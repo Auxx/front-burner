@@ -256,6 +256,10 @@ resolve on the git hosting provider.
 **Login method**
 : How a user signs in to an instance: **username + password** or **OIDC**.
 
+**Username**
+: The name a password user signs in with. The username is always the user's
+email address.
+
 **Login credentials**
 : What a user signs in to Front Burner with. Not to be confused with
 repository credentials.
@@ -269,7 +273,19 @@ administrator; never self-registered.
 onboarding.
 
 **Onboarding**
-: The first-time flow in which an invited user sets their own password.
+: The first-time flow in which an invited user sets their own password. Not
+to be confused with administrator onboarding.
+
+**Administrator onboarding**
+: The one-time flow that creates the first administrator of a new instance,
+either on the Administrator onboarding page or through environment
+variables. Once it is completed, it is disabled for good. _Short form_:
+admin onboarding.
+
+**Setup token**
+: A secret the operator sets in an environment variable of the container. It
+must be entered on the Administrator onboarding page, so that only the
+operator can create the first administrator.
 
 **OIDC user**
 : A user who signs in through an OpenID Connect provider.
