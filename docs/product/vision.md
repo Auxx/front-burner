@@ -26,17 +26,18 @@ non-developers and developers alike.
 
 ## Users
 
-Front Burner has two kinds of users: **operators**, who install and administer
-an instance, and **end users**, who work with Markdown files. An operator is
-usually also an end user of their own instance.
+Front Burner has two kinds of users: **operators**, who install and run an
+instance, and **end users**, who work with Markdown files. An operator usually
+also has an **administrator** account on their instance and is an end user of
+it too.
 
 | Persona                         | Role      | Technical level | Primary use                                                                                   |
 | ------------------------------- | --------- | --------------- | --------------------------------------------------------------------------------------------- |
 | Self-hoster                     | Operator  | High            | Documents their infrastructure; personal note-taking; invites family and friends.             |
 | Family and friends              | End user  | Low             | Note-taking only.                                                                             |
 | Tech lead                       | Operator  | High            | Runs an instance for an organisation; gives access to team members and software developers.   |
-| Software developer              | End user  | High            | Maintains Markdown docs across several projects; writes skills, specs and prompts for AI agents. |
-| Tech writer                     | End user  | Low             | Maintains Markdown docs across several projects in an organisation.                          |
+| Software developer              | End user  | High            | Maintains Markdown docs across several repositories; writes skills, specs and prompts for AI agents. |
+| Tech writer                     | End user  | Low             | Maintains Markdown docs across several repositories in an organisation.               |
 
 ### Self-hoster
 
@@ -58,30 +59,32 @@ integration (OIDC), access control, and operational simplicity.
 
 ### Software developer
 
-Manages and updates Markdown documents across multiple software projects using
-familiar git workflows (branches, commits, push/pull, conflict resolution).
-Also writes skills, specs and prompts for AI agents, which are typically
-Markdown files that live alongside the code in the same repositories.
+Manages and updates Markdown documents across multiple software repositories
+using familiar git workflows (branches, commits, push/pull, conflict
+resolution). Also writes skills, specs and prompts for AI agents, which are
+typically Markdown files that live alongside the code in the same
+repositories.
 
 ### Tech writer
 
 Works in an organisation and maintains Markdown documentation across several
-projects, often in the same repositories the software developers use. Their
+repositories, often the same ones the software developers use. Their
 technical skill level is low: they are fluent in Markdown but not in git, yet
 they still have to work within the team's git workflow (for example, working on
 a branch so that developers can review changes).
 
 ### Implications for design
 
-- **Operator and end-user concerns are separate.** Instance administration
-  (user management, instance settings) is a distinct role from editing files.
+- **Operator and end-user concerns are separate.** Administration (user
+  management, system settings) is a distinct administrator role from editing
+  files.
 - **Git must be both hideable and fully exposed.** Non-technical users need
   note-taking without git vocabulary; developers need explicit control over
   branches, commits and conflicts. The same product has to serve both.
 - **Low git skill does not mean simple repositories.** The tech writer works in
-  the same multi-project code repositories as developers and must follow team
-  workflows (branches, reviews), so the simplified experience has to guide
-  them through branching and conflicts, not just hide git.
+  the same code repositories as developers and must follow team workflows
+  (branches, reviews), so the simplified experience has to guide them through
+  branching and conflicts, not just hide git.
 - **Mobile matters most for note-taking users**; developers mostly work on
   desktop but still benefit from quick edits on mobile.
 - **Developer repositories are code repositories**, not documentation-only
@@ -108,8 +111,8 @@ a branch so that developers can review changes).
     limits the git workflow (for example, other remote branches and older
     history are not available).
 
-  For users with low technical skill, the admin makes this choice when adding
-  the repository on their behalf.
+  For users with low technical skill, the administrator makes this choice
+  when adding the repository on their behalf.
 
 ### 2. Markdown-first editing
 
@@ -119,7 +122,8 @@ a branch so that developers can review changes).
   specs and prompts. AI-agent files need no special support beyond this.
 - **Markdown files** can be created, edited, renamed and deleted.
 - **Non-Markdown files** (images, source code, PDFs, …):
-  - are **visible by default**; each user can choose to hide them in the UI;
+  - are **visible by default**; each user can choose to hide them in their
+    user preferences;
   - **existing ones cannot be edited**, but **can be deleted**;
   - **new ones can be uploaded** (for example, images to embed in a Markdown
     document).
@@ -141,8 +145,9 @@ The same git capabilities are offered at three **git control levels**:
 
 Rules:
 
-- An **instance admin decides which levels each user may use**.
-- Each user picks **one level per repository** from the levels allowed to them.
+- An **administrator decides which levels each user may use**.
+- Each user picks **one level per repository** from the levels allowed to
+  them, as a user preference.
 - The per-user, per-repository level is **stored on the backend**, which
   checks that the chosen level is one the user is allowed to use.
 - **Levels are a frontend concern only.** The backend exposes one set of git
@@ -197,38 +202,39 @@ requirements, not in this vision.
 ### 7. Multi-user with strict privacy and isolation
 
 - **Everything a user does is private.** No user can see another user's
-  repositories, working copies, files, settings or credentials.
+  repositories, working copies, files, user preferences or credentials.
 - Each user gets their **own working copy** of every repository they add, even
   when two users clone the same remote.
 - Collaboration happens **through the shared git remote**, never inside Front
   Burner.
 
-### 8. Roles: instance admin and user
+### 8. Roles: administrator and user
 
-- **Instance admin** manages users, their access, their allowed git control
+- **Administrator** manages users, their access, their allowed git control
   levels, and system settings.
-- An admin can **add repositories on behalf of a user** (for users with low
-  technical skill). The user then only has to **confirm** the repository and
-  **provide their own credentials** (username/password or SSH key). In this
-  case the admin also chooses the clone mode.
-- **Users** (non-admins) can access only their own repositories and files.
+- An administrator can **add repositories on behalf of a user** (for users
+  with low technical skill). The user then only has to **confirm** the
+  repository and **provide their own credentials** (username/password or SSH
+  key). In this case the administrator also chooses the clone mode.
+- **Users** (non-administrators) can access only their own repositories and
+  files.
 
 ### 9. Authentication
 
 - Two login methods: **username + password** and **OIDC**.
 - **Password users are invited, never self-registered:**
-  1. an admin creates the user with their email;
+  1. an administrator creates the user with their email;
   2. Front Burner sends an **invitation email**;
   3. the user follows the invitation and sets their own password during
-     onboarding. Admins never set or see user passwords.
+     onboarding. Administrators never set or see user passwords.
 
   Sending email requires an outgoing mail (SMTP) configuration in the system
   settings.
-- OIDC user registration is controlled by an admin setting:
+- OIDC user registration is controlled by a system setting:
   - **Automatic registration enabled** — any user who authenticates with the
     OIDC provider gets a Front Burner account on first login;
-  - **Automatic registration disabled** — an admin adds the user's email
-    first; only emails added this way can log in through OIDC.
+  - **Automatic registration disabled** — an administrator adds the user's
+    email first; only emails added this way can log in through OIDC.
 
 ### 10. Deployment
 
@@ -251,7 +257,8 @@ requirements, not in this vision.
 - **Editing existing non-Markdown files.** They can be uploaded or deleted,
   but not modified.
 - **Storage outside git.** No local-only notes, no database-backed documents.
-- **Self-registration for password users.** Only an admin can create them.
+- **Self-registration for password users.** Only an administrator can
+  create them.
 - **Creating repositories.** Front Burner only clones repositories that
   already exist on a remote; it never runs `git init` or creates repositories
   on a hosting provider.
