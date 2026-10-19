@@ -268,6 +268,11 @@ repository credentials.
 : A user who signs in with username + password. Always created by an
 administrator; never self-registered.
 
+**Password policy**
+: The rules that every password of a password user must meet when it is set
+(see [REQ-AUTH-002](../requirements/auth-password-policy.md)). The same on
+every instance; administrators cannot change it. It is not checked at login.
+
 **Invitation**
 : The email an instance sends to a new password user. Following it starts
 onboarding.
