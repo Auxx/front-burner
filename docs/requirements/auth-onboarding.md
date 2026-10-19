@@ -1,6 +1,6 @@
 # REQ-AUTH-001: Administrator onboarding
 
-Status: draft
+> Status: **Accepted**
 
 ## Summary
 
