@@ -8,11 +8,11 @@ People who keep Markdown files in git repositories have no tool that is
 simultaneously **Markdown-first**, **git-native**, **usable from any device**
 and **self-hosted**. Existing tools each cover only part of this:
 
-| Category                  | Strengths                                                                  | Gaps                                                                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Basic text editors        | Simple; available on every platform; create and edit Markdown files.       | Local file system only; no remote access; no git integration; no Markdown tooling (highlighting, preview).                           |
-| Code editors and IDEs     | Syntax highlighting, Markdown preview, git synchronisation.                | Heavy and complex; local only; rarely usable on mobile; Markdown features and workflows are an afterthought.                         |
-| Note-taking applications  | Good note management; often Markdown-based.                                | Markdown is a vehicle for notes, not the focus; good ones are rarely self-hosted; rarely work with git repositories directly.        |
+| Category                 | Strengths                                                            | Gaps                                                                                                                          |
+|--------------------------|----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| Basic text editors       | Simple; available on every platform; create and edit Markdown files. | Local file system only; no remote access; no git integration; no Markdown tooling (highlighting, preview).                    |
+| Code editors and IDEs    | Syntax highlighting, Markdown preview, git synchronisation.          | Heavy and complex; local only; rarely usable on mobile; Markdown features and workflows are an afterthought.                  |
+| Note-taking applications | Good note management; often Markdown-based.                          | Markdown is a vehicle for notes, not the focus; good ones are rarely self-hosted; rarely work with git repositories directly. |
 
 The result: to edit a Markdown file that lives in a git repository from a phone
 or a borrowed computer, a user must either install a heavy IDE (often
@@ -31,13 +31,13 @@ instance, and **end users**, who work with Markdown files. An operator usually
 also has an **administrator** account on their instance and is an end user of
 it too.
 
-| Persona                         | Role      | Technical level | Primary use                                                                                   |
-| ------------------------------- | --------- | --------------- | --------------------------------------------------------------------------------------------- |
-| Self-hoster                     | Operator  | High            | Documents their infrastructure; personal note-taking; invites family and friends.             |
-| Family and friends              | End user  | Low             | Note-taking only.                                                                             |
-| Tech lead                       | Operator  | High            | Runs an instance for an organisation; gives access to team members and software developers.   |
-| Software developer              | End user  | High            | Maintains Markdown docs across several repositories; writes skills, specs and prompts for AI agents. |
-| Tech writer                     | End user  | Low             | Maintains Markdown docs across several repositories in an organisation.               |
+| Persona            | Role     | Technical level | Primary use                                                                                          |
+|--------------------|----------|-----------------|------------------------------------------------------------------------------------------------------|
+| Self-hoster        | Operator | High            | Documents their infrastructure; personal note-taking; invites family and friends.                    |
+| Family and friends | End user | Low             | Note-taking only.                                                                                    |
+| Tech lead          | Operator | High            | Runs an instance for an organisation; gives access to team members and software developers.          |
+| Software developer | End user | High            | Maintains Markdown docs across several repositories; writes skills, specs and prompts for AI agents. |
+| Tech writer        | End user | Low             | Maintains Markdown docs across several repositories in an organisation.                              |
 
 ### Self-hoster
 
@@ -91,7 +91,6 @@ a branch so that developers can review changes).
   repositories: Markdown files sit among source code, so Front Burner must work
   inside repos that contain many non-Markdown files.
 
-
 ## Goals
 
 ### 1. Git repositories are the only storage
@@ -100,8 +99,8 @@ a branch so that developers can review changes).
   else. There is no separate database of notes.
 - A repository is added from a remote origin given as an **HTTPS URL** or an
   **SSH URL**.
-- Remote authentication supports **username + password/token** (HTTPS) and
-  **SSH keys** (SSH).
+- Remote authentication supports **username + password/token** (HTTPS) and **SSH
+  keys** (SSH).
 - Front Burner **never creates repositories**. Every repository must already
   exist on a remote.
 - When a repository is added, the user picks a **clone mode**:
@@ -137,11 +136,11 @@ a branch so that developers can review changes).
 
 The same git capabilities are offered at three **git control levels**:
 
-| Level        | Intended for                     | Experience                                                                                                                                                  |
-| ------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Simple**   | Family and friends               | Git is hidden. Changes are committed and synchronised (pull/push) automatically on the current branch.                                                      |
-| **Guided**   | Tech writers                     | Git is visible in plain language: "Start a new draft" (branch), "Save version" (commit), "Submit for review" (push + pull request), guided conflict help. |
-| **Advanced** | Software developers, operators   | Full, explicit control over branches, commits, push, pull and conflict resolution.                                                                         |
+| Level        | Intended for                   | Experience                                                                                                                                                |
+|--------------|--------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Simple**   | Family and friends             | Git is hidden. Changes are committed and synchronised (pull/push) automatically on the current branch.                                                    |
+| **Guided**   | Tech writers                   | Git is visible in plain language: "Start a new draft" (branch), "Save version" (commit), "Submit for review" (push + pull request), guided conflict help. |
+| **Advanced** | Software developers, operators | Full, explicit control over branches, commits, push, pull and conflict resolution.                                                                        |
 
 Rules:
 
@@ -173,21 +172,21 @@ Principles:
 
 Resolution methods:
 
-| Method                       | Description                                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------------------- |
-| **Choose a whole file**      | Keep mine or keep theirs for the entire file. The only option for non-Markdown files.       |
-| **Keep both**                | Keep theirs in place and save the user's version as a **copy of the file** next to it.      |
-| **Choose per change**        | Pick mine / theirs / both for each conflicting block, shown side by side as rendered Markdown. |
-| **Three-way merge editor**   | Base, ours and theirs, plus an editable result pane.                                        |
-| **Edit conflict markers**    | Edit the file with highlighted `<<<<<<<` markers in the normal editor.                      |
-| **Resolve on the provider**  | Push to a branch, open a pull request, and resolve on GitHub or Bitbucket.                  |
+| Method                      | Description                                                                                    |
+|-----------------------------|------------------------------------------------------------------------------------------------|
+| **Choose a whole file**     | Keep mine or keep theirs for the entire file. The only option for non-Markdown files.          |
+| **Keep both**               | Keep theirs in place and save the user's version as a **copy of the file** next to it.         |
+| **Choose per change**       | Pick mine / theirs / both for each conflicting block, shown side by side as rendered Markdown. |
+| **Three-way merge editor**  | Base, ours and theirs, plus an editable result pane.                                           |
+| **Edit conflict markers**   | Edit the file with highlighted `<<<<<<<` markers in the normal editor.                         |
+| **Resolve on the provider** | Push to a branch, open a pull request, and resolve on GitHub or Bitbucket.                     |
 
 Methods available at each git control level:
 
-| Level        | Methods                                                                                         |
-| ------------ | ----------------------------------------------------------------------------------------------- |
-| **Simple**   | Choose a whole file; keep both.                                                                 |
-| **Guided**   | Choose per change; resolve on the provider as an escape hatch.                                 |
+| Level        | Methods                                                                                              |
+|--------------|------------------------------------------------------------------------------------------------------|
+| **Simple**   | Choose a whole file; keep both.                                                                      |
+| **Guided**   | Choose per change; resolve on the provider as an escape hatch.                                       |
 | **Advanced** | All methods. The three-way merge editor and editing conflict markers are preferred and listed first. |
 
 Details (merge vs rebase, screen design, how work is backed up) belong in the
