@@ -300,6 +300,36 @@ operator can create the first administrator.
 provider gets an account on first login; when disabled, only emails
 added by an administrator can sign in through OIDC.
 
+**Disabled user**
+: A user whose account an administrator has disabled. The account and its
+data are kept, but the user cannot log in or reset their password, and all
+their sessions are revoked (see
+[REQ-AUTH-003](../requirements/auth-login.md)). _Avoid_: "deleted",
+"blocked", "locked".
+
+**Session**
+: One login of one user on one client, stored by the backend so that it can
+be revoked. Ends when it expires, the user logs out, or it is revoked.
+
+**Auth token**
+: A short-lived signed JWT that a client sends with every API request.
+Belongs to one session. _Avoid_: "access token", "session token".
+
+**Refresh token**
+: A long-lived secret that a client exchanges for a new auth token when the
+current one expires. Belongs to one session. The web client keeps it in an
+`HttpOnly` cookie.
+
+**Reset code**
+: A six-character one-time code emailed to a password user who forgot their
+password, so that they can set a new one. _Avoid_: "reset token",
+"confirmation code".
+
+**Login audit log**
+: The database record of every login attempt, with its outcome and the
+detailed reason for a failure. Users see only generic errors; the reasons are
+kept here.
+
 **System settings**
 : Instance-wide configuration managed by administrators, such as outgoing
 mail (SMTP) and automatic registration. _Avoid_: "instance settings".
