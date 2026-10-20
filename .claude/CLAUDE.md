@@ -13,6 +13,6 @@ frontend.
 
 - Product vision: `docs/product/vision.md` - describes the product's purpose,
   goals, and long-term direction.
-- Requirements: `docs/requirements/` - one file per area, IDs REQ-<AREA>-NNN,
-  acceptance criteria AC-<AREA>-NNN.N. These are the source of truth for
-  behavior.
+- Requirements: `docs/requirements/` - might have multiple files per area, IDs
+  REQ-<AREA>-NNN, acceptance criteria AC-<AREA>-NNN.N. These are the source of
+  truth for behavior.
