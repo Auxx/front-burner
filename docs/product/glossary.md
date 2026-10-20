@@ -132,10 +132,45 @@ same remote get two separate working copies.
 - **Single branch** — a shallow clone of one chosen branch only, which
 limits the git workflow.
 
+**Repository name**
+: The name a user gives a repository when they add it. Unique among that
+user's repositories, ignoring case.
+
 **Repository credentials**
 : What a user provides to access a remote: username + password/token (HTTPS)
 or an SSH key (SSH). Belongs to one user and is never visible to others,
-including administrators. Not to be confused with login credentials.
+including administrators. Always kept as saved credentials. A **public
+repository** (one anyone can read over HTTPS) can be added without any. Not
+to be confused with login credentials.
+
+**Saved credentials**
+: Repository credentials stored, encrypted, in a user's profile and reused
+across that user's repositories. Each has a name. Either **HTTPS
+credentials** (username + password/token) or an **SSH key**. _Avoid_:
+"secrets", "keychain".
+
+**SSH key**
+: A saved private key and its public key, used to access remotes over SSH.
+Either **pasted** by the user or **generated** by Front Burner, in which case
+the user adds its public key on the git hosting provider.
+
+**Passphrase-protected key**
+: An SSH key whose private key is encrypted with a passphrase. Front Burner
+never stores the passphrase.
+
+**Key unlock**
+: Decrypting a passphrase-protected key with its passphrase for the rest of a
+session. The decrypted key is kept only in the backend's memory and is
+forgotten when the session ends, after an idle time, or on restart.
+
+**Known host**
+: An SSH server host key fingerprint that a user has accepted. Stored per
+user. The fingerprints of GitHub and Bitbucket are built in.
+
+**Access check**
+: A quick, read-only connection to a remote with the chosen repository
+credentials (`git ls-remote`). Proves that the remote can be read and lists
+its branches; does not prove write access.
 
 **Add on behalf of a user**
 : An administrator adds a repository (and chooses its clone mode) for a
