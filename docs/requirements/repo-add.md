@@ -167,8 +167,7 @@ user.
   case. A name that is taken shows "You already have a repository named
   _&lt;name&gt;_". The web client checks this while the user types; the
   backend checks it again on submit. _(The mechanism of the early check is
-  left to the builder.)_ This rule replaces the placeholder rule for names in
-  DS-18.
+  left to the builder.)_
 
 ### Credentials: common rules
 

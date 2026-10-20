@@ -146,9 +146,8 @@ in an error status and a short label for the error.
   ordered. The web client does not load all of the user's repositories to
   build it.
 - **DS-18** Each entry shows:
-  - the repository's **name**, as set when it was added (add-repository
-    requirement). _(My call: until that requirement says otherwise, the name
-    is the last part of the remote's path without `.git`.)_
+  - the repository's **name**, as set when it was added (AR-13 to AR-15 in
+    [REQ-REPO-001](repo-add.md));
   - the **remote**, shown as host and path without the protocol, user or
     `.git`, for example `github.com/acme/handbook` for both
     `https://github.com/acme/handbook.git` and
