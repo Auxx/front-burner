@@ -142,6 +142,12 @@ including administrators. Not to be confused with login credentials.
 user. The user must then **confirm** the repository and provide their own
 repository credentials before it can be used.
 
+**Last access time**
+: When a user last opened a repository in the editor. Also set when the
+repository is added, so every repository has one. Stored per user, so each
+user has their own last access time for each of their repositories. _Avoid_:
+"accessed", "last used", "last visited".
+
 **Git hosting provider**
 : A service that hosts remotes and pull requests. At launch: GitHub and
 Bitbucket. _Short form_: provider.
