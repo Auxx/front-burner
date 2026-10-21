@@ -241,7 +241,8 @@ sees the result.
   | Clone                                            | Fails; the partial copy is removed (AR-54).                                                                       |
   | Simple-level synchronisation cycle               | A half-done merge is aborted as in D-3.1; the cycle is rescheduled. Overdue timers are spread over the first few minutes. |
   | Pull or push started by the user                 | Marked failed; the user is notified and can retry. A half-applied merge is reset to the commit recorded before it (D-4.6). |
-  | Merge or rebase waiting for resolution (D-4.4)   | Left in progress; the user carries on resolving. The resolution lease expires on its own (D-3.5a).                |
+  | Merge or rebase waiting for resolution (D-4.4)   | Left in progress; the user carries on resolving (D-4.4a).                                                        |
+  | Simple-level resolution (D-3.4)                  | The resolution lease expires on its own, which undoes the half-finished resolution (D-3.5a).                     |
   | Fetch                                            | Rescheduled.                                                                                                     |
   | Conflict reminder email (D-3.7)                  | Delivered at least once: a crash between sending and recording may send a duplicate, never miss one.             |
 

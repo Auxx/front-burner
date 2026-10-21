@@ -60,6 +60,19 @@ explicitly confirmed; they can be revisited cheaply.
 - **D-2.7** Background jobs never keep a key unlocked beyond what AR-31
   allows. A sync failure is not a conflict episode and sends no reminder
   email.
+- **D-2.8** Besides a save, a sync cycle also starts:
+  - **every 15 minutes** while a repository has commits that were not
+    uploaded and the cause may clear on its own (remote unreachable,
+    timeout, push rejected because the remote has new commits), whether or
+    not anyone is viewing the repository. Causes only the user can fix (a
+    locked key with no usable unlock, missing or refused credentials, an
+    open conflict episode) are not retried;
+  - **at once** when the user fixes such a cause: unlocks the key or changes
+    the repository's credentials;
+  - **at once** when a background fetch (D-4.2) finds new remote commits and
+    no save is waiting, so that a user viewing the repository sees remote
+    changes within about two minutes and conflicts are caught early.
+    D-2.4 still applies when a file is opened.
 
 ## D-3: Conflicts during automatic synchronisation (Simple level)
 
@@ -113,6 +126,11 @@ explicitly confirmed; they can be revisited cheaply.
 - **D-4.4** When the merge or rebase conflicts, it stays in progress and the
   repository is locked to the resolution screen until every conflicting file
   is resolved or the operation is aborted.
+- **D-4.4a** The merge or rebase in progress belongs to the repository, not
+  to a device, and has no lease or expiry (unlike the Simple level's
+  D-3.5a). Each resolved file is written to the working copy at once, so
+  any of the user's devices can open the resolution screen and continue.
+  Only finishing or aborting ends it.
 - **D-4.5** Aborting puts the branch and working copy back exactly as they
   were before the operation. At Guided the action is labelled in plain
   language, for example "Cancel and go back to my version". _(My call.)_
