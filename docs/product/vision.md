@@ -152,13 +152,18 @@ Rules:
 - **Levels are a frontend concern only.** The backend exposes one set of git
   operations regardless of level; the frontend decides which operations to
   show, how to name them, and which to run automatically.
+- **Only the Simple level is automatic.** At the Guided and Advanced levels
+  nothing is committed, pulled or pushed automatically: every such action is
+  started by the user.
 
 ### 5. Conflict resolution
 
 Principles:
 
-- **Prevent first.** Pull often (when a file is opened, and in the background
+- **Prevent first.** Fetch often (when a file is opened, and in the background
   while editing) and warn early when a file has changed on the remote.
+  Fetching never changes the user's files or branch; only the Simple level's
+  automatic synchronisation pulls without being asked.
 - **Never lose work.** The user's state is saved before any merge or rebase,
   so every resolution can be undone.
 - **Always resolvable inside Front Burner.** No user ever has to fall back to
@@ -194,7 +199,10 @@ requirements, not in this vision.
 
 ### 6. Pull requests ("Submit for review")
 
-- Supported git hosting providers at launch: **GitHub** and **Bitbucket**.
+- Supported git hosting providers at launch: **GitHub** (`github.com`) and
+  **Bitbucket Cloud** (`bitbucket.org`).
+- Pull requests are opened with a **personal access token** that the user
+  saves in their profile.
 - Providers sit behind a **provider abstraction** so new ones (GitLab, Gitea,
   …) can be added later without changing the core git or editor code.
 
@@ -269,6 +277,10 @@ requirements, not in this vision.
 
 - Pull request support for GitLab, Gitea and other providers (the abstraction
   must allow them).
+- Pull request support for self-hosted **GitHub Enterprise Server** and
+  **Bitbucket Data Center**.
+- Connecting to a git hosting provider by **OAuth** sign-in instead of a
+  personal access token.
 - Native desktop and mobile applications (the architecture must allow them).
 - **Markdown-aware merging** (for example, merging front matter key by key or
   merging paragraph by paragraph) to reduce conflicts.

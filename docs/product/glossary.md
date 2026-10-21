@@ -144,10 +144,10 @@ repository** (one anyone can read over HTTPS) can be added without any. Not
 to be confused with login credentials.
 
 **Saved credentials**
-: Repository credentials stored, encrypted, in a user's profile and reused
-across that user's repositories. Each has a name. Either **HTTPS
-credentials** (username + password/token) or an **SSH key**. _Avoid_:
-"secrets", "keychain".
+: Credentials stored, encrypted, in a user's profile and reused across that
+user's repositories. Each has a name. One of: **HTTPS credentials**
+(username + password/token) or an **SSH key**, which are repository
+credentials, or a **provider token**. _Avoid_: "secrets", "keychain".
 
 **SSH key**
 : A saved private key and its public key, used to access remotes over SSH.
@@ -184,8 +184,8 @@ user has their own last access time for each of their repositories. _Avoid_:
 "accessed", "last used", "last visited".
 
 **Git hosting provider**
-: A service that hosts remotes and pull requests. At launch: GitHub and
-Bitbucket. _Short form_: provider.
+: A service that hosts remotes and pull requests. At launch: GitHub
+(`github.com`) and Bitbucket Cloud (`bitbucket.org`). _Short form_: provider.
 
 **Provider abstraction**
 : The part of the backend that hides differences between git hosting
@@ -245,9 +245,24 @@ resolution, using standard git vocabulary.
 : Pulling changes from the remote and pushing local commits to it. Automatic
 at the Simple level; explicit at the others. _Short form_: sync.
 
+**Fetch**
+: Downloading new commits from the remote without changing the user's files
+or branch. Front Burner fetches often, at every level, to warn about remote
+changes early.
+
+**Automatic commit**
+: A commit that Front Burner makes on its own at the Simple level, after a
+minute without changes. Its message names the changed files and ends with a
+`Front-Burner-Auto-Commit` trailer.
+
 **Pull request**
 : A request, created on a git hosting provider, to merge one branch into
 another.
+
+**Provider token**
+: A personal access token for a git hosting provider's API, saved in a
+user's profile and used only to open pull requests. Pushing still uses
+repository credentials.
 
 ### Guided-level terms
 
@@ -266,6 +281,10 @@ They are UI labels, not separate concepts.
 **Conflict**
 : A situation in which local and remote changes to the same file cannot be
 combined automatically.
+
+**Conflict episode**
+: At the Simple level, the time from the first automatic pull that conflicts
+until the user's changes are pushed. One reminder email is sent per episode.
 
 **Base / Ours / Theirs**
 : The git terms for the three versions of a conflicting file: the common
