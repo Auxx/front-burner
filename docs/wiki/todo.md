@@ -6,3 +6,6 @@ Next requirements files to write, as these requirements leave them to separate f
 - Commit author name and email.
 - HTML in Markdown preview: the whitelist of safe HTML tags and attributes that the live preview renders; every other tag, including scripts, is stripped.
 - Live preview: how image paths are resolved, including site-absolute paths such as `/images/cover.png` that blog engines map to a folder inside the repository, and how the web client loads repository images given that the auth token is sent in a header.
+
+Deployment guide (`docs/wiki/deployment.md`), once the architecture fixes the details:
+- Operator-facing parts of `docs/architecture/non-functional.md`: the data volume and optional repositories directory, the container UID, disk sizing, backup and restore, upgrades, the encryption key (including rotation and recovery from a lost key), `…_FILE` variables, log, metrics and low-space settings, and the hardened compose example.

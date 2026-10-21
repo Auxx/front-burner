@@ -39,12 +39,16 @@ explicitly confirmed; they can be revisited cheaply.
   is the user (details belong to the commit author requirement).
 - **D-2.4** _(My call.)_ At the Simple level, opening a file also pulls when
   the working copy has no uncommitted changes and the pull is a fast-forward.
-- **D-2.5** _(My call.)_ To keep the vision's rule that levels are a frontend
-  concern only, the backend does not branch on the level. Automatic
-  synchronisation is a separate per-repository **auto-sync** setting that the
-  web client turns on when the user picks the Simple level and off for the
-  other levels. D-2, D-3 and D-4 describe what the backend does when auto-sync
-  is on.
+- **D-2.5** To keep the vision's rule that levels are a frontend concern
+  only, the backend does not branch on the level. Automatic synchronisation
+  is a separate per-repository **auto-sync** setting that the web client
+  turns on when the user picks the Simple level and off for the other levels.
+  D-2, D-3 and D-4 describe what the backend does when auto-sync is on.
+  - **D-2.5a** The level and auto-sync are changed in one API request, which
+    updates both or neither, so they cannot drift apart.
+  - **D-2.5b** The D-4a rules apply to auto-sync as well: it cannot be
+    changed while a merge or rebase is in progress, and turning it off ends
+    an open conflict episode (D-4a.3).
 
 - **D-2.6** Automatic commits always happen, since they need no
   credentials. When the pull or push cannot run — a passphrase-protected key

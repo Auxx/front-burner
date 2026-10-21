@@ -16,3 +16,9 @@ frontend.
 - Requirements: `docs/requirements/` - might have multiple files per area, IDs
   REQ-<AREA>-NNN, acceptance criteria AC-<AREA>-NNN.N. These are the source of
   truth for behavior.
+- Architecture decisions: `docs/architecture/decisions.md` - product and
+  technical decisions not yet written up as requirements (IDs D-x.y).
+- Non-functional requirements: `docs/architecture/non-functional.md` - scale,
+  performance, storage, backup, upgrades, secrets, resilience, observability,
+  security baseline, browser support, accessibility, localisation (IDs
+  NF-x.y).
