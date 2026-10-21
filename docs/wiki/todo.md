@@ -9,3 +9,9 @@ Next requirements files to write, as these requirements leave them to separate f
 
 Deployment guide (`docs/wiki/deployment.md`), once the architecture fixes the details:
 - Operator-facing parts of `docs/architecture/non-functional.md`: the data volume and optional repositories directory, the container UID, disk sizing, backup and restore, upgrades, the encryption key (including rotation and recovery from a lost key), `…_FILE` variables, log, metrics and low-space settings, and the hardened compose example.
+
+Spikes (`docs/architecture/spikes.md`), each on its own `spike/<name>` branch, never merged, time-boxed to 1–2 days; findings go back into the architecture documents:
+- Spike 1: SSH and credential broker (A-5.4 to A-5.6). Needs real GitHub and Bitbucket Cloud test repositories and credentials.
+- Spike 2: Egress proxy (A-5.7, A-5.8). Needs real GitHub and Bitbucket Cloud test repositories.
+- Spike 3: Preview under the strict CSP (A-8.11 to A-8.13). Needs nothing external; suggested first.
+- Spike 4: Git at 100,000 files (A-5.14). Needs a Linux kernel clone on hardware close to the reference host.
