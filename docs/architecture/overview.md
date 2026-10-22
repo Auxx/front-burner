@@ -54,7 +54,7 @@ in [spikes.md](spikes.md) and will be updated with its findings.
   memory. Nothing in the design coordinates several processes.
 - **A-1.2** Git is the `git` program, run as a child process (A-5). Every git
   network connection goes through an egress proxy inside the backend process
-  (A-5.6).
+  (A-5.7).
 
 ## A-1: Technology stack
 
@@ -80,8 +80,8 @@ in [spikes.md](spikes.md) and will be updated with its findings.
 - **A-1.10** _(My call.)_ Backend libraries not discussed separately:
   `nestjs-pino` (logging, NF-10), `prom-client` (metrics), `@nestjs/throttler`
   with in-memory storage (rate limits, NF-11.4), `nodemailer` (SMTP),
-  `openid-client` (OIDC), `argon2` (PP-12), `ssh2` (agent side of the
-  credential broker, A-5.4).
+  `openid-client` (OIDC), `argon2` (PP-12), `ssh2` (parsing SSH keys and
+  signing for the credential broker's agent, A-5.4).
 
 ## A-1: Runtime view
 

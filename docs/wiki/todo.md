@@ -27,10 +27,9 @@ Spikes (`docs/architecture/spikes.md`), each on its own `spike/<name>` branch,
 never merged, time-boxed to 1–2 days; findings go back into the architecture
 documents:
 
-- Spike 1: SSH and credential broker (A-5.4 to A-5.6). Needs real GitHub and
-  Bitbucket Cloud test repositories and credentials.
 - Spike 2: Egress proxy (A-5.7, A-5.8). Needs real GitHub and Bitbucket Cloud
-  test repositories.
+  test repositories; spike 1's test repositories and credentials can be
+  reused.
 - Spike 3: Preview under the strict CSP (A-8.11 to A-8.13). Needs nothing
   external; suggested first.
 - Spike 4: Git at 100,000 files (A-5.14). Needs a Linux kernel clone on hardware

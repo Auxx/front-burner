@@ -48,21 +48,52 @@ restricts where git may connect. Lives in `server/git` (A-2). See
 ## A-5: Credentials
 
 The decrypted secret never leaves the backend process (AR-17, AR-31).
-**Pending spike 1.**
+Confirmed by spike 1 (spikes.md).
 
-- **A-5.4** For each git operation that needs credentials, the backend opens
-  a **broker**: a Unix socket in a new `0700` directory under `/tmp`,
-  accepting only requests that carry a one-time token for this operation.
-  The directory is removed when the operation ends.
+- **A-5.4** For each git command that needs credentials (clone, fetch, push,
+  access check), the backend opens a **broker**: a new `0700` directory under
+  `/tmp` holding its sockets and per-command files. The directory is removed
+  when the command ends.
   - **HTTPS:** `GIT_ASKPASS` points to a tiny helper that sends git's prompt
-    and the token to the broker and prints the username or password it
-    gets back. The secret never appears on a command line, in a URL, in an
-    environment variable or in a file.
-  - **SSH:** the broker also serves the **ssh-agent protocol** on a second
-    socket (`SSH_AUTH_SOCK`), implemented with the agent-server side of the
-    `ssh2` library. `ssh` asks it to sign; the private key never leaves the
-    backend's memory. `ssh` runs with `IdentitiesOnly=yes`,
-    `IdentityAgent` set to the socket, `BatchMode=yes`.
+    and the command's **one-time token** to the broker's socket and prints
+    the username or password it gets back. The broker answers only prompts
+    for the expected host and username, at most a few times per command. The
+    secret never appears on a command line, in a URL, in an environment
+    variable or in a file.
+    - The helper ships in the image. It cannot be written to `/tmp`, which is
+      mounted `noexec` (NF-11.13).
+    - The token is a capability for this command, not the secret. It sits in
+      git's environment, which any process with the same UID can read, so it
+      does not protect against such processes. The container and its single
+      UID are the boundary.
+    - Usernames: `x-access-token` for GitHub tokens and `x-token-auth` for
+      Bitbucket repository access tokens.
+  - **SSH:** the broker serves the **ssh-agent protocol** on a second socket.
+    `ssh` asks it to sign; the private key never leaves the backend's memory.
+    - The protocol server is our own small implementation (requests
+      identities, sign, and failure for anything else, including
+      `session-bind@openssh.com`), using `ssh2` only to parse keys and sign.
+      _(My call: `ssh2`'s agent server does not skip the body of messages it
+      does not know, so OpenSSH 8.9 and later, which sends `session-bind`
+      before every login, gets out of sync and fails. The spike worked around
+      it with a framing filter.)_
+    - The agent signs only SSH login requests (`publickey` or
+      `publickey-hostbound-v00@openssh.com`) for the user `git` with the
+      operation's key, at most a few per command, so the socket is not a
+      general signing service. The ssh-agent protocol has no room for a
+      token; the `0700` directory and this rule protect the socket.
+    - git runs `ssh` through `GIT_SSH_COMMAND=ssh -F <per-command config>`.
+      `-F` is required: `ssh` reads `~/.ssh` from the home directory in
+      `/etc/passwd`, not `$HOME`, and `-F` skips both the user's and the
+      system's configuration. The paths are ours, so the shell git uses for
+      `GIT_SSH_COMMAND` sees no user input.
+    - The config sets `IdentityAgent` to the socket, `IdentitiesOnly yes`
+      with `IdentityFile` pointing at the public key (written to the broker
+      directory; ssh needs it to pick the agent's key), `BatchMode yes`,
+      `StrictHostKeyChecking yes`, `GlobalKnownHostsFile /dev/null`,
+      `UpdateHostKeys no`, `PreferredAuthentications publickey`, and turns
+      off forwarding, `ControlMaster` and `PermitLocalCommand`.
+    - `ssh` needs no `/etc/passwd` entry for the container UID.
 - **A-5.5** Unlocked keys (AR-31) are held in memory per session, with their
   idle timer. A clone job takes its own copy when queued (AR-49), held in
   the job runner's in-memory map (A-6.3). Background jobs use unlocks as
@@ -76,12 +107,24 @@ The decrypted secret never leaves the backend process (AR-17, AR-31).
   - a job never borrows an unlock from the user's other sessions. Without a
     usable unlock, a sync cycle commits and reports "saved but not
     uploaded" (D-2.6), and a fetch is skipped.
+  - "Removed from memory" means the backend drops its last reference to the
+    key. JavaScript cannot wipe strings, and `ssh2` keeps the decrypted key
+    as a PEM string until garbage collection. _(My call: accepted. Anyone
+    who can read the backend's memory can also use an unlocked key directly,
+    and the only other processes in the container are the git and `ssh`
+    processes the backend starts.)_
 - **A-5.6** **Known hosts:** the user's known hosts, plus the instance-wide
-  list (the built-in GitHub and Bitbucket fingerprints, or the operator's
-  `FRONT_BURNER_KNOWN_HOSTS_FILE`, AR-32), are written to a per-operation file
-  and used
-  with `StrictHostKeyChecking=yes`. An unknown or changed host key produces
-  its own error code, which the web client shows as AR-32's dialog.
+  list (the built-in GitHub and Bitbucket keys, or the operator's
+  `FRONT_BURNER_KNOWN_HOSTS_FILE`, AR-32), are written to a per-command file
+  in the broker directory and used with `StrictHostKeyChecking=yes`.
+  - The built-in list holds the full host keys (Ed25519, ECDSA and RSA) for
+    `github.com` and `bitbucket.org`, taken from GitHub's `/meta` API and
+    Bitbucket's published list, not only fingerprints.
+  - `ssh`'s messages map to two error codes, checked in this order: "REMOTE
+    HOST IDENTIFICATION HAS CHANGED" to a changed host key, then "No … host
+    key is known" or "Host key verification failed" (which `ssh` prints in
+    both cases) to an unknown one. The web client shows either as AR-32's
+    dialog.
 
 ## A-5: Address restriction
 

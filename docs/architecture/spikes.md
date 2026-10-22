@@ -28,7 +28,29 @@ conventions.
   - no key or token appears in any file, any other process's environment or
     any command line;
   - it runs in the hardened container of NF-11.13.
-- **Findings:** _pending._
+- **Findings:** passed on 2026-10-22, on branch
+  `spike/ssh-credential-broker`. It cloned, pushed and deleted a branch on
+  private GitHub and Bitbucket Cloud repositories with passphrase-protected
+  Ed25519 and RSA keys and over HTTPS with tokens, on Fedora (git 2.56,
+  OpenSSH 10.2). It did the same in the NF-11.13 container (Debian trixie
+  slim, git 2.47, `/tmp` tmpfs `noexec`), both as a fixed UID and as one with
+  no `/etc/passwd` entry. Each command took 0.7–2.5 s, mostly network.
+  - **No leaks:** git's process tree (argv and environment) was sampled
+    continuously, and the files git and the broker wrote and git's output
+    were scanned for the tokens, the passphrases and the decrypted keys in
+    several encodings. An `strace` record of every program started (324,
+    with full argv and environment) contained no secret. Deliberate leaks
+    (token in the environment, token in the URL) were caught by every check.
+  - **Refusals:** a wrong passphrase, an unknown or changed host key, a wrong
+    token, a forged broker token, a prompt for another host, and a request
+    to sign anything other than an SSH login each failed as intended.
+  - **Changes to the architecture** (A-5.4 to A-5.6): our own agent protocol
+    server instead of `ssh2`'s, which breaks with OpenSSH 8.9 and later;
+    `ssh -F` with a per-command config, since `ssh` ignores `$HOME`; the
+    askpass helper ships in the image, since `/tmp` is `noexec`; the agent
+    signs only login requests; the token only guards against other
+    processes, not against the same UID; decrypted keys cannot be wiped
+    from memory, only dropped.
 
 ### Spike 2: Egress proxy
 
