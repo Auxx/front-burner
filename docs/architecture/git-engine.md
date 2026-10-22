@@ -128,19 +128,62 @@ Confirmed by spike 1 (spikes.md).
 
 ## A-5: Address restriction
 
-**Pending spike 2.**
+Confirmed by spike 2 (spikes.md).
 
 - **A-5.7** All git network traffic goes through an **egress proxy** inside
-  the backend process, listening on a Unix socket or loopback port and
-  accepting only requests with the operation's one-time token:
-  - HTTPS: git's `http.proxy` points at it (HTTP `CONNECT`);
-  - SSH: `ProxyCommand` runs a tiny helper that connects through it.
+  the backend process: a **SOCKS5** server on a Unix socket in the command's
+  broker directory (A-5.4). It requires username/password authentication
+  with the command's one-time token as the password, and accepts only
+  `CONNECT`.
+  - **HTTPS:** git's `http.proxy` is `socks5h://fb:<token>@localhost<socket
+    path>` (git 2.47 or later). The `h` makes the proxy, not git, resolve
+    host names. It is passed through `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/
+    `GIT_CONFIG_VALUE_n`, so the token stays off command lines. _(My call:
+    SOCKS on a Unix socket rather than HTTP `CONNECT` on a loopback port,
+    since curl cannot reach an HTTP proxy over a Unix socket, and a loopback
+    port is open to every process in the container.)_
+  - **SSH:** the per-command `ssh_config` sets `ProxyCommand` to a tiny
+    helper shipped in the image, which opens the tunnel and joins it to
+    stdin and stdout. Its target host and port come from the environment,
+    set from the parsed remote URL, not from `%h`/`%p`, so a host name never
+    passes through the shell that runs `ProxyCommand`.
+  - The proxy turns off Nagle's algorithm (`TCP_NODELAY`) on its outgoing
+    connections. Without it, an SSH session took 78 ms longer.
+  - **The repository's own config can route git around the proxy:**
+    `http.<url>.proxy` and `remote.<name>.proxy` beat `http.proxy` wherever
+    it is set, and `""` means no proxy. Users cannot write `.git/config`
+    (A-7.6) and the engine never writes these keys, so before
+    each network command the engine reads the repository's config (with
+    includes) and refuses the command if it holds any of `http.*proxy`,
+    `http.*curloptResolve`, `remote.*.proxy`, `core.gitProxy`,
+    `core.sshCommand`, `url.*.insteadOf`, `url.*.pushInsteadOf`, `include.*`
+    or `includeIf.*`. _(My call: defence in depth against a bug elsewhere.)_
+  - Running git in an unprivileged network namespace without network
+    (`unshare -Un`) would make bypassing the proxy impossible. It works in
+    rootless podman with the NF-11.13 settings, but Docker's default seccomp
+    profile blocks `unshare`, so it cannot be relied on. _(My call: not
+    used. Doing it only where the runtime allows would make behaviour depend
+    on the host.)_
 - **A-5.8** For each connection, the proxy resolves the host name, checks
   **every** resolved address against the AR-57 rules
-  (`FRONT_BURNER_BLOCK_PRIVATE_NETWORKS`), and connects to an address it has
-  checked. DNS rebinding and redirects to another host are covered, since
-  every connection is checked when it is made. Refusals return their own
-  error code.
+  (`FRONT_BURNER_BLOCK_PRIVATE_NETWORKS`), and connects only to the
+  addresses it checked (with Happy Eyeballs across them). DNS rebinding and
+  redirects to another host are covered, since every connection is checked
+  when it is made. Refusals return their own error code; AR-57 shows them to
+  the user like an unreachable host.
+  - Addresses are checked after unwrapping embedded IPv4 addresses:
+    IPv4-mapped (`::ffff:a.b.c.d`, which Docker Desktop's DNS returns for
+    ordinary hosts), NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`). Numeric
+    host forms such as `2852039166` resolve to the address they encode and
+    are checked like any other.
+  - Besides AR-57's link-local ranges, these are always blocked:
+    `0.0.0.0/8` (on Linux, `0.0.0.0` reaches loopback services), `::/128`,
+    multicast (`224.0.0.0/4`, `ff00::/8`) and `240.0.0.0/4`. With
+    `FRONT_BURNER_BLOCK_PRIVATE_NETWORKS`, carrier-grade NAT
+    (`100.64.0.0/10`, used by Tailscale and similar) and the old site-local
+    `fec0::/10` are blocked too. _(My call; AR-57 may want to list them.)_
+  - Host names must be valid DNS names or IP addresses; anything else is
+    refused before resolving.
 - **A-5.9** Access checks (`git ls-remote`, AR-55) use the same proxy and
   broker.
 

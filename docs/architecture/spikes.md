@@ -64,7 +64,36 @@ conventions.
   - IPv6 works;
   - a DNS rebinding test and a redirect to a blocked host are both refused;
   - the proxy adds less than 50 ms per connection (NF-2.6).
-- **Findings:** _pending._
+- **Findings:** passed on 2026-10-22, on branch `spike/egress-proxy`, on
+  Fedora (git 2.56), in rootless podman and in Docker Desktop with the
+  NF-11.13 settings (Debian trixie slim, git 2.47 with GnuTLS curl).
+  - **Real remotes:** clone, push and branch delete on GitHub and Bitbucket
+    Cloud over HTTPS and SSH worked with git in a network namespace without
+    network, so every connection went through the proxy. Bitbucket was
+    reached over IPv6 for both protocols; GitHub has no IPv6 address.
+  - **AR-57:** `169.254.169.254` was refused as an address, in decimal,
+    IPv4-mapped and NAT64 forms, as a name resolving to it and over SSH;
+    so were `fe80::1` and `0.0.0.0`. Loopback was reachable by default and
+    refused with `FRONT_BURNER_BLOCK_PRIVATE_NETWORKS`, as were `10.0.0.1`,
+    `100.64.0.1` and `fd00::1`. Redirects from an allowed server to the
+    metadata address, directly or by name, were refused at the second hop.
+    A name resolving to a public and a blocked address was refused, and a
+    name alternating between them was checked on each connection, with
+    connections made only to checked addresses (simulated with a test
+    resolver, not a public rebinding service).
+  - **Cost:** under 1 ms inside the proxy (resolving and checking). Per
+    connection, HTTPS added 1–23 ms and SSH 33–47 ms, the upper figures
+    under Docker Desktop. SSH stays close to the 50 ms limit because every
+    round trip passes through the helper and the proxy; well within
+    NF-2.6's 1 s.
+  - **Changes to the architecture** (A-5.7, A-5.8): SOCKS5 on a Unix socket
+    instead of HTTP `CONNECT`; settings passed through `GIT_CONFIG_*`
+    variables; the SSH helper's target from the environment; `TCP_NODELAY`
+    upstream; a check of the repository's config before each network
+    command, since `http.<url>.proxy` and `remote.<name>.proxy` in
+    `.git/config` route git around the proxy; no network namespace, since
+    Docker's default seccomp profile blocks it; embedded IPv4 addresses
+    unwrapped; more always-blocked and private ranges.
 
 ### Spike 3: Preview under the strict CSP
 
