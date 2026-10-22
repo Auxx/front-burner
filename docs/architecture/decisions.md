@@ -203,18 +203,20 @@ _(My calls.)_
   - blog-engine markup such as Hexo's `{% blockquote %}` is shown as plain
     text.
 - **D-7.5** Shiki configuration:
-  - output CSS classes instead of inline styles (`transformerStyleToClass`
-    from `@shikijs/transformers`), so that neither Angular's sanitizer, the
-    DOMPurify whitelist nor a strict Content Security Policy has to allow
-    `style` attributes;
+  - output CSS classes instead of inline styles, so that neither Angular's
+    sanitizer, the DOMPurify whitelist nor a strict Content Security Policy
+    has to allow `style` attributes. _(Spike 3: a small transformer of our
+    own, since `transformerStyleToClass` from `@shikijs/transformers` leaves
+    token colours inline in Shiki 4; A-8.12.)_;
   - the fine-grained `shiki/core` build, with a few common languages bundled
     and the rest loaded on demand;
   - the JavaScript regex engine instead of the Oniguruma WebAssembly engine;
-  - one highlighter instance created once in an Angular service; only changed
-    code blocks are re-highlighted.
-- **D-7.6** HTML is sanitized once, with DOMPurify, and then passed to Angular
-  with `bypassSecurityTrustHtml` in a single shared preview component, and
-  nowhere else. _(My call.)_
+  - one highlighter instance created once, in the preview worker (A-8.13);
+    only changed code blocks are re-highlighted.
+- **D-7.6** HTML is sanitized once, with DOMPurify, and written to the page
+  by a single shared preview component, and nowhere else. _(My call. Spike 3:
+  the component writes DOMPurify's `TrustedHTML` into one element per block
+  instead of passing a string through `bypassSecurityTrustHtml`; A-8.12.)_
 - **D-7.7** Image loading is out of scope for now: assume images always load.
   How image paths are resolved and how the web client loads repository
   images are a separate requirement (see `docs/wiki/todo.md`).

@@ -320,7 +320,7 @@ These rules add to the security rules already in the requirements.
   ```
   default-src 'none'; script-src 'self'; style-src 'self' 'nonce-…';
   img-src 'self' blob: data:; connect-src 'self'; font-src 'self';
-  manifest-src 'self'; worker-src 'self'; base-uri 'none';
+  manifest-src 'self'; worker-src 'self'; base-uri 'self';
   form-action 'self'; frame-ancestors 'none'; object-src 'none';
   require-trusted-types-for 'script'
   ```
@@ -328,8 +328,15 @@ These rules add to the security rules already in the requirements.
   - The backend puts a fresh nonce into `index.html` for every request, used
     by Angular (`ngCspNonce`) and CodeMirror (`EditorView.cspNonce`). There is
     no `'unsafe-inline'` and no `'unsafe-eval'`.
-  - The Shiki + remark + Angular spike (D-7.8) confirms that this policy,
-    including Trusted Types, works.
+  - `base-uri` is `'self'`, not `'none'`: Angular's `index.html` needs
+    `<base href="/">`, and without it relative URLs break on deep links.
+    _(Spike 3.)_
+  - The build turns off critical CSS inlining (`inlineCritical: false`). It
+    adds an inline `<script>` that switches the stylesheet on, which
+    `script-src 'self'` blocks, leaving the global styles off.
+  - Spike 3 (D-7.8) confirmed that this policy, including Trusted Types,
+    works in Chromium, Firefox and WebKit, all of which enforce Trusted
+    Types; A-8.12 and A-8.13 list what the web client needs for it.
   - `img-src` is revisited by the image loading requirement (D-7.7).
 - **NF-11.2** Other headers: `Strict-Transport-Security` (when the request
   arrived over HTTPS), `X-Content-Type-Options: nosniff`,
@@ -476,8 +483,8 @@ These rules add to the security rules already in the requirements.
   mapping of API error codes to text (NF-14.3).
 - **Disk monitor.** A periodic free-space check that feeds the low-space
   rules, the readiness check and metrics (NF-9.7, NF-10.8, NF-10.11).
-- **Spikes.** The Shiki + remark + Angular spike (D-7.8) also confirms the
-  CSP with nonces and Trusted Types (NF-11.1).
+- **Spikes.** The Shiki + remark + Angular spike (D-7.8, spike 3) confirmed
+  the CSP with nonces and Trusted Types (NF-11.1).
 
 ## Open questions
 

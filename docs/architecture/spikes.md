@@ -106,7 +106,35 @@ conventions.
   - a 200 KB file's preview updates within 300 ms on a mid-range phone
     (NF-2.5), and typing stays within NF-2.4;
   - the initial bundle stays within 300 KB gzipped (NF-2.9).
-- **Findings:** _pending._
+- **Findings:** passed on 2026-10-22, on branch `spike/preview-csp` (Angular
+  22, CodeMirror 6, Shiki 4, DOMPurify 3), with one exception at 1 MB.
+  Timings come from Chromium with the CPU slowed 4× on a phone-sized
+  viewport, standing in for a mid-range phone; Chromium does not slow
+  workers, so worker times are desktop speed.
+  - **CSP and Trusted Types:** no violations in Chromium 156, Firefox 157
+    or WebKit 27.2 (all enforce Trusted Types), with the pipeline on the
+    main thread or in a worker, for a 200 KB document and for a document
+    of XSS payloads, which rendered without any script, handler, style or
+    dangerous URL. It took four changes: `base-uri 'self'` (NF-11.1), no
+    critical CSS inlining, a Trusted Types policy for the worker URL
+    (A-8.13), and stripping hostile markup before DOMPurify, since Chrome
+    reports what DOMPurify's inert document meets (A-8.12).
+  - **Bugs found:** Shiki 4's `transformerStyleToClass` leaves token colours
+    inline (replaced, D-7.5); the Angular builder resolves workers with the
+    `browser` condition, which loads DOM code into the worker (fixed with
+    the `worker` condition, A-8.13).
+  - **NF-2.5:** re-rendering the whole 200 KB file took 0.8–0.9 s, so the
+    preview renders incrementally, by block (A-8.12). It then updated
+    120–130 ms after the last keystroke, debounce included. The first render
+    of the file took about 3 s on the main thread and about 1 s in the
+    worker.
+  - **NF-2.4:** with previews updating, typing in the 200 KB file stayed at
+    or below 40–48 ms. In the 1 MB file the editor alone took 40–56 ms, at
+    the limit; with the preview visible, 10–17 of 48 keystrokes went over
+    50 ms (worst 88 ms), hence no visible preview while typing on phones.
+    This needs checking on a real mid-range phone.
+  - **NF-2.9:** the initial JavaScript was 65.5 KB gzipped. The editor's lazy
+    chunk was 224 KB and the worker 164 KB (A-8.11, A-8.13).
 
 ### Spike 4: Git at 100,000 files
 

@@ -27,7 +27,7 @@ Spikes (`docs/architecture/spikes.md`), each on its own `spike/<name>` branch,
 never merged, time-boxed to 1–2 days; findings go back into the architecture
 documents:
 
-- Spike 3: Preview under the strict CSP (A-8.11 to A-8.13). Needs nothing
-  external; suggested first.
+- Check typing in a 1 MB file on a real mid-range phone (NF-2.4): spike 3
+  measured 40–56 ms per keystroke in emulation, at the limit (A-8.11).
 - Spike 4: Git at 100,000 files (A-5.14). Needs a Linux kernel clone on hardware
   close to the reference host.
