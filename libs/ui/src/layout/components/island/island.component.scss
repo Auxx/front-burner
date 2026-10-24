@@ -1,0 +1,51 @@
+@layer components {
+  :host {
+    --ui-island-padding: var(--ui-space-3);
+    --ui-island-header-height: var(--ui-control-height);
+
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+    overflow: hidden;
+    container: ui-island / inline-size;
+    background: var(--ui-surface-island);
+    color: var(--ui-text-default);
+    border-radius: var(--ui-radius-island);
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    min-block-size: var(--ui-island-header-height);
+    padding-inline: var(--ui-island-padding);
+
+    &:not(:has(> *)) {
+      display: none;
+    }
+  }
+
+  .title {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    font-size: var(--ui-font-size-ui);
+    font-weight: var(--ui-font-weight-semibold);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .body {
+    flex: 1;
+    min-block-size: 0;
+    overflow: auto;
+
+    // Content that scrolls itself fills the body.
+    &:not([tabindex]) {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+  }
+}

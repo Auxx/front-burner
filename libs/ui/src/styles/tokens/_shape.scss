@@ -1,5 +1,7 @@
 // Radii, island spacing, elevation and focus (A-10.19, A-10.30).
 
+@use '../mixins';
+
 @layer tokens {
   :root {
     --ui-radius-control: 0.25rem;
@@ -18,5 +20,14 @@
 
     --ui-focus-ring-width: 2px;
     --ui-focus-ring-offset: 2px;
+  }
+
+  // Narrow screens: islands take the full width with smaller gaps and radii
+  // (A-10.6).
+  @include mixins.breakpoint-below(mixins.$breakpoint-medium) {
+    :root {
+      --ui-island-gap: var(--ui-space-1);
+      --ui-radius-island: var(--ui-radius-popover);
+    }
   }
 }

@@ -1,0 +1,9 @@
+<div class="header">
+  @if (heading()) {
+    <h2 class="title" [id]="titleId">{{ heading() }}</h2>
+  }
+  <ng-content select="[uiIslandHeader]" />
+</div>
+<div class="body" [attr.tabindex]="scrollable() ? 0 : null">
+  <ng-content />
+</div>
