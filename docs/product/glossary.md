@@ -290,6 +290,17 @@ conflict help.
 : Full, explicit control over branches, commits, push, pull and conflict
 resolution, using standard git vocabulary.
 
+**Upstream**
+: The remote branch that a local branch pulls from and pushes to, for
+example `origin/main` (git's _tracking branch_). A local branch without one
+is **unpublished** until its first push.
+
+**Changes**
+: The files in a working copy that differ from the last commit of the
+current branch (modified, added or deleted), and the tab of the repository
+screen that lists them. Committed by ticking them; there is no staging
+area at the Advanced level in the MVP.
+
 **Synchronisation**
 : Pulling changes from the remote and pushing local commits to it. Automatic
 at the Simple level; explicit at the others. _Short form_: sync.
@@ -341,6 +352,15 @@ combined automatically.
 **Conflict episode**
 : At the Simple level, the time from the first automatic pull that conflicts
 until the user's changes are pushed. One reminder email is sent per episode.
+
+**Merge in progress**
+: The state of a repository after a merge conflicted, until the user commits
+or aborts it. The repository screen shows conflict resolution meanwhile,
+on every device.
+
+**Conflict marker**
+: The `<<<<<<<`, `=======` and `>>>>>>>` lines git writes around each
+conflict in a text file. Front Burner always uses git's plain merge style.
 
 **Base / Ours / Theirs**
 : The git terms for the three versions of a conflicting file: the common

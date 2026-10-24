@@ -157,7 +157,7 @@ confused with the Guided level's **Draft**, which is a branch.
   - the content is larger than 1 MB: "Not saved — the file is larger than
     1 MB". Saving resumes when the content is small enough again;
   - the repository is locked by a merge or rebase in progress (A-5.3,
-    D-4.4).
+    D-4.4), unless the file is one of the merge's conflicting files (GC-12).
 - **ED-20** Unsaved edits are written to a browser draft as in NF-3.3, and
   the browser draft is deleted once the backend confirms the save. Browser
   drafts are deleted on logout (NF-3.5).
@@ -191,9 +191,11 @@ confused with the Guided level's **Draft**, which is a branch.
 
   _(My call.)_ The user's own saves never trigger this.
 - **ED-25** While the repository is locked by a merge or rebase in progress,
-  the editor is read-only, with a banner that says so and links to the
-  resolution screen (git requirement). Unsaved edits made before the lock
-  stay in the browser draft.
+  the repository screen shows conflict resolution
+  ([REQ-GIT-003](git-conflicts.md)). Only the merge's conflicting files can
+  be edited (GC-12); any other file opened during the merge, for example
+  with **Show mine** (GC-17), is read-only, with a banner that says so.
+  Unsaved edits made before the lock stay in the browser draft.
 
 ### Live preview
 

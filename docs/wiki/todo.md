@@ -1,13 +1,12 @@
 Next requirements files to write for the MVP (`docs/product/mvp.md`), in the
 suggested order of work:
 
-- Git at the Advanced level: status, diff, discard, commit, push, pull (merge),
-  branches, fetch notices, and conflict resolution by conflict markers, Use my /
-  their version and abort (from D-4, D-5 and D-6).
 - Push credentials and asking for a passphrase on other pages, including
   adding credentials to a repository that was added without them.
 - The repository management page (minimal: list, retry clone, replace
   credentials, remove).
+- Navigation: the web client's header and user menu (Preferences, Log out),
+  which REQ-DASH-001 and REQ-GIT-001 rely on but no requirement defines yet.
 
 Requirements files deferred until after the MVP:
 
@@ -20,6 +19,8 @@ Requirements files deferred until after the MVP:
 - User management, invitations and onboarding of invited users, and SMTP in
   system settings.
 - The Simple and Guided levels, and pull requests.
+- Conflict markers in the `zdiff3` style (with the common ancestor) as a user
+  preference. The MVP always uses the plain merge style (GC-5).
 - Editor: basic code formatting from the repository's `.editorconfig` (for
   example indent style and size, line endings, final newline and trimming
   trailing spaces), applied while typing and on save. Until then the editor

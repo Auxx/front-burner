@@ -173,17 +173,23 @@ The editor and preview are written up as
 [REQ-EDIT-002](../requirements/preview-html.md) and images as
 [REQ-EDIT-003](../requirements/preview-images.md).
 
-### 8. Git at the Advanced level (to write)
+### 8. Git at the Advanced level (written)
+
+Written up as [REQ-GIT-002](../requirements/git-advanced.md) (changes,
+commits, pull, push, branches, fetch) and
+[REQ-GIT-003](../requirements/git-conflicts.md) (conflict resolution).
 
 Builds on decisions D-4, D-5 and D-6. The backend exposes one set of git
 operations for every level. The MVP builds only the Advanced level's UI for
 them.
 
 - **Status**: the current branch, how far it is ahead of and behind its
-  upstream, and the list of changed files (added, modified, deleted, renamed).
+  upstream, and a **Changes** tab next to **Files** listing the changed
+  files (added, modified, deleted).
 - **Diff**: the diff of each changed file against the last commit.
 - **Discard**: discarding the changes to selected files, with a confirmation.
-- **Commit**: committing selected files, or all of them, with a message.
+- **Commit**: committing the ticked files (there is no staging area) with a
+  message, and amending the last commit while it has not been pushed.
 - **Push**: pushing the current branch, and setting its upstream on the first
   push.
 - **Pull**: fetching and merging the upstream into the current branch. If
@@ -198,14 +204,16 @@ them.
   upstream has new commits and whether the open file is among them.
 - **Conflict resolution** (D-4.4 to D-4.6, D-6): a pull that conflicts locks
   the repository to the resolution screen, which offers:
-  - **Edit conflict markers**, in the normal editor (D-6.4);
+  - **Edit conflict markers**, in the normal editor (D-6.4), in the plain
+    marker style, with **Accept mine** / **Accept theirs** / **Accept both**
+    buttons on each conflict;
   - **Use my version** / **Use their version**, the only methods for
     non-Markdown files (D-6.2);
   - **Abort**, which puts the branch and working copy back exactly as they
     were (D-4.5).
 
   Finishing commits the merge. The user then pushes it like any other
-  commit.
+  commit, or undoes the merge while it has not been pushed.
 
 ### 9. Deployment guide (to write)
 
