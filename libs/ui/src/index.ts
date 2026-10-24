@@ -11,9 +11,13 @@ export { MenuSeparatorComponent } from './navigation/components/menu-separator/m
 export { MenuComponent } from './navigation/components/menu/menu.component';
 export { TabStripComponent } from './navigation/components/tab-strip/tab-strip.component';
 export { TabComponent } from './navigation/components/tab/tab.component';
+export { TreeComponent } from './navigation/components/tree/tree.component';
 export { BreadcrumbDirective } from './navigation/directives/breadcrumb/breadcrumb.directive';
 export { MenuGroupDirective } from './navigation/directives/menu-group/menu-group.directive';
 export { MenuTriggerDirective } from './navigation/directives/menu-trigger/menu-trigger.directive';
 export { TabContentDirective } from './navigation/directives/tab-content/tab-content.directive';
 export { TabGroupDirective } from './navigation/directives/tab-group/tab-group.directive';
 export { TabPanelDirective } from './navigation/directives/tab-panel/tab-panel.directive';
+export { TreeItemMenuDirective } from './navigation/directives/tree-item-menu/tree-item-menu.directive';
+export { TreeNodeDirective } from './navigation/directives/tree-node/tree-node.directive';
+export { type TreeNode } from './navigation/models/tree-node.model';

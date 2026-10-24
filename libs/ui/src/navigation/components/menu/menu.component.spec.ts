@@ -64,6 +64,19 @@ class HostComponent {
 class GroupHostComponent {
 }
 
+@Component({
+  imports: [ MenuComponent, MenuItemComponent, MenuTriggerDirective ],
+  template: `
+    <button [uiMenuTrigger]="menu.aria">First row</button>
+    <button [uiMenuTrigger]="menu.aria">Second row</button>
+    <ui-menu #menu="uiMenu">
+      <button uiMenuItem="rename">Rename</button>
+    </ui-menu>
+  `
+})
+class SharedHostComponent {
+}
+
 describe('MenuComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -92,7 +105,7 @@ describe('MenuComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ HostComponent, GroupHostComponent ]
+      imports: [ HostComponent, GroupHostComponent, SharedHostComponent ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(HostComponent);
@@ -210,5 +223,21 @@ describe('MenuComponent', () => {
 
     expect(group.getAttribute('role')).toBe('group');
     expect(group.getAttribute('aria-label')).toBe('Recent');
+  });
+
+  it('opens from whichever of its triggers is used and returns the focus there', async () => {
+    const shared = TestBed.createComponent(SharedHostComponent);
+    await shared.whenStable();
+    const [ first ] = [ ...shared.nativeElement.querySelectorAll('button') ] as HTMLButtonElement[];
+
+    first.click();
+    await shared.whenStable();
+    expect(inOverlay()).not.toBeNull();
+    expect(first.getAttribute('aria-expanded')).toBe('true');
+    expect(activeText()).toBe('Rename');
+
+    await press('Escape');
+    expect(inOverlay()).toBeNull();
+    expect(document.activeElement).toBe(first);
   });
 });

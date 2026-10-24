@@ -76,6 +76,13 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
     graphic(fg, 'surface-canvas', 'surface-hover')
   ]),
 
+  // Tree chevrons in an island, also on selected rows, and the focus ring on a
+  // selected row of a tree that does not have the focus
+  graphic('icon-muted', 'surface-island'),
+  graphic('icon-muted', 'selected-active'),
+  graphic('icon-muted', 'selected-inactive'),
+  graphic('border-focus', 'selected-inactive'),
+
   // Status
   ...statuses.flatMap(status => [
     text(`${status}-text`, `${status}-background`),

@@ -1,0 +1,423 @@
+import { Directionality } from '@angular/cdk/bidi';
+import type { ListRange } from '@angular/cdk/collections';
+import { CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
+import { NgTemplateOutlet } from '@angular/common';
+import {
+  afterNextRender,
+  afterRenderEffect,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  contentChild,
+  DestroyRef,
+  ElementRef,
+  inject,
+  input,
+  model,
+  output,
+  signal,
+  viewChild
+} from '@angular/core';
+
+import { TreeNodeDirective } from '../../directives/tree-node/tree-node.directive';
+import type { TreeNode } from '../../models/tree-node.model';
+
+/** One visible row: a node with its place in the tree. */
+interface TreeRow {
+  readonly node: TreeNode;
+  readonly level: number;
+  readonly setsize: number;
+  readonly posinset: number;
+  readonly expanded: boolean;
+  readonly expandable: boolean;
+  readonly selectable: boolean;
+  /** Index of the parent's row, or -1 at the root. */
+  readonly parent: number;
+}
+
+/** The active row, remembered by value and by where it was. */
+interface ActiveRow {
+  readonly value: string;
+  readonly index: number;
+}
+
+const FALLBACK_ROW_HEIGHT = 24;
+const TYPEAHEAD_RESET_MS = 500;
+
+let nextId = 0;
+
+/**
+ * A tree of folders and files (REQ-FILE-001): our own code on the CDK's virtual
+ * scrolling (A-10.34), following the WAI-ARIA tree view pattern.
+ *
+ * ```html
+ * <ui-tree label="Files" [nodes]="nodes" [(selected)]="open" [(expanded)]="expanded"
+ *          (loadChildren)="load($event)">
+ *   <ng-template uiTreeNode let-node>{{ node.label }}</ng-template>
+ * </ui-tree>
+ * ```
+ *
+ * - `[(selected)]` is the value of the open file; files are selectable and
+ *   folders are not, unless a node says otherwise.
+ * - `[(expanded)]` holds the values of the expanded folders, so that they can
+ *   be restored (FB-14).
+ * - `(loadChildren)` asks for the children of a folder that is expanded while
+ *   its `children` is still undefined (FB-15).
+ *
+ * The visible nodes are flattened into rows of a fixed height, and only the
+ * rows near the viewport are rendered, so a folder of 5,000 entries (FB-18)
+ * opens as fast as a small one. The tree element keeps the focus and points at
+ * the active row with `aria-activedescendant`; each row carries its own
+ * `aria-level`, `aria-setsize` and `aria-posinset`.
+ *
+ * Keys: arrows, Home and End move; Right and Left expand, collapse and go to a
+ * child or the parent (swapped in right-to-left text); Enter and Space open a
+ * file or toggle a folder; typing finds a row by its label; Shift+F10 or the
+ * ContextMenu key opens the row's `uiTreeItemMenu`. Tabbing in lands on the
+ * open file.
+ *
+ * It fills its container and scrolls itself: in an island, set the island's
+ * `scrollable` to false.
+ */
+@Component({
+  selector: 'ui-tree',
+  imports: [ CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport, NgTemplateOutlet ],
+  templateUrl: './tree.component.html',
+  styleUrl: './tree.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class TreeComponent {
+  readonly nodes = input.required<readonly TreeNode[]>();
+  readonly label = input.required<string>();
+  readonly selected = model<string | null>(null);
+  readonly expanded = model<readonly string[]>([]);
+  readonly loadChildren = output<string>();
+
+  protected readonly id = `ui-tree-${nextId++}`;
+  protected readonly nodeTemplate = contentChild(TreeNodeDirective);
+  protected readonly itemSize = signal(FALLBACK_ROW_HEIGHT);
+
+  /** The visible nodes in order: O(n) in visible rows. */
+  protected readonly rows = computed(() => {
+    const expanded = new Set(this.expanded());
+    const rows: TreeRow[] = [];
+    const visit = (nodes: readonly TreeNode[], level: number, parent: number) => {
+      nodes.forEach((node, index) => {
+        const expandable = node.expandable === true;
+        const isExpanded = expandable && expanded.has(node.value);
+        rows.push({
+          node,
+          level,
+          setsize: nodes.length,
+          posinset: index + 1,
+          expanded: isExpanded,
+          expandable,
+          selectable: node.selectable ?? !expandable,
+          parent
+        });
+        if (isExpanded && node.children) {
+          visit(node.children, level + 1, rows.length - 1);
+        }
+      });
+    };
+    visit(this.nodes(), 1, -1);
+    return rows;
+  });
+
+  private readonly rowIndex = computed(() => new Map(this.rows().map((row, index) => [ row.node.value, index ])));
+  private readonly active = signal<ActiveRow | null>(null);
+
+  /**
+   * The active row's index. When the active row is gone (FB-41), it falls back
+   * to the open file, else to the row now at the same place.
+   */
+  protected readonly activeIndex = computed(() => {
+    const active = this.active();
+    if (!active) {
+      return -1;
+    }
+    const index = this.rowIndex().get(active.value) ?? this.selectedIndex();
+    if (index !== -1) {
+      return index;
+    }
+    return Math.min(active.index, this.rows().length - 1);
+  });
+
+  private readonly renderedRange = signal<ListRange>({ start: 0, end: 0 });
+
+  /** Only a rendered row can be referenced. */
+  protected readonly activeDescendant = computed(() => {
+    const index = this.activeIndex();
+    const { start, end } = this.renderedRange();
+    return index >= start && index < end ? this.rowId(index) : null;
+  });
+
+  private readonly selectedIndex = computed(() => {
+    const selected = this.selected();
+    return selected === null ? -1 : this.rowIndex().get(selected) ?? -1;
+  });
+
+  private readonly viewport = viewChild.required(CdkVirtualScrollViewport);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly direction = inject(Directionality).valueSignal;
+
+  private typeahead = '';
+  private typeaheadTimer?: ReturnType<typeof setTimeout>;
+  /**
+   * Set while a pointer or our own code moves the focus into the tree, which is
+   * then not focus from outside.
+   */
+  private focusByPointer = false;
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+
+    afterNextRender(() => {
+      const subscription = this.viewport().renderedRangeStream.subscribe(range => this.renderedRange.set(range));
+      destroyRef.onDestroy(() => subscription.unsubscribe());
+
+      // Touch density has taller rows (A-10.11).
+      if (typeof matchMedia !== 'function') {
+        return;
+      }
+      const coarse = matchMedia('(pointer: coarse)');
+      const remeasure = () => this.measureRowHeight();
+      coarse.addEventListener('change', remeasure);
+      destroyRef.onDestroy(() => coarse.removeEventListener('change', remeasure));
+    });
+
+    afterRenderEffect({
+      read: () => {
+        this.rows();
+        this.measureRowHeight();
+      }
+    });
+
+    destroyRef.onDestroy(() => clearTimeout(this.typeaheadTimer));
+  }
+
+  protected rowId(index: number): string {
+    return `${this.id}-row-${index}`;
+  }
+
+  protected trackRow(_index: number, row: TreeRow): string {
+    return row.node.value;
+  }
+
+  protected onFocusIn(event: FocusEvent): void {
+    const target = event.target as HTMLElement;
+    const tree = this.viewport().elementRef.nativeElement;
+
+    // A row's menu button is not a stop of its own: its focus, such as when its
+    // menu closes, goes back to the tree, on its row.
+    if (target.matches('[uiTreeItemMenu]')) {
+      const index = this.indexOfRowElement(target.closest('[role="treeitem"]'));
+      if (index !== -1) {
+        this.setActive(index);
+      }
+      this.focusTree();
+      return;
+    }
+
+    if (target !== tree || this.focusByPointer || tree.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
+
+    // From outside: the open file, else the last active row, else the first.
+    const last = this.active();
+    const lastIndex = last ? this.rowIndex().get(last.value) ?? -1 : -1;
+    const index = this.selectedIndex() !== -1 ? this.selectedIndex() : lastIndex !== -1 ? lastIndex : 0;
+    if (index < this.rows().length) {
+      this.setActive(index);
+    }
+  }
+
+  protected onPointerDown(): void {
+    this.focusByPointer = true;
+    setTimeout(() => (this.focusByPointer = false));
+  }
+
+  /** Rows have no handlers of their own: the tree has the focus and the keys. */
+  protected onClick(event: MouseEvent): void {
+    const index = this.indexOfRowElement((event.target as Element).closest('[role="treeitem"]'));
+    if (index === -1) {
+      return;
+    }
+    this.focusTree();
+    this.setActive(index);
+    this.activate(index);
+  }
+
+  protected onKeydown(event: KeyboardEvent): void {
+    if (event.target !== this.viewport().elementRef.nativeElement || event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+    if (this.handleKey(event)) {
+      event.preventDefault();
+    }
+  }
+
+  private handleKey(event: KeyboardEvent): boolean {
+    const rows = this.rows();
+    if (rows.length === 0) {
+      return false;
+    }
+    const index = Math.max(this.activeIndex(), 0);
+    const row = rows[index];
+    const rtl = this.direction() === 'rtl';
+    const key = event.key;
+
+    if (event.shiftKey ? key === 'F10' : key === 'ContextMenu') {
+      this.rowElement(index)?.querySelector<HTMLElement>('[uiTreeItemMenu]')?.click();
+      return true;
+    }
+    if (key.length === 1 && (key !== ' ' || this.typeahead !== '')) {
+      this.search(key, index);
+      return true;
+    }
+    if (event.shiftKey) {
+      return false;
+    }
+
+    switch (key) {
+      case 'ArrowDown':
+        this.setActive(Math.min(index + 1, rows.length - 1));
+        return true;
+      case 'ArrowUp':
+        this.setActive(Math.max(index - 1, 0));
+        return true;
+      case 'Home':
+        this.setActive(0);
+        return true;
+      case 'End':
+        this.setActive(rows.length - 1);
+        return true;
+      case 'Enter':
+      case ' ':
+        this.setActive(index);
+        this.activate(index);
+        return true;
+      case 'ArrowRight':
+      case 'ArrowLeft':
+        if ((key === 'ArrowRight') !== rtl) {
+          this.expandOrEnter(index, row);
+        } else {
+          this.collapseOrLeave(index, row);
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private expandOrEnter(index: number, row: TreeRow): void {
+    if (row.expandable && !row.expanded) {
+      this.setActive(index);
+      this.setExpanded(row.node, true);
+    } else if (row.expanded && this.rows()[index + 1]?.parent === index) {
+      this.setActive(index + 1);
+    } else {
+      this.setActive(index);
+    }
+  }
+
+  private collapseOrLeave(index: number, row: TreeRow): void {
+    if (row.expanded) {
+      this.setActive(index);
+      this.setExpanded(row.node, false);
+    } else {
+      this.setActive(row.parent !== -1 ? row.parent : index);
+    }
+  }
+
+  /** Opens a selectable row and toggles an expandable one. */
+  private activate(index: number): void {
+    const row = this.rows()[index];
+    if (row.selectable) {
+      this.selected.set(row.node.value);
+    }
+    if (row.expandable) {
+      this.setExpanded(row.node, !row.expanded);
+    }
+  }
+
+  private setExpanded(node: TreeNode, expanded: boolean): void {
+    const values = this.expanded();
+    if (values.includes(node.value) === expanded) {
+      return;
+    }
+    this.expanded.set(expanded ? [ ...values, node.value ] : values.filter(value => value !== node.value));
+    if (expanded && node.children === undefined) {
+      this.loadChildren.emit(node.value);
+    }
+  }
+
+  /** The next row whose label starts with what was typed (WAI-ARIA tree view). */
+  private search(key: string, index: number): void {
+    clearTimeout(this.typeaheadTimer);
+    this.typeaheadTimer = setTimeout(() => (this.typeahead = ''), TYPEAHEAD_RESET_MS);
+    this.typeahead += key.toLowerCase();
+
+    const rows = this.rows();
+    // A new search starts after the active row; a longer one may stay on it.
+    const from = this.typeahead.length === 1 ? index + 1 : index;
+    for (let offset = 0; offset < rows.length; offset++) {
+      const candidate = (from + offset) % rows.length;
+      if (rows[candidate].node.label.toLowerCase().startsWith(this.typeahead)) {
+        this.setActive(candidate);
+        return;
+      }
+    }
+  }
+
+  /** Scrolls the row into view first, so that the referenced element exists. */
+  private setActive(index: number): void {
+    const row = this.rows()[index];
+    if (!row) {
+      return;
+    }
+    this.scrollIntoView(index);
+    this.active.set({ value: row.node.value, index });
+  }
+
+  private scrollIntoView(index: number): void {
+    const viewport = this.viewport();
+    const size = this.itemSize();
+    const top = index * size;
+    const offset = viewport.measureScrollOffset('top');
+    const height = viewport.getViewportSize();
+    if (top < offset) {
+      viewport.scrollToOffset(top);
+    } else if (top + size > offset + height) {
+      viewport.scrollToOffset(top + size - height);
+    }
+  }
+
+  private focusTree(): void {
+    const tree = this.viewport().elementRef.nativeElement;
+    if (this.host.ownerDocument.activeElement !== tree) {
+      this.focusByPointer = true;
+      tree.focus({ preventScroll: true });
+      this.focusByPointer = false;
+    }
+  }
+
+  private rowElement(index: number): HTMLElement | null {
+    return this.host.ownerDocument.getElementById(this.rowId(index));
+  }
+
+  private indexOfRowElement(element: Element | null): number {
+    const id = element?.id ?? '';
+    const prefix = `${this.id}-row-`;
+    return id.startsWith(prefix) ? Number(id.slice(prefix.length)) : -1;
+  }
+
+  /** Rows are `var(--ui-row-height)` high; the CDK needs it in pixels. */
+  private measureRowHeight(): void {
+    const height = this.host.querySelector<HTMLElement>('[role="treeitem"]')?.offsetHeight;
+    const size = height && height > 0 ? height : FALLBACK_ROW_HEIGHT;
+    if (size !== this.itemSize()) {
+      this.itemSize.set(size);
+    }
+  }
+}

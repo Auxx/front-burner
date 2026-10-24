@@ -1,0 +1,101 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    --ui-tree-indent: var(--ui-space-4);
+
+    display: block;
+    block-size: 100%;
+    min-block-size: 0;
+    color: var(--ui-text-default);
+    font-size: var(--ui-font-size-ui);
+  }
+
+  // The tree keeps the focus; its active row shows it instead (A-10.30). It
+  // is a size container, so that rows can be exactly as wide as it: long names
+  // are shortened instead of scrolling sideways (NF-12.4).
+  [role='tree'] {
+    block-size: 100%;
+    container-type: inline-size;
+    outline: none;
+  }
+
+  [role='tree']:focus [data-active='true'] {
+    background-image: linear-gradient(var(--ui-surface-hover) 0 0);
+  }
+
+  [role='tree']:focus-visible [data-active='true'] {
+    @include mixins.focus-ring;
+    outline-offset: calc(-1 * var(--ui-focus-ring-width));
+  }
+
+  [aria-selected='true'] {
+    background-color: var(--ui-selected-inactive);
+  }
+
+  [role='tree']:focus-within [aria-selected='true'] {
+    background-color: var(--ui-selected-active);
+  }
+
+  // Under forced colours both selection colours are `Highlight`, so the
+  // selected row also gets an outline (A-10.22).
+  @media (forced-colors: active) {
+    [aria-selected='true'] {
+      outline: var(--ui-border-width) solid Highlight;
+      outline-offset: calc(-1 * var(--ui-border-width));
+    }
+  }
+
+  // Expanded folders turn their chevron down.
+  [aria-expanded='true'] > .chevron > svg {
+    rotate: 90deg;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-1);
+    box-sizing: border-box;
+    inline-size: 100cqi;
+    block-size: var(--ui-row-height);
+    padding-inline: calc((var(--ui-tree-level) - 1) * var(--ui-tree-indent) + var(--ui-space-1)) var(--ui-space-1);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  // An overlay, so that a hovered row keeps its selection colour.
+  .row:hover {
+    background-image: linear-gradient(var(--ui-surface-hover) 0 0);
+  }
+
+  // Non-expandable rows keep the chevron's space, so that labels line up.
+  .chevron {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--ui-icon-size);
+    block-size: var(--ui-icon-size);
+    color: var(--ui-icon-muted);
+  }
+
+  .chevron > svg {
+    inline-size: 100%;
+    block-size: 100%;
+    transition: rotate var(--ui-duration-fast);
+  }
+
+  // In right-to-left text the collapsed chevron points to the inline start;
+  // `rotate` applies after `scale`, so it turns the other way to point down.
+  :host-context([dir='rtl']) .chevron > svg {
+    scale: -1 1;
+  }
+
+  :host-context([dir='rtl']) [aria-expanded='true'] > .chevron > svg {
+    rotate: -90deg;
+  }
+
+  .label {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

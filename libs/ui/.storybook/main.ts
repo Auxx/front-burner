@@ -36,6 +36,7 @@ const config: StorybookConfig = {
           '@angular/cdk/layout',
           '@angular/cdk/overlay',
           '@angular/cdk/portal',
+          '@angular/cdk/scrolling',
           '@angular/core/rxjs-interop'
         ]
       }

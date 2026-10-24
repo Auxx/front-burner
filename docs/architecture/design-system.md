@@ -17,7 +17,7 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 
   | Package             | Used for                                                                                                                      |
   | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-  | **`@angular/aria`** | Widgets with complex keyboard and ARIA behaviour: Tree, Tabs, Menu and Menubar, Listbox, Combobox, Grid, Toolbar, Accordion   |
+  | **`@angular/aria`** | Widgets with complex keyboard and ARIA behaviour: Tabs, Menu and Menubar, Listbox, Combobox, Grid, Toolbar, Accordion         |
   | **`@angular/cdk`**  | Infrastructure: `Overlay`, `Dialog`, `a11y` (`FocusTrap`, `FocusMonitor`, `LiveAnnouncer`), `BreakpointObserver`, `Scrolling` |
   - Both are versioned with Angular (`@angular/aria` 22.2 has no
     developer-preview APIs and needs the exact `@angular/cdk` version), so they
@@ -32,7 +32,8 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   content projection. Required texts are required inputs.
 - **A-10.4** Every Aria or CDK directive is used through a `ui` component or
   directive, never directly in feature libraries. Features depend on our API
-  only, so a change in Aria or the CDK is absorbed in one place.
+  only, so a change in Aria or the CDK is absorbed in one place. `Tree` is our
+  own code on the CDK's virtual scrolling, not Aria's Tree (A-10.34).
 
 ## A-10: Look
 
@@ -231,13 +232,13 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 - **A-10.32** The `ui` library builds only what the MVP's screens need. Before
   release it holds:
 
-  | Group      | Components                                                                                      | Built on                    |
-  | ---------- | ----------------------------------------------------------------------------------------------- | --------------------------- |
-  | Layout     | `AppShell`, `Island`, `SplitPane`, `ActivityBar`, `StatusBar`                                   | Own code, CDK `Breakpoints` |
-  | Navigation | `TabStrip`, `Tree`, `Menu`, `Breadcrumbs`                                                       | Aria Tabs, Tree, Menu       |
-  | Controls   | `Button`, `IconButton`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements, Aria       |
-  | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`      | CDK Overlay and Dialog      |
-  | Content    | `Icon`, `EmptyState`, `KeyValueList`                                                            | Own code                    |
+  | Group      | Components                                                                                      | Built on                                                |
+  | ---------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+  | Layout     | `AppShell`, `Island`, `SplitPane`, `ActivityBar`, `StatusBar`                                   | Own code, CDK `Breakpoints`                             |
+  | Navigation | `TabStrip`, `Tree`, `Menu`, `Breadcrumbs`                                                       | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
+  | Controls   | `Button`, `IconButton`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements, Aria                                   |
+  | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`      | CDK Overlay and Dialog                                  |
+  | Content    | `Icon`, `EmptyState`, `KeyValueList`                                                            | Own code                                                |
 
   _(My call.)_ The list grows when a requirement needs a new component, not
   ahead of it.
@@ -245,9 +246,21 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 - **A-10.33** `SplitPane` can be resized with the keyboard (arrow keys on its
   separator, `role="separator"` with `aria-valuenow`) and through a menu with
   preset sizes, so that dragging is never the only way (NF-13.6).
-- **A-10.34** `Tree` is the base of the file tree (REQ-FILE-001): Aria's Tree
-  with deferred loading of a folder's children, and the CDK's virtual scrolling
-  for large folders.
+- **A-10.34** `Tree` is the base of the file tree (REQ-FILE-001). It is our own
+  code, following the WAI-ARIA tree view pattern:
+  - The visible nodes are flattened into rows that are siblings, each with its
+    own `aria-level`, `aria-setsize` and `aria-posinset`; a folder's children
+    are loaded when it is expanded.
+  - The tree element keeps the focus and points at the active row with
+    `aria-activedescendant`.
+  - Rows have a fixed height (`--ui-row-height`), and the CDK's virtual
+    scrolling renders only the rows near the viewport.
+  - Why not Aria's Tree: its item registry is quadratic. It copies its item set
+    on every registration and re-sorts it with `compareDocumentPosition`.
+    Opening a folder took 1,262 ms for 1,000 entries and 131 s for 5,000 in
+    Chromium (NF-2.1: 300 ms; FB-18: up to 5,000 entries).
+  - The `Navigation/Tree → LargeFolder` story measures opening a folder of 5,000
+    entries.
 
 ## A-10: Icons and fonts
 
@@ -275,7 +288,8 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   build before it reaches the end-to-end tests (NF-13.8). Storybook uses the
   Vite-based `@storybook/angular-vite` framework, which the Vitest addon needs.
 - **A-10.39** Unit tests of components that wrap Aria use its testing harnesses
-  (`@angular/aria/*/testing`) rather than querying the DOM.
+  (`@angular/aria/*/testing`) rather than querying the DOM. `Tree` has no Aria
+  harness and is tested through the DOM.
 - **A-10.40** The first step is the tokens: a Storybook page (**Design
   system/Tokens**) that shows the colours, type scale, spacing and both
   densities in both schemes, with contrast ratios. It lists every `--ui-*` token
