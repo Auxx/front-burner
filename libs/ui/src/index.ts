@@ -6,4 +6,8 @@ export { SplitPaneComponent, type SplitPaneShow } from './layout/components/spli
 export { StatusBarComponent } from './layout/components/status-bar/status-bar.component';
 export { AppShellSideDirective } from './layout/directives/app-shell-side/app-shell-side.directive';
 export { BreadcrumbsComponent } from './navigation/components/breadcrumbs/breadcrumbs.component';
+export { TabStripComponent } from './navigation/components/tab-strip/tab-strip.component';
+export { TabComponent } from './navigation/components/tab/tab.component';
 export { BreadcrumbDirective } from './navigation/directives/breadcrumb/breadcrumb.directive';
+export { TabGroupDirective } from './navigation/directives/tab-group/tab-group.directive';
+export { TabPanelDirective } from './navigation/directives/tab-panel/tab-panel.directive';

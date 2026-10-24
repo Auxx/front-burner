@@ -1,0 +1,41 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    box-sizing: border-box;
+    min-block-size: var(--ui-control-height);
+    min-inline-size: 0;
+    padding-block: 0;
+    padding-inline: var(--ui-space-2);
+    background: none;
+    color: var(--ui-text-muted);
+    font-size: var(--ui-font-size-ui);
+    border: 0;
+    border-block-end: var(--ui-focus-ring-width) solid transparent;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+
+  :host(:hover) {
+    color: var(--ui-text-default);
+  }
+
+  // The selected tab has an accent line, not another background (A-10.22).
+  :host([aria-selected='true']) {
+    color: var(--ui-text-default);
+    border-block-end-color: var(--ui-accent);
+  }
+
+  :host([aria-disabled='true']) {
+    color: var(--ui-text-disabled);
+    cursor: default;
+  }
+
+  // Inside the island header, so the ring is drawn inwards.
+  :host(:focus-visible) {
+    @include mixins.focus-ring;
+    outline-offset: calc(-1 * var(--ui-focus-ring-width));
+  }
+}

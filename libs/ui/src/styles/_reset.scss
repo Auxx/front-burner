@@ -39,4 +39,10 @@
   h6 {
     overflow-wrap: break-word;
   }
+
+  // A consumer's `display` would beat the browser's `[hidden]` rule. An
+  // important declaration of an earlier layer wins over later layers.
+  [hidden] {
+    display: none !important;
+  }
 }

@@ -1,0 +1,8 @@
+@layer components {
+  :host {
+    display: flex;
+    flex-direction: row;
+    gap: var(--ui-space-1);
+    min-inline-size: 0;
+  }
+}
