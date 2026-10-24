@@ -1,6 +1,6 @@
 # Front Burner — Glossary
 
-> Status: **Draft**
+> Status: **Accepted**
 
 This glossary defines the terms used in Front Burner's documentation, code and
 UI. Where a word has more than one common meaning, the glossary picks one and

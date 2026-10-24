@@ -1,6 +1,6 @@
 # Front Burner — MVP
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Purpose
 
@@ -233,7 +233,8 @@ breadcrumbs, "Page not found", global banners and shared accessibility rules.
 The operator-facing deployment guide in `docs/wiki/deployment.md`, as listed
 in `docs/wiki/todo.md`: the image, volumes, container UID, environment
 variables, encryption key, backup and restore, upgrades, and a hardened
-compose example.
+compose example. It is written once the MVP runs locally in a development
+environment, before the release (order of work, step 6).
 
 ## Out of scope (deferred)
 

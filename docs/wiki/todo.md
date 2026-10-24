@@ -19,8 +19,9 @@ Requirements files deferred until after the MVP:
   trailing spaces), applied while typing and on save. Until then the editor
   changes nothing on its own (ED-9, ED-12).
 
-Deployment guide (`docs/wiki/deployment.md`), once the architecture fixes the
-details:
+Deployment guide (`docs/wiki/deployment.md`), postponed until the MVP runs
+locally in a development environment, so that it describes what was actually
+built:
 
 - Operator-facing parts of `docs/architecture/non-functional.md`: the data
   volume and optional repositories directory, the container UID, disk sizing,
