@@ -1,9 +1,6 @@
 Next requirements files to write for the MVP (`docs/product/mvp.md`), in the
 suggested order of work:
 
-- File browser: the file tree, creating, renaming and deleting Markdown files
-  and folders.
-- Markdown editor, automatic saving and live preview (from D-1 and D-7).
 - HTML in Markdown preview: the whitelist of safe HTML tags and attributes that
   the live preview renders; every other tag, including scripts, is stripped.
 - Live preview images: how relative image paths are resolved, and how the web
@@ -27,6 +24,10 @@ Requirements files deferred until after the MVP:
 - User management, invitations and onboarding of invited users, and SMTP in
   system settings.
 - The Simple and Guided levels, and pull requests.
+- Editor: basic code formatting from the repository's `.editorconfig` (for
+  example indent style and size, line endings, final newline and trimming
+  trailing spaces), applied while typing and on save. Until then the editor
+  changes nothing on its own (ED-9, ED-12).
 
 Deployment guide (`docs/wiki/deployment.md`), once the architecture fixes the
 details:

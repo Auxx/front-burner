@@ -206,8 +206,21 @@ code.
 ## Files and editing
 
 **Markdown file**
-: A file that Front Burner can create, edit, rename and delete, with syntax
-highlighting and live preview.
+: A file whose name ends in `.md`, `.markdown` or `.mdx` (ignoring case).
+The only kind of file that Front Burner can create, edit and rename, with
+syntax highlighting and live preview.
+
+**Repository screen**
+: The screen that shows one repository: the file tree, the editor and the
+live preview (see [REQ-FILE-001](../requirements/file-browser.md)). Opening
+it counts as opening the repository in the editor.
+
+**File tree**
+: The tree of folders and files of a working copy's current branch, as they
+are on disk. Any number of folders can be expanded; each folder's content
+is loaded when it is first expanded. Shows every file, including dot-files
+and files ignored by `.gitignore` (shown in a different colour, with an
+icon), but never `.git`. _Avoid_: "file explorer", "sidebar".
 
 **Front matter**
 : A YAML block at the start of a Markdown file. Highlighted in the editor,
@@ -219,8 +232,8 @@ for an AI agent. Treated as an ordinary Markdown file.
 
 **Non-Markdown file**
 : Any other file in a repository (images, source code, PDFs, …). Can be
-viewed in the file tree, uploaded and deleted, but not edited. Each user
-can hide them in their user preferences.
+listed in the file tree, uploaded and deleted, but not edited or renamed.
+Each user can hide them in their user preferences.
 
 **Upload**
 : Adding a new non-Markdown file to a repository, for example an image to
@@ -229,6 +242,18 @@ embed in a Markdown document.
 **Live preview**
 : The rendered view of a Markdown file shown alongside or instead of its
 source while editing.
+
+**Save**
+: Writing the editor's content to the file in the user's working copy,
+shortly after the user stops typing. A save does nothing else: no commit and
+no other git operation. _Avoid_ using "save" for committing; at the Guided
+level that is **Save version**.
+
+**Browser draft**
+: Unsaved edits that the web client keeps in the browser, so that they
+survive a reload or a lost connection, until the backend confirms the save.
+Offered back to the user, never applied on their own. _Avoid_ plain "draft",
+which is the Guided level's word for a branch.
 
 ## Git workflows
 

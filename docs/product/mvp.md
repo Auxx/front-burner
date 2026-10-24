@@ -54,8 +54,9 @@ browser and in a mobile browser:
 3. The operator adds a private repository over HTTPS with a token, and
    another over SSH with a generated key, with each clone mode. They follow
    each clone on the dashboard.
-4. The operator browses the repository, creates, renames and deletes
-   Markdown files and folders, and opens any Markdown file in the editor.
+4. The operator browses the repository, creates and renames Markdown files
+   and folders, deletes files and folders, and opens any Markdown file in the
+   editor.
 5. Edits are saved to the working copy automatically after the user stops
    typing. Reloading the page or opening it on another device shows the saved
    content.
@@ -130,16 +131,18 @@ remote, and managing saved credentials and known hosts as lists of their own.
 
 - A file tree of the current branch of the working copy, which loads
   folders lazily so that large code repositories stay fast.
-- Markdown and non-Markdown files are both shown. Only Markdown files can be
-  opened. Non-Markdown files are listed only.
-- Creating, renaming and deleting Markdown files and folders. Deleting a
-  folder that contains non-Markdown files asks for an extra confirmation.
-  _(My call.)_
+- Markdown files (`.md`, `.markdown`, `.mdx`) and non-Markdown files are
+  both shown, and files ignored by `.gitignore` are marked. Only Markdown
+  files can be opened.
+- Creating Markdown files and (empty) folders, renaming Markdown files and
+  folders in place, and deleting files of any kind and folders.
 - Opening a repository sets its last access time (DS-7, DS-8).
 - Works with the tree on a phone (for example, as a drawer).
 
-Left for later: uploading files, deleting single non-Markdown files, the
-"hide non-Markdown files" preference, and search.
+Written up as [REQ-FILE-001](../requirements/file-browser.md).
+
+Left for later: moving files to another folder, uploading files, the "hide
+non-Markdown files" preference, and search.
 
 ### 7. Markdown editor, saving and live preview (to write)
 
@@ -149,14 +152,20 @@ Builds on decisions D-1 and D-7:
 - automatic saving to the working copy after the user stops typing (D-1.1 to
   D-1.3: no commit, last save wins), with a visible saved / saving / failed
   state and a warning when leaving with an unsaved change;
-- a live preview beside the editor on wide screens, and a toggle between
-  editor and preview on narrow screens;
+- plain Markdown editing, one file at a time (a formatting toolbar and tabs
+  come later);
+- a live preview beside the editor on wide screens, scrolling together with
+  it, and Edit and Preview tabs on narrow screens;
 - the rendering pipeline and what it shows (D-7.3 to D-7.6);
 - **safe HTML**: the whitelist of HTML tags and attributes that the preview
   renders (its own requirement, already on the todo list);
 - **images**: images with a path relative to the Markdown file are shown,
   loaded through the API with the user's auth token. Site-absolute paths such
   as `/images/cover.png` and remote images are left for later.
+
+The editor and preview are written up as
+[REQ-EDIT-001](../requirements/editor.md); safe HTML and images are still
+to write.
 
 ### 8. Git at the Advanced level (to write)
 
@@ -176,8 +185,8 @@ them.
   first (D-4.3). The MVP only merges; rebase comes later (see D-5.2).
 - **Branches**: listing local and remote branches, creating a branch from
   the current one, and switching branches. Switching is refused while there
-  are uncommitted changes _(my call)_. In a single-branch clone, only the cloned branch
-  and branches created locally from it are listed.
+  are uncommitted changes _(my call)_. In a single-branch clone, only the
+  cloned branch and branches created locally from it are listed.
 - **Fetch and remote-change notices** (D-4.2): fetching when a file is opened
   and periodically while the user is editing, telling the user when the
   upstream has new commits and whether the open file is among them.
@@ -213,8 +222,8 @@ vision, and the architecture must not rule them out.
 | Advanced git extras     | Rebase and the merge/rebase preference (D-5.2, D-5.3), the three-way merge editor, Choose per change, Keep both, commit history, deleting and renaming branches, tags, stash. |
 | Repositories            | Adding a repository on a user's behalf and confirming it, renaming a repository, changing its clone mode or remote, submodules, Git LFS.     |
 | Credentials             | Managing saved credentials and known hosts as lists: renaming, deleting, changing a passphrase, replacing a changed host key.                 |
-| Files                   | Uploading files, deleting single non-Markdown files, the "hide non-Markdown files" preference, file search.                                  |
-| Preview                 | Site-absolute image paths and remote images.                                                                                                  |
+| Files                   | Moving files to another folder, uploading files, the "hide non-Markdown files" preference, file search.                                     |
+| Editor and preview      | A formatting toolbar, several open files (tabs), Mermaid and math, ticking task lists. Site-absolute image paths and remote images.            |
 | Account                 | Changing the password while logged in.                                                                                                        |
 
 ## Order of work
