@@ -2,22 +2,36 @@
   <ng-content select="[uiSplitPaneStart]" />
 </div>
 @if (show() === 'both') {
-  <div
-    class="separator"
-    role="separator"
-    tabindex="0"
-    [attr.aria-orientation]="orientation() === 'horizontal' ? 'vertical' : 'horizontal'"
-    [attr.aria-valuenow]="roundedSize()"
-    [attr.aria-valuemin]="min()"
-    [attr.aria-valuemax]="max()"
-    [attr.aria-controls]="startId"
-    [attr.aria-label]="separatorLabel()"
-    (keydown)="onKeydown($event)"
-    (pointerdown)="onPointerDown($event)"
-    (pointermove)="onPointerMove($event)"
-    (pointerup)="onPointerUp($event)"
-    (lostpointercapture)="onPointerUp($event)"
-  ></div>
+  <div class="divider">
+    <div
+      class="separator"
+      role="separator"
+      tabindex="0"
+      [attr.aria-orientation]="orientation() === 'horizontal' ? 'vertical' : 'horizontal'"
+      [attr.aria-valuenow]="roundedSize()"
+      [attr.aria-valuemin]="min()"
+      [attr.aria-valuemax]="max()"
+      [attr.aria-controls]="startId"
+      [attr.aria-label]="separatorLabel()"
+      (keydown)="onKeydown($event)"
+      (pointerdown)="onPointerDown($event)"
+      (pointermove)="onPointerMove($event)"
+      (pointerup)="onPointerUp($event)"
+      (lostpointercapture)="onPointerUp($event)"
+    ></div>
+    @if (presets().length > 0 && presetsLabel()) {
+      <button class="presets" [uiMenuTrigger]="presetsMenu.aria" [attr.aria-label]="presetsLabel()">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M5 8C5 8.55229 4.55228 9 4 9C3.44772 9 3 8.55229 3 8C3 7.44772 3.44772 7 4 7C4.55228 7 5 7.44772 5 8ZM9 8C9 8.55229 8.55229 9 8 9C7.44772 9 7 8.55229 7 8C7 7.44772 7.44772 7 8 7C8.55229 7 9 7.44772 9 8ZM12 9C12.5523 9 13 8.55229 13 8C13 7.44772 12.5523 7 12 7C11.4477 7 11 7.44772 11 8C11 8.55229 11.4477 9 12 9Z" />
+        </svg>
+      </button>
+      <ui-menu #presetsMenu="uiMenu" (itemSelected)="choosePreset($event)">
+        @for (preset of presets(); track preset.size) {
+          <button [uiMenuItem]="preset.size">{{ preset.label }}</button>
+        }
+      </ui-menu>
+    }
+  </div>
 }
 <div class="pane end" [hidden]="show() === 'start'">
   <ng-content select="[uiSplitPaneEnd]" />

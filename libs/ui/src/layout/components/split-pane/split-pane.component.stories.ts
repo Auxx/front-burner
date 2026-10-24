@@ -1,5 +1,5 @@
 import { Meta, StoryObj } from '@storybook/angular-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { IslandComponent } from '../island/island.component';
 import { SplitPaneComponent } from './split-pane.component';
 
@@ -9,6 +9,8 @@ const canvas = `
   .positioned { position: relative; block-size: 100%; }
 `;
 
+const presets = [ { label: 'Small', size: 25 }, { label: 'Half', size: 50 }, { label: 'Large', size: 75 } ];
+
 const meta: Meta<SplitPaneComponent> = {
   title: 'Layout/Split pane',
   component: SplitPaneComponent,
@@ -16,13 +18,13 @@ const meta: Meta<SplitPaneComponent> = {
     layout: 'fullscreen'
   },
   decorators: [ story => ({ ...story(), moduleMetadata: { imports: [ IslandComponent ] } }) ],
-  args: { size: 30, orientation: 'horizontal', show: 'both' },
+  args: { size: 30, orientation: 'horizontal', show: 'both', presets, presetsLabel: 'Pane sizes' },
   render: props => ({
     props,
     styles: [ canvas ],
     template: `
       <div class="canvas">
-        <ui-split-pane [(size)]="size" [orientation]="orientation" [show]="show" separatorLabel="Resize first pane">
+        <ui-split-pane [(size)]="size" [orientation]="orientation" [show]="show" [presets]="presets" [presetsLabel]="presetsLabel" separatorLabel="Resize first pane">
           <ui-island uiSplitPaneStart heading="First"><p>First pane</p></ui-island>
           <ui-island uiSplitPaneEnd heading="Second"><p class="positioned">Second pane</p></ui-island>
         </ui-split-pane>
@@ -45,7 +47,8 @@ export const Horizontal: Story = {
     // The target is at least 24 px wide (NF-13.5) and grows into the end pane,
     // above its content, leaving the start island's edge and scrollbar alone.
     const { left, top, height } = separator.getBoundingClientRect();
-    const y = top + height / 2;
+    // Away from the menu button, which sits at the middle.
+    const y = top + height / 8;
     const at = (x: number) => canvasElement.ownerDocument.elementFromPoint(x, y);
     await expect(at(left - 2)).not.toBe(separator);
     await expect(at(left + 1)).toBe(separator);
@@ -54,7 +57,16 @@ export const Horizontal: Story = {
 };
 
 export const Vertical: Story = {
-  args: { orientation: 'vertical', size: 60 }
+  args: { orientation: 'vertical', size: 60 },
+  play: async ({ canvasElement }) => {
+    const trigger = within(canvasElement).getByRole('button', { name: 'Pane sizes' });
+
+    await userEvent.click(trigger);
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Large' }));
+
+    await waitFor(() => expect(within(canvasElement).getByRole('separator')).toHaveAttribute('aria-valuenow', '75'));
+    await expect(trigger).toHaveFocus();
+  }
 };
 
 export const OnePane: Story = {
