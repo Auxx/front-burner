@@ -14,17 +14,18 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
 
 ## Documents
 
-| File                           | Range | Covers                                                                |
-| ------------------------------ | ----- | --------------------------------------------------------------------- |
-| [overview.md](overview.md)     | A-1   | Context, technology stack, runtime view, configuration                |
-| [modules.md](modules.md)       | A-2   | NX projects, libraries and their boundary rules                       |
-| [api.md](api.md)               | A-3   | REST API, contracts, generated client, errors, push channel           |
-| [data.md](data.md)             | A-4   | Database, tables, migrations, encryption of stored secrets            |
-| [git-engine.md](git-engine.md) | A-5   | Running git, per-working-copy queue, credentials, address restriction |
-| [jobs.md](jobs.md)             | A-6   | Job runner, job types, scheduling, retries                            |
-| [security.md](security.md)     | A-7   | Trust boundaries, authentication, authorisation, file system, egress  |
-| [web-client.md](web-client.md) | A-8   | Angular structure, state, save queue, editor and preview              |
-| [spikes.md](spikes.md)         | A-9   | Throwaway spikes for the risky parts                                  |
+| File                                 | Range | Covers                                                                |
+| ------------------------------------ | ----- | --------------------------------------------------------------------- |
+| [overview.md](overview.md)           | A-1   | Context, technology stack, runtime view, configuration                |
+| [modules.md](modules.md)             | A-2   | NX projects, libraries and their boundary rules                       |
+| [api.md](api.md)                     | A-3   | REST API, contracts, generated client, errors, push channel           |
+| [data.md](data.md)                   | A-4   | Database, tables, migrations, encryption of stored secrets            |
+| [git-engine.md](git-engine.md)       | A-5   | Running git, per-working-copy queue, credentials, address restriction |
+| [jobs.md](jobs.md)                   | A-6   | Job runner, job types, scheduling, retries                            |
+| [security.md](security.md)           | A-7   | Trust boundaries, authentication, authorisation, file system, egress  |
+| [web-client.md](web-client.md)       | A-8   | Angular structure, state, save queue, editor and preview              |
+| [spikes.md](spikes.md)               | A-9   | Throwaway spikes for the risky parts                                  |
+| [design-system.md](design-system.md) | A-10  | Look, design tokens, CSS architecture, `ui` components                |
 
 ## A-1: Context
 
@@ -74,7 +75,9 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
 - **A-1.8** Web client: **Angular**. Signals for component state, RxJS in
   services for more complex state; no NgRx. **Transloco** for text, **CodeMirror
   6** for editing, **remark → Shiki → DOMPurify** for the live preview (D-7).
-  Storybook for the `ui` library.
+  Our own design system in the `ui` library, on **Angular Aria** and the
+  **Angular CDK**, styled with SCSS and CSS custom properties (A-10). Storybook
+  for the `ui` library.
 - **A-1.9** Tests: **Vitest** for unit and integration tests, **Playwright**
   with **axe-core** for end-to-end tests (NF-12.2, NF-13.8).
 - **A-1.10** _(My call.)_ Backend libraries not discussed separately:

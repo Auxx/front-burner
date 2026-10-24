@@ -25,7 +25,7 @@ frontend.
   security baseline, browser support, accessibility, localisation (IDs NF-x.y).
 - Architecture: `docs/architecture/overview.md` - entry point to the
   architecture documents (module map, API, data, git engine, jobs, security, web
-  client, spikes; IDs A-x.y).
+  client, spikes, design system; IDs A-x.y).
 
 <!-- @hexmode/toolkit-nx:start -->
 

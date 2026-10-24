@@ -93,6 +93,7 @@ confirmed; they can be revisited cheaply.
     copy next to it (Markdown files only).
 
   The backend then commits the resolution and pushes.
+
 - **D-3.5** While the resolution screen is open, the repository cannot be edited
   elsewhere (other tabs or devices) until the user finishes or cancels. _(My
   call.)_
@@ -253,6 +254,26 @@ _(My calls.)_
   after they are saved.
 - **D-8.6** Pushing always uses the repository credentials; provider tokens are
   used only for the provider API.
+
+## D-9: User interface
+
+- **D-9.1** The web client uses **its own design system and component library**
+  in the `ui` library, not an existing component library such as Angular
+  Material. Existing libraries bring their own look, and the accessibility
+  (NF-13), Content Security Policy (NF-11.1), bundle size (NF-2.9) and
+  touch-plus-IDE density (NF-12.5, NF-13.5) targets would have to be fought
+  rather than reused.
+- **D-9.2** The look is inspired by **JetBrains' Islands theme** and **VS
+  Code**, so that it is familiar to software developers: rounded panels on a
+  darker canvas, compact density on desktop, an activity bar and a status bar.
+- **D-9.3** Styling is **semantic CSS**: SCSS with design tokens as CSS custom
+  properties, styled through elements and their ARIA state. No Tailwind or other
+  utility-class framework, so that templates hold structure and not styling.
+- **D-9.4** Behaviour that is hard to get right — keyboard navigation, focus
+  management, ARIA patterns and overlays — comes from **Angular Aria** and the
+  **Angular CDK**, both headless and first-party. Every visual is our own.
+- **D-9.5** The rules for all of this are in
+  [design-system.md](design-system.md) (A-10).
 
 ## Consequences for the architecture
 
