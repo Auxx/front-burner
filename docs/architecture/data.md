@@ -36,12 +36,26 @@ encrypted. The layout of the data volume is in NF-5. See
   | `saved_credentials`   | Owner, kind (HTTPS, SSH key, provider token), name, public parts (username, public key, provider), encrypted secret |
   | `known_hosts`         | Owner, host, port, key type, fingerprint                                                                         |
   | `repositories`        | Owner, repository name, remote URL (no secrets), clone mode and branch, status and error label, credential and provider token references, confirmation state when added on behalf of a user, last access time, git control level, auto-sync, merge or rebase preference, commit author override (CA-8) |
-  | `sync_state`          | Per repository: last automatic sync outcome ("not uploaded" and its cause), open conflict episode and reminder status, resolution lock lease (session, expiry), commit recorded before a merge or rebase (D-4.6) |
+  | `sync_state`          | Per repository: last automatic sync outcome ("not uploaded" and its cause), open conflict episode and reminder status, resolution lock lease (session, expiry), commit recorded before a merge or rebase (D-4.6) and the merge commit it belongs to (GC-26), credential problems of the last fetch or pull and of the last push (RC-4, RM-8) |
   | `jobs`                | A-6.2                                                                                                           |
 
 - **A-4.5** A working copy's directory name is the repository's internal ID
   (NF-5.2). The merge or rebase in progress is not duplicated in the
   database: git's own state in the working copy is the source of truth.
+- **A-4.5a** The commit recorded before a merge (D-4.6) is kept, in
+  `sync_state` and as a ref (A-5.12), until the merge is aborted, or until
+  the merge commit is pushed or undone (GC-24 to GC-26). Only then are both
+  removed. _(My call.)_
+- **A-4.5b** Every row that belongs to one repository references it with
+  `ON DELETE CASCADE`, so that removing a repository (RM-19) deletes its
+  `sync_state`, warnings and jobs in the same transaction. Saved
+  credentials and known hosts belong to the user, not the repository, and are
+  kept. _(My call.)_
+- **A-4.5c** State that belongs to one device is not stored by the backend:
+  the last file opened, expanded folders, pane sizes and view mode (FB-8,
+  FB-12, FB-14, ED-34), and the ticked files of **Changes** (GA-17) live in
+  the browser. The commit author confirmation (CA-13) and everything else
+  that must hold on every device is stored here.
 
 ## A-4: Migrations
 

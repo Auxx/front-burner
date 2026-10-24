@@ -120,3 +120,24 @@ its libraries and [overview.md](overview.md) for the numbering conventions.
   - The main thread loads only CodeMirror, DOMPurify and the component; the
     pipeline is 164 KB gzipped in the worker, and each Shiki language and
     theme is its own chunk.
+
+## A-8: Shell and repository screen
+
+- **A-8.14** `web/shell` (A-2.5) renders the app header, the user menu, the
+  global banners, page titles and breadcrumbs (REQ-APP-001). The routes of
+  NV-1 live in `apps/web`; logging out in one tab reaches the others through
+  a `storage` event (NV-8).
+- **A-8.15** `feature-repository-screen` keeps the state of the open file —
+  content, undo history, save queue, browser draft, content hash of the last
+  load or save — in a per-file store keyed by repository and path, not in
+  the screen, so that tabs can be added later (ED-3). Changes to the open
+  file on disk are found by comparing `files.changed` events with that hash
+  (A-3.11, ED-24).
+- **A-8.16** **Image loader** (REQ-EDIT-003), in `web/markdown`: after
+  DOMPurify, and before the HTML reaches the page, it replaces every image
+  address with a placeholder (IM-24). On the main thread, an
+  `IntersectionObserver` loads repository images near the viewport, at most
+  4 at a time per tab (IM-8), with `fetch` and the auth token, into `blob:`
+  URLs cached per repository screen and revalidated with `If-None-Match`
+  (A-3.14, IM-10). Remote images are set only after **Show remote images**.
+  It also picks the `<source>` of a `<picture>` with `matchMedia` (IM-12).

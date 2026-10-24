@@ -194,6 +194,19 @@ Confirmed by spike 2 (spikes.md).
   commit (including the automatic commit of D-2.3), merge, rebase, continue
   and abort, push, read a conflict, resolve a file, create and switch
   branches. Features never build git command lines themselves.
+  - The MVP requirements add: which entries of a folder are ignored
+    (`git check-ignore`, FB-16); the diff of one file against the last
+    commit (GA-14 to GA-16); discarding selected files (GA-23); committing
+    exactly a list of paths, and amending (GA-19, GA-22); whether a commit is
+    on any remote branch (GA-22, GC-25, RM-18); creating a local branch that
+    tracks a remote branch (GA-37); adding a pushed branch to a single-branch
+    clone's fetch refspec (GA-41); starting a conflicting file over
+    (`git checkout -m`, GC-18); undoing a merge by resetting to the recorded
+    commit (GC-26); and recognising credential problems in git's and the
+    server's messages (RC-5).
+  - Every operation that writes a commit sets the commit author itself
+    (CA-2), and every merge sets `merge.conflictStyle=merge` (GC-5), so the
+    working copy's own configuration decides neither.
 - **A-5.11** Conflicts are read from the index: base, ours and theirs are
   stages 1, 2 and 3 (`git show :1:<path>` and so on), giving the one
   conflict model of vision goal 5.
@@ -205,7 +218,8 @@ Confirmed by spike 2 (spikes.md).
   when they succeed (NF-5.3).
 - **A-5.14** Status at 100,000 files (NF-1.4) may need git's
   `core.untrackedCache` or `core.fsmonitor`, or limiting status to the paths
-  that changed. **Pending spike 4.**
+  that changed. It also sets how often **Changes** can refresh after saves
+  (GA-12). **Pending spike 4.**
 
 ## A-5: Recovery
 

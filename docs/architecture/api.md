@@ -64,6 +64,16 @@ numbering conventions.
   `resolution.lock` (repository ID, taken over). After connecting or
   reconnecting, the client fetches current state over REST; events are never
   replayed.
+  - The MVP requirements add: `files.changed` (repository ID, the folders
+    whose entries changed, or "all" after an operation that may change many,
+    such as a pull or a branch switch; FB-41, ED-23, GA-12), `merge.state`
+    (repository ID, started, file resolved, ended; GC-2, GC-21),
+    `repository.removed` (repository ID; RM-20), `repository.warning`
+    (repository ID, the warnings of RM-8) and `key.unlocked` (key ID, to the
+    streams of the session that unlocked it; RC-16).
+  - The user's own saves also cause `files.changed`; the web client ignores
+    a change to the open file whose content hash matches its last save
+    (ED-24). _(My call.)_
 - **A-3.12** The client tells the backend which repository it is viewing by
   opening the stream with `?repository=<id>` and reopening it when that
   changes. The backend uses this to schedule background fetches (A-6, job types).
@@ -72,3 +82,9 @@ numbering conventions.
   proxies normally serve HTTP/2, where this does not apply. If it becomes a
   problem, one tab can share its stream with the others through
   `BroadcastChannel`; this is not built at launch.
+- **A-3.14** Besides JSON, the API returns raw bytes in one place in the
+  MVP: the **image endpoint** (IM-7), in the `files` feature. It serves image
+  files of the working copy with the headers of NF-11.3, a content type from
+  the extension, and an `ETag` from the file's size and modification time,
+  and answers `If-None-Match` with `304`. _(My call: no content hash, so a
+  10 MB image is not read just to answer a revalidation.)_

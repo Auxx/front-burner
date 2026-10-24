@@ -280,7 +280,8 @@ someone:
   recovery procedure in the deployment guide.
 - **Typing speed on phones.** Spike 3 measured typing in a 1 MB file at the
   limit of NF-2.4 in emulation (A-8.11). The check on a real mid-range phone
-  is still to do, and must happen before the editor requirement is accepted.
+  is still to do, and must happen before the editor is built (order of work,
+  step 2), so that a slow result can still change its design.
 - **Large repositories.** Spike 4 (git at 100,000 files, A-5.14) is still to
   do. The file browser's lazy loading and the status call are the parts most
   at risk.

@@ -71,15 +71,27 @@ on top of the security rules in the requirements and NF-11. See
 
 - **A-7.9** The backend serves `index.html` itself, adding a fresh CSP nonce
   per request (NF-11.1) and the version header (NF-7.6).
-- **A-7.10** HTML from Markdown is sanitised once with DOMPurify and passed
-  to Angular in one shared preview component (D-7.6). Raw repository files
-  are served from a separate endpoint with sandboxing headers (NF-11.3).
+- **A-7.10** HTML from Markdown is sanitised by `rehype-sanitize` and then
+  DOMPurify, both configured from the safe HTML whitelist (REQ-EDIT-002),
+  and passed to Angular in one shared preview component (D-7.6). Raw
+  repository files are served from a separate endpoint with sandboxing
+  headers (NF-11.3).
 - **A-7.11** Cross-site request forgery: the API authenticates with a bearer
   header, which browsers do not send on their own; the refresh-token cookie
   is protected by LG-33.
+- **A-7.11a** The image loader of the preview is the only code that sets an
+  image's address (IM-24): repository images become `blob:` URLs, and remote
+  `https:` images are set only after **Show remote images**. No address
+  from a file reaches the page on its own.
 
 ## A-7: Accepted limits
 
 - **A-7.12** Git and `ssh` run as the same UID as the backend. A rootless
   container cannot switch users, so there is no sandbox around git beyond
   NF-11.6 to NF-11.8 and A-5.1.
+- **A-7.13** The Content Security Policy allows `https:` images (NF-11.1,
+  IM-23), so that remote images can be shown on request. If the sanitising
+  steps were ever bypassed, injected markup could make the browser load an
+  image from any `https:` host, for example to leak that a file was viewed;
+  it still could not run script. A-7.11a keeps this from happening while
+  the sanitisers work.

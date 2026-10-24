@@ -37,25 +37,43 @@ libs/
       auth/               login, sessions, refresh, OIDC, onboarding,
                           password reset, login audit log
       users/              user management by administrators
+      preferences/        user preferences, including the default commit
+                          author and its confirmation (REQ-GIT-001)
       settings/           system settings
       credentials/        saved credentials, known hosts, key unlocks
       repositories/       add, clone, list, status, level and auto-sync,
-                          adding on behalf of a user
-      files/              file tree, read, save, upload, rename, delete, raw serving
-      sync/               commit, fetch, pull, push, Simple-level sync,
-                          conflicts, resolution lock, conflict episodes
+                          adding on behalf of a user, repository management:
+                          warnings, retry clone, clone again, removal
+                          (REQ-REPO-003)
+      files/              file tree, read, save, upload, rename, delete, raw serving,
+                          the image endpoint (A-3.14)
+      sync/               status, diff, discard, commit and amend, branches,
+                          fetch, pull, push, Simple-level sync, conflicts,
+                          undo merge, resolution lock, conflict episodes
       providers/          provider abstraction, GitHub, Bitbucket Cloud,
                           provider tokens, pull requests
 
   web/
     feature-auth/         login, onboarding, password reset
     feature-dashboard/
-    feature-repositories/ add-repository flow, repository management
-    feature-credentials/  saved credentials, known hosts
-    feature-editor/       file tree, editor screen
-    feature-sync/         git panels at each level, conflict resolution screens
+    feature-repositories/ add-repository flow, repository management and
+                          settings pages
+    feature-repository-screen/
+                          the repository screen: its header, file tree,
+                          editor, Changes tab and git actions, conflict
+                          resolution (REQ-FILE-001, REQ-EDIT-001,
+                          REQ-GIT-002, REQ-GIT-003)
+    feature-preferences/  the Preferences page
+    feature-credentials/  saved credentials, known hosts (after the MVP)
     feature-admin/        users, system settings
-    markdown/             remark → Shiki → DOMPurify pipeline and the one
+    shell/                app header, user menu, banners, page titles,
+                          breadcrumbs, Page not found (REQ-APP-001)
+    repository-dialogs/   dialogs used by several features: repository
+                          credentials, key unlock, changed host key
+                          (REQ-REPO-002), commit author (CA-9)
+    markdown/             remark → rehype-sanitize → Shiki → DOMPurify
+                          pipeline, the safe HTML whitelist (REQ-EDIT-002),
+                          the image loader (REQ-EDIT-003) and the one
                           preview component (D-7.6)
     code-editor/          CodeMirror 6 wrapper
     core/                 auth tokens and refresh, interceptors, push channel
@@ -69,6 +87,12 @@ libs/
   _(My call.)_
 - **A-2.2** Web feature libraries are each loaded lazily from a route of
   `apps/web` (NF-2.9).
+- **A-2.2a** The repository screen is one feature library,
+  `feature-repository-screen`, rather than separate editor and git features:
+  its parts share one screen, one header (NV-9) and the same state (the open
+  file, the save queue, the merge in progress), and web features may not
+  import each other (A-2.4). The git UI of the Simple and Guided levels will
+  be added to it. _(My call.)_
 - **A-2.3** The generated `api-client` is an Angular library, since its
   template targets `HttpClient`. A future Angular-based native client can
   reuse it; a non-Angular client generates its own from the OpenAPI
@@ -90,5 +114,7 @@ libs/
   | `ui` imports only `shared/util`                                                                         | No business logic, contracts or API calls in generic components.   |
   | Every other library may import `shared/contracts` and `shared/util`                                    | One source of types.                                               |
 
-- **A-2.5** Web tags: `markdown` and `code-editor` are `type:domain`; `core`
-  and `api-client` are `type:data-access`. _(My call.)_
+- **A-2.5** Web tags: `markdown`, `code-editor`, `shell` and
+  `repository-dialogs` are `type:domain`; `core` and `api-client` are
+  `type:data-access`. _(My call.)_ `apps/web` uses `shell` for every page;
+  `feature-repository-screen` uses it to build its combined bar (NV-9).
