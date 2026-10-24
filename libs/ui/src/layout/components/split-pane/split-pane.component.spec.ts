@@ -41,8 +41,10 @@ describe('SplitPaneComponent', () => {
     await fixture.whenStable();
   };
 
-  const pointer = async (type: string, clientX: number, clientY = 0) => {
-    const event = new MouseEvent(type, { clientX, clientY, bubbles: true }) as MouseEvent & { pointerId: number; };
+  const pointer = async (type: string, clientX: number, clientY = 0, button = 0) => {
+    const event = new MouseEvent(type, { clientX, clientY, button, bubbles: true }) as MouseEvent & {
+      pointerId: number;
+    };
     Object.defineProperty(event, 'pointerId', { value: 1 });
     separator()?.dispatchEvent(event);
     await fixture.whenStable();
@@ -161,6 +163,34 @@ describe('SplitPaneComponent', () => {
       await pointer('pointerup', 400);
       await pointer('pointermove', 600);
       expect(host.size()).toBe(40);
+    });
+
+    it('only drags with the primary button', async () => {
+      await pointer('pointerdown', 300, 0, 2);
+      await pointer('pointermove', 400);
+
+      expect(host.size()).toBe(30);
+    });
+
+    it('measures within the padding, as the grid does', async () => {
+      splitPane().style.paddingLeft = '100px';
+      splitPane().style.paddingRight = '100px';
+
+      await pointer('pointerdown', 300);
+      await pointer('pointermove', 400);
+
+      expect(host.size()).toBe(37.5);
+    });
+
+    it('keeps its size when it has no width', async () => {
+      vi.spyOn(splitPane(), 'getBoundingClientRect').mockReturnValue(
+        { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 } as DOMRect
+      );
+
+      await pointer('pointerdown', 0);
+      await pointer('pointermove', 10);
+
+      expect(host.size()).toBe(30);
     });
 
     it('keeps a dragged size within its limits', async () => {

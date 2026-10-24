@@ -69,6 +69,9 @@ export class SplitPaneComponent {
   }
 
   protected onPointerDown(event: PointerEvent): void {
+    if (event.button !== 0) {
+      return;
+    }
     (event.target as HTMLElement).setPointerCapture(event.pointerId);
     this.dragging.set(true);
   }
@@ -77,12 +80,26 @@ export class SplitPaneComponent {
     if (!this.dragging()) {
       return;
     }
-    const rect = this.host.nativeElement.getBoundingClientRect();
-    const share = this.orientation() === 'vertical'
-      ? (event.clientY - rect.top) / rect.height
+    // The grid's percentages resolve against the content box.
+    const host = this.host.nativeElement;
+    const rect = host.getBoundingClientRect();
+    const style = getComputedStyle(host);
+    const padding = (side: string) => parseFloat(style.getPropertyValue(`padding-${side}`)) || 0;
+    const left = rect.left + padding('left');
+    const right = rect.right - padding('right');
+    const top = rect.top + padding('top');
+    const bottom = rect.bottom - padding('bottom');
+
+    const vertical = this.orientation() === 'vertical';
+    const length = vertical ? bottom - top : right - left;
+    if (length <= 0) {
+      return;
+    }
+    const share = vertical
+      ? (event.clientY - top) / length
       : this.directionality.valueSignal() === 'rtl'
-      ? (rect.right - event.clientX) / rect.width
-      : (event.clientX - rect.left) / rect.width;
+      ? (right - event.clientX) / length
+      : (event.clientX - left) / length;
     this.size.set(this.clamp(share * 100));
   }
 
