@@ -79,7 +79,6 @@
 
   :host([data-orientation='vertical']) .separator {
     cursor: row-resize;
-    block-size: auto;
     inline-size: 100%;
 
     &::before {
@@ -97,14 +96,18 @@
     }
   }
 
-  // Centred on the divider, above the separator's grown target.
+  // On the middle of the divider, above the separator's grown target.
   .presets {
     position: absolute;
-    inset: 0;
+    // Centred with logical margins, which flip in right-to-left; the track is
+    // narrower than the button, so `margin: auto` would not centre it.
+    inset-inline-start: 50%;
+    inset-block-start: 50%;
+    margin-inline-start: calc(var(--ui-split-pane-handle-size) / -2);
+    margin-block-start: calc(var(--ui-split-pane-handle-size) / -2);
     z-index: 1;
     display: grid;
     place-items: center;
-    margin: auto;
     padding: 0;
     inline-size: var(--ui-split-pane-handle-size);
     block-size: var(--ui-split-pane-handle-size);
