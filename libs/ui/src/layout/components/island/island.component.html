@@ -4,6 +4,13 @@
   }
   <ng-content select="[uiIslandHeader]" />
 </div>
-<div class="body" [attr.tabindex]="scrollable() ? 0 : null">
-  <ng-content />
+<div
+  #body
+  class="body"
+  [attr.tabindex]="scrollable() && overflowing() ? 0 : null"
+  [attr.data-fill]="scrollable() ? null : ''"
+>
+  <div #content class="content">
+    <ng-content />
+  </div>
 </div>

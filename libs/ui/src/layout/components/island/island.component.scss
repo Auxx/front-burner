@@ -42,10 +42,16 @@
     overflow: auto;
 
     // Content that scrolls itself fills the body.
-    &:not([tabindex]) {
-      display: flex;
-      flex-direction: column;
+    &[data-fill] {
+      display: grid;
+      grid-template: minmax(0, 1fr) / minmax(0, 1fr);
       overflow: hidden;
+
+      > .content {
+        display: grid;
+        grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+        min-block-size: 0;
+      }
     }
   }
 }

@@ -1,4 +1,5 @@
 import { Meta, StoryObj } from '@storybook/angular-vite';
+import { expect, waitFor } from 'storybook/test';
 import { IslandComponent } from './island.component';
 
 const meta: Meta<IslandComponent> = {
@@ -29,8 +30,22 @@ type Story = StoryObj<IslandComponent & { lines: number[]; }>;
 
 const lines = Array.from({ length: 40 }, (_, index) => index);
 
+const body = (canvasElement: HTMLElement) => canvasElement.querySelector('ui-island .body') as HTMLElement;
+
+/** A body that overflows can be scrolled with the keyboard. */
 export const WithHeading: Story = {
-  args: { heading: 'Files', lines }
+  args: { heading: 'Files', lines },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => expect(body(canvasElement)).toHaveAttribute('tabindex', '0'));
+  }
+};
+
+/** A body that fits adds no tab stop. */
+export const Short: Story = {
+  args: { heading: 'Files', lines: [ 0 ] },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => expect(body(canvasElement)).not.toHaveAttribute('tabindex'));
+  }
 };
 
 export const LabelOnly: Story = {

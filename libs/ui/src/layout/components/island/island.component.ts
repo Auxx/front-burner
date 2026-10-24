@@ -1,4 +1,16 @@
-import { booleanAttribute, ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import {
+  afterNextRender,
+  booleanAttribute,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  ElementRef,
+  inject,
+  input,
+  signal,
+  viewChild
+} from '@angular/core';
 
 let nextId = 0;
 
@@ -7,9 +19,10 @@ let nextId = 0;
  * scrolls. It reacts to its own width with container queries (A-10.7): its
  * content can use `@container ui-island (…)`.
  *
- * A body that scrolls is focusable, so that it can be scrolled with the
- * keyboard. Content that scrolls itself, such as the editor or a virtual tree,
- * sets `scrollable` to false and fills the body instead.
+ * The body is focusable while its content overflows, so that it can be
+ * scrolled with the keyboard, and adds no tab stop otherwise. Content that
+ * scrolls itself, such as the editor or a virtual tree, sets `scrollable` to
+ * false and fills the body instead.
  *
  * It is a labelled region when it has a heading or a label, so that the panes
  * of the repository screen are landmarks (NV-17).
@@ -35,4 +48,26 @@ export class IslandComponent {
 
   protected readonly titleId = `ui-island-title-${nextId++}`;
   protected readonly named = computed(() => Boolean(this.heading() || this.label()));
+  /** Without ResizeObserver, the body is assumed to overflow. */
+  protected readonly overflowing = signal(true);
+
+  private readonly body = viewChild.required<ElementRef<HTMLElement>>('body');
+  private readonly content = viewChild.required<ElementRef<HTMLElement>>('content');
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+
+    afterNextRender(() => {
+      if (typeof ResizeObserver === 'undefined') {
+        return;
+      }
+      const body = this.body().nativeElement;
+      const observer = new ResizeObserver(() =>
+        this.overflowing.set(body.scrollHeight > body.clientHeight || body.scrollWidth > body.clientWidth)
+      );
+      observer.observe(body);
+      observer.observe(this.content().nativeElement);
+      destroyRef.onDestroy(() => observer.disconnect());
+    });
+  }
 }

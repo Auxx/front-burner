@@ -65,7 +65,7 @@ describe('IslandComponent', () => {
     expect(ids[0]).not.toBe(ids[1]);
   });
 
-  it('lets the keyboard reach a scrolling body', async () => {
+  it('lets the keyboard reach the body until it knows the body fits', async () => {
     await fixture.whenStable();
 
     expect(fixture.nativeElement.querySelector('.body').getAttribute('tabindex')).toBe('0');
@@ -77,6 +77,7 @@ describe('IslandComponent', () => {
 
     const body: HTMLElement = fixture.nativeElement.querySelector('.body');
     expect(body.hasAttribute('tabindex')).toBe(false);
+    expect(body.hasAttribute('data-fill')).toBe(true);
   });
 
   it('projects header content into the header and the rest into the body', async () => {
