@@ -11,12 +11,14 @@ import {
   computed,
   contentChild,
   DestroyRef,
+  effect,
   ElementRef,
   inject,
   input,
   model,
   output,
   signal,
+  untracked,
   viewChild
 } from '@angular/core';
 
@@ -62,8 +64,11 @@ let nextId = 0;
  *   folders are not, unless a node says otherwise.
  * - `[(expanded)]` holds the values of the expanded folders, so that they can
  *   be restored (FB-14).
- * - `(loadChildren)` asks for the children of a folder that is expanded while
- *   its `children` is still undefined (FB-15).
+ * - `(loadChildren)` asks for the children of every visible folder that is
+ *   expanded while its `children` is still undefined (FB-15), whether the user
+ *   expanded it or `[expanded]` restored it: once per folder, until it gets
+ *   children or is collapsed; a folder expanded again while still unloaded is
+ *   asked for again.
  *
  * The visible nodes are flattened into rows of a fixed height, and only the
  * rows near the viewport are rendered, so a folder of 5,000 entries (FB-18)
@@ -163,6 +168,8 @@ export class TreeComponent {
   private readonly direction = inject(Directionality).valueSignal;
   private readonly focusMonitor = inject(FocusMonitor);
 
+  /** Unloaded expanded folders that `loadChildren` has already asked for. */
+  private asked = new Set<string>();
   private typeahead = '';
   private typeaheadTimer?: ReturnType<typeof setTimeout>;
   /** Set while our own code moves the focus to the tree element. */
@@ -193,6 +200,13 @@ export class TreeComponent {
       const remeasure = () => this.measureRowHeight();
       coarse.addEventListener('change', remeasure);
       destroyRef.onDestroy(() => coarse.removeEventListener('change', remeasure));
+    });
+
+    effect(() => {
+      const unloaded = this.rows()
+        .filter(row => row.expanded && row.node.children === undefined)
+        .map(row => row.node.value);
+      untracked(() => this.askForChildren(unloaded));
     });
 
     afterRenderEffect({
@@ -355,9 +369,21 @@ export class TreeComponent {
       return;
     }
     this.expanded.set(expanded ? [ ...values, node.value ] : values.filter(value => value !== node.value));
-    if (expanded && node.children === undefined) {
-      this.loadChildren.emit(node.value);
+  }
+
+  /**
+   * Asks once for each unloaded expanded folder, and forgets the folders that
+   * got children or were collapsed, so that they are asked for again.
+   */
+  private askForChildren(unloaded: readonly string[]): void {
+    const asked = new Set<string>();
+    for (const value of unloaded) {
+      if (!this.asked.has(value)) {
+        this.loadChildren.emit(value);
+      }
+      asked.add(value);
     }
+    this.asked = asked;
   }
 
   /** The next row whose label starts with what was typed (WAI-ARIA tree view). */

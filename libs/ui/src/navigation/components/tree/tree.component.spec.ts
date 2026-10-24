@@ -261,6 +261,44 @@ describe('TreeComponent', () => {
     expect(row('main.ts')).toBeDefined();
   });
 
+  it('asks again for an unloaded folder that is collapsed and expanded again', async () => {
+    await create();
+
+    row('src').click();
+    await stable();
+    row('src').click();
+    await stable();
+    expect(host.requested).toEqual([ 'src' ]);
+
+    row('src').click();
+    await stable();
+    expect(host.requested).toEqual([ 'src', 'src' ]);
+  });
+
+  it('asks once for the children of a folder restored as expanded', async () => {
+    await create(h => h.expanded.set([ 'src' ]));
+    expect(host.requested).toEqual([ 'src' ]);
+
+    host.selected.set('README.md');
+    await stable();
+    expect(host.requested).toEqual([ 'src' ]);
+  });
+
+  it('asks only for restored folders that are visible', async () => {
+    await create(h => h.expanded.set([ 'src', 'src/app' ]));
+    expect(host.requested).toEqual([ 'src' ]);
+
+    host.nodes.set(
+      NODES.map(node =>
+        node.value === 'src'
+          ? { ...node, children: [ { value: 'src/app', label: 'app', expandable: true } ] }
+          : node
+      )
+    );
+    await stable();
+    expect(host.requested).toEqual([ 'src', 'src/app' ]);
+  });
+
   it('opens a file with a click', async () => {
     await create();
 
