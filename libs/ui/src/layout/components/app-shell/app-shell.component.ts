@@ -4,9 +4,11 @@ import {
   Component,
   computed,
   contentChild,
+  effect,
   ElementRef,
   input,
   model,
+  untracked,
   viewChild
 } from '@angular/core';
 
@@ -20,9 +22,11 @@ import { SplitPaneComponent, SplitPaneShow } from '../split-pane/split-pane.comp
  * bar, on the canvas.
  *
  * On wide screens the side panel is beside the content and can be resized and
- * collapsed. On narrow screens it is a drawer shown instead of the content: it
- * takes the focus when it opens, `Escape` closes it, and the focus goes back to
- * where it was.
+ * collapsed (`sideOpen`). On narrow screens it is a drawer shown instead of the
+ * content (`drawerOpen`): it takes the focus when it opens, `Escape` closes it,
+ * and the focus goes back to where it was, unless the consumer has moved it.
+ * The drawer starts closed and closes whenever the viewport crosses the
+ * breakpoint, without moving the focus.
  */
 @Component({
   selector: 'ui-app-shell',
@@ -37,8 +41,13 @@ import { SplitPaneComponent, SplitPaneShow } from '../split-pane/split-pane.comp
 export class AppShellComponent {
   /** The text of the skip link to the main content (NV-17). */
   readonly skipLinkLabel = input.required<string>();
-  /** Whether the side panel is shown: beside the content, or as the drawer. */
+  /** Whether the side panel is beside the content on wide screens. */
   readonly sideOpen = model(true);
+  /**
+   * Whether the side panel is shown instead of the content on narrow screens.
+   * It starts closed and closes whenever the viewport crosses the breakpoint.
+   */
+  readonly drawerOpen = model(false);
   /** The side panel's share of the width, in percent. */
   readonly sideSize = model(20);
 
@@ -51,32 +60,54 @@ export class AppShellComponent {
       return 'end';
     }
     if (this.narrow()) {
-      return this.sideOpen() ? 'start' : 'end';
+      return this.drawerOpen() ? 'start' : 'end';
     }
     return this.sideOpen() ? 'both' : 'end';
   });
 
   private readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
-  private drawerOpen = false;
+  private drawerShown = false;
+  private wasNarrow = this.narrow();
   private returnFocus: HTMLElement | null = null;
 
   constructor() {
+    // A rotated phone or a resized window starts with the drawer closed.
+    let previous = this.narrow();
+    effect(() => {
+      const narrow = this.narrow();
+      if (narrow !== previous) {
+        previous = narrow;
+        untracked(() => this.drawerOpen.set(false));
+      }
+    });
+
     afterRenderEffect(() => {
       const side = this.side();
-      const open = Boolean(side) && this.narrow() && this.sideOpen();
-      if (open === this.drawerOpen) {
+      const narrow = this.narrow();
+      const open = Boolean(side) && narrow && this.drawerOpen();
+      const crossed = narrow !== this.wasNarrow;
+      this.wasNarrow = narrow;
+      if (open === this.drawerShown) {
         return;
       }
-      this.drawerOpen = open;
+      this.drawerShown = open;
 
       if (open) {
         this.returnFocus = document.activeElement as HTMLElement | null;
         side?.element.focus();
-      } else {
-        const target = this.returnFocus?.isConnected ? this.returnFocus : this.main().nativeElement;
-        this.returnFocus = null;
+        return;
+      }
+
+      // Crossing the breakpoint never moves the focus, and neither does a
+      // consumer that has already put it somewhere else.
+      const focused = document.activeElement;
+      const lost = !focused || focused === document.body || Boolean(side?.element.contains(focused));
+      if (!crossed && lost) {
+        const opener = this.returnFocus;
+        const target = opener?.isConnected && opener !== document.body ? opener : this.main().nativeElement;
         target.focus();
       }
+      this.returnFocus = null;
     });
   }
 
@@ -88,8 +119,8 @@ export class AppShellComponent {
 
   /** Closes the drawer, but only for an `Escape` from inside it. */
   protected onEscape(event: Event): void {
-    if (this.drawerOpen && this.side()?.element.contains(event.target as Node)) {
-      this.sideOpen.set(false);
+    if (this.drawerShown && this.side()?.element.contains(event.target as Node)) {
+      this.drawerOpen.set(false);
     }
   }
 }

@@ -12,7 +12,8 @@ import { AppShellComponent } from './app-shell.component';
   imports: [ AppShellComponent, AppShellSideDirective ],
   template: `
     <button type="button" class="outside">Outside</button>
-    <ui-app-shell skipLinkLabel="Skip to content" [(sideOpen)]="sideOpen" [(sideSize)]="sideSize">
+    <button type="button" class="other">Other</button>
+    <ui-app-shell skipLinkLabel="Skip to content" [(sideOpen)]="sideOpen" [(drawerOpen)]="drawerOpen" [(sideSize)]="sideSize">
       <span uiAppShellHeader>Front Burner</span>
       @if (withSide()) {
         <div uiAppShellSide resizeLabel="Resize side panel">
@@ -25,6 +26,7 @@ import { AppShellComponent } from './app-shell.component';
 })
 class HostComponent {
   readonly sideOpen = signal(true);
+  readonly drawerOpen = signal(false);
   readonly sideSize = signal(20);
   readonly withSide = signal(true);
 }
@@ -99,52 +101,87 @@ describe('AppShellComponent', () => {
     expect(isShown(main())).toBe(true);
   });
 
-  it('shows the side panel instead of main on narrow screens', async () => {
+  it('starts on narrow screens with the drawer closed', async () => {
     await setViewport(true);
+
+    expect(isShown(side())).toBe(false);
+    expect(isShown(main())).toBe(true);
+    expect(separator()).toBeNull();
+  });
+
+  it('shows the drawer instead of main on narrow screens', async () => {
+    await setViewport(true);
+
+    await set(() => host.drawerOpen.set(true));
     expect(isShown(side())).toBe(true);
     expect(isShown(main())).toBe(false);
-    expect(separator()).toBeNull();
 
-    await set(() => host.sideOpen.set(false));
+    await set(() => host.drawerOpen.set(false));
     expect(isShown(side())).toBe(false);
     expect(isShown(main())).toBe(true);
   });
 
   it('moves focus into the drawer and back', async () => {
-    await set(() => host.sideOpen.set(false));
     await setViewport(true);
     const outside = query('.outside') as HTMLElement;
     outside.focus();
 
-    await set(() => host.sideOpen.set(true));
+    await set(() => host.drawerOpen.set(true));
     expect(document.activeElement).toBe(side());
 
     side().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await fixture.whenStable();
-    expect(host.sideOpen()).toBe(false);
+    expect(host.drawerOpen()).toBe(false);
+    expect(host.sideOpen()).toBe(true);
     expect(document.activeElement).toBe(outside);
   });
 
   it('focuses main when the opener is gone', async () => {
-    await set(() => host.sideOpen.set(false));
     await setViewport(true);
     const outside = query('.outside') as HTMLElement;
     outside.focus();
-    await set(() => host.sideOpen.set(true));
+    await set(() => host.drawerOpen.set(true));
 
     outside.remove();
-    await set(() => host.sideOpen.set(false));
+    await set(() => host.drawerOpen.set(false));
 
     expect(document.activeElement).toBe(main());
   });
 
+  it('focuses main when nothing had the focus when the drawer opened', async () => {
+    // iOS Safari does not focus a tapped button.
+    await setViewport(true);
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    await set(() => host.drawerOpen.set(true));
+    await set(() => host.drawerOpen.set(false));
+
+    expect(document.activeElement).toBe(main());
+  });
+
+  it('leaves the focus where the consumer put it when the drawer closes', async () => {
+    await setViewport(true);
+    (query('.outside') as HTMLElement).focus();
+    await set(() => host.drawerOpen.set(true));
+
+    // A consumer that closes the drawer and focuses something else at once.
+    const other = query('.other') as HTMLElement;
+    host.drawerOpen.set(false);
+    other.focus();
+    await fixture.whenStable();
+
+    expect(document.activeElement).toBe(other);
+  });
+
   it('ignores Escape from outside the drawer', async () => {
     await setViewport(true);
+    await set(() => host.drawerOpen.set(true));
 
     query('header span')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await fixture.whenStable();
 
-    expect(host.sideOpen()).toBe(true);
+    expect(host.drawerOpen()).toBe(true);
   });
 
   it('ignores Escape on wide screens', async () => {
@@ -154,13 +191,31 @@ describe('AppShellComponent', () => {
     expect(host.sideOpen()).toBe(true);
   });
 
-  it('switches layout when the viewport crosses the breakpoint', async () => {
+  it('keeps main and the focus when a wide screen becomes narrow', async () => {
+    const opener = query('.opener') as HTMLElement;
+    opener.focus();
+
     await setViewport(true);
+
+    expect(isShown(main())).toBe(true);
+    expect(isShown(side())).toBe(false);
+    expect(host.drawerOpen()).toBe(false);
+    expect(host.sideOpen()).toBe(true);
+  });
+
+  it('closes the drawer without moving the focus when a narrow screen becomes wide', async () => {
+    await setViewport(true);
+    await set(() => host.drawerOpen.set(true));
+    const opener = query('.opener') as HTMLElement;
+    opener.focus();
+
     await setViewport(false);
 
+    expect(host.drawerOpen()).toBe(false);
     expect(isShown(side())).toBe(true);
     expect(isShown(main())).toBe(true);
     expect(separator()).toBeTruthy();
+    expect(document.activeElement).toBe(opener);
   });
 
   it('keeps the side size in sync with the split', async () => {
