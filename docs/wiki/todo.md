@@ -1,8 +1,6 @@
 Next requirements files to write for the MVP (`docs/product/mvp.md`), in the
 suggested order of work:
 
-- Push credentials and asking for a passphrase on other pages, including
-  adding credentials to a repository that was added without them.
 - The repository management page (minimal: list, retry clone, replace
   credentials, remove).
 - Navigation: the web client's header and user menu (Preferences, Log out),

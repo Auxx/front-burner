@@ -22,8 +22,8 @@ standard git vocabulary, without leaving the repository screen
 Nothing is committed, pulled or pushed unless the user asks (D-4.1). A pull
 that conflicts goes to conflict resolution
 ([REQ-GIT-003](git-conflicts.md)). Credentials that are missing or refused,
-and keys that need unlocking, are handled by the push credentials and key
-unlock requirement (see `docs/wiki/todo.md`).
+and keys that need unlocking, are handled by
+[REQ-REPO-002](repo-credentials.md).
 
 ## Context
 
@@ -230,7 +230,7 @@ terms its _upstream_ or _tracking_ branch, for example `origin/main`.
   protected branch, a server hook, or unsigned commits (CA-15) — the push
   says so in plain words where it can, and shows the remote's own messages
   (the `remote:` lines) as plain text. Credentials and key problems follow
-  the push credentials and key unlock requirement.
+  REQ-REPO-002 (RC-4).
 - **GA-32** After a successful push, the counts update and a short notice
   says "Pushed 2 commits to origin/main".
 
@@ -358,8 +358,7 @@ terms its _upstream_ or _tracking_ branch, for example `origin/main`.
 - Several remotes; remotes other than the one the repository was cloned
   from.
 - The Simple and Guided levels, and pull requests.
-- Credentials, key unlock and changing the remote (push credentials and key
-  unlock requirement; repository management).
+- Credentials and key unlock (REQ-REPO-002), and changing the remote.
 
 ## Open questions
 

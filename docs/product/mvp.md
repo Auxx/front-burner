@@ -112,11 +112,15 @@ to:
 Left for later: renaming a repository, changing its clone mode, changing its
 remote, and managing saved credentials and known hosts as lists of their own.
 
-### 4. Push credentials and key unlock (to write)
+### 4. Push credentials and key unlock (written)
+
+Written up as [REQ-REPO-002](../requirements/repo-credentials.md).
 
 - Pushing uses the repository credentials. A push that the remote refuses
-  because of permissions shows a clear error, with a way to replace the
-  credentials (section 3).
+  shows a clear error, with a way to add or replace the credentials, or to
+  update an expired saved token in place for every repository that uses it.
+- A changed SSH host key can be reviewed and trusted, behind a strong
+  warning.
 - When a git operation needs a passphrase-protected key that is not
   unlocked (for example after a restart or in a new session), the web client
   asks for the passphrase on the page where the operation was started, then

@@ -206,7 +206,7 @@ user.
   is refused, the user is told "This repository needs credentials." on the
   credentials section. There is no such option for SSH, because SSH servers
   practically always require a key. _(My call.)_ Adding credentials to the
-  repository later is covered by the push and remotes requirement.
+  repository later is covered by [REQ-REPO-002](repo-credentials.md).
 
 ### Credentials: SSH
 
@@ -274,8 +274,8 @@ user.
 
   On this page, a passphrase given for a saved key (AR-25) or a pasted key
   (AR-26) unlocks that key for the session as soon as it has been checked.
-  How other pages ask for the passphrase is covered by the requirements of
-  those pages.
+  How other pages ask for the passphrase is covered by
+  [REQ-REPO-002](repo-credentials.md).
 - **AR-32** Host keys:
   - Front Burner ships with the published host key fingerprints of
     `github.com` and `bitbucket.org`, which every user trusts. The operator
