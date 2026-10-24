@@ -102,6 +102,12 @@ export const RepositoryScreen: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
+    // No gap between the activity bar and the side panel; the activity bar
+    // has its own padding.
+    const activityBar = canvas.getByRole('toolbar', { name: 'Side panel' });
+    const files = canvas.getByRole('region', { name: 'Files' });
+    await expect(files.getBoundingClientRect().left).toBe(activityBar.getBoundingClientRect().right);
+
     // Islands fill their panes.
     const editor = canvas.getByRole('region', { name: 'Editor' });
     const pane = editor.parentElement as HTMLElement;
@@ -127,7 +133,12 @@ export const Dashboard: Story = {
         <ui-island heading="Recent repositories"><p>handbook</p></ui-island>
       </ui-app-shell>
     `
-  })
+  }),
+  play: async ({ canvasElement }) => {
+    // Without an activity bar, the island keeps its gap from the edge.
+    const island = within(canvasElement).getByRole('region', { name: 'Recent repositories' });
+    await expect(island.getBoundingClientRect().left).toBeGreaterThan(0);
+  }
 };
 
 /** On a phone, the activity bar is at the bottom and the side panel is a drawer (A-10.6). */

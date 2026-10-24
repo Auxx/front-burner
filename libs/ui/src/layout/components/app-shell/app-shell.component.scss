@@ -67,6 +67,13 @@
     padding: 0 var(--ui-island-gap) var(--ui-island-gap);
   }
 
+  // Beside the activity bar, whose own padding is the gap.
+  :host:has(.activity > *) .body {
+    @include mixins.breakpoint-from(mixins.$breakpoint-medium) {
+      padding-inline-start: 0;
+    }
+  }
+
   // Each part is one cell, so that a projected island fills it.
   .side,
   main {
