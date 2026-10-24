@@ -15,16 +15,13 @@
     grid-template-rows: minmax(0, var(--ui-split-pane-size)) var(--ui-split-pane-gap) minmax(0, 1fr);
   }
 
+  // One cell, so that a projected island or split pane fills the pane; a
+  // child selector cannot reach projected content.
   .pane {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
     min-inline-size: 0;
     min-block-size: 0;
-
-    // A projected island or split pane fills the pane.
-    > * {
-      flex: 1;
-    }
 
     &[hidden] {
       display: none;

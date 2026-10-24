@@ -29,7 +29,12 @@ const config: StorybookConfig = {
       // A late find bundles them against a second copy of @angular/core, and
       // their `inject()` calls fail (NG0203) on a cold cache, as in CI.
       optimizeDeps: {
-        include: [ '@angular/cdk/bidi', '@angular/cdk/layout', '@angular/aria/toolbar' ]
+        include: [
+          '@angular/aria/toolbar',
+          '@angular/cdk/bidi',
+          '@angular/cdk/layout',
+          '@angular/core/rxjs-interop'
+        ]
       }
     });
   }

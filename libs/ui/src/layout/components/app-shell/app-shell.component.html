@@ -1,0 +1,23 @@
+<a class="skip-link" href="#" (click)="skipToMain($event)">{{ skipLinkLabel() }}</a>
+<header class="header">
+  <ng-content select="[uiAppShellHeader]" />
+</header>
+<div class="activity">
+  <ng-content select="ui-activity-bar" />
+</div>
+<ui-split-pane
+  class="body"
+  [show]="show()"
+  [(size)]="sideSize"
+  [separatorLabel]="side()?.resizeLabel() ?? ''"
+>
+  <div uiSplitPaneStart class="side">
+    <ng-content select="[uiAppShellSide]" />
+  </div>
+  <main #main uiSplitPaneEnd tabindex="-1">
+    <ng-content />
+  </main>
+</ui-split-pane>
+<div class="status">
+  <ng-content select="ui-status-bar" />
+</div>
