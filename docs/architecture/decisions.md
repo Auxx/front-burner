@@ -36,7 +36,7 @@ explicitly confirmed; they can be revisited cheaply.
   (`Update shopping-list.md`), or the count when there are several
   (`Update 3 files`, with the files listed in the body), followed by a blank
   line and the trailer `Front-Burner-Auto-Commit: simple`. The commit author
-  is the user (details belong to the commit author requirement).
+  is the user's ([REQ-GIT-001](../requirements/commit-author.md)).
 - **D-2.4** _(My call.)_ At the Simple level, opening a file also pulls when
   the working copy has no uncommitted changes and the pull is a fast-forward.
 - **D-2.5** To keep the vision's rule that levels are a frontend concern

@@ -1,7 +1,6 @@
 Next requirements files to write for the MVP (`docs/product/mvp.md`), in the
 suggested order of work:
 
-- Commit author name and email.
 - Git at the Advanced level: status, diff, discard, commit, push, pull (merge),
   branches, fetch notices, and conflict resolution by conflict markers, Use my /
   their version and abort (from D-4, D-5 and D-6).

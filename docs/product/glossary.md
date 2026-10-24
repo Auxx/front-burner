@@ -304,6 +304,13 @@ changes early.
 minute without changes. Its message names the changed files and ends with a
 `Front-Burner-Auto-Commit` trailer.
 
+**Commit author**
+: The name and email address recorded in a commit (as git's author and
+committer). Each user has a default in their user preferences and can
+override it per repository; they confirm it once before their first commit
+(see [REQ-GIT-001](../requirements/commit-author.md)). _Avoid_: "git
+identity", "signature".
+
 **Pull request**
 : A request, created on a git hosting provider, to merge one branch into
 another.

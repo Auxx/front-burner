@@ -26,8 +26,8 @@ encrypted. The layout of the data volume is in NF-5. See
 
   | Table                 | Holds                                                                                                          |
   |-----------------------|----------------------------------------------------------------------------------------------------------------|
-  | `users`               | Email (username), role, login method, Argon2id hash (PP-12), disabled flag, allowed git control levels         |
-  | `user_preferences`    | Per-user preferences, such as hiding non-Markdown files                                                         |
+  | `users`               | Email (username), display name, role, login method, Argon2id hash (PP-12), disabled flag, allowed git control levels |
+  | `user_preferences`    | Per-user preferences, such as hiding non-Markdown files, and the default commit author and whether it is confirmed (CA-7, CA-13) |
   | `sessions`            | LG-30                                                                                                           |
   | `login_audit`         | LG-41                                                                                                           |
   | `invitations`, `password_reset_codes` | Hashed one-time codes with expiry (LG-52 and onboarding of invited users)                       |
@@ -35,7 +35,7 @@ encrypted. The layout of the data volume is in NF-5. See
   | `system_settings`     | SMTP, OIDC, automatic registration; secrets encrypted (A-4.8)                                                   |
   | `saved_credentials`   | Owner, kind (HTTPS, SSH key, provider token), name, public parts (username, public key, provider), encrypted secret |
   | `known_hosts`         | Owner, host, port, key type, fingerprint                                                                         |
-  | `repositories`        | Owner, repository name, remote URL (no secrets), clone mode and branch, status and error label, credential and provider token references, confirmation state when added on behalf of a user, last access time, git control level, auto-sync, merge or rebase preference |
+  | `repositories`        | Owner, repository name, remote URL (no secrets), clone mode and branch, status and error label, credential and provider token references, confirmation state when added on behalf of a user, last access time, git control level, auto-sync, merge or rebase preference, commit author override (CA-8) |
   | `sync_state`          | Per repository: last automatic sync outcome ("not uploaded" and its cause), open conflict episode and reminder status, resolution lock lease (session, expiry), commit recorded before a merge or rebase (D-4.6) |
   | `jobs`                | A-6.2                                                                                                           |
 

@@ -122,11 +122,14 @@ remote, and managing saved credentials and known hosts as lists of their own.
   asks for the passphrase on the page where the operation was started, then
   carries on with the operation.
 
-### 5. Commit author (to write)
+### 5. Commit author ([REQ-GIT-001](../requirements/commit-author.md))
 
-- The author name and email of the user's commits. By default they come from
-  the account (its display name and email). The user can change them in
-  their user preferences. _(My call.)_
+- The author name and email of the user's commits, as a default in the user
+  preferences (taken at first from the account) and an optional override per
+  repository. The user confirms it once, before their first commit. Commits
+  are not signed.
+- A minimal **Preferences** page (`/preferences`), reached from the user
+  menu, for the default commit author.
 
 ### 6. File browser (to write)
 
