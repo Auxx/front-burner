@@ -1,4 +1,6 @@
-import type { Decorator, Preview } from '@storybook/angular';
+import '../src/styles/index.scss';
+
+import type { Decorator, Preview } from '@storybook/angular-vite';
 
 /**
  * Sets `data-theme` and `data-density` on the root, so that every story can be
@@ -54,7 +56,7 @@ const preview: Preview = {
   },
   parameters: {
     a11y: {
-      // Violations fail the story in the a11y panel and in the test-runner
+      // Violations fail the story in the a11y panel and in the Vitest run
       // (A-10.38, NF-13.8).
       test: 'error',
       options: {

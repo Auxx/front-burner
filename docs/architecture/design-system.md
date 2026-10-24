@@ -268,10 +268,12 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   Storybook switches `data-theme` and `data-density` (A-10.9, A-10.11), so each
   story can be checked in light and dark and at both densities.
 - **A-10.38** `@storybook/addon-a11y` runs axe on every story with its `test`
-  parameter set to `'error'`, and `@storybook/test-runner` runs all stories in
-  CI (to be replaced by the Vitest addon, see `docs/wiki/todo.md`), so an
-  accessibility violation in a component fails the build before it reaches the
-  end-to-end tests (NF-13.8).
+  parameter set to `'error'`. Storybook's Vitest addon runs every story as a
+  test in a real browser (Chromium through Playwright): the `test-storybook`
+  target in CI, and the test panel of the running Storybook. An accessibility
+  violation or a failing `play` function in a component therefore fails the
+  build before it reaches the end-to-end tests (NF-13.8). Storybook uses the
+  Vite-based `@storybook/angular-vite` framework, which the Vitest addon needs.
 - **A-10.39** Unit tests of components that wrap Aria use its testing harnesses
   (`@angular/aria/*/testing`) rather than querying the DOM.
 - **A-10.40** The first step is the tokens: a Storybook page (**Design

@@ -1,4 +1,4 @@
-import { Meta, StoryObj } from '@storybook/angular';
+import { Meta, StoryObj } from '@storybook/angular-vite';
 import { expect, waitFor } from 'storybook/test';
 import { TokenOverviewComponent } from './token-overview.component';
 
@@ -26,7 +26,7 @@ export const Colours: Story = {
   args: { section: 'colours' }
 };
 
-/** Fails in the test-runner when any pair is below its minimum in either scheme (A-10.10). */
+/** Fails in the Vitest run when any pair is below its minimum in either scheme (A-10.10). */
 export const Contrast: Story = {
   args: { section: 'contrast' },
   play: async ({ canvasElement }) => {
