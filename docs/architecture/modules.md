@@ -83,20 +83,19 @@ libs/
 ```
 
 - **A-2.1** Server feature libraries contain their controllers, services and
-  queries together; they are not split further into data-access libraries.
-  _(My call.)_
+  queries together; they are not split further into data-access libraries. _(My
+  call.)_
 - **A-2.2** Web feature libraries are each loaded lazily from a route of
   `apps/web` (NF-2.9).
 - **A-2.2a** The repository screen is one feature library,
-  `feature-repository-screen`, rather than separate editor and git features:
-  its parts share one screen, one header (NV-9) and the same state (the open
-  file, the save queue, the merge in progress), and web features may not
-  import each other (A-2.4). The git UI of the Simple and Guided levels will
-  be added to it. _(My call.)_
-- **A-2.3** The generated `api-client` is an Angular library, since its
-  template targets `HttpClient`. A future Angular-based native client can
-  reuse it; a non-Angular client generates its own from the OpenAPI
-  document.
+  `feature-repository-screen`, rather than separate editor and git features: its
+  parts share one screen, one header (NV-9) and the same state (the open file,
+  the save queue, the merge in progress), and web features may not import each
+  other (A-2.4). The git UI of the Simple and Guided levels will be added to it.
+  _(My call.)_
+- **A-2.3** The generated `api-client` is an Angular library, since its template
+  targets `HttpClient`. A future Angular-based native client can reuse it; a
+  non-Angular client generates its own from the OpenAPI document.
 
 ## A-2: Boundary rules
 
@@ -104,15 +103,15 @@ libs/
   `type:<app|feature|core|domain|data-access|ui|contracts|util>`, and
   `@nx/enforce-module-boundaries` enforces these rules:
 
-  | Rule                                                                                                   | Why                                                                |
-  |--------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|
-  | `scope:shared` imports only `scope:shared`; server and web never import each other                     | Contracts stay framework-free; no server code reaches the bundle.  |
-  | Server `type:core` never imports `type:feature`                                                        | Infrastructure stays reusable and testable alone.                 |
-  | Server features may import other server features, without cycles                                      | For example `sync` needs `credentials` (key unlock) and `repositories`. |
-  | Web `type:feature` never imports another `type:feature`                                                | Lazy chunks stay independent.                                      |
-  | Web `type:domain` (`markdown`, `code-editor`) imports only `core`, `ui`, `api-client` and `scope:shared` | Shared by several features.                                       |
-  | `ui` imports only `shared/util`                                                                         | No business logic, contracts or API calls in generic components.   |
-  | Every other library may import `shared/contracts` and `shared/util`                                    | One source of types.                                               |
+  | Rule                                                                                                     | Why                                                                     |
+  | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+  | `scope:shared` imports only `scope:shared`; server and web never import each other                       | Contracts stay framework-free; no server code reaches the bundle.       |
+  | Server `type:core` never imports `type:feature`                                                          | Infrastructure stays reusable and testable alone.                       |
+  | Server features may import other server features, without cycles                                         | For example `sync` needs `credentials` (key unlock) and `repositories`. |
+  | Web `type:feature` never imports another `type:feature`                                                  | Lazy chunks stay independent.                                           |
+  | Web `type:domain` (`markdown`, `code-editor`) imports only `core`, `ui`, `api-client` and `scope:shared` | Shared by several features.                                             |
+  | `ui` imports only `shared/util`                                                                          | No business logic, contracts or API calls in generic components.        |
+  | Every other library may import `shared/contracts` and `shared/util`                                      | One source of types.                                                    |
 
 - **A-2.5** Web tags: `markdown`, `code-editor`, `shell` and
   `repository-dialogs` are `type:domain`; `core` and `api-client` are

@@ -6,9 +6,9 @@ Requirements files deferred until after the MVP:
 - Admin-assisted adding, plus the user's confirmation flow.
 - Saved credentials and known-hosts management.
 - Changing a repository's remote.
-- Live preview: mapping site-absolute image paths such as `/images/cover.png`
-  to the folder a blog engine uses (for example Hexo's `source/`), per
-  repository. Until then they resolve from the repository root (IM-2).
+- Live preview: mapping site-absolute image paths such as `/images/cover.png` to
+  the folder a blog engine uses (for example Hexo's `source/`), per repository.
+  Until then they resolve from the repository root (IM-2).
 - User management, invitations and onboarding of invited users, and SMTP in
   system settings.
 - The Simple and Guided levels, and pull requests.

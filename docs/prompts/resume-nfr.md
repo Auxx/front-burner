@@ -4,8 +4,8 @@ Paste the text below into a new Claude Code session to continue.
 
 ---
 
-We are preparing to design the architecture of Front Burner. Before drafting
-it, we agreed on this order:
+We are preparing to design the architecture of Front Burner. Before drafting it,
+we agreed on this order:
 
 1. ~~Answer the architecture-driving product questions~~ — done, recorded in
    `docs/architecture/decisions.md` (D-1 to D-8).
@@ -23,24 +23,24 @@ Read first: `docs/product/vision.md`, `docs/product/glossary.md`,
 `docs/requirements/`.
 
 Already fixed by existing documents (do not re-ask): a single rootless Docker
-container serves the web client and the API from one origin over HTTPS;
-per-user working copies; strict privacy between users; background clones with
-a concurrency limit and a timeout; a backend-run job runner for Simple-level
+container serves the web client and the API from one origin over HTTPS; per-user
+working copies; strict privacy between users; background clones with a
+concurrency limit and a timeout; a backend-run job runner for Simple-level
 auto-sync, fetches and reminder emails; encrypted saved credentials.
 
 The NFR document still has to settle, among others:
 
 - **Scale:** users per instance, repositories per user, largest supported
-  repository (size, file count — developer repositories are code
-  repositories), largest Markdown file.
+  repository (size, file count — developer repositories are code repositories),
+  largest Markdown file.
 - **Performance:** latency targets for opening the file tree, opening a file,
   saving, and synchronising; behaviour on slow mobile connections.
 - **Storage and data layout:** where working copies, the database and secrets
-  live on the container's volume(s); database choice consequences
-  (SQLite vs Postgres given the single-container constraint).
+  live on the container's volume(s); database choice consequences (SQLite vs
+  Postgres given the single-container constraint).
 - **Backup and restore:** what the operator backs up, whether a backup must be
-  consistent while the instance runs, how working copies relate to backups
-  (they can be re-cloned, but may hold unpushed commits).
+  consistent while the instance runs, how working copies relate to backups (they
+  can be re-cloned, but may hold unpushed commits).
 - **Upgrades:** database migrations, compatibility of stored data across
   versions, downgrade policy.
 - **Secrets:** how the instance encryption secret (AR-17) is provided and
@@ -59,7 +59,7 @@ The NFR document still has to settle, among others:
 How to work: go through these one topic at a time, asking me one question per
 message, proposing concrete defaults when I'm unsure, and marking anything you
 decide yourself as _(My call.)_. Also confirm with me decision D-2.5 in
-`decisions.md` (Simple-level auto-sync as a separate per-repository
-"auto-sync" setting), which I have not explicitly approved yet. Ask me where
-the NFR document should live before writing it (suggestion:
+`decisions.md` (Simple-level auto-sync as a separate per-repository "auto-sync"
+setting), which I have not explicitly approved yet. Ask me where the NFR
+document should live before writing it (suggestion:
 `docs/architecture/non-functional.md`).

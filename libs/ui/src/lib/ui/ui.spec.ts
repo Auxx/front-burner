@@ -7,7 +7,7 @@ describe('Ui', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [Ui]
+      imports: [ Ui ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(Ui);

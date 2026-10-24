@@ -1,24 +1,22 @@
 import type { Meta, StoryObj } from '@storybook/angular';
-import { Ui } from './ui';
 import { expect } from 'storybook/test';
+import { Ui } from './ui';
 
 const meta: Meta<Ui> = {
   component: Ui,
-  title: 'Ui',
+  title: 'Ui'
 };
 export default meta;
 
 type Story = StoryObj<Ui>;
 
 export const Primary: Story = {
-  args: {
-  },
+  args: {}
 };
 
 export const Heading: Story = {
-  args: {
-  },
+  args: {},
   play: async ({ canvas }) => {
     await expect(canvas.getByText(/ui/gi)).toBeTruthy();
-  },
+  }
 };

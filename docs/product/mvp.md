@@ -4,31 +4,30 @@
 
 ## Purpose
 
-This document defines the **minimum viable product (MVP)**: the smallest
-release of Front Burner that delivers the core promise of the
-[vision](vision.md) to one kind of user, end to end. It decides what is built
-first. It does not change the vision: everything left out here is deferred,
-not dropped.
+This document defines the **minimum viable product (MVP)**: the smallest release
+of Front Burner that delivers the core promise of the [vision](vision.md) to one
+kind of user, end to end. It decides what is built first. It does not change the
+vision: everything left out here is deferred, not dropped.
 
 The requirements stay the source of truth for behaviour. This document lists
-which requirements the MVP needs, which already exist and which still have to
-be written.
+which requirements the MVP needs, which already exist and which still have to be
+written.
 
 ## Target user
 
 The MVP serves **one person: the operator, who is also the instance's only
-administrator and its only end user**. In persona terms this is the
-self-hoster, or a tech lead or software developer trying Front Burner out
-before inviting a team. It suits people who already know git.
+administrator and its only end user**. In persona terms this is the self-hoster,
+or a tech lead or software developer trying Front Burner out before inviting a
+team. It suits people who already know git.
 
 Consequences:
 
 - The only account is the first administrator, created by administrator
   onboarding (REQ-AUTH-001). Onboarding turns automatic registration off, and
   the MVP has no way to add users, so no other accounts can exist.
-- Every repository uses the **Advanced** git control level. Since it is the
-  only level allowed, the level dropdown on the Add repository page is
-  hidden (AR-40).
+- Every repository uses the **Advanced** git control level. Since it is the only
+  level allowed, the level dropdown on the Add repository page is hidden
+  (AR-40).
 - No outgoing mail is needed. Without SMTP the **Forgot password?** link is
   hidden (LG-48). If the operator loses their password, they recover the
   instance by hand (see [Risks](#risks)).
@@ -38,63 +37,62 @@ Consequences:
 
 ## Goal of the MVP
 
-> An operator deploys Front Burner, signs in, adds an existing git
-> repository, finds a Markdown file, edits it with a live preview on a laptop
-> or a phone, and commits, pushes, pulls and resolves conflicts, all without
-> a terminal.
+> An operator deploys Front Burner, signs in, adds an existing git repository,
+> finds a Markdown file, edits it with a live preview on a laptop or a phone,
+> and commits, pushes, pulls and resolves conflicts, all without a terminal.
 
 ### Exit criteria
 
-The MVP is done when all of these hold on a fresh instance, in a desktop
-browser and in a mobile browser:
+The MVP is done when all of these hold on a fresh instance, in a desktop browser
+and in a mobile browser:
 
 1. Following the deployment guide, the operator starts the container and
    completes administrator onboarding, with either a password or OIDC.
 2. The operator logs in and out. Sessions survive a backend restart.
-3. The operator adds a private repository over HTTPS with a token, and
-   another over SSH with a generated key, with each clone mode. They follow
-   each clone on the dashboard.
-4. The operator browses the repository, creates and renames Markdown files
-   and folders, deletes files and folders, and opens any Markdown file in the
+3. The operator adds a private repository over HTTPS with a token, and another
+   over SSH with a generated key, with each clone mode. They follow each clone
+   on the dashboard.
+4. The operator browses the repository, creates and renames Markdown files and
+   folders, deletes files and folders, and opens any Markdown file in the
    editor.
 5. Edits are saved to the working copy automatically after the user stops
    typing. Reloading the page or opening it on another device shows the saved
    content.
-6. The live preview renders standard Markdown, front matter, code blocks,
-   safe HTML and repository images, and remote images on request. Unsafe
-   HTML is stripped.
+6. The live preview renders standard Markdown, front matter, code blocks, safe
+   HTML and repository images, and remote images on request. Unsafe HTML is
+   stripped.
 7. The operator sees the changed files and their diffs, discards a change,
    commits selected files with a message, and pushes. A new branch gets its
    upstream on the first push.
 8. The operator creates a branch, switches between branches, and pulls.
-9. When the remote changes, the operator is told. A pull that conflicts can
-   be resolved in the browser by editing conflict markers, by keeping one
-   whole version of a file, or by aborting. After an abort, the branch and
-   working copy are exactly as they were before.
+9. When the remote changes, the operator is told. A pull that conflicts can be
+   resolved in the browser by editing conflict markers, by keeping one whole
+   version of a file, or by aborting. After an abort, the branch and working
+   copy are exactly as they were before.
 10. After a backend restart, a passphrase-protected key can be unlocked again
     from whichever page needs it, and the git operation carries on.
-11. A repository whose clone failed, or whose credentials stopped working,
-    can be fixed or removed from the repository management page.
-12. The non-functional baseline holds: the security baseline, the
-    rootless container, and the browser support and accessibility targets in
+11. A repository whose clone failed, or whose credentials stopped working, can
+    be fixed or removed from the repository management page.
+12. The non-functional baseline holds: the security baseline, the rootless
+    container, and the browser support and accessibility targets in
     [non-functional.md](../architecture/non-functional.md).
 
 ## In scope
 
 ### 1. Authentication and onboarding (written)
 
-| Requirement                                               | Status   | MVP notes                                                         |
-|-----------------------------------------------------------|----------|-------------------------------------------------------------------|
-| [REQ-AUTH-001](../requirements/auth-onboarding.md)        | Accepted | As written.                                                       |
-| [REQ-AUTH-002](../requirements/auth-password-policy.md)   | Accepted | As written.                                                       |
-| [REQ-AUTH-003](../requirements/auth-login.md)             | Accepted | As written. Password reset stays hidden, because SMTP is missing. |
+| Requirement                                             | Status   | MVP notes                                                         |
+| ------------------------------------------------------- | -------- | ----------------------------------------------------------------- |
+| [REQ-AUTH-001](../requirements/auth-onboarding.md)      | Accepted | As written.                                                       |
+| [REQ-AUTH-002](../requirements/auth-password-policy.md) | Accepted | As written.                                                       |
+| [REQ-AUTH-003](../requirements/auth-login.md)           | Accepted | As written. Password reset stays hidden, because SMTP is missing. |
 
 ### 2. Dashboard and adding repositories (written)
 
-| Requirement                                         | Status   | MVP notes                                                                                     |
-|-----------------------------------------------------|----------|-----------------------------------------------------------------------------------------------|
-| [REQ-DASH-001](../requirements/dashboard.md)        | Accepted | As written. The **Needs your confirmation** status never occurs.                              |
-| [REQ-REPO-001](../requirements/repo-add.md)         | Accepted | As written. Only Advanced is allowed, so the level dropdown is hidden (AR-40).                |
+| Requirement                                  | Status   | MVP notes                                                                      |
+| -------------------------------------------- | -------- | ------------------------------------------------------------------------------ |
+| [REQ-DASH-001](../requirements/dashboard.md) | Accepted | As written. The **Needs your confirmation** status never occurs.               |
+| [REQ-REPO-001](../requirements/repo-add.md)  | Accepted | As written. Only Advanced is allowed, so the level dropdown is hidden (AR-40). |
 
 ### 3. Repository management (written)
 
@@ -107,9 +105,9 @@ settings page per repository:
 - replace a repository's credentials, including adding credentials to a
   repository that was added without them, so that it can be pushed;
 - set the repository's commit author override;
-- remove a repository, which deletes its working copy after a confirmation
-  that lists commits that were not pushed and changes that were not
-  committed, and then asks for the repository name before removing it.
+- remove a repository, which deletes its working copy after a confirmation that
+  lists commits that were not pushed and changes that were not committed, and
+  then asks for the repository name before removing it.
 
 Left for later: renaming a repository, changing its clone mode, changing its
 remote, and managing saved credentials and known hosts as lists of their own.
@@ -118,32 +116,31 @@ remote, and managing saved credentials and known hosts as lists of their own.
 
 Written up as [REQ-REPO-002](../requirements/repo-credentials.md).
 
-- Pushing uses the repository credentials. A push that the remote refuses
-  shows a clear error, with a way to add or replace the credentials, or to
-  update an expired saved token in place for every repository that uses it.
-- A changed SSH host key can be reviewed and trusted, behind a strong
-  warning.
-- When a git operation needs a passphrase-protected key that is not
-  unlocked (for example after a restart or in a new session), the web client
-  asks for the passphrase on the page where the operation was started, then
-  carries on with the operation.
+- Pushing uses the repository credentials. A push that the remote refuses shows
+  a clear error, with a way to add or replace the credentials, or to update an
+  expired saved token in place for every repository that uses it.
+- A changed SSH host key can be reviewed and trusted, behind a strong warning.
+- When a git operation needs a passphrase-protected key that is not unlocked
+  (for example after a restart or in a new session), the web client asks for the
+  passphrase on the page where the operation was started, then carries on with
+  the operation.
 
 ### 5. Commit author ([REQ-GIT-001](../requirements/commit-author.md))
 
 - The author name and email of the user's commits, as a default in the user
   preferences (taken at first from the account) and an optional override per
-  repository. The user confirms it once, before their first commit. Commits
-  are not signed.
-- A minimal **Preferences** page (`/preferences`), reached from the user
-  menu, for the default commit author.
+  repository. The user confirms it once, before their first commit. Commits are
+  not signed.
+- A minimal **Preferences** page (`/preferences`), reached from the user menu,
+  for the default commit author.
 
 ### 6. File browser (written)
 
-- A file tree of the current branch of the working copy, which loads
-  folders lazily so that large code repositories stay fast.
-- Markdown files (`.md`, `.markdown`, `.mdx`) and non-Markdown files are
-  both shown, and files ignored by `.gitignore` are marked. Only Markdown
-  files can be opened.
+- A file tree of the current branch of the working copy, which loads folders
+  lazily so that large code repositories stay fast.
+- Markdown files (`.md`, `.markdown`, `.mdx`) and non-Markdown files are both
+  shown, and files ignored by `.gitignore` are marked. Only Markdown files can
+  be opened.
 - Creating Markdown files and (empty) folders, renaming Markdown files and
   folders in place, and deleting files of any kind and folders.
 - Opening a repository sets its last access time (DS-7, DS-8).
@@ -162,17 +159,17 @@ Builds on decisions D-1 and D-7:
 - automatic saving to the working copy after the user stops typing (D-1.1 to
   D-1.3: no commit, last save wins), with a visible saved / saving / failed
   state and a warning when leaving with an unsaved change;
-- plain Markdown editing, one file at a time (a formatting toolbar and tabs
-  come later);
-- a live preview beside the editor on wide screens, scrolling together with
-  it, and Edit and Preview tabs on narrow screens;
+- plain Markdown editing, one file at a time (a formatting toolbar and tabs come
+  later);
+- a live preview beside the editor on wide screens, scrolling together with it,
+  and Edit and Preview tabs on narrow screens;
 - the rendering pipeline and what it shows (D-7.3 to D-7.6);
-- **safe HTML**: the GitHub-compatible whitelist of HTML tags and
-  attributes that the preview renders, with a notice when HTML was removed;
-- **images**: repository images, resolved from the Markdown file's folder
-  or, for paths that start with `/`, from the repository root, loaded through
-  the API with the user's auth token; remote images only when the user asks
-  for the open file.
+- **safe HTML**: the GitHub-compatible whitelist of HTML tags and attributes
+  that the preview renders, with a notice when HTML was removed;
+- **images**: repository images, resolved from the Markdown file's folder or,
+  for paths that start with `/`, from the repository root, loaded through the
+  API with the user's auth token; remote images only when the user asks for the
+  open file.
 
 The editor and preview are written up as
 [REQ-EDIT-001](../requirements/editor.md), safe HTML as
@@ -181,78 +178,78 @@ The editor and preview are written up as
 
 ### 8. Git at the Advanced level (written)
 
-Written up as [REQ-GIT-002](../requirements/git-advanced.md) (changes,
-commits, pull, push, branches, fetch) and
-[REQ-GIT-003](../requirements/git-conflicts.md) (conflict resolution).
+Written up as [REQ-GIT-002](../requirements/git-advanced.md) (changes, commits,
+pull, push, branches, fetch) and [REQ-GIT-003](../requirements/git-conflicts.md)
+(conflict resolution).
 
 Builds on decisions D-4, D-5 and D-6. The backend exposes one set of git
 operations for every level. The MVP builds only the Advanced level's UI for
 them.
 
 - **Status**: the current branch, how far it is ahead of and behind its
-  upstream, and a **Changes** tab next to **Files** listing the changed
-  files (added, modified, deleted).
+  upstream, and a **Changes** tab next to **Files** listing the changed files
+  (added, modified, deleted).
 - **Diff**: the diff of each changed file against the last commit.
 - **Discard**: discarding the changes to selected files, with a confirmation.
 - **Commit**: committing the ticked files (there is no staging area) with a
   message, and amending the last commit while it has not been pushed.
 - **Push**: pushing the current branch, and setting its upstream on the first
   push.
-- **Pull**: fetching and merging the upstream into the current branch. If
-  there are uncommitted changes, the user is asked to commit or discard them
-  first (D-4.3). The MVP only merges; rebase comes later (see D-5.2).
-- **Branches**: listing local and remote branches, creating a branch from
-  the current one, and switching branches. Switching is refused while there
-  are uncommitted changes _(my call)_. In a single-branch clone, only the
-  cloned branch and branches created locally from it are listed.
+- **Pull**: fetching and merging the upstream into the current branch. If there
+  are uncommitted changes, the user is asked to commit or discard them first
+  (D-4.3). The MVP only merges; rebase comes later (see D-5.2).
+- **Branches**: listing local and remote branches, creating a branch from the
+  current one, and switching branches. Switching is refused while there are
+  uncommitted changes _(my call)_. In a single-branch clone, only the cloned
+  branch and branches created locally from it are listed.
 - **Fetch and remote-change notices** (D-4.2): fetching when a file is opened
-  and periodically while the user is editing, telling the user when the
-  upstream has new commits and whether the open file is among them.
-- **Conflict resolution** (D-4.4 to D-4.6, D-6): a pull that conflicts locks
-  the repository to the resolution screen, which offers:
-  - **Edit conflict markers**, in the normal editor (D-6.4), in the plain
-    marker style, with **Accept mine** / **Accept theirs** / **Accept both**
-    buttons on each conflict;
+  and periodically while the user is editing, telling the user when the upstream
+  has new commits and whether the open file is among them.
+- **Conflict resolution** (D-4.4 to D-4.6, D-6): a pull that conflicts locks the
+  repository to the resolution screen, which offers:
+  - **Edit conflict markers**, in the normal editor (D-6.4), in the plain marker
+    style, with **Accept mine** / **Accept theirs** / **Accept both** buttons on
+    each conflict;
   - **Use my version** / **Use their version**, the only methods for
     non-Markdown files (D-6.2);
-  - **Abort**, which puts the branch and working copy back exactly as they
-    were (D-4.5).
+  - **Abort**, which puts the branch and working copy back exactly as they were
+    (D-4.5).
 
-  Finishing commits the merge. The user then pushes it like any other
-  commit, or undoes the merge while it has not been pushed.
+  Finishing commits the merge. The user then pushes it like any other commit, or
+  undoes the merge while it has not been pushed.
 
 ### 9. Navigation (written)
 
-Written up as [REQ-APP-001](../requirements/navigation.md): the app header
-with the user menu (Preferences, Log out), one combined bar with a repository
-switcher on the repository screen, the list of routes, page titles,
-breadcrumbs, "Page not found", global banners and shared accessibility rules.
+Written up as [REQ-APP-001](../requirements/navigation.md): the app header with
+the user menu (Preferences, Log out), one combined bar with a repository
+switcher on the repository screen, the list of routes, page titles, breadcrumbs,
+"Page not found", global banners and shared accessibility rules.
 
 ### 10. Deployment guide (to write)
 
-The operator-facing deployment guide in `docs/wiki/deployment.md`, as listed
-in `docs/wiki/todo.md`: the image, volumes, container UID, environment
-variables, encryption key, backup and restore, upgrades, and a hardened
-compose example. It is written once the MVP runs locally in a development
-environment, before the release (order of work, step 6).
+The operator-facing deployment guide in `docs/wiki/deployment.md`, as listed in
+`docs/wiki/todo.md`: the image, volumes, container UID, environment variables,
+encryption key, backup and restore, upgrades, and a hardened compose example. It
+is written once the MVP runs locally in a development environment, before the
+release (order of work, step 6).
 
 ## Out of scope (deferred)
 
 These are deferred in favour of a smaller first release. They stay in the
 vision, and the architecture must not rule them out.
 
-| Area                    | Deferred                                                                                                                                      |
-|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
-| Users                   | Inviting password users, onboarding of invited users, user management (disable/enable, allowed levels), viewing the login audit log, OIDC allow-list and the automatic registration toggle. |
-| System settings         | SMTP configuration, and everything that needs email: invitations, password reset, conflict reminder emails.                                   |
-| Git control levels      | The Simple level and auto-sync (D-2, D-3), the Guided level, and changing a repository's level (D-4a).                                        |
-| Pull requests           | "Submit for review", provider tokens, and the provider abstraction's pull request calls (D-8). Resolving on the provider.                     |
-| Advanced git extras     | Rebase and the merge/rebase preference (D-5.2, D-5.3), the three-way merge editor, Choose per change, Keep both, commit history, deleting and renaming branches, tags, stash. |
-| Repositories            | Adding a repository on a user's behalf and confirming it, renaming a repository, changing its clone mode or remote, submodules, Git LFS.     |
-| Credentials             | Managing saved credentials and known hosts as lists: renaming, deleting, changing a passphrase, reviewing known hosts.                       |
-| Files                   | Moving files to another folder, uploading files, the "hide non-Markdown files" preference, file search.                                     |
-| Editor and preview      | A formatting toolbar, several open files (tabs), Mermaid and math, ticking task lists. Blog-engine image folders, a remote image proxy.         |
-| Account                 | Changing the password while logged in.                                                                                                        |
+| Area                | Deferred                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Users               | Inviting password users, onboarding of invited users, user management (disable/enable, allowed levels), viewing the login audit log, OIDC allow-list and the automatic registration toggle. |
+| System settings     | SMTP configuration, and everything that needs email: invitations, password reset, conflict reminder emails.                                                                                 |
+| Git control levels  | The Simple level and auto-sync (D-2, D-3), the Guided level, and changing a repository's level (D-4a).                                                                                      |
+| Pull requests       | "Submit for review", provider tokens, and the provider abstraction's pull request calls (D-8). Resolving on the provider.                                                                   |
+| Advanced git extras | Rebase and the merge/rebase preference (D-5.2, D-5.3), the three-way merge editor, Choose per change, Keep both, commit history, deleting and renaming branches, tags, stash.               |
+| Repositories        | Adding a repository on a user's behalf and confirming it, renaming a repository, changing its clone mode or remote, submodules, Git LFS.                                                    |
+| Credentials         | Managing saved credentials and known hosts as lists: renaming, deleting, changing a passphrase, reviewing known hosts.                                                                      |
+| Files               | Moving files to another folder, uploading files, the "hide non-Markdown files" preference, file search.                                                                                     |
+| Editor and preview  | A formatting toolbar, several open files (tabs), Mermaid and math, ticking task lists. Blog-engine image folders, a remote image proxy.                                                     |
+| Account             | Changing the password while logged in.                                                                                                                                                      |
 
 ## Order of work
 
@@ -261,30 +258,30 @@ someone:
 
 1. Authentication and onboarding, the app header and navigation, then the
    dashboard and adding repositories.
-2. The file browser, then the editor with saving and live preview, safe HTML
-   and images. At this point the operator can edit files but not commit them.
-3. Commit author, status, diff, discard, commit and push, with push
-   credentials and key unlock.
+2. The file browser, then the editor with saving and live preview, safe HTML and
+   images. At this point the operator can edit files but not commit them.
+3. Commit author, status, diff, discard, commit and push, with push credentials
+   and key unlock.
 4. Pull, fetch notices, branches and conflict resolution.
 5. The repository management page.
-6. The deployment guide, the security review and the release checks
-   (NF-11.12, and the hand checks on real phones in
+6. The deployment guide, the security review and the release checks (NF-11.12,
+   and the hand checks on real phones in
    [non-functional.md](../architecture/non-functional.md)).
 
 ## Risks
 
-- **Locked out without SMTP.** With one administrator and no password reset,
-  a forgotten password locks the operator out. REQ-AUTH-001 leaves
-  recovering an instance where every administrator is lost to a separate
-  requirement, as an operator task. The MVP needs at least a documented
-  recovery procedure in the deployment guide.
+- **Locked out without SMTP.** With one administrator and no password reset, a
+  forgotten password locks the operator out. REQ-AUTH-001 leaves recovering an
+  instance where every administrator is lost to a separate requirement, as an
+  operator task. The MVP needs at least a documented recovery procedure in the
+  deployment guide.
 - **Typing speed on phones.** Spike 3 measured typing in a 1 MB file at the
-  limit of NF-2.4 in emulation (A-8.11). The check on a real mid-range phone
-  is still to do, and must happen before the editor is built (order of work,
-  step 2), so that a slow result can still change its design.
-- **Large repositories.** Spike 4 (git at 100,000 files, A-5.14) is still to
-  do. The file browser's lazy loading and the status call are the parts most
-  at risk.
+  limit of NF-2.4 in emulation (A-8.11). The check on a real mid-range phone is
+  still to do, and must happen before the editor is built (order of work, step
+  2), so that a slow result can still change its design.
+- **Large repositories.** Spike 4 (git at 100,000 files, A-5.14) is still to do.
+  The file browser's lazy loading and the status call are the parts most at
+  risk.
 
 ## Open questions
 
