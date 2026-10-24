@@ -13,6 +13,8 @@ frontend.
 
 - Product vision: `docs/product/vision.md` - describes the product's purpose,
   goals, and long-term direction.
+- MVP: `docs/product/mvp.md` - the scope of the first release: what is in,
+  what is deferred, and which requirements are still to be written.
 - Requirements: `docs/requirements/` - might have multiple files per area, IDs
   REQ-<AREA>-NNN, acceptance criteria AC-<AREA>-NNN.N. These are the source of
   truth for behavior.

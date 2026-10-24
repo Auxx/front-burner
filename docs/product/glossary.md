@@ -58,6 +58,12 @@ taken as a whole. _Avoid_: "the project", "the app", "the application".
 : One running deployment of Front Burner (a rootless Docker container plus
 its data), administered by one or more administrators.
 
+**MVP**
+: The minimum viable product: the first release of Front Burner, for a
+single operator who is the instance's only administrator and end user,
+working at the Advanced git control level. Defined in
+[mvp.md](mvp.md). Features outside it are _deferred_, not dropped.
+
 **Backend**
 : The server side of Front Burner (NestJS application project). It owns git
 operations, storage, authentication and access control, and exposes the
@@ -176,6 +182,11 @@ its branches; does not prove write access.
 : An administrator adds a repository (and chooses its clone mode) for a
 user. The user must then **confirm** the repository and provide their own
 repository credentials before it can be used.
+
+**Repository management page**
+: The page that lists all of a user's repositories with their status and
+lets the user fix or remove them, for example by retrying a failed clone or
+replacing credentials. Linked from the dashboard.
 
 **Last access time**
 : When a user last opened a repository in the editor. Also set when the
