@@ -217,9 +217,9 @@ _(My calls.)_
   by a single shared preview component, and nowhere else. _(My call. Spike 3:
   the component writes DOMPurify's `TrustedHTML` into one element per block
   instead of passing a string through `bypassSecurityTrustHtml`; A-8.12.)_
-- **D-7.7** Image loading is out of scope for now: assume images always load.
-  How image paths are resolved and how the web client loads repository
-  images are a separate requirement (see `docs/wiki/todo.md`).
+- **D-7.7** How image paths are resolved and how the web client loads
+  repository and remote images is
+  [REQ-EDIT-003](../requirements/preview-images.md).
 - **D-7.8** A small throwaway spike will confirm the Shiki + remark + Angular
   integration during the architecture phase.
 

@@ -319,7 +319,7 @@ These rules add to the security rules already in the requirements.
 
   ```
   default-src 'none'; script-src 'self'; style-src 'self' 'nonce-…';
-  img-src 'self' blob: data:; connect-src 'self'; font-src 'self';
+  img-src 'self' blob: data: https:; connect-src 'self'; font-src 'self';
   manifest-src 'self'; worker-src 'self'; base-uri 'self';
   form-action 'self'; frame-ancestors 'none'; object-src 'none';
   require-trusted-types-for 'script'
@@ -337,7 +337,10 @@ These rules add to the security rules already in the requirements.
   - Spike 3 (D-7.8) confirmed that this policy, including Trusted Types,
     works in Chromium, Firefox and WebKit, all of which enforce Trusted
     Types; A-8.12 and A-8.13 list what the web client needs for it.
-  - `img-src` is revisited by the image loading requirement (D-7.7).
+  - `img-src` allows `https:` only for remote images that the user chose to
+    show (IM-14, IM-23). The preview's image loader sets every image address
+    itself, so an address written in a file never loads on its own (IM-24).
+    Repository images are shown through `blob:` URLs (IM-6).
 - **NF-11.2** Other headers: `Strict-Transport-Security` (when the request
   arrived over HTTPS), `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: no-referrer`, a `Permissions-Policy` that denies every

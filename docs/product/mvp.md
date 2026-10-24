@@ -61,7 +61,8 @@ browser and in a mobile browser:
    typing. Reloading the page or opening it on another device shows the saved
    content.
 6. The live preview renders standard Markdown, front matter, code blocks,
-   safe HTML and relative images. Unsafe HTML is stripped.
+   safe HTML and repository images, and remote images on request. Unsafe
+   HTML is stripped.
 7. The operator sees the changed files and their diffs, discards a change,
    commits selected files with a message, and pushes. A new branch gets its
    upstream on the first push.
@@ -159,13 +160,15 @@ Builds on decisions D-1 and D-7:
 - the rendering pipeline and what it shows (D-7.3 to D-7.6);
 - **safe HTML**: the GitHub-compatible whitelist of HTML tags and
   attributes that the preview renders, with a notice when HTML was removed;
-- **images**: images with a path relative to the Markdown file are shown,
-  loaded through the API with the user's auth token. Site-absolute paths such
-  as `/images/cover.png` and remote images are left for later.
+- **images**: repository images, resolved from the Markdown file's folder
+  or, for paths that start with `/`, from the repository root, loaded through
+  the API with the user's auth token; remote images only when the user asks
+  for the open file.
 
 The editor and preview are written up as
 [REQ-EDIT-001](../requirements/editor.md), safe HTML as
-[REQ-EDIT-002](../requirements/preview-html.md); images are still to write.
+[REQ-EDIT-002](../requirements/preview-html.md) and images as
+[REQ-EDIT-003](../requirements/preview-images.md).
 
 ### 8. Git at the Advanced level (to write)
 
@@ -223,7 +226,7 @@ vision, and the architecture must not rule them out.
 | Repositories            | Adding a repository on a user's behalf and confirming it, renaming a repository, changing its clone mode or remote, submodules, Git LFS.     |
 | Credentials             | Managing saved credentials and known hosts as lists: renaming, deleting, changing a passphrase, replacing a changed host key.                 |
 | Files                   | Moving files to another folder, uploading files, the "hide non-Markdown files" preference, file search.                                     |
-| Editor and preview      | A formatting toolbar, several open files (tabs), Mermaid and math, ticking task lists. Site-absolute image paths and remote images.            |
+| Editor and preview      | A formatting toolbar, several open files (tabs), Mermaid and math, ticking task lists. Blog-engine image folders, a remote image proxy.         |
 | Account                 | Changing the password while logged in.                                                                                                        |
 
 ## Order of work

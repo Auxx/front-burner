@@ -250,6 +250,12 @@ Other tags are dropped with their text kept, and the preview shows a notice
 when anything was removed. _Short form_: whitelist. _Avoid_: "allow-list",
 "sanitiser rules".
 
+**Repository image** / **Remote image**
+: An image embedded in a Markdown file, either from a path in the same
+repository (loaded through the API) or from an `https:` address on another
+host (loaded only when the user chooses **Show remote images**). See
+[REQ-EDIT-003](../requirements/preview-images.md).
+
 **Save**
 : Writing the editor's content to the file in the user's working copy,
 shortly after the user stops typing. A save does nothing else: no commit and

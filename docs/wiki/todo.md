@@ -1,8 +1,6 @@
 Next requirements files to write for the MVP (`docs/product/mvp.md`), in the
 suggested order of work:
 
-- Live preview images: how relative image paths are resolved, and how the web
-  client loads repository images given that the auth token is sent in a header.
 - Commit author name and email.
 - Git at the Advanced level: status, diff, discard, commit, push, pull (merge),
   branches, fetch notices, and conflict resolution by conflict markers, Use my /
@@ -17,8 +15,9 @@ Requirements files deferred until after the MVP:
 - Admin-assisted adding, plus the user's confirmation flow.
 - Saved credentials and known-hosts management.
 - Changing a repository's remote.
-- Live preview: site-absolute image paths such as `/images/cover.png` that blog
-  engines map to a folder inside the repository.
+- Live preview: mapping site-absolute image paths such as `/images/cover.png`
+  to the folder a blog engine uses (for example Hexo's `source/`), per
+  repository. Until then they resolve from the repository root (IM-2).
 - User management, invitations and onboarding of invited users, and SMTP in
   system settings.
 - The Simple and Guided levels, and pull requests.

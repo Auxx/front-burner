@@ -203,9 +203,8 @@ preview does not render because they are not on the whitelist.
   anything from an address that SH-15 removes. Script, styles and event
   handlers are removed before the browser meets them, so they never trigger
   a Content Security Policy violation report. _(Spike 3 confirmed the
-  approach with an XSS corpus; A-8.12. Image addresses that SH-15 keeps but
-  the policy's `img-src` does not allow are handled by the preview images
-  requirement.)_
+  approach with an XSS corpus; A-8.12. Which kept image addresses are
+  loaded is decided by [REQ-EDIT-003](preview-images.md), IM-24.)_
 - **SH-22** The pipeline's tests run a corpus of known XSS and HTML
   injection payloads through the whitelist (for example the OWASP XSS filter
   evasion examples and DOMPurify's own test cases) and check the output, and
