@@ -18,8 +18,8 @@ One file is open at a time. The editor is plain Markdown: there is no
 formatting toolbar in the MVP.
 
 Two parts of the preview are their own requirements: which HTML tags it
-renders (safe HTML whitelist) and how it shows images (preview images). See
-`docs/wiki/todo.md`.
+renders ([REQ-EDIT-002](preview-html.md), the safe HTML whitelist) and how it
+shows images (preview images; see `docs/wiki/todo.md`).
 
 ## Context
 
@@ -200,10 +200,10 @@ confused with the Guided level's **Draft**, which is a branch.
 - **ED-26** The preview renders the open file as D-7.4 describes:
   CommonMark with the GitHub extensions (tables, task lists, strikethrough,
   autolinks, footnotes), syntax-highlighted fenced code blocks, HTML tags on
-  the safe HTML whitelist, front matter not shown, and blog-engine markup as
-  plain text. Nothing else is rendered: Mermaid, math and other diagram or
-  formula blocks are shown as code blocks. _(My call: footnotes, as part of
-  the GitHub extensions.)_
+  the safe HTML whitelist (REQ-EDIT-002), front matter not shown, and
+  blog-engine markup as plain text. Nothing else is rendered: Mermaid, math
+  and other diagram or formula blocks are shown as code blocks. _(My call:
+  footnotes, as part of the GitHub extensions.)_
 - **ED-27** The preview is rendered in the browser through the pipeline of
   D-7.3, incrementally as in A-8.12 and A-8.13, and written to the page only
   by the shared preview component (D-7.6). The API never serves rendered
@@ -212,8 +212,8 @@ confused with the Guided level's **Draft**, which is a branch.
   for files up to 200 KB. Larger files update more slowly (A-8.12). Typing is
   never slowed down by the preview (NF-2.4).
 - **ED-29** `.mdx` files are previewed as Markdown. Their `import` and
-  `export` lines are shown as text, and JSX components are treated as HTML,
-  so components that are not on the whitelist are removed. _(My call.)_
+  `export` lines are shown as text, and JSX components are treated as HTML:
+  their tags are dropped and their text is kept (SH-7, SH-8). _(My call.)_
 - **ED-30** Each block of the preview takes its text direction from its
   content, so right-to-left paragraphs are shown right to left (NF-14.4).
 - **ED-31** Links in the preview:
@@ -321,7 +321,8 @@ confused with the Guided level's **Draft**, which is a branch.
 - Basic formatting from the repository's `.editorconfig` (planned after the
   MVP; see `docs/wiki/todo.md`).
 - Several open files, as tabs (planned after the MVP; ED-3).
-- The safe HTML whitelist and preview images (separate requirements).
+- The safe HTML whitelist (REQ-EDIT-002) and preview images (separate
+  requirement).
 - Mermaid diagrams, math, and other rendered extensions.
 - MDX-aware preview (rendering JSX components or running MDX).
 - Ticking task list checkboxes in the preview.

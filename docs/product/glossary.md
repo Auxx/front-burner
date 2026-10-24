@@ -243,6 +243,13 @@ embed in a Markdown document.
 : The rendered view of a Markdown file shown alongside or instead of its
 source while editing.
 
+**Safe HTML whitelist**
+: The HTML tags and attributes that the live preview renders from a Markdown
+file (see [REQ-EDIT-002](../requirements/preview-html.md)). GitHub-compatible.
+Other tags are dropped with their text kept, and the preview shows a notice
+when anything was removed. _Short form_: whitelist. _Avoid_: "allow-list",
+"sanitiser rules".
+
 **Save**
 : Writing the editor's content to the file in the user's working copy,
 shortly after the user stops typing. A save does nothing else: no commit and

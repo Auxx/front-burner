@@ -198,8 +198,8 @@ _(My calls.)_
     extensions — tables, task lists, strikethrough, autolinks.)_;
   - fenced code blocks are syntax-highlighted;
   - HTML tags on a whitelist (for example `<strong>`, `<img>`) are rendered;
-    every other tag, including `<script>`, is stripped. The whitelist is a
-    separate requirement (see `docs/wiki/todo.md`);
+    every other tag, including `<script>`, is stripped. The whitelist is
+    [REQ-EDIT-002](../requirements/preview-html.md);
   - blog-engine markup such as Hexo's `{% blockquote %}` is shown as plain
     text.
 - **D-7.5** Shiki configuration:

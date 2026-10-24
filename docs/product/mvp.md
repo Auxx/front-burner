@@ -157,15 +157,15 @@ Builds on decisions D-1 and D-7:
 - a live preview beside the editor on wide screens, scrolling together with
   it, and Edit and Preview tabs on narrow screens;
 - the rendering pipeline and what it shows (D-7.3 to D-7.6);
-- **safe HTML**: the whitelist of HTML tags and attributes that the preview
-  renders (its own requirement, already on the todo list);
+- **safe HTML**: the GitHub-compatible whitelist of HTML tags and
+  attributes that the preview renders, with a notice when HTML was removed;
 - **images**: images with a path relative to the Markdown file are shown,
   loaded through the API with the user's auth token. Site-absolute paths such
   as `/images/cover.png` and remote images are left for later.
 
 The editor and preview are written up as
-[REQ-EDIT-001](../requirements/editor.md); safe HTML and images are still
-to write.
+[REQ-EDIT-001](../requirements/editor.md), safe HTML as
+[REQ-EDIT-002](../requirements/preview-html.md); images are still to write.
 
 ### 8. Git at the Advanced level (to write)
 

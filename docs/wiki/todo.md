@@ -1,8 +1,6 @@
 Next requirements files to write for the MVP (`docs/product/mvp.md`), in the
 suggested order of work:
 
-- HTML in Markdown preview: the whitelist of safe HTML tags and attributes that
-  the live preview renders; every other tag, including scripts, is stripped.
 - Live preview images: how relative image paths are resolved, and how the web
   client loads repository images given that the auth token is sent in a header.
 - Commit author name and email.
