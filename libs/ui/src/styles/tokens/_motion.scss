@@ -1,0 +1,21 @@
+// Motion (A-10.12). Durations drop to zero when the user asks for less motion
+// (NF-13.7), so nothing may depend on a transition or animation running.
+
+@layer tokens {
+  :root {
+    --ui-duration-fast: 100ms;
+    --ui-duration-base: 160ms;
+    --ui-duration-slow: 240ms;
+
+    --ui-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ui-easing-exit: cubic-bezier(0.3, 0, 1, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --ui-duration-fast: 0s;
+      --ui-duration-base: 0s;
+      --ui-duration-slow: 0s;
+    }
+  }
+}

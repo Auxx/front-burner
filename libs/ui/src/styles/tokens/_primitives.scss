@@ -1,0 +1,85 @@
+// Colour primitives (A-10.16). A step is the colour's OKLCH lightness: neutral-20
+// has a lightness of 20 %. Only semantic tokens use these.
+
+@layer tokens {
+  :root {
+    // neutral
+    --ui-neutral-0: oklch(0% 0 0);
+    --ui-neutral-18: oklch(18% 0.006 265);
+    --ui-neutral-20: oklch(20% 0.006 265);
+    --ui-neutral-23: oklch(23% 0.006 265);
+    --ui-neutral-27: oklch(27% 0.006 265);
+    --ui-neutral-30: oklch(30% 0.006 265);
+    --ui-neutral-33: oklch(33% 0.006 265);
+    --ui-neutral-37: oklch(37% 0.006 265);
+    --ui-neutral-45: oklch(45% 0.006 265);
+    --ui-neutral-53: oklch(53% 0.005 265);
+    --ui-neutral-55: oklch(55% 0.005 265);
+    --ui-neutral-60: oklch(60% 0.005 265);
+    --ui-neutral-70: oklch(70% 0.005 265);
+    --ui-neutral-75: oklch(75% 0.005 265);
+    --ui-neutral-88: oklch(88% 0.005 265);
+    --ui-neutral-91: oklch(91% 0.005 265);
+    --ui-neutral-93: oklch(93% 0.005 265);
+    --ui-neutral-95: oklch(95% 0.005 265);
+    --ui-neutral-98: oklch(98% 0.005 265);
+    --ui-neutral-100: oklch(100% 0 0);
+
+    // blue
+    --ui-blue-25: oklch(25% 0.08 262);
+    --ui-blue-30: oklch(30% 0.15 262);
+    --ui-blue-35: oklch(35% 0.168 262);
+    --ui-blue-40: oklch(40% 0.19 262);
+    --ui-blue-45: oklch(45% 0.19 262);
+    --ui-blue-50: oklch(50% 0.19 262);
+    --ui-blue-55: oklch(55% 0.19 262);
+    --ui-blue-60: oklch(60% 0.19 262);
+    --ui-blue-70: oklch(70% 0.156 262);
+    --ui-blue-75: oklch(75% 0.128 262);
+    --ui-blue-80: oklch(80% 0.1 262);
+    --ui-blue-90: oklch(90% 0.048 262);
+    --ui-blue-95: oklch(95% 0.022 262);
+
+    // green
+    --ui-green-25: oklch(25% 0.072 150);
+    --ui-green-30: oklch(30% 0.084 150);
+    --ui-green-35: oklch(35% 0.098 150);
+    --ui-green-40: oklch(40% 0.11 150);
+    --ui-green-45: oklch(45% 0.124 150);
+    --ui-green-55: oklch(55% 0.15 150);
+    --ui-green-75: oklch(75% 0.15 150);
+    --ui-green-80: oklch(80% 0.15 150);
+    --ui-green-90: oklch(90% 0.1 150);
+    --ui-green-95: oklch(95% 0.06 150);
+
+    // amber
+    --ui-amber-25: oklch(25% 0.056 75);
+    --ui-amber-40: oklch(40% 0.086 75);
+    --ui-amber-45: oklch(45% 0.096 75);
+    --ui-amber-50: oklch(50% 0.106 75);
+    --ui-amber-55: oklch(55% 0.116 75);
+    --ui-amber-60: oklch(60% 0.126 75);
+    --ui-amber-75: oklch(75% 0.158 75);
+    --ui-amber-80: oklch(80% 0.16 75);
+    --ui-amber-95: oklch(95% 0.04 75);
+
+    // red
+    --ui-red-25: oklch(25% 0.08 25);
+    --ui-red-30: oklch(30% 0.124 25);
+    --ui-red-35: oklch(35% 0.144 25);
+    --ui-red-40: oklch(40% 0.164 25);
+    --ui-red-45: oklch(45% 0.184 25);
+    --ui-red-55: oklch(55% 0.19 25);
+    --ui-red-75: oklch(75% 0.15 25);
+    --ui-red-80: oklch(80% 0.114 25);
+    --ui-red-90: oklch(90% 0.052 25);
+    --ui-red-95: oklch(95% 0.024 25);
+
+    // purple
+    --ui-purple-45: oklch(45% 0.17 300);
+    --ui-purple-80: oklch(80% 0.118 300);
+
+    // teal
+    --ui-teal-45: oklch(45% 0.076 195);
+    --ui-teal-80: oklch(80% 0.12 195);  }
+}

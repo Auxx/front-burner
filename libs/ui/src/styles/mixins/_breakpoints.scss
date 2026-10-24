@@ -1,0 +1,18 @@
+// Viewport breakpoints for the page layout only (A-10.7, A-10.13). In `em`, so
+// that they follow the browser's font size setting. Islands use container
+// queries instead.
+
+$medium: 37.5em; // 600 px: tablets and small windows
+$wide: 64em; // 1024 px: desktop
+
+@mixin from($breakpoint) {
+  @media (min-width: $breakpoint) {
+    @content;
+  }
+}
+
+@mixin below($breakpoint) {
+  @media (max-width: calc(#{$breakpoint} - 0.02px)) {
+    @content;
+  }
+}

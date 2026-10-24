@@ -1,0 +1,13 @@
+@layer components {
+  :host {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-1);
+    padding: var(--ui-space-1);
+  }
+
+  :host([aria-orientation='horizontal']) {
+    flex-direction: row;
+    justify-content: center;
+  }
+}

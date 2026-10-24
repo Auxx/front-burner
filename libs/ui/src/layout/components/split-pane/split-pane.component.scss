@@ -1,0 +1,88 @@
+@layer components {
+  :host {
+    --ui-split-pane-gap: var(--ui-island-gap);
+    --ui-split-pane-handle-size: var(--ui-control-height-small);
+
+    display: grid;
+    grid-template-columns: minmax(0, var(--ui-split-pane-size)) var(--ui-split-pane-gap) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  :host([data-orientation='vertical']) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, var(--ui-split-pane-size)) var(--ui-split-pane-gap) minmax(0, 1fr);
+  }
+
+  // One cell, so that a projected island or split pane fills the pane; a
+  // child selector cannot reach projected content.
+  .pane {
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    min-inline-size: 0;
+    min-block-size: 0;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  // With one pane on screen, it takes every track.
+  :host(:not(:has(> .separator))) .pane {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+  }
+
+  .separator {
+    position: relative;
+    z-index: 1;
+    touch-action: none;
+    cursor: col-resize;
+
+    // The visible gap is narrow; the target is at least 24 px (NF-13.5). It
+    // grows into the end pane only, above positioned content such as the
+    // editor, so that the start pane keeps its edge and scrollbar.
+    &::before {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      inline-size: max(100%, var(--ui-split-pane-handle-size));
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: calc(50% - var(--ui-border-width));
+      inline-size: calc(var(--ui-border-width) * 2);
+      background: transparent;
+      transition: background var(--ui-duration-fast) var(--ui-easing-standard);
+    }
+
+    &:hover::after,
+    &:active::after,
+    &:focus-visible::after {
+      background: var(--ui-accent);
+    }
+  }
+
+  :host([data-orientation='vertical']) .separator {
+    cursor: row-resize;
+
+    &::before {
+      inset-inline: 0;
+      inset-block: 0 auto;
+      inline-size: auto;
+      block-size: max(100%, var(--ui-split-pane-handle-size));
+    }
+
+    &::after {
+      inset-inline: 0;
+      inset-block-start: calc(50% - var(--ui-border-width));
+      inline-size: auto;
+      block-size: calc(var(--ui-border-width) * 2);
+    }
+  }
+}

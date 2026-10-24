@@ -1,0 +1,5 @@
+// The one focus indicator (A-10.30), shown on `:focus-visible`.
+@mixin focus-ring {
+  outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
+  outline-offset: var(--ui-focus-ring-offset);
+}

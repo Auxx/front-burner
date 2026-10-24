@@ -1,0 +1,178 @@
+@layer components {
+  :host {
+    display: block;
+    padding: var(--ui-space-4);
+    color: var(--ui-text-default);
+  }
+
+  h2 {
+    margin-block-end: var(--ui-space-3);
+    font-size: var(--ui-font-size-title);
+    font-weight: var(--ui-font-weight-semibold);
+    line-height: var(--ui-line-height-tight);
+  }
+
+  h3 {
+    margin-block-end: var(--ui-space-2);
+    font-size: var(--ui-font-size-ui);
+    font-weight: var(--ui-font-weight-semibold);
+    text-transform: capitalize;
+  }
+
+  p {
+    margin-block-end: var(--ui-space-4);
+    color: var(--ui-text-muted);
+  }
+
+  .probe {
+    display: none;
+  }
+
+  // Each scheme column re-declares the tokens (A-10.9), so it draws its own
+  // background and text.
+  [data-theme] {
+    background: var(--ui-surface-island);
+    color: var(--ui-text-default);
+  }
+
+  table {
+    inline-size: 100%;
+    margin-block-end: var(--ui-space-6);
+    border-collapse: collapse;
+    background: var(--ui-surface-island);
+    border-radius: var(--ui-radius-island);
+  }
+
+  caption {
+    padding-block: var(--ui-space-2);
+    font-weight: var(--ui-font-weight-semibold);
+    text-align: start;
+  }
+
+  th,
+  td {
+    padding: var(--ui-space-1-5) var(--ui-space-3);
+    border-block-end: var(--ui-border-width) solid var(--ui-border-subtle);
+    text-align: start;
+    vertical-align: middle;
+  }
+
+  thead th {
+    color: var(--ui-text-muted);
+    font-weight: var(--ui-font-weight-medium);
+  }
+
+  tbody th {
+    font-weight: var(--ui-font-weight-regular);
+  }
+
+  code {
+    font-size: var(--ui-font-size-ui-small);
+  }
+
+  .value {
+    color: var(--ui-text-muted);
+  }
+
+  .swatch {
+    display: inline-block;
+    inline-size: 2.5rem;
+    block-size: 1.5rem;
+    margin-inline-end: var(--ui-space-2);
+    vertical-align: middle;
+    border: var(--ui-border-width) solid var(--ui-border-default);
+    border-radius: var(--ui-radius-control);
+  }
+
+  .ramp {
+    margin-block-end: var(--ui-space-4);
+
+    ol {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--ui-space-2);
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ui-space-1);
+      color: var(--ui-text-muted);
+    }
+
+    .swatch {
+      inline-size: 4rem;
+      block-size: 2.5rem;
+      margin: 0;
+    }
+  }
+
+  .contrast {
+    white-space: nowrap;
+  }
+
+  .text-sample,
+  .graphic-sample {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 2.5rem;
+    block-size: 1.75rem;
+    margin-inline-end: var(--ui-space-2);
+    vertical-align: middle;
+    border-radius: var(--ui-radius-control);
+  }
+
+  .text-sample {
+    font-weight: var(--ui-font-weight-medium);
+  }
+
+  .graphic-sample > span {
+    inline-size: 1rem;
+    block-size: 1rem;
+    border: 3px solid;
+    border-radius: var(--ui-radius-control);
+  }
+
+  [data-status='fail'] .result,
+  [data-status='missing'] .result {
+    color: var(--ui-danger-text);
+    font-weight: var(--ui-font-weight-semibold);
+  }
+
+  .summary[data-failures]:not([data-failures='0']) {
+    color: var(--ui-danger-text);
+  }
+
+  .type-sample {
+    display: block;
+    line-height: var(--ui-line-height-ui);
+
+    &.mono {
+      font-family: var(--ui-font-family-mono);
+      color: var(--ui-text-muted);
+    }
+  }
+
+  .space-sample {
+    display: block;
+    block-size: 0.75rem;
+    background: var(--ui-accent);
+    border-radius: var(--ui-radius-control);
+  }
+
+  .shape-sample {
+    display: block;
+    inline-size: 4rem;
+    block-size: 2.5rem;
+    background: var(--ui-surface-sunken);
+    border: var(--ui-border-width) solid var(--ui-border-strong);
+
+    &.raised {
+      background: var(--ui-surface-raised);
+      border-color: var(--ui-border-default);
+      border-radius: var(--ui-radius-popover);
+    }
+  }
+}

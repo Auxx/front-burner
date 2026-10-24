@@ -1,0 +1,85 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    display: grid;
+    grid-template:
+      'header header' auto
+      'activity body' minmax(0, 1fr)
+      'status status' auto
+      / auto minmax(0, 1fr);
+    block-size: 100dvh;
+    background: var(--ui-surface-canvas);
+    color: var(--ui-text-default);
+
+    @include mixins.breakpoint-below(mixins.$breakpoint-medium) {
+      grid-template:
+        'header' auto
+        'body' minmax(0, 1fr)
+        'status' auto
+        'activity' auto
+        / minmax(0, 1fr);
+    }
+  }
+
+  .skip-link {
+    position: absolute;
+    inset-block-start: var(--ui-space-2);
+    inset-inline-start: var(--ui-space-2);
+    z-index: 1;
+    padding: var(--ui-space-2) var(--ui-space-3);
+    background: var(--ui-surface-raised);
+    border-radius: var(--ui-radius-control);
+
+    &:not(:focus) {
+      @include mixins.visually-hidden;
+    }
+  }
+
+  .header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: var(--ui-control-height);
+    padding-inline: var(--ui-island-gap);
+  }
+
+  .activity {
+    grid-area: activity;
+  }
+
+  .status {
+    grid-area: status;
+  }
+
+  .activity,
+  .status {
+    min-inline-size: 0;
+
+    &:not(:has(*)) {
+      display: none;
+    }
+  }
+
+  .body {
+    grid-area: body;
+    padding: 0 var(--ui-island-gap) var(--ui-island-gap);
+  }
+
+  // Beside the activity bar, whose own padding is the gap.
+  :host:has(.activity > *) .body {
+    @include mixins.breakpoint-from(mixins.$breakpoint-medium) {
+      padding-inline-start: 0;
+    }
+  }
+
+  // Each part is one cell, so that a projected island fills it.
+  .side,
+  main {
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+}

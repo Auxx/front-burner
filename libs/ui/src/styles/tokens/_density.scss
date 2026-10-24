@@ -1,0 +1,25 @@
+// Density tokens (A-10.11, A-10.20, A-10.21), as `name: (compact, touch)`.
+
+@use 'functions';
+
+$tokens: (
+  // Text. Inputs and the editor are 16 px on touch screens, because iOS zooms
+  // into anything smaller when it gets the focus.
+  font-size-ui: (functions.ref(font-size-sm), functions.ref(font-size-lg)),
+  font-size-ui-small: (functions.ref(font-size-xs), functions.ref(font-size-md)),
+  font-size-input: (functions.ref(font-size-sm), functions.ref(font-size-xl)),
+  font-size-editor: (functions.ref(font-size-md), functions.ref(font-size-xl)),
+
+  // Targets: never below 24 px, and 44 px on touch screens (NF-13.5)
+  control-height: (1.75rem, 2.75rem),
+  control-height-small: (1.5rem, 2.75rem),
+  row-height: (1.5rem, 2.75rem),
+  control-padding-inline: (functions.ref(space-3), functions.ref(space-4)),
+
+  // Codicons are drawn on a 16 px grid
+  icon-size: (1rem, 1.25rem)
+);
+
+@layer tokens {
+  @include functions.densities($tokens);
+}

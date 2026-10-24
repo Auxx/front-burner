@@ -1,14 +1,20 @@
 Requirements files for the MVP (`docs/product/mvp.md`): all written and
 accepted.
 
+UI work
+
+- `SplitPane`: a menu with preset sizes on the separator (A-10.33), once the
+  `Menu` component exists. Until then the keyboard is the only alternative to
+  dragging, which does not meet WCAG 2.5.7 for pointer users (NF-13.6).
+
 Requirements files deferred until after the MVP:
 
 - Admin-assisted adding, plus the user's confirmation flow.
 - Saved credentials and known-hosts management.
 - Changing a repository's remote.
-- Live preview: mapping site-absolute image paths such as `/images/cover.png`
-  to the folder a blog engine uses (for example Hexo's `source/`), per
-  repository. Until then they resolve from the repository root (IM-2).
+- Live preview: mapping site-absolute image paths such as `/images/cover.png` to
+  the folder a blog engine uses (for example Hexo's `source/`), per repository.
+  Until then they resolve from the repository root (IM-2).
 - User management, invitations and onboarding of invited users, and SMTP in
   system settings.
 - The Simple and Guided levels, and pull requests.

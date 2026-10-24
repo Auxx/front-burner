@@ -44,3 +44,7 @@ Thumbs.db
 .claude/worktrees
 .claude/settings.local.json
 .superpowers/
+
+.angular
+
+__screenshots__/
