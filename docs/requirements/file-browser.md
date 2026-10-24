@@ -1,6 +1,6 @@
 # REQ-FILE-001: File browser
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

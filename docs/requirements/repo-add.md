@@ -1,6 +1,6 @@
 # REQ-REPO-001: Add a repository
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

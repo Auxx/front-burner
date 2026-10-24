@@ -1,5 +1,5 @@
-Requirements files for the MVP (`docs/product/mvp.md`): all drafted. Next,
-review them and move them from Draft to Accepted.
+Requirements files for the MVP (`docs/product/mvp.md`): all written and
+accepted.
 
 Requirements files deferred until after the MVP:
 

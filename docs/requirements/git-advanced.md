@@ -1,6 +1,6 @@
 # REQ-GIT-002: Git at the Advanced level
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

@@ -1,6 +1,6 @@
 # REQ-EDIT-001: Markdown editor and live preview
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

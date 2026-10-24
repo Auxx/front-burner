@@ -1,6 +1,6 @@
 # REQ-REPO-002: Repository credentials and key unlock
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

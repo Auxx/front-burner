@@ -1,6 +1,6 @@
 # REQ-REPO-003: Repository management
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

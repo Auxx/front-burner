@@ -87,14 +87,14 @@ browser and in a mobile browser:
 |-----------------------------------------------------------|----------|-------------------------------------------------------------------|
 | [REQ-AUTH-001](../requirements/auth-onboarding.md)        | Accepted | As written.                                                       |
 | [REQ-AUTH-002](../requirements/auth-password-policy.md)   | Accepted | As written.                                                       |
-| [REQ-AUTH-003](../requirements/auth-login.md)             | Draft    | As written. Password reset stays hidden, because SMTP is missing. |
+| [REQ-AUTH-003](../requirements/auth-login.md)             | Accepted | As written. Password reset stays hidden, because SMTP is missing. |
 
 ### 2. Dashboard and adding repositories (written)
 
 | Requirement                                         | Status   | MVP notes                                                                                     |
 |-----------------------------------------------------|----------|-----------------------------------------------------------------------------------------------|
 | [REQ-DASH-001](../requirements/dashboard.md)        | Accepted | As written. The **Needs your confirmation** status never occurs.                              |
-| [REQ-REPO-001](../requirements/repo-add.md)         | Draft    | As written. Only Advanced is allowed, so the level dropdown is hidden (AR-40).                |
+| [REQ-REPO-001](../requirements/repo-add.md)         | Accepted | As written. Only Advanced is allowed, so the level dropdown is hidden (AR-40).                |
 
 ### 3. Repository management (written)
 

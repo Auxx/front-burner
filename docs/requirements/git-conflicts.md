@@ -1,6 +1,6 @@
 # REQ-GIT-003: Conflict resolution at the Advanced level
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

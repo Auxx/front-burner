@@ -1,6 +1,6 @@
 # REQ-AUTH-003: Login
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

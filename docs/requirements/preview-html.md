@@ -1,6 +1,6 @@
 # REQ-EDIT-002: Safe HTML in the live preview
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

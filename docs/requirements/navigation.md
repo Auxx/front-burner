@@ -1,6 +1,6 @@
 # REQ-APP-001: Navigation
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

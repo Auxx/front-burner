@@ -1,6 +1,6 @@
 # REQ-GIT-001: Commit author
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 

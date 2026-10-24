@@ -1,6 +1,6 @@
 # REQ-EDIT-003: Images in the live preview
 
-> Status: **Draft**
+> Status: **Accepted**
 
 ## Summary
 
