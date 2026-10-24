@@ -1,0 +1,25 @@
+@layer components {
+  :host {
+    --ui-status-bar-height: var(--ui-control-height-small);
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--ui-space-3);
+    min-block-size: var(--ui-status-bar-height);
+    padding-inline: var(--ui-space-3);
+    color: var(--ui-text-muted);
+    font-size: var(--ui-font-size-ui-small);
+    white-space: nowrap;
+  }
+
+  // Block, not flex: text-overflow only applies to inline content.
+  .start {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .end {
+    text-align: end;
+  }
+}
