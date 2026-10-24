@@ -198,8 +198,9 @@ terms its _upstream_ or _tracking_ branch, for example `origin/main`.
   - a deleted file restores it.
 - **GA-24** Before a file is discarded, its waiting save is dropped and its
   browser draft deleted (ED-20), so that a late save cannot bring the change
-  back. An open file that is discarded is reloaded in the editor (ED-24);
-  an added file that is discarded is closed (FB-39). _(My call.)_
+  back. An open file that is discarded is reloaded in the editor at once,
+  without the question of ED-24, since the user asked for the discard; an
+  added file that is discarded is closed (FB-39). _(My call.)_
 
 ### Pulling
 
@@ -275,7 +276,9 @@ terms its _upstream_ or _tracking_ branch, for example `origin/main`.
   _(My call.)_
 - **GA-40** After a switch, the file tree, the open file and the changes
   update as in FB-41 and ED-24. An open file that does not exist on the new
-  branch is closed (FB-42).
+  branch is closed (FB-42); since switching needs a clean working copy
+  (GA-39), it has no unsaved edits other than a waiting save, which is sent
+  before the switch. _(My call.)_
 - **GA-41** In a single-branch clone, the remote branches are only the cloned
   branch and branches pushed from Front Burner. The branch list says "This is
   a single-branch clone, so other remote branches aren't available."
@@ -344,6 +347,10 @@ terms its _upstream_ or _tracking_ branch, for example `origin/main`.
     switching are not offered, and the API refuses them.
 21. Every action can be done by touch alone and with the keyboard alone, and
     axe-core reports no violations in the header, **Changes** and the diff.
+22. A text file whose diff is larger than 1 MB shows "This diff is too large
+    to show"; a file whose only change is its line endings says so.
+23. Unticking a file, reloading the page and coming back keeps it unticked on
+    that device; a file that becomes changed later appears ticked.
 
 ## Out of scope
 

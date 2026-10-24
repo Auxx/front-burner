@@ -198,7 +198,7 @@ choosing a whole version (in git terms, added to the index).
 ### Undoing a committed merge
 
 - **GC-25** **Undo merge** is offered, in the notice of GC-22 and in the
-  header's menu, while:
+  branch list (GA-36), while:
   - the last commit of the branch is the merge commit made by Front Burner;
   - it has not been pushed (it is on no remote branch);
   - there are no uncommitted changes.
@@ -257,6 +257,8 @@ choosing a whole version (in git terms, added to the index).
     every resolution made so far.
 15. The conflict list, the conflict bar and the buttons work with the
     keyboard alone and by touch alone, and axe-core reports no violations.
+16. **Show mine** and **Show theirs** on a conflicting Markdown file open
+    that version read-only, and the list shows the size of each version.
 
 ## Out of scope
 

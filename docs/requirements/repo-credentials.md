@@ -96,9 +96,10 @@ set, refused, not allowed to push, a locked key, or a changed host key.
   "The remote refused your credentials." and shows the remote's own messages
   as plain text (GA-31). _(My call: the messages recognised are left to the
   builder and kept in one place in the git engine.)_
-- **RC-6** A credential problem found by a background fetch is shown only in
-  the header's quiet status (GA-35), with the same fix, and never opens a
-  dialog on its own.
+- **RC-6** A credential problem found by a background fetch never opens a
+  dialog on its own. On the repository screen it is shown in the header's
+  quiet status (GA-35), with the same fix; elsewhere it is shown as a
+  repository warning (RM-8).
 
 ### Repository credentials dialog
 
@@ -124,7 +125,7 @@ set, refused, not allowed to push, a locked key, or a changed host key.
   credentials or keys from the user's profile. Other repositories that use
   them are not affected.
 - **RC-11** The dialog opens from the fixes in RC-4, and from the repository
-  management page (separate requirement).
+  management page ([REQ-REPO-003](repo-manage.md)).
 
 ### Updating saved HTTPS credentials in place
 
@@ -237,6 +238,8 @@ set, refused, not allowed to push, a locked key, or a changed host key.
     the header's quiet status and opens no dialog.
 14. No API response contains a password, token, private key or passphrase,
     and none appears in the logs.
+15. A key unlocked on a desktop still shows the locked-key banner on a phone
+    logged in to another session, until it is unlocked there too.
 
 ## Out of scope
 

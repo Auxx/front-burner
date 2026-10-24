@@ -38,7 +38,7 @@ next to them, as code editors usually do.
   is told so.
 - A save writes to the working copy and does nothing else (D-1.2). The same
   holds for every change made in the file tree: nothing is committed, staged
-  or pushed. Committing is covered by the git requirement.
+  or pushed. Committing is covered by [REQ-GIT-002](git-advanced.md).
 - A malicious remote may contain symbolic links that point outside the
   working copy. Symbolic links are never followed (A-7.6).
 - File names may use any Unicode, including right-to-left scripts (NF-14.4).
@@ -71,8 +71,9 @@ link, or submodule.
 a rule matches it.
 
 **Empty folder**
-: A folder that holds no files, directly or in any subfolder. Git does not
-track it.
+: A folder with no entries directly inside it. Git does not track it. (A
+folder that holds only empty folders is not marked empty, since finding
+that out would mean walking its subfolders, FB-15.)
 
 ## Requirements
 
@@ -208,10 +209,10 @@ track it.
 - **FB-25** The top of the file tree has **New file** and **New folder**
   buttons, which create in the root folder. A folder's actions menu has the
   same actions, which create inside that folder.
-- **FB-26** While a merge is in progress, or the repository is otherwise
-  locked (A-5.3, D-4.4), the actions that change files are not offered, and
-  the backend refuses them with an error code. Browsing and opening still
-  work.
+- **FB-26** While a merge is in progress (D-4.4), the file tree is not
+  shown; the left pane lists the conflicting files instead (GC-7). The
+  backend refuses every action of this requirement that changes files, with
+  an error code, also while the repository is otherwise locked (A-5.3).
 
 ### Names
 
@@ -302,8 +303,16 @@ track it.
   the mechanism is left to the builder, for example a push channel event
   naming the changed folders, A-3.11.)_
 - **FB-42** When an expanded folder no longer exists, it is removed from the
-  tree. When the open file no longer exists, FB-39 applies, except that the
-  editor says "This file was deleted or renamed elsewhere."
+  tree. When the open file no longer exists because of a change made
+  elsewhere (another tab or device, or a git operation such as a branch
+  switch):
+  - with no unsaved edits, the editor closes it and says "This file was
+    deleted or renamed elsewhere.";
+  - with unsaved edits, the editor keeps them and follows ED-21: the content
+    stays in the editor and in its browser draft, with **Recreate it**.
+
+  The browser draft is never deleted in this case. FB-39 applies only to
+  deletes and renames made from this tab's own file tree.
 
 ### Loading and errors
 
@@ -373,16 +382,24 @@ track it.
     file also warns that it can't be recovered. Deleting a folder says how
     many files, non-Markdown files and uncommitted files it holds.
 19. Deleting the open file closes it in the editor.
-20. While a merge with conflicts is in progress, create, rename and delete
-    are not offered, and the API refuses them; browsing still works.
+20. While a merge with conflicts is in progress, the file tree is replaced
+    by the list of conflicting files, and the API refuses create, rename and
+    delete.
 21. A file created from a second device appears in the first device's
     expanded folder without a reload. A file deleted there closes in the
     first device's editor with "This file was deleted or renamed
-    elsewhere."
+    elsewhere." when it has no unsaved edits; with unsaved edits, the edits
+    are kept and **Recreate it** is offered.
 22. A folder that cannot be listed shows the error with **Try again**, and
     the rest of the tree still works.
 23. Every action in the tree can be done with the keyboard alone and by touch
     alone. axe-core reports no violations on the repository screen.
+24. A folder of 6,000 entries lists the first 5,000 in sort order and says
+    "1000 more items not shown".
+25. A file named `café.md` typed with a decomposed é (`e` followed by
+    U+0301) is stored with the composed é, in NFC.
+26. Deleting a folder of 20,000 files shows it as "Deleting…" until it is
+    gone, and the screen stays usable meanwhile.
 
 ## Out of scope
 
@@ -394,7 +411,7 @@ track it.
 - Copying or duplicating files, and actions on several entries at once.
 - Updating links to a renamed file.
 - Showing git state (changed, new, deleted) in the tree. The changed files
-  are listed by the git requirement.
+  are listed by REQ-GIT-002.
 - Undoing a delete other than by discarding it in git.
 - Submodules and Git LFS.
 

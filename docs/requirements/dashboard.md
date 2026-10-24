@@ -25,7 +25,7 @@ administrators.
   opens one with a single click.
 - Users of developer personas often work across many repositories. Showing
   only the 10 most recent keeps the dashboard short; the full list lives on the
-  repository management page (separate requirement).
+  repository management page ([REQ-REPO-003](repo-manage.md)).
 - A new user has no repositories, and Front Burner never creates them (vision).
   The user must understand that they need an existing remote and credentials
   before they start, so the dashboard explains this up front. Users who already
@@ -225,8 +225,8 @@ that a repository is in an error status and a short label for the error.
     user's list marked **Needs your confirmation**, and clicking it starts the
     confirmation flow.
 13. A repository that is cloning, or whose clone failed, shows its status, does
-    not open the editor when clicked, and offers a link to that repository on
-    the repository management page.
+    not open the editor when clicked, and offers a link to that repository's
+    settings page.
 14. When a cloning repository finishes cloning while the dashboard is open,
     its entry becomes openable without a page reload.
 15. When the API cannot return the list, the dashboard shows the error with

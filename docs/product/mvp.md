@@ -109,7 +109,7 @@ settings page per repository:
 - set the repository's commit author override;
 - remove a repository, which deletes its working copy after a confirmation
   that lists commits that were not pushed and changes that were not
-  committed, and then asks for the repository name.
+  committed, and then asks for the repository name before removing it.
 
 Left for later: renaming a repository, changing its clone mode, changing its
 remote, and managing saved credentials and known hosts as lists of their own.
@@ -137,7 +137,7 @@ Written up as [REQ-REPO-002](../requirements/repo-credentials.md).
 - A minimal **Preferences** page (`/preferences`), reached from the user
   menu, for the default commit author.
 
-### 6. File browser (to write)
+### 6. File browser (written)
 
 - A file tree of the current branch of the working copy, which loads
   folders lazily so that large code repositories stay fast.
@@ -154,7 +154,7 @@ Written up as [REQ-FILE-001](../requirements/file-browser.md).
 Left for later: moving files to another folder, uploading files, the "hide
 non-Markdown files" preference, and search.
 
-### 7. Markdown editor, saving and live preview (to write)
+### 7. Markdown editor, saving and live preview (written)
 
 Builds on decisions D-1 and D-7:
 
@@ -248,7 +248,7 @@ vision, and the architecture must not rule them out.
 | Pull requests           | "Submit for review", provider tokens, and the provider abstraction's pull request calls (D-8). Resolving on the provider.                     |
 | Advanced git extras     | Rebase and the merge/rebase preference (D-5.2, D-5.3), the three-way merge editor, Choose per change, Keep both, commit history, deleting and renaming branches, tags, stash. |
 | Repositories            | Adding a repository on a user's behalf and confirming it, renaming a repository, changing its clone mode or remote, submodules, Git LFS.     |
-| Credentials             | Managing saved credentials and known hosts as lists: renaming, deleting, changing a passphrase, replacing a changed host key.                 |
+| Credentials             | Managing saved credentials and known hosts as lists: renaming, deleting, changing a passphrase, reviewing known hosts.                       |
 | Files                   | Moving files to another folder, uploading files, the "hide non-Markdown files" preference, file search.                                     |
 | Editor and preview      | A formatting toolbar, several open files (tabs), Mermaid and math, ticking task lists. Blog-engine image folders, a remote image proxy.         |
 | Account                 | Changing the password while logged in.                                                                                                        |

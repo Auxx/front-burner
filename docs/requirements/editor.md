@@ -19,7 +19,7 @@ formatting toolbar in the MVP.
 
 Two parts of the preview are their own requirements: which HTML tags it
 renders ([REQ-EDIT-002](preview-html.md), the safe HTML whitelist) and how it
-shows images (preview images; see `docs/wiki/todo.md`).
+shows images ([REQ-EDIT-003](preview-images.md)).
 
 ## Context
 
@@ -68,7 +68,7 @@ the working copy (D-1.1, D-1.2).
 confused with the Guided level's **Draft**, which is a branch.
 
 **View mode**
-: Which of the editor and preview are on screen: **Split**, **Editor** or
+: Which of the editor and preview are on screen: **Split**, **Edit** or
 **Preview** on wide screens; **Edit** or **Preview** on narrow screens.
 
 ## Requirements
@@ -193,8 +193,9 @@ confused with the Guided level's **Draft**, which is a branch.
 - **ED-25** While the repository is locked by a merge or rebase in progress,
   the repository screen shows conflict resolution
   ([REQ-GIT-003](git-conflicts.md)). Only the merge's conflicting files can
-  be edited (GC-12); any other file opened during the merge, for example
-  with **Show mine** (GC-17), is read-only, with a banner that says so.
+  be edited (GC-12). A version opened read-only during the merge, with
+  **Show mine** or **Show theirs** (GC-17), shows a banner that says so;
+  other files cannot be opened, since the file tree is not shown (FB-26).
   Unsaved edits made before the lock stay in the browser draft.
 
 ### Live preview
@@ -238,7 +239,7 @@ confused with the Guided level's **Draft**, which is a branch.
 ### View modes and scrolling
 
 - **ED-34** On wide screens the view mode is **Split** by default, with the
-  editor and preview side by side; the user can switch to **Editor** or
+  editor and preview side by side; the user can switch to **Edit** or
   **Preview** only. On narrow screens the view mode is **Edit** or
   **Preview**, shown as tabs, with **Edit** by default (A-8.12). Each device
   remembers the last view mode it used for each screen size. _(My call.)_
@@ -290,8 +291,10 @@ confused with the Guided level's **Draft**, which is a branch.
     the editor and shows "This file was updated." With unsaved edits it asks
     **Reload** or **Keep mine**, and each does what it says. The user's own
     saves never show either notice.
-13. While a merge with conflicts is in progress, the editor is read-only with
-    a banner, and the API refuses saves.
+13. While a merge with conflicts is in progress, the conflicting files can
+    be edited and saved, a version opened with **Show mine** is read-only
+    with a banner, and the API refuses saves to any file that is not
+    conflicting.
 14. The preview renders headings, lists, tables, task lists, strikethrough,
     autolinks, footnotes and fenced code with highlighting. Front matter is
     not shown. A `mermaid` block is shown as a code block.
@@ -305,7 +308,7 @@ confused with the Guided level's **Draft**, which is a branch.
     the heading; `https://example.com` opens in a new tab.
 19. An Arabic paragraph is shown right to left in the editor and the preview.
 20. In **Split** mode, scrolling the editor scrolls the preview to the same
-    block, and the other way round. **Editor** and **Preview** modes show one
+    block, and the other way round. **Edit** and **Preview** modes show one
     pane only.
 21. On a phone, the editor and preview are **Edit** and **Preview** tabs.
     Switching keeps the place in the file. The cursor stays visible above the
@@ -323,8 +326,8 @@ confused with the Guided level's **Draft**, which is a branch.
 - Basic formatting from the repository's `.editorconfig` (planned after the
   MVP; see `docs/wiki/todo.md`).
 - Several open files, as tabs (planned after the MVP; ED-3).
-- The safe HTML whitelist (REQ-EDIT-002) and preview images (separate
-  requirement).
+- The safe HTML whitelist (REQ-EDIT-002) and preview images
+  (REQ-EDIT-003).
 - Mermaid diagrams, math, and other rendered extensions.
 - MDX-aware preview (rendering JSX components or running MDX).
 - Ticking task list checkboxes in the preview.
@@ -332,7 +335,7 @@ confused with the Guided level's **Draft**, which is a branch.
 - Checking that the file is unchanged before a save (D-1.3).
 - Real-time collaborative editing (vision non-goal).
 - Export, print, word count and outline views.
-- Remote-change notices and committing, which belong to the git requirement.
+- Remote-change notices and committing, which belong to REQ-GIT-002.
 
 ## Open questions
 

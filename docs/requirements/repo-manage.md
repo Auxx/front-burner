@@ -51,9 +51,10 @@ and managing saved credentials as a list come later
 `/repositories/<id>/settings`.
 
 **Repository status**
-: As in [REQ-DASH-001](dashboard.md): **Ready** (openable), **Needs your
-confirmation**, **Cloning** or **Error**. **Error** is only for repositories
-that cannot be opened (RM-6).
+: **Needs your confirmation**, **Cloning** or **Error**, as in
+[REQ-DASH-001](dashboard.md), for repositories that cannot be opened; this
+page also shows **Ready** for openable ones. **Error** is only for
+repositories that cannot be opened (RM-6).
 
 **Repository warning**
 : A problem with a repository that does not stop it from being opened, such
@@ -109,9 +110,13 @@ as refused credentials (RM-8).
   | "Server identity changed"       | The last connection met a changed host key (RC-4)                      | **Review the new key** (RC-21)             |
   | "Key locked"                    | The repository's key is locked in the current session (RC-15)          | **Unlock** (RC-16)                         |
 
-  The first three come from the backend's record of the last operation with
-  the remote, and go away when an operation with the remote succeeds. "Key
-  locked" depends on the session. _(My call.)_ A repository can be opened
+  The first three come from the backend's record of the operations with the
+  remote, including background fetches. "Credentials refused" and "Server
+  identity changed" go away when an operation of the same kind succeeds: a
+  refused push only when a push succeeds, a refused fetch or pull when any
+  operation with the remote succeeds. "Can't push with these credentials"
+  goes away only when a push succeeds or the credentials are changed.
+  "Key locked" depends on the session. _(My call.)_ A repository can be opened
   whatever its warnings.
 
 ### Repository settings page
@@ -214,8 +219,9 @@ as refused credentials (RM-8).
    again** warns about lost work, clones it, and keeps the repository's name
    and commit author override.
 6. A repository whose last push was refused shows "Credentials refused" on
-   the dashboard, this page and its settings page, can still be opened, and
-   loses the warning after the next successful fetch.
+   the dashboard, this page and its settings page, and can still be opened.
+   A successful background fetch does not remove the warning; the next
+   successful push does.
 7. After a backend restart, a repository with a passphrase-protected key
    shows "Key locked" with **Unlock**.
 8. The **Credentials** section shows the credentials' name, kind and, for an

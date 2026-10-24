@@ -182,7 +182,9 @@ _(My calls.)_
 - **D-6.4** **Edit conflict markers** first shows the list of conflicting
   files; each opens in the normal editor with the markers highlighted.
 - **D-6.5** The UI labels for choosing a whole file and keeping both are
-  **Use my version**, **Use their version** and **Keep both**.
+  **Use my version**, **Use their version** and **Keep both**. When one side
+  deleted the file, they are **Keep the file** and **Delete the file**, for
+  every kind of file (GC-16).
 
 ## D-7: Editor and live preview
 
@@ -191,7 +193,8 @@ _(My calls.)_
 - **D-7.2** The live preview is rendered **in the browser**. The API never
   serves rendered HTML.
 - **D-7.3** Rendering pipeline: **remark** (`remark-parse` → `remark-rehype` →
-  `rehype-raw`) → **Shiki** (`@shikijs/rehype`) → **DOMPurify**.
+  `rehype-raw`) → `rehype-sanitize` → **Shiki** (`@shikijs/rehype`) →
+  **DOMPurify**. _(Spike 3 added `rehype-sanitize`; A-8.12.)_
 - **D-7.4** What the preview shows:
   - front matter is not shown;
   - all standard Markdown is rendered. _(My call: CommonMark plus the GitHub
@@ -213,10 +216,14 @@ _(My calls.)_
   - the JavaScript regex engine instead of the Oniguruma WebAssembly engine;
   - one highlighter instance created once, in the preview worker (A-8.13);
     only changed code blocks are re-highlighted.
-- **D-7.6** HTML is sanitized once, with DOMPurify, and written to the page
-  by a single shared preview component, and nowhere else. _(My call. Spike 3:
-  the component writes DOMPurify's `TrustedHTML` into one element per block
-  instead of passing a string through `bypassSecurityTrustHtml`; A-8.12.)_
+- **D-7.6** HTML is sanitized with DOMPurify as the last step, after
+  `rehype-sanitize` has removed hostile markup from the syntax tree (A-8.12),
+  both configured from one whitelist
+  ([REQ-EDIT-002](../requirements/preview-html.md)). It is written to the
+  page by a single shared preview component, and nowhere else. _(My call.
+  Spike 3: the component writes DOMPurify's `TrustedHTML` into one element
+  per block instead of passing a string through `bypassSecurityTrustHtml`;
+  A-8.12.)_
 - **D-7.7** How image paths are resolved and how the web client loads
   repository and remote images is
   [REQ-EDIT-003](../requirements/preview-images.md).

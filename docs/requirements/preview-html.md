@@ -43,8 +43,8 @@ the file, only from the preview.
 - Without a notice, a user whose `<iframe>` embed silently vanishes cannot
   tell whether Front Burner is broken.
 - How images are loaded, and which image addresses are shown, is a separate
-  requirement (preview images). This requirement only decides which image
-  tags and attributes survive sanitising.
+  requirement ([REQ-EDIT-003](preview-images.md)). This requirement only
+  decides which image tags and attributes survive sanitising.
 
 ## Terms
 
@@ -171,7 +171,7 @@ preview does not render because they are not on the whitelist.
   including obfuscated forms such as mixed case, entities or embedded
   whitespace — removes the attribute. An `a` without its `href` renders as
   plain text. Whether and how an allowed image address is loaded is decided
-  by the preview images requirement; how links open by ED-31.
+  by REQ-EDIT-003; how links open by ED-31.
 - **SH-16** Protocol-relative addresses (`//host/…`) are treated as
   `https:` addresses. _(My call.)_
 
@@ -254,11 +254,14 @@ preview does not render because they are not on the whitelist.
 16. The XSS corpus test and the end-to-end Content Security Policy test pass
     in CI; previewing the corpus reports no Content Security Policy
     violation for script, styles or event handlers.
+17. `<img src="//cdn.example.com/a.png">` is kept as an `https:` address
+    (SH-16), and `<a href="//example.com">` opens `https://example.com` in a
+    new tab.
 
 ## Out of scope
 
-- How images are resolved and loaded, including remote images (preview
-  images requirement).
+- How images are resolved and loaded, including remote images
+  (REQ-EDIT-003).
 - `<video>`, `<audio>` and other embedded media (possible later, with
   uploads).
 - Inline SVG and MathML, Mermaid and math (ED-26).

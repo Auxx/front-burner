@@ -197,7 +197,8 @@ dashboard and the repository management page, with the fix (see
 **Last access time**
 : When a user last opened a repository in the editor. Also set when the
 repository is added, so every repository has one. Stored per user, so each
-user has their own last access time for each of their repositories. _Avoid_:
+user has their own last access time for each of their repositories. Shown
+in the UI with the label "Last accessed" (DS-18). _Avoid_ in other places:
 "accessed", "last used", "last visited".
 
 **Git hosting provider**
@@ -395,7 +396,10 @@ block;
 - **Three-way merge editor** — base, ours and theirs plus an editable
 result;
 - **Edit conflict markers** — edit the file with highlighted `<<<<<<<`
-markers;
+markers, helped by **Accept mine**, **Accept theirs** and **Accept both**
+buttons on each conflict, which are plain text edits. Not to be confused with
+Choose per change, which shows the versions side by side as rendered
+Markdown;
 - **Resolve on the provider** — push to a branch, open a pull request and
 resolve on the git hosting provider.
 

@@ -104,7 +104,7 @@ default commit author for that repository's commits.
   - for a repository, on the repository management page, which shows the
     commit author in use and whether it is the default or an override, with
     **Use a different author for this repository** or **Use my default**;
-  - on the commit screen (git requirement), which always shows "Committing
+  - on the commit screen (GA-18), which always shows "Committing
     as _Name &lt;email&gt;_" with **Change**. **Change** edits the override
     of that repository, or the default, as the user chooses in the same
     dialog. _(My call.)_
@@ -141,7 +141,10 @@ default commit author for that repository's commits.
 - **CA-13** The confirmation applies to the user, not to a repository or a
   device, and is stored by the backend. The backend refuses a commit, with an
   error code, while the user has not confirmed, so that every client asks
-  (vision goal 12). _(My call.)_
+  (vision goal 12). _(My call. The Simple level's automatic commits
+  (D-2.6) cannot ask; when that level is added, it must decide how a user
+  confirms before automatic commits start, for example when choosing the
+  level.)_
 - **CA-14** A merge commit made by a pull, or the commit that finishes a
   conflict resolution, asks as in CA-12 if it is the user's first commit.
 
@@ -149,7 +152,7 @@ default commit author for that repository's commits.
 
 - **CA-15** Commits are not signed. When a push is refused because the
   remote requires signed commits, the push error says so in plain words.
-  _(The error handling belongs to the git requirement; signing may come
+  _(The error handling is GA-31; signing may come
   later.)_
 
 ## Acceptance criteria
@@ -182,6 +185,8 @@ default commit author for that repository's commits.
     author, and the web client asks as in criterion 2.
 11. No other user, administrator or not, can read or change a user's commit
     author through the API.
+12. Editing the default commit author on the Preferences page before the
+    first commit counts as confirming it: the first commit does not ask.
 
 ## Out of scope
 
