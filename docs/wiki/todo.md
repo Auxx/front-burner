@@ -1,6 +1,10 @@
 Requirements files for the MVP (`docs/product/mvp.md`): all written and
 accepted.
 
+UI work
+
+- Layout components.
+
 Requirements files deferred until after the MVP:
 
 - Admin-assisted adding, plus the user's confirmation flow.
