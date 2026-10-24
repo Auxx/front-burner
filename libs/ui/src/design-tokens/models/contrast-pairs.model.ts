@@ -58,6 +58,10 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
     text(fg, 'selected-active'),
     text(fg, 'selected-inactive')
   ]),
+  // Text in menus, also on the hovered or active item; disabled text is
+  // exempt (WCAG 1.4.3)
+  text('text-default', 'surface-raised', 'surface-hover'),
+  text('text-muted', 'surface-raised', 'surface-hover'),
   text('text-inverse', 'text-default'),
   ...[ 'accent', 'accent-hover', 'accent-pressed' ].map(bg => text('text-on-accent', bg)),
 
