@@ -37,13 +37,22 @@ export default [
                     style: "camelCase"
                 }
             ],
+            // Simple controls are attribute components on native elements,
+            // such as `button[uiActivityBarItem]` (A-10.26).
             "@angular-eslint/component-selector": [
                 "error",
-                {
-                    type: "element",
-                    prefix: "ui",
-                    style: "kebab-case"
-                }
+                [
+                    {
+                        type: "element",
+                        prefix: "ui",
+                        style: "kebab-case"
+                    },
+                    {
+                        type: "attribute",
+                        prefix: "ui",
+                        style: "camelCase"
+                    }
+                ]
             ]
         }
     },

@@ -1,0 +1,53 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    --ui-activity-bar-item-size: var(--ui-control-height);
+
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: var(--ui-activity-bar-item-size);
+    block-size: var(--ui-activity-bar-item-size);
+    padding: 0;
+    background: none;
+    color: var(--ui-icon-muted);
+    border: 0;
+    border-radius: var(--ui-radius-control);
+    cursor: pointer;
+  }
+
+  :host(:hover) {
+    background: var(--ui-surface-hover);
+    color: var(--ui-icon-default);
+  }
+
+  // The selected item has an accent bar, not only another colour. The bar is
+  // drawn as a background, which forced colours would otherwise remove
+  // (A-10.22); `--ui-accent` is `Highlight` there.
+  :host([aria-pressed='true']) {
+    color: var(--ui-icon-default);
+  }
+
+  :host([aria-pressed='true'])::before {
+    content: '';
+    position: absolute;
+    inset-block: var(--ui-space-1);
+    inset-inline-start: 0;
+    inline-size: var(--ui-focus-ring-width);
+    background: var(--ui-accent);
+    border-radius: var(--ui-radius-pill);
+    forced-color-adjust: none;
+  }
+
+  :host-context([aria-orientation='horizontal'])[aria-pressed='true']::before {
+    inset-block: auto 0;
+    inset-inline: var(--ui-space-1);
+    inline-size: auto;
+    block-size: var(--ui-focus-ring-width);
+  }
+
+  :host(:focus-visible) {
+    @include mixins.focus-ring;
+  }
+}

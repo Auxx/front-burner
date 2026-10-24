@@ -66,6 +66,12 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   ...[ 'surface-canvas', 'surface-island', 'surface-raised', 'selected-active' ].map(bg => graphic('border-focus', bg)),
   ...[ 'surface-canvas', 'surface-island' ].map(bg => graphic('accent', bg)),
 
+  // Icons on the canvas, such as the activity bar's, also when hovered
+  ...[ 'icon-default', 'icon-muted' ].flatMap(fg => [
+    graphic(fg, 'surface-canvas'),
+    graphic(fg, 'surface-canvas', 'surface-hover')
+  ]),
+
   // Status
   ...statuses.flatMap(status => [
     text(`${status}-text`, `${status}-background`),
