@@ -7,11 +7,10 @@
   [attr.aria-activedescendant]="activeDescendant()"
   (keydown)="onKeydown($event)"
   (focusin)="onFocusIn($event)"
-  (pointerdown)="onPointerDown()"
   (click)="onClick($event)"
 >
   <div
-    *cdkVirtualFor="let row of rows(); let index = index; trackBy: trackRow"
+    *cdkVirtualFor="let row of rows(); let index = index; trackBy: trackRow; templateCacheSize: 0"
     class="row"
     role="treeitem"
     [id]="rowId(index)"

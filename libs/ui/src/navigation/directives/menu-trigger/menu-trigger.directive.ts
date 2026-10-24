@@ -1,7 +1,12 @@
-import { MenuTrigger } from '@angular/aria/menu';
-import { computed, Directive, inject } from '@angular/core';
+import { type Menu, MenuTrigger } from '@angular/aria/menu';
+import { computed, DestroyRef, Directive, effect, inject, untracked } from '@angular/core';
 
 import { TreeItemMenuDirective } from '../tree-item-menu/tree-item-menu.directive';
+
+/** The trigger that last opened each shared menu. */
+const owners = new WeakMap<Menu<unknown>, MenuTrigger<unknown>>();
+
+const OPENING_KEYS = new Set([ 'Enter', ' ', 'ArrowDown', 'ArrowUp' ]);
 
 /**
  * The button that opens a `ui-menu`: `[uiMenuTrigger]="menu.aria"`, where
@@ -10,7 +15,8 @@ import { TreeItemMenuDirective } from '../tree-item-menu/tree-item-menu.directiv
  *
  * Several triggers can share one menu, such as the actions button of every
  * row of a tree: the menu opens next to, and returns the focus to, the trigger
- * that opened it.
+ * that opened it. Triggers created while it is open leave it alone, and it
+ * closes when the trigger that opened it is destroyed.
  */
 @Directive({
   selector: 'button[uiMenuTrigger]',
@@ -22,7 +28,7 @@ import { TreeItemMenuDirective } from '../tree-item-menu/tree-item-menu.directiv
     // Our host bindings run after Aria's, so this one wins over Aria's own.
     '[attr.tabindex]': 'tabIndex()',
     '(click)': 'claimMenu()',
-    '(keydown)': 'claimMenu()'
+    '(keydown)': 'onKeydown($event)'
   }
 })
 export class MenuTriggerDirective {
@@ -36,11 +42,47 @@ export class MenuTriggerDirective {
    */
   protected readonly tabIndex = computed(() => this.inTreeRow ? -1 : this.trigger._pattern.tabIndex());
 
-  /**
-   * Aria links a menu to the last trigger that was given it, and shows the menu
-   * only while that trigger is expanded; so the trigger that is used takes it.
-   */
+  constructor() {
+    // Aria links a menu to every new trigger it is given, and shows the menu
+    // only while that trigger is expanded. A trigger created later, such as a
+    // tree row scrolled into view, gives the menu back to the one that opened
+    // it. This runs after Aria's own effect, which was created first.
+    effect(() => {
+      const menu = this.trigger.menu();
+      untracked(() => {
+        const owner = menu && owners.get(menu);
+        if (menu && owner && owner !== this.trigger) {
+          menu.parent.set(owner);
+        }
+      });
+    });
+
+    inject(DestroyRef).onDestroy(() => {
+      const menu = this.trigger.menu();
+      if (menu && owners.get(menu) === this.trigger) {
+        this.trigger.close();
+        owners.delete(menu);
+      }
+    });
+  }
+
+  protected onKeydown(event: KeyboardEvent): void {
+    if (OPENING_KEYS.has(event.key)) {
+      this.claimMenu();
+    }
+  }
+
+  /** The trigger that opens the menu takes it, closing it for any other. */
   protected claimMenu(): void {
-    this.trigger.menu()?.parent.set(this.trigger);
+    const menu = this.trigger.menu();
+    if (!menu) {
+      return;
+    }
+    const owner = owners.get(menu);
+    if (owner && owner !== this.trigger && owner.expanded()) {
+      owner.close();
+    }
+    owners.set(menu, this.trigger);
+    menu.parent.set(this.trigger);
   }
 }

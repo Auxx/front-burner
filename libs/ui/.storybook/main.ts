@@ -32,6 +32,7 @@ const config: StorybookConfig = {
         include: [
           '@angular/aria/menu',
           '@angular/aria/toolbar',
+          '@angular/cdk/a11y',
           '@angular/cdk/bidi',
           '@angular/cdk/layout',
           '@angular/cdk/overlay',

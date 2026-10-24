@@ -1,3 +1,4 @@
+import { FocusMonitor, type FocusOrigin } from '@angular/cdk/a11y';
 import { Directionality } from '@angular/cdk/bidi';
 import type { ListRange } from '@angular/cdk/collections';
 import { CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
@@ -160,14 +161,12 @@ export class TreeComponent {
   private readonly viewport = viewChild.required(CdkVirtualScrollViewport);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly direction = inject(Directionality).valueSignal;
+  private readonly focusMonitor = inject(FocusMonitor);
 
   private typeahead = '';
   private typeaheadTimer?: ReturnType<typeof setTimeout>;
-  /**
-   * Set while a pointer or our own code moves the focus into the tree, which is
-   * then not focus from outside.
-   */
-  private focusByPointer = false;
+  /** Set while our own code moves the focus to the tree element. */
+  private focusingTree = false;
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -175,6 +174,16 @@ export class TreeComponent {
     afterNextRender(() => {
       const subscription = this.viewport().renderedRangeStream.subscribe(range => this.renderedRange.set(range));
       destroyRef.onDestroy(() => subscription.unsubscribe());
+
+      // The focus origin tells keyboard focus from a mouse click or a tap; the
+      // focus of a tap comes long after its pointerdown.
+      const focusMonitor = this.focusMonitor;
+      const tree = this.viewport().elementRef.nativeElement;
+      const focus = focusMonitor.monitor(tree).subscribe(origin => this.onTreeFocus(origin));
+      destroyRef.onDestroy(() => {
+        focus.unsubscribe();
+        focusMonitor.stopMonitoring(tree);
+      });
 
       // Touch density has taller rows (A-10.11).
       if (typeof matchMedia !== 'function') {
@@ -204,37 +213,36 @@ export class TreeComponent {
     return row.node.value;
   }
 
+  /**
+   * A row's menu button is not a stop of its own: its focus, such as when its
+   * menu closes, goes back to the tree, on its row.
+   */
   protected onFocusIn(event: FocusEvent): void {
     const target = event.target as HTMLElement;
-    const tree = this.viewport().elementRef.nativeElement;
-
-    // A row's menu button is not a stop of its own: its focus, such as when its
-    // menu closes, goes back to the tree, on its row.
     if (target.matches('[uiTreeItemMenu]')) {
       const index = this.indexOfRowElement(target.closest('[role="treeitem"]'));
       if (index !== -1) {
         this.setActive(index);
       }
       this.focusTree();
+    }
+  }
+
+  /**
+   * Focus that reaches the tree element itself from outside: by keyboard or a
+   * script, the open file, else the last active row, else the first. A click or
+   * a tap neither moves nor scrolls: the click makes its own row active.
+   */
+  private onTreeFocus(origin: FocusOrigin): void {
+    if (origin === null || origin === 'mouse' || origin === 'touch' || this.focusingTree) {
       return;
     }
-
-    if (target !== tree || this.focusByPointer || tree.contains(event.relatedTarget as Node | null)) {
-      return;
-    }
-
-    // From outside: the open file, else the last active row, else the first.
     const last = this.active();
     const lastIndex = last ? this.rowIndex().get(last.value) ?? -1 : -1;
     const index = this.selectedIndex() !== -1 ? this.selectedIndex() : lastIndex !== -1 ? lastIndex : 0;
     if (index < this.rows().length) {
       this.setActive(index);
     }
-  }
-
-  protected onPointerDown(): void {
-    this.focusByPointer = true;
-    setTimeout(() => (this.focusByPointer = false));
   }
 
   /** Rows have no handlers of their own: the tree has the focus and the keys. */
@@ -396,9 +404,9 @@ export class TreeComponent {
   private focusTree(): void {
     const tree = this.viewport().elementRef.nativeElement;
     if (this.host.ownerDocument.activeElement !== tree) {
-      this.focusByPointer = true;
+      this.focusingTree = true;
       tree.focus({ preventScroll: true });
-      this.focusByPointer = false;
+      this.focusingTree = false;
     }
   }
 

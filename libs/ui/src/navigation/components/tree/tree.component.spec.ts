@@ -401,6 +401,63 @@ describe('TreeComponent', () => {
     expect(menuOpen()).toBe(true);
   });
 
+  it('keeps a row menu and its triggers consistent when rows are added', async () => {
+    await create();
+    const expandedButtons = () =>
+      [ ...root().querySelectorAll('[uiTreeItemMenu]') ].filter(b => b.getAttribute('aria-expanded') === 'true');
+
+    menuButton('README.md').click();
+    await stable();
+    expect(menuOpen()).toBe(true);
+
+    host.nodes.set([ ...NODES, { value: 'LICENSE', label: 'LICENSE' } ]);
+    await stable();
+
+    expect(row('LICENSE')).toBeDefined();
+    expect(menuOpen()).toBe(true);
+    expect(expandedButtons()).toEqual([ menuButton('README.md') ]);
+  });
+
+  it('closes a row menu whose row is scrolled away', async () => {
+    await create(h =>
+      h.nodes.set(Array.from({ length: 200 }, (_, index) => ({ value: `f${index}`, label: `f${index}` })))
+    );
+
+    menuButton('f0').click();
+    await stable();
+    expect(menuOpen()).toBe(true);
+
+    tree().scrollTop = 150 * 24;
+    await stable();
+
+    expect(row('f0')).toBeUndefined();
+    expect(menuOpen()).toBe(false);
+    expect([ ...root().querySelectorAll('[uiTreeItemMenu]') ].some(b => b.getAttribute('aria-expanded') === 'true'))
+      .toBe(false);
+  });
+
+  it('does not scroll when a pointer focuses the tree', async () => {
+    fixture = TestBed.createComponent(LargeHostComponent);
+    await stable();
+    tree().scrollTop = 100 * 24;
+    await stable();
+    const target = row('file-105.md');
+
+    // A tap: pointerdown at touchstart, then the compatibility mousedown and the
+    // focus well after it.
+    target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    // `buttons` and `detail` are 0 in a screen reader's fake mousedown.
+    target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1, detail: 1 }));
+    tree().focus();
+    await stable();
+
+    expect(tree().scrollTop).toBe(100 * 24);
+    target.click();
+    await stable();
+    expect(active()).toBe(row('file-105.md').id);
+  });
+
   it('keeps the tree as the only tab stop when the active row disappears', async () => {
     await create();
     await activate('CHANGELOG.md');

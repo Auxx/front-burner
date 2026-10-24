@@ -67,14 +67,21 @@ class GroupHostComponent {
 @Component({
   imports: [ MenuComponent, MenuItemComponent, MenuTriggerDirective ],
   template: `
-    <button [uiMenuTrigger]="menu.aria">First row</button>
+    @if (showFirst()) {
+      <button [uiMenuTrigger]="menu.aria">First row</button>
+    }
     <button [uiMenuTrigger]="menu.aria">Second row</button>
+    @if (showThird()) {
+      <button [uiMenuTrigger]="menu.aria">Third row</button>
+    }
     <ui-menu #menu="uiMenu">
       <button uiMenuItem="rename">Rename</button>
     </ui-menu>
   `
 })
 class SharedHostComponent {
+  readonly showFirst = signal(true);
+  readonly showThird = signal(false);
 }
 
 describe('MenuComponent', () => {
@@ -239,5 +246,69 @@ describe('MenuComponent', () => {
     await press('Escape');
     expect(inOverlay()).toBeNull();
     expect(document.activeElement).toBe(first);
+  });
+
+  describe('shared between triggers', () => {
+    let shared: ComponentFixture<SharedHostComponent>;
+    const triggers = () =>
+      ([ ...shared.nativeElement.querySelectorAll('button') ] as HTMLButtonElement[]).filter(b =>
+        b.textContent?.includes('row')
+      );
+    const shareTrigger = (text: string) => triggers().find(b => b.textContent?.trim() === text) as HTMLButtonElement;
+    const expandedStates = () => triggers().map(b => b.getAttribute('aria-expanded'));
+
+    beforeEach(async () => {
+      shared = TestBed.createComponent(SharedHostComponent);
+      await shared.whenStable();
+    });
+
+    it('opens from a second trigger after the first', async () => {
+      shareTrigger('First row').click();
+      await shared.whenStable();
+      await press('Escape');
+
+      shareTrigger('Second row').click();
+      await shared.whenStable();
+      expect(inOverlay()).not.toBeNull();
+      expect(expandedStates()).toEqual([ 'false', 'true' ]);
+
+      await press('Escape');
+      expect(inOverlay()).toBeNull();
+      expect(document.activeElement).toBe(shareTrigger('Second row'));
+    });
+
+    it('stays open when another trigger is created', async () => {
+      shareTrigger('First row').click();
+      await shared.whenStable();
+
+      shared.componentInstance.showThird.set(true);
+      await shared.whenStable();
+
+      expect(inOverlay()).not.toBeNull();
+      expect(expandedStates()).toEqual([ 'true', 'false', 'false' ]);
+
+      await press('Escape');
+      expect(inOverlay()).toBeNull();
+      expect(expandedStates()).toEqual([ 'false', 'false', 'false' ]);
+      expect(document.activeElement).toBe(shareTrigger('First row'));
+
+      shareTrigger('Third row').click();
+      await shared.whenStable();
+      expect(inOverlay()).not.toBeNull();
+      expect(expandedStates()).toEqual([ 'false', 'false', 'true' ]);
+    });
+
+    it('closes when its trigger is removed', async () => {
+      shareTrigger('First row').click();
+      await shared.whenStable();
+
+      shared.componentInstance.showFirst.set(false);
+      await shared.whenStable();
+
+      expect(inOverlay()).toBeNull();
+      shareTrigger('Second row').click();
+      await shared.whenStable();
+      expect(inOverlay()).not.toBeNull();
+    });
   });
 });
