@@ -5,6 +5,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { TabContentDirective } from '../../directives/tab-content/tab-content.directive';
 import { TabGroupDirective } from '../../directives/tab-group/tab-group.directive';
 import { TabPanelDirective } from '../../directives/tab-panel/tab-panel.directive';
 import { TabComponent } from '../tab/tab.component';
@@ -33,15 +34,15 @@ class TabGroupHarness extends TabsHarness {
 }
 
 @Component({
-  imports: [ Dir, TabGroupDirective, TabStripComponent, TabComponent, TabPanelDirective ],
+  imports: [ Dir, TabContentDirective, TabGroupDirective, TabStripComponent, TabComponent, TabPanelDirective ],
   template: `
     <div uiTabGroup [dir]="direction()">
       <ui-tab-strip label="Left pane" [(selected)]="selected">
         <button uiTab="files">Files</button>
         <button uiTab="changes">Changes (3)</button>
       </ui-tab-strip>
-      <div uiTabPanel="files"><input aria-label="Probe" /></div>
-      <div uiTabPanel="changes">No changes</div>
+      <div uiTabPanel="files"><ng-template uiTabContent><input aria-label="Probe" /></ng-template></div>
+      <div uiTabPanel="changes"><ng-template uiTabContent>No changes</ng-template></div>
     </div>
   `
 })
@@ -134,6 +135,15 @@ describe('TabStripComponent', () => {
     const tabStops = [ 'files', 'changes' ].filter(value => tab(value).tabIndex === 0);
 
     expect(tabStops.length).toBe(1);
+  });
+
+  it('renders a panel\'s content on its first selection only', async () => {
+    expect(panel('changes').textContent?.trim()).toBe('');
+
+    host.selected.set('changes');
+    await fixture.whenStable();
+
+    expect(panel('changes').textContent).toContain('No changes');
   });
 
   it('keeps a hidden panel\'s content', async () => {

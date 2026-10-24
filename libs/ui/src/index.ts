@@ -9,5 +9,6 @@ export { BreadcrumbsComponent } from './navigation/components/breadcrumbs/breadc
 export { TabStripComponent } from './navigation/components/tab-strip/tab-strip.component';
 export { TabComponent } from './navigation/components/tab/tab.component';
 export { BreadcrumbDirective } from './navigation/directives/breadcrumb/breadcrumb.directive';
+export { TabContentDirective } from './navigation/directives/tab-content/tab-content.directive';
 export { TabGroupDirective } from './navigation/directives/tab-group/tab-group.directive';
 export { TabPanelDirective } from './navigation/directives/tab-panel/tab-panel.directive';

@@ -1,6 +1,7 @@
 import { Meta, StoryObj } from '@storybook/angular-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { IslandComponent } from '../../../layout/components/island/island.component';
+import { TabContentDirective } from '../../directives/tab-content/tab-content.directive';
 import { TabGroupDirective } from '../../directives/tab-group/tab-group.directive';
 import { TabPanelDirective } from '../../directives/tab-panel/tab-panel.directive';
 import { TabComponent } from '../tab/tab.component';
@@ -12,7 +13,9 @@ const meta: Meta<TabStripComponent> = {
   decorators: [
     story => ({
       ...story(),
-      moduleMetadata: { imports: [ IslandComponent, TabGroupDirective, TabComponent, TabPanelDirective ] }
+      moduleMetadata: {
+        imports: [ IslandComponent, TabContentDirective, TabGroupDirective, TabComponent, TabPanelDirective ]
+      }
     })
   ],
   parameters: { layout: 'fullscreen' }
@@ -33,8 +36,8 @@ export const LeftPane: Story = {
             <button uiTab="files">Files</button>
             <button uiTab="changes">Changes (3)</button>
           </ui-tab-strip>
-          <div uiTabPanel="files">The file tree.</div>
-          <div uiTabPanel="changes">Three changed files.</div>
+          <div uiTabPanel="files"><ng-template uiTabContent>The file tree.</ng-template></div>
+          <div uiTabPanel="changes"><ng-template uiTabContent>Three changed files.</ng-template></div>
         </ui-island>
       </div>
     `
@@ -64,8 +67,8 @@ export const EditPreview: Story = {
           <button uiTab="edit">Edit</button>
           <button uiTab="preview">Preview</button>
         </ui-tab-strip>
-        <div uiTabPanel="edit">The Markdown source.</div>
-        <div uiTabPanel="preview">The rendered preview.</div>
+        <div uiTabPanel="edit"><ng-template uiTabContent>The Markdown source.</ng-template></div>
+        <div uiTabPanel="preview"><ng-template uiTabContent>The rendered preview.</ng-template></div>
       </div>
     `
   })
