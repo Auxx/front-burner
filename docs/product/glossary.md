@@ -216,6 +216,12 @@ code.
 The only kind of file that Front Burner can create, edit and rename, with
 syntax highlighting and live preview.
 
+**App header**
+: The bar at the top of every page of the web client that needs a login,
+with the links to the dashboard and the repository management page and the
+user menu (see [REQ-APP-001](../requirements/navigation.md)). On the
+repository screen it is combined with the repository's own header.
+
 **Repository screen**
 : The screen that shows one repository: the file tree, the editor and the
 live preview (see [REQ-FILE-001](../requirements/file-browser.md)). Opening

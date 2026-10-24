@@ -1,8 +1,5 @@
-Next requirements files to write for the MVP (`docs/product/mvp.md`), in the
-suggested order of work:
-
-- Navigation: the web client's header and user menu (Preferences, Log out),
-  which REQ-DASH-001 and REQ-GIT-001 rely on but no requirement defines yet.
+Requirements files for the MVP (`docs/product/mvp.md`): all drafted. Next,
+review them and move them from Draft to Accepted.
 
 Requirements files deferred until after the MVP:
 

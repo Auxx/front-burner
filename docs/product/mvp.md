@@ -221,7 +221,14 @@ them.
   Finishing commits the merge. The user then pushes it like any other
   commit, or undoes the merge while it has not been pushed.
 
-### 9. Deployment guide (to write)
+### 9. Navigation (written)
+
+Written up as [REQ-APP-001](../requirements/navigation.md): the app header
+with the user menu (Preferences, Log out), one combined bar with a repository
+switcher on the repository screen, the list of routes, page titles,
+breadcrumbs, "Page not found", global banners and shared accessibility rules.
+
+### 10. Deployment guide (to write)
 
 The operator-facing deployment guide in `docs/wiki/deployment.md`, as listed
 in `docs/wiki/todo.md`: the image, volumes, container UID, environment
@@ -251,8 +258,8 @@ vision, and the architecture must not rule them out.
 A suggested order. Each step leaves a working product that can be shown to
 someone:
 
-1. Authentication and onboarding, then the dashboard and adding repositories
-   (requirements already written).
+1. Authentication and onboarding, the app header and navigation, then the
+   dashboard and adding repositories.
 2. The file browser, then the editor with saving and live preview, safe HTML
    and images. At this point the operator can edit files but not commit them.
 3. Commit author, status, diff, discard, commit and push, with push

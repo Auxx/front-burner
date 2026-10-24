@@ -114,7 +114,8 @@ track it.
   REQ-EDIT-001.
 - **FB-10** The screen's header shows the repository name and a link back to
   the dashboard. The current branch, git actions and the save status are
-  added by the git requirement and REQ-EDIT-001.
+  added by REQ-GIT-002 and REQ-EDIT-001. The header is the app header and
+  the repository's header in one bar ([REQ-APP-001](navigation.md), NV-9).
 
 ### Opening the repository screen
 

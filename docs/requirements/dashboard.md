@@ -242,7 +242,8 @@ that a repository is in an error status and a short label for the error.
   user's behalf (separate requirements).
 - How administrators add repositories on a user's behalf and see other users'
   repositories (administration requirements).
-- The navigation bar and the links to administration pages.
+- The navigation bar ([REQ-APP-001](navigation.md)) and the links to
+  administration pages.
 - The editor itself.
 - Pinning, favourites, search or filtering on the dashboard.
 - Showing recent files, sync status or uncommitted changes per repository.
