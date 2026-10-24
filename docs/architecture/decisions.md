@@ -272,7 +272,11 @@ _(My calls.)_
 - **D-9.4** Behaviour that is hard to get right — keyboard navigation, focus
   management, ARIA patterns and overlays — comes from **Angular Aria** and the
   **Angular CDK**, both headless and first-party. Every visual is our own.
-- **D-9.5** The rules for all of this are in
+- **D-9.5** The look's starting points: **JetBrains blue** as the accent,
+  **slightly cool** neutral greys, **13 px** UI text on desktop, and
+  **Codicons** for icons. Design tokens are written by hand in SCSS, with no
+  token build step.
+- **D-9.6** The rules for all of this are in
   [design-system.md](design-system.md) (A-10).
 
 ## Consequences for the architecture

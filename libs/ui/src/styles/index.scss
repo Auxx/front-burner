@@ -1,0 +1,15 @@
+// The global stylesheet of the design system (A-10). Loaded once by the web
+// client and by Storybook; components never import it.
+
+@use 'layers';
+@use 'fonts';
+@use 'reset';
+@use 'tokens/primitives';
+@use 'tokens/color';
+@use 'tokens/syntax';
+@use 'tokens/typography';
+@use 'tokens/space';
+@use 'tokens/shape';
+@use 'tokens/density';
+@use 'tokens/motion';
+@use 'base';

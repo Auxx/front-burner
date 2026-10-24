@@ -1,0 +1,36 @@
+@use 'mixins';
+
+@layer base {
+  html {
+    background: var(--ui-surface-canvas);
+    color: var(--ui-text-default);
+    scrollbar-color: var(--ui-scrollbar-thumb) transparent;
+  }
+
+  // On `body`, not `html`: the root font size stays the browser's, so that
+  // `rem` follows the user's setting (A-10.17).
+  body {
+    font-family: var(--ui-font-family-sans);
+    font-size: var(--ui-font-size-ui);
+    line-height: var(--ui-line-height-ui);
+  }
+
+  :focus-visible {
+    @include mixins.focus-ring;
+  }
+
+  ::selection {
+    background: var(--ui-editor-selection);
+  }
+
+  a {
+    color: var(--ui-text-link);
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--ui-font-family-mono);
+  }
+}

@@ -1,0 +1,7 @@
+// Self-hosted fonts (A-10.36), served from the web client's own origin
+// (`font-src 'self'`, NF-11.1). Variable fonts: one file per script covers
+// every weight, and the browser loads only the scripts a page uses
+// (`unicode-range`). Both use `font-display: swap`.
+
+@use '@fontsource-variable/inter';
+@use '@fontsource-variable/jetbrains-mono';

@@ -29,6 +29,14 @@ built:
   recovery from a lost key), `…_FILE` variables, log, metrics and low-space
   settings, and the hardened compose example.
 
+Design system (`docs/architecture/design-system.md`):
+
+- Replace `@storybook/test-runner` with Storybook's Vitest addon
+  (`@storybook/addon-vitest`), which needs the Vite-based framework
+  `@storybook/angular-vite` instead of the webpack-based `@storybook/angular`.
+  The test-runner works but is no longer supported. The axe checks and the
+  contrast story's `play` check must keep failing CI (A-10.38, A-10.10).
+
 Spikes (`docs/architecture/spikes.md`), each on its own `spike/<name>` branch,
 never merged, time-boxed to 1–2 days; findings go back into the architecture
 documents:

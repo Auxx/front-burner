@@ -1,0 +1,151 @@
+// Semantic colour tokens (A-10.18, A-10.19), as `name: (light, dark)`.
+// Every pair that must meet a contrast ratio is listed in contrast-pairs.model.ts
+// and checked on the Storybook token page (A-10.10).
+
+@use 'functions';
+
+$tokens: (
+  // Surfaces
+  surface-canvas: (functions.ref(neutral-95), functions.ref(neutral-18)),
+  surface-island: (functions.ref(neutral-100), functions.ref(neutral-23)),
+  surface-raised: (functions.ref(neutral-100), functions.ref(neutral-27)),
+  surface-sunken: (functions.ref(neutral-98), functions.ref(neutral-20)),
+  surface-hover: (functions.alpha(neutral-0, 5%), functions.alpha(neutral-100, 6%)),
+  surface-pressed: (functions.alpha(neutral-0, 9%), functions.alpha(neutral-100, 10%)),
+  surface-scrim: (functions.alpha(neutral-0, 40%), functions.alpha(neutral-0, 60%)),
+
+  // Selection in lists and trees, with and without the focus
+  selected-active: (functions.ref(blue-90), functions.ref(blue-35)),
+  selected-inactive: (functions.ref(neutral-91), functions.ref(neutral-30)),
+
+  // Text
+  text-default: (functions.ref(neutral-20), functions.ref(neutral-93)),
+  text-muted: (functions.ref(neutral-45), functions.ref(neutral-75)),
+  text-subtle: (functions.ref(neutral-53), functions.ref(neutral-70)),
+  text-disabled: (functions.ref(neutral-70), functions.ref(neutral-45)),
+  text-inverse: (functions.ref(neutral-98), functions.ref(neutral-20)),
+  text-link: (functions.ref(blue-50), functions.ref(blue-75)),
+  text-on-accent: (functions.ref(neutral-100), functions.ref(neutral-100)),
+
+  // Icons
+  icon-default: (functions.ref(neutral-20), functions.ref(neutral-93)),
+  icon-muted: (functions.ref(neutral-45), functions.ref(neutral-75)),
+  icon-disabled: (functions.ref(neutral-70), functions.ref(neutral-45)),
+  icon-on-accent: (functions.ref(neutral-100), functions.ref(neutral-100)),
+
+  // Borders. Only `strong` and `focus` meet 3:1; the others separate areas and
+  // never carry information on their own.
+  border-subtle: (functions.ref(neutral-93), functions.ref(neutral-27)),
+  border-default: (functions.ref(neutral-88), functions.ref(neutral-33)),
+  border-strong: (functions.ref(neutral-60), functions.ref(neutral-55)),
+  border-focus: (functions.ref(blue-55), functions.ref(blue-70)),
+
+  // Accent
+  accent: (functions.ref(blue-55), functions.ref(blue-55)),
+  accent-hover: (functions.ref(blue-50), functions.ref(blue-50)),
+  accent-pressed: (functions.ref(blue-45), functions.ref(blue-45)),
+
+  // Status
+  info-background: (functions.ref(blue-95), functions.ref(blue-25)),
+  info-border: (functions.ref(blue-80), functions.ref(blue-40)),
+  info-text: (functions.ref(blue-45), functions.ref(blue-80)),
+  info-icon: (functions.ref(blue-55), functions.ref(blue-75)),
+  success-background: (functions.ref(green-95), functions.ref(green-25)),
+  success-border: (functions.ref(green-80), functions.ref(green-40)),
+  success-text: (functions.ref(green-45), functions.ref(green-80)),
+  success-icon: (functions.ref(green-55), functions.ref(green-75)),
+  warning-background: (functions.ref(amber-95), functions.ref(amber-25)),
+  warning-border: (functions.ref(amber-80), functions.ref(amber-40)),
+  warning-text: (functions.ref(amber-45), functions.ref(amber-80)),
+  warning-icon: (functions.ref(amber-55), functions.ref(amber-75)),
+  danger-background: (functions.ref(red-95), functions.ref(red-25)),
+  danger-border: (functions.ref(red-80), functions.ref(red-40)),
+  danger-text: (functions.ref(red-45), functions.ref(red-80)),
+  danger-icon: (functions.ref(red-55), functions.ref(red-75)),
+
+  // Git and file status, always shown with a letter or an icon too (NF-13.7)
+  git-added: (functions.ref(green-45), functions.ref(green-80)),
+  git-modified: (functions.ref(blue-45), functions.ref(blue-80)),
+  git-deleted: (functions.ref(red-45), functions.ref(red-80)),
+  git-renamed: (functions.ref(teal-45), functions.ref(teal-80)),
+  git-untracked: (functions.ref(amber-50), functions.ref(amber-80)),
+  git-conflicted: (functions.ref(red-45), functions.ref(red-80)),
+  git-ignored: (functions.ref(neutral-45), functions.ref(neutral-75)),
+
+  // Diffs
+  diff-inserted-line: (functions.ref(green-95), functions.ref(green-30)),
+  diff-inserted-word: (functions.ref(green-90), functions.ref(green-35)),
+  diff-deleted-line: (functions.ref(red-95), functions.ref(red-30)),
+  diff-deleted-word: (functions.ref(red-90), functions.ref(red-35)),
+
+  // Conflicts
+  conflict-mine: (functions.ref(green-95), functions.ref(green-30)),
+  conflict-theirs: (functions.ref(blue-95), functions.ref(blue-30)),
+  conflict-base: (functions.ref(neutral-93), functions.ref(neutral-30)),
+  conflict-marker: (functions.ref(neutral-88), functions.ref(neutral-37)),
+
+  // Editor
+  editor-background: (functions.ref(surface-island), functions.ref(surface-island)),
+  editor-active-line: (functions.alpha(blue-55, 6%), functions.alpha(neutral-100, 4%)),
+  editor-selection: (functions.alpha(blue-55, 20%), functions.alpha(blue-60, 35%)),
+  editor-match: (functions.alpha(amber-75, 40%), functions.alpha(amber-60, 30%)),
+  editor-line-number: (functions.ref(text-subtle), functions.ref(text-subtle)),
+  editor-line-number-active: (functions.ref(text-default), functions.ref(text-default)),
+  editor-cursor: (functions.ref(text-default), functions.ref(text-default)),
+
+  // Elevation and scrollbars
+  shadow-color: (functions.alpha(neutral-0, 12%), functions.alpha(neutral-0, 50%)),
+  scrollbar-thumb: (functions.ref(neutral-75), functions.ref(neutral-45))
+);
+
+@layer tokens {
+  :root,
+  [data-theme='light'] {
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      color-scheme: dark;
+    }
+  }
+
+  [data-theme='dark'] {
+    color-scheme: dark;
+  }
+
+  @include functions.color-schemes($tokens);
+
+  // Windows contrast themes (A-10.22): the browser forces most colours anyway;
+  // these keep surfaces, selection and focus in the user's system colours.
+  @media (forced-colors: active) {
+    @include functions.every-scheme {
+      --ui-surface-canvas: Canvas;
+      --ui-surface-island: Canvas;
+      --ui-surface-raised: Canvas;
+      --ui-surface-sunken: Field;
+      --ui-surface-hover: transparent;
+      --ui-surface-pressed: transparent;
+      --ui-selected-active: Highlight;
+      --ui-selected-inactive: Highlight;
+      --ui-text-default: CanvasText;
+      --ui-text-muted: CanvasText;
+      --ui-text-subtle: CanvasText;
+      --ui-text-disabled: GrayText;
+      --ui-text-inverse: Canvas;
+      --ui-text-link: LinkText;
+      --ui-text-on-accent: HighlightText;
+      --ui-icon-default: CanvasText;
+      --ui-icon-muted: CanvasText;
+      --ui-icon-disabled: GrayText;
+      --ui-icon-on-accent: HighlightText;
+      --ui-border-subtle: CanvasText;
+      --ui-border-default: CanvasText;
+      --ui-border-strong: CanvasText;
+      --ui-border-focus: Highlight;
+      --ui-accent: Highlight;
+      --ui-accent-hover: Highlight;
+      --ui-accent-pressed: Highlight;
+    }
+  }
+}

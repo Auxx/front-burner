@@ -1,0 +1,69 @@
+// Helpers for writing token files (A-10.15). They emit custom properties only.
+
+@use 'sass:list';
+
+// A reference to another token: `ref(neutral-20)` is `var(--ui-neutral-20)`.
+@function ref($token) {
+  @return var(--ui-#{$token});
+}
+
+// A token at a given opacity, for overlays such as hover. `color-mix()` is used
+// instead of relative colour syntax, which Safari 17 lacks (NF-12.1).
+@function alpha($token, $amount) {
+  @return color-mix(in oklch, ref($token) $amount, transparent);
+}
+
+@mixin -declare($tokens, $index) {
+  @each $name, $values in $tokens {
+    --ui-#{$name}: #{list.nth($values, $index)};
+  }
+}
+
+// Emits a map of `name: (light, dark)` pairs for both colour schemes (A-10.9).
+// The platform's scheme applies unless `data-theme` overrides it, on the root
+// or on any element.
+@mixin color-schemes($tokens) {
+  :root,
+  [data-theme='light'] {
+    @include -declare($tokens, 1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      @include -declare($tokens, 2);
+    }
+  }
+
+  [data-theme='dark'] {
+    @include -declare($tokens, 2);
+  }
+}
+
+// Emits a map of `name: (compact, touch)` pairs for both densities (A-10.11).
+// Touch applies to coarse pointers unless `data-density` overrides it.
+@mixin densities($tokens) {
+  :root,
+  [data-density='compact'] {
+    @include -declare($tokens, 1);
+  }
+
+  @media (pointer: coarse) {
+    :root:not([data-density='compact']) {
+      @include -declare($tokens, 2);
+    }
+  }
+
+  [data-density='touch'] {
+    @include -declare($tokens, 2);
+  }
+}
+
+// Selectors that beat every rule emitted by `color-schemes`, for overrides that
+// apply to both schemes, such as forced colours (A-10.22).
+@mixin every-scheme {
+  :root,
+  :root:not([data-theme='light']),
+  [data-theme] {
+    @content;
+  }
+}
