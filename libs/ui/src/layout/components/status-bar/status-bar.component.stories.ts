@@ -45,3 +45,27 @@ export const LongText: Story = {
     await expect(wrapper.scrollWidth).toBeLessThanOrEqual(wrapper.clientWidth);
   }
 };
+
+/** Long end content is shortened too, and leaves room for the start. */
+export const LongEnd: Story = {
+  render: props => ({
+    props,
+    styles: [ '.narrow { inline-size: 20rem; }' ],
+    template: `
+      <div class="narrow">
+        <ui-status-bar [label]="label">
+          main
+          <span uiStatusBarEnd>Saving docs/a-very-long-folder-name/and-a-long-file-name.md…</span>
+        </ui-status-bar>
+      </div>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    const wrapper = canvasElement.querySelector('.narrow') as HTMLElement;
+    const statusBar = canvasElement.querySelector('ui-status-bar') as HTMLElement;
+    const start = canvasElement.querySelector('ui-status-bar .start') as HTMLElement;
+    await expect(wrapper.scrollWidth).toBeLessThanOrEqual(wrapper.clientWidth);
+    await expect(statusBar.scrollWidth).toBeLessThanOrEqual(statusBar.clientWidth);
+    await expect(start.getBoundingClientRect().width).toBeGreaterThan(0);
+  }
+};

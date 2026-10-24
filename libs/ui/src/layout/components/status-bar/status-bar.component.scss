@@ -3,7 +3,8 @@
     --ui-status-bar-height: var(--ui-control-height-small);
 
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    // The end takes what it needs, up to half the bar.
+    grid-template-columns: minmax(0, 1fr) fit-content(50%);
     align-items: center;
     gap: var(--ui-space-3);
     min-block-size: var(--ui-status-bar-height);
@@ -13,8 +14,9 @@
     white-space: nowrap;
   }
 
-  // Block, not flex: text-overflow only applies to inline content.
-  .start {
+  // Blocks, not flex: text-overflow only applies to inline content.
+  .start,
+  .end {
     overflow: hidden;
     text-overflow: ellipsis;
   }
