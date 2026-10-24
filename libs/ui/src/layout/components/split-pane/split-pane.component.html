@@ -1,0 +1,24 @@
+<div class="pane start" [id]="startId" [hidden]="show() === 'end'">
+  <ng-content select="[uiSplitPaneStart]" />
+</div>
+@if (show() === 'both') {
+  <div
+    class="separator"
+    role="separator"
+    tabindex="0"
+    [attr.aria-orientation]="orientation() === 'horizontal' ? 'vertical' : 'horizontal'"
+    [attr.aria-valuenow]="roundedSize()"
+    [attr.aria-valuemin]="min()"
+    [attr.aria-valuemax]="max()"
+    [attr.aria-controls]="startId"
+    [attr.aria-label]="separatorLabel()"
+    (keydown)="onKeydown($event)"
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="onPointerMove($event)"
+    (pointerup)="onPointerUp($event)"
+    (lostpointercapture)="onPointerUp($event)"
+  ></div>
+}
+<div class="pane end" [hidden]="show() === 'start'">
+  <ng-content select="[uiSplitPaneEnd]" />
+</div>

@@ -1,0 +1,100 @@
+import { Directionality } from '@angular/cdk/bidi';
+import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, model, signal } from '@angular/core';
+
+/** Which panes of a split pane are on screen. */
+export type SplitPaneShow = 'both' | 'start' | 'end';
+
+let nextId = 0;
+
+/**
+ * Two panes and a separator between them. The separator is resized by
+ * dragging, or with the arrow keys, `Home` and `End` (A-10.33, NF-13.6).
+ *
+ * `size` is the start pane's share in percent. A size outside `[min, max]`,
+ * such as a stale one restored from the browser, is shown clamped.
+ */
+@Component({
+  selector: 'ui-split-pane',
+  templateUrl: './split-pane.component.html',
+  styleUrl: './split-pane.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '[style.--ui-split-pane-size]': 'clampedSize() + "%"',
+    '[attr.data-orientation]': 'orientation()'
+  }
+})
+export class SplitPaneComponent {
+  /** `horizontal` puts the panes side by side. */
+  readonly orientation = input<'horizontal' | 'vertical'>('horizontal');
+  /** The start pane's share, in percent. */
+  readonly size = model(50);
+  readonly min = input(10);
+  readonly max = input(90);
+  /** How far one arrow key press moves the separator, in percent. */
+  readonly step = input(5);
+  readonly show = input<SplitPaneShow>('both');
+  /** The accessible name of the separator, such as "Resize file tree". */
+  readonly separatorLabel = input.required<string>();
+
+  protected readonly startId = `ui-split-pane-start-${nextId++}`;
+  protected readonly clampedSize = computed(() => {
+    const size = this.size();
+    return this.clamp(Number.isFinite(size) ? size : 50);
+  });
+  protected readonly roundedSize = computed(() => Math.round(this.clampedSize()));
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly directionality = inject(Directionality);
+  private readonly dragging = signal(false);
+
+  protected onKeydown(event: KeyboardEvent): void {
+    const vertical = this.orientation() === 'vertical';
+    const rtl = this.directionality.valueSignal() === 'rtl';
+    const forward = vertical ? 'ArrowDown' : rtl ? 'ArrowLeft' : 'ArrowRight';
+    const backward = vertical ? 'ArrowUp' : rtl ? 'ArrowRight' : 'ArrowLeft';
+
+    const size = event.key === forward
+      ? this.clampedSize() + this.step()
+      : event.key === backward
+      ? this.clampedSize() - this.step()
+      : event.key === 'Home'
+      ? this.min()
+      : event.key === 'End'
+      ? this.max()
+      : undefined;
+    if (size !== undefined) {
+      event.preventDefault();
+      this.size.set(this.clamp(size));
+    }
+  }
+
+  protected onPointerDown(event: PointerEvent): void {
+    (event.target as HTMLElement).setPointerCapture(event.pointerId);
+    this.dragging.set(true);
+  }
+
+  protected onPointerMove(event: PointerEvent): void {
+    if (!this.dragging()) {
+      return;
+    }
+    const rect = this.host.nativeElement.getBoundingClientRect();
+    const share = this.orientation() === 'vertical'
+      ? (event.clientY - rect.top) / rect.height
+      : this.directionality.valueSignal() === 'rtl'
+      ? (rect.right - event.clientX) / rect.width
+      : (event.clientX - rect.left) / rect.width;
+    this.size.set(this.clamp(share * 100));
+  }
+
+  protected onPointerUp(event: PointerEvent): void {
+    const separator = event.target as HTMLElement;
+    if (separator.hasPointerCapture?.(event.pointerId)) {
+      separator.releasePointerCapture(event.pointerId);
+    }
+    this.dragging.set(false);
+  }
+
+  private clamp(size: number): number {
+    return Math.min(this.max(), Math.max(this.min(), size));
+  }
+}

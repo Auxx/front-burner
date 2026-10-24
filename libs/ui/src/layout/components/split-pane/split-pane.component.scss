@@ -1,0 +1,85 @@
+@layer components {
+  :host {
+    --ui-split-pane-gap: var(--ui-island-gap);
+    --ui-split-pane-handle-size: var(--ui-control-height-small);
+
+    display: grid;
+    grid-template-columns: minmax(0, var(--ui-split-pane-size)) var(--ui-split-pane-gap) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  :host([data-orientation='vertical']) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, var(--ui-split-pane-size)) var(--ui-split-pane-gap) minmax(0, 1fr);
+  }
+
+  .pane {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+
+    // A projected island or split pane fills the pane.
+    > * {
+      flex: 1;
+    }
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  // With one pane on screen, it takes every track.
+  :host(:not(:has(> .separator))) .pane {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+  }
+
+  .separator {
+    position: relative;
+    touch-action: none;
+    cursor: col-resize;
+
+    // The visible gap is narrow; the target is at least 24 px (NF-13.5).
+    &::before {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline: calc((var(--ui-split-pane-gap) - var(--ui-split-pane-handle-size)) / 2);
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: calc(50% - var(--ui-border-width));
+      inline-size: calc(var(--ui-border-width) * 2);
+      background: transparent;
+      transition: background var(--ui-duration-fast) var(--ui-easing-standard);
+    }
+
+    &:hover::after,
+    &:active::after,
+    &:focus-visible::after {
+      background: var(--ui-accent);
+    }
+  }
+
+  :host([data-orientation='vertical']) .separator {
+    cursor: row-resize;
+
+    &::before {
+      inset-inline: 0;
+      inset-block: calc((var(--ui-split-pane-gap) - var(--ui-split-pane-handle-size)) / 2);
+    }
+
+    &::after {
+      inset-inline: 0;
+      inset-block-start: calc(50% - var(--ui-border-width));
+      inline-size: auto;
+      block-size: calc(var(--ui-border-width) * 2);
+    }
+  }
+}

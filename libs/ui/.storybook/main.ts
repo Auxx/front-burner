@@ -19,11 +19,19 @@ const config: StorybookConfig = {
       tsconfig: join(configDir, 'tsconfig.json')
     }
   },
-  // The dev server only serves files under its own root; packages such as the
-  // fonts (_fonts.scss) live in the workspace's node_modules.
   viteFinal: async config => {
     const { mergeConfig } = await import('vite');
-    return mergeConfig(config, { server: { fs: { allow: [ workspaceRoot ] } } });
+    return mergeConfig(config, {
+      // The dev server only serves files under its own root; packages such as
+      // the fonts (_fonts.scss) live in the workspace's node_modules.
+      server: { fs: { allow: [ workspaceRoot ] } },
+      // Entry points that Vite would otherwise find only while a story loads.
+      // A late find bundles them against a second copy of @angular/core, and
+      // their `inject()` calls fail (NG0203) on a cold cache, as in CI.
+      optimizeDeps: {
+        include: [ '@angular/cdk/bidi', '@angular/cdk/layout', '@angular/aria/toolbar' ]
+      }
+    });
   }
 };
 
