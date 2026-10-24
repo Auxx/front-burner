@@ -188,6 +188,12 @@ repository credentials before it can be used.
 lets the user fix or remove them, for example by retrying a failed clone or
 replacing credentials. Linked from the dashboard.
 
+**Repository warning**
+: A problem with a repository that does not stop it from being opened, such
+as refused credentials or a locked key. Shown next to its status on the
+dashboard and the repository management page, with the fix (see
+[REQ-REPO-003](../requirements/repo-manage.md)).
+
 **Last access time**
 : When a user last opened a repository in the editor. Also set when the
 repository is added, so every repository has one. Stored per user, so each

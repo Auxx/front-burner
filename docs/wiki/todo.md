@@ -1,8 +1,6 @@
 Next requirements files to write for the MVP (`docs/product/mvp.md`), in the
 suggested order of work:
 
-- The repository management page (minimal: list, retry clone, replace
-  credentials, remove).
 - Navigation: the web client's header and user menu (Preferences, Log out),
   which REQ-DASH-001 and REQ-GIT-001 rely on but no requirement defines yet.
 

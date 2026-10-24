@@ -96,18 +96,20 @@ browser and in a mobile browser:
 | [REQ-DASH-001](../requirements/dashboard.md)        | Accepted | As written. The **Needs your confirmation** status never occurs.                              |
 | [REQ-REPO-001](../requirements/repo-add.md)         | Draft    | As written. Only Advanced is allowed, so the level dropdown is hidden (AR-40).                |
 
-### 3. Repository management (to write)
+### 3. Repository management (written)
 
-A minimal **repository management page**, which the dashboard already links
-to:
+Written up as [REQ-REPO-003](../requirements/repo-manage.md). A minimal
+**repository management page**, which the dashboard already links to, with a
+settings page per repository:
 
-- list every repository of the user, with its status and error;
-- retry a failed clone;
+- list every repository of the user, with its status, error or warning;
+- retry a failed clone, or clone again when the working copy is missing;
 - replace a repository's credentials, including adding credentials to a
   repository that was added without them, so that it can be pushed;
+- set the repository's commit author override;
 - remove a repository, which deletes its working copy after a confirmation
-  that warns about commits that were not pushed and changes that were not
-  committed. _(My call.)_
+  that lists commits that were not pushed and changes that were not
+  committed, and then asks for the repository name.
 
 Left for later: renaming a repository, changing its clone mode, changing its
 remote, and managing saved credentials and known hosts as lists of their own.

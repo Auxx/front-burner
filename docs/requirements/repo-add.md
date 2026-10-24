@@ -412,8 +412,8 @@ user.
   fails, the repository gets the status **Error** with a short label, for
   example "Clone failed" or "Clone timed out", any partial working copy is
   removed, and the full git error is written to the backend log with secrets
-  removed. How the user sees the full error and retries belongs to the
-  repository management requirement.
+  removed. How the user sees the full error and retries is in
+  [REQ-REPO-003](repo-manage.md).
 - **AR-54** A clone that is interrupted because the backend stops is treated
   as failed when the backend starts again. _(My call.)_
 

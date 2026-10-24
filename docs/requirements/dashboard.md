@@ -35,9 +35,10 @@ administrators.
   dashboard is where such a user first notices the repository, so it must be
   clear that it needs their action.
 - A repository can exist without being ready to open: it may still be cloning,
-  or cloning may have failed, or its credentials may have been rejected. The
+  or cloning may have failed, or its working copy may be missing. The
   dashboard shows this instead of sending the user into an editor that cannot
-  work.
+  work. A repository whose credentials were refused can still be opened, so
+  it shows a warning instead (RM-8).
 - Each user sees only their own repositories (vision). Administrators reach
   other users' repositories through administration pages, not through the
   dashboard.
@@ -66,11 +67,11 @@ opened in the editor.
 |----------------------------|-----------------------------------------------------------------------------------------------|
 | **Needs your confirmation** | An administrator added it on the user's behalf; the user has not confirmed it yet.           |
 | **Cloning**                 | The working copy is still being cloned.                                                      |
-| **Error**                   | The repository cannot be opened because of an error, for example a failed clone or rejected credentials. |
+| **Error**                   | The repository cannot be opened because of an error, for example a failed clone or a missing working copy. |
 
-The exact set of errors, and how the user fixes them, belong to the repository
-management requirement. The dashboard only needs to know that a repository is
-in an error status and a short label for the error.
+The exact set of errors and warnings, and how the user fixes them, are in
+[REQ-REPO-003](repo-manage.md) (RM-6, RM-8). The dashboard only needs to know
+that a repository is in an error status and a short label for the error.
 
 ## Requirements
 
@@ -155,7 +156,9 @@ in an error status and a short label for the error.
   - the **last access time**, labelled "Last accessed" and shown as a
     relative time (for example "3 hours ago"), with the exact date and time
     available on hover or long press. _(My call.)_
-  - the **repository status**, if the repository is not openable.
+  - the **repository status**, if the repository is not openable;
+  - its **repository warnings**, if any, for example "Credentials refused"
+    (RM-8), as a short label. The repository stays openable.
 - **DS-19** The remote shown on the dashboard never contains credentials, even
   if the stored URL has a user name or token in it.
 - **DS-20** Clicking an **openable** repository opens it in the editor (and
@@ -167,8 +170,9 @@ in an error status and a short label for the error.
 - **DS-22** A repository that is **cloning** or in an **error** status:
   - shows its status, and for an error a short label of what went wrong;
   - does **not** open the editor when clicked;
-  - shows a link to that repository on the repository management page, where
-    the user can follow the progress, see the error in full and fix it.
+  - shows a link to that repository's settings page
+    (`/repositories/<id>/settings`, RM-9), where the user can follow the
+    progress, see the error in full and fix it.
 - **DS-23** While at least one listed repository is cloning, the dashboard
   updates its status without the user reloading the page, so that it becomes
   clickable as soon as it is openable. _(My call; the mechanism is left to the
@@ -233,7 +237,7 @@ in an error status and a short label for the error.
 ## Out of scope
 
 - The repository management page, including the full list of repositories,
-  their errors and how to fix them (separate requirement).
+  their errors and how to fix them ([REQ-REPO-003](repo-manage.md)).
 - The add-repository flow and the confirmation flow for repositories added on a
   user's behalf (separate requirements).
 - How administrators add repositories on a user's behalf and see other users'
