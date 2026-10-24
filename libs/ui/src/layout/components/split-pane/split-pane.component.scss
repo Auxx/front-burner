@@ -36,15 +36,19 @@
 
   .separator {
     position: relative;
+    z-index: 1;
     touch-action: none;
     cursor: col-resize;
 
-    // The visible gap is narrow; the target is at least 24 px (NF-13.5).
+    // The visible gap is narrow; the target is at least 24 px (NF-13.5). It
+    // grows into the end pane only, above positioned content such as the
+    // editor, so that the start pane keeps its edge and scrollbar.
     &::before {
       content: '';
       position: absolute;
       inset-block: 0;
-      inset-inline: calc((var(--ui-split-pane-gap) - var(--ui-split-pane-handle-size)) / 2);
+      inset-inline-start: 0;
+      inline-size: max(100%, var(--ui-split-pane-handle-size));
     }
 
     &::after {
@@ -69,7 +73,9 @@
 
     &::before {
       inset-inline: 0;
-      inset-block: calc((var(--ui-split-pane-gap) - var(--ui-split-pane-handle-size)) / 2);
+      inset-block: 0 auto;
+      inline-size: auto;
+      block-size: max(100%, var(--ui-split-pane-handle-size));
     }
 
     &::after {

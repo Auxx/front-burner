@@ -3,7 +3,11 @@ import { expect, userEvent, within } from 'storybook/test';
 import { IslandComponent } from '../island/island.component';
 import { SplitPaneComponent } from './split-pane.component';
 
-const canvas = '.canvas { display: grid; block-size: 24rem; padding: var(--ui-island-gap); }';
+// `.positioned` stands for content such as CodeMirror's `position: relative` editor.
+const canvas = `
+  .canvas { display: grid; block-size: 24rem; padding: var(--ui-island-gap); }
+  .positioned { position: relative; block-size: 100%; }
+`;
 
 const meta: Meta<SplitPaneComponent> = {
   title: 'Layout/Split pane',
@@ -20,7 +24,7 @@ const meta: Meta<SplitPaneComponent> = {
       <div class="canvas">
         <ui-split-pane [(size)]="size" [orientation]="orientation" [show]="show" separatorLabel="Resize first pane">
           <ui-island uiSplitPaneStart heading="First"><p>First pane</p></ui-island>
-          <ui-island uiSplitPaneEnd heading="Second"><p>Second pane</p></ui-island>
+          <ui-island uiSplitPaneEnd heading="Second"><p class="positioned">Second pane</p></ui-island>
         </ui-split-pane>
       </div>
     `
@@ -37,6 +41,15 @@ export const Horizontal: Story = {
     separator.focus();
     await userEvent.keyboard('{ArrowRight}');
     await expect(separator).toHaveAttribute('aria-valuenow', '35');
+
+    // The target is at least 24 px wide (NF-13.5) and grows into the end pane,
+    // above its content, leaving the start island's edge and scrollbar alone.
+    const { left, top, height } = separator.getBoundingClientRect();
+    const y = top + height / 2;
+    const at = (x: number) => canvasElement.ownerDocument.elementFromPoint(x, y);
+    await expect(at(left - 2)).not.toBe(separator);
+    await expect(at(left + 1)).toBe(separator);
+    await expect(at(left + 23)).toBe(separator);
   }
 };
 
