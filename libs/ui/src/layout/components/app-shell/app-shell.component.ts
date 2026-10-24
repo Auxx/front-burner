@@ -117,9 +117,12 @@ export class AppShellComponent {
     this.main().nativeElement.focus();
   }
 
-  /** Closes the drawer, but only for an `Escape` from inside it. */
+  /**
+   * Closes the drawer, but only for an `Escape` from inside it that no control
+   * there has handled, such as a menu or an inline rename closing itself.
+   */
   protected onEscape(event: Event): void {
-    if (this.drawerShown && this.side()?.element.contains(event.target as Node)) {
+    if (this.drawerShown && !event.defaultPrevented && this.side()?.element.contains(event.target as Node)) {
       this.drawerOpen.set(false);
     }
   }

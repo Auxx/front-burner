@@ -184,6 +184,18 @@ describe('AppShellComponent', () => {
     expect(host.drawerOpen()).toBe(true);
   });
 
+  it('ignores an Escape that a control in the drawer has handled', async () => {
+    await setViewport(true);
+    await set(() => host.drawerOpen.set(true));
+
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    escape.preventDefault();
+    (query('.opener') as HTMLElement).dispatchEvent(escape);
+    await fixture.whenStable();
+
+    expect(host.drawerOpen()).toBe(true);
+  });
+
   it('ignores Escape on wide screens', async () => {
     side().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await fixture.whenStable();
