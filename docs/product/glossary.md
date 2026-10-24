@@ -197,9 +197,9 @@ dashboard and the repository management page, with the fix (see
 **Last access time**
 : When a user last opened a repository in the editor. Also set when the
 repository is added, so every repository has one. Stored per user, so each
-user has their own last access time for each of their repositories. Shown
-in the UI with the label "Last accessed" (DS-18). _Avoid_ in other places:
-"accessed", "last used", "last visited".
+user has their own last access time for each of their repositories. _UI
+label_: "Last accessed". _Avoid_: "last opened", "last used", "last
+visited".
 
 **Git hosting provider**
 : A service that hosts remotes and pull requests. At launch: GitHub

@@ -79,8 +79,8 @@ as refused credentials (RM-8).
   the list by repository name and remote as the user types. _(My call.)_
 - **RM-5** It lists all of the user's repositories, in any status, sorted by
   name, ignoring case. Each entry shows the repository's name, its remote as
-  on the dashboard (DS-18, DS-19), its last access time (DS-18), and its
-  status or warning (RM-6 to RM-8). Selecting an entry opens its settings
+  on the dashboard (DS-18, DS-19), its last access time, labelled "Last
+  accessed" (DS-18), and its status or warning (RM-6 to RM-8). Selecting an entry opens its settings
   page; an openable repository also has **Open**, which opens the repository
   screen. A user with no repositories sees the full guide of DS-11 instead
   of the list. _(My call: the list is not paged, since a user has at most 50
