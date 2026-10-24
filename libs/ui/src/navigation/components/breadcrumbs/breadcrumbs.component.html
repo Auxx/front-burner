@@ -1,0 +1,7 @@
+<ol>
+  @for (item of items(); track item; let last = $last) {
+    <li [attr.aria-current]="last ? 'page' : null">
+      <ng-container *ngTemplateOutlet="item.template" />
+    </li>
+  }
+</ol>

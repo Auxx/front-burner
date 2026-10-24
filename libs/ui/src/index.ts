@@ -5,3 +5,5 @@ export { IslandComponent } from './layout/components/island/island.component';
 export { SplitPaneComponent, type SplitPaneShow } from './layout/components/split-pane/split-pane.component';
 export { StatusBarComponent } from './layout/components/status-bar/status-bar.component';
 export { AppShellSideDirective } from './layout/directives/app-shell-side/app-shell-side.directive';
+export { BreadcrumbsComponent } from './navigation/components/breadcrumbs/breadcrumbs.component';
+export { BreadcrumbDirective } from './navigation/directives/breadcrumb/breadcrumb.directive';
