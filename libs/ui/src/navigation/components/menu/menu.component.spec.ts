@@ -84,6 +84,21 @@ class SharedHostComponent {
   readonly showThird = signal(false);
 }
 
+@Component({
+  imports: [ MenuComponent, MenuItemComponent, MenuTriggerDirective ],
+  template: `
+    @if (show()) {
+      <button [uiMenuTrigger]="menu.aria">Row actions</button>
+      <ui-menu #menu="uiMenu">
+        <button uiMenuItem="rename">Rename</button>
+      </ui-menu>
+    }
+  `
+})
+class ConditionalHostComponent {
+  readonly show = signal(true);
+}
+
 describe('MenuComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -112,7 +127,7 @@ describe('MenuComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ HostComponent, GroupHostComponent, SharedHostComponent ]
+      imports: [ HostComponent, GroupHostComponent, SharedHostComponent, ConditionalHostComponent ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(HostComponent);
@@ -248,6 +263,21 @@ describe('MenuComponent', () => {
     expect(document.activeElement).toBe(first);
   });
 
+  it('leaves nothing in the page when it is destroyed while open', async () => {
+    const conditional = TestBed.createComponent(ConditionalHostComponent);
+    await conditional.whenStable();
+    const rowActions = conditional.nativeElement.querySelector('button') as HTMLButtonElement;
+
+    rowActions.click();
+    await conditional.whenStable();
+    expect(inOverlay()).not.toBeNull();
+
+    conditional.componentInstance.show.set(false);
+    await conditional.whenStable();
+
+    expect(document.querySelector('ui-menu')).toBeNull();
+  });
+
   describe('shared between triggers', () => {
     let shared: ComponentFixture<SharedHostComponent>;
     const triggers = () =>
@@ -275,6 +305,30 @@ describe('MenuComponent', () => {
       await press('Escape');
       expect(inOverlay()).toBeNull();
       expect(document.activeElement).toBe(shareTrigger('Second row'));
+    });
+
+    it('moves next to a second trigger that claims it in the same task', async () => {
+      const place = (button: HTMLButtonElement, top: number) =>
+        vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(
+          { top, bottom: top + 20, left: 10, right: 110, width: 100, height: 20, x: 10, y: top } as DOMRect
+        );
+      place(shareTrigger('First row'), 100);
+      place(shareTrigger('Second row'), 300);
+
+      shareTrigger('First row').click();
+      await shared.whenStable();
+      const pane = () => document.querySelector('.cdk-overlay-pane') as HTMLElement;
+      expect(pane().style.top).toBe('120px');
+
+      // A touch tap fires focus and click in one task, with no change
+      // detection in between.
+      shareTrigger('Second row').focus();
+      shareTrigger('Second row').click();
+      await shared.whenStable();
+
+      expect(expandedStates()).toEqual([ 'false', 'true' ]);
+      expect(inOverlay()).not.toBeNull();
+      expect(pane().style.top).toBe('320px');
     });
 
     it('stays open when another trigger is created', async () => {

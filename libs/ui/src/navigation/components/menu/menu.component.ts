@@ -50,21 +50,33 @@ export class MenuComponent<V = unknown> {
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private overlayRef?: OverlayRef;
+  /** The trigger that the overlay is positioned next to. */
+  private origin?: HTMLElement;
 
   constructor() {
+    // The parent is tracked too: a second trigger that claims the open menu
+    // within one task (a touch tap fires focus and click together) turns
+    // `visible` off and on again before this effect runs, so only the parent
+    // shows that the menu has moved.
     effect(() => {
       const visible = this.aria.visible();
-      untracked(() => (visible ? this.attach() : this.detach()));
+      const trigger = this.aria.parent()?.element;
+      untracked(() => (visible ? this.attach(trigger) : this.detach()));
     });
-    inject(DestroyRef).onDestroy(() => this.overlayRef?.dispose());
+    inject(DestroyRef).onDestroy(() => {
+      this.overlayRef?.dispose();
+      // Disposing a DOM portal puts the host back where it was, even after
+      // Angular removed its view; take it out of the page again.
+      this.host.remove();
+    });
   }
 
-  private attach(): void {
-    const trigger = this.aria.parent()?.element;
-    if (!trigger || this.overlayRef?.hasAttached()) {
+  private attach(trigger: HTMLElement | undefined): void {
+    if (!trigger || (this.overlayRef?.hasAttached() && trigger === this.origin)) {
       return;
     }
 
+    this.origin = trigger;
     const positionStrategy = createFlexibleConnectedPositionStrategy(this.injector, trigger)
       .withPositions([
         { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top' },
@@ -76,6 +88,7 @@ export class MenuComponent<V = unknown> {
       .withViewportMargin(8);
 
     if (this.overlayRef) {
+      // Repositions at once when the menu is already shown.
       this.overlayRef.updatePositionStrategy(positionStrategy);
     } else {
       this.overlayRef = createOverlayRef(this.injector, {
@@ -83,7 +96,9 @@ export class MenuComponent<V = unknown> {
         scrollStrategy: createRepositionScrollStrategy(this.injector)
       });
     }
-    this.overlayRef.attach(new DomPortal(this.host));
+    if (!this.overlayRef.hasAttached()) {
+      this.overlayRef.attach(new DomPortal(this.host));
+    }
   }
 
   private detach(): void {
