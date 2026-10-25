@@ -37,10 +37,22 @@ interface Spawned {
 }
 
 async function spawnServer(env: Record<string, string>, options: ServerOptions): Promise<Spawned & { port: number; }> {
-  const dataDir = mkdtempSync(join(tmpdir(), 'front-burner-e2e-'));
-  mkdirSync(dataDir, { recursive: true });
-  const port = await freePort();
-  options.prepare?.(dataDir);
+  // A caller that names the data directory owns it; otherwise it is a temp dir of ours.
+  const ownsDataDir = env['FRONT_BURNER_DATA_DIR'] === undefined;
+  const dataDir = env['FRONT_BURNER_DATA_DIR'] ?? mkdtempSync(join(tmpdir(), 'front-burner-e2e-'));
+  const removeOwnDataDir = () => {
+    if (ownsDataDir) {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  };
+  let port: number;
+  try {
+    port = await freePort();
+    options.prepare?.(dataDir);
+  } catch (error) {
+    removeOwnDataDir();
+    throw error;
+  }
   const child = spawn('node', [ MAIN ], {
     cwd: options.cwd ?? process.cwd(),
     env: {
@@ -64,7 +76,7 @@ async function spawnServer(env: Record<string, string>, options: ServerOptions):
       child.kill('SIGKILL');
       await exited;
     }
-    rmSync(dataDir, { recursive: true, force: true });
+    removeOwnDataDir();
   };
   return { child, dataDir, exited, output: () => collected, cleanup, port };
 }
@@ -77,17 +89,14 @@ function within<T>(promise: Promise<T>, what: string, output: () => string): Pro
   return Promise.race([ promise, timeout ]).finally(() => clearTimeout(timer));
 }
 
-/** Starts the built server on a free port and waits until it is ready. */
-export async function startServerProcess(
-  env: Record<string, string> = {},
-  options: ServerOptions = {}
-): Promise<ServerProcess> {
+async function startOnce(env: Record<string, string>, options: ServerOptions): Promise<ServerProcess> {
   const spawned = await spawnServer(env, options);
   const url = `http://127.0.0.1:${spawned.port}`;
+  let polling = true;
   const ready = (async () => {
-    for (;;) {
+    while (polling) {
       try {
-        if ((await fetch(`${url}/api/health/ready`)).status === 200) {
+        if ((await fetch(`${url}/api/health/ready`, { signal: AbortSignal.timeout(1000) })).status === 200) {
           return;
         }
       } catch {
@@ -102,21 +111,49 @@ export async function startServerProcess(
   try {
     await within(Promise.race([ ready, died ]), 'Waiting for the server', spawned.output);
   } catch (error) {
+    polling = false;
     await spawned.cleanup();
     throw error;
+  } finally {
+    // Nobody waits for the loser of the race.
+    died.catch(() => undefined);
   }
   return {
     url,
     dataDir: spawned.dataDir,
     output: spawned.output,
     stop: async () => {
+      polling = false;
       if (spawned.child.exitCode === null) {
         spawned.child.kill('SIGTERM');
-        await within(spawned.exited, 'Stopping the server', spawned.output).catch(() => undefined);
+        try {
+          await within(spawned.exited, 'Stopping the server (it ignored SIGTERM)', spawned.output);
+        } finally {
+          await spawned.cleanup();
+        }
+      } else {
+        await spawned.cleanup();
       }
-      await spawned.cleanup();
     }
   };
+}
+
+/**
+ * Starts the built server on a free port and waits until it is ready. Retries
+ * once when the port was taken between `freePort` and the server binding it.
+ */
+export async function startServerProcess(
+  env: Record<string, string> = {},
+  options: ServerOptions = {}
+): Promise<ServerProcess> {
+  try {
+    return await startOnce(env, options);
+  } catch (error) {
+    if (env['FRONT_BURNER_PORT'] === undefined && String((error as Error).message).includes('EADDRINUSE')) {
+      return startOnce(env, options);
+    }
+    throw error;
+  }
 }
 
 /** Runs the built server until it exits, for startup failures. */

@@ -1,5 +1,5 @@
 import BetterSqlite3 from 'better-sqlite3';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,6 +33,7 @@ describe('server startup', () => {
     });
     const { code, output } = await runServerToExit({ FRONT_BURNER_DATA_DIR: dataDir });
     expect(code).toBe(1);
+    expect(output).toContain('"step":"data-dir"');
     expect(output).toContain(dataDir);
   });
 
@@ -50,6 +51,7 @@ describe('server startup', () => {
     });
     expect(code).toBe(1);
     expect(output).toContain('"step":"migrations"');
+    expect(output).toContain('newer version of Front Burner');
   });
 
   it('refuses to start when the port is in use', async () => {
@@ -59,6 +61,7 @@ describe('server startup', () => {
     const { port } = holder.address() as { port: number; };
     const { code, output } = await runServerToExit({ FRONT_BURNER_PORT: String(port) });
     expect(code).toBe(1);
+    expect(output).toContain('"step":"http"');
     expect(output).toContain(String(port));
   });
 
@@ -67,6 +70,6 @@ describe('server startup', () => {
     cleanups.push(() => rmSync(cwd, { recursive: true, force: true }));
     const server = await startServerProcess({ FRONT_BURNER_DATA_DIR: 'relative-data' }, { cwd });
     cleanups.push(() => server.stop());
-    expect(server.output()).toContain(join(cwd, 'relative-data'));
+    expect(server.output()).toContain(join(realpathSync(cwd), 'relative-data'));
   });
 });
