@@ -26,6 +26,11 @@ describe('TooltipDirective', () => {
       (element: HTMLButtonElement) => (element.getAttribute('aria-label') ?? element.textContent?.trim()) === text
     ) as HTMLButtonElement;
   const shown = () => [ ...document.querySelectorAll('ui-tooltip') ].map(element => element.textContent?.trim());
+  // jsdom decides `:focus-visible` from the last event, as browsers do.
+  const keyboardFocus = (element: HTMLElement) => {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    element.focus();
+  };
   const pointer = (element: Element, type: 'pointerenter' | 'pointerleave') =>
     element.dispatchEvent(new MouseEvent(type));
 
@@ -76,15 +81,16 @@ describe('TooltipDirective', () => {
   });
 
   it('shows at once on keyboard focus and hides on blur', () => {
-    button('Push').focus();
+    keyboardFocus(button('Push'));
     expect(shown()).toEqual([ 'Nothing to push' ]);
 
-    button('Elsewhere').focus();
+    keyboardFocus(button('Elsewhere'));
     expect(shown()).toEqual([]);
   });
 
   it('hides on Escape without moving the focus', () => {
-    button('Push').focus();
+    keyboardFocus(button('Push'));
+    expect(shown()).toEqual([ 'Nothing to push' ]);
 
     button('Push').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 

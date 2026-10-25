@@ -1,0 +1,74 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    --ui-dialog-max-inline-size: 32rem;
+
+    box-sizing: border-box;
+    display: grid;
+    // Heading and footer stay; a tall content scrolls between them.
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    inline-size: calc(100vw - 2 * var(--ui-space-2));
+    max-inline-size: var(--ui-dialog-max-inline-size);
+    max-block-size: calc(100dvh - 2 * var(--ui-space-2));
+    background: var(--ui-surface-raised);
+    color: var(--ui-text-default);
+    font-size: var(--ui-font-size-ui);
+    line-height: var(--ui-line-height-ui);
+    border: var(--ui-border-width) solid var(--ui-border-default);
+    border-radius: var(--ui-radius-island);
+    box-shadow: var(--ui-shadow-dialog);
+    animation: appear var(--ui-duration-base) var(--ui-easing-standard);
+  }
+
+  :host([data-size='small']) {
+    --ui-dialog-max-inline-size: 24rem;
+  }
+
+  :host([data-size='large']) {
+    --ui-dialog-max-inline-size: 48rem;
+  }
+
+  .header {
+    display: flex;
+    align-items: start;
+    gap: var(--ui-space-2);
+    padding: var(--ui-space-3) var(--ui-space-4);
+  }
+
+  .heading {
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    font-size: var(--ui-font-size-title);
+    font-weight: var(--ui-font-weight-semibold);
+    line-height: var(--ui-line-height-tight);
+    overflow-wrap: anywhere;
+  }
+
+  .header svg {
+    inline-size: var(--ui-icon-size);
+    block-size: var(--ui-icon-size);
+  }
+
+  .body {
+    padding-inline: var(--ui-space-4);
+    overflow: auto;
+    overflow-wrap: anywhere;
+  }
+
+  .body:focus-visible {
+    @include mixins.focus-ring;
+  }
+
+  .footer {
+    padding: var(--ui-space-3) var(--ui-space-4);
+  }
+
+  @keyframes appear {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+  }
+}

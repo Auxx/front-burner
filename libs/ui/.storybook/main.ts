@@ -36,6 +36,7 @@ const config: StorybookConfig = {
           '@angular/aria/toolbar',
           '@angular/cdk/a11y',
           '@angular/cdk/bidi',
+          '@angular/cdk/dialog',
           '@angular/cdk/layout',
           '@angular/cdk/overlay',
           '@angular/cdk/portal',

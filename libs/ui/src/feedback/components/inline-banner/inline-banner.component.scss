@@ -79,6 +79,11 @@
     grid-area: dismiss;
   }
 
+  .dismiss svg {
+    inline-size: var(--ui-icon-size);
+    block-size: var(--ui-icon-size);
+  }
+
   // Wide enough: the actions go on the same row as the message.
   @container (min-width: 36rem) {
     .layout {

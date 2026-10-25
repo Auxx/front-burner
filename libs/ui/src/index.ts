@@ -22,6 +22,8 @@ export { type ChoiceOption } from './controls/models/choice-option.model';
 export { FieldControl } from './controls/models/field-control.model';
 export { BadgeComponent, type BadgeStatus } from './feedback/components/badge/badge.component';
 export { BannerActionsComponent } from './feedback/components/banner-actions/banner-actions.component';
+export { DialogFooterComponent } from './feedback/components/dialog-footer/dialog-footer.component';
+export { DialogComponent } from './feedback/components/dialog/dialog.component';
 export { InlineBannerComponent } from './feedback/components/inline-banner/inline-banner.component';
 export { PopoverComponent } from './feedback/components/popover/popover.component';
 export { ProgressBarComponent } from './feedback/components/progress-bar/progress-bar.component';
@@ -29,6 +31,9 @@ export { SpinnerComponent } from './feedback/components/spinner/spinner.componen
 export { PopoverTriggerDirective } from './feedback/directives/popover-trigger/popover-trigger.directive';
 export { TooltipDirective } from './feedback/directives/tooltip/tooltip.directive';
 export { type Status } from './feedback/models/status.model';
+export { DialogRef } from './feedback/services/dialog/dialog-ref';
+export { type ConfirmOptions, DIALOG_DATA, type DialogOptions } from './feedback/services/dialog/dialog.model';
+export { DialogService } from './feedback/services/dialog/dialog.service';
 export { ActivityBarItemComponent } from './layout/components/activity-bar-item/activity-bar-item.component';
 export { ActivityBarComponent } from './layout/components/activity-bar/activity-bar.component';
 export { AppShellComponent } from './layout/components/app-shell/app-shell.component';

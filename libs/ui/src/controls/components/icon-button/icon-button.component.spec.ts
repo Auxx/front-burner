@@ -38,6 +38,8 @@ describe('IconButtonComponent', () => {
   });
 
   it('shows its label as a tooltip on focus', () => {
+    // jsdom decides `:focus-visible` from the last event, as browsers do.
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     buttons()[0].focus();
 
     expect(document.querySelector('ui-tooltip')?.textContent?.trim()).toBe('Fetch');

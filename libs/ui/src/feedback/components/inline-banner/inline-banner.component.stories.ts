@@ -73,7 +73,10 @@ export const LockedKey: Story = {
     const wrapper = canvasElement.querySelector('.narrow') as HTMLElement;
     await expect(wrapper.scrollWidth).toBeLessThanOrEqual(wrapper.clientWidth);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+    await expect((dismiss.querySelector('svg') as SVGElement).getBoundingClientRect().width).toBeGreaterThan(0);
+
+    await userEvent.click(dismiss);
 
     await expect(canvasElement.querySelector('ui-inline-banner')).toBeNull();
   }

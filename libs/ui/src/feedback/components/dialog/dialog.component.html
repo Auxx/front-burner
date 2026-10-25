@@ -1,0 +1,10 @@
+<header class="header">
+  <h2 class="heading" [id]="context.headingId">{{ heading() }}</h2>
+  @if (closeLabel(); as label) {
+    <button uiIconButton [label]="label" [disabled]="!ref.dismissible()" (click)="ref.close()">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path [attr.d]="close" /></svg>
+    </button>
+  }
+</header>
+<div #body class="body" [attr.tabindex]="scrollableByKeyboard() ? 0 : null"><ng-content /></div>
+<footer class="footer"><ng-content select="[uiDialogFooter]" /></footer>
