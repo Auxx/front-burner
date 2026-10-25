@@ -29,7 +29,8 @@ async function capture(response: Response): Promise<Captured> {
       headers[name] = value;
     }
   });
-  const { requestId: _requestId, ...body } = (await response.json()) as Record<string, unknown>;
+  const body = (await response.json()) as Record<string, unknown>;
+  delete body['requestId'];
   return { status: response.status, body, headers };
 }
 
@@ -69,8 +70,8 @@ describe('administrator onboarding', () => {
   const cleanups: (() => void | Promise<void>)[] = [];
 
   afterEach(async () => {
-    while (cleanups.length > 0) {
-      await cleanups.pop()!();
+    for (const cleanup of cleanups.splice(0).reverse()) {
+      await cleanup();
     }
   });
 
