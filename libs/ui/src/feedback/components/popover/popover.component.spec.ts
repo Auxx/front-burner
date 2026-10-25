@@ -95,6 +95,46 @@ describe('PopoverComponent', () => {
     expect(popover().hidden).toBe(true);
   });
 
+  it('closes and hands the focus to its trigger when Tab leaves its last element', async () => {
+    trigger().click();
+    await stable();
+
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    button('Try again').dispatchEvent(tab);
+    await stable();
+
+    expect(popover().hidden).toBe(true);
+    // The browser then moves on from the trigger, so Tab is not cancelled.
+    expect(tab.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  it('closes and returns to its trigger on Shift+Tab from its first element', async () => {
+    trigger().click();
+    await stable();
+
+    const shiftTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    button('Try again').dispatchEvent(shiftTab);
+    await stable();
+
+    expect(popover().hidden).toBe(true);
+    expect(shiftTab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  it('leaves Tab alone between its own elements', async () => {
+    trigger().click();
+    await stable();
+    const first = document.createElement('button');
+    first.textContent = 'First';
+    popover().prepend(first);
+
+    first.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    await stable();
+
+    expect(popover().hidden).toBe(false);
+  });
+
   it('toggles from its trigger', async () => {
     trigger().click();
     await stable();

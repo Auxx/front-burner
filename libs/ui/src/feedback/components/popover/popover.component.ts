@@ -32,7 +32,9 @@ const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:
  *
  * Opening moves the focus inside it (to its first focusable element, or to the
  * panel itself). Escape closes it and returns the focus to the trigger; a
- * click or the focus going elsewhere closes it without moving the focus.
+ * click or the focus going elsewhere closes it without moving the focus. Tab
+ * out of either end closes it too and carries on from the trigger, as if the
+ * popover sat right after it in the page (WCAG 2.4.3).
  * While it is open, it is moved into an overlay next to its trigger, so that
  * no ancestor clips it.
  */
@@ -49,6 +51,8 @@ const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:
     '[attr.aria-label]': 'label()',
     '[hidden]': '!open()',
     '(keydown.escape)': 'closeAndReturnFocus($event)',
+    '(keydown.tab)': 'onTab($event)',
+    '(keydown.shift.tab)': 'onTab($event)',
     '(focusout)': 'onFocusout($event)'
   }
 })
@@ -94,6 +98,26 @@ export class PopoverComponent {
 
   protected closeAndReturnFocus(event: Event): void {
     event.stopPropagation();
+    this.open.set(false);
+    this.trigger?.focus();
+  }
+
+  /**
+   * The popover sits at the end of `<body>`, so the browser would move on to
+   * the end of the page. Shift+Tab from its first element goes back to the
+   * trigger; Tab from its last one focuses the trigger and lets the browser
+   * move on from there.
+   */
+  protected onTab(event: Event): void {
+    const keyboardEvent = event as KeyboardEvent;
+    const focusable = [ ...this.host.querySelectorAll<HTMLElement>(FOCUSABLE) ];
+    const edge = keyboardEvent.shiftKey ? focusable[0] : focusable[focusable.length - 1];
+    if (focusable.length && keyboardEvent.target !== edge) {
+      return;
+    }
+    if (keyboardEvent.shiftKey) {
+      keyboardEvent.preventDefault();
+    }
     this.open.set(false);
     this.trigger?.focus();
   }
