@@ -15,6 +15,12 @@ describe('appRoutes', () => {
     const harness = await RouterTestingHarness.create();
     const navigation = harness.navigateByUrl(url);
     const http = TestBed.inject(HttpTestingController);
+    // A 404 from the state endpoint means onboarding is completed (AO-3).
+    await vi.waitFor(() =>
+      expect(
+        http.match('/api/v1/onboarding').map(request => request.flush(null, { status: 404, statusText: 'Not Found' }))
+      ).not.toHaveLength(0)
+    );
     // The language file is requested once the lazy feature has loaded.
     await vi.waitFor(() => expect(http.match('i18n/en.json').map(request => request.flush(en))).not.toHaveLength(0));
     await navigation;
