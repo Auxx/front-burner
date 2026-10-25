@@ -184,7 +184,10 @@ icons.mjs sprite --write
   `ICON_NAMES` in `libs/ui/src/content/models/icon-name.model.ts`, then run
   `sprite --write`. `sprite` writes only with `--write`; without it, it exits 1
   when the sprite is out of date. A spec fails while the sprite and the list
-  differ, including after a Codicons upgrade that changes an icon.
+  differ, including after a Codicons upgrade that changes an icon. The
+  `ai-tools` test target takes the installed `@vscode/codicons` version as an
+  input, so Nx reruns that spec after an upgrade rather than replaying a cached
+  pass.
 
 ## `doc-ids`
 

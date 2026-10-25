@@ -1,6 +1,8 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildSprite, findIcons, loadIcons, readIcon, readIconList, UI_ICON_LIST, UI_SPRITE } from './icons.mjs';
+import { WORKSPACE_ROOT } from './workspace.mjs';
 
 describe('icons', () => {
   const icons = loadIcons();
@@ -46,6 +48,27 @@ describe('icons', () => {
     expect(sprite).toContain('<symbol id="warning" viewBox="0 0 16 16"><path d="M14.831');
     expect(sprite).not.toContain('width=');
     expect(() => buildSprite(icons, [ 'close', 'nope' ])).toThrow('Unknown Codicon: nope');
+  });
+
+  it('prefixes the ids inside an icon with its name, and the references to them', () => {
+    mkdirSync(join(WORKSPACE_ROOT, 'tmp'), { recursive: true });
+    const fixture = mkdtempSync(join(WORKSPACE_ROOT, 'tmp', 'ai-tools-icons-'));
+    try {
+      mkdirSync(join(fixture, 'src/icons'), { recursive: true });
+      writeFileSync(
+        join(fixture, 'src/icons/clipped.svg'),
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><defs><clipPath id="a"><path d="M0 0h16v16H0z"/></clipPath>'
+          + '<path id="b" d="M1 1h14v14H1z"/></defs><g clip-path="url(#a)"><use href="#b"/></g></svg>'
+      );
+      const sprite = buildSprite([ { name: 'clipped', aliases: [] } ], [ 'clipped' ], fixture);
+      expect(sprite).toContain('<clipPath id="clipped--a">');
+      expect(sprite).toContain('<path id="clipped--b"');
+      expect(sprite).toContain('clip-path="url(#clipped--a)"');
+      expect(sprite).toContain('<use href="#clipped--b"/>');
+      expect(sprite).toContain('<symbol id="clipped" viewBox="0 0 16 16">');
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
   });
 
   it('writes no "--" inside a comment, which would make the sprite invalid XML', () => {

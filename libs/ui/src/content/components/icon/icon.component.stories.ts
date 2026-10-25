@@ -23,7 +23,7 @@ export const Default: Story = {
 /** An icon that carries meaning on its own, such as an ignored file's mark (FB). */
 export const Labelled: Story = {
   render: () => ({
-    template: `<ui-icon name="info" label="Ignored by git" />`
+    template: `<ui-icon name="diff-ignored" label="Ignored by git" />`
   }),
   play: async () => {
     await expect(screen.getByRole('img', { name: 'Ignored by git' })).toBeVisible();

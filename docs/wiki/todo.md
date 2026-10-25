@@ -37,16 +37,3 @@ documents:
   measured 40–56 ms per keystroke in emulation, at the limit (A-8.11).
 - Spike 4: Git at 100,000 files (A-5.14). Needs a Linux kernel clone on hardware
   close to the reference host.
-
-## Deferred minors after the last run
-
-- The sprite URL has no version, so after an upgrade a browser may show an old
-  cached sprite. It needs a caching rule when the backend serves static files.
-- A Codicons upgrade doesn't re-run the cached sprite check; the fix is one
-  `externalDependencies` line in the test target.
-- `buildSprite`'s prefixing of ids inside an icon has no test.
-- Some specs still put a raw `<svg>` in icon buttons.
-- No story has a long repository name with no break points, and the RC-21 story
-  uses an island rather than a dialog.
-- The `Labelled` icon story should use `diff-ignored`, and A-10.48 sits between
-  A-10.35 and A-10.36 in the doc.

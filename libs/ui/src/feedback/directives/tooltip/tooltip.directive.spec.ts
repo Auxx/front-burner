@@ -1,17 +1,18 @@
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { ButtonComponent } from '../../../controls/components/button/button.component';
 import { IconButtonComponent } from '../../../controls/components/icon-button/icon-button.component';
 import { TOOLTIP_HIDE_DELAY_MS, TOOLTIP_SHOW_DELAY_MS } from '../../utils/tooltip/tooltip.util';
 import { TooltipDirective } from './tooltip.directive';
 
 @Component({
-  imports: [ ButtonComponent, IconButtonComponent, TooltipDirective ],
+  imports: [ ButtonComponent, IconButtonComponent, IconComponent, TooltipDirective ],
   template: `
     <button uiButton unavailable uiTooltip="Nothing to push">Push</button>
     <button uiIconButton label="Ignored" uiTooltip="Ignored by .gitignore. Git won't commit this file." uiTooltipShowOnClick>
-      <svg aria-hidden="true"></svg>
+      <ui-icon name="diff-ignored" />
     </button>
     <button>Elsewhere</button>
   `

@@ -52,7 +52,12 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
 - **A-1.1** One container runs **one Node.js process** (NF-4.2). It serves the
   web client's static files and the API from the same origin, runs the job
   runner, holds the push channel connections and keeps unlocked keys in memory.
-  Nothing in the design coordinates several processes.
+  Nothing in the design coordinates several processes. Static files whose name
+  carries a content hash (the build's scripts and styles) are served with
+  `Cache-Control: public, max-age=31536000, immutable`; every other static file,
+  such as `index.html` and the files under `assets/` (the icon sprite, A-10.48),
+  with `Cache-Control: no-cache` and an `ETag`, so that a browser revalidates it
+  and picks up a new version right after an upgrade.
 - **A-1.2** Git is the `git` program, run as a child process (A-5). Every git
   network connection goes through an egress proxy inside the backend process
   (A-5.7).

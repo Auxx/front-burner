@@ -16,7 +16,12 @@
       "cache": true,
       "inputs": [
         "default",
-        "^production"
+        "^production",
+        {
+          "externalDependencies": [
+            "@vscode/codicons"
+          ]
+        }
       ],
       "options": {
         "command": "vitest run",

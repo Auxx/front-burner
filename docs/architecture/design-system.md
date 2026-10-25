@@ -331,6 +331,11 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   self-hosted SVG sprite (`img-src 'self'`) and drawn by the `Icon` component
   with `fill: currentColor`. Icons that only decorate are `aria-hidden`; an
   icon-only button takes a required accessible name.
+- **A-10.36** Fonts are **Inter** for the UI and **JetBrains Mono** for code,
+  both under the SIL Open Font License, from the `@fontsource-variable` packages
+  and served from the web client's own origin (`font-src 'self'`) with
+  `font-display: swap`. They are variable fonts: one `woff2` file per script
+  covers every weight, and the browser downloads only the scripts a page uses.
 - **A-10.48** `ui-icon` draws a symbol of our own sprite,
   `libs/ui/src/assets/icons.svg`, with `<use>`. The sprite holds only the icons
   listed in `ICON_NAMES` (typed as `IconName`), built from the package's SVG
@@ -340,15 +345,11 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   and `lock`. The `ui` library's build does not ship the sprite: the web
   client's build copies `libs/ui/src/assets/icons.svg` to `assets/` (an asset
   entry `{ glob: 'icons.svg', input: 'libs/ui/src/assets', output: 'assets' }`)
-  and serves it at `assets/icons.svg`, the default of `ICON_SPRITE_URL`; its
+  and serves it at `assets/icons.svg`, the default of `ICON_SPRITE_URL`. The URL
+  carries no version, so the backend serves it to be revalidated (A-1.1); its
   licence notices carry the Codicons CC-BY-4.0 attribution. Storybook serves the
   sprite from its static files. An icon is decorative unless it has a `label`; a
   component that takes a leading icon projects a `ui-icon`.
-- **A-10.36** Fonts are **Inter** for the UI and **JetBrains Mono** for code,
-  both under the SIL Open Font License, from the `@fontsource-variable` packages
-  and served from the web client's own origin (`font-src 'self'`) with
-  `font-display: swap`. They are variable fonts: one `woff2` file per script
-  covers every weight, and the browser downloads only the scripts a page uses.
 
 ## A-10: Workflow and testing
 
