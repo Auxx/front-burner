@@ -28,12 +28,15 @@ export { InlineBannerComponent } from './feedback/components/inline-banner/inlin
 export { PopoverComponent } from './feedback/components/popover/popover.component';
 export { ProgressBarComponent } from './feedback/components/progress-bar/progress-bar.component';
 export { SpinnerComponent } from './feedback/components/spinner/spinner.component';
+export { ToastOutletComponent } from './feedback/components/toast-outlet/toast-outlet.component';
 export { PopoverTriggerDirective } from './feedback/directives/popover-trigger/popover-trigger.directive';
 export { TooltipDirective } from './feedback/directives/tooltip/tooltip.directive';
 export { type Status } from './feedback/models/status.model';
 export { DialogRef } from './feedback/services/dialog/dialog-ref';
 export { type ConfirmOptions, DIALOG_DATA, type DialogOptions } from './feedback/services/dialog/dialog.model';
 export { DialogService } from './feedback/services/dialog/dialog.service';
+export { type ToastAction, type ToastOptions } from './feedback/services/toast/toast.model';
+export { TOAST_DURATION_MS, ToastService } from './feedback/services/toast/toast.service';
 export { ActivityBarItemComponent } from './layout/components/activity-bar-item/activity-bar-item.component';
 export { ActivityBarComponent } from './layout/components/activity-bar/activity-bar.component';
 export { AppShellComponent } from './layout/components/app-shell/app-shell.component';

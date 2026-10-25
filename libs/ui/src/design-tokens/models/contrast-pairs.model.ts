@@ -117,6 +117,9 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
     graphic(`${status}-icon`, 'surface-island')
   ]),
 
+  // The status edge and icon of a toast on its raised surface
+  ...statuses.map(status => graphic(`${status}-icon`, 'surface-raised')),
+
   // Git status in the file tree, also on selected rows
   ...gitStatuses.flatMap(status =>
     [ 'surface-island', 'selected-active', 'selected-inactive' ].map(bg => text(`git-${status}`, bg))
