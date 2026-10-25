@@ -1,0 +1,28 @@
+{
+  "name": "web-core",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/web/core/src",
+  "prefix": "core",
+  "projectType": "library",
+  "tags": [
+    "scope:web",
+    "type:data-access"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/web/core"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

@@ -38,6 +38,9 @@
       ],
       "@front-burner/web-api-client": [
         "./libs/web/api-client/src/index.ts"
+      ],
+      "@front-burner/web-core": [
+        "./libs/web/core/src/index.ts"
       ]
     }
   },
