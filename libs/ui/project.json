@@ -4,7 +4,10 @@
   "sourceRoot": "libs/ui/src",
   "prefix": "ui",
   "projectType": "library",
-  "tags": [],
+  "tags": [
+    "scope:web",
+    "type:ui"
+  ],
   "targets": {
     "build": {
       "executor": "@nx/angular:ng-packagr-lite",

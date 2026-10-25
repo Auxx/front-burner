@@ -26,11 +26,80 @@ export default [
                     allow: [
                         "^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$"
                     ],
+                    // A-2.4. Every constraint whose source tags match applies,
+                    // so one import can be refused by its scope or its type.
                     depConstraints: [
                         {
-                            sourceTag: "*",
+                            sourceTag: "scope:shared",
+                            onlyDependOnLibsWithTags: [
+                                "scope:shared"
+                            ]
+                        },
+                        {
+                            sourceTag: "scope:server",
+                            onlyDependOnLibsWithTags: [
+                                "scope:server",
+                                "scope:shared"
+                            ]
+                        },
+                        {
+                            sourceTag: "scope:web",
+                            onlyDependOnLibsWithTags: [
+                                "scope:web",
+                                "scope:shared"
+                            ]
+                        },
+                        // Workspace tooling may read any project; no other
+                        // scope lists it, so nothing imports it.
+                        {
+                            sourceTag: "scope:tools",
                             onlyDependOnLibsWithTags: [
                                 "*"
+                            ]
+                        },
+                        {
+                            allSourceTags: [
+                                "scope:server",
+                                "type:core"
+                            ],
+                            notDependOnLibsWithTags: [
+                                "type:feature"
+                            ]
+                        },
+                        {
+                            allSourceTags: [
+                                "scope:web",
+                                "type:feature"
+                            ],
+                            notDependOnLibsWithTags: [
+                                "type:feature"
+                            ]
+                        },
+                        {
+                            sourceTag: "type:domain",
+                            onlyDependOnLibsWithTags: [
+                                "type:data-access",
+                                "type:ui",
+                                "scope:shared"
+                            ]
+                        },
+                        {
+                            sourceTag: "type:ui",
+                            onlyDependOnLibsWithTags: [
+                                "type:util"
+                            ]
+                        },
+                        {
+                            sourceTag: "type:contracts",
+                            onlyDependOnLibsWithTags: [
+                                "type:contracts",
+                                "type:util"
+                            ]
+                        },
+                        {
+                            sourceTag: "type:util",
+                            onlyDependOnLibsWithTags: [
+                                "type:util"
                             ]
                         }
                     ]
