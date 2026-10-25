@@ -10,9 +10,14 @@ export interface Database {
 
 export function openDatabase(file: string): Database {
   const sqlite = new BetterSqlite3(file);
-  sqlite.pragma('journal_mode = WAL');
-  sqlite.pragma('foreign_keys = ON');
-  sqlite.pragma('synchronous = NORMAL');
-  sqlite.pragma('busy_timeout = 5000');
+  try {
+    sqlite.pragma('journal_mode = WAL');
+    sqlite.pragma('foreign_keys = ON');
+    sqlite.pragma('synchronous = NORMAL');
+    sqlite.pragma('busy_timeout = 5000');
+  } catch (error) {
+    sqlite.close();
+    throw error;
+  }
   return { sqlite, db: drizzle(sqlite, { schema }) };
 }

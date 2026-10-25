@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -20,6 +20,13 @@ describe('migrations', () => {
     database.sqlite.close();
     rmSync(dir, { recursive: true, force: true });
   });
+
+  function journalFolder(content: string): string {
+    const folder = mkdtempSync(join(dir, 'journal-'));
+    mkdirSync(join(folder, 'meta'));
+    writeFileSync(join(folder, 'meta', '_journal.json'), content);
+    return folder;
+  }
 
   const tables = () =>
     database.sqlite
@@ -60,6 +67,22 @@ describe('migrations', () => {
 
     expect(error).toBeInstanceOf(NewerSchemaError);
     expect((error as NewerSchemaError).unknown).toEqual([ 2000 ]);
+  });
+
+  it('names the journal when it is not valid JSON', () => {
+    const folder = journalFolder('{ not json');
+
+    expect(() => applyMigrations(database, folder)).toThrow(/_journal\.json is not valid JSON/);
+    applyMigrations(database, fixture('migrations-one'));
+    expect(() => assertNoNewerMigrations(database, folder)).toThrow(/_journal\.json is not valid JSON/);
+  });
+
+  it('names the journal when it has no entries array', () => {
+    const folder = journalFolder('{"version":"7"}');
+
+    expect(() => applyMigrations(database, folder)).toThrow(/_journal\.json has no "entries" array/);
+    applyMigrations(database, fixture('migrations-one'));
+    expect(() => assertNoNewerMigrations(database, folder)).toThrow(/_journal\.json has no "entries" array/);
   });
 
   it('refuses any applied migration when the folder has none', () => {

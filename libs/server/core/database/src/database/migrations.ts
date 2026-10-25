@@ -29,7 +29,15 @@ function knownMigrations(migrationsFolder: string): Set<number> {
   if (!path) {
     return new Set();
   }
-  const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { when: number; }[]; };
+  let journal: { entries?: { when: number; }[]; };
+  try {
+    journal = JSON.parse(readFileSync(path, 'utf8')) as typeof journal;
+  } catch (error) {
+    throw new Error(`The migration journal ${path} is not valid JSON: ${(error as Error).message}`);
+  }
+  if (!Array.isArray(journal?.entries)) {
+    throw new Error(`The migration journal ${path} has no "entries" array`);
+  }
   return new Set(journal.entries.map(entry => entry.when));
 }
 
@@ -55,5 +63,6 @@ export function applyMigrations(database: Database, migrationsFolder: string): v
   if (!journalPath(migrationsFolder)) {
     return;
   }
+  knownMigrations(migrationsFolder); // validates the journal before Drizzle reads it
   migrate(database.db, { migrationsFolder });
 }

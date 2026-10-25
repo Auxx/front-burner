@@ -13,6 +13,18 @@ function issuesOf(env: Record<string, string | undefined>, options = {}) {
 }
 
 describe('loadConfig', () => {
+  it('keeps the warnings in the error', () => {
+    try {
+      loadConfig({ FRONT_BURNER_PORT: 'x', FRONT_BURNER_PROT: '1' });
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      expect((error as ConfigError).issues.map(i => i.variable)).toEqual([ 'FRONT_BURNER_PORT' ]);
+      expect((error as ConfigError).warnings).toEqual([ 'Unknown variable FRONT_BURNER_PROT is ignored.' ]);
+      return;
+    }
+    throw new Error('loadConfig did not throw');
+  });
+
   it('uses the defaults', () => {
     const { config, warnings } = loadConfig({});
     expect(config).toEqual({

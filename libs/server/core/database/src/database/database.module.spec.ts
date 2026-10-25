@@ -6,8 +6,17 @@ import { DatabaseModule } from './database.module';
 import { openDatabase } from './open-database';
 
 describe('DatabaseModule', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'fb-db-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it('closes the connection when the application closes', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'fb-db-'));
     const database = openDatabase(join(dir, 'test.db'));
     const app = (await Test.createTestingModule({ imports: [ DatabaseModule.forRoot(database) ] }).compile())
       .createNestApplication();
@@ -17,6 +26,5 @@ describe('DatabaseModule', () => {
     await app.close();
 
     expect(database.sqlite.open).toBe(false);
-    rmSync(dir, { recursive: true, force: true });
   });
 });

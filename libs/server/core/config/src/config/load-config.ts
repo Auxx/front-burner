@@ -17,7 +17,7 @@ export interface ConfigIssue {
 
 /** Thrown with every invalid variable. Messages never contain a secret value. */
 export class ConfigError extends Error {
-  constructor(readonly issues: ConfigIssue[]) {
+  constructor(readonly issues: ConfigIssue[], readonly warnings: string[] = []) {
     super(
       `Invalid configuration:\n${issues.map(issue => `- ${issue.variable}: ${issue.message}`).join('\n')}`
     );
@@ -118,7 +118,7 @@ export function loadConfig(
   }
 
   if (!parsed.success || issues.length > 0) {
-    throw new ConfigError(issues);
+    throw new ConfigError(issues, warnings);
   }
 
   const values = parsed.data;
