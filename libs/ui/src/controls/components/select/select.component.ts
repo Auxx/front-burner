@@ -74,6 +74,7 @@ export class SelectComponent<V> extends FieldControl {
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 }
   ];
 
+  private readonly combobox = viewChild.required(Combobox);
   private readonly trigger = viewChild.required<ElementRef<HTMLElement>>('trigger');
   private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
 
@@ -101,6 +102,9 @@ export class SelectComponent<V> extends FieldControl {
   protected onBlur(event: FocusEvent): void {
     const panel = this.panel()?.nativeElement;
     if (!(event.relatedTarget instanceof Node && panel?.contains(event.relatedTarget))) {
+      // Aria closes the list a task later, which would emit from a destroyed
+      // combobox (NG0953) if the select is removed meanwhile.
+      this.combobox().expanded.set(false);
       this.touch.emit();
     }
   }

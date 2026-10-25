@@ -181,6 +181,22 @@ describe('SelectComponent', () => {
     expect(host.model.level().touched()).toBe(true);
   });
 
+  it('emits nothing once it is destroyed', async () => {
+    const warn = vi.spyOn(console, 'warn');
+    await open();
+    const element = trigger();
+    // Browsers blur a focused element while it is being removed; jsdom does
+    // not, so the focus is moved out first.
+    element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    element.dispatchEvent(new FocusEvent('blur'));
+
+    fixture.destroy();
+    await new Promise(resolve => setTimeout(resolve));
+
+    expect(warn.mock.calls.flat().join(' ')).not.toContain('NG0953');
+    warn.mockRestore();
+  });
+
   it('is described and marked invalid by its field', async () => {
     host.error.set('Choose a level');
     await fixture.whenStable();
