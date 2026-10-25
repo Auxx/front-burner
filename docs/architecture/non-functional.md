@@ -351,7 +351,9 @@ These rules add to the security rules already in the requirements.
 - **NF-11.4** In addition to LG-65, AO-37 and AR-55: 600 API requests per user
   per minute; 60 requests per IP address per minute on unauthenticated
   endpoints; at most 3 clones waiting or running per user. Refused requests get
-  `429` with `Retry-After`.
+  `429` with `Retry-After`. The onboarding endpoints that check the setup token
+  share a limit of 10 requests per IP address per minute, which stays on after
+  onboarding is completed (AO-37).
 - **NF-11.5** Request bodies are limited to 2 MB for JSON (enough for a 1 MB
   Markdown file, NF-1.5) and to the upload limit (NF-1.6) for uploads.
 

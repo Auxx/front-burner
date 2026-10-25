@@ -1,6 +1,7 @@
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { RateLimitGroup } from './rate-limit-group.decorator';
 import { RateLimitModule } from './rate-limit.module';
 
 @Controller('ping')
@@ -11,13 +12,36 @@ class PingController {
   }
 }
 
+@Controller('first')
+class FirstController {
+  @Get('grouped')
+  @RateLimitGroup('setup-token')
+  grouped(): { ok: boolean; } {
+    return { ok: true };
+  }
+
+  @Get('plain')
+  plain(): { ok: boolean; } {
+    return { ok: true };
+  }
+}
+
+@Controller('second')
+class SecondController {
+  @Get('grouped')
+  @RateLimitGroup('setup-token')
+  grouped(): { ok: boolean; } {
+    return { ok: true };
+  }
+}
+
 describe('AppThrottlerGuard', () => {
   let app: INestApplication;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [ RateLimitModule ],
-      controllers: [ PingController ]
+      controllers: [ PingController, FirstController, SecondController ]
     }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -52,5 +76,24 @@ describe('AppThrottlerGuard', () => {
     }
     const limited = await request(app.getHttpServer()).get('/ping');
     expect(Object.keys(limited.headers).filter(h => h.startsWith('x-ratelimit'))).toEqual([]);
+  });
+
+  it('routes of a group share 10 requests per minute', async () => {
+    for (let i = 0; i < 5; i++) {
+      expect((await request(app.getHttpServer()).get('/first/grouped')).status).toBe(200);
+      expect((await request(app.getHttpServer()).get('/second/grouped')).status).toBe(200);
+    }
+    const limited = await request(app.getHttpServer()).get('/first/grouped');
+    expect(limited.status).toBe(429);
+    expect(limited.headers['retry-after']).toMatch(/^[1-9]\d*$/);
+  });
+
+  it('a route without a group keeps 60 per minute', async () => {
+    for (let i = 0; i < 10; i++) {
+      await request(app.getHttpServer()).get('/first/grouped');
+    }
+    for (let i = 0; i < 11; i++) {
+      expect((await request(app.getHttpServer()).get('/first/plain')).status).toBe(200);
+    }
   });
 });
