@@ -1,8 +1,7 @@
 # shared-contracts
 
-This library was generated with [Nx](https://nx.dev).
+The Zod schemas and types shared by the backend and the clients: the `ApiError`
+body, the error codes and the health status. The OpenAPI document and the web
+client's API client are generated from them.
 
-## Running unit tests
-
-Run `nx test shared-contracts` to execute the unit tests via
-[Vitest](https://vitest.dev/).
+Tested with Vitest: `nx test shared-contracts`.

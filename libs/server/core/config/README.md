@@ -1,8 +1,6 @@
 # server-core-config
 
-This library was generated with [Nx](https://nx.dev).
+Reads and validates the backend's configuration from `FRONT_BURNER_*`
+environment variables (A-1.15) and provides it to Nest as `Config`.
 
-## Running unit tests
-
-Run `nx test server-core-config` to execute the unit tests via
-[Vitest](https://vitest.dev/).
+Tested with Vitest: `nx test server-core-config`.
