@@ -1,0 +1,18 @@
+@if (icon(); as name) {
+  <ui-icon class="icon" [name]="name" />
+}
+@if (heading(); as text) {
+  @switch (headingLevel()) {
+    @case (3) {
+      <h3 class="heading">{{ text }}</h3>
+    }
+    @case (4) {
+      <h4 class="heading">{{ text }}</h4>
+    }
+    @default {
+      <h2 class="heading">{{ text }}</h2>
+    }
+  }
+}
+<div class="message"><ng-content /></div>
+<ng-content select="[uiEmptyStateActions]" />

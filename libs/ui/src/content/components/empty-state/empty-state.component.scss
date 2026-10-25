@@ -1,0 +1,34 @@
+@layer components {
+  :host {
+    --ui-empty-state-icon-size: 2rem;
+
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ui-space-3);
+    block-size: 100%;
+    padding: var(--ui-space-6);
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .icon {
+    --ui-icon-size: var(--ui-empty-state-icon-size);
+
+    color: var(--ui-icon-muted);
+  }
+
+  .heading {
+    margin: 0;
+    font-size: var(--ui-font-size-title);
+    font-weight: var(--ui-font-weight-semibold);
+    line-height: var(--ui-line-height-tight);
+  }
+
+  .message {
+    max-inline-size: 36rem;
+    color: var(--ui-text-muted);
+  }
+}
