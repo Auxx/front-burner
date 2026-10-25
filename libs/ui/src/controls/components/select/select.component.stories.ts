@@ -193,3 +193,36 @@ export const Disabled: Story = {
     `
   })
 };
+
+/** A click on a disabled option keeps the focus on the trigger, so Escape closes the list. */
+export const DisabledOption: Story = {
+  render: () => ({
+    props: {
+      options: levels.map(level => ({ ...level, disabled: level.value === 'guided' })),
+      value: 'advanced'
+    },
+    styles: [ width ],
+    template: `
+      <div class="form">
+        <ui-field label="Git control level">
+          <ui-select [options]="options" [(value)]="value" />
+        </ui-field>
+      </div>
+    `
+  }),
+  play: async () => {
+    const trigger = screen.getByRole('combobox', { name: 'Git control level' });
+
+    await userEvent.click(trigger);
+    await userEvent.click(await waitFor(() => screen.getByRole('option', { name: /Guided/ })));
+    await expect(trigger).toHaveFocus();
+
+    await userEvent.keyboard('{Escape}');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await expect(trigger).toHaveTextContent('Advanced');
+
+    await userEvent.click(trigger);
+    await userEvent.click(await waitFor(() => screen.getByRole('option', { name: /Simple/ })));
+    await expect(trigger).toHaveTextContent('Simple');
+  }
+};

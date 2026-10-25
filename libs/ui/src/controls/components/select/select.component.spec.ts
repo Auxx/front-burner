@@ -197,6 +197,24 @@ describe('SelectComponent', () => {
     warn.mockRestore();
   });
 
+  it('keeps the focus on the trigger when the list is pressed', async () => {
+    await open();
+    const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+
+    option('Guided').dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('closes when the overlay closes itself', async () => {
+    await open();
+
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+    await fixture.whenStable();
+
+    expect(trigger().getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('is described and marked invalid by its field', async () => {
     host.error.set('Choose a level');
     await fixture.whenStable();
@@ -218,6 +236,15 @@ describe('SelectComponent', () => {
     expect(trigger().getAttribute('aria-expanded')).toBe('false');
   });
 
+  it('is named by aria-label outside a field', async () => {
+    const templateFixture = TestBed.createComponent(TemplateHostComponent);
+    await templateFixture.whenStable();
+    const select = templateFixture.nativeElement.querySelector('ui-select') as HTMLElement;
+
+    expect(select.querySelector('[role="combobox"]')?.getAttribute('aria-label')).toBe('Key');
+    expect(select.hasAttribute('aria-label')).toBe(false);
+  });
+
   it('renders a custom option template', async () => {
     const templateFixture = TestBed.createComponent(TemplateHostComponent);
     await templateFixture.whenStable();
@@ -229,5 +256,8 @@ describe('SelectComponent', () => {
 
     const rendered = [ ...document.querySelectorAll('.cdk-overlay-container [role="option"] code') ];
     expect(rendered.map(element => element.textContent)).toEqual([ 'simple', 'guided', 'advanced' ]);
+    // The template's text, which is what is on screen, is the option's name.
+    const first = document.querySelector('.cdk-overlay-container [role="option"]') as HTMLElement;
+    expect(first.hasAttribute('aria-label')).toBe(false);
   });
 });

@@ -7,6 +7,7 @@
   [disabled]="disabled()"
   [id]="id()"
   [attr.aria-labelledby]="labelledBy()"
+  [attr.aria-label]="labelledBy() ? null : ariaLabel()"
   [attr.aria-describedby]="describedBy()"
   [attr.aria-invalid]="invalid() || null"
   (blur)="onBlur($event)"
@@ -19,6 +20,7 @@
 <ng-template ngComboboxPopup [combobox]="combobox">
   <ng-template
     cdkConnectedOverlay
+    (detach)="expanded.set(false)"
     [cdkConnectedOverlayOpen]="true"
     [cdkConnectedOverlayOrigin]="trigger"
     [cdkConnectedOverlayMinWidth]="triggerWidth()"
@@ -38,6 +40,7 @@
       [value]="selectedValues()"
       [activeDescendant]="listbox.activeDescendant()"
       (valueChange)="choose($event)"
+      (mousedown)="$event.preventDefault()"
     >
       @for (option of options(); track option.value) {
         <div ngOption class="option" [value]="option.value" [label]="option.label" [disabled]="!!option.disabled">

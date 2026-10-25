@@ -36,7 +36,11 @@ let nextId = 0;
  *
  * It has the shape of Signal Forms' `FormValueControl` (`value`, `disabled`,
  * `touch`), so it can be bound with `[formField]` as well as `[(value)]`. Put
- * it in a `ui-field` for its label, or give it an `aria-label`.
+ * it in a `ui-field` for its label, or give it an `aria-label`, which names the
+ * combobox.
+ *
+ * With a `uiSelectOption` template, the template's text is each option's
+ * accessible name, as it is what the option shows.
  */
 @Component({
   selector: 'ui-select',
@@ -44,6 +48,9 @@ let nextId = 0;
   templateUrl: './select.component.html',
   styleUrl: './select.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '[attr.aria-label]': 'null'
+  },
   providers: [ { provide: FieldControl, useExisting: forwardRef(() => SelectComponent) } ]
 })
 export class SelectComponent<V> extends FieldControl {
@@ -53,6 +60,8 @@ export class SelectComponent<V> extends FieldControl {
   readonly placeholder = input('');
   readonly disabled = input(false, { transform: booleanAttribute });
   readonly id = input<string>(`ui-select-${nextId++}`);
+  /** The name outside a `ui-field`; it goes on the combobox, not the host. */
+  readonly ariaLabel = input<string | undefined>(undefined, { alias: 'aria-label' });
 
   /** Emitted when the focus leaves the control. */
   readonly touch = output<void>();

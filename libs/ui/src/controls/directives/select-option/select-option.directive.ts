@@ -9,8 +9,9 @@ export interface SelectOptionContext<V> {
 
 /**
  * The content of each option of a `ui-select`, in place of its label and
- * description, such as an SSH key's type and fingerprint (AR-24). The option's
- * label stays its accessible name.
+ * description, such as an SSH key's type and fingerprint (AR-24). Its text is
+ * the option's accessible name, so it should start with the label; the label
+ * is still used for typeahead and shown in the trigger.
  *
  * ```html
  * <ng-template uiSelectOption let-option>…</ng-template>

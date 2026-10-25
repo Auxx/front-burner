@@ -87,6 +87,12 @@
       --ui-checkbox-mark: CanvasText;
     }
 
+    // The fill is `Highlight` (`--ui-accent`), which browsers keep.
+    :host(:checked),
+    :host(:indeterminate) {
+      --ui-checkbox-mark: HighlightText;
+    }
+
     :host(:disabled) {
       --ui-checkbox-border: GrayText;
       --ui-checkbox-mark: GrayText;

@@ -55,4 +55,11 @@
   :host(:focus-visible) {
     @include mixins.focus-ring;
   }
+
+  // The pressed background is `Highlight` (`--ui-selected-inactive`).
+  @media (forced-colors: active) {
+    :host([aria-pressed='true']) {
+      color: HighlightText;
+    }
+  }
 }
