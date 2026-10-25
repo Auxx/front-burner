@@ -1,0 +1,32 @@
+<ng-container *transloco="let t; prefix: 'web-feature-auth.SetupTokenStepComponent'">
+  <form novalidate (submit)="submit($event)">
+    <h2 class="step-heading">{{ t('heading') }}</h2>
+    <p>{{ t('intro') }}</p>
+    @if (failure(); as failure) {
+      <ui-inline-banner status="danger">
+        {{ failure.text }}
+        @if (failure.reference) {
+          <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+        }
+      </ui-inline-banner>
+    }
+    <ui-field [label]="t('label')" [error]="errorKey() ? t('errors.' + errorKey()) : undefined">
+      <input
+        uiInput
+        #secret
+        type="password"
+       
+        autocomplete="off"
+        spellcheck="false"
+        [formField]="model.setupToken"
+        (input)="edited()"
+      />
+      <button uiIconButton [uiPasswordReveal]="secret" [label]="t('show')">
+        <ui-icon name="eye" />
+      </button>
+    </ui-field>
+    <div class="actions">
+      <button uiButton variant="primary" type="submit" [busy]="busy()">{{ t('continue') }}</button>
+    </div>
+  </form>
+</ng-container>

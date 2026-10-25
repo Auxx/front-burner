@@ -1,0 +1,17 @@
+@use '../../styles/step';
+
+@include step.step;
+
+form {
+  display: grid;
+  gap: var(--ui-space-4);
+}
+
+p {
+  margin: 0;
+}
+
+.reference {
+  display: block;
+  color: var(--ui-text-muted);
+}
