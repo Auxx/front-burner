@@ -1,0 +1,149 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  // Fills its row, like a text field, also in a `ui-field`'s flex row.
+  :host {
+    display: block;
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  // The trigger looks like a text field (`uiInput`).
+  .trigger {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-1);
+    inline-size: 100%;
+    min-block-size: var(--ui-control-height);
+    padding-inline: var(--ui-space-2) var(--ui-space-1);
+    background: var(--ui-surface-sunken);
+    color: var(--ui-text-default);
+    font-size: var(--ui-font-size-input);
+    border: var(--ui-border-width) solid var(--ui-border-strong);
+    border-radius: var(--ui-radius-control);
+    cursor: pointer;
+
+    &:focus-visible {
+      @include mixins.focus-ring;
+      outline-offset: 0;
+    }
+
+    // The border gets thicker as well as red, so the colour is not alone.
+    &[aria-invalid='true'] {
+      border-color: var(--ui-danger-icon);
+      box-shadow: inset 0 0 0 var(--ui-border-width) var(--ui-danger-icon);
+    }
+
+    &[aria-disabled='true'] {
+      background: var(--ui-surface-canvas);
+      color: var(--ui-text-disabled);
+      border-color: var(--ui-border-subtle);
+      box-shadow: none;
+      cursor: default;
+    }
+  }
+
+  .value {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &[data-placeholder] {
+      color: var(--ui-text-subtle);
+    }
+  }
+
+  .chevron {
+    flex: none;
+    inline-size: var(--ui-icon-size);
+    block-size: var(--ui-icon-size);
+    color: var(--ui-icon-muted);
+    transition: rotate var(--ui-duration-fast) var(--ui-easing-standard);
+  }
+
+  [aria-expanded='true'] > .chevron {
+    rotate: 180deg;
+  }
+
+  [aria-disabled='true'] > .chevron {
+    color: var(--ui-icon-disabled);
+  }
+
+  // The list, in the overlay; it looks like a `ui-menu`.
+  .listbox {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    max-inline-size: calc(100vw - 2 * var(--ui-space-2));
+    max-block-size: min(20rem, 60vh);
+    overflow-y: auto;
+    padding: var(--ui-space-1);
+    background: var(--ui-surface-raised);
+    color: var(--ui-text-default);
+    font-size: var(--ui-font-size-ui);
+    border: var(--ui-border-width) solid var(--ui-border-default);
+    border-radius: var(--ui-radius-popover);
+    box-shadow: var(--ui-shadow-popover);
+  }
+
+  .option {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--ui-space-2);
+    min-block-size: var(--ui-control-height);
+    padding-block: var(--ui-space-1);
+    padding-inline: var(--ui-space-2) var(--ui-control-padding-inline);
+    border-radius: var(--ui-radius-control);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--ui-surface-hover);
+    }
+
+    // The focus stays on the trigger (`aria-activedescendant`), so the active
+    // option has its own ring as well as the hover background.
+    &[data-active='true'] {
+      background: var(--ui-surface-hover);
+      outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
+      outline-offset: calc(-1 * var(--ui-focus-ring-width));
+    }
+
+    &[aria-disabled='true'] {
+      color: var(--ui-text-disabled);
+      cursor: default;
+
+      .description {
+        color: var(--ui-text-disabled);
+      }
+    }
+  }
+
+  // Selection is shown by the tick, not by colour (A-10.22).
+  .check {
+    inline-size: var(--ui-icon-size);
+    block-size: var(--ui-icon-size);
+    color: var(--ui-icon-default);
+    visibility: hidden;
+  }
+
+  [aria-selected='true'] > .check {
+    visibility: visible;
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .description {
+    color: var(--ui-text-muted);
+    font-size: var(--ui-font-size-ui-small);
+  }
+}

@@ -1,0 +1,17 @@
+@layer components {
+  // The label is the target, so it has the control height (NF-13.5).
+  :host {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    min-block-size: var(--ui-control-height);
+    max-inline-size: 100%;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+
+  :host(:has(:disabled)) {
+    color: var(--ui-text-disabled);
+    cursor: default;
+  }
+}

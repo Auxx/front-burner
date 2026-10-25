@@ -1,0 +1,101 @@
+@use '../../../styles/mixins';
+
+// The input is the target, at least 24 px (NF-13.5); the box and its mark are
+// drawn inside it by `::before` and `::after`, since `data:` URLs are not
+// allowed (A-10.29).
+@layer components {
+  :host {
+    --ui-checkbox-size: var(--ui-icon-size);
+    --ui-checkbox-target: max(var(--ui-checkbox-size), 1.5rem);
+    --ui-checkbox-background: var(--ui-surface-sunken);
+    --ui-checkbox-border: var(--ui-border-strong);
+    --ui-checkbox-mark: var(--ui-icon-on-accent);
+
+    appearance: none;
+    box-sizing: border-box;
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    inline-size: var(--ui-checkbox-target);
+    block-size: var(--ui-checkbox-target);
+    margin: 0;
+    background: none;
+    border: 0;
+    border-radius: var(--ui-radius-control);
+    cursor: pointer;
+  }
+
+  :host::before,
+  :host::after {
+    content: '';
+    grid-area: 1 / 1;
+    box-sizing: border-box;
+  }
+
+  // The box
+  :host::before {
+    inline-size: var(--ui-checkbox-size);
+    block-size: var(--ui-checkbox-size);
+    background: var(--ui-checkbox-background);
+    border: var(--ui-border-width) solid var(--ui-checkbox-border);
+    border-radius: calc(var(--ui-radius-control) / 2);
+  }
+
+  :host(:checked),
+  :host(:indeterminate) {
+    --ui-checkbox-background: var(--ui-accent);
+    --ui-checkbox-border: var(--ui-accent);
+  }
+
+  // A tick: the end and bottom borders of a rotated box.
+  :host(:checked)::after {
+    inline-size: calc(var(--ui-checkbox-size) * 0.3);
+    block-size: calc(var(--ui-checkbox-size) * 0.55);
+    margin-block-start: calc(var(--ui-checkbox-size) * -0.1);
+    border: solid var(--ui-checkbox-mark);
+    border-width: 0 2px 2px 0;
+    rotate: 45deg;
+  }
+
+  // A dash, also when the checkbox is checked as well.
+  :host(:indeterminate)::after {
+    inline-size: calc(var(--ui-checkbox-size) * 0.5);
+    block-size: 0;
+    margin: 0;
+    border: solid var(--ui-checkbox-mark);
+    border-width: 2px 0 0;
+    rotate: none;
+  }
+
+  :host(:disabled) {
+    --ui-checkbox-background: var(--ui-surface-canvas);
+    --ui-checkbox-border: var(--ui-border-subtle);
+    --ui-checkbox-mark: var(--ui-icon-disabled);
+
+    cursor: default;
+  }
+
+  :host(:focus-visible) {
+    @include mixins.focus-ring;
+    outline-offset: 0;
+  }
+
+  // The fill is removed in forced colours; the mark and the border remain.
+  @media (forced-colors: active) {
+    :host {
+      --ui-checkbox-border: CanvasText;
+      --ui-checkbox-mark: CanvasText;
+    }
+
+    // The fill is `Highlight` (`--ui-accent`), which browsers keep.
+    :host(:checked),
+    :host(:indeterminate) {
+      --ui-checkbox-mark: HighlightText;
+    }
+
+    :host(:disabled) {
+      --ui-checkbox-border: GrayText;
+      --ui-checkbox-mark: GrayText;
+    }
+  }
+}

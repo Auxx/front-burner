@@ -1,0 +1,92 @@
+@use '../../../styles/mixins';
+
+// The input is the target, at least 24 px high (NF-13.5); the track and the
+// thumb are drawn inside it by `::before` and `::after`.
+@layer components {
+  :host {
+    --ui-switch-block-size: var(--ui-icon-size);
+    --ui-switch-inline-size: calc(var(--ui-switch-block-size) * 1.75);
+    --ui-switch-thumb-size: calc(var(--ui-switch-block-size) - 4px);
+    --ui-switch-track: var(--ui-surface-sunken);
+    --ui-switch-border: var(--ui-border-strong);
+    --ui-switch-thumb: var(--ui-icon-muted);
+
+    appearance: none;
+    position: relative;
+    box-sizing: border-box;
+    flex: none;
+    inline-size: var(--ui-switch-inline-size);
+    block-size: max(var(--ui-switch-block-size), 1.5rem);
+    margin: 0;
+    background: none;
+    border: 0;
+    border-radius: var(--ui-radius-control);
+    cursor: pointer;
+  }
+
+  :host::before,
+  :host::after {
+    content: '';
+    position: absolute;
+    box-sizing: border-box;
+    border-radius: var(--ui-radius-pill);
+  }
+
+  // The track
+  :host::before {
+    inset-inline: 0;
+    inset-block-start: calc(50% - var(--ui-switch-block-size) / 2);
+    block-size: var(--ui-switch-block-size);
+    background: var(--ui-switch-track);
+    border: var(--ui-border-width) solid var(--ui-switch-border);
+  }
+
+  // The thumb; `inset-inline-start` flips it in right-to-left.
+  :host::after {
+    inset-block-start: calc(50% - var(--ui-switch-thumb-size) / 2);
+    inset-inline-start: 2px;
+    inline-size: var(--ui-switch-thumb-size);
+    block-size: var(--ui-switch-thumb-size);
+    background: var(--ui-switch-thumb);
+    transition: inset-inline-start var(--ui-duration-fast) var(--ui-easing-standard);
+  }
+
+  :host(:checked) {
+    --ui-switch-track: var(--ui-accent);
+    --ui-switch-border: var(--ui-accent);
+    --ui-switch-thumb: var(--ui-icon-on-accent);
+  }
+
+  :host(:checked)::after {
+    inset-inline-start: calc(100% - var(--ui-switch-thumb-size) - 2px);
+  }
+
+  :host(:disabled) {
+    --ui-switch-track: var(--ui-surface-canvas);
+    --ui-switch-border: var(--ui-border-subtle);
+    --ui-switch-thumb: var(--ui-icon-disabled);
+
+    cursor: default;
+  }
+
+  :host(:focus-visible) {
+    @include mixins.focus-ring;
+  }
+
+  // The thumb's position shows the state; it keeps a system colour.
+  @media (forced-colors: active) {
+    :host {
+      --ui-switch-border: CanvasText;
+      --ui-switch-thumb: CanvasText;
+    }
+
+    :host::after {
+      forced-color-adjust: none;
+    }
+
+    :host(:disabled) {
+      --ui-switch-border: GrayText;
+      --ui-switch-thumb: GrayText;
+    }
+  }
+}

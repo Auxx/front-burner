@@ -63,6 +63,29 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   text('text-default', 'surface-raised', 'surface-hover'),
   text('text-muted', 'surface-raised', 'surface-hover'),
   text('text-inverse', 'text-default'),
+
+  // Buttons: secondary and danger on their raised background, also hovered
+  // or pressed; icon buttons in an island, also hovered or pressed in
+  text('text-default', 'surface-raised', 'surface-pressed'),
+  text('danger-text', 'surface-raised'),
+  text('danger-text', 'surface-raised', 'surface-hover'),
+  graphic('icon-default', 'surface-island', 'surface-hover'),
+  graphic('icon-default', 'selected-inactive'),
+  graphic('border-strong', 'selected-inactive'),
+
+  // The border of an invalid text field, and of controls on a raised surface
+  graphic('danger-icon', 'surface-sunken'),
+  graphic('border-strong', 'surface-raised'),
+
+  // Checkbox and switch marks on the accent, the switch's thumb when off, and
+  // the accent fill in menus and popovers
+  graphic('icon-on-accent', 'accent'),
+  graphic('icon-muted', 'surface-sunken'),
+  graphic('accent', 'surface-raised'),
+
+  // Select options: the tick and the active option's ring on the hovered row
+  graphic('icon-default', 'surface-raised', 'surface-hover'),
+  graphic('border-focus', 'surface-raised', 'surface-hover'),
   ...[ 'accent', 'accent-hover', 'accent-pressed' ].map(bg => text('text-on-accent', bg)),
 
   // Control borders, focus ring and accent

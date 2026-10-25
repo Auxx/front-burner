@@ -1,0 +1,58 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    --ui-segmented-control-padding: var(--ui-space-0-5);
+
+    box-sizing: border-box;
+    display: inline-grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    max-inline-size: 100%;
+    padding: var(--ui-segmented-control-padding);
+    background: var(--ui-surface-sunken);
+    border: var(--ui-border-width) solid var(--ui-border-default);
+    border-radius: var(--ui-radius-control);
+  }
+
+  input {
+    @include mixins.visually-hidden;
+  }
+
+  // Labels wrap rather than being cut off on narrow screens (NF-12.4).
+  .segment {
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    min-block-size: calc(var(--ui-control-height) - 2 * var(--ui-segmented-control-padding));
+    padding-inline: var(--ui-space-2);
+    color: var(--ui-text-muted);
+    font-size: var(--ui-font-size-ui);
+    text-align: center;
+    overflow-wrap: anywhere;
+    border: var(--ui-border-width) solid transparent;
+    border-radius: calc(var(--ui-radius-control) - var(--ui-segmented-control-padding));
+    cursor: pointer;
+
+    &:hover {
+      color: var(--ui-text-default);
+    }
+
+    // A border and a weight as well as the background (A-10.22).
+    &:has(:checked) {
+      background: var(--ui-surface-raised);
+      color: var(--ui-text-default);
+      font-weight: var(--ui-font-weight-medium);
+      border-color: var(--ui-border-strong);
+    }
+
+    &:has(:focus-visible) {
+      @include mixins.focus-ring;
+    }
+
+    &:has(:disabled) {
+      color: var(--ui-text-disabled);
+      cursor: default;
+    }
+  }
+}

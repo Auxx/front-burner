@@ -1,0 +1,65 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    --ui-icon-button-size: var(--ui-control-height);
+    --ui-icon-button-background: transparent;
+    --ui-icon-button-border: transparent;
+    --ui-icon-button-overlay: transparent;
+
+    box-sizing: border-box;
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    inline-size: var(--ui-icon-button-size);
+    block-size: var(--ui-icon-button-size);
+    padding: 0;
+    background-color: var(--ui-icon-button-background);
+    background-image: linear-gradient(var(--ui-icon-button-overlay), var(--ui-icon-button-overlay));
+    color: var(--ui-icon-default);
+    border: var(--ui-border-width) solid var(--ui-icon-button-border);
+    border-radius: var(--ui-radius-control);
+    cursor: pointer;
+  }
+
+  :host([data-variant='secondary']) {
+    --ui-icon-button-background: var(--ui-surface-raised);
+    --ui-icon-button-border: var(--ui-border-default);
+  }
+
+  :host([data-size='small']) {
+    --ui-icon-button-size: var(--ui-control-height-small);
+  }
+
+  :host(:hover) {
+    --ui-icon-button-overlay: var(--ui-surface-hover);
+  }
+
+  :host(:active) {
+    --ui-icon-button-overlay: var(--ui-surface-pressed);
+  }
+
+  // Pressed is shown by a border as well as a background (A-10.22).
+  :host([aria-pressed='true']) {
+    --ui-icon-button-background: var(--ui-selected-inactive);
+    --ui-icon-button-border: var(--ui-border-strong);
+  }
+
+  :host(:disabled) {
+    --ui-icon-button-overlay: transparent;
+
+    color: var(--ui-icon-disabled);
+    cursor: default;
+  }
+
+  :host(:focus-visible) {
+    @include mixins.focus-ring;
+  }
+
+  // The pressed background is `Highlight` (`--ui-selected-inactive`).
+  @media (forced-colors: active) {
+    :host([aria-pressed='true']) {
+      color: HighlightText;
+    }
+  }
+}

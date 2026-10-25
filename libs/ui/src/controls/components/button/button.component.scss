@@ -1,0 +1,103 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    --ui-button-background: var(--ui-surface-raised);
+    --ui-button-color: var(--ui-text-default);
+    --ui-button-border: var(--ui-border-default);
+    // Hover and pressed overlays go on top of the variant's background.
+    --ui-button-overlay: transparent;
+
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ui-space-1-5);
+    min-block-size: var(--ui-control-height);
+    max-inline-size: 100%;
+    padding-block: 0;
+    padding-inline: var(--ui-control-padding-inline);
+    background-color: var(--ui-button-background);
+    background-image: linear-gradient(var(--ui-button-overlay), var(--ui-button-overlay));
+    color: var(--ui-button-color);
+    font: inherit;
+    font-size: var(--ui-font-size-ui);
+    font-weight: var(--ui-font-weight-medium);
+    text-decoration: none;
+    border: var(--ui-border-width) solid var(--ui-button-border);
+    border-radius: var(--ui-radius-control);
+    cursor: pointer;
+  }
+
+  :host(:hover) {
+    --ui-button-overlay: var(--ui-surface-hover);
+  }
+
+  :host(:active) {
+    --ui-button-overlay: var(--ui-surface-pressed);
+  }
+
+  :host([data-variant='primary']) {
+    --ui-button-background: var(--ui-accent);
+    --ui-button-color: var(--ui-text-on-accent);
+    --ui-button-border: transparent;
+  }
+
+  // The accent has its own hover and pressed colours instead of overlays.
+  :host([data-variant='primary']:hover) {
+    --ui-button-background: var(--ui-accent-hover);
+    --ui-button-overlay: transparent;
+  }
+
+  :host([data-variant='primary']:active) {
+    --ui-button-background: var(--ui-accent-pressed);
+    --ui-button-overlay: transparent;
+  }
+
+  :host([data-variant='danger']) {
+    --ui-button-color: var(--ui-danger-text);
+    --ui-button-border: var(--ui-danger-border);
+  }
+
+  :host([data-variant='ghost']) {
+    --ui-button-background: transparent;
+    --ui-button-border: transparent;
+  }
+
+  :host([data-size='small']) {
+    gap: var(--ui-space-1);
+    min-block-size: var(--ui-control-height-small);
+    padding-inline: var(--ui-space-2);
+    font-size: var(--ui-font-size-ui-small);
+  }
+
+  // Disabled controls have their own colours, never `opacity` (A-10.18).
+  :host(:disabled),
+  :host([aria-disabled='true']) {
+    --ui-button-background: var(--ui-surface-sunken);
+    --ui-button-color: var(--ui-text-disabled);
+    --ui-button-border: var(--ui-border-subtle);
+    --ui-button-overlay: transparent;
+
+    cursor: default;
+  }
+
+  :host(:focus-visible) {
+    @include mixins.focus-ring;
+  }
+
+  // Backgrounds are removed in forced colours, so the primary button is set
+  // apart by a thicker border (A-10.22).
+  @media (forced-colors: active) {
+    :host([data-variant='primary']:not(:disabled)) {
+      border: calc(var(--ui-border-width) * 2) solid ButtonText;
+    }
+  }
+
+  .label {
+    min-inline-size: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

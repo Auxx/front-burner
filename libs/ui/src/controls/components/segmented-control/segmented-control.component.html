@@ -1,0 +1,12 @@
+@for (option of options(); track option.value) {
+  <label class="segment">
+    <input
+      type="radio"
+      [name]="name"
+      [checked]="option.value === value()"
+      [disabled]="disabled() || !!option.disabled"
+      (change)="value.set(option.value)"
+    />
+    <span>{{ option.label }}</span>
+  </label>
+}

@@ -30,6 +30,8 @@ const config: StorybookConfig = {
       // their `inject()` calls fail (NG0203) on a cold cache, as in CI.
       optimizeDeps: {
         include: [
+          '@angular/aria/combobox',
+          '@angular/aria/listbox',
           '@angular/aria/menu',
           '@angular/aria/toolbar',
           '@angular/cdk/a11y',
@@ -38,7 +40,8 @@ const config: StorybookConfig = {
           '@angular/cdk/overlay',
           '@angular/cdk/portal',
           '@angular/cdk/scrolling',
-          '@angular/core/rxjs-interop'
+          '@angular/core/rxjs-interop',
+          '@angular/forms/signals'
         ]
       }
     });
