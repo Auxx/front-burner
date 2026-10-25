@@ -35,6 +35,9 @@
       ],
       "@front-burner/server-core-security": [
         "./libs/server/core/security/src/index.ts"
+      ],
+      "@front-burner/web-api-client": [
+        "./libs/web/api-client/src/index.ts"
       ]
     }
   },

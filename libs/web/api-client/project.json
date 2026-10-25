@@ -1,0 +1,46 @@
+{
+  "name": "web-api-client",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/web/api-client/src",
+  "prefix": "api",
+  "projectType": "library",
+  "tags": [
+    "scope:web",
+    "type:data-access"
+  ],
+  "targets": {
+    "test": {
+      "executor": "@nx/angular:unit-test",
+      "options": {
+        "watch": false,
+        "buildTarget": "ui:build:development",
+        "tsConfig": "libs/web/api-client/tsconfig.spec.json"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "generate": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "server:openapi"
+      ],
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/apps/server/openapi.json",
+        "{projectRoot}/templates/**/*"
+      ],
+      "outputs": [
+        "{projectRoot}/src/generated"
+      ],
+      "options": {
+        "commands": [
+          "find libs/web/api-client/src/generated -name '*.ts' ! -name '*.spec.ts' -delete",
+          "npx swagger-typescript-api generate --path apps/server/openapi.json --templates libs/web/api-client/templates --output libs/web/api-client/src/generated --modular --module-name-first-tag --silent",
+          "npx dprint fmt \"libs/web/api-client/src/generated/**/*.ts\""
+        ],
+        "parallel": false
+      }
+    }
+  }
+}

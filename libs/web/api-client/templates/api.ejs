@@ -1,0 +1,31 @@
+<%
+const { route, utils, modelTypes } = it;
+const { pascalCase } = utils;
+const className = `${pascalCase(route.moduleName)}Api`;
+const routes = route.routes;
+// Every request and response type lives in @front-burner/shared-contracts
+// (A-3.6): import the ones this class uses, declare none.
+const used = new Set();
+for (const r of routes) {
+  for (const t of [r.response.type, r.request.payload && r.request.payload.type, r.request.query && r.request.query.type]) {
+    for (const name of String(t || '').match(/[A-Za-z_][A-Za-z0-9_]*/g) || []) {
+      if (modelTypes.some((m) => m.name === name)) used.add(name);
+    }
+  }
+}
+%>
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import type { Observable } from 'rxjs';
+<% if (used.size) { %>
+import type { <%~ [...used].sort().join(', ') %> } from '@front-burner/shared-contracts';
+<% } %>
+
+@Injectable({ providedIn: 'root' })
+export class <%~ className %> {
+  private readonly http = inject(HttpClient);
+
+<% for (const r of routes) { %>
+  <%~ includeFile('./procedure-call.ejs', { ...it, route: r }) %>
+<% } %>
+}
