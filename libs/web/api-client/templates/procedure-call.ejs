@@ -1,8 +1,10 @@
 <%
 const { route, utils } = it;
 const { _ } = utils;
-const { path, method, parameters, query, payload } = route.request;
+const { path: rawPath, method, parameters, query, payload } = route.request;
 const { type } = route.response;
+// Path parameters are data, not URL syntax: encode each one.
+const path = rawPath.replace(/\$\{([^}]+)\}/g, '${encodeURIComponent($1)}');
 const args = _.compact([
   ..._.values(parameters).map((p) => `${p.name}: ${p.type}`),
   query && `${query.name}${query.optional ? '?' : ''}: ${query.type}`,
