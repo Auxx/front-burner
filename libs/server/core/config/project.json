@@ -1,0 +1,30 @@
+{
+  "name": "server-core-config",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/server/core/config/src",
+  "projectType": "library",
+  "tags": [
+    "scope:server",
+    "type:core"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{workspaceRoot}/coverage/libs/server/core/config"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/server/core/config"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}
