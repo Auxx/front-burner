@@ -1,1 +1,1 @@
-export * from './generated/Health';
+export * from './generated';

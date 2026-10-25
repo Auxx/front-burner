@@ -10,11 +10,15 @@
   ],
   "targets": {
     "test": {
-      "executor": "@nx/angular:unit-test",
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
       "options": {
-        "watch": false,
-        "buildTarget": "ui:build:development",
-        "tsConfig": "libs/web/api-client/tsconfig.spec.json"
+        "command": "vitest run",
+        "cwd": "libs/web/api-client"
       }
     },
     "lint": {
@@ -37,6 +41,7 @@
         "commands": [
           "find libs/web/api-client/src/generated -name '*.ts' ! -name '*.spec.ts' -delete",
           "npx swagger-typescript-api generate --path apps/server/openapi.json --templates libs/web/api-client/templates --output libs/web/api-client/src/generated --modular --module-name-first-tag --silent",
+          "cd libs/web/api-client/src/generated && for f in $(ls *.ts | grep -v -e '\\.spec\\.ts$' -e '^index\\.ts$' | LC_ALL=C sort); do echo \"export * from './${f%.ts}';\"; done > index.ts",
           "npx dprint fmt \"libs/web/api-client/src/generated/**/*.ts\""
         ],
         "parallel": false
