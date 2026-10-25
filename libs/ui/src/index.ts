@@ -21,6 +21,8 @@ export {
 export { type ChoiceOption } from './controls/models/choice-option.model';
 export { FieldControl } from './controls/models/field-control.model';
 export { BadgeComponent, type BadgeStatus } from './feedback/components/badge/badge.component';
+export { BannerActionsComponent } from './feedback/components/banner-actions/banner-actions.component';
+export { InlineBannerComponent } from './feedback/components/inline-banner/inline-banner.component';
 export { ProgressBarComponent } from './feedback/components/progress-bar/progress-bar.component';
 export { SpinnerComponent } from './feedback/components/spinner/spinner.component';
 export { type Status } from './feedback/models/status.model';

@@ -1,0 +1,8 @@
+// Global styles for elements that the CDK adds outside every component, such
+// as the LiveAnnouncer's region, so they cannot be styled from a component.
+
+@use '@angular/cdk';
+
+@layer components {
+  @include cdk.a11y-visually-hidden;
+}
