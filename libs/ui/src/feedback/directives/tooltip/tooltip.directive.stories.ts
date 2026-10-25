@@ -70,7 +70,7 @@ export const Unavailable: Story = {
     styles: [ row ],
     template: `
       <div class="row">
-        <button uiButton aria-disabled="true" uiTooltip="Nothing to push">Push</button>
+        <button uiButton unavailable uiTooltip="Nothing to push">Push</button>
       </div>
     `
   }),

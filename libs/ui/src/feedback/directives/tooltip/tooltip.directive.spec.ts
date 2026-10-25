@@ -9,7 +9,7 @@ import { TooltipDirective } from './tooltip.directive';
 @Component({
   imports: [ ButtonComponent, IconButtonComponent, TooltipDirective ],
   template: `
-    <button uiButton aria-disabled="true" uiTooltip="Nothing to push">Push</button>
+    <button uiButton unavailable uiTooltip="Nothing to push">Push</button>
     <button uiIconButton label="Ignored" uiTooltip="Ignored by .gitignore. Git won't commit this file." uiTooltipShowOnClick>
       <svg aria-hidden="true"></svg>
     </button>

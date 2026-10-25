@@ -3,13 +3,14 @@ import { booleanAttribute, ChangeDetectionStrategy, Component, ElementRef, injec
 import { SpinnerComponent } from '../../../feedback/components/spinner/spinner.component';
 import { TooltipDirective } from '../../../feedback/directives/tooltip/tooltip.directive';
 import { attachTooltip } from '../../../feedback/utils/tooltip/tooltip.util';
-import { useBusyState } from '../../utils/busy/busy.util';
+import { swallowClicksWhileAriaDisabled } from '../../utils/busy/busy.util';
 import { type ButtonSize, type ButtonType } from '../button/button.component';
 
 /**
  * A button whose content is one `<svg>` icon. `label` is its accessible name
  * and its tooltip, unless a `uiTooltip` on it gives another tooltip. Set `pressed` to make it a toggle button. While `busy`, a
- * spinner replaces the icon and the button is `aria-disabled`.
+ * spinner replaces the icon. While `busy` or `unavailable`, the button is
+ * `aria-disabled`: it keeps the focus, and its clicks are swallowed.
  */
 @Component({
   selector: 'button[uiIconButton]',
@@ -28,7 +29,8 @@ import { type ButtonSize, type ButtonType } from '../button/button.component';
     '[attr.aria-pressed]': 'pressed() ?? null',
     '[attr.data-variant]': 'variant()',
     '[attr.data-size]': 'size()',
-    '[attr.data-busy]': 'busy() || null'
+    '[attr.data-busy]': 'busy() || null',
+    '[attr.aria-disabled]': 'busy() || unavailable() ? "true" : null'
   }
 })
 export class IconButtonComponent {
@@ -38,10 +40,12 @@ export class IconButtonComponent {
   readonly type = input<ButtonType>('button');
   readonly pressed = input<boolean | undefined>(undefined);
   readonly busy = input(false, { transform: booleanAttribute });
+  /** Unavailable but focusable, to explain why with a tooltip (GA-8). Use instead of `aria-disabled`. */
+  readonly unavailable = input(false, { transform: booleanAttribute });
 
   constructor() {
     const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
-    useBusyState(host, this.busy);
+    swallowClicksWhileAriaDisabled(host);
     if (!inject(TooltipDirective, { self: true, optional: true })) {
       attachTooltip(host, this.label, { describes: false, showOnClick: signal(false) });
     }

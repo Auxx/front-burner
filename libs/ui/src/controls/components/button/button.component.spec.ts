@@ -77,12 +77,13 @@ describe('ButtonComponent', () => {
 @Component({
   imports: [ ButtonComponent ],
   template: `
-    <button uiButton [busy]="busy()" (click)="clicks = clicks + 1"><svg aria-hidden="true"></svg>Pull</button>
-    <button uiButton aria-disabled="true" (click)="clicks = clicks + 1">Push</button>
+    <button uiButton [busy]="busy()" [unavailable]="unavailable()" (click)="clicks = clicks + 1"><svg aria-hidden="true"></svg>Pull</button>
+    <button uiButton unavailable (click)="clicks = clicks + 1">Push</button>
   `
 })
 class BusyHostComponent {
   readonly busy = signal(false);
+  readonly unavailable = signal(false);
   clicks = 0;
 }
 
@@ -130,6 +131,41 @@ describe('ButtonComponent busy', () => {
     await setBusy(true);
 
     expect(document.activeElement).toBe(pull);
+  });
+
+  it('stays unavailable when busy ends in the same change as it becomes unavailable', async () => {
+    const [ pull ] = buttons();
+    await setBusy(true);
+
+    fixture.componentInstance.busy.set(false);
+    fixture.componentInstance.unavailable.set(true);
+    await fixture.whenStable();
+
+    expect(pull.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('stays unavailable when busy ends after it became unavailable', async () => {
+    const [ pull ] = buttons();
+    await setBusy(true);
+    fixture.componentInstance.unavailable.set(true);
+    await fixture.whenStable();
+
+    await setBusy(false);
+
+    expect(pull.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('stays aria-disabled while busy when it becomes available', async () => {
+    const [ pull ] = buttons();
+    fixture.componentInstance.unavailable.set(true);
+    await setBusy(true);
+
+    fixture.componentInstance.unavailable.set(false);
+    await fixture.whenStable();
+    pull.click();
+
+    expect(pull.getAttribute('aria-disabled')).toBe('true');
+    expect(fixture.componentInstance.clicks).toBe(0);
   });
 
   it('swallows clicks while aria-disabled', async () => {

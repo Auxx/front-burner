@@ -302,10 +302,11 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   description from the start. `uiIconButton` shows its label as a tooltip
   instead of a native `title`.
 - **A-10.46** A busy or unavailable button is `aria-disabled`, not `disabled`,
-  so that it keeps the focus and can explain itself with a tooltip (GA-8, GA-9);
-  `uiButton` and `uiIconButton` swallow its clicks, and `busy` shows a spinner
-  in place of the icon. `disabled` is for buttons whose reason needs no
-  explanation.
+  so that it keeps the focus and can explain itself with a tooltip (GA-8, GA-9).
+  `uiButton` and `uiIconButton` set it from their `busy` and `unavailable`
+  inputs, which consumers use instead of writing `aria-disabled` themselves, and
+  swallow its clicks; `busy` also shows a spinner in place of the icon.
+  `disabled` is for buttons whose reason needs no explanation.
 - **A-10.47** Elements that a component lays out but a consumer writes, such as
   a banner's actions (`uiBannerActions`) or a dialog's footer
   (`uiDialogFooter`), are attribute components with their own styles, since a

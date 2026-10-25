@@ -1,7 +1,7 @@
 import { booleanAttribute, ChangeDetectionStrategy, Component, ElementRef, inject, input } from '@angular/core';
 
 import { SpinnerComponent } from '../../../feedback/components/spinner/spinner.component';
-import { useBusyState } from '../../utils/busy/busy.util';
+import { swallowClicksWhileAriaDisabled } from '../../utils/busy/busy.util';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
 export type ButtonSize = 'default' | 'small';
@@ -13,8 +13,8 @@ export type ButtonType = 'button' | 'submit' | 'reset';
  *
  * A button is `type="button"` unless `type` says otherwise, so that a button in
  * a form, such as Cancel, does not submit it. While `busy`, a spinner replaces
- * the icon and the button is `aria-disabled`; clicks on an `aria-disabled`
- * button are swallowed.
+ * the icon. While `busy` or `unavailable`, the button is `aria-disabled`: it
+ * keeps the focus, and its clicks are swallowed.
  */
 @Component({
   selector: 'button[uiButton], a[uiButton]',
@@ -32,7 +32,8 @@ export type ButtonType = 'button' | 'submit' | 'reset';
     '[attr.type]': 'isButton ? type() : null',
     '[attr.data-variant]': 'variant()',
     '[attr.data-size]': 'size()',
-    '[attr.data-busy]': 'busy() || null'
+    '[attr.data-busy]': 'busy() || null',
+    '[attr.aria-disabled]': 'busy() || unavailable() ? "true" : null'
   }
 })
 export class ButtonComponent {
@@ -40,11 +41,13 @@ export class ButtonComponent {
   readonly size = input<ButtonSize>('default');
   readonly type = input<ButtonType>('button');
   readonly busy = input(false, { transform: booleanAttribute });
+  /** Unavailable but focusable, to explain why with a tooltip (GA-8). Use instead of `aria-disabled`. */
+  readonly unavailable = input(false, { transform: booleanAttribute });
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   protected readonly isButton = this.host.tagName === 'BUTTON';
 
   constructor() {
-    useBusyState(this.host, this.busy);
+    swallowClicksWhileAriaDisabled(this.host);
   }
 }
