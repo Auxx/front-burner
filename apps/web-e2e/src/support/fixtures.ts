@@ -7,10 +7,16 @@ export interface PolicyViolation {
   documentURI: string;
 }
 
+export interface ConsoleError {
+  text: string;
+  /** Where it was logged from: the document or script URL (browsers word the same error differently). */
+  url: string;
+}
+
 /** What the page reported so far; the fixture fails the test if any is left. */
 export interface Monitor {
   violations: PolicyViolation[];
-  consoleErrors: string[];
+  consoleErrors: ConsoleError[];
 }
 
 /**
@@ -25,10 +31,10 @@ export const test = base.extend<{ monitor: Monitor; }>({
       const monitor: Monitor = { violations: [], consoleErrors: [] };
       page.on('console', message => {
         if (message.type() === 'error') {
-          monitor.consoleErrors.push(message.text());
+          monitor.consoleErrors.push({ text: message.text(), url: message.location().url });
         }
       });
-      page.on('pageerror', error => monitor.consoleErrors.push(error.message));
+      page.on('pageerror', error => monitor.consoleErrors.push({ text: error.message, url: page.url() }));
       await page.exposeBinding('reportPolicyViolation', (_source, violation: PolicyViolation) => {
         monitor.violations.push(violation);
       });

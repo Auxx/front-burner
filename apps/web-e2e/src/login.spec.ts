@@ -109,13 +109,16 @@ test.describe('fixture', () => {
     const own = monitor.violations.filter(violation => violation.documentURI.endsWith('/csp-probe'));
     expect(own.length).toBeGreaterThan(0);
     monitor.violations.splice(0, monitor.violations.length, ...monitor.violations.filter(v => !own.includes(v)));
-    // Its console errors name the probe's own policy.
-    const ownErrors = monitor.consoleErrors.filter(text => text.includes(`default-src 'none'`));
+    // Its console errors too: logged from the probe page (WebKit's message does not quote the
+    // policy) or quoting its policy (Firefox logs the blocked favicon from its own module).
+    const ownErrors = monitor.consoleErrors.filter(error =>
+      error.url.endsWith('/csp-probe') || error.text.includes(`default-src 'none'`)
+    );
     expect(ownErrors.length).toBeGreaterThan(0);
     monitor.consoleErrors.splice(
       0,
       monitor.consoleErrors.length,
-      ...monitor.consoleErrors.filter(t => !ownErrors.includes(t))
+      ...monitor.consoleErrors.filter(error => !ownErrors.includes(error))
     );
   });
 });
