@@ -39,7 +39,7 @@ describe('server API', () => {
     const response = await fetch(`${server.url}/api/nope`);
     expect(response.status).toBe(404);
     expect(response.headers.get('content-type')).toContain('application/json');
-    const body = await response.json();
+    const body = (await response.json()) as { code: string; requestId: string; };
     expect(body.code).toBe('not-found');
     expect(body.requestId).toBe(response.headers.get('x-request-id'));
   });
@@ -48,7 +48,7 @@ describe('server API', () => {
     const response = await fetch(`${server.url}/api/nope`, { headers: { accept: 'text/html' } });
     expect(response.status).toBe(404);
     expect(response.headers.get('content-type')).toContain('application/json');
-    expect((await response.json()).code).toBe('not-found');
+    expect(((await response.json()) as { code: string; }).code).toBe('not-found');
   });
 
   it('refuses a JSON body over 2 MB with 413 payload-too-large', async () => {
@@ -58,7 +58,7 @@ describe('server API', () => {
       body: JSON.stringify({ text: 'x'.repeat(2 * 1024 * 1024 + 1) })
     });
     expect(response.status).toBe(413);
-    expect((await response.json()).code).toBe('payload-too-large');
+    expect(((await response.json()) as { code: string; }).code).toBe('payload-too-large');
   });
 
   it('refuses malformed JSON with 400 malformed-request', async () => {
@@ -68,6 +68,6 @@ describe('server API', () => {
       body: '{"broken":'
     });
     expect(response.status).toBe(400);
-    expect((await response.json()).code).toBe('malformed-request');
+    expect(((await response.json()) as { code: string; }).code).toBe('malformed-request');
   });
 });
