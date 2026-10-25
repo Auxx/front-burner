@@ -1,10 +1,14 @@
+import type { ApiError } from '@front-burner/shared-contracts';
 import express from 'express';
+import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, posix } from 'node:path';
 import { contentSecurityPolicy, createNonce, CSP_NONCE_PLACEHOLDER } from '../csp/csp';
 
 function isApiPath(path: string): boolean {
-  return path === '/api' || path.startsWith('/api/');
+  // Express routing ignores case, so the check does too.
+  const lower = path.toLowerCase();
+  return lower === '/api' || lower.startsWith('/api/');
 }
 
 /** Whether the request names index.html, however it is spelled (encoded, `./`, other case). */
@@ -21,7 +25,7 @@ function isIndexPath(path: string): boolean {
 /**
  * Whether a path that matched no file is a missing file of the build (answered
  * with 404) rather than a client-side route: anything under a folder of the web
- * root (`assets/`, `i18n/`, `media/`), or a single root-level name with an
+ * root (`assets/`, `i18n/`, `media/`; the folder itself too), or a single root-level name with an
  * extension (a hashed chunk). Routes such as `/repositories/1/files/a.md` end in
  * a file name too, so the extension alone cannot tell them apart.
  */
@@ -30,8 +34,8 @@ function isMissingBuildFile(path: string, webRoot: string): boolean {
     return false;
   }
   const segments = path.split('/').filter(segment => segment !== '');
-  if (segments.length === 1) {
-    return extname(segments[0]) !== '';
+  if (segments.length === 1 && extname(segments[0]) !== '') {
+    return true;
   }
   let first: string;
   try {
@@ -61,7 +65,7 @@ export function serveWebClient(app: express.Application, webRoot: string): boole
     return false;
   }
   const template = readFileSync(indexPath, 'utf8');
-  const files = express.static(webRoot, { index: false });
+  const files = express.static(webRoot, { index: false, redirect: false });
 
   app.use((req, res, next) => {
     if ((req.method !== 'GET' && req.method !== 'HEAD') || isApiPath(req.path)) {
@@ -76,7 +80,9 @@ export function serveWebClient(app: express.Application, webRoot: string): boole
         return;
       }
       if (isMissingBuildFile(req.path, webRoot)) {
-        res.status(404).end();
+        const requestId = (res.getHeader('X-Request-Id') as string | undefined) ?? randomUUID();
+        const body: ApiError = { code: 'not-found', params: {}, requestId, message: 'Not found.' };
+        res.status(404).set('X-Request-Id', requestId).json(body);
         return;
       }
       const nonce = createNonce();

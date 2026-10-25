@@ -115,6 +115,40 @@ describe('serveWebClient', () => {
     expect(res.status).toBe(404);
   });
 
+  it('answers a build directory without a trailing slash with 404, not a redirect', async () => {
+    mkdirSync(join(webRoot, 'assets'));
+    const res = await request(createApp()).get('/assets');
+    expect(res.status).toBe(404);
+    expect(res.headers['location']).toBeUndefined();
+  });
+
+  it('answers a missing build file with the JSON ApiError body and the request ID', async () => {
+    mkdirSync(join(webRoot, 'assets'));
+    const app = createApp();
+    const res = await request(app).get('/assets/missing.png').set('Accept', 'image/png');
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toMatch(/^application\/json/);
+    expect(res.body).toEqual({
+      code: 'not-found',
+      params: {},
+      requestId: res.headers['x-request-id'],
+      message: 'Not found.'
+    });
+    expect(res.headers['x-request-id']).toBeTruthy();
+  });
+
+  it('reuses the request ID that is already set', async () => {
+    writeFileSync(join(webRoot, 'index.html'), INDEX);
+    const app = express();
+    app.use((_req, res, next) => {
+      res.setHeader('X-Request-Id', 'abc-123');
+      next();
+    });
+    serveWebClient(app, webRoot);
+    const res = await request(app).get('/missing-chunk.js');
+    expect(res.body.requestId).toBe('abc-123');
+  });
+
   it('returns 404 for a missing file at the root, such as a hashed chunk', async () => {
     const res = await request(createApp()).get('/missing-chunk.js');
     expect(res.status).toBe(404);
@@ -136,6 +170,8 @@ describe('serveWebClient', () => {
     const app = createApp();
     expect((await request(app).get('/api/v1/x')).status).toBe(418);
     expect((await request(app).get('/api')).status).toBe(418);
+    expect((await request(app).get('/API/v1/x')).status).toBe(418);
+    expect((await request(app).get('/Api')).status).toBe(418);
   });
 
   it('does not treat /apiary as an API path', async () => {
