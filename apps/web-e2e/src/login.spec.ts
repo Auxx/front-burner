@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import type { Page } from '@playwright/test';
 import { expect, test } from './support/fixtures';
 
 test.describe('login page', () => {
@@ -6,14 +7,14 @@ test.describe('login page', () => {
     test(`any URL ends on the login page: ${url}`, async ({ page }) => {
       await page.goto(url);
       await expect(page).toHaveURL(/\/login$/);
-      await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
       await expect(page).toHaveTitle('Log in · Front Burner');
     });
   }
 
   test('has no accessibility violations', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations).toEqual([]);
   });
@@ -33,13 +34,13 @@ test.describe('login page', () => {
 
   test('runs without CSP or Trusted Types violations', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
     await expect(page.getByText(`Signing in isn't available yet.`)).toBeVisible();
   });
 
   test('applies the global styles', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
     const fontFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
     expect(fontFamily).toContain('Inter');
   });
@@ -50,13 +51,55 @@ test.describe('login page', () => {
     expect(response.headers()['content-type']).toContain('image/svg+xml');
   });
 
-  test('does not scroll sideways at phone width', async ({ page }) => {
+  test('does not scroll sideways at the device width', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'only the mobile projects have a phone viewport of their own');
+    await page.goto('/login');
+    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
+    expect(await fitsWidth(page)).toBe(true);
+  });
+
+  test('does not scroll sideways at 320 px', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/login');
-    await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
-    const fits = await page.evaluate(
-      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
-    );
-    expect(fits).toBe(true);
+    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
+    expect(await fitsWidth(page)).toBe(true);
   });
 });
+
+test.describe('fixture', () => {
+  test('records a CSP violation', async ({ page, monitor }) => {
+    await page.route('**/csp-probe', route =>
+      route.fulfill({
+        contentType: 'text/html',
+        headers: { 'content-security-policy': `default-src 'none'` },
+        body: '<script>window.ran = true</script>'
+      }));
+    await page.goto('/csp-probe');
+    await expect.poll(() => monitor.violations.length).toBeGreaterThan(0);
+    expect(monitor.violations[0].directive).toContain('script-src');
+    // Drain it, so the fixture's own check passes.
+    monitor.violations.length = 0;
+    monitor.consoleErrors.length = 0;
+  });
+
+  test('keeps violations from earlier page loads', async ({ page, monitor }) => {
+    await page.route('**/csp-probe', route =>
+      route.fulfill({
+        contentType: 'text/html',
+        headers: { 'content-security-policy': `default-src 'none'` },
+        body: '<script>window.ran = true</script>'
+      }));
+    await page.goto('/csp-probe');
+    await expect.poll(() => monitor.violations.length).toBeGreaterThan(0);
+    await page.goto('/login');
+    expect(monitor.violations.length).toBeGreaterThan(0);
+    monitor.violations.length = 0;
+    monitor.consoleErrors.length = 0;
+  });
+});
+
+function fitsWidth(page: Page): Promise<boolean> {
+  return page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+  );
+}

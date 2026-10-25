@@ -1,15 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 import { nxE2EPreset } from '@nx/playwright/preset';
 import { workspaceRoot } from '@nx/devkit';
-import { rmSync } from 'node:fs';
-import { join } from 'node:path';
 
 const port = 4300;
 const baseURL = `http://localhost:${port}`;
-const dataDir = join(workspaceRoot, 'tmp', 'web-e2e-data');
-
-// Start from an empty data directory on every run.
-rmSync(dataDir, { recursive: true, force: true });
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -30,15 +24,10 @@ export default defineConfig({
   },
   // The production path: the built server serves the built web client.
   webServer: {
-    command: 'node dist/apps/server/main.js',
+    command: `node apps/web-e2e/start-server.mjs ${port}`,
     url: `${baseURL}/api/health/ready`,
     reuseExistingServer: !process.env['CI'],
-    cwd: workspaceRoot,
-    env: {
-      FRONT_BURNER_PORT: String(port),
-      FRONT_BURNER_DATA_DIR: dataDir,
-      FRONT_BURNER_LOG_FORMAT: 'json'
-    }
+    cwd: workspaceRoot
   },
   // NF-12.2: desktop and mobile browsers.
   projects: [
