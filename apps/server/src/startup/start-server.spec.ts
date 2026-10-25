@@ -1,3 +1,4 @@
+import { ConfigError } from '@front-burner/server-core-config';
 import { DATABASE, Database } from '@front-burner/server-core-database';
 import type { INestApplication } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
@@ -5,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
-import { startServer, StartupError } from './start-server';
+import { bootstrapLoggerFor, logStartupFailure, startServer, StartupError } from './start-server';
 
 describe('startServer', () => {
   let root: string;
@@ -165,5 +166,114 @@ describe('startServer', () => {
 
     expect(failure).toBeInstanceOf(StartupError);
     expect((failure as StartupError).step).toBe('migrations');
+  });
+
+  it('fails at the data-dir step when the data directory is a file', async () => {
+    writeFileSync(dataDir, 'not a directory');
+
+    const failure = await start().catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(StartupError);
+    expect((failure as StartupError).step).toBe('data-dir');
+    expect((failure as StartupError).message).toContain(dataDir);
+  });
+
+  it('fails at the database step when the database file cannot be opened', async () => {
+    mkdirSync(join(dataDir, 'db', 'front-burner.sqlite'), { recursive: true });
+
+    const failure = await start().catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(StartupError);
+    expect((failure as StartupError).step).toBe('database');
+  });
+
+  it('logs the configuration warnings once, before Nest exists (A-1.11)', async () => {
+    app = await start({ FRONT_BURNER_PROT: '1' });
+
+    const warnings = logEntries().filter(e => String(e['message']).includes('FRONT_BURNER_PROT'));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]['level']).toBe('warn');
+    expect(logEntries()[0]['message']).toContain('FRONT_BURNER_PROT');
+  });
+
+  describe('trust proxy', () => {
+    const hsts = async (trusted: string) => {
+      app = await start({ FRONT_BURNER_TRUSTED_PROXIES: trusted });
+      const response = await request(app.getHttpServer()).get('/api/health/live').set('X-Forwarded-Proto', 'https');
+      return response.headers['strict-transport-security'];
+    };
+
+    it('trusts X-Forwarded-Proto from a trusted proxy', async () => {
+      expect(await hsts('loopback')).toBeDefined();
+    });
+
+    it('ignores X-Forwarded-Proto from an unrelated address', async () => {
+      expect(await hsts('203.0.113.7')).toBeUndefined();
+    });
+  });
+});
+
+describe('bootstrapLoggerFor', () => {
+  const lines: string[] = [];
+  const destination = { write: (line: string) => void lines.push(line) };
+
+  beforeEach(() => {
+    lines.length = 0;
+  });
+
+  it('honours the configured log level', () => {
+    const logger = bootstrapLoggerFor(
+      { FRONT_BURNER_LOG_LEVEL: 'error', FRONT_BURNER_LOG_FORMAT: 'json' },
+      destination
+    );
+    logger.warn('hidden');
+    logger.fatal('shown');
+
+    expect(lines.map(l => JSON.parse(l).message)).toEqual([ 'shown' ]);
+  });
+
+  it('falls back to JSON at info when the configuration does not parse', () => {
+    const logger = bootstrapLoggerFor(
+      { FRONT_BURNER_LOG_LEVEL: 'loud', FRONT_BURNER_LOG_FORMAT: 'pretty' },
+      destination
+    );
+    logger.info('shown');
+
+    expect(JSON.parse(lines[0]).message).toBe('shown');
+  });
+});
+
+describe('logStartupFailure', () => {
+  const lines: string[] = [];
+  const destination = { write: (line: string) => void lines.push(line) };
+
+  beforeEach(() => {
+    lines.length = 0;
+  });
+
+  it('logs the step and the reason as a fatal line', () => {
+    logStartupFailure(new StartupError('database', new Error('boom')), {}, destination);
+
+    const entry = JSON.parse(lines[0]);
+    expect(entry).toMatchObject({ level: 'fatal', step: 'database' });
+    expect(entry.message).toContain('boom');
+  });
+
+  it('also prints the configuration warnings of a failed configuration', () => {
+    const cause = new ConfigError([ { variable: 'FRONT_BURNER_PORT', message: 'bad' } ], [
+      'Unknown variable X is ignored.'
+    ]);
+
+    logStartupFailure(new StartupError('config', cause), { FRONT_BURNER_PORT: 'x' }, destination);
+
+    const entries = lines.map(l => JSON.parse(l));
+    expect(entries.map(e => e.level)).toEqual([ 'warn', 'fatal' ]);
+    expect(entries[0].message).toBe('Unknown variable X is ignored.');
+  });
+
+  it('logs other errors as a startup failure', () => {
+    logStartupFailure(new Error('odd'), {}, destination);
+
+    expect(JSON.parse(lines[0]).message).toBe('Startup failed');
   });
 });

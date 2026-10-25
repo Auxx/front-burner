@@ -1,12 +1,12 @@
-import { Config, loadConfig } from '@front-burner/server-core-config';
+import { Config, ConfigError, loadConfig } from '@front-burner/server-core-config';
 import { applyMigrations, assertNoNewerMigrations, Database, openDatabase } from '@front-burner/server-core-database';
-import { createRequestLogger } from '@front-burner/server-core-observability';
+import { createBootstrapLogger, createRequestLogger } from '@front-burner/server-core-observability';
 import { securityHeaders, serveWebClient } from '@front-burner/server-core-security';
 import { INestApplication, Logger as NestLogger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from 'nestjs-pino';
-import type { DestinationStream } from 'pino';
+import type { DestinationStream, Logger as PinoLogger } from 'pino';
 import type { HttpLogger } from 'pino-http';
 import { AppModule } from '../app/app.module';
 import { prepareDataDir } from './prepare-data-dir';
@@ -39,19 +39,50 @@ function step<T>(name: StartupStep, run: () => T): T {
   }
 }
 
+/**
+ * The logger for startup lines. Once the configuration parses, it honours
+ * `FRONT_BURNER_LOG_LEVEL` and `FRONT_BURNER_LOG_FORMAT`; when it does not,
+ * nothing can be trusted and the lines are JSON at `info`.
+ */
+export function bootstrapLoggerFor(
+  env: Record<string, string | undefined>,
+  destination?: DestinationStream
+): PinoLogger {
+  try {
+    return createBootstrapLogger(loadConfig(env, { cwd: '/' }).config, destination);
+  } catch {
+    return createBootstrapLogger(undefined, destination);
+  }
+}
+
+/** Logs why startup failed; a failed configuration also prints its warnings (A-1.11). */
+export function logStartupFailure(
+  error: unknown,
+  env: Record<string, string | undefined>,
+  destination?: DestinationStream
+): void {
+  const logger = bootstrapLoggerFor(env, destination);
+  if (error instanceof StartupError) {
+    if (error.cause instanceof ConfigError) {
+      for (const warning of error.cause.warnings) {
+        logger.warn(warning);
+      }
+    }
+    logger.fatal({ step: error.step, err: error.cause }, error.message);
+  } else {
+    logger.fatal({ err: error }, 'Startup failed');
+  }
+}
+
 function configure(
   app: NestExpressApplication,
   config: Config,
   webRoot: string,
-  warnings: string[],
   requestLogger: HttpLogger
 ): void {
   app.useLogger(app.get(Logger));
   app.flushLogs();
   const log = new NestLogger('Startup');
-  for (const warning of warnings) {
-    log.warn(warning);
-  }
   log.log(`Data directory: ${config.dataDir}`);
 
   app.set('trust proxy', config.trustedProxies);
@@ -77,6 +108,10 @@ function configure(
  */
 export async function startServer(options: StartServerOptions): Promise<INestApplication> {
   const { config, warnings } = step('config', () => loadConfig(options.env, { cwd: options.cwd }));
+  const bootstrapLogger = createBootstrapLogger(config, options.logDestination);
+  for (const warning of warnings) {
+    bootstrapLogger.warn(warning);
+  }
   const { databaseFile } = step('data-dir', () => prepareDataDir(config.dataDir));
   const database: Database = step('database', () => openDatabase(databaseFile));
 
@@ -98,7 +133,7 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
       throw new StartupError('http', error);
     });
     try {
-      configure(app, config, options.webRoot, warnings, requestLogger);
+      configure(app, config, options.webRoot, requestLogger);
       if (options.listen) {
         await app.listen(config.port);
       } else {
