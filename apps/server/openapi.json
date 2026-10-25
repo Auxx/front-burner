@@ -52,6 +52,75 @@
           "health"
         ]
       }
+    },
+    "/api/v1/onboarding": {
+      "get": {
+        "operationId": "status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingStatus"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboarding/setup-token/check": {
+      "post": {
+        "operationId": "checkSetupToken",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboarding/password-setup": {
+      "post": {
+        "operationId": "setUpPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordSetupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "onboarding"
+        ]
+      }
     }
   },
   "info": {
@@ -78,6 +147,68 @@
         },
         "required": [
           "status"
+        ]
+      },
+      "OnboardingStatus": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "required",
+              "oidc-pending",
+              "completed"
+            ]
+          },
+          "oidcFromEnvironment": {
+            "type": "boolean"
+          },
+          "setupTokenConfigured": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "state",
+          "oidcFromEnvironment",
+          "setupTokenConfigured"
+        ]
+      },
+      "SetupTokenRequest": {
+        "type": "object",
+        "properties": {
+          "setupToken": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "setupToken"
+        ]
+      },
+      "PasswordSetupRequest": {
+        "type": "object",
+        "properties": {
+          "setupToken": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "setupToken",
+          "email",
+          "displayName",
+          "password"
         ]
       }
     }
