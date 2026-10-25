@@ -88,6 +88,42 @@ describe('ToastOutletComponent', () => {
     expect(toasts().length).toBe(0);
   });
 
+  it('keeps the focus in a toast replaced by key', () => {
+    const remote = (count: number) =>
+      service.show({
+        message: `${count} new commits on origin/main`,
+        key: 'remote',
+        dismissLabel: 'Dismiss',
+        actions: [ { label: 'Pull now', run: () => undefined } ]
+      });
+    remote(3);
+    render();
+    focusFromPull(button('Pull now'));
+
+    remote(5);
+    render();
+    vi.runOnlyPendingTimers();
+    render();
+
+    expect(toasts()[0].textContent).toContain('5 new commits');
+    expect(document.activeElement).toBe(button('Pull now'));
+  });
+
+  it('moves the focus out of a toast before its action runs', () => {
+    let focusedWhenRun: Element | null = null;
+    service.show({
+      message: 'Merge committed. Push to publish it.',
+      dismissLabel: 'Dismiss',
+      actions: [ { label: 'Undo merge', run: () => (focusedWhenRun = document.activeElement) } ]
+    });
+    render();
+    focusFromPull(button('Undo merge'));
+
+    button('Undo merge').click();
+
+    expect(focusedWhenRun).toBe(pull());
+  });
+
   it('returns the focus when the toast holding it goes away', () => {
     showWithAction();
     render();

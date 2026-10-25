@@ -44,11 +44,11 @@ describe('ToastService', () => {
     service.show({ message: 'Already up to date', dismissLabel: 'Dismiss' });
     const [ { id } ] = service.toasts();
 
-    service.pause(id);
+    service.pause(id, 'hover');
     vi.advanceTimersByTime(TOAST_DURATION_MS * 2);
     expect(messages()).toEqual([ 'Already up to date' ]);
 
-    service.resume(id);
+    service.resume(id, 'hover');
     vi.advanceTimersByTime(TOAST_DURATION_MS);
     expect(messages()).toEqual([]);
   });
@@ -89,6 +89,69 @@ describe('ToastService', () => {
 
     expect(TOAST_LIMIT).toBe(3);
     expect(messages()).toEqual([ 'Toast 2', 'Toast 3', 'Toast 4' ]);
+  });
+
+  it('stays paused until neither hover nor focus holds it', () => {
+    service.show({ message: 'Already up to date', dismissLabel: 'Dismiss' });
+    const [ { id } ] = service.toasts();
+
+    service.pause(id, 'focus');
+    service.pause(id, 'hover');
+    service.resume(id, 'hover');
+    vi.advanceTimersByTime(TOAST_DURATION_MS * 2);
+    expect(messages()).toEqual([ 'Already up to date' ]);
+
+    service.resume(id, 'focus');
+    vi.advanceTimersByTime(TOAST_DURATION_MS);
+    expect(messages()).toEqual([]);
+  });
+
+  it('keeps toasts with actions over the limit and drops the oldest without', () => {
+    service.show({ message: 'Undo', dismissLabel: 'Dismiss', actions: [ { label: 'Undo merge', run: vi.fn() } ] });
+    for (const n of [ 1, 2, 3 ]) {
+      service.show({ message: `Toast ${n}`, dismissLabel: 'Dismiss' });
+    }
+
+    expect(messages()).toEqual([ 'Undo', 'Toast 2', 'Toast 3' ]);
+  });
+
+  it('keeps a toast that holds the focus over the limit', () => {
+    service.show({ message: 'Toast 1', dismissLabel: 'Dismiss' });
+    service.pause(service.toasts()[0].id, 'focus');
+    for (const n of [ 2, 3, 4 ]) {
+      service.show({ message: `Toast ${n}`, dismissLabel: 'Dismiss' });
+    }
+
+    expect(messages()).toEqual([ 'Toast 1', 'Toast 3', 'Toast 4' ]);
+  });
+
+  it('queues a toast while every shown toast must stay', () => {
+    for (const n of [ 1, 2, 3 ]) {
+      service.show({ message: `Action ${n}`, dismissLabel: 'Dismiss', actions: [ { label: 'Push', run: vi.fn() } ] });
+    }
+    service.show({ message: 'Pulled 3 commits', dismissLabel: 'Dismiss' });
+
+    expect(messages()).toEqual([ 'Action 1', 'Action 2', 'Action 3' ]);
+    expect(announce).not.toHaveBeenCalledWith('Pulled 3 commits', expect.anything());
+
+    service.dismiss(service.toasts()[0].id);
+
+    expect(messages()).toEqual([ 'Action 2', 'Action 3', 'Pulled 3 commits' ]);
+    expect(announce).toHaveBeenLastCalledWith('Pulled 3 commits', 'polite');
+  });
+
+  it('keeps the id and the pause of a toast it replaces by key', () => {
+    service.show({ message: '3 new commits on origin/main', key: 'remote', dismissLabel: 'Dismiss' });
+    const [ { id } ] = service.toasts();
+    service.pause(id, 'hover');
+
+    service.show({ message: '5 new commits on origin/main', key: 'remote', dismissLabel: 'Dismiss' });
+    vi.advanceTimersByTime(TOAST_DURATION_MS * 2);
+
+    expect(service.toasts().map(toast => [ toast.id, toast.message ])).toEqual([ [
+      id,
+      '5 new commits on origin/main'
+    ] ]);
   });
 
   it('dismisses through the returned handle', () => {

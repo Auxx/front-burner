@@ -12,6 +12,7 @@ import {
 
 import { ButtonComponent } from '../../../controls/components/button/button.component';
 import { IconButtonComponent } from '../../../controls/components/icon-button/icon-button.component';
+import { type ToastAction } from '../../services/toast/toast.model';
 import { ToastService } from '../../services/toast/toast.service';
 import { StatusIconComponent } from '../status-icon/status-icon.component';
 
@@ -74,7 +75,7 @@ export class ToastOutletComponent {
 
   protected onToastFocusin(id: string): void {
     this.focusedToast = id;
-    this.service.pause(id);
+    this.service.pause(id, 'focus');
   }
 
   protected onToastFocusout(event: FocusEvent, id: string): void {
@@ -84,11 +85,25 @@ export class ToastOutletComponent {
     // toast, which the effect above handles.
     if (next && !toast.contains(next)) {
       this.focusedToast = null;
-      this.service.resume(id);
+      this.service.resume(id, 'focus');
     }
   }
 
-  private restoreFocus(): void {
+  /**
+   * Moves the focus out of the toast first: an action that opens a dialog
+   * would otherwise return the focus, when the dialog closes, to a button
+   * that is gone.
+   */
+  protected runAction(id: string, action: ToastAction): void {
+    if (this.host.contains(this.host.ownerDocument.activeElement)) {
+      this.focusedToast = null;
+      this.restoreFocus(id);
+    }
+    this.service.run(id, action);
+  }
+
+  /** Focuses where the focus was before the region, else another toast than `leaving`. */
+  private restoreFocus(leaving?: string): void {
     const active = this.host.ownerDocument.activeElement;
     if (active && active !== this.host.ownerDocument.body && !this.host.contains(active)) {
       return;
@@ -96,7 +111,8 @@ export class ToastOutletComponent {
     if (this.returnTo?.isConnected) {
       this.returnTo.focus();
     } else {
-      this.host.querySelector<HTMLElement>('.dismiss')?.focus();
+      const others = leaving ? `.toast:not([data-toast="${leaving}"])` : '.toast';
+      this.host.querySelector<HTMLElement>(`${others} .dismiss`)?.focus();
     }
   }
 }

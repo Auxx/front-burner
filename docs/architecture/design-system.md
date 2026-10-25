@@ -288,7 +288,9 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
     ED-24's "This file was updated.", GC-22). Toasts with actions stay until
     they are dismissed or an action runs; others last 6 s, paused while hovered
     or focused (WCAG 2.2.1). A toast with the same `key` as one on screen
-    replaces it, and at most 3 are shown. Toasts are announced, assertively for
+    replaces it in place, and at most 3 are shown: the oldest toast without
+    actions that is neither hovered nor focused goes first, and a new toast
+    waits while every toast must stay. Toasts are announced, assertively for
     `danger`;
   - an **inline banner** for a state that lasts, shown where it applies (NV-15,
     RC-15, GA-34, ED-24's question, SH-17). A banner is announced once when it

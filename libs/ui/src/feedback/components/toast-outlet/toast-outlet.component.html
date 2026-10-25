@@ -2,9 +2,10 @@
   @for (toast of service.toasts(); track toast.id) {
     <li
       class="toast"
+      [attr.data-toast]="toast.id"
       [attr.data-status]="toast.status ?? 'info'"
-      (pointerenter)="service.pause(toast.id)"
-      (pointerleave)="service.resume(toast.id)"
+      (pointerenter)="service.pause(toast.id, 'hover')"
+      (pointerleave)="service.resume(toast.id, 'hover')"
       (focusin)="onToastFocusin(toast.id)"
       (focusout)="onToastFocusout($event, toast.id)"
     >
@@ -14,7 +15,7 @@
         @if (toast.actions?.length) {
           <div class="actions">
             @for (action of toast.actions; track $index) {
-              <button uiButton size="small" (click)="service.run(toast.id, action)">{{ action.label }}</button>
+              <button uiButton size="small" (click)="runAction(toast.id, action)">{{ action.label }}</button>
             }
           </div>
         }
