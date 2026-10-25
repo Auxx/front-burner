@@ -3,7 +3,10 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "tools/ai-tools/src",
   "projectType": "library",
-  "tags": [],
+  "tags": [
+    "scope:tools",
+    "type:util"
+  ],
   "implicitDependencies": [
     "ui"
   ],

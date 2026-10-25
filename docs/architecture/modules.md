@@ -79,7 +79,13 @@ libs/
     core/                 auth tokens and refresh, interceptors, push channel
                           client, error-code texts, Transloco, save queue and drafts
     api-client/           generated API methods (A-3.6)
-    ui/                   buttons, inputs, layouts; no business logic; Storybook
+
+  ui/                     buttons, inputs, layouts; no business logic; Storybook
+                          (web, kept at the top level of libs/)
+
+tools/
+  ai-tools/               command-line tools for the AI agent; not imported by
+                          any project
 ```
 
 - **A-2.1** Server feature libraries contain their controllers, services and
@@ -99,7 +105,7 @@ libs/
 
 ## A-2: Boundary rules
 
-- **A-2.4** Every project has two NX tags, `scope:<server|web|shared>` and
+- **A-2.4** Every project has two NX tags, `scope:<server|web|shared|tools>` and
   `type:<app|feature|core|domain|data-access|ui|contracts|util>`, and
   `@nx/enforce-module-boundaries` enforces these rules:
 
@@ -113,7 +119,14 @@ libs/
   | `ui` imports only `shared/util`                                                                          | No business logic, contracts or API calls in generic components.        |
   | Every other library may import `shared/contracts` and `shared/util`                                      | One source of types.                                                    |
 
-- **A-2.5** Web tags: `markdown`, `code-editor`, `shell` and
-  `repository-dialogs` are `type:domain`; `core` and `api-client` are
-  `type:data-access`. _(My call.)_ `apps/web` uses `shell` for every page;
-  `feature-repository-screen` uses it to build its combined bar (NV-9).
+  Every project has exactly one `scope:` and one `type:` tag; CI checks it with
+  `nx-tags check` from `ai-tools`, because Nx cannot require tags.
+
+- **A-2.5** `ui` is `scope:web`, `type:ui`. `scope:tools` is for workspace
+  tooling: `ai-tools` is `scope:tools`, `type:util`. `scope:tools` has no rule
+  of its own: a tooling project is limited by its type tag (`ai-tools` imports
+  only `type:util` libraries), and no project may import it. Web tags:
+  `markdown`, `code-editor`, `shell` and `repository-dialogs` are `type:domain`;
+  `core` and `api-client` are `type:data-access`. _(My call.)_ `apps/web` uses
+  `shell` for every page; `feature-repository-screen` uses it to build its
+  combined bar (NV-9).

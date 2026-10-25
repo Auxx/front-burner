@@ -1,0 +1,42 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    # Packages released together are updated together.
+    groups:
+      angular:
+        patterns:
+          - "@angular/*"
+          - "@angular-devkit/*"
+          - "@analogjs/*"
+      nx:
+        patterns:
+          - nx
+          - "@nx/*"
+      storybook:
+        patterns:
+          - storybook
+          - "@storybook/*"
+      vitest:
+        patterns:
+          - vitest
+          - "@vitest/*"
+      playwright:
+        patterns:
+          - playwright
+          - "@playwright/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      github-actions:
+        patterns:
+          - "*"

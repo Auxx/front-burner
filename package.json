@@ -7,9 +7,9 @@
     "format:check": "dprint check",
     "prepare": "husky || true",
     "lint": "nx run-many --all --target=lint",
-    "lint:ci": "nx affected -t lint --base=origin/master --head=HEAD",
     "test": "nx run-many --all --target=test --codeCoverage --maxWorkers=50% --workerThreads=true",
-    "test:ci": "nx run-many --all --target=test --configuration=ci --ci --maxWorkers=63% --workerThreads=true --code-coverage --coverageReporters=lcov"
+    "test:ci": "nx run-many --all --target=test --configuration=ci --ci --maxWorkers=63% --workerThreads=true --code-coverage --coverageReporters=lcov",
+    "check:tags": "node tools/ai-tools/src/bin/nx-tags.mjs check"
   },
   "private": true,
   "dependencies": {
@@ -39,6 +39,7 @@
     "@eslint/js": "9.39.5",
     "@hexmode/toolkit-nx": "0.1.0",
     "@nx/angular": "23.3.1",
+    "@nx/devkit": "23.3.1",
     "@nx/eslint": "23.3.1",
     "@nx/eslint-plugin": "23.3.1",
     "@nx/js": "23.3.1",
@@ -73,5 +74,8 @@
     "typescript-eslint": "8.72.0",
     "vite": "8.3.5",
     "vitest": "4.1.12"
+  },
+  "engines": {
+    "node": ">=24.22.1 <25"
   }
 }

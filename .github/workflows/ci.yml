@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Pull requests drop superseded runs; pushes to master always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Actions are pinned to commit SHAs (tags can be moved); Dependabot updates them.
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # nx-set-shas reads earlier workflow runs to find the last green commit.
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # nx affected compares against an earlier commit.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - uses: nrwl/nx-set-shas@e602fada7ad5987b0f7b1905e7a99ea1c661514c # v5.1.0
+        with:
+          main-branch-name: master
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Project tags
+        run: npm run check:tags
+
+      # Storybook stories run as browser tests (A-10.38); the browser is
+      # installed only when a project with those tests is affected.
+      - name: Find affected browser tests
+        id: browsers
+        run: |
+          affected=$(npx nx show projects --affected -t test-storybook --json)
+          echo "Affected by test-storybook: $affected"
+          if [ "$affected" != "[]" ]; then echo "storybook=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Install Playwright browsers
+        if: steps.browsers.outputs.storybook == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Lint, test, build
+        run: npx nx affected -t lint test build test-storybook e2e --parallel=3
+
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Production dependencies only: Trivy leaves out npm dev dependencies
+      # unless --include-dev-deps is set (NF-11.10).
+      - name: Scan dependencies
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: package-lock.json
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+          trivyignores: .trivyignore
