@@ -45,8 +45,17 @@ jobs:
       - name: Project tags
         run: npm run check:tags
 
-      # Storybook stories run as browser tests (A-10.38).
+      # Storybook stories run as browser tests (A-10.38); the browser is
+      # installed only when a project with those tests is affected.
+      - name: Find affected browser tests
+        id: browsers
+        run: |
+          affected=$(npx nx show projects --affected -t test-storybook --json)
+          echo "Affected by test-storybook: $affected"
+          if [ "$affected" != "[]" ]; then echo "storybook=true" >> "$GITHUB_OUTPUT"; fi
+
       - name: Install Playwright browsers
+        if: steps.browsers.outputs.storybook == 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Lint, test, build
@@ -68,3 +77,4 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: 1
+          trivyignores: .trivyignore

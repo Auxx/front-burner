@@ -72,7 +72,9 @@ push to `master`: `dprint check`, the project tag check, and `nx affected` for
 lint, test, build, the Storybook browser tests and e2e, plus a Trivy scan of the
 production dependencies in `package-lock.json`. Run the same checks locally with
 `npm run format:check`, `npm run check:tags` and `npx nx affected -t lint test
-build test-storybook e2e`. Node.js is pinned to 24.22.1 in `.nvmrc`. Dependabot
+build test-storybook e2e`. Node.js is pinned to 24.22.1 in `.nvmrc`, and
+`.npmrc` sets `engine-strict`, so `npm ci` refuses an older Node.js. Accepted
+Trivy findings go in `.trivyignore`, with a reason and a review date. Dependabot
 opens weekly update pull requests for npm packages and GitHub Actions.
 
 ## Install Nx Console

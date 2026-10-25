@@ -7,7 +7,6 @@
     "format:check": "dprint check",
     "prepare": "husky || true",
     "lint": "nx run-many --all --target=lint",
-    "lint:ci": "nx affected -t lint --base=origin/master --head=HEAD",
     "test": "nx run-many --all --target=test --codeCoverage --maxWorkers=50% --workerThreads=true",
     "test:ci": "nx run-many --all --target=test --configuration=ci --ci --maxWorkers=63% --workerThreads=true --code-coverage --coverageReporters=lcov",
     "check:tags": "node tools/ai-tools/src/bin/nx-tags.mjs check"

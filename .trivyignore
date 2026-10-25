@@ -1,0 +1,7 @@
+# Vulnerabilities accepted for the CI Trivy scan (NF-11.10), one ID per line.
+# Use only when a fix exists but the upgrade is blocked. Each entry needs a
+# comment with the reason, a link to the blocking issue, and a review date;
+# remove it as soon as the upgrade lands. For example:
+#
+# # Blocked by <link>; review 2026-12-01.
+# CVE-2026-12345
