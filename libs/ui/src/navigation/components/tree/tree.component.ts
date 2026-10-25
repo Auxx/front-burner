@@ -5,7 +5,6 @@ import { CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport } 
 import { NgTemplateOutlet } from '@angular/common';
 import {
   afterNextRender,
-  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -164,6 +163,7 @@ export class TreeComponent {
   });
 
   private readonly viewport = viewChild.required(CdkVirtualScrollViewport);
+  private readonly rowProbe = viewChild.required<ElementRef<HTMLElement>>('rowProbe');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly direction = inject(Directionality).valueSignal;
   private readonly focusMonitor = inject(FocusMonitor);
@@ -192,14 +192,22 @@ export class TreeComponent {
         focusMonitor.stopMonitoring(tree);
       });
 
-      // Touch density has taller rows (A-10.11).
-      if (typeof matchMedia !== 'function') {
+      // The viewport is measured again, and so is the row height, when it is
+      // shown again after `display: none` (a hidden pane or tab), resized or
+      // rotated, and when the density changes (A-10.11): the probe is one row
+      // high, so it resizes with `--ui-row-height`.
+      this.measureRowHeight();
+      if (typeof ResizeObserver !== 'function') {
         return;
       }
-      const coarse = matchMedia('(pointer: coarse)');
-      const remeasure = () => this.measureRowHeight();
-      coarse.addEventListener('change', remeasure);
-      destroyRef.onDestroy(() => coarse.removeEventListener('change', remeasure));
+      const viewport = this.viewport();
+      const observer = new ResizeObserver(() => {
+        viewport.checkViewportSize();
+        this.measureRowHeight();
+      });
+      observer.observe(tree);
+      observer.observe(this.rowProbe().nativeElement);
+      destroyRef.onDestroy(() => observer.disconnect());
     });
 
     effect(() => {
@@ -207,13 +215,6 @@ export class TreeComponent {
         .filter(row => row.expanded && row.node.children === undefined)
         .map(row => row.node.value);
       untracked(() => this.askForChildren(unloaded));
-    });
-
-    afterRenderEffect({
-      read: () => {
-        this.rows();
-        this.measureRowHeight();
-      }
     });
 
     destroyRef.onDestroy(() => clearTimeout(this.typeaheadTimer));
@@ -446,12 +447,14 @@ export class TreeComponent {
     return id.startsWith(prefix) ? Number(id.slice(prefix.length)) : -1;
   }
 
-  /** Rows are `var(--ui-row-height)` high; the CDK needs it in pixels. */
+  /**
+   * Rows are `var(--ui-row-height)` high; the CDK needs it in pixels, unrounded.
+   * While hidden, the probe measures 0: the last known height is kept.
+   */
   private measureRowHeight(): void {
-    const height = this.host.querySelector<HTMLElement>('[role="treeitem"]')?.offsetHeight;
-    const size = height && height > 0 ? height : FALLBACK_ROW_HEIGHT;
-    if (size !== this.itemSize()) {
-      this.itemSize.set(size);
+    const height = this.rowProbe().nativeElement.getBoundingClientRect().height;
+    if (height > 0 && height !== this.itemSize()) {
+      this.itemSize.set(height);
     }
   }
 }

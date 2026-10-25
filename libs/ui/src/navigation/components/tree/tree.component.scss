@@ -4,6 +4,7 @@
   :host {
     --ui-tree-indent: var(--ui-space-4);
 
+    position: relative;
     display: block;
     block-size: 100%;
     min-block-size: 0;
@@ -91,6 +92,17 @@
 
   :host-context([dir='rtl']) [aria-expanded='true'] > .chevron > svg {
     rotate: -90deg;
+  }
+
+  // Measures `--ui-row-height` in pixels for the virtual scrolling.
+  .row-probe {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inline-size: 0;
+    block-size: var(--ui-row-height);
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .label {

@@ -215,3 +215,79 @@ export const LargeFolder: Story = {
     await expect(tree).toHaveAttribute('aria-activedescendant', last.id);
   }
 };
+
+const manyFiles: readonly TreeNode[] = Array.from({ length: 80 }, (_, index) => {
+  const name = `note-${String(index + 1).padStart(2, '0')}.md`;
+  return { value: name, label: name };
+});
+
+/**
+ * A tree in a hidden pane whose rows change while the density switches to
+ * touch, as when a hidden tab is refreshed (FB-41) on a phone. Shown again, it
+ * lays its rows out at their own height: they do not overlap when scrolled,
+ * and End brings the last one fully into view.
+ */
+export const HiddenWhileRowsChange: Story = {
+  render: () => {
+    const hidden = signal(false);
+    const nodes = signal<readonly TreeNode[]>(manyFiles);
+    const addFile = () => nodes.update(list => [ ...list, { value: 'note-81.md', label: 'note-81.md' } ]);
+    return {
+      props: { hidden, nodes, addFile },
+      styles: [
+        ...styles,
+        '.canvas { grid-template-rows: auto auto 1fr; gap: var(--ui-space-2); }',
+        '.pane:not([hidden]) { display: grid; min-block-size: 0; }'
+      ],
+      template: `
+        <div class="canvas">
+          <button type="button" (click)="hidden.set(!hidden())">{{ hidden() ? 'Show files' : 'Hide files' }}</button>
+          <button type="button" (click)="addFile()">Add a file</button>
+          <div class="pane" [hidden]="hidden()">
+            <ui-island heading="Files" [scrollable]="false">
+              <ui-tree label="Files" [nodes]="nodes()" />
+            </ui-island>
+          </div>
+        </div>
+      `
+    };
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const root = document.documentElement;
+    const density = root.getAttribute('data-density');
+    const rows = () => [ ...canvasElement.querySelectorAll<HTMLElement>('[role="treeitem"]') ];
+
+    try {
+      await userEvent.click(canvas.getByRole('button', { name: 'Hide files' }));
+      root.setAttribute('data-density', 'touch');
+      await userEvent.click(canvas.getByRole('button', { name: 'Add a file' }));
+      await userEvent.click(canvas.getByRole('button', { name: 'Show files' }));
+
+      const tree = canvas.getByRole('tree', { name: 'Files' });
+      const rowHeight = (await canvas.findByRole('treeitem', { name: 'note-01.md' })).getBoundingClientRect().height;
+      // The CDK's scroll height is the number of rows times its row pitch.
+      await waitFor(() => expect(tree.scrollHeight / 81).toBeCloseTo(rowHeight, 1));
+
+      tree.focus();
+      await userEvent.keyboard('{End}');
+      const last = await canvas.findByRole('treeitem', { name: 'note-81.md' });
+      await waitFor(() => {
+        const box = last.getBoundingClientRect();
+        const view = tree.getBoundingClientRect();
+        expect(box.top).toBeGreaterThanOrEqual(view.top - 0.5);
+        expect(box.bottom).toBeLessThanOrEqual(view.bottom + 0.5);
+      });
+      const boxes = rows().map(row => row.getBoundingClientRect());
+      for (let i = 1; i < boxes.length; i++) {
+        await expect(boxes[i].top).toBeGreaterThanOrEqual(boxes[i - 1].bottom - 0.5);
+      }
+    } finally {
+      if (density === null) {
+        root.removeAttribute('data-density');
+      } else {
+        root.setAttribute('data-density', density);
+      }
+    }
+  }
+};

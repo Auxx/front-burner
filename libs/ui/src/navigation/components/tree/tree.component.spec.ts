@@ -1,5 +1,6 @@
 import { MenuHarness } from '@angular/aria/menu/testing';
 import { Dir } from '@angular/cdk/bidi';
+import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -519,6 +520,58 @@ describe('TreeComponent', () => {
     await stable();
 
     expect(active()).toBe(row('README.md').id);
+  });
+
+  it('keeps the known row height while hidden and re-measures on resize', async () => {
+    // jsdom has neither layout nor ResizeObserver: the row height is stubbed,
+    // and the observer's callbacks are run by hand.
+    let rowHeight = 44;
+    const observers: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          observers.push(callback);
+        }
+        observe(): void {
+          // Callbacks are run by `resize()`.
+        }
+        disconnect(): void {
+          // Nothing to release.
+        }
+      }
+    );
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      () => ({ top: 0, bottom: rowHeight, left: 0, right: 100, width: 100, height: rowHeight, x: 0, y: 0 }) as DOMRect
+    );
+    const checkViewportSize = vi.spyOn(CdkVirtualScrollViewport.prototype, 'checkViewportSize');
+    const resize = async () => {
+      observers.forEach(callback => callback([], {} as ResizeObserver));
+      await stable();
+    };
+    const contentHeight = () => (root().querySelector('.cdk-virtual-scroll-spacer') as HTMLElement).style.height;
+
+    try {
+      await create();
+      expect(contentHeight()).toBe(`${4 * 44}px`);
+
+      // Hidden: everything measures 0, and the rows change meanwhile.
+      rowHeight = 0;
+      host.nodes.set([ ...NODES, { value: 'LICENSE.md', label: 'LICENSE.md' } ]);
+      await stable();
+      await resize();
+      expect(contentHeight()).toBe(`${5 * 44}px`);
+
+      // Shown again in compact density.
+      rowHeight = 24;
+      checkViewportSize.mockClear();
+      await resize();
+      expect(checkViewportSize).toHaveBeenCalled();
+      expect(contentHeight()).toBe(`${5 * 24}px`);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
   });
 
   it('indents rows by level', async () => {
