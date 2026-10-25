@@ -33,6 +33,7 @@
     "@nestjs/swagger": "11.4.7",
     "@nestjs/throttler": "6.7.1",
     "@vscode/codicons": "0.0.46-24",
+    "argon2": "0.45.1",
     "better-sqlite3": "13.0.3",
     "drizzle-orm": "0.45.4",
     "express": "5.2.1",
