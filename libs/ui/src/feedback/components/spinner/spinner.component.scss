@@ -1,0 +1,44 @@
+@layer components {
+  :host {
+    --ui-spinner-size: var(--ui-icon-size);
+    // Not a motion token: those are zero under reduced motion, and a spinner
+    // that stops no longer shows that something runs.
+    --ui-spinner-duration: 0.8s;
+
+    box-sizing: border-box;
+    display: inline-block;
+    flex: none;
+    inline-size: var(--ui-spinner-size);
+    block-size: var(--ui-spinner-size);
+    border: 0.125rem solid color-mix(in oklch, currentColor 25%, transparent);
+    border-block-start-color: currentColor;
+    border-radius: 50%;
+    animation: spin var(--ui-spinner-duration) linear infinite;
+  }
+
+  // Reduced motion: no rotation, a slow pulse instead (NF-13.7).
+  @media (prefers-reduced-motion: reduce) {
+    :host {
+      border-color: currentColor;
+      animation: pulse 2s ease-in-out infinite;
+    }
+  }
+
+  @media (forced-colors: active) {
+    :host {
+      border-block-start-color: CanvasText;
+    }
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.4;
+    }
+  }
+}

@@ -66,3 +66,24 @@ export const Toggle: Story = {
     await expect(button).toHaveAttribute('aria-pressed', 'true');
   }
 };
+
+/** The git actions while a pull runs (GA-9). */
+export const Busy: Story = {
+  render: () => ({
+    props: { icons },
+    styles: [ iconSize, '.row { display: flex; gap: var(--ui-space-1); }' ],
+    template: `
+      <div class="row">
+        <button uiIconButton label="Fetch" disabled>
+          <svg viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path [attr.d]="icons.fetch" /></svg>
+        </button>
+        <button uiIconButton label="Pull" busy>
+          <svg viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path [attr.d]="icons.pull" /></svg>
+        </button>
+        <button uiIconButton label="Push" disabled>
+          <svg viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path [attr.d]="icons.push" /></svg>
+        </button>
+      </div>
+    `
+  })
+};

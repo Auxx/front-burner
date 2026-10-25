@@ -82,6 +82,31 @@
     cursor: default;
   }
 
+  // Busy is not unavailable: it keeps its colours (A-10.46).
+  :host([data-busy='true']) {
+    --ui-button-background: var(--ui-surface-raised);
+    --ui-button-color: var(--ui-text-default);
+    --ui-button-border: var(--ui-border-default);
+
+    cursor: progress;
+  }
+
+  :host([data-busy='true'][data-variant='primary']) {
+    --ui-button-background: var(--ui-accent);
+    --ui-button-color: var(--ui-text-on-accent);
+    --ui-button-border: transparent;
+  }
+
+  :host([data-busy='true'][data-variant='danger']) {
+    --ui-button-color: var(--ui-danger-text);
+    --ui-button-border: var(--ui-danger-border);
+  }
+
+  :host([data-busy='true'][data-variant='ghost']) {
+    --ui-button-background: transparent;
+    --ui-button-border: transparent;
+  }
+
   :host(:focus-visible) {
     @include mixins.focus-ring;
   }
@@ -92,6 +117,15 @@
     :host([data-variant='primary']:not(:disabled)) {
       border: calc(var(--ui-border-width) * 2) solid ButtonText;
     }
+  }
+
+  .icon {
+    display: inline-flex;
+  }
+
+  .icon:empty,
+  .icon[hidden] {
+    display: none;
   }
 
   .label {
