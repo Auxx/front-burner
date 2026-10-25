@@ -1,3 +1,4 @@
+import { DATABASE, Database } from '@front-burner/server-core-database';
 import type { INestApplication } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -38,6 +39,16 @@ describe('startServer', () => {
   afterEach(async () => {
     await app?.close();
     rmSync(root, { recursive: true, force: true });
+  });
+
+  it('closes the database when the application closes', async () => {
+    app = await start();
+    const database = app.get<Database>(DATABASE);
+    expect(database.sqlite.open).toBe(true);
+
+    await app.close();
+
+    expect(database.sqlite.open).toBe(false);
   });
 
   it('serves the health endpoints outside /api/v1', async () => {
