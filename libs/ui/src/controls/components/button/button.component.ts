@@ -9,7 +9,7 @@ export type ButtonType = 'button' | 'submit' | 'reset';
 
 /**
  * A button, or a link that looks like one. Its content is its label, with an
- * optional leading `<svg>` icon.
+ * optional leading `<ui-icon>`.
  *
  * A button is `type="button"` unless `type` says otherwise, so that a button in
  * a form, such as Cancel, does not submit it. While `busy`, a spinner replaces
@@ -20,7 +20,7 @@ export type ButtonType = 'button' | 'submit' | 'reset';
   selector: 'button[uiButton], a[uiButton]',
   imports: [ SpinnerComponent ],
   template: `
-    <span class="icon" [hidden]="busy()"><ng-content select="svg" /></span>
+    <span class="icon" [hidden]="busy()"><ng-content select="ui-icon" /></span>
     @if (busy()) {
       <ui-spinner />
     }

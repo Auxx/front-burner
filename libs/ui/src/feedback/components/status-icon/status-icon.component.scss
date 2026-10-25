@@ -9,9 +9,4 @@
       color: var(--ui-#{$status}-icon);
     }
   }
-
-  svg {
-    inline-size: var(--ui-icon-size);
-    block-size: var(--ui-icon-size);
-  }
 }

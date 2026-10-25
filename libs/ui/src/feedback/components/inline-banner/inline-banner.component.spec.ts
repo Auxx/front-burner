@@ -45,7 +45,7 @@ describe('InlineBannerComponent', () => {
     expect(locked().dataset['status']).toBe('warning');
     expect(locked().querySelector('.message')?.textContent).toContain('is locked');
     expect(locked().querySelector('.actions button')?.textContent?.trim()).toBe('Unlock');
-    expect(locked().querySelector('ui-status-icon svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(locked().querySelector('ui-status-icon ui-icon')?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('offers a dismiss button that reports and leaves removal to its owner', async () => {

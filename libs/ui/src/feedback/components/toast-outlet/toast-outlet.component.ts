@@ -10,15 +10,12 @@ import {
   untracked
 } from '@angular/core';
 
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { ButtonComponent } from '../../../controls/components/button/button.component';
 import { IconButtonComponent } from '../../../controls/components/icon-button/icon-button.component';
 import { type ToastAction } from '../../services/toast/toast.model';
 import { ToastService } from '../../services/toast/toast.service';
 import { StatusIconComponent } from '../status-icon/status-icon.component';
-
-// Codicon `close` (CC-BY-4.0), inline until the Icon component exists.
-const close =
-  'M8.70701 8.00001L12.353 4.35401C12.548 4.15901 12.548 3.84201 12.353 3.64701C12.158 3.45201 11.841 3.45201 11.646 3.64701L8.00001 7.29301L4.35401 3.64701C4.15901 3.45201 3.84201 3.45201 3.64701 3.64701C3.45201 3.84201 3.45201 4.15901 3.64701 4.35401L7.29301 8.00001L3.64701 11.646C3.45201 11.841 3.45201 12.158 3.64701 12.353C3.74501 12.451 3.87301 12.499 4.00101 12.499C4.12901 12.499 4.25701 12.45 4.35501 12.353L8.00101 8.70701L11.647 12.353C11.745 12.451 11.873 12.499 12.001 12.499C12.129 12.499 12.257 12.45 12.355 12.353C12.55 12.158 12.55 11.841 12.355 11.646L8.70901 8.00001H8.70701Z';
 
 /**
  * Where the toasts of `ToastService` are shown: a labelled region that the web
@@ -31,7 +28,7 @@ const close =
  */
 @Component({
   selector: 'ui-toast-outlet',
-  imports: [ ButtonComponent, IconButtonComponent, StatusIconComponent ],
+  imports: [ ButtonComponent, IconButtonComponent, IconComponent, StatusIconComponent ],
   templateUrl: './toast-outlet.component.html',
   styleUrl: './toast-outlet.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,7 +42,6 @@ export class ToastOutletComponent {
   readonly label = input.required<string>();
 
   protected readonly service = inject(ToastService);
-  protected readonly close = close;
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly injector = inject(Injector);

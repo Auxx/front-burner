@@ -1,6 +1,7 @@
 import { signal } from '@angular/core';
 import { Meta, StoryObj } from '@storybook/angular-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { IslandComponent } from '../../../layout/components/island/island.component';
 import { MenuTriggerDirective } from '../../directives/menu-trigger/menu-trigger.directive';
 import { TreeItemMenuDirective } from '../../directives/tree-item-menu/tree-item-menu.directive';
@@ -9,10 +10,6 @@ import type { TreeNode } from '../../models/tree-node.model';
 import { MenuItemComponent } from '../menu-item/menu-item.component';
 import { MenuComponent } from '../menu/menu.component';
 import { TreeComponent } from './tree.component';
-
-// Codicon `ellipsis` (CC-BY-4.0), inline until the Icon component exists.
-const ellipsis =
-  'M5 8C5 8.55229 4.55228 9 4 9C3.44772 9 3 8.55229 3 8C3 7.44772 3.44772 7 4 7C4.55228 7 5 7.44772 5 8ZM9 8C9 8.55229 8.55229 9 8 9C7.44772 9 7 8.55229 7 8C7 7.44772 7.44772 7 8 7C8.55229 7 9 7.44772 9 8ZM12 9C12.5523 9 13 8.55229 13 8C13 7.44772 12.5523 7 12 7C11.4477 7 11 7.44772 11 8C11 8.55229 11.4477 9 12 9Z';
 
 const meta: Meta<TreeComponent> = {
   title: 'Navigation/Tree',
@@ -23,6 +20,7 @@ const meta: Meta<TreeComponent> = {
       ...story(),
       moduleMetadata: {
         imports: [
+          IconComponent,
           IslandComponent,
           MenuComponent,
           MenuItemComponent,
@@ -74,7 +72,7 @@ const repository: readonly TreeNode[] = [
 /** The file tree of a repository (REQ-FILE-001), with row actions. */
 export const FileTree: Story = {
   render: () => ({
-    props: { nodes: repository, ellipsis },
+    props: { nodes: repository },
     styles: [
       ...styles,
       `.actions {
@@ -83,8 +81,7 @@ export const FileTree: Story = {
         padding: 0; color: var(--ui-icon-muted); background: none; border: 0; border-radius: var(--ui-radius-control);
         cursor: pointer;
       }`,
-      '.actions:hover { color: var(--ui-icon-default); background: var(--ui-surface-hover); }',
-      '.actions svg { inline-size: var(--ui-icon-size); block-size: var(--ui-icon-size); }'
+      '.actions:hover { color: var(--ui-icon-default); background: var(--ui-surface-hover); }'
     ],
     template: `
       <div class="canvas">
@@ -93,7 +90,7 @@ export const FileTree: Story = {
             <ng-template uiTreeNode let-node>
               <span class="name">{{ node.label }}</span>
               <button class="actions" uiTreeItemMenu [uiMenuTrigger]="actions.aria" aria-label="Actions for {{ node.label }}">
-                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path [attr.d]="ellipsis" /></svg>
+                <ui-icon name="ellipsis" />
               </button>
             </ng-template>
           </ui-tree>
@@ -120,6 +117,36 @@ export const FileTree: Story = {
     await userEvent.keyboard('{ArrowRight}');
     await waitFor(() => expect(docs).toHaveAttribute('aria-expanded', 'true'));
     await expect(await canvas.findByRole('treeitem', { name: 'guide.md' })).toBeVisible();
+  }
+};
+
+/**
+ * Right-to-left text: a collapsed folder's chevron points to the inline start,
+ * and an expanded folder's points down.
+ */
+export const RightToLeft: Story = {
+  render: () => ({
+    props: { nodes: repository },
+    styles,
+    template: `
+      <div class="canvas" dir="rtl">
+        <ui-island heading="Files" [scrollable]="false">
+          <ui-tree label="Files" [nodes]="nodes" />
+        </ui-island>
+      </div>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const docs = canvas.getByRole('treeitem', { name: 'docs' });
+    const chevron = (item: HTMLElement) => getComputedStyle(item.querySelector('.chevron > ui-icon') as Element);
+
+    await userEvent.click(docs);
+    await waitFor(() => expect(docs).toHaveAttribute('aria-expanded', 'true'));
+
+    await expect(chevron(canvas.getByRole('treeitem', { name: '.github' })).scale).toBe('-1 1');
+    // The chevron turns with a transition.
+    await waitFor(() => expect(chevron(docs).rotate).toBe('-90deg'));
   }
 };
 

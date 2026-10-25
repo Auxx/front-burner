@@ -1,6 +1,9 @@
 #!/usr/bin/env node
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { main, print, table, UsageError } from '../lib/cli.mjs';
-import { findIcons, loadIcons, readIcon } from '../lib/icons.mjs';
+import { buildSprite, findIcons, loadIcons, readIcon, readIconList, UI_SPRITE } from '../lib/icons.mjs';
+import { workspacePath } from '../lib/workspace.mjs';
 
 main({
   name: 'icons',
@@ -19,6 +22,34 @@ main({
           icons.length
             ? table([ [ 'name', 'category', 'description' ], ...icons.map(i => [ i.name, i.category, i.description ]) ])
             : 'No icons match.');
+      }
+    },
+    sprite: {
+      usage: '[--write]',
+      summary: 'Builds ui-icon\'s sprite from ICON_NAMES; writes it only with --write.',
+      help: [
+        'Reads ICON_NAMES in libs/ui/src/content/models/icon-name.model.ts and builds',
+        'libs/ui/src/assets/icons.svg from the SVG files of @vscode/codicons. Without',
+        '--write it says whether the sprite is up to date and exits 1 if it is not.'
+      ].join('\n'),
+      options: { write: { type: 'boolean' } },
+      run(options) {
+        const names = readIconList();
+        const sprite = buildSprite(loadIcons(), names);
+        const current = existsSync(UI_SPRITE) ? readFileSync(UI_SPRITE, 'utf8') : '';
+        const target = workspacePath(UI_SPRITE);
+        if (current === sprite) {
+          console.log(`${target} is up to date (${names.length} icons).`);
+          return 0;
+        }
+        if (!options.write) {
+          console.log(`${target} is out of date: rerun with --write to build it (${names.length} icons).`);
+          return 1;
+        }
+        mkdirSync(dirname(UI_SPRITE), { recursive: true });
+        writeFileSync(UI_SPRITE, sprite);
+        console.log(`Wrote ${target} (${names.length} icons).`);
+        return 0;
       }
     },
     show: {

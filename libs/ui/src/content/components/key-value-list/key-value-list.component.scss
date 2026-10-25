@@ -1,0 +1,11 @@
+@layer components {
+  // Items line up on these columns through `subgrid`, and query the list's
+  // width (A-10.7).
+  :host {
+    display: grid;
+    grid-template-columns: fit-content(40%) minmax(0, 1fr);
+    gap: var(--ui-space-2) var(--ui-space-4);
+    margin: 0;
+    container: key-value-list / inline-size;
+  }
+}

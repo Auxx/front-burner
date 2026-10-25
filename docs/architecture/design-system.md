@@ -238,7 +238,7 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   | Navigation | `TabStrip`, `Tree`, `Menu`, `Breadcrumbs`                                                                | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
   | Controls   | `Button`, `IconButton`, `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements; Aria Combobox and Listbox; CDK Overlay |
   | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`               | CDK Overlay, Dialog and LiveAnnouncer                   |
-  | Content    | `Icon`, `EmptyState`, `KeyValueList`                                                                     | Own code                                                |
+  | Content    | `Icon`, `EmptyState`, `KeyValueList`                                                                     | Own code; a curated Codicons sprite                     |
 
   _(My call.)_ The list grows when a requirement needs a new component, not
   ahead of it.
@@ -313,6 +313,16 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   a banner's actions (`uiBannerActions`) or a dialog's footer
   (`uiDialogFooter`), are attribute components with their own styles, since a
   component cannot style the children of projected content.
+- **A-10.49** An **empty state** (`ui-empty-state`) says why a place is empty
+  and what to do next, with an optional decorative icon, at most one heading at
+  the level its place needs, and the actions that fill it (FB-12, DS-11, GA-13).
+  It centres itself in the block size it is given, such as an island that does
+  not scroll, and is not announced.
+- **A-10.50** Read-only details (RM-14, RM-16, RC-21) are a **key-value list**:
+  `dl[uiKeyValueList]` with `div[uiKeyValue]` items, the only grouping element
+  HTML allows in a `<dl>`. Values sit beside their labels, and under them when
+  the list is narrower than 22 rem; fingerprints and other machine values are
+  `mono`. Long values wrap anywhere.
 
 ## A-10: Icons and fonts
 
@@ -321,6 +331,19 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   self-hosted SVG sprite (`img-src 'self'`) and drawn by the `Icon` component
   with `fill: currentColor`. Icons that only decorate are `aria-hidden`; an
   icon-only button takes a required accessible name.
+- **A-10.48** `ui-icon` draws a symbol of our own sprite,
+  `libs/ui/src/assets/icons.svg`, with `<use>`. The sprite holds only the icons
+  listed in `ICON_NAMES` (typed as `IconName`), built from the package's SVG
+  files by `node tools/ai-tools/src/bin/icons.mjs sprite --write`; a spec fails
+  while the two differ. The package's own `dist/codicon.svg` is not used: it
+  lacks icons whose file is named by a later alias, such as `warning`, `sync`
+  and `lock`. The `ui` library's build does not ship the sprite: the web
+  client's build copies `libs/ui/src/assets/icons.svg` to `assets/` (an asset
+  entry `{ glob: 'icons.svg', input: 'libs/ui/src/assets', output: 'assets' }`)
+  and serves it at `assets/icons.svg`, the default of `ICON_SPRITE_URL`; its
+  licence notices carry the Codicons CC-BY-4.0 attribution. Storybook serves the
+  sprite from its static files. An icon is decorative unless it has a `label`; a
+  component that takes a leading icon projects a `ui-icon`.
 - **A-10.36** Fonts are **Inter** for the UI and **JetBrains Mono** for code,
   both under the SIL Open Font License, from the `@fontsource-variable` packages
   and served from the web client's own origin (`font-src 'self'`) with

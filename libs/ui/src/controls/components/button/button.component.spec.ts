@@ -1,6 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { ButtonComponent } from './button.component';
 
 @Component({
@@ -75,9 +76,9 @@ describe('ButtonComponent', () => {
 });
 
 @Component({
-  imports: [ ButtonComponent ],
+  imports: [ ButtonComponent, IconComponent ],
   template: `
-    <button uiButton [busy]="busy()" [unavailable]="unavailable()" (click)="clicks = clicks + 1"><svg aria-hidden="true"></svg>Pull</button>
+    <button uiButton [busy]="busy()" [unavailable]="unavailable()" (click)="clicks = clicks + 1"><ui-icon name="repo-pull" />Pull</button>
     <button uiButton unavailable (click)="clicks = clicks + 1">Push</button>
   `
 })
@@ -113,6 +114,7 @@ describe('ButtonComponent busy', () => {
     await setBusy(true);
 
     expect(pull.querySelector('ui-spinner')).not.toBeNull();
+    expect(pull.querySelector('.icon > ui-icon')).not.toBeNull();
     expect((pull.querySelector('.icon') as HTMLElement).hidden).toBe(true);
     expect(pull.getAttribute('aria-disabled')).toBe('true');
     expect(pull.dataset['busy']).toBe('true');

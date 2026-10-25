@@ -1,15 +1,13 @@
 import { Meta, StoryObj } from '@storybook/angular-vite';
 import { expect } from 'storybook/test';
 
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { BadgeComponent } from './badge.component';
-
-// Codicon `sync` (CC-BY-4.0), inline until the Icon component exists.
-const sync =
-  'M14 3.5V6.5C14 6.78 13.78 7 13.5 7H10.5C10.22 7 9.99999 6.78 9.99999 6.5C9.99999 6.22 10.22 6 10.5 6H12.58C11.78 4.17 10.01 3 7.99999 3C5.77999 3 3.79999 4.5 3.18999 6.64C3.12999 6.86 2.92999 7 2.70999 7C2.65999 7 2.61999 7 2.56999 6.98C2.29999 6.9 2.14999 6.63 2.22999 6.36C2.95999 3.79 5.32999 2 7.99999 2C10.05 2 11.91 3.02 13 4.69V3.5C13 3.22 13.22 3 13.5 3C13.78 3 14 3.22 14 3.5ZM13.42 9.02C13.16 8.95 12.88 9.1 12.8 9.37C12.19 11.51 10.22 13.01 7.98999 13.01C5.97999 13.01 4.20999 11.84 3.40999 10.01H5.48999C5.76999 10.01 5.98999 9.79 5.98999 9.51C5.98999 9.23 5.76999 9.01 5.48999 9.01H2.48999C2.20999 9.01 1.98999 9.23 1.98999 9.51V12.51C1.98999 12.79 2.20999 13.01 2.48999 13.01C2.76999 13.01 2.98999 12.79 2.98999 12.51V11.32C4.07999 12.98 5.93999 14.01 7.98999 14.01C10.66 14.01 13.03 12.22 13.76 9.65C13.84 9.38 13.68 9.11 13.41 9.03L13.42 9.02Z';
 
 const meta: Meta<BadgeComponent> = {
   title: 'Feedback/Badge',
-  component: BadgeComponent
+  component: BadgeComponent,
+  decorators: [ story => ({ ...story(), moduleMetadata: { imports: [ IconComponent ] } }) ]
 };
 
 export default meta;
@@ -19,15 +17,13 @@ type Story = StoryObj<BadgeComponent>;
 /** Repository statuses and warnings (DS-22, RM-6, RM-8). */
 export const Statuses: Story = {
   render: () => ({
-    props: { sync },
     styles: [
-      '.row { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); }',
-      'svg { inline-size: var(--ui-icon-size); block-size: var(--ui-icon-size); }'
+      '.row { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); }'
     ],
     template: `
       <div class="row">
         <span uiBadge>
-          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path [attr.d]="sync" /></svg>
+          <ui-icon name="sync" />
           Cloning
         </span>
         <span uiBadge status="danger">Clone failed</span>

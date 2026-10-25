@@ -121,15 +121,13 @@
       @include mixins.focus-ring;
     }
 
-    svg {
-      inline-size: var(--ui-icon-size);
-      block-size: var(--ui-icon-size);
+    ui-icon {
       // Dots in a column on a vertical separator, so it reads as a handle.
       rotate: 90deg;
     }
   }
 
-  :host([data-orientation='vertical']) .presets svg {
+  :host([data-orientation='vertical']) .presets ui-icon {
     rotate: none;
   }
 }

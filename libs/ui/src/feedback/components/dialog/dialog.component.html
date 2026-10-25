@@ -2,7 +2,7 @@
   <h2 class="heading" [id]="context.headingId">{{ heading() }}</h2>
   @if (closeLabel(); as label) {
     <button uiIconButton [label]="label" [disabled]="!ref.dismissible()" (click)="ref.close()">
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path [attr.d]="close" /></svg>
+      <ui-icon name="close" />
     </button>
   }
 </header>

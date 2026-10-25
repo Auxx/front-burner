@@ -8,6 +8,8 @@ const workspaceRoot = join(configDir, '../../..');
 const config: StorybookConfig = {
   stories: [ '../**/*.@(mdx|stories.@(js|jsx|ts|tsx))' ],
   addons: [ '@storybook/addon-a11y', '@storybook/addon-vitest' ],
+  // The icon sprite, at the URL the web client serves it from (ICON_SPRITE_URL).
+  staticDirs: [ { from: '../src/assets', to: '/assets' } ],
   core: {
     disableTelemetry: true
   },
