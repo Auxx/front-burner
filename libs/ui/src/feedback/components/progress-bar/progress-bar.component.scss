@@ -1,0 +1,61 @@
+@layer components {
+  :host {
+    --ui-progress-bar-height: var(--ui-space-1);
+
+    box-sizing: border-box;
+    display: block;
+    inline-size: 100%;
+    block-size: var(--ui-progress-bar-height);
+    background: var(--ui-surface-sunken);
+    border: var(--ui-border-width) solid var(--ui-border-strong);
+    border-radius: var(--ui-radius-pill);
+    overflow: hidden;
+  }
+
+  .fill {
+    block-size: 100%;
+    inline-size: calc(var(--ui-progress-value, 0) * 100%);
+    background: var(--ui-accent);
+    transition: inline-size var(--ui-duration-base) var(--ui-easing-standard);
+  }
+
+  // Not a motion token, as the spinner: a bar that stops no longer shows that
+  // something runs.
+  :host([data-indeterminate='true']) .fill {
+    inline-size: 40%;
+    animation: slide 1.5s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :host([data-indeterminate='true']) .fill {
+      inline-size: 100%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+  }
+
+  @media (forced-colors: active) {
+    :host {
+      border-color: CanvasText;
+    }
+
+    .fill {
+      background: Highlight;
+    }
+  }
+
+  @keyframes slide {
+    from {
+      margin-inline-start: -40%;
+    }
+
+    to {
+      margin-inline-start: 100%;
+    }
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.4;
+    }
+  }
+}

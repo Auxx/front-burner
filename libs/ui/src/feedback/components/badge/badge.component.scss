@@ -1,0 +1,27 @@
+@layer components {
+  :host {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-1);
+    max-inline-size: 100%;
+    min-block-size: calc(var(--ui-icon-size) + var(--ui-space-1));
+    padding-inline: var(--ui-space-1-5);
+    background: var(--ui-surface-sunken);
+    // A projected icon inherits this colour.
+    color: var(--ui-text-muted);
+    font-size: var(--ui-font-size-ui-small);
+    font-weight: var(--ui-font-weight-medium);
+    overflow-wrap: anywhere;
+    border: var(--ui-border-width) solid var(--ui-border-default);
+    border-radius: var(--ui-radius-pill);
+  }
+
+  @each $status in (info, success, warning, danger) {
+    :host([data-status='#{$status}']) {
+      background: var(--ui-#{$status}-background);
+      color: var(--ui-#{$status}-text);
+      border-color: var(--ui-#{$status}-border);
+    }
+  }
+}

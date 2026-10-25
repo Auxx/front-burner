@@ -20,6 +20,8 @@ export {
 } from './controls/directives/select-option/select-option.directive';
 export { type ChoiceOption } from './controls/models/choice-option.model';
 export { FieldControl } from './controls/models/field-control.model';
+export { BadgeComponent, type BadgeStatus } from './feedback/components/badge/badge.component';
+export { ProgressBarComponent } from './feedback/components/progress-bar/progress-bar.component';
 export { SpinnerComponent } from './feedback/components/spinner/spinner.component';
 export { type Status } from './feedback/models/status.model';
 export { ActivityBarItemComponent } from './layout/components/activity-bar-item/activity-bar-item.component';
