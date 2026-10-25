@@ -109,9 +109,27 @@ describe('serveWebClient', () => {
     }
   );
 
-  it('returns 404 for a missing file with an extension', async () => {
+  it('returns 404 for a missing file in a folder of the build', async () => {
+    mkdirSync(join(webRoot, 'assets'));
     const res = await request(createApp()).get('/assets/missing.png');
     expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for a missing file at the root, such as a hashed chunk', async () => {
+    const res = await request(createApp()).get('/missing-chunk.js');
+    expect(res.status).toBe(404);
+  });
+
+  it('serves index.html for a deep link that ends in a file name', async () => {
+    mkdirSync(join(webRoot, 'assets'));
+    const res = await request(createApp()).get('/repositories/1/files/docs/README.md');
+    expect(res.status).toBe(200);
+    expect(res.text).not.toContain('__CSP_NONCE__');
+    expect(res.headers['content-security-policy']).toBe(contentSecurityPolicy(nonceOf(res.text)));
+  });
+
+  it('serves index.html for a deep link when the first segment is a file name', async () => {
+    expect((await request(createApp()).get('/main.js/x.md')).status).toBe(200);
   });
 
   it('leaves /api paths alone', async () => {

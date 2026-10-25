@@ -1,5 +1,5 @@
 import express from 'express';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, posix } from 'node:path';
 import { contentSecurityPolicy, createNonce, CSP_NONCE_PLACEHOLDER } from '../csp/csp';
 
@@ -16,6 +16,37 @@ function isIndexPath(path: string): boolean {
     return false;
   }
   return posix.normalize(decoded).toLowerCase() === '/index.html';
+}
+
+/**
+ * Whether a path that matched no file is a missing file of the build (answered
+ * with 404) rather than a client-side route: anything under a folder of the web
+ * root (`assets/`, `i18n/`, `media/`), or a single root-level name with an
+ * extension (a hashed chunk). Routes such as `/repositories/1/files/a.md` end in
+ * a file name too, so the extension alone cannot tell them apart.
+ */
+function isMissingBuildFile(path: string, webRoot: string): boolean {
+  if (isIndexPath(path)) {
+    return false;
+  }
+  const segments = path.split('/').filter(segment => segment !== '');
+  if (segments.length === 1) {
+    return extname(segments[0]) !== '';
+  }
+  let first: string;
+  try {
+    first = decodeURIComponent(segments[0] ?? '');
+  } catch {
+    return false;
+  }
+  if (first === '' || first === '.' || first === '..' || /[\\/]/.test(first)) {
+    return false;
+  }
+  try {
+    return statSync(join(webRoot, first)).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -44,7 +75,7 @@ export function serveWebClient(app: express.Application, webRoot: string): boole
         next(err);
         return;
       }
-      if (extname(req.path) !== '' && !isIndexPath(req.path)) {
+      if (isMissingBuildFile(req.path, webRoot)) {
         res.status(404).end();
         return;
       }

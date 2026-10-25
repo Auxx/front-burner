@@ -67,7 +67,11 @@ top of the security rules in the requirements and NF-11. See
 ## A-7: Browser
 
 - **A-7.9** The backend serves `index.html` itself, adding a fresh CSP nonce per
-  request (NF-11.1) and the version header (NF-7.6).
+  request (NF-11.1) and the version header (NF-7.6). Every GET or HEAD path that
+  is not a file of the build gets `index.html`, so that reloading a deep link
+  such as `/repositories/1/files/docs/README.md` works; only a missing file
+  under a folder of the build (`assets/`, `i18n/`, `media/`) or a missing
+  root-level file with an extension (a hashed chunk) gets 404.
 - **A-7.10** HTML from Markdown is sanitised by `rehype-sanitize` and then
   DOMPurify, both configured from the safe HTML whitelist (REQ-EDIT-002), and
   passed to Angular in one shared preview component (D-7.6). Raw repository
