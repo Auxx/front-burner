@@ -1,3 +1,6 @@
+export { IconComponent } from './content/components/icon/icon.component';
+export { ICON_NAMES, type IconName } from './content/models/icon-name.model';
+export { ICON_SPRITE_URL } from './content/tokens/icon-sprite-url.token';
 export {
   ButtonComponent,
   type ButtonSize,

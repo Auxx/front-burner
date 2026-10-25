@@ -1,0 +1,13 @@
+@layer components {
+  :host {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--ui-icon-size);
+    block-size: var(--ui-icon-size);
+  }
+
+  svg {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+}

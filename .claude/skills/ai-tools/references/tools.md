@@ -10,7 +10,7 @@ watch out for. The rules shared by all tools are in [SKILL.md](../SKILL.md).
 | [`colour`](#colour)   | Converting colours, WCAG contrast, finding a lightness that passes |
 | [`tokens`](#tokens)   | The ui library's colour tokens and contrast pairs, without a build |
 | [`story`](#story)     | Screenshots of stories and values read from their pages            |
-| [`icons`](#icons)     | Finding Codicons and their SVG                                     |
+| [`icons`](#icons)     | Finding Codicons and building the sprite of `ui-icon`              |
 | [`doc-ids`](#doc-ids) | Checking and renumbering IDs such as A-10.38 or REQ-EDIT-002       |
 
 ## `colour`
@@ -160,21 +160,31 @@ story.mjs eval controls-button--variants "matchMedia('(prefers-reduced-motion: r
 ## `icons`
 
 Looks up [Codicons](https://github.com/microsoft/vscode-codicons) (A-10.35) in
-the `@vscode/codicons` package.
+the `@vscode/codicons` package, and builds the sprite that `ui-icon` draws from.
 
-| Command          | Does                                                                       |
-| ---------------- | -------------------------------------------------------------------------- |
-| `find <word...>` | Icons matching every word, best first: names, then tags, then descriptions |
-| `show <name...>` | The SVG of each icon (16 × 16, `fill="currentColor"`)                      |
+| Command          | Does                                                                         |
+| ---------------- | ---------------------------------------------------------------------------- |
+| `find <word...>` | Icons matching every word, best first: names and aliases, tags, descriptions |
+| `show <name...>` | The SVG of each icon (16 × 16, `fill="currentColor"`)                        |
+| `sprite`         | Builds `libs/ui/src/assets/icons.svg` from `ICON_NAMES`; 1 if out of date    |
 
 ```shell
 icons.mjs find close
 icons.mjs find git branch --limit 5
 icons.mjs show loading eye
+icons.mjs sprite --write
 ```
 
-- Check that an icon exists with `find` before using its name in a component or
-  story.
+- Icons are named by their SVG file in the package (`warning`, `ellipsis`),
+  which is the name `ui-icon` takes. `find` and `show` also accept an alias from
+  the package's `mapping.json` (`alert`, `more`) and print the file name.
+- The package's own `dist/codicon.svg` is not used: it lacks icons whose file is
+  named by a later alias, such as `warning`, `sync` and `lock`.
+- To give `ui-icon` a new icon, check it with `find`, add its name in order to
+  `ICON_NAMES` in `libs/ui/src/content/models/icon-name.model.ts`, then run
+  `sprite --write`. `sprite` writes only with `--write`; without it, it exits 1
+  when the sprite is out of date. A spec fails while the sprite and the list
+  differ, including after a Codicons upgrade that changes an icon.
 
 ## `doc-ids`
 
