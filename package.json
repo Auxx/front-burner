@@ -98,7 +98,7 @@
     "eslint": "9.39.5",
     "eslint-plugin-playwright": "1.8.3",
     "jsdom": "27.4.0",
-    "jsonc-eslint-parser": "2.4.2",
+    "jsonc-eslint-parser": "3.3.0",
     "ng-packagr": "22.2.5",
     "nx": "23.3.1",
     "playwright": "1.64.1",
