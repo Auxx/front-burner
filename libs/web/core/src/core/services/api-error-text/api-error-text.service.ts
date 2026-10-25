@@ -9,6 +9,10 @@ const REFERENCE_LENGTH = 8;
 export class ApiErrorTextService {
   private readonly transloco = inject(TranslocoService);
 
+  /**
+   * Relies on the active language being loaded already (true once any page has
+   * rendered); until then every code falls back to `error.message`.
+   */
   describe(error: ApiError): { text: string; reference: string | null; } {
     const key = `errors.${error.code}`;
     // Transloco returns the key itself when it has no translation.

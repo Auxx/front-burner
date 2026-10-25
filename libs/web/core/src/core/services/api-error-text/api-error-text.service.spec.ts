@@ -17,7 +17,12 @@ describe('ApiErrorTextService', () => {
     TestBed.configureTestingModule({
       imports: [
         TranslocoTestingModule.forRoot({
-          langs: { en: { 'errors.not-found': 'We could not find that.' } },
+          langs: {
+            en: {
+              'errors.not-found': 'We could not find that.',
+              'errors.rate-limited': 'Wait {{ retryAfter }} seconds.'
+            }
+          },
           preloadLangs: true,
           translocoConfig: { availableLangs: [ 'en' ], defaultLang: 'en' }
         })
@@ -28,6 +33,11 @@ describe('ApiErrorTextService', () => {
 
   it('translates the error code', () => {
     expect(service.describe(error('not-found')).text).toBe('We could not find that.');
+  });
+
+  it('interpolates the params of the error', () => {
+    const rateLimited = { ...error('rate-limited'), params: { retryAfter: 30 } };
+    expect(service.describe(rateLimited).text).toBe('Wait 30 seconds.');
   });
 
   it('falls back to the message for a code without a key', () => {
