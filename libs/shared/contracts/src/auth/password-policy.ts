@@ -67,9 +67,9 @@ export const PasswordSchema = z.string().superRefine((password, ctx) => {
 });
 
 /** The object-level check of PP-7, reported at `password`. */
-export function refinePasswordNotEmail(
-  value: { email: string; password: string; },
-  ctx: z.RefinementCtx
+export function refinePasswordNotEmail<T extends { email?: string; password: string; }>(
+  value: T,
+  ctx: z.RefinementCtx<T>
 ): void {
   if (passwordPolicyIssues(value.password, value.email).includes('equals-email')) {
     ctx.addIssue({ code: 'custom', message: MESSAGE, path: [ 'password' ], params: { code: 'equals-email' } });
