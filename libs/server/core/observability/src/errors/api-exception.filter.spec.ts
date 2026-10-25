@@ -1,9 +1,11 @@
 import { Config } from '@front-burner/server-core-config';
 import { ApiErrorSchema } from '@front-burner/shared-contracts';
-import { Body, Controller, Get, INestApplication, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, INestApplication, Post } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
+import { ThrottlerException } from '@nestjs/throttler';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
+import { Writable } from 'node:stream';
 import request from 'supertest';
 import { z } from 'zod';
 import { LoggingModule } from '../logging/logging.module';
@@ -17,6 +19,16 @@ class TestController {
   @Get('api-error')
   apiError() {
     throw new ApiErrorException(409, 'some-code', { a: 1 });
+  }
+
+  @Get('throttled')
+  throttled() {
+    throw new ThrottlerException();
+  }
+
+  @Get('bad')
+  bad() {
+    throw new BadRequestException('nope');
   }
 
   @Get('boom')
@@ -33,8 +45,7 @@ class TestController {
 const config: Config = {
   port: 3000,
   trustedProxies: [],
-  // The 500 test logs an error on purpose; keep the test output clean.
-  logLevel: 'silent' as Config['logLevel'],
+  logLevel: 'error',
   logFormat: 'json',
   dataDir: '/tmp',
   setupToken: undefined
@@ -45,11 +56,13 @@ describe('ApiExceptionFilter', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [ LoggingModule.forRoot(config) ],
+      imports: [ LoggingModule.forRoot(config, new Writable({ write: (_c, _e, done) => done() })) ],
       controllers: [ TestController ],
       providers: [ { provide: APP_FILTER, useClass: ApiExceptionFilter } ]
     }).compile();
-    app = moduleRef.createNestApplication({ bufferLogs: true });
+    // Nest's default JSON limit is 100kb; shrink it to test 413 cheaply.
+    app = moduleRef.createNestApplication({ bufferLogs: true, bodyParser: false });
+    app.useBodyParser('json', { limit: '1kb' });
     await app.init();
   });
 
@@ -105,6 +118,29 @@ describe('ApiExceptionFilter', () => {
     expect(res.body.code).toBe('internal');
     expect(JSON.stringify(res.body)).not.toContain('secret internal detail');
     expect(res.body.requestId).toBe(res.headers['x-request-id']);
+    expect(ApiErrorSchema.safeParse(res.body).success).toBe(true);
+  });
+
+  it('answers ThrottlerException with 429 rate-limited', async () => {
+    const res = await request(app.getHttpServer()).get('/test/throttled');
+
+    expect(res.status).toBe(429);
+    expect(res.body.code).toBe('rate-limited');
+    expect(ApiErrorSchema.safeParse(res.body).success).toBe(true);
+  });
+
+  it('answers another client HttpException with 400 malformed-request', async () => {
+    const res = await request(app.getHttpServer()).get('/test/bad');
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('malformed-request');
+  });
+
+  it('answers an oversized body with 413 payload-too-large', async () => {
+    const res = await request(app.getHttpServer()).post('/test/signup').send({ email: 'x'.repeat(2048) });
+
+    expect(res.status).toBe(413);
+    expect(res.body.code).toBe('payload-too-large');
     expect(ApiErrorSchema.safeParse(res.body).success).toBe(true);
   });
 });

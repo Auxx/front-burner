@@ -90,6 +90,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     if (exception instanceof ThrottlerException) {
       return { status: 429, code: 'rate-limited', params: {} };
     }
+    // Deliberate plan choice: any other client error is reported as malformed-request.
     if (exception instanceof HttpException && exception.getStatus() < 500) {
       return {
         status: exception.getStatus(),
