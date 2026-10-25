@@ -1,9 +1,9 @@
 import { provideHttpClient, withFetch } from '@angular/common/http';
 import { type EnvironmentProviders, isDevMode, makeEnvironmentProviders } from '@angular/core';
 import { TitleStrategy } from '@angular/router';
-import { provideTransloco } from '@jsverse/transloco';
-import { provideTranslocoMessageformat } from '@jsverse/transloco-messageformat';
+import { provideTransloco, TRANSLOCO_TRANSPILER } from '@jsverse/transloco';
 
+import { IcuTranspiler } from '../i18n/icu-transpiler';
 import { TranslocoHttpLoader } from '../i18n/transloco-http.loader';
 import { PageTitleStrategy } from '../routing/page-title.strategy';
 
@@ -21,7 +21,7 @@ export function provideCore(): EnvironmentProviders {
       },
       loader: TranslocoHttpLoader
     }),
-    provideTranslocoMessageformat(),
+    { provide: TRANSLOCO_TRANSPILER, useClass: IcuTranspiler },
     { provide: TitleStrategy, useClass: PageTitleStrategy }
   ]);
 }
