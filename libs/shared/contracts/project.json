@@ -9,12 +9,18 @@
   ],
   "targets": {
     "test": {
-      "executor": "@nx/vitest:test",
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
       "outputs": [
-        "{options.reportsDirectory}"
+        "{workspaceRoot}/coverage/libs/shared/contracts"
       ],
       "options": {
-        "reportsDirectory": "coverage/libs/shared/contracts"
+        "command": "vitest run",
+        "cwd": "libs/shared/contracts"
       }
     },
     "lint": {

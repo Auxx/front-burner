@@ -1,21 +1,20 @@
 import { defineConfig } from 'vitest/config';
-import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
-import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
-export default defineConfig(() => ({
+export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../../node_modules/.vite/libs/shared/contracts',
-  plugins: [nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
+  // Vite 8 resolves the aliases of tsconfig.base.json natively.
+  resolve: { tsconfigPaths: true },
   test: {
     name: 'shared-contracts',
     watch: false,
     globals: true,
     environment: 'node',
-    include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    include: ['src/**/*.spec.ts'],
     reporters: ['default'],
     coverage: {
       reportsDirectory: '../../../coverage/libs/shared/contracts',
-      provider: 'v8' as const,
+      provider: 'v8'
     }
-  },
-}));
+  }
+});
