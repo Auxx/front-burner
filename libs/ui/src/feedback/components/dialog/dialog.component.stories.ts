@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
 import { Meta, StoryObj } from '@storybook/angular-vite';
-import { expect, screen, userEvent, waitFor } from 'storybook/test';
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 
+import { KeyValueListComponent } from '../../../content/components/key-value-list/key-value-list.component';
+import { KeyValueComponent } from '../../../content/components/key-value/key-value.component';
 import { ButtonComponent } from '../../../controls/components/button/button.component';
 import { CheckboxComponent } from '../../../controls/components/checkbox/checkbox.component';
 import { ChoiceComponent } from '../../../controls/components/choice/choice.component';
@@ -55,15 +57,16 @@ class UnlockKeyDialogComponent {
 /** RC-21, RC-22: the server's host key changed. */
 @Component({
   selector: 'ui-changed-host-key-dialog',
-  imports: [ ...dialogImports, CheckboxComponent, ChoiceComponent ],
+  imports: [ ...dialogImports, CheckboxComponent, ChoiceComponent, KeyValueComponent, KeyValueListComponent ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [ 'code { font-family: var(--ui-font-family-mono); }' ],
   template: `
     <ui-dialog heading="The server's identity has changed" closeLabel="Close">
       <p>This may be an attack. It also happens when a provider replaces its keys.</p>
-      <p>Host: github.com, port 22</p>
-      <p>Trusted: ED25519 <code>SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU</code></p>
-      <p>New: ED25519 <code>SHA256:p2QAMXNIC1TJYWeIOttrVc98/R1BUFWu3/LiyKgUfQM</code></p>
+      <dl uiKeyValueList>
+        <div uiKeyValue label="Host">github.com, port 22</div>
+        <div uiKeyValue label="Trusted key" mono>ED25519 SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU</div>
+        <div uiKeyValue label="New key" mono>ED25519 SHA256:p2QAMXNIC1TJYWeIOttrVc98/R1BUFWu3/LiyKgUfQM</div>
+      </dl>
       <label uiChoice>
         <input type="checkbox" uiCheckbox (change)="checked.set($any($event.target).checked)" />
         I have checked the new fingerprint with the server's owner.
@@ -108,6 +111,8 @@ class TallDialogComponent {
 })
 class DialogOpenerComponent {
   readonly dialog = input<'unlock' | 'host-key' | 'tall' | 'confirm'>('unlock');
+  /** The repository that the confirmation removes. */
+  readonly repository = input('handbook');
   protected readonly result = signal('');
 
   private readonly dialogs = inject(DialogService);
@@ -121,7 +126,7 @@ class DialogOpenerComponent {
     const kind = this.dialog();
     if (kind === 'confirm') {
       const confirmed = await this.dialogs.confirm({
-        heading: 'Remove handbook?',
+        heading: `Remove ${this.repository()}?`,
         message: 'This deletes its working copy on Front Burner. The remote is not changed.',
         confirmLabel: 'Remove',
         cancelLabel: 'Cancel',
@@ -161,7 +166,7 @@ export const UnlockKey: Story = {
   }
 };
 
-/** A changed host key with two fingerprints, on a phone (RC-21, NF-12.4). */
+/** A changed host key on a phone: each fingerprint sits under its label and wraps (RC-21, NF-12.4). */
 export const ChangedHostKey: Story = {
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   render: () => ({ template: `<ui-dialog-opener [dialog]="'host-key'" />` }),
@@ -172,6 +177,12 @@ export const ChangedHostKey: Story = {
     await expect(rect.left).toBeGreaterThanOrEqual(0);
     await expect(rect.right).toBeLessThanOrEqual(window.innerWidth);
     await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+    for (const item of dialog.querySelectorAll('[uiKeyValue]')) {
+      const dt = (item.querySelector('dt') as HTMLElement).getBoundingClientRect();
+      const value = item.querySelector('dd') as HTMLElement;
+      await expect(value.scrollWidth).toBeLessThanOrEqual(value.clientWidth);
+      await expect(value.getBoundingClientRect().top).toBeGreaterThanOrEqual(dt.bottom);
+    }
   }
 };
 
@@ -199,5 +210,22 @@ export const ConfirmRemove: Story = {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus());
     await expect(screen.getByText('Result: false')).toBeVisible();
+  }
+};
+
+/** A repository name with no break points wraps in the heading on a phone (RM-17, NF-12.4). */
+export const RemoveLongName: Story = {
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  render: () => ({
+    template:
+      `<ui-dialog-opener [dialog]="'confirm'" repository="TheEngineeringHandbookOfAnOrganisationWithAVeryLongRepositoryName" />`
+  }),
+  play: async () => {
+    const dialog = await openDialog();
+    const heading = within(dialog).getByRole('heading', { name: /^Remove TheEngineeringHandbook/ });
+
+    await expect(heading.scrollWidth).toBeLessThanOrEqual(heading.clientWidth);
+    await expect(dialog.getBoundingClientRect().right).toBeLessThanOrEqual(window.innerWidth);
+    await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
   }
 };

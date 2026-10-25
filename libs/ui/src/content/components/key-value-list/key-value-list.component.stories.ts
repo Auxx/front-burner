@@ -25,12 +25,14 @@ const styles = [
   'dl { padding: 0 var(--ui-space-3) var(--ui-space-3); }'
 ];
 
-const hostKey = `
-  <ui-island heading="Changed host key">
+const sshCredentials = `
+  <ui-island heading="Credentials">
     <dl uiKeyValueList>
-      <div uiKeyValue label="Host">github.com</div>
-      <div uiKeyValue label="Trusted key" mono>ED25519 SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU</div>
-      <div uiKeyValue label="New key" mono>ED25519 SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8</div>
+      <div uiKeyValue label="Name">Work deploy key</div>
+      <div uiKeyValue label="Kind">SSH key</div>
+      <div uiKeyValue label="Key type">ED25519</div>
+      <div uiKeyValue label="Fingerprint" mono>SHA256:Ht3Vr8Kp1QwZ6sLm9YbN2cXa7DfGjQ4kRt5Uv8WxYz0</div>
+      <div uiKeyValue label="Passphrase">Protected</div>
     </dl>
   </ui-island>
 `;
@@ -65,35 +67,18 @@ export const CloneDetails: Story = {
 export const SshCredentials: Story = {
   render: () => ({
     styles,
-    template: `
-      <div class="canvas">
-        <ui-island heading="Credentials">
-          <dl uiKeyValueList>
-            <div uiKeyValue label="Name">Work deploy key</div>
-            <div uiKeyValue label="Kind">SSH key</div>
-            <div uiKeyValue label="Key type">ED25519</div>
-            <div uiKeyValue label="Fingerprint" mono>SHA256:Ht3Vr8Kp1QwZ6sLm9YbN2cXa7DfGjQ4kRt5Uv8WxYz0</div>
-            <div uiKeyValue label="Passphrase">Protected</div>
-          </dl>
-        </ui-island>
-      </div>
-    `
+    template: `<div class="canvas">${sshCredentials}</div>`
   })
 };
 
-/** The trusted and the new host key of a changed host key (RC-21). */
-export const ChangedHostKey: Story = {
-  render: () => ({
-    styles,
-    template: `<div class="canvas">${hostKey}</div>`
-  })
-};
-
-/** At 320 CSS px each value sits under its label, and the fingerprints wrap (NF-12.4). */
+/**
+ * At 320 CSS px each value sits under its label, and the fingerprint wraps (NF-12.4).
+ * RC-21's host keys are shown in a dialog: see Feedback/Dialog.
+ */
 export const Narrow: Story = {
   render: () => ({
     styles,
-    template: `<div class="narrow">${hostKey}</div>`
+    template: `<div class="narrow">${sshCredentials}</div>`
   }),
   play: async ({ canvasElement }) => {
     // The island's body would scroll an overflow away, so the list and its values are measured.

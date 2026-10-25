@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { form, FormField } from '@angular/forms/signals';
 
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { PasswordRevealDirective } from '../../directives/password-reveal/password-reveal.directive';
 import { IconButtonComponent } from '../icon-button/icon-button.component';
 import { InputComponent } from '../input/input.component';
@@ -13,6 +14,7 @@ import { FieldComponent } from './field.component';
     FieldComponent,
     FormField,
     IconButtonComponent,
+    IconComponent,
     InputComponent,
     PasswordRevealDirective,
     TextareaComponent
@@ -24,7 +26,7 @@ import { FieldComponent } from './field.component';
       </ui-field>
       <ui-field label="Password or token">
         <input uiInput #secret type="password" value="s3cret" />
-        <button uiIconButton [uiPasswordReveal]="secret" label="Show password"><svg aria-hidden="true"></svg></button>
+        <button uiIconButton [uiPasswordReveal]="secret" label="Show password"><ui-icon name="eye" /></button>
       </ui-field>
       <ui-field label="Private key">
         <textarea uiTextarea code rows="6"></textarea>
