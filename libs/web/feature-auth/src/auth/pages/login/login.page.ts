@@ -10,5 +10,4 @@ import { EmptyStateComponent } from '@front-burner/ui';
   styleUrl: './login.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class LoginPage {
-}
+export class LoginPage {}

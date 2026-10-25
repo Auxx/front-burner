@@ -101,6 +101,22 @@
         "spa": true
       }
     },
+    "size-check": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": [
+        "build"
+      ],
+      "inputs": [
+        "{projectRoot}/scripts/size-check.mjs",
+        {
+          "dependentTasksOutputFiles": "**/*.{js,html}"
+        }
+      ],
+      "options": {
+        "command": "node apps/web/scripts/size-check.mjs dist/apps/web/browser"
+      }
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "cache": true,

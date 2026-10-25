@@ -65,7 +65,7 @@ jobs:
         run: npx playwright install --with-deps ${{ steps.browsers.outputs.browsers }}
 
       - name: Type check, lint, test, build
-        run: npx nx affected -t typecheck lint test build test-storybook e2e --parallel=3
+        run: npx nx affected -t typecheck lint test build size-check test-storybook e2e --parallel=3
 
       # The OpenAPI document and the web client generated from it are
       # committed; regenerating must change nothing (A-3.7).
