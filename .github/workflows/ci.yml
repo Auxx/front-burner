@@ -72,7 +72,14 @@ jobs:
       - name: API client drift
         run: |
           npx nx run web-api-client:generate
-          git diff --exit-code -- apps/server/openapi.json libs/web/api-client/src/generated
+          paths="apps/server/openapi.json libs/web/api-client/src/generated"
+          # git diff alone ignores untracked files, such as a new tag's client.
+          changes=$(git status --porcelain -- $paths)
+          if [ -n "$changes" ]; then
+            echo "$changes"
+            git diff -- $paths
+            exit 1
+          fi
 
   trivy:
     runs-on: ubuntu-latest

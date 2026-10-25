@@ -32,8 +32,8 @@ numbering conventions.
   - it contains **methods only**, built on Angular's `HttpClient`;
   - every type is imported from `shared/contracts` (`z.infer` types), never
     generated; type-only imports add no Zod code to the bundle. The generator
-    checks every imported type against `@front-burner/shared-contracts` and
-    fails on inline schemas;
+    fails on inline or unknown types, and a test checks that every imported name
+    resolves to a `shared/contracts` schema with a matching `.meta` id;
   - there is one client class per OpenAPI tag, and methods are named by
     `operationId`, which is the controller method's name;
   - OpenAPI component names come from the Zod schemas' `.meta({ id })`;
