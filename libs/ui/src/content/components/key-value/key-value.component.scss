@@ -1,0 +1,28 @@
+@layer components {
+  :host {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+  }
+
+  dt {
+    color: var(--ui-text-muted);
+  }
+
+  dd {
+    min-inline-size: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  :host([data-mono]) dd {
+    font-family: var(--ui-font-family-mono);
+  }
+
+  // A narrow list puts each value under its label.
+  @container key-value-list (inline-size < 22rem) {
+    :host {
+      display: block;
+    }
+  }
+}

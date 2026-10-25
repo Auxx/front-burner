@@ -1,6 +1,8 @@
 export { EmptyStateActionsComponent } from './content/components/empty-state-actions/empty-state-actions.component';
 export { EmptyStateComponent } from './content/components/empty-state/empty-state.component';
 export { IconComponent } from './content/components/icon/icon.component';
+export { KeyValueListComponent } from './content/components/key-value-list/key-value-list.component';
+export { KeyValueComponent } from './content/components/key-value/key-value.component';
 export { ICON_NAMES, type IconName } from './content/models/icon-name.model';
 export { ICON_SPRITE_URL } from './content/tokens/icon-sprite-url.token';
 export {
