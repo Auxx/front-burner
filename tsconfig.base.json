@@ -29,6 +29,9 @@
       ],
       "@front-burner/server-core-database": [
         "./libs/server/core/database/src/index.ts"
+      ],
+      "@front-burner/server-core-observability": [
+        "./libs/server/core/observability/src/index.ts"
       ]
     }
   },
