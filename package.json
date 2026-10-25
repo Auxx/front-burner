@@ -95,7 +95,7 @@
     "culori": "4.0.2",
     "dprint": "^0.64.3",
     "drizzle-kit": "0.31.11",
-    "eslint": "9.39.5",
+    "eslint": "10.13.0",
     "eslint-plugin-playwright": "1.8.3",
     "jsdom": "27.4.0",
     "jsonc-eslint-parser": "2.4.2",
