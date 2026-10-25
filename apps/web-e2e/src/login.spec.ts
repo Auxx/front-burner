@@ -101,14 +101,22 @@ test.describe('fixture', () => {
       }));
     await page.goto('/csp-probe');
     await expect.poll(() => monitor.violations.length).toBeGreaterThan(0);
-    const violationsBefore = monitor.violations.length;
-    const errorsBefore = monitor.consoleErrors.length;
     await page.goto('/login');
     await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
     expect(monitor.violations.length).toBeGreaterThan(0);
-    // Drain only what the probe caused; anything the /login load adds stays and fails the test.
-    monitor.violations.splice(0, violationsBefore);
-    monitor.consoleErrors.splice(0, errorsBefore);
+    // Drain only what the probe page reported (a late one, such as Firefox's
+    // blocked favicon request, included); a violation of /login stays and fails the test.
+    const own = monitor.violations.filter(violation => violation.documentURI.endsWith('/csp-probe'));
+    expect(own.length).toBeGreaterThan(0);
+    monitor.violations.splice(0, monitor.violations.length, ...monitor.violations.filter(v => !own.includes(v)));
+    // Its console errors name the probe's own policy.
+    const ownErrors = monitor.consoleErrors.filter(text => text.includes(`default-src 'none'`));
+    expect(ownErrors.length).toBeGreaterThan(0);
+    monitor.consoleErrors.splice(
+      0,
+      monitor.consoleErrors.length,
+      ...monitor.consoleErrors.filter(t => !ownErrors.includes(t))
+    );
   });
 });
 

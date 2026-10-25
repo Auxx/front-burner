@@ -3,6 +3,8 @@ import { test as base } from '@playwright/test';
 export interface PolicyViolation {
   directive: string;
   blockedURI: string;
+  /** The document that reported it. */
+  documentURI: string;
 }
 
 /** What the page reported so far; the fixture fails the test if any is left. */
@@ -36,7 +38,8 @@ export const test = base.extend<{ monitor: Monitor; }>({
             reportPolicyViolation(violation: PolicyViolation): void;
           }).reportPolicyViolation({
             directive: event.violatedDirective,
-            blockedURI: event.blockedURI
+            blockedURI: event.blockedURI,
+            documentURI: event.documentURI
           });
         });
       });
