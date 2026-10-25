@@ -1,8 +1,18 @@
 // Centred on the page, with no app header; the padding keeps it off the edges
 // at 320 px (NF-12.4).
-:host {
+main {
   display: grid;
-  place-items: center;
+  justify-items: center;
+  align-content: center;
+  gap: var(--ui-space-2);
   min-block-size: 100dvh;
   padding: var(--ui-space-4);
+  text-align: center;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--ui-font-size-title);
+  font-weight: var(--ui-font-weight-semibold);
+  line-height: var(--ui-line-height-tight);
 }

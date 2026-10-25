@@ -37,10 +37,15 @@ describe('LoginPage', () => {
     expect(component).toBeTruthy();
   });
 
+  it('is the main landmark of the page', () => {
+    expect((fixture.nativeElement as HTMLElement).querySelectorAll('main')).toHaveLength(1);
+  });
+
   it('shows the heading and the message', () => {
     const page = fixture.nativeElement as HTMLElement;
 
-    expect(page.querySelector('h2')?.textContent).toBe('Log in');
+    expect(page.querySelectorAll('h1')).toHaveLength(1);
+    expect(page.querySelector('h1')?.textContent).toBe('Log in');
     expect(page.textContent).toContain('Signing in isn\'t available yet.');
   });
 });
