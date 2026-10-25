@@ -232,13 +232,13 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 - **A-10.32** The `ui` library builds only what the MVP's screens need. Before
   release it holds:
 
-  | Group      | Components                                                                                      | Built on                                                |
-  | ---------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-  | Layout     | `AppShell`, `Island`, `SplitPane`, `ActivityBar`, `StatusBar`                                   | Own code, CDK `Breakpoints`                             |
-  | Navigation | `TabStrip`, `Tree`, `Menu`, `Breadcrumbs`                                                       | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
-  | Controls   | `Button`, `IconButton`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements, Aria                                   |
-  | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`      | CDK Overlay and Dialog                                  |
-  | Content    | `Icon`, `EmptyState`, `KeyValueList`                                                            | Own code                                                |
+  | Group      | Components                                                                                               | Built on                                                |
+  | ---------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+  | Layout     | `AppShell`, `Island`, `SplitPane`, `ActivityBar`, `StatusBar`                                            | Own code, CDK `Breakpoints`                             |
+  | Navigation | `TabStrip`, `Tree`, `Menu`, `Breadcrumbs`                                                                | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
+  | Controls   | `Button`, `IconButton`, `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements; Aria Combobox and Listbox; CDK Overlay |
+  | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`               | CDK Overlay and Dialog                                  |
+  | Content    | `Icon`, `EmptyState`, `KeyValueList`                                                                     | Own code                                                |
 
   _(My call.)_ The list grows when a requirement needs a new component, not
   ahead of it.
@@ -261,6 +261,18 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
     Chromium (NF-2.1: 300 ms; FB-18: up to 5,000 entries).
   - The `Navigation/Tree → LargeFolder` story measures opening a folder of 5,000
     entries.
+
+- **A-10.42** Controls follow Angular Signal Forms' control contracts without
+  importing `@angular/forms`:
+  - native-element controls (`uiInput`, `uiTextarea`, `uiCheckbox`, `uiSwitch`)
+    are bound with `[formField]` directly;
+  - `Select` and `SegmentedControl` have the `FormValueControl` shape (`value`,
+    `disabled`, `touch`), and emit `touch` when the focus leaves them;
+  - `ui-field` gives a control its label, hint and error and sets
+    `aria-labelledby`, `aria-describedby` and `aria-invalid`. When an error is
+    shown is the feature's decision (AR-6);
+  - buttons are `type="button"` unless they say otherwise, so that a button in a
+    form, such as Cancel, does not submit it.
 
 ## A-10: Icons and fonts
 
@@ -289,7 +301,9 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   Vite-based `@storybook/angular-vite` framework, which the Vitest addon needs.
 - **A-10.39** Unit tests of components that wrap Aria use its testing harnesses
   (`@angular/aria/*/testing`) rather than querying the DOM. `Tree` has no Aria
-  harness and is tested through the DOM.
+  harness and is tested through the DOM. `Select` is tested with the Combobox
+  and Listbox harnesses as they are, since its Aria directives are in its own
+  template.
 - **A-10.40** The first step is the tokens: a Storybook page (**Design
   system/Tokens**) that shows the colours, type scale, spacing and both
   densities in both schemes, with contrast ratios. It lists every `--ui-*` token

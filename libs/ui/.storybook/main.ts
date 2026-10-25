@@ -40,7 +40,8 @@ const config: StorybookConfig = {
           '@angular/cdk/overlay',
           '@angular/cdk/portal',
           '@angular/cdk/scrolling',
-          '@angular/core/rxjs-interop'
+          '@angular/core/rxjs-interop',
+          '@angular/forms/signals'
         ]
       }
     });
