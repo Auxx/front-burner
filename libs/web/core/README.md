@@ -1,7 +1,7 @@
 # web-core
 
-This library was generated with [Nx](https://nx.dev).
+What every page of the web client needs (A-2): HTTP, Transloco with the ICU
+transpiler, page titles and the translation of API errors, wired up by
+`provideCore()`.
 
-## Running unit tests
-
-Run `nx test web-core` to execute the unit tests.
+Tested with Vitest and Angular's TestBed: `nx test web-core`.

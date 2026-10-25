@@ -7,10 +7,12 @@ import { IntlMessageFormat } from 'intl-messageformat';
  * the active language (NF-14.2). `intl-messageformat` interprets the message, so
  * nothing is compiled with `new Function`, which the CSP and Trusted Types
  * forbid (NF-11.1). Messages with `{{ param }}` keep Transloco's interpolation, and
- * messages without braces are returned as they are. A broken message is logged
- * once and shown as it is, so that the page keeps rendering.
+ * messages without braces are returned as they are. A message uses one syntax:
+ * `{{ x }}` messages are not ICU (a plain `{name}` in them stays literal), and a
+ * message that mixes both is logged once and shown raw. A broken message is
+ * logged once and shown as it is, so that the page keeps rendering.
  */
-const PLACEHOLDER = /\{\{\s*[\w.]+\s*\}\}/;
+const PLACEHOLDER = /\{\{\s*[\w.-]+\s*\}\}/;
 const ICU_CONSTRUCT = /\{\s*\w+\s*,\s*(plural|select|selectordinal)\b/;
 
 type Values = Parameters<IntlMessageFormat['format']>[0];

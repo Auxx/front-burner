@@ -6,8 +6,8 @@ import { IcuTranspiler } from './icu-transpiler';
 describe('IcuTranspiler', () => {
   let transpiler: TranslocoTranspiler;
 
-  const format = (value: string, params?: Record<string, unknown>) =>
-    transpiler.transpile({ value, params, translation: {}, key: 'k' });
+  const format = (value: string, params?: Record<string, unknown>, key = 'k') =>
+    transpiler.transpile({ value, params, translation: {}, key });
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -48,6 +48,14 @@ describe('IcuTranspiler', () => {
     expect(format('Wait {{ retryAfter }} seconds.', { retryAfter: 30 })).toBe('Wait 30 seconds.');
   });
 
+  it('keeps {{ param }} interpolation for hyphenated keys', () => {
+    expect(format('Wait {{ retry-after }} seconds.', { 'retry-after': 30 })).toBe('Wait 30 seconds.');
+  });
+
+  it('treats a {{ x }} message as Transloco syntax only: a plain {name} stays literal', () => {
+    expect(format('Hi {{ x }}, {name}', { x: 'Ada', name: 'Bob' })).toBe('Hi Ada, {name}');
+  });
+
   it('returns plain text, apostrophes included, unchanged', () => {
     expect(format('Signing in isn\'t available yet.')).toBe('Signing in isn\'t available yet.');
   });
@@ -62,17 +70,30 @@ describe('IcuTranspiler', () => {
     afterEach(() => error.mockRestore());
 
     it('returns a malformed message as it is and logs the key once', () => {
-      expect(format('{count, plural, one {# file}')).toBe('{count, plural, one {# file}');
-      expect(format('{count, plural, one {# file}')).toBe('{count, plural, one {# file}');
+      expect(format('{count, plural, one {# file}', undefined, 'forms.files')).toBe('{count, plural, one {# file}');
+      expect(format('{count, plural, one {# file}', undefined, 'forms.files')).toBe('{count, plural, one {# file}');
 
       expect(error).toHaveBeenCalledTimes(1);
-      expect(error.mock.calls[0].join(' ')).toContain('k');
+      expect(error.mock.calls[0]).toEqual([
+        'Translation "forms.files" (en): malformed message; showing the raw message.'
+      ]);
+    });
+
+    it('returns a message that mixes both syntaxes as it is and logs it', () => {
+      const mixed = '{{ x }} {count, plural, one {# file} other {# files}}';
+
+      expect(format(mixed, { x: 'a', count: 2 }, 'mixed')).toBe(mixed);
+      expect(error).toHaveBeenCalledTimes(1);
+      expect(String(error.mock.calls[0][0])).toContain('"mixed"');
     });
 
     it('returns a message as it is when an argument is missing, without logging values', () => {
       expect(format('Hello {name}!', { other: 'secret' })).toBe('Hello {name}!');
 
       expect(error).toHaveBeenCalledTimes(1);
+      expect(error.mock.calls[0]).toEqual([
+        'Translation "k" (en): missing or invalid argument; showing the raw message.'
+      ]);
       expect(error.mock.calls[0].join(' ')).not.toContain('secret');
     });
   });
@@ -87,5 +108,15 @@ describe('IcuTranspiler', () => {
     } finally {
       globalThis.Function = original;
     }
+  });
+
+  it('caches per language: the same message formats by each language\'s rules', () => {
+    const rules = '{n, plural, zero {zero} one {one} two {two} few {few} many {many} other {other}}';
+
+    expect(format(rules, { n: 2 })).toBe('other');
+    (transpiler as IcuTranspiler).onLangChanged('ar');
+    expect(format(rules, { n: 2 })).toBe('two');
+    (transpiler as IcuTranspiler).onLangChanged('en');
+    expect(format(rules, { n: 2 })).toBe('other');
   });
 });

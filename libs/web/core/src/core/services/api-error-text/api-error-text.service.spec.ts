@@ -19,6 +19,7 @@ describe('ApiErrorTextService', () => {
         TranslocoTestingModule.forRoot({
           langs: {
             en: {
+              'errors.same-as-key': 'errors.same-as-key',
               'errors.not-found': 'We could not find that.',
               'errors.rate-limited': 'Wait {{ retryAfter }} seconds.'
             }
@@ -42,6 +43,10 @@ describe('ApiErrorTextService', () => {
 
   it('falls back to the message for a code without a key', () => {
     expect(service.describe(error('some-future-code')).text).toBe('Server said so');
+  });
+
+  it('treats a translation that equals its own key as missing and uses the message', () => {
+    expect(service.describe(error('same-as-key')).text).toBe('Server said so');
   });
 
   it('shows the first 8 characters of the request id as reference', () => {

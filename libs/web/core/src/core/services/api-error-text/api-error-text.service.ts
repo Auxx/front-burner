@@ -15,7 +15,8 @@ export class ApiErrorTextService {
    */
   describe(error: ApiError): { text: string; reference: string | null; } {
     const key = `errors.${error.code}`;
-    // Transloco returns the key itself when it has no translation.
+    // Transloco returns the key itself when it has no translation, so a
+    // translation that equals its own key counts as missing.
     const translated = this.transloco.translate(key, error.params);
     return {
       text: translated === key ? error.message : translated,

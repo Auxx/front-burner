@@ -34,7 +34,10 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   Transloco transpiler on `intl-messageformat` (FormatJS, no `eval`), because
   `@jsverse/transloco-messageformat` compiles with `new Function`, which
   NF-11.1's CSP forbids. Zod runs `jitless` in the web client for the same
-  reason. A malformed message is logged and shown raw (NF-14).
+  reason. A message uses one syntax: `{{ x }}` messages are Transloco
+  interpolation, not ICU (a plain `{name}` in them stays literal), and a message
+  that mixes both is logged and shown raw. A malformed message is logged and
+  shown raw (NF-14).
 
 ## A-8: Saving
 
