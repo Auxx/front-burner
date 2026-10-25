@@ -201,5 +201,10 @@ export const AddRepositoryNarrow: Story = {
 
     const wrapper = canvasElement.querySelector('.narrow') as HTMLElement;
     await expect(wrapper.scrollWidth).toBeLessThanOrEqual(wrapper.clientWidth);
+
+    // A select fills its field like a text field does.
+    const url = screen.getByRole('textbox', { name: 'Remote URL' });
+    const level = screen.getByRole('combobox', { name: 'Git control level' });
+    await expect(level.getBoundingClientRect().width).toBeCloseTo(url.getBoundingClientRect().width, 0);
   }
 };

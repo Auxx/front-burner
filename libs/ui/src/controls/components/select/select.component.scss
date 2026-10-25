@@ -1,8 +1,10 @@
 @use '../../../styles/mixins';
 
 @layer components {
+  // Fills its row, like a text field, also in a `ui-field`'s flex row.
   :host {
     display: block;
+    inline-size: 100%;
     min-inline-size: 0;
   }
 
