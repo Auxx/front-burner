@@ -1,10 +1,21 @@
 import express from 'express';
 import { existsSync, readFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { extname, join, posix } from 'node:path';
 import { contentSecurityPolicy, createNonce, CSP_NONCE_PLACEHOLDER } from '../csp/csp';
 
 function isApiPath(path: string): boolean {
   return path === '/api' || path.startsWith('/api/');
+}
+
+/** Whether the request names index.html, however it is spelled (encoded, `./`, other case). */
+function isIndexPath(path: string): boolean {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    return false;
+  }
+  return posix.normalize(decoded).toLowerCase() === '/index.html';
 }
 
 /**
@@ -26,12 +37,14 @@ export function serveWebClient(app: express.Application, webRoot: string): boole
       next();
       return;
     }
-    files(req, res, err => {
+    // index.html is a template: it must only leave through the nonce branch.
+    const serveFile: express.RequestHandler = isIndexPath(req.path) ? (_req, _res, done) => done() : files;
+    serveFile(req, res, err => {
       if (err) {
         next(err);
         return;
       }
-      if (extname(req.path) !== '') {
+      if (extname(req.path) !== '' && !isIndexPath(req.path)) {
         res.status(404).end();
         return;
       }

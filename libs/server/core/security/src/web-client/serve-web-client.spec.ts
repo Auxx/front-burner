@@ -32,8 +32,10 @@ describe('serveWebClient', () => {
 
   function nonceOf(body: string): string {
     const match = /ngCspNonce="([^"]+)"/.exec(body);
-    expect(match).not.toBeNull();
-    return match![1];
+    if (!match) {
+      throw new Error('no nonce in the body');
+    }
+    return match[1];
   }
 
   it('serves index.html for a route', async () => {
@@ -73,6 +75,39 @@ describe('serveWebClient', () => {
     expect(res.status).toBe(200);
     expect(res.text).toBe('hello');
   });
+
+  it.each([ '/index.html', '/%69ndex.html', '/./index.html', '/INDEX.HTML' ])(
+    'templates %s like any route',
+    async path => {
+      const res = await request(createApp()).get(path);
+      expect(res.status).toBe(200);
+      expect(res.text).not.toContain('__CSP_NONCE__');
+      expect(res.headers['content-security-policy']).toBe(contentSecurityPolicy(nonceOf(res.text)));
+      expect(res.headers['cache-control']).toBe('no-store');
+    }
+  );
+
+  it('sends the CSP header for HEAD /index.html', async () => {
+    const res = await request(createApp()).head('/index.html');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-security-policy']).toContain('\'nonce-');
+  });
+
+  it.each([ '/..%2fsecret.txt', '/%2e%2e/secret.txt', '/.secret', '/..%2f..%2fetc/passwd' ])(
+    'does not disclose files outside the web root or dot-files via %s',
+    async path => {
+      const outside = join(webRoot, '..', 'secret.txt');
+      writeFileSync(outside, 'TOP-SECRET');
+      writeFileSync(join(webRoot, '.secret'), 'TOP-SECRET');
+      try {
+        const res = await request(createApp()).get(path);
+        expect(res.text).not.toContain('TOP-SECRET');
+        expect([ 200, 400, 404 ]).toContain(res.status);
+      } finally {
+        rmSync(outside, { force: true });
+      }
+    }
+  );
 
   it('returns 404 for a missing file with an extension', async () => {
     const res = await request(createApp()).get('/assets/missing.png');
