@@ -65,34 +65,15 @@ to browse plugins and generators in your IDE.
 |
 [Browse the plugin registry &raquo;](https://nx.dev/plugin-registry?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
 
-## Set up CI!
+## CI
 
-### Step 1
-
-To connect to Nx Cloud, run the following command:
-
-```sh
-npx nx connect
-```
-
-Connecting to Nx Cloud ensures a
-[fast and scalable CI](https://nx.dev/ci/intro/why-nx-cloud?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-pipeline. It includes features such as:
-
-- [Remote caching](https://nx.dev/ci/features/remote-cache?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task distribution across multiple machines](https://nx.dev/ci/features/distribute-task-execution?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Automated e2e test splitting](https://nx.dev/ci/features/split-e2e-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task flakiness detection and rerunning](https://nx.dev/ci/features/flaky-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-### Step 2
-
-Use the following command to configure a CI workflow for your workspace:
-
-```sh
-npx nx g ci-workflow
-```
-
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+GitHub Actions (`.github/workflows/ci.yml`) runs on every pull request and every
+push to `master`: `dprint check`, the project tag check, and `nx affected` for
+lint, test, build, the Storybook browser tests and e2e, plus a Trivy scan of the
+production dependencies in `package-lock.json`. Run the same checks locally with
+`npm run format:check`, `npm run check:tags` and `npx nx affected -t lint test
+build test-storybook e2e`. Node.js is pinned to 24.22.1 in `.nvmrc`. Dependabot
+opens weekly update pull requests for npm packages and GitHub Actions.
 
 ## Install Nx Console
 
