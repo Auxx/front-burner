@@ -21,6 +21,10 @@ Aria's `ngMenu` stays on the host. `Tree` does **not** use virtual scrolling:
 Aria's Tree only knows the items that are rendered (decision recorded in A-10.34
 by Task 4).
 
+> **Superseded for `Tree`:** the Tree was rebuilt as our own flat tree on the
+> CDK's virtual scrolling after Aria's Tree measured 1,262 ms to open a folder
+> of 1,000 entries. See A-10.34 in `docs/architecture/design-system.md`.
+
 **Tech Stack:** Angular 22.2 (signals, `hostDirectives`), `@angular/aria` 22.2.4
 (`tabs`, `menu`, `tree` and their `/testing` harnesses), `@angular/cdk` 22.2.4
 (`overlay`, `portal`, `bidi`, `testing`), SCSS with `--ui-*` tokens, Vitest +
@@ -497,6 +501,11 @@ Run: `npx nx run ui:test --include='**/menu.component.spec.ts'` Expected: FAIL.
 ---
 
 ### Task 4: `Tree`
+
+> **Superseded:** this task was carried out differently. Aria's Tree measured
+> 1,262 ms to open a folder of 1,000 entries, so the Tree was rebuilt as our own
+> flat tree on the CDK's virtual scrolling. See A-10.34 in
+> `docs/architecture/design-system.md`; the steps below are kept as written.
 
 **Files:**
 
