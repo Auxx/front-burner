@@ -100,6 +100,22 @@
         "staticFilePath": "dist/apps/web/browser",
         "spa": true
       }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/tsconfig.base.json"
+      ],
+      "options": {
+        "commands": [
+          "tsc --noEmit -p apps/web/tsconfig.app.json",
+          "tsc --noEmit -p apps/web/tsconfig.spec.json"
+        ],
+        "parallel": false
+      }
     }
   }
 }

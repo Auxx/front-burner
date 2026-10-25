@@ -15,7 +15,7 @@ numbering conventions.
 - **A-4.2** `better-sqlite3` is synchronous. At the scale of NF-1 queries take
   well under a millisecond; transactions stay short and never wait on git, the
   network or the file system.
-- **A-4.3** All table definitions live in `server/database` (A-2), so that
+- **A-4.3** All table definitions live in `server/core/database` (A-2), so that
   `drizzle-kit` generates migrations from one place. Features import the tables
   they need. _(My call.)_
 
@@ -64,7 +64,8 @@ numbering conventions.
 - **A-4.7** The startup sequence (A-1.11) applies migrations itself, after the
   pre-upgrade snapshot (NF-7.1), with Drizzle's migrator. A database that has a
   migration this version does not know is from a newer version: the backend
-  refuses to start (NF-7.3).
+  refuses to start (NF-7.3). A migrations folder without a journal means there
+  are no migrations yet.
 
 ## A-4: Encryption of stored secrets
 

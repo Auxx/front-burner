@@ -24,6 +24,21 @@
     },
     "lint": {
       "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/tsconfig.base.json"
+      ],
+      "options": {
+        "commands": [
+          "tsc --noEmit -p apps/server-e2e/tsconfig.spec.json"
+        ],
+        "parallel": false
+      }
     }
   }
 }

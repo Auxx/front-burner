@@ -1,7 +1,8 @@
 import { Config } from '@front-burner/server-core-config';
 import { ApiErrorSchema } from '@front-burner/shared-contracts';
-import { BadRequestException, Body, Controller, Get, INestApplication, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { ThrottlerException } from '@nestjs/throttler';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
@@ -52,7 +53,7 @@ const config: Config = {
 };
 
 describe('ApiExceptionFilter', () => {
-  let app: INestApplication;
+  let app: NestExpressApplication;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -61,7 +62,7 @@ describe('ApiExceptionFilter', () => {
       providers: [ { provide: APP_FILTER, useClass: ApiExceptionFilter } ]
     }).compile();
     // Nest's default JSON limit is 100kb; shrink it to test 413 cheaply.
-    app = moduleRef.createNestApplication({ bufferLogs: true, bodyParser: false });
+    app = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true, bodyParser: false });
     app.useBodyParser('json', { limit: '1kb' });
     await app.init();
   });

@@ -337,9 +337,9 @@ These rules add to the security rules already in the requirements.
     images are shown through `blob:` URLs (IM-6).
 - **NF-11.2** Other headers: `Strict-Transport-Security` (when the request
   arrived over HTTPS), `X-Content-Type-Options: nosniff`, `Referrer-Policy:
-  no-referrer`, a `Permissions-Policy` that denies every feature,
-  `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Resource-Policy:
-  same-origin`.
+  no-referrer`, a `Permissions-Policy` that denies every feature except
+  `clipboard-write=(self)`, for copy buttons, `Cross-Origin-Opener-Policy:
+  same-origin` and `Cross-Origin-Resource-Policy: same-origin`.
 - **NF-11.3** Repository files served as they are (uploads, images, SVG, HTML,
   …) are sent with `Content-Security-Policy: default-src 'none'; sandbox` and
   `X-Content-Type-Options: nosniff`; non-image files are also sent with
@@ -436,9 +436,11 @@ These rules add to the security rules already in the requirements.
 - **NF-14.2** The web client is ready for translation from the start:
   - every UI string goes through **Transloco**, which loads translation files on
     demand and switches language at run time without a reload;
-  - plurals and similar forms use ICU message format
-    (`@jsverse/transloco-messageformat`); strings are never built by
-    concatenation;
+  - plurals and similar forms use ICU message format (formatted by our own
+    Transloco transpiler on `intl-messageformat`, not
+    `@jsverse/transloco-messageformat`, whose `@messageformat` compiles with
+    `new Function`, which NF-11.1's CSP forbids); a malformed message is logged
+    and shown raw; strings are never built by concatenation;
   - dates and numbers are formatted in the browser's locale.
 - **NF-14.3** API errors are a stable code plus parameters, with an English
   message only as a fallback. Clients turn codes into text, so translations live

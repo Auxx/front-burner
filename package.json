@@ -12,6 +12,9 @@
     "check:tags": "node tools/ai-tools/src/bin/nx-tags.mjs check"
   },
   "private": true,
+  "scarfSettings": {
+    "enabled": false
+  },
   "dependencies": {
     "@angular/aria": "22.2.4",
     "@angular/cdk": "22.2.4",

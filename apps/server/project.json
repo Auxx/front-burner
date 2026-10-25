@@ -92,6 +92,22 @@
           "FRONT_BURNER_LOG_LEVEL": "warn"
         }
       }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/tsconfig.base.json"
+      ],
+      "options": {
+        "commands": [
+          "tsc --noEmit -p apps/server/tsconfig.app.json",
+          "tsc --noEmit -p apps/server/tsconfig.spec.json"
+        ],
+        "parallel": false
+      }
     }
   }
 }

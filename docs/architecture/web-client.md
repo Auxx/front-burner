@@ -30,8 +30,11 @@ libraries and [overview.md](overview.md) for the numbering conventions.
 - **A-8.7** **Version check:** when a response's version header differs from the
   loaded version, asks the user to reload (NF-7.6).
 - **A-8.8** **Transloco:** English at launch, translation files loaded on
-  demand, language switched without reloading, ICU messages through
-  `@jsverse/transloco-messageformat` (NF-14).
+  demand, language switched without reloading, ICU messages through our own
+  Transloco transpiler on `intl-messageformat` (FormatJS, no `eval`), because
+  `@jsverse/transloco-messageformat` compiles with `new Function`, which
+  NF-11.1's CSP forbids. Zod runs `jitless` in the web client for the same
+  reason. A malformed message is logged and shown raw (NF-14).
 
 ## A-8: Saving
 

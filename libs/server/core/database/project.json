@@ -32,6 +32,22 @@
         "command": "drizzle-kit generate --config libs/server/core/database/drizzle.config.ts",
         "cwd": "{workspaceRoot}"
       }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/tsconfig.base.json"
+      ],
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/server/core/database/tsconfig.lib.json",
+          "tsc --noEmit -p libs/server/core/database/tsconfig.spec.json"
+        ],
+        "parallel": false
+      }
     }
   }
 }
