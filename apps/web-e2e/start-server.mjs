@@ -22,7 +22,7 @@ const server = spawn('node', ['dist/apps/server/main.js'], {
     FRONT_BURNER_LOG_FORMAT: 'json'
   }
 });
-for (const signal of ['SIGINT', 'SIGTERM']) {
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(signal, () => server.kill(signal));
 }
 server.on('exit', (code) => process.exit(code ?? 1));

@@ -26,7 +26,11 @@ test.describe('login page', () => {
       const csp = response?.headers()['content-security-policy'] ?? '';
       expect(csp).toContain(`'nonce-`);
       expect(csp).toContain(`require-trusted-types-for 'script'`);
-      nonces.push(/'nonce-([^']+)'/.exec(csp)?.[1] ?? '');
+      const headerNonce = /'nonce-([^']+)'/.exec(csp)?.[1] ?? '';
+      const htmlNonce = /ngcspnonce=["']([^"']+)["']/i.exec(await response!.text())?.[1] ?? '';
+      expect(htmlNonce, 'nonce in the served HTML').not.toBe('');
+      expect(htmlNonce, 'nonce in the HTML equals the one in the header').toBe(headerNonce);
+      nonces.push(headerNonce);
     }
     expect(nonces[0]).not.toBe('');
     expect(nonces[0]).not.toBe(nonces[1]);
@@ -43,6 +47,12 @@ test.describe('login page', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
     const fontFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
     expect(fontFamily).toContain('Inter');
+    // The family is declared; check that the font file really loaded.
+    const loaded = await page.evaluate(async () => {
+      await document.fonts.ready;
+      return document.fonts.check('16px "Inter Variable"');
+    });
+    expect(loaded).toBe(true);
   });
 
   test('serves the icon sprite', async ({ request }) => {
@@ -91,10 +101,14 @@ test.describe('fixture', () => {
       }));
     await page.goto('/csp-probe');
     await expect.poll(() => monitor.violations.length).toBeGreaterThan(0);
+    const violationsBefore = monitor.violations.length;
+    const errorsBefore = monitor.consoleErrors.length;
     await page.goto('/login');
+    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
     expect(monitor.violations.length).toBeGreaterThan(0);
-    monitor.violations.length = 0;
-    monitor.consoleErrors.length = 0;
+    // Drain only what the probe caused; anything the /login load adds stays and fails the test.
+    monitor.violations.splice(0, violationsBefore);
+    monitor.consoleErrors.splice(0, errorsBefore);
   });
 });
 
