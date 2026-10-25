@@ -1,5 +1,7 @@
 import { test as base } from '@playwright/test';
 
+import { type Instance, type InstanceOptions, startInstance, TEST_TOKEN } from './instance';
+
 export interface PolicyViolation {
   directive: string;
   blockedURI: string;
@@ -20,18 +22,41 @@ export interface Monitor {
 }
 
 /**
- * `test` that fails when a page logs a console error or reports a
+ * Once onboarding is completed, its state endpoint answers 404 on every page
+ * load (AO-3), and browsers log the failed request.
+ */
+function isClosedOnboarding(error: ConsoleError): boolean {
+  return new URL(error.url, 'http://x').pathname === '/api/v1/onboarding' && error.text.includes('404');
+}
+
+/**
+ * `test` with its own instance of Front Burner as `baseURL`, configured by
+ * `instanceOptions` (by default a fresh instance with a setup token), that
+ * fails when a page logs a console error or reports a
  * `securitypolicyviolation` (CSP or Trusted Types). Both are collected on the
  * Node side, so they survive navigations. A test that provokes one on purpose
  * drains `monitor` itself.
  */
-export const test = base.extend<{ monitor: Monitor; }>({
+export const test = base.extend<{ instanceOptions: InstanceOptions; instance: Instance; monitor: Monitor; }>({
+  instanceOptions: [ { setupToken: TEST_TOKEN }, { option: true } ],
+  instance: async ({ instanceOptions }, use) => {
+    const instance = await startInstance(instanceOptions);
+    try {
+      await use(instance);
+    } finally {
+      await instance.stop();
+    }
+  },
+  baseURL: async ({ instance }, use) => {
+    await use(instance.url);
+  },
   monitor: [
     async ({ page }, use) => {
       const monitor: Monitor = { violations: [], consoleErrors: [] };
       page.on('console', message => {
-        if (message.type() === 'error') {
-          monitor.consoleErrors.push({ text: message.text(), url: message.location().url });
+        const error = { text: message.text(), url: message.location().url };
+        if (message.type() === 'error' && !isClosedOnboarding(error)) {
+          monitor.consoleErrors.push(error);
         }
       });
       page.on('pageerror', error => monitor.consoleErrors.push({ text: error.message, url: page.url() }));
