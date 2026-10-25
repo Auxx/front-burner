@@ -15,8 +15,12 @@ export default [
         files: [
             "**/*.ts",
             "**/*.tsx",
+            "**/*.cts",
+            "**/*.mts",
             "**/*.js",
-            "**/*.jsx"
+            "**/*.jsx",
+            "**/*.cjs",
+            "**/*.mjs"
         ],
         rules: {
             "@nx/enforce-module-boundaries": [
@@ -49,14 +53,9 @@ export default [
                                 "scope:shared"
                             ]
                         },
-                        // Workspace tooling may read any project; no other
-                        // scope lists it, so nothing imports it.
-                        {
-                            sourceTag: "scope:tools",
-                            onlyDependOnLibsWithTags: [
-                                "*"
-                            ]
-                        },
+                        // scope:tools has no row: its projects are limited by
+                        // their type tag, and no scope lists scope:tools, so
+                        // nothing imports them.
                         {
                             allSourceTags: [
                                 "scope:server",

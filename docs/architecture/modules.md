@@ -123,8 +123,10 @@ tools/
   `nx-tags check` from `ai-tools`, because Nx cannot require tags.
 
 - **A-2.5** `ui` is `scope:web`, `type:ui`. `scope:tools` is for workspace
-  tooling: `ai-tools` is `scope:tools`, `type:util`; it may import any project
-  and no project may import it. Web tags: `markdown`, `code-editor`, `shell` and
-  `repository-dialogs` are `type:domain`; `core` and `api-client` are
-  `type:data-access`. _(My call.)_ `apps/web` uses `shell` for every page;
-  `feature-repository-screen` uses it to build its combined bar (NV-9).
+  tooling: `ai-tools` is `scope:tools`, `type:util`. `scope:tools` has no rule
+  of its own: a tooling project is limited by its type tag (`ai-tools` imports
+  only `type:util` libraries), and no project may import it. Web tags:
+  `markdown`, `code-editor`, `shell` and `repository-dialogs` are `type:domain`;
+  `core` and `api-client` are `type:data-access`. _(My call.)_ `apps/web` uses
+  `shell` for every page; `feature-repository-screen` uses it to build its
+  combined bar (NV-9).
