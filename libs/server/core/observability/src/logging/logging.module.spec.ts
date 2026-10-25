@@ -6,7 +6,7 @@ import { Logger } from 'nestjs-pino';
 import { Writable } from 'node:stream';
 import request from 'supertest';
 import { ApiExceptionFilter } from '../errors/api-exception.filter';
-import { LoggingModule } from './logging.module';
+import { createRequestLogger, LoggingModule } from './logging.module';
 
 @Controller('t')
 class LogController {
@@ -49,12 +49,14 @@ describe('LoggingModule', () => {
         callback();
       }
     });
+    const requestLogger = createRequestLogger(config, destination);
     const moduleRef = await Test.createTestingModule({
-      imports: [ LoggingModule.forRoot(config, destination) ],
+      imports: [ LoggingModule.forRoot(requestLogger) ],
       controllers: [ LogController ],
       providers: [ { provide: APP_FILTER, useClass: ApiExceptionFilter } ]
     }).compile();
     app = moduleRef.createNestApplication({ bufferLogs: true });
+    app.use(requestLogger);
     app.useLogger(app.get(Logger));
     await app.init();
   });

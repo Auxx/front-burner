@@ -1,11 +1,13 @@
 import { Config, loadConfig } from '@front-burner/server-core-config';
 import { applyMigrations, assertNoNewerMigrations, Database, openDatabase } from '@front-burner/server-core-database';
+import { createRequestLogger } from '@front-burner/server-core-observability';
 import { securityHeaders, serveWebClient } from '@front-burner/server-core-security';
 import { INestApplication, Logger as NestLogger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from 'nestjs-pino';
 import type { DestinationStream } from 'pino';
+import type { HttpLogger } from 'pino-http';
 import { AppModule } from '../app/app.module';
 import { prepareDataDir } from './prepare-data-dir';
 
@@ -37,7 +39,13 @@ function step<T>(name: StartupStep, run: () => T): T {
   }
 }
 
-function configure(app: NestExpressApplication, config: Config, webRoot: string, warnings: string[]): void {
+function configure(
+  app: NestExpressApplication,
+  config: Config,
+  webRoot: string,
+  warnings: string[],
+  requestLogger: HttpLogger
+): void {
   app.useLogger(app.get(Logger));
   app.flushLogs();
   const log = new NestLogger('Startup');
@@ -47,6 +55,8 @@ function configure(app: NestExpressApplication, config: Config, webRoot: string,
   log.log(`Data directory: ${config.dataDir}`);
 
   app.set('trust proxy', config.trustedProxies);
+  // First, so that every response has an ID and is logged (NF-10.6, A-1.12).
+  app.use(requestLogger);
   app.use(securityHeaders());
   // Nest's own parser is off so that the limit of NF-11.5 applies.
   app.useBodyParser('json', { limit: '2mb' });
@@ -75,19 +85,20 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
       assertNoNewerMigrations(database, options.migrationsFolder);
       applyMigrations(database, options.migrationsFolder);
     });
+    const requestLogger = createRequestLogger(config, options.logDestination);
     const app = await NestFactory.create<NestExpressApplication>(
       AppModule.register({
         config,
         database,
         migrationsApplied: true,
-        logDestination: options.logDestination
+        requestLogger
       }),
       { bodyParser: false, bufferLogs: true }
     ).catch((error: unknown) => {
       throw new StartupError('http', error);
     });
     try {
-      configure(app, config, options.webRoot, warnings);
+      configure(app, config, options.webRoot, warnings, requestLogger);
       if (options.listen) {
         await app.listen(config.port);
       } else {

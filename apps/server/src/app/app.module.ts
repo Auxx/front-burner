@@ -5,14 +5,14 @@ import { RateLimitModule } from '@front-burner/server-core-security';
 import { DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
-import type { DestinationStream } from 'pino';
+import type { HttpLogger } from 'pino-http';
 
 export interface AppModuleDeps {
   config: Config;
   database: Database;
   migrationsApplied: boolean;
-  /** Replaces stdout as the log destination; meant for tests. */
-  logDestination?: DestinationStream;
+  /** The request logger, attached to the application before everything else. */
+  requestLogger: HttpLogger;
 }
 
 @Module({})
@@ -23,7 +23,7 @@ export class AppModule {
       imports: [
         ConfigModule.forRoot(deps.config),
         DatabaseModule.forRoot(deps.database),
-        LoggingModule.forRoot(deps.config, deps.logDestination),
+        LoggingModule.forRoot(deps.requestLogger),
         RateLimitModule,
         HealthModule.forRoot({ migrationsApplied: deps.migrationsApplied })
       ],

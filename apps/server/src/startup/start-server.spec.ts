@@ -81,6 +81,52 @@ describe('startServer', () => {
     expect(response.body.code).toBe('payload-too-large');
   });
 
+  const logEntries = () =>
+    logs.flatMap(chunk => chunk.split('\n').filter(Boolean)).map(line => JSON.parse(line) as Record<string, any>);
+
+  it('logs the request ID of a rejected oversized body (NF-10.6, A-1.12)', async () => {
+    app = await start();
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/nope')
+      .send({ text: 'x'.repeat(3 * 1024 * 1024) });
+
+    expect(response.status).toBe(413);
+    expect(response.headers['x-request-id']).toBe(response.body.requestId);
+    const completed = logEntries().filter(e =>
+      e['requestId'] === response.body.requestId && e['message'] === 'request completed'
+    );
+    expect(completed).toHaveLength(1);
+  });
+
+  it('logs the request ID of malformed JSON', async () => {
+    app = await start();
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/nope')
+      .set('Content-Type', 'application/json')
+      .send('{ not json');
+
+    expect(response.status).toBe(400);
+    expect(logEntries().some(e => e['requestId'] === response.body.requestId && e['message'] === 'request completed'))
+      .toBe(true);
+  });
+
+  it('gives web client pages and static assets a request ID and logs them once', async () => {
+    writeFileSync(join(webRoot, 'index.html'), '<html><script nonce="__CSP_NONCE__"></script></html>');
+    writeFileSync(join(webRoot, 'main.js'), 'console.log(1);');
+    mkdirSync(join(webRoot, 'assets'));
+    app = await start();
+
+    for (const path of [ '/login', '/main.js', '/assets/missing.png' ]) {
+      const response = await request(app.getHttpServer()).get(path);
+      const id = response.headers['x-request-id'];
+      expect(id, path).toBeTruthy();
+      expect(logEntries().filter(e => e['requestId'] === id && e['message'] === 'request completed'), path)
+        .toHaveLength(1);
+    }
+  });
+
   it('starts without a web client build', async () => {
     app = await start();
 

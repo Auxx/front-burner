@@ -9,7 +9,7 @@ import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
 import { Writable } from 'node:stream';
 import request from 'supertest';
 import { z } from 'zod';
-import { LoggingModule } from '../logging/logging.module';
+import { createRequestLogger, LoggingModule } from '../logging/logging.module';
 import { ApiErrorException } from './api-error.exception';
 import { ApiExceptionFilter } from './api-exception.filter';
 
@@ -56,13 +56,15 @@ describe('ApiExceptionFilter', () => {
   let app: NestExpressApplication;
 
   beforeAll(async () => {
+    const requestLogger = createRequestLogger(config, new Writable({ write: (_c, _e, done) => done() }));
     const moduleRef = await Test.createTestingModule({
-      imports: [ LoggingModule.forRoot(config, new Writable({ write: (_c, _e, done) => done() })) ],
+      imports: [ LoggingModule.forRoot(requestLogger) ],
       controllers: [ TestController ],
       providers: [ { provide: APP_FILTER, useClass: ApiExceptionFilter } ]
     }).compile();
     // Nest's default JSON limit is 100kb; shrink it to test 413 cheaply.
     app = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true, bodyParser: false });
+    app.use(requestLogger);
     app.useBodyParser('json', { limit: '1kb' });
     await app.init();
   });
