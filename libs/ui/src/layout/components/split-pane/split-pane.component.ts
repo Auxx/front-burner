@@ -1,8 +1,19 @@
 import { Directionality } from '@angular/cdk/bidi';
 import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, model, signal } from '@angular/core';
 
+import { MenuItemComponent } from '../../../navigation/components/menu-item/menu-item.component';
+import { MenuComponent } from '../../../navigation/components/menu/menu.component';
+import { MenuTriggerDirective } from '../../../navigation/directives/menu-trigger/menu-trigger.directive';
+
 /** Which panes of a split pane are on screen. */
 export type SplitPaneShow = 'both' | 'start' | 'end';
+
+/** One entry of a split pane's menu of sizes. */
+export interface SplitPanePreset {
+  readonly label: string;
+  /** The start pane's share, in percent. */
+  readonly size: number;
+}
 
 let nextId = 0;
 
@@ -12,9 +23,13 @@ let nextId = 0;
  *
  * `size` is the start pane's share in percent. A size outside `[min, max]`,
  * such as a stale one restored from the browser, is shown clamped.
+ *
+ * Dragging is not possible for everyone (WCAG 2.5.7), so with `presets` and
+ * `presetsLabel` a button on the separator opens a menu of sizes.
  */
 @Component({
   selector: 'ui-split-pane',
+  imports: [ MenuComponent, MenuItemComponent, MenuTriggerDirective ],
   templateUrl: './split-pane.component.html',
   styleUrl: './split-pane.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -36,6 +51,11 @@ export class SplitPaneComponent {
   /** The accessible name of the separator, such as "Resize file tree". */
   readonly separatorLabel = input.required<string>();
 
+  /** Sizes offered in a menu on the separator, in percent. */
+  readonly presets = input<readonly SplitPanePreset[]>([]);
+  /** The accessible name of the menu button, such as "Pane sizes". */
+  readonly presetsLabel = input<string>();
+
   protected readonly startId = `ui-split-pane-start-${nextId++}`;
   protected readonly clampedSize = computed(() => {
     const size = this.size();
@@ -46,6 +66,10 @@ export class SplitPaneComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly directionality = inject(Directionality);
   private readonly dragging = signal(false);
+
+  protected choosePreset(size: number): void {
+    this.size.set(this.clamp(size));
+  }
 
   protected onKeydown(event: KeyboardEvent): void {
     const vertical = this.orientation() === 'vertical';

@@ -1,0 +1,8 @@
+@layer components {
+  :host {
+    display: block;
+    block-size: var(--ui-border-width);
+    margin-block: var(--ui-space-1);
+    background: var(--ui-border-subtle);
+  }
+}

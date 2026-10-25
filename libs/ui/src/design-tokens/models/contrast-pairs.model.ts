@@ -58,6 +58,10 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
     text(fg, 'selected-active'),
     text(fg, 'selected-inactive')
   ]),
+  // Text in menus, also on the hovered or active item; disabled text is
+  // exempt (WCAG 1.4.3)
+  text('text-default', 'surface-raised', 'surface-hover'),
+  text('text-muted', 'surface-raised', 'surface-hover'),
   text('text-inverse', 'text-default'),
   ...[ 'accent', 'accent-hover', 'accent-pressed' ].map(bg => text('text-on-accent', bg)),
 
@@ -71,6 +75,13 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
     graphic(fg, 'surface-canvas'),
     graphic(fg, 'surface-canvas', 'surface-hover')
   ]),
+
+  // Tree chevrons in an island, also on selected rows, and the focus ring on a
+  // selected row of a tree that does not have the focus
+  graphic('icon-muted', 'surface-island'),
+  graphic('icon-muted', 'selected-active'),
+  graphic('icon-muted', 'selected-inactive'),
+  graphic('border-focus', 'selected-inactive'),
 
   // Status
   ...statuses.flatMap(status => [

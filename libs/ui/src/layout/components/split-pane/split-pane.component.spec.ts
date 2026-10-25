@@ -2,7 +2,7 @@ import { Dir } from '@angular/cdk/bidi';
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { SplitPaneComponent, SplitPaneShow } from './split-pane.component';
+import { SplitPaneComponent, SplitPanePreset, SplitPaneShow } from './split-pane.component';
 
 @Component({
   imports: [ SplitPaneComponent, Dir ],
@@ -12,6 +12,10 @@ import { SplitPaneComponent, SplitPaneShow } from './split-pane.component';
         [(size)]="size"
         [orientation]="orientation()"
         [show]="show()"
+        [min]="min()"
+        [max]="max()"
+        [presets]="presets()"
+        [presetsLabel]="presetsLabel()"
         separatorLabel="Resize file tree"
       >
         <p uiSplitPaneStart>Tree</p>
@@ -25,6 +29,10 @@ class HostComponent {
   readonly orientation = signal<'horizontal' | 'vertical'>('horizontal');
   readonly show = signal<SplitPaneShow>('both');
   readonly dir = signal<'ltr' | 'rtl'>('ltr');
+  readonly min = signal(10);
+  readonly max = signal(90);
+  readonly presets = signal<readonly SplitPanePreset[]>([]);
+  readonly presetsLabel = signal<string | undefined>(undefined);
 }
 
 describe('SplitPaneComponent', () => {
@@ -215,6 +223,86 @@ describe('SplitPaneComponent', () => {
       await pointer('pointerdown', 0, 100);
       await pointer('pointermove', 0, 200);
       expect(host.size()).toBe(40);
+    });
+  });
+
+  describe('presets', () => {
+    const presets: readonly SplitPanePreset[] = [
+      { label: 'Small', size: 25 },
+      { label: 'Half', size: 50 },
+      { label: 'Large', size: 75 }
+    ];
+    const menuButton = () => element.querySelector('button[aria-label="Pane sizes"]') as HTMLButtonElement | null;
+    const menuItem = (name: string) =>
+      [ ...document.querySelectorAll('[role="menuitem"]') ].find(i => i.textContent?.trim() === name) as HTMLElement;
+
+    const enable = async () => {
+      host.presets.set(presets);
+      host.presetsLabel.set('Pane sizes');
+      await fixture.whenStable();
+    };
+
+    it('offers a menu of preset sizes', async () => {
+      await enable();
+      const button = menuButton() as HTMLButtonElement;
+      expect(button.getAttribute('aria-haspopup')).toBe('menu');
+
+      button.click();
+      await fixture.whenStable();
+
+      const names = [ ...document.querySelectorAll('[role="menuitem"]') ].map(i => i.textContent?.trim());
+      expect(names).toEqual([ 'Small', 'Half', 'Large' ]);
+    });
+
+    it('resizes to the chosen preset', async () => {
+      await enable();
+      const button = menuButton() as HTMLButtonElement;
+      button.click();
+      await fixture.whenStable();
+
+      menuItem('Large').click();
+      await fixture.whenStable();
+
+      expect(host.size()).toBe(75);
+      expect(separator()?.getAttribute('aria-valuenow')).toBe('75');
+      expect(document.activeElement).toBe(button);
+    });
+
+    it('clamps a preset outside min and max', async () => {
+      host.max.set(60);
+      await enable();
+      (menuButton() as HTMLButtonElement).click();
+      await fixture.whenStable();
+
+      menuItem('Large').click();
+      await fixture.whenStable();
+
+      expect(host.size()).toBe(60);
+    });
+
+    it('has no menu button without presets or a label, or with one pane', async () => {
+      expect(menuButton()).toBeNull();
+
+      host.presets.set(presets);
+      await fixture.whenStable();
+      expect(element.querySelector('.divider button')).toBeNull();
+
+      host.presets.set([]);
+      host.presetsLabel.set('Pane sizes');
+      await fixture.whenStable();
+      expect(menuButton()).toBeNull();
+
+      await enable();
+      expect(menuButton()).not.toBeNull();
+      host.show.set('end');
+      await fixture.whenStable();
+      expect(menuButton()).toBeNull();
+    });
+
+    it('keeps the button out of the separator', async () => {
+      await enable();
+      expect(separator()?.contains(menuButton())).toBe(false);
+      expect(menuButton()).not.toBeNull();
     });
   });
 });

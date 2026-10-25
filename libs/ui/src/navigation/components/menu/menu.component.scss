@@ -1,0 +1,19 @@
+@layer components {
+  :host {
+    display: none;
+  }
+
+  // Aria sets `data-visible` while the menu is open; it is then in the overlay.
+  :host([data-visible='true']) {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 10rem;
+    max-inline-size: min(20rem, 100vw - 2 * var(--ui-space-2));
+    padding: var(--ui-space-1);
+    background: var(--ui-surface-raised);
+    border: var(--ui-border-width) solid var(--ui-border-default);
+    border-radius: var(--ui-radius-popover);
+    box-shadow: var(--ui-shadow-popover);
+  }
+}

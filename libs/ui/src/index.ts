@@ -2,6 +2,26 @@ export { ActivityBarItemComponent } from './layout/components/activity-bar-item/
 export { ActivityBarComponent } from './layout/components/activity-bar/activity-bar.component';
 export { AppShellComponent } from './layout/components/app-shell/app-shell.component';
 export { IslandComponent } from './layout/components/island/island.component';
-export { SplitPaneComponent, type SplitPaneShow } from './layout/components/split-pane/split-pane.component';
+export {
+  SplitPaneComponent,
+  type SplitPanePreset,
+  type SplitPaneShow
+} from './layout/components/split-pane/split-pane.component';
 export { StatusBarComponent } from './layout/components/status-bar/status-bar.component';
 export { AppShellSideDirective } from './layout/directives/app-shell-side/app-shell-side.directive';
+export { BreadcrumbsComponent } from './navigation/components/breadcrumbs/breadcrumbs.component';
+export { MenuItemComponent } from './navigation/components/menu-item/menu-item.component';
+export { MenuSeparatorComponent } from './navigation/components/menu-separator/menu-separator.component';
+export { MenuComponent } from './navigation/components/menu/menu.component';
+export { TabStripComponent } from './navigation/components/tab-strip/tab-strip.component';
+export { TabComponent } from './navigation/components/tab/tab.component';
+export { TreeComponent } from './navigation/components/tree/tree.component';
+export { BreadcrumbDirective } from './navigation/directives/breadcrumb/breadcrumb.directive';
+export { MenuGroupDirective } from './navigation/directives/menu-group/menu-group.directive';
+export { MenuTriggerDirective } from './navigation/directives/menu-trigger/menu-trigger.directive';
+export { TabContentDirective } from './navigation/directives/tab-content/tab-content.directive';
+export { TabGroupDirective } from './navigation/directives/tab-group/tab-group.directive';
+export { TabPanelDirective } from './navigation/directives/tab-panel/tab-panel.directive';
+export { TreeItemMenuDirective } from './navigation/directives/tree-item-menu/tree-item-menu.directive';
+export { TreeNodeDirective } from './navigation/directives/tree-node/tree-node.directive';
+export { type TreeNode } from './navigation/models/tree-node.model';

@@ -1,5 +1,5 @@
 import { Meta, StoryObj } from '@storybook/angular-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { IslandComponent } from '../island/island.component';
 import { SplitPaneComponent } from './split-pane.component';
 
@@ -9,6 +9,34 @@ const canvas = `
   .positioned { position: relative; block-size: 100%; }
 `;
 
+const presets = [ { label: 'Small', size: 25 }, { label: 'Half', size: 50 }, { label: 'Large', size: 75 } ];
+
+/**
+ * The menu button is centred on the separator on both axes, sits above it
+ * without blocking it elsewhere, and a drag started just outside the button
+ * resizes.
+ */
+async function expectHandleOnSeparator(canvasElement: HTMLElement, vertical: boolean): Promise<void> {
+  const separator = within(canvasElement).getByRole('separator');
+  const button = within(canvasElement).getByRole('button', { name: 'Pane sizes' });
+  const s = separator.getBoundingClientRect();
+  const b = button.getBoundingClientRect();
+  await expect(Math.abs(b.left + b.width / 2 - (s.left + s.width / 2))).toBeLessThanOrEqual(1);
+  await expect(Math.abs(b.top + b.height / 2 - (s.top + s.height / 2))).toBeLessThanOrEqual(1);
+
+  const x = vertical ? b.right + 4 : s.left + s.width / 2;
+  const y = vertical ? s.top + s.height / 2 : b.bottom + 4;
+  await expect(canvasElement.ownerDocument.elementFromPoint(x, y)).toBe(separator);
+
+  const before = Number(separator.getAttribute('aria-valuenow'));
+  await userEvent.pointer([
+    { keys: '[MouseLeft>]', target: separator, coords: { clientX: x, clientY: y } },
+    { coords: { clientX: vertical ? x : x + 40, clientY: vertical ? y + 40 : y } },
+    { keys: '[/MouseLeft]' }
+  ]);
+  await expect(Number(separator.getAttribute('aria-valuenow'))).not.toBe(before);
+}
+
 const meta: Meta<SplitPaneComponent> = {
   title: 'Layout/Split pane',
   component: SplitPaneComponent,
@@ -16,13 +44,13 @@ const meta: Meta<SplitPaneComponent> = {
     layout: 'fullscreen'
   },
   decorators: [ story => ({ ...story(), moduleMetadata: { imports: [ IslandComponent ] } }) ],
-  args: { size: 30, orientation: 'horizontal', show: 'both' },
+  args: { size: 30, orientation: 'horizontal', show: 'both', presets, presetsLabel: 'Pane sizes' },
   render: props => ({
     props,
     styles: [ canvas ],
     template: `
       <div class="canvas">
-        <ui-split-pane [(size)]="size" [orientation]="orientation" [show]="show" separatorLabel="Resize first pane">
+        <ui-split-pane [(size)]="size" [orientation]="orientation" [show]="show" [presets]="presets" [presetsLabel]="presetsLabel" separatorLabel="Resize first pane">
           <ui-island uiSplitPaneStart heading="First"><p>First pane</p></ui-island>
           <ui-island uiSplitPaneEnd heading="Second"><p class="positioned">Second pane</p></ui-island>
         </ui-split-pane>
@@ -45,16 +73,48 @@ export const Horizontal: Story = {
     // The target is at least 24 px wide (NF-13.5) and grows into the end pane,
     // above its content, leaving the start island's edge and scrollbar alone.
     const { left, top, height } = separator.getBoundingClientRect();
-    const y = top + height / 2;
+    // Away from the menu button, which sits at the middle.
+    const y = top + height / 8;
     const at = (x: number) => canvasElement.ownerDocument.elementFromPoint(x, y);
     await expect(at(left - 2)).not.toBe(separator);
     await expect(at(left + 1)).toBe(separator);
     await expect(at(left + 23)).toBe(separator);
+
+    await expectHandleOnSeparator(canvasElement, false);
+  }
+};
+
+/** In right-to-left the panes swap sides; the button stays centred. */
+export const HorizontalRtl: Story = {
+  render: props => ({
+    props,
+    styles: [ canvas ],
+    template: `
+      <div class="canvas" dir="rtl">
+        <ui-split-pane [(size)]="size" [presets]="presets" presetsLabel="Pane sizes" separatorLabel="Resize first pane">
+          <ui-island uiSplitPaneStart heading="First"><p>First pane</p></ui-island>
+          <ui-island uiSplitPaneEnd heading="Second"><p>Second pane</p></ui-island>
+        </ui-split-pane>
+      </div>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    await expectHandleOnSeparator(canvasElement, false);
   }
 };
 
 export const Vertical: Story = {
-  args: { orientation: 'vertical', size: 60 }
+  args: { orientation: 'vertical', size: 60 },
+  play: async ({ canvasElement }) => {
+    const trigger = within(canvasElement).getByRole('button', { name: 'Pane sizes' });
+
+    await expectHandleOnSeparator(canvasElement, true);
+    await userEvent.click(trigger);
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Large' }));
+
+    await waitFor(() => expect(within(canvasElement).getByRole('separator')).toHaveAttribute('aria-valuenow', '75'));
+    await expect(trigger).toHaveFocus();
+  }
 };
 
 export const OnePane: Story = {

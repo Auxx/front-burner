@@ -1,3 +1,5 @@
+@use '../../../styles/mixins';
+
 @layer components {
   :host {
     --ui-split-pane-gap: var(--ui-island-gap);
@@ -29,14 +31,21 @@
   }
 
   // With one pane on screen, it takes every track.
-  :host(:not(:has(> .separator))) .pane {
+  :host(:not(:has(> .divider))) .pane {
     grid-column: 1 / -1;
     grid-row: 1 / -1;
   }
 
-  .separator {
+  // Takes the separator's grid track; the separator and the menu button are
+  // siblings in it, as a button must not be inside a separator.
+  .divider {
     position: relative;
     z-index: 1;
+  }
+
+  .separator {
+    position: relative;
+    block-size: 100%;
     touch-action: none;
     cursor: col-resize;
 
@@ -70,6 +79,7 @@
 
   :host([data-orientation='vertical']) .separator {
     cursor: row-resize;
+    inline-size: 100%;
 
     &::before {
       inset-inline: 0;
@@ -84,5 +94,42 @@
       inline-size: auto;
       block-size: calc(var(--ui-border-width) * 2);
     }
+  }
+
+  // On the middle of the divider, above the separator's grown target.
+  .presets {
+    position: absolute;
+    // Centred with logical margins, which flip in right-to-left; the track is
+    // narrower than the button, so `margin: auto` would not centre it.
+    inset-inline-start: 50%;
+    inset-block-start: 50%;
+    margin-inline-start: calc(var(--ui-split-pane-handle-size) / -2);
+    margin-block-start: calc(var(--ui-split-pane-handle-size) / -2);
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    inline-size: var(--ui-split-pane-handle-size);
+    block-size: var(--ui-split-pane-handle-size);
+    color: var(--ui-text-default);
+    background: var(--ui-surface-raised);
+    border: var(--ui-border-width) solid var(--ui-border-default);
+    border-radius: var(--ui-radius-control);
+    cursor: pointer;
+
+    &:focus-visible {
+      @include mixins.focus-ring;
+    }
+
+    svg {
+      inline-size: var(--ui-icon-size);
+      block-size: var(--ui-icon-size);
+      // Dots in a column on a vertical separator, so it reads as a handle.
+      rotate: 90deg;
+    }
+  }
+
+  :host([data-orientation='vertical']) .presets svg {
+    rotate: none;
   }
 }
