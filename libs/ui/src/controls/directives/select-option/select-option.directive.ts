@@ -23,11 +23,12 @@ export class SelectOptionDirective<V> {
   readonly template = inject<TemplateRef<SelectOptionContext<V>>>(TemplateRef);
 
   /** Types `let-option` in the template. */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the signature is Angular's contract
+  /* eslint-disable @typescript-eslint/no-unused-vars -- the signature is Angular's contract */
   static ngTemplateContextGuard<V>(
     _directive: SelectOptionDirective<V>,
     context: unknown
   ): context is SelectOptionContext<V> {
     return true;
   }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
 }
