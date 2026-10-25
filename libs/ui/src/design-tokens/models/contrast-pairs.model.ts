@@ -76,6 +76,12 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   // The border of an invalid text field, and of controls on a raised surface
   graphic('danger-icon', 'surface-sunken'),
   graphic('border-strong', 'surface-raised'),
+
+  // Checkbox and switch marks on the accent, the switch's thumb when off, and
+  // the accent fill in menus and popovers
+  graphic('icon-on-accent', 'accent'),
+  graphic('icon-muted', 'surface-sunken'),
+  graphic('accent', 'surface-raised'),
   ...[ 'accent', 'accent-hover', 'accent-pressed' ].map(bg => text('text-on-accent', bg)),
 
   // Control borders, focus ring and accent
