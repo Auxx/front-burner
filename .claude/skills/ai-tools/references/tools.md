@@ -12,6 +12,7 @@ watch out for. The rules shared by all tools are in [SKILL.md](../SKILL.md).
 | [`story`](#story)     | Screenshots of stories and values read from their pages            |
 | [`icons`](#icons)     | Finding Codicons and building the sprite of `ui-icon`              |
 | [`doc-ids`](#doc-ids) | Checking and renumbering IDs such as A-10.38 or REQ-EDIT-002       |
+| [`nx-tags`](#nx-tags) | Checking that every Nx project has a scope and a type tag          |
 
 ## `colour`
 
@@ -244,3 +245,23 @@ instead.
   `--write`. After writing, run `check` and format the docs.
 - Uppercase words joined by hyphens and numbers look like IDs (`UTF-8`). They
   are ignored unless their prefix has definitions.
+
+## `nx-tags`
+
+Checks that every Nx project has exactly one known `scope:` tag and one known
+`type:` tag (A-2.4). The module boundary rules in `eslint.config.mjs` are keyed
+on these tags, and Nx cannot require them, so a project created without tags
+would escape every rule. CI runs it as `npm run check:tags`.
+
+| Command          | Does                                                                   |
+| ---------------- | ---------------------------------------------------------------------- |
+| `check [--json]` | Missing, unknown or duplicate `scope:`/`type:` tags; 1 if there is any |
+
+The vocabulary is `scope:server|web|shared|tools` and
+`type:app|feature|core|domain|data-access|ui|contracts|util`, in
+`src/lib/nx-tags.mjs`. Tags with other prefixes are ignored. A new tag needs
+both that list and the constraints in `eslint.config.mjs`.
+
+```shell
+nx-tags.mjs check
+```

@@ -2,7 +2,8 @@
 
 Command-line tools for the AI agent working in this workspace: colour and
 contrast maths, design token checks, Storybook screenshots, icon lookup, and
-checking or renumbering requirement IDs. They replace throwaway scripts.
+checking or renumbering requirement IDs, and checking Nx project tags. They
+replace throwaway scripts.
 
 ```shell
 node tools/ai-tools/src/bin/<tool>.mjs --help
