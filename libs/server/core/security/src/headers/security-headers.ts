@@ -1,9 +1,9 @@
 import type { RequestHandler } from 'express';
 
+/** Only features Chromium recognises: it warns in the console about any other. */
 const DENIED_FEATURES = [
   'accelerometer',
   'autoplay',
-  'bluetooth',
   'camera',
   'display-capture',
   'encrypted-media',
@@ -27,7 +27,6 @@ const DENIED_FEATURES = [
   'storage-access',
   'sync-xhr',
   'usb',
-  'web-share',
   'xr-spatial-tracking'
 ];
 

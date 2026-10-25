@@ -42,4 +42,9 @@ describe('securityHeaders', () => {
     expect(PERMISSIONS_POLICY).not.toContain('clipboard-read');
     expect(PERMISSIONS_POLICY.match(/clipboard-write=\(self\)/g)).toHaveLength(1);
   });
+
+  it('names no feature that Chromium does not recognise (it logs a console warning for each)', () => {
+    expect(PERMISSIONS_POLICY).not.toContain('bluetooth=');
+    expect(PERMISSIONS_POLICY).not.toContain('web-share=');
+  });
 });
