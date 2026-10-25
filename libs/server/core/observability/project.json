@@ -1,0 +1,38 @@
+{
+  "name": "server-core-observability",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/server/core/observability/src",
+  "projectType": "library",
+  "tags": [
+    "scope:server",
+    "type:core"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{workspaceRoot}/coverage/libs/server/core/observability"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/server/core/observability"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/server/core/observability/tsconfig.lib.json",
+          "tsc --noEmit -p libs/server/core/observability/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

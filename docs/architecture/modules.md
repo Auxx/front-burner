@@ -99,6 +99,10 @@ tools/
   the save queue, the merge in progress), and web features may not import each
   other (A-2.4). The git UI of the Simple and Guided levels will be added to it.
   _(My call.)_
+- **A-2.2b** `shared/util` is created with its first helper _(My call: nothing
+  in the skeleton needs it, and an empty library adds a project to every graph
+  for nothing)_. Non-buildable Angular libraries have no ng-packagr build; they
+  test with Vitest and Analog.
 - **A-2.3** The generated `api-client` is an Angular library, since its template
   targets `HttpClient`. A future Angular-based native client can reuse it; a
   non-Angular client generates its own from the OpenAPI document.

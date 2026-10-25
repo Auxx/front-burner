@@ -1,0 +1,46 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Fixture", "version": "1" },
+  "paths": {
+    "/api/v1/items": {
+      "get": {
+        "operationId": "search",
+        "tags": ["items"],
+        "parameters": [
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "array", "items": { "type": "string" } }
+          },
+          { "name": "limit", "in": "query", "required": true, "schema": { "type": "number" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HealthStatus" } } }
+          }
+        }
+      },
+      "post": {
+        "operationId": "touch",
+        "tags": ["items"],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HealthStatus" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthStatus": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "enum": ["ok", "degraded", "fail"] } },
+        "required": ["status"]
+      }
+    }
+  }
+}

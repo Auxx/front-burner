@@ -1,0 +1,36 @@
+{
+  "name": "server-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/server-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:server",
+    "type:app"
+  ],
+  "implicitDependencies": [
+    "server"
+  ],
+  "targets": {
+    "e2e": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "dependsOn": [
+        "server:build"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "apps/server-e2e"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p apps/server-e2e/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

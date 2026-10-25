@@ -20,6 +20,30 @@
     "paths": {
       "@front-burner/ui": [
         "./libs/ui/src/index.ts"
+      ],
+      "@front-burner/shared-contracts": [
+        "./libs/shared/contracts/src/index.ts"
+      ],
+      "@front-burner/server-core-config": [
+        "./libs/server/core/config/src/index.ts"
+      ],
+      "@front-burner/server-core-database": [
+        "./libs/server/core/database/src/index.ts"
+      ],
+      "@front-burner/server-core-observability": [
+        "./libs/server/core/observability/src/index.ts"
+      ],
+      "@front-burner/server-core-security": [
+        "./libs/server/core/security/src/index.ts"
+      ],
+      "@front-burner/web-api-client": [
+        "./libs/web/api-client/src/index.ts"
+      ],
+      "@front-burner/web-core": [
+        "./libs/web/core/src/index.ts"
+      ],
+      "@front-burner/web-feature-auth": [
+        "./libs/web/feature-auth/src/index.ts"
       ]
     }
   },

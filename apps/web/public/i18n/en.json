@@ -1,0 +1,11 @@
+{
+  "errors.not-found": "We could not find what you asked for.",
+  "errors.validation-failed": "Some of the information is not valid.",
+  "errors.malformed-request": "The request could not be understood.",
+  "errors.payload-too-large": "That is too large to send.",
+  "errors.rate-limited": "Too many requests. Please wait a moment and try again.",
+  "errors.internal": "Something went wrong on our side.",
+  "errors.network": "Could not reach the server. Check your connection.",
+  "web-feature-auth.LoginPage.title": "Log in",
+  "web-feature-auth.LoginPage.message": "Signing in isn't available yet."
+}

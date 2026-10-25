@@ -1,0 +1,29 @@
+<%
+const { route, utils } = it;
+const { _ } = utils;
+const { path: rawPath, method, parameters, query, payload } = route.request;
+const { type } = route.response;
+// Path parameters are data, not URL syntax: encode each one.
+const path = rawPath.replace(/\$\{([^}]+)\}/g, '${encodeURIComponent($1)}');
+const args = _.compact([
+  ..._.values(parameters).map((p) => `${p.name}: ${p.type}`),
+  query && `${query.name}${query.optional ? '?' : ''}: ${query.type}`,
+  payload && `${payload.name}: ${payload.type}`
+]).join(', ');
+const body = payload ? `, ${payload.name}` : '';
+// The query type is generated from the operation's parameters, so HttpClient
+// checks it against its own params type: no cast.
+const requestOptions = query ? `, { params: ${query.name} }` : '';
+const verb = method.toLowerCase();
+// HttpClient.post/put/patch require a body argument, so an operation without a
+// request body goes through request(), which takes none.
+const bodyless = ['post', 'put', 'patch'].includes(verb) && !payload;
+const call = bodyless
+  ? `this.http.request<${type}>('${method.toUpperCase()}', \`${path}\`${requestOptions})`
+  : ['post', 'put', 'patch'].includes(verb)
+  ? `this.http.${verb}<${type}>(\`${path}\`${body}${requestOptions})`
+  : `this.http.${verb}<${type}>(\`${path}\`${requestOptions})`;
+%>
+<%~ route.routeName.usage %>(<%~ args %>): Observable<<%~ type %>> {
+  return <%~ call %>;
+}

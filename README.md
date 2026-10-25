@@ -65,17 +65,29 @@ to browse plugins and generators in your IDE.
 |
 [Browse the plugin registry &raquo;](https://nx.dev/plugin-registry?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
 
+## Local development
+
+Copy `.env.example` to `.env`, then start the backend and the web client:
+
+```sh
+npx nx serve server
+npx nx serve web
+```
+
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every pull request and every
 push to `master`: `dprint check`, the project tag check, and `nx affected` for
-lint, test, build, the Storybook browser tests and e2e, plus a Trivy scan of the
+type checking, lint, test, build, the Storybook browser tests and the e2e suites
+(API and web), then regenerates the OpenAPI document and the API client and
+fails if they differ from the committed files, plus a Trivy scan of the
 production dependencies in `package-lock.json`. Run the same checks locally with
-`npm run format:check`, `npm run check:tags` and `npx nx affected -t lint test
-build test-storybook e2e`. Node.js is pinned to 24.22.1 in `.nvmrc`, and
-`.npmrc` sets `engine-strict`, so `npm ci` refuses an older Node.js. Accepted
-Trivy findings go in `.trivyignore`, with a reason and a review date. Dependabot
-opens weekly update pull requests for npm packages and GitHub Actions.
+`npm run format:check`, `npm run check:tags` and `npx nx affected -t typecheck
+lint test build test-storybook e2e`. Node.js is pinned to 24.22.1 in `.nvmrc`,
+and `.npmrc` sets `engine-strict`, so `npm ci` refuses an older Node.js.
+Accepted Trivy findings go in `.trivyignore`, with a reason and a review date.
+Dependabot opens weekly update pull requests for npm packages and GitHub
+Actions.
 
 ## Install Nx Console
 

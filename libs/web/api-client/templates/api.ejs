@@ -1,0 +1,42 @@
+<%
+const { route, utils, modelTypes } = it;
+const { pascalCase } = utils;
+const className = `${pascalCase(route.moduleName)}Api`;
+const routes = route.routes;
+// Every request and response type lives in @front-burner/shared-contracts
+// (A-3.6): import the ones this class uses, declare none. A type that is not a
+// component schema (an inline schema) or a primitive fails the generation. A
+// query type is the exception: it is built from the operation's parameters.
+const modelNames = new Set(modelTypes.map((m) => m.name));
+const allowed = new Set(['string', 'number', 'boolean', 'void', 'null', 'undefined', 'never', 'Array', 'Record']);
+const used = new Set();
+for (const r of routes) {
+  const types = [
+    r.response.type,
+    r.request.payload && r.request.payload.type,
+    ...Object.values(r.request.parameters || {}).map((p) => p.type)
+  ].filter(Boolean);
+  for (const t of types) {
+    const names = String(t).match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+    if (t.includes('{') || names.some((n) => !modelNames.has(n) && !allowed.has(n))) {
+      throw new Error(className + '.' + r.routeName.usage + ': type ' + t + ' is not a component schema of the OpenAPI document; give it a name in @front-burner/shared-contracts (A-3.6)');
+    }
+    names.filter((n) => modelNames.has(n)).forEach((n) => used.add(n));
+  }
+}
+%>
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import type { Observable } from 'rxjs';
+<% if (used.size) { %>
+import type { <%~ [...used].sort().join(', ') %> } from '@front-burner/shared-contracts';
+<% } %>
+
+@Injectable({ providedIn: 'root' })
+export class <%~ className %> {
+  private readonly http = inject(HttpClient);
+
+<% for (const r of routes) { %>
+  <%~ includeFile('./procedure-call.ejs', { ...it, route: r }) %>
+<% } %>
+}

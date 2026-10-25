@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, signal, type Type } from '@angular/core';
 import { Meta, StoryObj } from '@storybook/angular-vite';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 
@@ -116,7 +116,7 @@ class DialogOpenerComponent {
   protected readonly result = signal('');
 
   private readonly dialogs = inject(DialogService);
-  private readonly components = {
+  private readonly components: Record<'unlock' | 'host-key' | 'tall', Type<unknown>> = {
     unlock: UnlockKeyDialogComponent,
     'host-key': ChangedHostKeyDialogComponent,
     tall: TallDialogComponent

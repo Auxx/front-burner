@@ -45,21 +45,41 @@ jobs:
       - name: Project tags
         run: npm run check:tags
 
-      # Storybook stories run as browser tests (A-10.38); the browser is
-      # installed only when a project with those tests is affected.
+      # Storybook stories run as browser tests (A-10.38) and web-e2e runs in
+      # Chromium, Firefox and WebKit (NF-13.8); browsers are installed only
+      # when one of those is affected.
       - name: Find affected browser tests
         id: browsers
         run: |
-          affected=$(npx nx show projects --affected -t test-storybook --json)
-          echo "Affected by test-storybook: $affected"
-          if [ "$affected" != "[]" ]; then echo "storybook=true" >> "$GITHUB_OUTPUT"; fi
+          storybook=$(npx nx show projects --affected -t test-storybook --json)
+          e2e=$(npx nx show projects --affected -t e2e --json)
+          echo "Affected by test-storybook: $storybook"
+          echo "Affected by e2e: $e2e"
+          browsers=""
+          if [ "$storybook" != "[]" ]; then browsers="chromium"; fi
+          if echo "$e2e" | grep -q '"web-e2e"'; then browsers="chromium firefox webkit"; fi
+          echo "browsers=$browsers" >> "$GITHUB_OUTPUT"
 
       - name: Install Playwright browsers
-        if: steps.browsers.outputs.storybook == 'true'
-        run: npx playwright install --with-deps chromium
+        if: steps.browsers.outputs.browsers != ''
+        run: npx playwright install --with-deps ${{ steps.browsers.outputs.browsers }}
 
-      - name: Lint, test, build
-        run: npx nx affected -t lint test build test-storybook e2e --parallel=3
+      - name: Type check, lint, test, build
+        run: npx nx affected -t typecheck lint test build size-check test-storybook e2e --parallel=3
+
+      # The OpenAPI document and the web client generated from it are
+      # committed; regenerating must change nothing (A-3.7).
+      - name: API client drift
+        run: |
+          npx nx run web-api-client:generate
+          paths="apps/server/openapi.json libs/web/api-client/src/generated"
+          # git diff alone ignores untracked files, such as a new tag's client.
+          changes=$(git status --porcelain -- $paths)
+          if [ -n "$changes" ]; then
+            echo "$changes"
+            git diff -- $paths
+            exit 1
+          fi
 
   trivy:
     runs-on: ubuntu-latest

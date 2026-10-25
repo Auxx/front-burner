@@ -1,0 +1,37 @@
+{
+  "name": "web-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/web-e2e/src",
+  "implicitDependencies": [
+    "web"
+  ],
+  "targets": {
+    "e2e": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "dependsOn": [
+        "web:build:production",
+        "server:build"
+      ],
+      "options": {
+        "command": "playwright test",
+        "cwd": "apps/web-e2e"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p apps/web-e2e/tsconfig.json"
+        ]
+      }
+    }
+  },
+  "tags": [
+    "scope:web",
+    "type:app"
+  ]
+}

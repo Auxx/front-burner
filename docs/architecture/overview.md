@@ -65,7 +65,8 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
 ## A-1: Technology stack
 
 - **A-1.3** Runtime: **Node.js 24 LTS**, TypeScript, NX workspace.
-- **A-1.4** Backend: **NestJS**. Database access with **Drizzle ORM** on
+- **A-1.4** Backend: **NestJS 11**, until `nestjs-zod` supports 12 _(user's
+  decision, 2026-10-25)_. Database access with **Drizzle ORM** on
   **`better-sqlite3`** (A-4).
 - **A-1.5** API: REST under `/api/v1`, described by **OpenAPI** generated from
   NestJS. Request and response shapes are **Zod** schemas in a shared library
@@ -136,12 +137,13 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
 
 - **A-1.15** All configuration comes from environment variables with the
   `FRONT_BURNER_` prefix, parsed and validated at startup by one Zod schema in
-  `server/config`. Durations use LG-62's format; sizes use a number and `KB`,
-  `MB` or `GB`. Variables already defined in the requirements and NF-x.y keep
-  their names. New ones _(My call: names and defaults)_:
+  `server/core/config`. Durations use LG-62's format; sizes use a number and
+  `KB`, `MB` or `GB`. Variables already defined in the requirements and NF-x.y
+  keep their names. New ones _(My call: names and defaults)_:
 
   | Variable                              | Default                      | Meaning                                                                                                                                                                          |
   | ------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `FRONT_BURNER_DATA_DIR`               | `/data`                      | Directory for all stored data. A relative path resolves against the working directory; meant for development.                                                                    |
   | `FRONT_BURNER_PORT`                   | `8080`                       | HTTP port inside the container.                                                                                                                                                  |
   | `FRONT_BURNER_TRUSTED_PROXIES`        | `loopback, private networks` | Addresses whose `X-Forwarded-*` headers are trusted.                                                                                                                             |
   | `FRONT_BURNER_CLONE_TIMEOUT`          | `30m`                        | AR-51.                                                                                                                                                                           |

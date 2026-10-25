@@ -1,0 +1,25 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Fixture", "version": "1" },
+  "paths": {
+    "/api/things": {
+      "get": {
+        "operationId": "list",
+        "tags": ["things"],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "name": { "type": "string" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
