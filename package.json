@@ -57,6 +57,7 @@
     "@vitest/coverage-v8": "4.1.12",
     "angular-eslint": "22.6.0",
     "autoprefixer": "10.6.1",
+    "culori": "4.0.2",
     "dprint": "^0.64.3",
     "eslint": "9.39.5",
     "jsdom": "27.4.0",

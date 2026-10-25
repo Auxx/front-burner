@@ -1,0 +1,27 @@
+{
+  "name": "ai-tools",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/ai-tools/src",
+  "projectType": "library",
+  "tags": [],
+  "implicitDependencies": [
+    "ui"
+  ],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "tools/ai-tools"
+      }
+    }
+  }
+}

@@ -53,7 +53,8 @@
     "codeBlock.preserveIndentation": true
   },
   "includes": [
-    "**/*.{ts,tsx,js,jsx,json,md}"
+    "**/*.{ts,tsx,js,jsx,json,md}",
+    "tools/**/*.mjs"
   ],
   "excludes": [
     "**/node_modules",
