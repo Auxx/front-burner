@@ -32,8 +32,15 @@ describe('IconButtonComponent', () => {
     const fetch = buttons()[0];
 
     expect(fetch.getAttribute('aria-label')).toBe('Fetch');
-    expect(fetch.getAttribute('title')).toBe('Fetch');
+    expect(fetch.hasAttribute('title')).toBe(false);
+    expect(fetch.hasAttribute('aria-describedby')).toBe(false);
     expect(fetch.getAttribute('type')).toBe('button');
+  });
+
+  it('shows its label as a tooltip on focus', () => {
+    buttons()[0].focus();
+
+    expect(document.querySelector('ui-tooltip')?.textContent?.trim()).toBe('Fetch');
   });
 
   it('is a toggle only when pressed is set', async () => {

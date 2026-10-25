@@ -1,12 +1,14 @@
-import { booleanAttribute, ChangeDetectionStrategy, Component, ElementRef, inject, input } from '@angular/core';
+import { booleanAttribute, ChangeDetectionStrategy, Component, ElementRef, inject, input, signal } from '@angular/core';
 
 import { SpinnerComponent } from '../../../feedback/components/spinner/spinner.component';
+import { TooltipDirective } from '../../../feedback/directives/tooltip/tooltip.directive';
+import { attachTooltip } from '../../../feedback/utils/tooltip/tooltip.util';
 import { useBusyState } from '../../utils/busy/busy.util';
 import { type ButtonSize, type ButtonType } from '../button/button.component';
 
 /**
  * A button whose content is one `<svg>` icon. `label` is its accessible name
- * and its tooltip. Set `pressed` to make it a toggle button. While `busy`, a
+ * and its tooltip, unless a `uiTooltip` on it gives another tooltip. Set `pressed` to make it a toggle button. While `busy`, a
  * spinner replaces the icon and the button is `aria-disabled`.
  */
 @Component({
@@ -23,7 +25,6 @@ import { type ButtonSize, type ButtonType } from '../button/button.component';
   host: {
     '[attr.type]': 'type()',
     '[attr.aria-label]': 'label()',
-    '[attr.title]': 'label()',
     '[attr.aria-pressed]': 'pressed() ?? null',
     '[attr.data-variant]': 'variant()',
     '[attr.data-size]': 'size()',
@@ -39,6 +40,10 @@ export class IconButtonComponent {
   readonly busy = input(false, { transform: booleanAttribute });
 
   constructor() {
-    useBusyState(inject<ElementRef<HTMLElement>>(ElementRef).nativeElement, this.busy);
+    const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+    useBusyState(host, this.busy);
+    if (!inject(TooltipDirective, { self: true, optional: true })) {
+      attachTooltip(host, this.label, { describes: false, showOnClick: signal(false) });
+    }
   }
 }

@@ -25,6 +25,7 @@ export { BannerActionsComponent } from './feedback/components/banner-actions/ban
 export { InlineBannerComponent } from './feedback/components/inline-banner/inline-banner.component';
 export { ProgressBarComponent } from './feedback/components/progress-bar/progress-bar.component';
 export { SpinnerComponent } from './feedback/components/spinner/spinner.component';
+export { TooltipDirective } from './feedback/directives/tooltip/tooltip.directive';
 export { type Status } from './feedback/models/status.model';
 export { ActivityBarItemComponent } from './layout/components/activity-bar-item/activity-bar-item.component';
 export { ActivityBarComponent } from './layout/components/activity-bar/activity-bar.component';
