@@ -337,10 +337,13 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   files by `node tools/ai-tools/src/bin/icons.mjs sprite --write`; a spec fails
   while the two differ. The package's own `dist/codicon.svg` is not used: it
   lacks icons whose file is named by a later alias, such as `warning`, `sync`
-  and `lock`. The web client serves the sprite at `assets/icons.svg` (the
-  default of `ICON_SPRITE_URL`), and Storybook from its static files. An icon is
-  decorative unless it has a `label`; a component that takes a leading icon
-  projects a `ui-icon`.
+  and `lock`. The `ui` library's build does not ship the sprite: the web
+  client's build copies `libs/ui/src/assets/icons.svg` to `assets/` (an asset
+  entry `{ glob: 'icons.svg', input: 'libs/ui/src/assets', output: 'assets' }`)
+  and serves it at `assets/icons.svg`, the default of `ICON_SPRITE_URL`; its
+  licence notices carry the Codicons CC-BY-4.0 attribution. Storybook serves the
+  sprite from its static files. An icon is decorative unless it has a `label`; a
+  component that takes a leading icon projects a `ui-icon`.
 - **A-10.36** Fonts are **Inter** for the UI and **JetBrains Mono** for code,
   both under the SIL Open Font License, from the `@fontsource-variable` packages
   and served from the web client's own origin (`font-src 'self'`) with

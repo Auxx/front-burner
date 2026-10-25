@@ -461,9 +461,9 @@ it('marks monospace values', ...);
 ## Not in this plan
 
 - **Serving the sprite in the web client:** the web client application does not
-  exist yet. When it does, its build copies
-  `node_modules/@vscode/codicons/dist/codicon.svg` to `icons/`, and its licence
-  notices carry the Codicons CC-BY-4.0 attribution (A-10.35).
+  exist yet. _(Superseded during execution: `dist/codicon.svg` lacks icons, so
+  `ui-icon` uses a curated sprite, `libs/ui/src/assets/icons.svg`; A-10.48 says
+  how the web client copies and serves it.)_
 - **A subset sprite** with only the icons in use: the full sprite (444 kB, about
   a fifth of that compressed) is downloaded once and cached; revisit if NF
   performance budgets ask for it.
