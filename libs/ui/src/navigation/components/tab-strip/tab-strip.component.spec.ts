@@ -91,7 +91,9 @@ describe('TabStripComponent', () => {
   it('shows the selected tab\'s panel only', async () => {
     const tabs = await loader.getHarness(TabGroupHarness);
 
-    expect(await (await tabs.getSelectedTab())!.getTitle()).toBe('Files');
+    const selected = await tabs.getSelectedTab();
+    expect(selected).not.toBeNull();
+    expect(await selected?.getTitle()).toBe('Files');
     expect(panel('files').hidden).toBe(false);
     expect(panel('changes').hidden).toBe(true);
   });
