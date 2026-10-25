@@ -1,3 +1,10 @@
+export {
+  ButtonComponent,
+  type ButtonSize,
+  type ButtonType,
+  type ButtonVariant
+} from './controls/components/button/button.component';
+export { IconButtonComponent } from './controls/components/icon-button/icon-button.component';
 export { ActivityBarItemComponent } from './layout/components/activity-bar-item/activity-bar-item.component';
 export { ActivityBarComponent } from './layout/components/activity-bar/activity-bar.component';
 export { AppShellComponent } from './layout/components/app-shell/app-shell.component';
