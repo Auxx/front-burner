@@ -20,6 +20,9 @@
     "paths": {
       "@front-burner/ui": [
         "./libs/ui/src/index.ts"
+      ],
+      "@front-burner/shared-contracts": [
+        "./libs/shared/contracts/src/index.ts"
       ]
     }
   },
