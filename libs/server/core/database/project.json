@@ -1,0 +1,37 @@
+{
+  "name": "server-core-database",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/server/core/database/src",
+  "projectType": "library",
+  "tags": [
+    "scope:server",
+    "type:core"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{workspaceRoot}/coverage/libs/server/core/database"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/server/core/database"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "db-generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "drizzle-kit generate --config libs/server/core/database/drizzle.config.ts",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

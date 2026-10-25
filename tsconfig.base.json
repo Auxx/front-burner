@@ -26,6 +26,9 @@
       ],
       "@front-burner/server-core-config": [
         "./libs/server/core/config/src/index.ts"
+      ],
+      "@front-burner/server-core-database": [
+        "./libs/server/core/database/src/index.ts"
       ]
     }
   },

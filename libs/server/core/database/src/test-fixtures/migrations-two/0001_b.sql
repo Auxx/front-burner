@@ -1,0 +1,1 @@
+CREATE TABLE `b` (`id` integer PRIMARY KEY NOT NULL);
