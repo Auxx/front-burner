@@ -87,10 +87,12 @@ When onboarding ends, it is disabled for good.
     from the onboarding state endpoint as `completed`.
 - **AO-4** The backend enforces onboarding rules. Hiding pages in the web client
   is not enough, because native clients must be possible later (vision goal 12).
-- **AO-5** The API exposes the onboarding state, and whether OIDC is configured
-  through environment variables, without authentication, so clients can decide
-  what to show. It does not expose any other data, such as OIDC settings, the
-  administrator email or the setup token.
+- **AO-5** The API exposes the onboarding state, whether OIDC is configured
+  through environment variables, and whether a valid setup token is set (AO-8),
+  without authentication, so clients can decide what to show (AO-9). It exposes
+  no secrets and no other data, such as OIDC settings, the administrator email
+  or the setup token itself. Knowing that an instance has no setup token gives
+  nothing away, since nothing can be submitted without one.
 - **AO-6** Completing onboarding is atomic. If two onboarding requests arrive at
   the same time, exactly one succeeds and the other is refused. The instance
   never ends up with two administrators created by onboarding.
