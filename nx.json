@@ -71,6 +71,18 @@
         "default",
         "^production"
       ]
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/tsconfig.base.json"
+      ],
+      "options": {
+        "parallel": false
+      }
     }
   },
   "generators": {

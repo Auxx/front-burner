@@ -4,11 +4,17 @@ import { IconComponent } from '../../../content/components/icon/icon.component';
 import { ActivityBarItemComponent } from '../activity-bar-item/activity-bar-item.component';
 import { ActivityBarComponent } from './activity-bar.component';
 
-const meta: Meta<ActivityBarComponent> = {
+/** The story's own arguments: the bar's inputs are signals, which Storybook sets by name. */
+interface ActivityBarArgs {
+  selected: string;
+  orientation: 'horizontal' | 'vertical';
+}
+
+const meta: Meta<ActivityBarArgs> = {
   title: 'Layout/Activity bar',
   component: ActivityBarComponent,
   decorators: [ story => ({ ...story(), moduleMetadata: { imports: [ IconComponent, ActivityBarItemComponent ] } }) ],
-  args: { selected: 'files', orientation: 'vertical' } as Partial<ActivityBarComponent>,
+  args: { selected: 'files', orientation: 'vertical' },
   render: props => ({
     props: { ...props },
     template: `
@@ -26,7 +32,7 @@ const meta: Meta<ActivityBarComponent> = {
 
 export default meta;
 
-type Story = StoryObj<ActivityBarComponent & { orientation: 'horizontal' | 'vertical'; }>;
+type Story = StoryObj<ActivityBarArgs>;
 
 export const Vertical: Story = {
   play: async ({ canvasElement }) => {

@@ -87,6 +87,15 @@
           "buildTarget": "ui:build-storybook:ci"
         }
       }
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/ui/tsconfig.lib.json",
+          "tsc --noEmit -p libs/ui/tsconfig.spec.json",
+          "tsc --noEmit -p libs/ui/.storybook/tsconfig.json"
+        ]
+      }
     }
   }
 }
