@@ -1,0 +1,8 @@
+// Centred on the page, with no app header; the padding keeps it off the edges
+// at 320 px (NF-12.4).
+:host {
+  display: grid;
+  place-items: center;
+  min-block-size: 100dvh;
+  padding: var(--ui-space-4);
+}

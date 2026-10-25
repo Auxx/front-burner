@@ -1,0 +1,28 @@
+{
+  "name": "web-feature-auth",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/web/feature-auth/src",
+  "prefix": "auth",
+  "projectType": "library",
+  "tags": [
+    "scope:web",
+    "type:feature"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/web/feature-auth"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

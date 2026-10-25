@@ -41,6 +41,9 @@
       ],
       "@front-burner/web-core": [
         "./libs/web/core/src/index.ts"
+      ],
+      "@front-burner/web-feature-auth": [
+        "./libs/web/feature-auth/src/index.ts"
       ]
     }
   },

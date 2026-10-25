@@ -54,6 +54,23 @@
         "^production",
         "{projectRoot}/.storybook/**/*"
       ]
+    },
+    "@angular/build:application": {
+      "cache": true,
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "production",
+        "^production"
+      ]
+    },
+    "@angular/build:unit-test": {
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ]
     }
   },
   "generators": {
@@ -75,6 +92,12 @@
         "buildDepsTargetName": "build-deps",
         "watchDepsTargetName": "watch-deps",
         "serveStaticTargetName": "serve-static"
+      }
+    },
+    {
+      "plugin": "@nx/playwright/plugin",
+      "options": {
+        "targetName": "e2e"
       }
     }
   ]
