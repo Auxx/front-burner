@@ -8,8 +8,8 @@ export default defineConfig({
     watch: false,
     globals: true,
     environment: 'node',
-    include: ['src/**/*.e2e.spec.ts'],
-    reporters: ['default'],
+    include: [ 'src/**/*.e2e.spec.ts' ],
+    reporters: [ 'default' ],
     testTimeout: 30000,
     hookTimeout: 30000
   }

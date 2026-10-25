@@ -6,7 +6,7 @@ export default defineConfig({
   cacheDir: '../../../../node_modules/.vite/libs/server/core/database',
   // Nest's dependency injection needs emitDecoratorMetadata, which the default
   // transform does not emit.
-  plugins: [swc.vite()],
+  plugins: [ swc.vite() ],
   // Vite 8 resolves the aliases of tsconfig.base.json natively.
   resolve: { tsconfigPaths: true },
   test: {
@@ -14,8 +14,8 @@ export default defineConfig({
     watch: false,
     globals: true,
     environment: 'node',
-    include: ['src/**/*.spec.ts'],
-    reporters: ['default'],
+    include: [ 'src/**/*.spec.ts' ],
+    reporters: [ 'default' ],
     coverage: {
       reportsDirectory: '../../../../coverage/libs/server/core/database',
       provider: 'v8'

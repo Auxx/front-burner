@@ -10,8 +10,8 @@ export default defineConfig({
     watch: false,
     globals: true,
     environment: 'node',
-    include: ['src/**/*.spec.ts'],
-    reporters: ['default'],
+    include: [ 'src/**/*.spec.ts' ],
+    reporters: [ 'default' ],
     coverage: {
       reportsDirectory: '../../../coverage/libs/shared/contracts',
       provider: 'v8'

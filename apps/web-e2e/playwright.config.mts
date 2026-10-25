@@ -1,6 +1,6 @@
-import { defineConfig, devices } from '@playwright/test';
-import { nxE2EPreset } from '@nx/playwright/preset';
 import { workspaceRoot } from '@nx/devkit';
+import { nxE2EPreset } from '@nx/playwright/preset';
+import { defineConfig, devices } from '@playwright/test';
 
 const port = 4300;
 const baseURL = `http://localhost:${port}`;
@@ -20,7 +20,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     baseURL,
-    trace: 'on-first-retry',
+    trace: 'on-first-retry'
   },
   // The production path: the built server serves the built web client.
   webServer: {

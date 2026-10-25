@@ -42,9 +42,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   for (const { file, bytes } of sizes) {
     console.log(`${(bytes / 1024).toFixed(1).padStart(8)} KB gzip  ${file}`);
   }
-  console.log(`${(total / 1024).toFixed(1).padStart(8)} KB gzip  initial total (limit ${(limit / 1024).toFixed(0)} KB)`);
+  console.log(
+    `${(total / 1024).toFixed(1).padStart(8)} KB gzip  initial total (limit ${(limit / 1024).toFixed(0)} KB)`
+  );
   if (!ok) {
-    console.error(`Initial JavaScript is ${(total / 1024).toFixed(1)} KB gzipped, over the ${(limit / 1024).toFixed(0)} KB limit (NF-2.9).`);
+    console.error(
+      `Initial JavaScript is ${(total / 1024).toFixed(1)} KB gzipped, over the ${
+        (limit / 1024).toFixed(0)
+      } KB limit (NF-2.9).`
+    );
     process.exit(1);
   }
 }
