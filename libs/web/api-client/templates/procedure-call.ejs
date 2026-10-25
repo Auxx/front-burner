@@ -11,10 +11,17 @@ const args = _.compact([
   payload && `${payload.name}: ${payload.type}`
 ]).join(', ');
 const body = payload ? `, ${payload.name}` : '';
-const requestOptions = query ? `, { params: ${query.name} as Record<string, string | number | boolean> }` : '';
+// The query type is generated from the operation's parameters, so HttpClient
+// checks it against its own params type: no cast.
+const requestOptions = query ? `, { params: ${query.name} }` : '';
 const verb = method.toLowerCase();
-const call = ['post', 'put', 'patch'].includes(verb)
-  ? `this.http.${verb}<${type}>(\`${path}\`${payload ? body : ', null'}${requestOptions})`
+// HttpClient.post/put/patch require a body argument, so an operation without a
+// request body goes through request(), which takes none.
+const bodyless = ['post', 'put', 'patch'].includes(verb) && !payload;
+const call = bodyless
+  ? `this.http.request<${type}>('${method.toUpperCase()}', \`${path}\`${requestOptions})`
+  : ['post', 'put', 'patch'].includes(verb)
+  ? `this.http.${verb}<${type}>(\`${path}\`${body}${requestOptions})`
   : `this.http.${verb}<${type}>(\`${path}\`${requestOptions})`;
 %>
 <%~ route.routeName.usage %>(<%~ args %>): Observable<<%~ type %>> {

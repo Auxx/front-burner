@@ -5,7 +5,8 @@ const className = `${pascalCase(route.moduleName)}Api`;
 const routes = route.routes;
 // Every request and response type lives in @front-burner/shared-contracts
 // (A-3.6): import the ones this class uses, declare none. A type that is not a
-// component schema (an inline schema) or a primitive fails the generation.
+// component schema (an inline schema) or a primitive fails the generation. A
+// query type is the exception: it is built from the operation's parameters.
 const modelNames = new Set(modelTypes.map((m) => m.name));
 const allowed = new Set(['string', 'number', 'boolean', 'void', 'null', 'undefined', 'never', 'Array', 'Record']);
 const used = new Set();
@@ -13,7 +14,6 @@ for (const r of routes) {
   const types = [
     r.response.type,
     r.request.payload && r.request.payload.type,
-    r.request.query && r.request.query.type,
     ...Object.values(r.request.parameters || {}).map((p) => p.type)
   ].filter(Boolean);
   for (const t of types) {
