@@ -9,11 +9,21 @@ export const ICON_NAMES = [
   'chevron-down',
   'chevron-right',
   'close',
+  'diff-ignored',
   'ellipsis',
   'error',
+  'eye',
+  'files',
   'info',
+  'lock',
+  'markdown',
   'pass',
   'repo',
+  'repo-fetch',
+  'repo-pull',
+  'repo-push',
+  'source-control',
+  'sync',
   'warning'
 ] as const;
 

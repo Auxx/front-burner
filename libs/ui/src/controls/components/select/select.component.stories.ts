@@ -1,14 +1,11 @@
 import { signal } from '@angular/core';
 import { Meta, StoryObj } from '@storybook/angular-vite';
 import { expect, screen, userEvent, waitFor } from 'storybook/test';
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { SelectOptionDirective } from '../../directives/select-option/select-option.directive';
 import { type ChoiceOption } from '../../models/choice-option.model';
 import { FieldComponent } from '../field/field.component';
 import { SelectComponent } from './select.component';
-
-// Codicon `lock` (CC-BY-4.0), inline until the Icon component exists.
-const lock =
-  'M8 9C8.55228 9 9 9.44771 9 10C9 10.5523 8.55228 11 8 11C7.44772 11 7 10.5523 7 10C7 9.44771 7.44772 9 8 9Z M8 1C9.654 1 11 2.346 11 4V6H12C13.103 6 14 6.897 14 8V13C14 14.103 13.103 15 12 15H4C2.897 15 2 14.103 2 13V8C2 6.897 2.897 6 4 6H5V4C5 2.346 6.346 1 8 1ZM4 7C3.449 7 3 7.449 3 8V13C3 13.551 3.449 14 4 14H12C12.551 14 13 13.551 13 13V8C13 7.449 12.551 7 12 7H4ZM8 2C6.897 2 6 2.897 6 4V6H10V4C10 2.897 9.103 2 8 2Z';
 
 const levels: readonly ChoiceOption<string>[] = [
   { value: 'simple', label: 'Simple', description: 'Git is hidden. Changes are saved and synchronised for you.' },
@@ -50,7 +47,7 @@ const meta: Meta<SelectComponent<string>> = {
   decorators: [
     story => ({
       ...story(),
-      moduleMetadata: { imports: [ FieldComponent, SelectOptionDirective ] }
+      moduleMetadata: { imports: [ IconComponent, FieldComponent, SelectOptionDirective ] }
     })
   ]
 };
@@ -92,7 +89,6 @@ export const SavedKeys: Story = {
   render: () => ({
     props: {
       keys,
-      lock,
       options: keys.map(key => ({ value: key.name, label: key.name })),
       key: (name: string) => keys.find(key => key.name === name),
       value: 'Work deploy key'
@@ -101,8 +97,7 @@ export const SavedKeys: Story = {
       '.narrow { inline-size: 20rem; }',
       '.key { display: flex; flex-direction: column; min-inline-size: 0; }',
       '.details { color: var(--ui-text-muted); font-size: var(--ui-font-size-ui-small); overflow-wrap: anywhere; }',
-      '.passphrase { display: inline-flex; align-items: center; gap: var(--ui-space-1); }',
-      'svg { inline-size: var(--ui-icon-size); block-size: var(--ui-icon-size); }'
+      '.passphrase { display: inline-flex; align-items: center; gap: var(--ui-space-1); }'
     ],
     template: `
       <div class="narrow">
@@ -114,7 +109,7 @@ export const SavedKeys: Story = {
                 <code class="details">{{ key(option.value)?.type }} {{ key(option.value)?.fingerprint }}</code>
                 @if (key(option.value)?.passphrase) {
                   <span class="details passphrase">
-                    <svg viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path [attr.d]="lock" /></svg>
+                    <ui-icon name="lock" />
                     Passphrase
                   </span>
                 }

@@ -19,6 +19,7 @@ import {
   viewChild
 } from '@angular/core';
 
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { SelectOptionDirective } from '../../directives/select-option/select-option.directive';
 import { type ChoiceOption } from '../../models/choice-option.model';
 import { FieldControl } from '../../models/field-control.model';
@@ -44,7 +45,16 @@ let nextId = 0;
  */
 @Component({
   selector: 'ui-select',
-  imports: [ CdkConnectedOverlay, Combobox, ComboboxPopup, ComboboxWidget, Listbox, NgTemplateOutlet, Option ],
+  imports: [
+    CdkConnectedOverlay,
+    Combobox,
+    ComboboxPopup,
+    ComboboxWidget,
+    IconComponent,
+    Listbox,
+    NgTemplateOutlet,
+    Option
+  ],
   templateUrl: './select.component.html',
   styleUrl: './select.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

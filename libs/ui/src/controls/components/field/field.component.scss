@@ -39,10 +39,7 @@
     color: var(--ui-danger-text);
     font-size: var(--ui-font-size-ui-small);
 
-    svg {
-      flex: none;
-      inline-size: var(--ui-icon-size);
-      block-size: var(--ui-icon-size);
+    ui-icon {
       color: var(--ui-danger-icon);
     }
   }

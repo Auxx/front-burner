@@ -21,6 +21,7 @@ import {
   viewChild
 } from '@angular/core';
 
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { TreeNodeDirective } from '../../directives/tree-node/tree-node.directive';
 import type { TreeNode } from '../../models/tree-node.model';
 
@@ -86,7 +87,7 @@ let nextId = 0;
  */
 @Component({
   selector: 'ui-tree',
-  imports: [ CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport, NgTemplateOutlet ],
+  imports: [ CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport, IconComponent, NgTemplateOutlet ],
   templateUrl: './tree.component.html',
   styleUrl: './tree.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush

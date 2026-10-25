@@ -7,7 +7,7 @@ import { swallowClicksWhileAriaDisabled } from '../../utils/busy/busy.util';
 import { type ButtonSize, type ButtonType } from '../button/button.component';
 
 /**
- * A button whose content is one `<svg>` icon. `label` is its accessible name
+ * A button whose content is one `<ui-icon>`. `label` is its accessible name
  * and its tooltip, unless a `uiTooltip` on it gives another tooltip. Set `pressed` to make it a toggle button. While `busy`, a
  * spinner replaces the icon. While `busy` or `unavailable`, the button is
  * `aria-disabled`: it keeps the focus, and its clicks are swallowed.

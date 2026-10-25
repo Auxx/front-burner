@@ -1,6 +1,7 @@
 import { Directionality } from '@angular/cdk/bidi';
 import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, model, signal } from '@angular/core';
 
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { MenuItemComponent } from '../../../navigation/components/menu-item/menu-item.component';
 import { MenuComponent } from '../../../navigation/components/menu/menu.component';
 import { MenuTriggerDirective } from '../../../navigation/directives/menu-trigger/menu-trigger.directive';
@@ -29,7 +30,7 @@ let nextId = 0;
  */
 @Component({
   selector: 'ui-split-pane',
-  imports: [ MenuComponent, MenuItemComponent, MenuTriggerDirective ],
+  imports: [ IconComponent, MenuComponent, MenuItemComponent, MenuTriggerDirective ],
   templateUrl: './split-pane.component.html',
   styleUrl: './split-pane.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

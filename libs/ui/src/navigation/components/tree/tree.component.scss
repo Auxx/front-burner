@@ -48,7 +48,7 @@
   }
 
   // Expanded folders turn their chevron down.
-  [aria-expanded='true'] > .chevron > svg {
+  [aria-expanded='true'] > .chevron > ui-icon {
     rotate: 90deg;
   }
 
@@ -78,19 +78,17 @@
     color: var(--ui-icon-muted);
   }
 
-  .chevron > svg {
-    inline-size: 100%;
-    block-size: 100%;
+  .chevron > ui-icon {
     transition: rotate var(--ui-duration-fast);
   }
 
   // In right-to-left text the collapsed chevron points to the inline start;
   // `rotate` applies after `scale`, so it turns the other way to point down.
-  :host-context([dir='rtl']) .chevron > svg {
+  :host-context([dir='rtl']) .chevron > ui-icon {
     scale: -1 1;
   }
 
-  :host-context([dir='rtl']) [aria-expanded='true'] > .chevron > svg {
+  :host-context([dir='rtl']) [aria-expanded='true'] > .chevron > ui-icon {
     rotate: -90deg;
   }
 

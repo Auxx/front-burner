@@ -4,7 +4,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject } from '@angular
 /**
  * An item of a `ui-menu`: a button for an action or a link. `uiMenuItem` is its
  * value, which the menu's `(itemSelected)` emits; values are unique within a
- * menu. Its content is its label, with an optional leading `<svg>` icon.
+ * menu. Its content is its label, with an optional leading `<ui-icon>`.
  *
  * Disable it with `[disabled]="true"`: Aria's input takes no attribute
  * transform, and a bare `disabled` attribute would also disable the native
@@ -15,7 +15,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject } from '@angular
  */
 @Component({
   selector: 'button[uiMenuItem], a[uiMenuItem]',
-  template: '<ng-content select="svg" /><span class="label"><ng-content /></span>',
+  template: '<ng-content select="ui-icon" /><span class="label"><ng-content /></span>',
   styleUrl: './menu-item.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   hostDirectives: [ { directive: MenuItem, inputs: [ 'value: uiMenuItem', 'disabled' ] } ],

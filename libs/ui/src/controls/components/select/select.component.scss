@@ -57,9 +57,6 @@
   }
 
   .chevron {
-    flex: none;
-    inline-size: var(--ui-icon-size);
-    block-size: var(--ui-icon-size);
     color: var(--ui-icon-muted);
     transition: rotate var(--ui-duration-fast) var(--ui-easing-standard);
   }
@@ -125,8 +122,6 @@
 
   // Selection is shown by the tick, not by colour (A-10.22).
   .check {
-    inline-size: var(--ui-icon-size);
-    block-size: var(--ui-icon-size);
     color: var(--ui-icon-default);
     visibility: hidden;
   }

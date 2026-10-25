@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, contentChild, effect, input } from '@angular/core';
 
+import { IconComponent } from '../../../content/components/icon/icon.component';
 import { FieldControl } from '../../models/field-control.model';
 
 let nextId = 0;
@@ -16,6 +17,7 @@ let nextId = 0;
  */
 @Component({
   selector: 'ui-field',
+  imports: [ IconComponent ],
   templateUrl: './field.component.html',
   styleUrl: './field.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush

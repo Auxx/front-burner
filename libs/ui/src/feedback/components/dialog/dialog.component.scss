@@ -46,11 +46,6 @@
     overflow-wrap: anywhere;
   }
 
-  .header svg {
-    inline-size: var(--ui-icon-size);
-    block-size: var(--ui-icon-size);
-  }
-
   .body {
     padding-inline: var(--ui-space-4);
     overflow: auto;

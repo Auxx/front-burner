@@ -13,9 +13,7 @@
   (blur)="onBlur($event)"
 >
   <span class="value" [attr.data-placeholder]="selected() ? null : ''">{{ selected()?.label ?? placeholder() }}</span>
-  <svg class="chevron" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-    <path d="M3.14598 5.85423L7.64598 10.3542C7.84098 10.5492 8.15798 10.5492 8.35298 10.3542L12.853 5.85423C13.048 5.65923 13.048 5.34223 12.853 5.14723C12.658 4.95223 12.341 4.95223 12.146 5.14723L7.99998 9.29323L3.85398 5.14723C3.65898 4.95223 3.34198 4.95223 3.14698 5.14723C2.95198 5.34223 2.95098 5.65923 3.14598 5.85423Z" />
-  </svg>
+  <ui-icon class="chevron" name="chevron-down" />
 </div>
 <ng-template ngComboboxPopup [combobox]="combobox">
   <ng-template
@@ -44,9 +42,7 @@
     >
       @for (option of options(); track option.value) {
         <div ngOption class="option" [value]="option.value" [label]="option.label" [disabled]="!!option.disabled">
-          <svg class="check" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-            <path d="M13.6572 3.13573C13.8583 2.9465 14.175 2.95614 14.3643 3.15722C14.5535 3.35831 14.5438 3.675 14.3428 3.86425L5.84277 11.8642C5.64597 12.0494 5.33756 12.0446 5.14648 11.8535L1.64648 8.35351C1.45121 8.15824 1.45121 7.84174 1.64648 7.64647C1.84174 7.45121 2.15825 7.45121 2.35351 7.64647L5.50976 10.8027L13.6572 3.13573Z" />
-          </svg>
+          <ui-icon class="check" name="check" />
           <span class="text">
             @if (optionTemplate(); as custom) {
               <ng-container *ngTemplateOutlet="custom.template; context: { $implicit: option }" />
