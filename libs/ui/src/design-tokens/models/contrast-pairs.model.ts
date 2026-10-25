@@ -82,6 +82,10 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   graphic('icon-on-accent', 'accent'),
   graphic('icon-muted', 'surface-sunken'),
   graphic('accent', 'surface-raised'),
+
+  // Select options: the tick and the active option's ring on the hovered row
+  graphic('icon-default', 'surface-raised', 'surface-hover'),
+  graphic('border-focus', 'surface-raised', 'surface-hover'),
   ...[ 'accent', 'accent-hover', 'accent-pressed' ].map(bg => text('text-on-accent', bg)),
 
   // Control borders, focus ring and accent

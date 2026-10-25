@@ -10,9 +10,14 @@ export { FieldComponent } from './controls/components/field/field.component';
 export { IconButtonComponent } from './controls/components/icon-button/icon-button.component';
 export { InputComponent } from './controls/components/input/input.component';
 export { SegmentedControlComponent } from './controls/components/segmented-control/segmented-control.component';
+export { SelectComponent } from './controls/components/select/select.component';
 export { SwitchComponent } from './controls/components/switch/switch.component';
 export { TextareaComponent } from './controls/components/textarea/textarea.component';
 export { PasswordRevealDirective } from './controls/directives/password-reveal/password-reveal.directive';
+export {
+  type SelectOptionContext,
+  SelectOptionDirective
+} from './controls/directives/select-option/select-option.directive';
 export { type ChoiceOption } from './controls/models/choice-option.model';
 export { FieldControl } from './controls/models/field-control.model';
 export { ActivityBarItemComponent } from './layout/components/activity-bar-item/activity-bar-item.component';
