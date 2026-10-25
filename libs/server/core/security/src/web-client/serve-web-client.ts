@@ -1,0 +1,48 @@
+import express from 'express';
+import { existsSync, readFileSync } from 'node:fs';
+import { extname, join } from 'node:path';
+import { contentSecurityPolicy, createNonce, CSP_NONCE_PLACEHOLDER } from '../csp/csp';
+
+function isApiPath(path: string): boolean {
+  return path === '/api' || path.startsWith('/api/');
+}
+
+/**
+ * Serves the built web client from `webRoot` (A-7.9): files as they are, and
+ * `index.html` with a fresh CSP nonce for every other route, so that the
+ * client-side router can handle it. Returns `false`, registering nothing, when
+ * there is no build.
+ */
+export function serveWebClient(app: express.Application, webRoot: string): boolean {
+  const indexPath = join(webRoot, 'index.html');
+  if (!existsSync(indexPath)) {
+    return false;
+  }
+  const template = readFileSync(indexPath, 'utf8');
+  const files = express.static(webRoot, { index: false });
+
+  app.use((req, res, next) => {
+    if ((req.method !== 'GET' && req.method !== 'HEAD') || isApiPath(req.path)) {
+      next();
+      return;
+    }
+    files(req, res, err => {
+      if (err) {
+        next(err);
+        return;
+      }
+      if (extname(req.path) !== '') {
+        res.status(404).end();
+        return;
+      }
+      const nonce = createNonce();
+      res
+        .status(200)
+        .type('text/html; charset=utf-8')
+        .set('Cache-Control', 'no-store')
+        .set('Content-Security-Policy', contentSecurityPolicy(nonce))
+        .send(template.split(CSP_NONCE_PLACEHOLDER).join(nonce));
+    });
+  });
+  return true;
+}

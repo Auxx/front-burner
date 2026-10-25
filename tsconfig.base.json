@@ -32,6 +32,9 @@
       ],
       "@front-burner/server-core-observability": [
         "./libs/server/core/observability/src/index.ts"
+      ],
+      "@front-burner/server-core-security": [
+        "./libs/server/core/security/src/index.ts"
       ]
     }
   },
