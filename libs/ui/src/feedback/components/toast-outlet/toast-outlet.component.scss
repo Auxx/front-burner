@@ -1,0 +1,99 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    position: fixed;
+    inset-block-end: var(--ui-toast-offset-block-end, var(--ui-space-4));
+    inset-inline-end: var(--ui-space-4);
+    // Above the page; dialogs, in the CDK's overlay container, stay above it.
+    z-index: 900;
+    inline-size: min(24rem, calc(100vw - 2 * var(--ui-space-2)));
+    // The empty region must not catch clicks meant for the page below it.
+    pointer-events: none;
+  }
+
+  // A viewport query: the outlet is page layout, not an island (A-10.7).
+  @include mixins.breakpoint-below(mixins.$breakpoint-medium) {
+    :host {
+      inset-inline: var(--ui-space-2);
+      inline-size: auto;
+    }
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .toast {
+    --ui-toast-status: var(--ui-info-icon);
+
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: var(--ui-space-2);
+    align-items: start;
+    padding: var(--ui-space-2) var(--ui-space-3);
+    background: var(--ui-surface-raised);
+    color: var(--ui-text-default);
+    font-size: var(--ui-font-size-ui);
+    line-height: var(--ui-line-height-ui);
+    overflow-wrap: anywhere;
+    border: var(--ui-border-width) solid var(--ui-border-default);
+    // The icon and the text carry the status too (NF-13.7).
+    border-inline-start: 3px solid var(--ui-toast-status);
+    border-radius: var(--ui-radius-popover);
+    box-shadow: var(--ui-shadow-popover);
+    pointer-events: auto;
+    animation: enter var(--ui-duration-base) var(--ui-easing-standard);
+  }
+
+  @each $status in (success, warning, danger) {
+    .toast[data-status='#{$status}'] {
+      --ui-toast-status: var(--ui-#{$status}-icon);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .toast {
+      border-color: CanvasText;
+    }
+  }
+
+  .icon {
+    min-block-size: calc(1em * var(--ui-line-height-ui));
+    align-items: center;
+  }
+
+  .content {
+    display: grid;
+    gap: var(--ui-space-2);
+    min-inline-size: 0;
+  }
+
+  .message {
+    margin: 0;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ui-space-2);
+  }
+
+  .dismiss svg {
+    inline-size: var(--ui-icon-size);
+    block-size: var(--ui-icon-size);
+  }
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(var(--ui-space-2));
+    }
+  }
+}

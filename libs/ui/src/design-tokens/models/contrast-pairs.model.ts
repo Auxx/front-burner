@@ -83,6 +83,9 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   graphic('icon-muted', 'surface-sunken'),
   graphic('accent', 'surface-raised'),
 
+  // The progress bar's fill on its track
+  graphic('accent', 'surface-sunken'),
+
   // Select options: the tick and the active option's ring on the hovered row
   graphic('icon-default', 'surface-raised', 'surface-hover'),
   graphic('border-focus', 'surface-raised', 'surface-hover'),
@@ -113,6 +116,9 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
     graphic(`${status}-icon`, `${status}-background`),
     graphic(`${status}-icon`, 'surface-island')
   ]),
+
+  // The status edge and icon of a toast on its raised surface
+  ...statuses.map(status => graphic(`${status}-icon`, 'surface-raised')),
 
   // Git status in the file tree, also on selected rows
   ...gitStatuses.flatMap(status =>

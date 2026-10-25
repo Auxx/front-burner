@@ -237,7 +237,7 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   | Layout     | `AppShell`, `Island`, `SplitPane`, `ActivityBar`, `StatusBar`                                            | Own code, CDK `Breakpoints`                             |
   | Navigation | `TabStrip`, `Tree`, `Menu`, `Breadcrumbs`                                                                | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
   | Controls   | `Button`, `IconButton`, `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements; Aria Combobox and Listbox; CDK Overlay |
-  | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`               | CDK Overlay and Dialog                                  |
+  | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`               | CDK Overlay, Dialog and LiveAnnouncer                   |
   | Content    | `Icon`, `EmptyState`, `KeyValueList`                                                                     | Own code                                                |
 
   _(My call.)_ The list grows when a requirement needs a new component, not
@@ -273,6 +273,46 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
     shown is the feature's decision (AR-6);
   - buttons are `type="button"` unless they say otherwise, so that a button in a
     form, such as Cancel, does not submit it.
+- **A-10.43** Dialogs are opened with `DialogService` (or its `confirm()` for a
+  yes/no question) and framed by `ui-dialog`; features never use the CDK's
+  dialog directly. A dialog:
+  - focuses an element marked `data-autofocus`, else its first field, else
+    itself (the lint rules forbid the native `autofocus`);
+  - returns the focus to where it was when it closes;
+  - closes on Escape unless a request is running (`DialogRef.dismissible`), and
+    never on a click on the backdrop, so that typed input is not lost.
+
+  A confirmation focuses Cancel, the safe choice.
+- **A-10.44** Notices:
+  - a **toast** for the short result of something the user did (GA-28, GA-32,
+    ED-24's "This file was updated.", GC-22). Toasts with actions stay until
+    they are dismissed or an action runs; others last 6 s, paused while hovered
+    or focused (WCAG 2.2.1). A toast with the same `key` as one on screen
+    replaces it in place, and at most 3 are shown: the oldest toast without
+    actions that is neither hovered nor focused goes first, and a new toast
+    waits while every toast must stay. Toasts are announced, assertively for
+    `danger`;
+  - an **inline banner** for a state that lasts, shown where it applies (NV-15,
+    RC-15, GA-34, ED-24's question, SH-17). A banner is announced once when it
+    asks to be (`announce`), and its owner removes it when it is dismissed.
+
+  Neither takes the focus. When the toast that holds the focus goes away, the
+  focus returns to where it was before it entered the toasts.
+- **A-10.45** Tooltips show on hover, on keyboard focus and, for an unavailable
+  button or an information icon, on click or tap. The pointer can move onto them
+  and Escape hides them (WCAG 1.4.13). Their text is the element's accessible
+  description from the start. `uiIconButton` shows its label as a tooltip
+  instead of a native `title`.
+- **A-10.46** A busy or unavailable button is `aria-disabled`, not `disabled`,
+  so that it keeps the focus and can explain itself with a tooltip (GA-8, GA-9).
+  `uiButton` and `uiIconButton` set it from their `busy` and `unavailable`
+  inputs, which consumers use instead of writing `aria-disabled` themselves, and
+  swallow its clicks; `busy` also shows a spinner in place of the icon.
+  `disabled` is for buttons whose reason needs no explanation.
+- **A-10.47** Elements that a component lays out but a consumer writes, such as
+  a banner's actions (`uiBannerActions`) or a dialog's footer
+  (`uiDialogFooter`), are attribute components with their own styles, since a
+  component cannot style the children of projected content.
 
 ## A-10: Icons and fonts
 

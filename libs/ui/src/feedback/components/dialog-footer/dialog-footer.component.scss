@@ -1,0 +1,8 @@
+@layer components {
+  :host {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--ui-space-2);
+  }
+}

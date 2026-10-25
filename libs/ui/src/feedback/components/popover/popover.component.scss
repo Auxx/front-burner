@@ -1,0 +1,28 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    box-sizing: border-box;
+    display: block;
+    max-inline-size: min(24rem, calc(100vw - 2 * var(--ui-space-2)));
+    max-block-size: min(28rem, 70vh);
+    padding: var(--ui-space-2) var(--ui-space-3);
+    overflow: auto;
+    overflow-wrap: anywhere;
+    background: var(--ui-surface-raised);
+    color: var(--ui-text-default);
+    font-size: var(--ui-font-size-ui);
+    line-height: var(--ui-line-height-ui);
+    border: var(--ui-border-width) solid var(--ui-border-default);
+    border-radius: var(--ui-radius-popover);
+    box-shadow: var(--ui-shadow-popover);
+  }
+
+  :host([hidden]) {
+    display: none;
+  }
+
+  :host(:focus-visible) {
+    @include mixins.focus-ring;
+  }
+}

@@ -1,0 +1,30 @@
+@layer components {
+  :host {
+    box-sizing: border-box;
+    display: block;
+    max-inline-size: min(20rem, calc(100vw - 2 * var(--ui-space-2)));
+    padding: var(--ui-space-1) var(--ui-space-2);
+    background: var(--ui-text-default);
+    color: var(--ui-text-inverse);
+    font-size: var(--ui-font-size-ui-small);
+    line-height: var(--ui-line-height-ui);
+    overflow-wrap: anywhere;
+    border-radius: var(--ui-radius-control);
+    box-shadow: var(--ui-shadow-popover);
+    animation: appear var(--ui-duration-fast) var(--ui-easing-standard);
+  }
+
+  @media (forced-colors: active) {
+    :host {
+      background: Canvas;
+      color: CanvasText;
+      border: 1px solid CanvasText;
+    }
+  }
+
+  @keyframes appear {
+    from {
+      opacity: 0;
+    }
+  }
+}

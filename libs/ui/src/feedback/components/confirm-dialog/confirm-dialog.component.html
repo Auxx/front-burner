@@ -1,0 +1,7 @@
+<ui-dialog [heading]="options.heading">
+  <p class="message">{{ options.message }}</p>
+  <div uiDialogFooter>
+    <button uiButton data-autofocus (click)="ref.close(false)">{{ options.cancelLabel }}</button>
+    <button uiButton [variant]="options.variant ?? 'primary'" (click)="ref.close(true)">{{ options.confirmLabel }}</button>
+  </div>
+</ui-dialog>

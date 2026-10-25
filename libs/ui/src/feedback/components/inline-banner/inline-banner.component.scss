@@ -1,0 +1,99 @@
+@layer components {
+  :host {
+    // A global banner below the app header sets it to 0 (NV-15).
+    --ui-inline-banner-radius: var(--ui-radius-control);
+
+    box-sizing: border-box;
+    display: block;
+    // The layout follows the banner's own width, not the viewport's (A-10.7).
+    container-type: inline-size;
+    padding: var(--ui-space-2) var(--ui-space-3);
+    background: var(--ui-info-background);
+    color: var(--ui-text-default);
+    font-size: var(--ui-font-size-ui);
+    line-height: var(--ui-line-height-ui);
+    border: var(--ui-border-width) solid var(--ui-info-border);
+    border-radius: var(--ui-inline-banner-radius);
+  }
+
+  @each $status in (success, warning, danger) {
+    :host([data-status='#{$status}']) {
+      background: var(--ui-#{$status}-background);
+      border-color: var(--ui-#{$status}-border);
+    }
+  }
+
+  :host([data-quiet='true']) {
+    padding: var(--ui-space-1) var(--ui-space-2);
+    background: transparent;
+    color: var(--ui-text-muted);
+    font-size: var(--ui-font-size-ui-small);
+    border-color: transparent;
+  }
+
+  // Backgrounds are removed in forced colours; the border keeps it a box.
+  @media (forced-colors: active) {
+    :host(:not([data-quiet='true'])) {
+      border-color: CanvasText;
+    }
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'icon message dismiss'
+      '. actions actions';
+    gap: var(--ui-space-1) var(--ui-space-2);
+    align-items: start;
+  }
+
+  // No actions: no second row, so no gap below the message.
+  .layout:has(> .actions:empty) {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: 'icon message dismiss';
+  }
+
+  .icon {
+    grid-area: icon;
+    // Centres the icon on the first line of the message.
+    min-block-size: calc(1em * var(--ui-line-height-ui));
+    align-items: center;
+  }
+
+  .message {
+    grid-area: message;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .actions {
+    grid-area: actions;
+  }
+
+  .actions:empty {
+    display: none;
+  }
+
+  .dismiss {
+    grid-area: dismiss;
+  }
+
+  .dismiss svg {
+    inline-size: var(--ui-icon-size);
+    block-size: var(--ui-icon-size);
+  }
+
+  // Wide enough: the actions go on the same row as the message.
+  @container (min-width: 36rem) {
+    .layout {
+      grid-template-columns: auto 1fr auto auto;
+      grid-template-areas: 'icon message actions dismiss';
+    }
+
+    .layout,
+    .layout:has(> .actions:empty) {
+      align-items: center;
+    }
+  }
+}

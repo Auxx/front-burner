@@ -1,5 +1,5 @@
 import { Meta, StoryObj } from '@storybook/angular-vite';
-import { expect } from 'storybook/test';
+import { expect, screen, userEvent } from 'storybook/test';
 import { ButtonComponent } from './button.component';
 
 // Codicon `repo-pull` (CC-BY-4.0), inline until the Icon component exists.
@@ -86,5 +86,34 @@ export const LongLabel: Story = {
   play: async ({ canvasElement }) => {
     const wrapper = canvasElement.querySelector('.narrow') as HTMLElement;
     await expect(wrapper.scrollWidth).toBeLessThanOrEqual(wrapper.clientWidth);
+  }
+};
+
+/** A button whose operation runs: a spinner replaces its icon (GA-9). */
+export const Busy: Story = {
+  render: () => ({
+    props: {
+      pull,
+      busy: false,
+      start(this: { busy: boolean; }) {
+        this.busy = true;
+        setTimeout(() => (this.busy = false), 1000);
+      }
+    },
+    styles: [ 'svg { inline-size: var(--ui-icon-size); block-size: var(--ui-icon-size); }' ],
+    template: `
+      <button uiButton [busy]="busy" (click)="start()">
+        <svg viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path [attr.d]="pull" /></svg>
+        Pull
+      </button>
+    `
+  }),
+  play: async () => {
+    const button = screen.getByRole('button', { name: 'Pull' });
+
+    await userEvent.click(button);
+
+    await expect(button).toHaveAttribute('aria-disabled', 'true');
+    await expect(button).toHaveFocus();
   }
 };

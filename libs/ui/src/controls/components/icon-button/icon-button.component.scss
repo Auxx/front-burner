@@ -45,11 +45,27 @@
     --ui-icon-button-border: var(--ui-border-strong);
   }
 
-  :host(:disabled) {
+  :host(:disabled),
+  :host([aria-disabled='true']:not([data-busy='true'])) {
     --ui-icon-button-overlay: transparent;
 
     color: var(--ui-icon-disabled);
     cursor: default;
+  }
+
+  :host([data-busy='true']) {
+    --ui-icon-button-overlay: transparent;
+
+    cursor: progress;
+  }
+
+  .icon {
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .icon[hidden] {
+    display: none;
   }
 
   :host(:focus-visible) {

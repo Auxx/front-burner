@@ -1,0 +1,10 @@
+<div class="layout">
+  <ui-status-icon class="icon" [status]="status()" />
+  <div #message class="message"><ng-content /></div>
+  <div class="actions"><ng-content select="[uiBannerActions]" /></div>
+  @if (dismissLabel(); as label) {
+    <button uiIconButton class="dismiss" size="small" [label]="label" (click)="dismissed.emit()">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path [attr.d]="close" /></svg>
+    </button>
+  }
+</div>

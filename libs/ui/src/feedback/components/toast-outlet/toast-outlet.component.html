@@ -1,0 +1,28 @@
+<ol class="list">
+  @for (toast of service.toasts(); track toast.id) {
+    <li
+      class="toast"
+      [attr.data-toast]="toast.id"
+      [attr.data-status]="toast.status ?? 'info'"
+      (pointerenter)="service.pause(toast.id, 'hover')"
+      (pointerleave)="service.resume(toast.id, 'hover')"
+      (focusin)="onToastFocusin(toast.id)"
+      (focusout)="onToastFocusout($event, toast.id)"
+    >
+      <ui-status-icon class="icon" [status]="toast.status ?? 'info'" />
+      <div class="content">
+        <p class="message">{{ toast.message }}</p>
+        @if (toast.actions?.length) {
+          <div class="actions">
+            @for (action of toast.actions; track $index) {
+              <button uiButton size="small" (click)="runAction(toast.id, action)">{{ action.label }}</button>
+            }
+          </div>
+        }
+      </div>
+      <button uiIconButton class="dismiss" size="small" [label]="toast.dismissLabel" (click)="service.dismiss(toast.id)">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path [attr.d]="close" /></svg>
+      </button>
+    </li>
+  }
+</ol>
