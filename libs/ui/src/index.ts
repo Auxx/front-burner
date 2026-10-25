@@ -4,7 +4,12 @@ export {
   type ButtonType,
   type ButtonVariant
 } from './controls/components/button/button.component';
+export { FieldComponent } from './controls/components/field/field.component';
 export { IconButtonComponent } from './controls/components/icon-button/icon-button.component';
+export { InputComponent } from './controls/components/input/input.component';
+export { TextareaComponent } from './controls/components/textarea/textarea.component';
+export { PasswordRevealDirective } from './controls/directives/password-reveal/password-reveal.directive';
+export { FieldControl } from './controls/models/field-control.model';
 export { ActivityBarItemComponent } from './layout/components/activity-bar-item/activity-bar-item.component';
 export { ActivityBarComponent } from './layout/components/activity-bar/activity-bar.component';
 export { AppShellComponent } from './layout/components/app-shell/app-shell.component';

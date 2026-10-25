@@ -1,0 +1,49 @@
+@layer components {
+  :host {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-1);
+    min-inline-size: 0;
+  }
+
+  .label,
+  .hint,
+  .error {
+    overflow-wrap: anywhere;
+  }
+
+  .label {
+    color: var(--ui-text-default);
+    font-size: var(--ui-font-size-ui);
+    font-weight: var(--ui-font-weight-medium);
+  }
+
+  // The control and anything next to it, such as a password reveal button.
+  .control {
+    display: flex;
+    align-items: start;
+    gap: var(--ui-space-1);
+    min-inline-size: 0;
+  }
+
+  .hint {
+    color: var(--ui-text-muted);
+    font-size: var(--ui-font-size-ui-small);
+  }
+
+  // An icon as well as the colour (NF-13.7).
+  .error {
+    display: flex;
+    align-items: start;
+    gap: var(--ui-space-1);
+    color: var(--ui-danger-text);
+    font-size: var(--ui-font-size-ui-small);
+
+    svg {
+      flex: none;
+      inline-size: var(--ui-icon-size);
+      block-size: var(--ui-icon-size);
+      color: var(--ui-danger-icon);
+    }
+  }
+}

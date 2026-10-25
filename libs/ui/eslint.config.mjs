@@ -15,7 +15,10 @@ export default [
                 {
                     ignoredFiles: [
                         "{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}",
-                        "{projectRoot}/vitest.config.{js,mjs,ts,mts}"
+                        "{projectRoot}/vitest.config.{js,mjs,ts,mts}",
+                        // Tests may use packages that `ui` itself does not,
+                        // such as @angular/forms (A-10.42).
+                        "{projectRoot}/src/**/*.spec.ts"
                     ]
                 }
             ]
