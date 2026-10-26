@@ -23,7 +23,9 @@ numbering conventions.
   document and the client template can map it back to its export.
 - **A-3.5** Response schemas never contain secret fields (passwords, tokens,
   private keys); a secret cannot leak through a response by accident (AR-17,
-  D-8.5).
+  D-8.5). The one exception is `SessionTokens`: the auth token and, with body
+  delivery, the refresh token of LG-27 and LG-31, sent only to the client that
+  logged in or refreshed.
 
 ## A-3: Generated API client
 

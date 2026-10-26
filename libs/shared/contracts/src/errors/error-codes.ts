@@ -5,7 +5,12 @@ export const ERROR_CODES = [
   'malformed-request',
   'payload-too-large',
   'rate-limited',
-  'internal'
+  'internal',
+  'unauthenticated',
+  'auth-token-expired',
+  'wrong-credentials',
+  'refresh-refused',
+  'cross-site-refused'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
