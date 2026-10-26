@@ -14,7 +14,12 @@ const MESSAGES: Record<ErrorCode, string> = {
   'malformed-request': 'The request could not be read.',
   'payload-too-large': 'The request is too large.',
   'rate-limited': 'Too many requests. Try again later.',
-  internal: 'Something went wrong.'
+  internal: 'Something went wrong.',
+  unauthenticated: 'Log in to continue.',
+  'auth-token-expired': 'The auth token has expired.',
+  'wrong-credentials': 'Wrong username or password',
+  'refresh-refused': 'Your session has expired. Please log in again',
+  'cross-site-refused': 'The request came from another site.'
 };
 
 interface ZodIssueLike {

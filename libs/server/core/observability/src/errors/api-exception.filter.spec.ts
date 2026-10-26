@@ -49,7 +49,11 @@ const config: Config = {
   logLevel: 'error',
   logFormat: 'json',
   dataDir: '/tmp',
-  setupToken: undefined
+  setupToken: undefined,
+  jwtSecret: 'spec-jwt-secret-0123456789abcdefghijklmnopqrstu',
+  authTokenTtlMs: 900_000,
+  refreshTokenTtlMs: 2_592_000_000,
+  loginAuditRetentionMs: 7_776_000_000
 };
 
 describe('ApiExceptionFilter', () => {
