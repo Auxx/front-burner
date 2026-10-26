@@ -25,6 +25,18 @@ describe('PasswordHasher', () => {
     expect(await hasher.verify(await hasher.hash(nfc), nfd)).toBe(true);
   });
 
+  it('checks against a dummy hash and always refuses', async () => {
+    expect(await hasher.verifyAgainstDummy('abcdefghi1')).toBe(false);
+    expect(await hasher.verifyAgainstDummy('')).toBe(false);
+  });
+
+  it('runs a real Argon2id check against the dummy', async () => {
+    const verify = vi.spyOn(hasher, 'verify');
+    await hasher.verifyAgainstDummy('abcdefghi1');
+    expect(verify).toHaveBeenCalledWith(expect.stringMatching(/^\$argon2id\$/), 'abcdefghi1');
+    verify.mockRestore();
+  });
+
   it('does not trim', async () => {
     expect(await hasher.verify(await hasher.hash('  abcdefghi1  '), 'abcdefghi1')).toBe(false);
   });
