@@ -1,3 +1,4 @@
+import { parseDuration } from '@front-burner/shared-util';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compile } from 'proxy-addr';
@@ -8,7 +9,21 @@ const PREFIX = 'FRONT_BURNER_';
 const SETUP_TOKEN = 'FRONT_BURNER_SETUP_TOKEN';
 const SETUP_TOKEN_FILE = 'FRONT_BURNER_SETUP_TOKEN_FILE';
 const MIN_SETUP_TOKEN_LENGTH = 16;
+const JWT_SECRET = 'FRONT_BURNER_JWT_SECRET';
+const JWT_SECRET_FILE = 'FRONT_BURNER_JWT_SECRET_FILE';
+const MIN_JWT_SECRET_LENGTH = 32;
 const DEFAULT_TRUSTED_PROXIES = 'loopback, linklocal, uniquelocal';
+
+function duration(defaultValue: string) {
+  return z.string().default(defaultValue).transform((value, context) => {
+    const ms = parseDuration(value);
+    if (ms === undefined) {
+      context.addIssue({ code: 'custom', message: 'must be a number followed by s, m, h or d' });
+      return z.NEVER;
+    }
+    return ms;
+  });
+}
 
 export interface ConfigIssue {
   variable: string;
@@ -58,10 +73,18 @@ const schema = z.object({
   }).default('json'),
   FRONT_BURNER_DATA_DIR: z.string().default('/data'),
   [SETUP_TOKEN]: z.string().optional(),
-  [SETUP_TOKEN_FILE]: z.string().optional()
+  [SETUP_TOKEN_FILE]: z.string().optional(),
+  [JWT_SECRET]: z.string().optional(),
+  [JWT_SECRET_FILE]: z.string().optional(),
+  FRONT_BURNER_AUTH_TOKEN_TTL: duration('15m'),
+  FRONT_BURNER_REFRESH_TOKEN_TTL: duration('30d'),
+  FRONT_BURNER_LOGIN_AUDIT_RETENTION: duration('90d')
 }).refine(v => v[SETUP_TOKEN] === undefined || v[SETUP_TOKEN_FILE] === undefined, {
   path: [ SETUP_TOKEN ],
   message: `cannot be set together with ${SETUP_TOKEN_FILE}`
+}).refine(v => v[JWT_SECRET] === undefined || v[JWT_SECRET_FILE] === undefined, {
+  path: [ JWT_SECRET ],
+  message: `cannot be set together with ${JWT_SECRET_FILE}`
 });
 
 const KNOWN_VARIABLES = new Set(Object.keys(schema.shape));
@@ -99,17 +122,32 @@ export function loadConfig(
     }
   }
 
-  let setupToken: string | undefined = input[SETUP_TOKEN];
-  let tokenVariable = SETUP_TOKEN;
-  const tokenFile = input[SETUP_TOKEN_FILE];
-  if (tokenFile !== undefined && setupToken === undefined) {
-    tokenVariable = SETUP_TOKEN_FILE;
-    try {
-      setupToken = readFile(tokenFile).replace(/\r?\n$/, '');
-    } catch {
-      issues.push({ variable: SETUP_TOKEN_FILE, message: 'the file could not be read' });
+  /** A secret from its variable or, when that is unset, from the file its `_FILE` variable names (NF-8.2). */
+  const readSecret = (variable: string, fileVariable: string) => {
+    const file = input[fileVariable];
+    if (input[variable] !== undefined || file === undefined) {
+      return { value: input[variable], variable };
     }
+    try {
+      return { value: readFile(file).replace(/\r?\n$/, ''), variable: fileVariable };
+    } catch {
+      issues.push({ variable: fileVariable, message: 'the file could not be read' });
+      return { value: undefined, variable: fileVariable };
+    }
+  };
+
+  const jwtSecret = readSecret(JWT_SECRET, JWT_SECRET_FILE);
+  if (jwtSecret.value === undefined) {
+    if (input[JWT_SECRET_FILE] === undefined) {
+      issues.push({ variable: JWT_SECRET, message: 'is required' });
+    }
+  } else if (jwtSecret.value.length < MIN_JWT_SECRET_LENGTH) {
+    issues.push({ variable: jwtSecret.variable, message: `must be at least ${MIN_JWT_SECRET_LENGTH} characters` });
   }
+
+  const token = readSecret(SETUP_TOKEN, SETUP_TOKEN_FILE);
+  let setupToken = token.value;
+  const tokenVariable = token.variable;
   if (setupToken !== undefined && setupToken.length < MIN_SETUP_TOKEN_LENGTH) {
     warnings.push(
       `${tokenVariable} gives a setup token shorter than ${MIN_SETUP_TOKEN_LENGTH} characters; it is ignored.`
@@ -122,7 +160,7 @@ export function loadConfig(
     );
   }
 
-  if (!parsed.success || issues.length > 0) {
+  if (!parsed.success || issues.length > 0 || jwtSecret.value === undefined) {
     throw new ConfigError(issues, warnings);
   }
 
@@ -134,7 +172,11 @@ export function loadConfig(
       logLevel: values.FRONT_BURNER_LOG_LEVEL,
       logFormat: values.FRONT_BURNER_LOG_FORMAT,
       dataDir: resolve(cwd, values.FRONT_BURNER_DATA_DIR),
-      setupToken
+      setupToken,
+      jwtSecret: jwtSecret.value,
+      authTokenTtlMs: values.FRONT_BURNER_AUTH_TOKEN_TTL,
+      refreshTokenTtlMs: values.FRONT_BURNER_REFRESH_TOKEN_TTL,
+      loginAuditRetentionMs: values.FRONT_BURNER_LOGIN_AUDIT_RETENTION
     },
     warnings
   };

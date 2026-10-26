@@ -21,7 +21,12 @@ describe('startServer', () => {
 
   const start = (env: Record<string, string | undefined> = {}) =>
     startServer({
-      env: { FRONT_BURNER_DATA_DIR: dataDir, FRONT_BURNER_LOG_FORMAT: 'json', ...env },
+      env: {
+        FRONT_BURNER_DATA_DIR: dataDir,
+        FRONT_BURNER_LOG_FORMAT: 'json',
+        FRONT_BURNER_JWT_SECRET: 'server-spec-jwt-secret-0123456789abcdefghijklm',
+        ...env
+      },
       cwd: root,
       webRoot,
       migrationsFolder,
@@ -71,6 +76,15 @@ describe('startServer', () => {
 
     expect(response.status).toBe(404);
     expect(response.body.code).toBe('not-found');
+  });
+
+  it('rate-limits requests that the auth guard refuses (A-1.12)', async () => {
+    app = await start();
+
+    for (let i = 0; i < 60; i++) {
+      expect((await request(app.getHttpServer()).get('/api/v1/me')).status).toBe(401);
+    }
+    expect((await request(app.getHttpServer()).get('/api/v1/me')).status).toBe(429);
   });
 
   it('limits JSON bodies to 2 MB', async () => {
@@ -225,7 +239,11 @@ describe('bootstrapLoggerFor', () => {
 
   it('honours the configured log level', () => {
     const logger = bootstrapLoggerFor(
-      { FRONT_BURNER_LOG_LEVEL: 'error', FRONT_BURNER_LOG_FORMAT: 'json' },
+      {
+        FRONT_BURNER_LOG_LEVEL: 'error',
+        FRONT_BURNER_LOG_FORMAT: 'json',
+        FRONT_BURNER_JWT_SECRET: 'server-spec-jwt-secret-0123456789abcdefghijklm'
+      },
       destination
     );
     logger.warn('hidden');

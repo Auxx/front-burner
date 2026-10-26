@@ -1,10 +1,12 @@
 import { ConfigError, loadConfig } from './load-config';
 
 const TOKEN = 'abcdefghijklmnop';
+const SECRET = 'jwt-secret-for-the-config-tests-0123456789abcdef';
+const BASE = { FRONT_BURNER_JWT_SECRET: SECRET };
 
 function issuesOf(env: Record<string, string | undefined>, options = {}) {
   try {
-    loadConfig(env, options);
+    loadConfig({ ...BASE, ...env }, options);
   } catch (error) {
     expect(error).toBeInstanceOf(ConfigError);
     return (error as ConfigError).issues;
@@ -15,7 +17,7 @@ function issuesOf(env: Record<string, string | undefined>, options = {}) {
 describe('loadConfig', () => {
   it('keeps the warnings in the error', () => {
     try {
-      loadConfig({ FRONT_BURNER_PORT: 'x', FRONT_BURNER_PROT: '1' });
+      loadConfig({ ...BASE, FRONT_BURNER_PORT: 'x', FRONT_BURNER_PROT: '1' });
     } catch (error) {
       expect(error).toBeInstanceOf(ConfigError);
       expect((error as ConfigError).issues.map(i => i.variable)).toEqual([ 'FRONT_BURNER_PORT' ]);
@@ -26,20 +28,70 @@ describe('loadConfig', () => {
   });
 
   it('uses the defaults', () => {
-    const { config, warnings } = loadConfig({});
+    const { config, warnings } = loadConfig(BASE);
     expect(config).toEqual({
       port: 8080,
       trustedProxies: [ 'loopback', 'linklocal', 'uniquelocal' ],
       logLevel: 'info',
       logFormat: 'json',
       dataDir: '/data',
-      setupToken: undefined
+      setupToken: undefined,
+      jwtSecret: SECRET,
+      authTokenTtlMs: 900_000,
+      refreshTokenTtlMs: 2_592_000_000,
+      loginAuditRetentionMs: 7_776_000_000
     });
     expect(warnings).toEqual([]);
   });
 
+  it('requires FRONT_BURNER_JWT_SECRET', () => {
+    expect(issuesOf({ FRONT_BURNER_JWT_SECRET: undefined })).toEqual([
+      { variable: 'FRONT_BURNER_JWT_SECRET', message: 'is required' }
+    ]);
+  });
+
+  it('refuses a JWT secret shorter than 32 characters', () => {
+    const short = SECRET.slice(0, 31);
+    const issues = issuesOf({ FRONT_BURNER_JWT_SECRET: short });
+    expect(issues).toEqual([
+      { variable: 'FRONT_BURNER_JWT_SECRET', message: 'must be at least 32 characters' }
+    ]);
+    expect(JSON.stringify(issues)).not.toContain(short);
+  });
+
+  it('reads the JWT secret from a file', () => {
+    const readFile = vi.fn().mockReturnValue(`${SECRET}\n`);
+    const { config } = loadConfig({ FRONT_BURNER_JWT_SECRET_FILE: '/run/secrets/jwt' }, { readFile });
+    expect(config.jwtSecret).toBe(SECRET);
+    expect(readFile).toHaveBeenCalledWith('/run/secrets/jwt');
+  });
+
+  it('rejects both the JWT secret and its _FILE variant', () => {
+    const issues = issuesOf({ FRONT_BURNER_JWT_SECRET_FILE: '/run/secrets/jwt' }, { readFile: () => SECRET });
+    expect(issues.map(issue => issue.variable)).toEqual([ 'FRONT_BURNER_JWT_SECRET' ]);
+  });
+
+  it('parses the durations', () => {
+    const { config } = loadConfig({
+      ...BASE,
+      FRONT_BURNER_AUTH_TOKEN_TTL: '5m',
+      FRONT_BURNER_REFRESH_TOKEN_TTL: '7d',
+      FRONT_BURNER_LOGIN_AUDIT_RETENTION: '30d'
+    });
+    expect(config.authTokenTtlMs).toBe(300_000);
+    expect(config.refreshTokenTtlMs).toBe(604_800_000);
+    expect(config.loginAuditRetentionMs).toBe(2_592_000_000);
+  });
+
+  it('refuses an unreadable duration', () => {
+    expect(issuesOf({ FRONT_BURNER_REFRESH_TOKEN_TTL: '30 days' })).toEqual([
+      { variable: 'FRONT_BURNER_REFRESH_TOKEN_TTL', message: 'must be a number followed by s, m, h or d' }
+    ]);
+  });
+
   it('reads valid values', () => {
     const { config } = loadConfig({
+      ...BASE,
       FRONT_BURNER_PORT: '3000',
       FRONT_BURNER_TRUSTED_PROXIES: ' 10.0.0.0/8 , loopback ',
       FRONT_BURNER_LOG_LEVEL: 'debug',
@@ -56,7 +108,7 @@ describe('loadConfig', () => {
   });
 
   it('resolves a relative data directory against the working directory', () => {
-    const { config } = loadConfig({ FRONT_BURNER_DATA_DIR: 'tmp/data' }, { cwd: '/work' });
+    const { config } = loadConfig({ ...BASE, FRONT_BURNER_DATA_DIR: 'tmp/data' }, { cwd: '/work' });
     expect(config.dataDir).toBe('/work/tmp/data');
   });
 
@@ -81,14 +133,14 @@ describe('loadConfig', () => {
 
   it('reads the setup token from a _FILE variable', () => {
     const readFile = vi.fn().mockReturnValue(TOKEN);
-    const { config } = loadConfig({ FRONT_BURNER_SETUP_TOKEN_FILE: '/run/secrets/token' }, { readFile });
+    const { config } = loadConfig({ ...BASE, FRONT_BURNER_SETUP_TOKEN_FILE: '/run/secrets/token' }, { readFile });
     expect(config.setupToken).toBe(TOKEN);
     expect(readFile).toHaveBeenCalledWith('/run/secrets/token');
   });
 
   it.each([ '\n', '\r\n' ])('strips one trailing newline from a _FILE value (%j)', newline => {
     const { config } = loadConfig(
-      { FRONT_BURNER_SETUP_TOKEN_FILE: '/run/secrets/token' },
+      { ...BASE, FRONT_BURNER_SETUP_TOKEN_FILE: '/run/secrets/token' },
       { readFile: () => TOKEN + newline }
     );
     expect(config.setupToken).toBe(TOKEN);
@@ -116,12 +168,12 @@ describe('loadConfig', () => {
   });
 
   it('ignores a short setup token with a warning', () => {
-    const short = loadConfig({ FRONT_BURNER_SETUP_TOKEN: TOKEN.slice(1) });
+    const short = loadConfig({ ...BASE, FRONT_BURNER_SETUP_TOKEN: TOKEN.slice(1) });
     expect(short.config.setupToken).toBeUndefined();
     expect(short.warnings).toHaveLength(1);
     expect(short.warnings[0]).toContain('FRONT_BURNER_SETUP_TOKEN');
 
-    const enough = loadConfig({ FRONT_BURNER_SETUP_TOKEN: TOKEN });
+    const enough = loadConfig({ ...BASE, FRONT_BURNER_SETUP_TOKEN: TOKEN });
     expect(enough.config.setupToken).toBe(TOKEN);
     expect(enough.warnings).toEqual([]);
   });
@@ -129,7 +181,7 @@ describe('loadConfig', () => {
   it('keeps a setup token with whitespace at an end, with a warning', () => {
     // The onboarding page's password field cannot send a line break.
     for (const token of [ `${TOKEN}\n`, ` ${TOKEN}`, `${TOKEN}\t` ]) {
-      const { config, warnings } = loadConfig({ FRONT_BURNER_SETUP_TOKEN: token });
+      const { config, warnings } = loadConfig({ ...BASE, FRONT_BURNER_SETUP_TOKEN: token });
       expect(config.setupToken).toBe(token);
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('FRONT_BURNER_SETUP_TOKEN');
@@ -140,7 +192,7 @@ describe('loadConfig', () => {
 
   it('never puts a secret in an issue or warning', () => {
     const secret = 'short-secret';
-    const { warnings } = loadConfig({ FRONT_BURNER_SETUP_TOKEN: secret });
+    const { warnings } = loadConfig({ ...BASE, FRONT_BURNER_SETUP_TOKEN: secret });
     expect(warnings.join('\n')).not.toContain(secret);
 
     const issues = issuesOf({ FRONT_BURNER_SETUP_TOKEN: secret, FRONT_BURNER_SETUP_TOKEN_FILE: secret });
@@ -148,7 +200,7 @@ describe('loadConfig', () => {
   });
 
   it('warns about unknown FRONT_BURNER_ variables', () => {
-    const { warnings } = loadConfig({ FRONT_BURNER_PROT: '1', PATH: '/bin', OTHER: 'x' });
+    const { warnings } = loadConfig({ ...BASE, FRONT_BURNER_PROT: '1', PATH: '/bin', OTHER: 'x' });
     expect(warnings).toEqual([ 'Unknown variable FRONT_BURNER_PROT is ignored.' ]);
   });
 });

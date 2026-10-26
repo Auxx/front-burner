@@ -5,6 +5,7 @@ import { securityHeaders, serveWebClient } from '@front-burner/server-core-secur
 import { INestApplication, Logger as NestLogger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import cookieParser from 'cookie-parser';
 import { Logger } from 'nestjs-pino';
 import type { DestinationStream, Logger as PinoLogger } from 'pino';
 import type { HttpLogger } from 'pino-http';
@@ -89,6 +90,8 @@ function configure(
   // First, so that every response has an ID and is logged (NF-10.6, A-1.12).
   app.use(requestLogger);
   app.use(securityHeaders());
+  // The refresh token's cookie (LG-32).
+  app.use(cookieParser());
   // Nest's own parser is off so that the limit of NF-11.5 applies.
   app.useBodyParser('json', { limit: '2mb' });
   // The health probes keep their path outside the API version (NF-10.7).

@@ -10,6 +10,9 @@ const READY_TIMEOUT_MS = 15_000;
 /** A setup token for tests: 32 characters. */
 export const TEST_TOKEN = 'web-e2e-setup-token-0123456789ab';
 
+/** The `FRONT_BURNER_JWT_SECRET` of every instance. */
+const TEST_JWT_SECRET = 'web-e2e-jwt-secret-0123456789abcdefghijklmnopqr';
+
 /** The administrator that `onboarded` instances are created with. */
 export const TEST_ADMIN = { email: 'admin@example.com', displayName: 'Admin', password: 'correct horse 1' };
 
@@ -82,6 +85,7 @@ export async function startInstance(options: InstanceOptions = {}): Promise<Inst
       FRONT_BURNER_DATA_DIR: dataDir,
       FRONT_BURNER_LOG_FORMAT: 'json',
       FRONT_BURNER_LOG_LEVEL: 'warn',
+      FRONT_BURNER_JWT_SECRET: TEST_JWT_SECRET,
       ...(setupToken ? { FRONT_BURNER_SETUP_TOKEN: setupToken } : {})
     },
     stdio: [ 'ignore', 'pipe', 'pipe' ]

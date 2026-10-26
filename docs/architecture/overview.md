@@ -114,9 +114,12 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
 ### Request path
 
 - **A-1.12** A request passes, in order: request ID (NF-10.6) → security headers
-  (NF-11.2) → rate limit (NF-11.4) → authentication guard (A-7.2) → role and
-  ownership guards (A-7.3) → Zod validation (A-3.3) → controller → service →
-  database and/or the working copy's git queue (A-5.3).
+  (NF-11.2) → authentication middleware (A-7.2) → rate limit (NF-11.4) →
+  authentication guard (A-7.2) → role and ownership guards (A-7.3) → Zod
+  validation (A-3.3) → controller → service → database and/or the working copy's
+  git queue (A-5.3). The middleware only identifies the caller from the auth
+  token, so that the rate limit can count per user; it never refuses a request.
+  The guard enforces after the rate limit, so refused requests are counted too.
 - **A-1.13** Any operation that can take longer than about 2 seconds becomes a
   job (NF-2.8): the request returns `202 Accepted` with the job ID, and progress
   and the result arrive over the push channel (A-3.11). _(My call.)_ Two
@@ -158,6 +161,11 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
   | `FRONT_BURNER_DB_SNAPSHOT_KEEP`       | `7`                          | NF-6.2.                                                                                                                                                                          |
 
   The deployment guide documents them (see `docs/wiki/todo.md`).
+
+  The same schema parses LG-61's variables (`FRONT_BURNER_JWT_SECRET`, also read
+  from `FRONT_BURNER_JWT_SECRET_FILE` as NF-8.2 describes, and the three
+  durations), so a missing or short JWT secret stops the startup with every
+  other invalid variable (LG-63).
 
 ## Consequences for the requirements
 

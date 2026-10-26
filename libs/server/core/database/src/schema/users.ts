@@ -17,7 +17,9 @@ export const users = sqliteTable(
     loginMethod: text('login_method', { enum: [ 'password', 'oidc' ] }).notNull(),
     /** Argon2id (PP-12); null for OIDC users. */
     passwordHash: text('password_hash'),
-    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull()
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    /** A disabled user cannot log in or refresh (LG-13, LG-24). */
+    disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false)
   },
   table => [ uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`) ]
 );

@@ -15,18 +15,31 @@ import { defineConfig, devices } from '@playwright/test';
  * built server, which serves the built web client (the production path), and
  * gets it as its `baseURL` (see `src/support/fixtures.ts`).
  */
+// NF-12.2: desktop and mobile browsers.
+const projects = [
+  { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+  { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+  { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  { name: 'mobile-chromium', use: { ...devices['Pixel 7'] } },
+  { name: 'mobile-webkit', use: { ...devices['iPhone 14'] } }
+];
+
+/**
+ * `E2E_BROWSERS` (comma-separated browser engines, e.g. `chromium`) limits the
+ * run to the projects on those engines. CI sets it to `chromium` on every
+ * pull request; the nightly workflow leaves it unset to run every project.
+ */
+const browsers = process.env['E2E_BROWSERS']
+  ?.split(',')
+  .map(browser => browser.trim());
+
 export default defineConfig({
   ...nxE2EPreset(import.meta.dirname, { testDir: './src' }),
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     trace: 'on-first-retry'
   },
-  // NF-12.2: desktop and mobile browsers.
-  projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
-    { name: 'mobile-chromium', use: { ...devices['Pixel 7'] } },
-    { name: 'mobile-webkit', use: { ...devices['iPhone 14'] } }
-  ]
+  projects: browsers
+    ? projects.filter(project => browsers.includes(project.use.defaultBrowserType))
+    : projects
 });

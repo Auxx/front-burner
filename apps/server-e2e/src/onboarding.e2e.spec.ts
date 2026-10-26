@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type ServerProcess, startServerProcess } from './support/server-process';
+import { login, type ServerProcess, startServerProcess } from './support/server-process';
 
 const TOKEN = 'e2e-setup-token-0123456789abcdef';
 const ONBOARDING = '/api/v1/onboarding';
@@ -126,6 +126,8 @@ describe('administrator onboarding', () => {
 
     expect((await post(server, CHECK, { setupToken: TOKEN })).status).toBe(204);
     expect((await post(server, SETUP, { setupToken: TOKEN, ...details })).status).toBe(204);
+    // Criterion 4: that user can log in.
+    await expect(login(server, 'cookie', details)).resolves.toMatchObject({ authToken: expect.any(String) });
 
     await expectSameAsUnknownRoute(server, await fetch(`${server.url}${ONBOARDING}`), 'GET');
     await expectSameAsUnknownRoute(server, await post(server, CHECK, { setupToken: TOKEN }), 'POST', {

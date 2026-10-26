@@ -1,6 +1,8 @@
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { Request } from 'express';
 import request from 'supertest';
+import '../auth/request-auth';
 import { RateLimitGroup } from './rate-limit-group.decorator';
 import { RateLimitModule } from './rate-limit.module';
 
@@ -44,6 +46,14 @@ describe('AppThrottlerGuard', () => {
       controllers: [ PingController, FirstController, SecondController ]
     }).compile();
     app = moduleRef.createNestApplication();
+    // Stands in for the authentication middleware, which runs before every guard.
+    app.use((req: Request, _res: unknown, next: () => void) => {
+      const user = req.headers['x-test-user'];
+      if (typeof user === 'string') {
+        req.auth = { userId: Number(user), sessionId: `session-${user}` };
+      }
+      next();
+    });
     await app.init();
   });
 
@@ -86,6 +96,34 @@ describe('AppThrottlerGuard', () => {
     const limited = await request(app.getHttpServer()).get('/first/grouped');
     expect(limited.status).toBe(429);
     expect(limited.headers['retry-after']).toMatch(/^[1-9]\d*$/);
+  });
+
+  it('allows an authenticated user 600 requests per minute', async () => {
+    for (let i = 0; i < 600; i++) {
+      expect((await request(app.getHttpServer()).get('/ping').set('x-test-user', '1')).status).toBe(200);
+    }
+    expect((await request(app.getHttpServer()).get('/ping').set('x-test-user', '1')).status).toBe(429);
+  });
+
+  it('counts authenticated requests per user, not per address', async () => {
+    for (let i = 0; i < 600; i++) {
+      expect((await request(app.getHttpServer()).get('/ping').set('x-test-user', '1')).status).toBe(200);
+    }
+    for (let i = 0; i < 600; i++) {
+      expect((await request(app.getHttpServer()).get('/ping').set('x-test-user', '2')).status).toBe(200);
+    }
+    // The address's own counter is untouched by them.
+    expect((await request(app.getHttpServer()).get('/ping')).status).toBe(200);
+  });
+
+  it('counts a group per address even for authenticated users', async () => {
+    // LG-65: login is limited by client IP; holding sessions must not buy more attempts.
+    for (let i = 0; i < 10; i++) {
+      const user = String(i % 2);
+      expect((await request(app.getHttpServer()).get('/first/grouped').set('x-test-user', user)).status).toBe(200);
+    }
+    expect((await request(app.getHttpServer()).get('/first/grouped').set('x-test-user', '3')).status).toBe(429);
+    expect((await request(app.getHttpServer()).get('/first/grouped')).status).toBe(429);
   });
 
   it('a route without a group keeps 60 per minute', async () => {
