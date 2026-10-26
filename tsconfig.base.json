@@ -50,6 +50,9 @@
       ],
       "@front-burner/server-feature-auth": [
         "./libs/server/feature/auth/src/index.ts"
+      ],
+      "@front-burner/shared-util": [
+        "./libs/shared/util/src/index.ts"
       ]
     }
   },
