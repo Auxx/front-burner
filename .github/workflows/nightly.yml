@@ -1,0 +1,51 @@
+name: Nightly
+
+# CI runs browser tests in Chromium only; this runs every test of every
+# project in Chromium, Firefox and WebKit, on desktop and mobile (NF-12.2).
+# Scheduled runs start only from the default branch.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+# Actions are pinned to commit SHAs (tags can be moved); Dependabot updates them.
+jobs:
+  browser-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Find Playwright version
+        id: playwright
+        run: echo "version=$(npx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-all
+
+      # Rebuilding the man-page index after every package slows apt down a lot.
+      - name: Disable man-db triggers
+        run: sudo rm -f /var/lib/man-db/auto-update
+
+      # On a cache hit this only installs the system packages.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Test
+        run: npx nx run-many -t test test-storybook e2e --parallel=3

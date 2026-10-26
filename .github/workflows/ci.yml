@@ -45,9 +45,10 @@ jobs:
       - name: Project tags
         run: npm run check:tags
 
-      # Storybook stories run as browser tests (A-10.38) and web-e2e runs in
-      # Chromium, Firefox and WebKit (NF-13.8); browsers are installed only
-      # when one of those is affected.
+      # Storybook stories run as browser tests (A-10.38) and web-e2e runs as
+      # end-to-end tests; Chromium is installed only when one of those is
+      # affected. Here both run in Chromium alone, as its headless shell;
+      # nightly.yml runs every browser (NF-12.2).
       - name: Find affected browser tests
         id: browsers
         run: |
@@ -55,17 +56,32 @@ jobs:
           e2e=$(npx nx show projects --affected -t e2e --json)
           echo "Affected by test-storybook: $storybook"
           echo "Affected by e2e: $e2e"
-          browsers=""
-          if [ "$storybook" != "[]" ]; then browsers="chromium"; fi
-          if echo "$e2e" | grep -q '"web-e2e"'; then browsers="chromium firefox webkit"; fi
-          echo "browsers=$browsers" >> "$GITHUB_OUTPUT"
+          needed=false
+          if [ "$storybook" != "[]" ] || [ "$e2e" != "[]" ]; then needed=true; fi
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+          echo "version=$(npx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
 
+      - name: Cache Playwright browsers
+        if: steps.browsers.outputs.needed == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.browsers.outputs.version }}-chromium-shell
+
+      # Rebuilding the man-page index after every package slows apt down a lot.
+      - name: Disable man-db triggers
+        if: steps.browsers.outputs.needed == 'true'
+        run: sudo rm -f /var/lib/man-db/auto-update
+
+      # On a cache hit this only installs the system packages.
       - name: Install Playwright browsers
-        if: steps.browsers.outputs.browsers != ''
-        run: npx playwright install --with-deps ${{ steps.browsers.outputs.browsers }}
+        if: steps.browsers.outputs.needed == 'true'
+        run: npx playwright install --with-deps --only-shell chromium
 
       - name: Type check, lint, test, build
         run: npx nx affected -t typecheck lint test build size-check test-storybook e2e --parallel=3
+        env:
+          E2E_BROWSERS: chromium
 
       # The OpenAPI document and the web client generated from it are
       # committed; regenerating must change nothing (A-3.7).
