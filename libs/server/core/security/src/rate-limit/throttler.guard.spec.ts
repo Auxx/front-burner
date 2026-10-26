@@ -116,6 +116,16 @@ describe('AppThrottlerGuard', () => {
     expect((await request(app.getHttpServer()).get('/ping')).status).toBe(200);
   });
 
+  it('counts a group per address even for authenticated users', async () => {
+    // LG-65: login is limited by client IP; holding sessions must not buy more attempts.
+    for (let i = 0; i < 10; i++) {
+      const user = String(i % 2);
+      expect((await request(app.getHttpServer()).get('/first/grouped').set('x-test-user', user)).status).toBe(200);
+    }
+    expect((await request(app.getHttpServer()).get('/first/grouped').set('x-test-user', '3')).status).toBe(429);
+    expect((await request(app.getHttpServer()).get('/first/grouped')).status).toBe(429);
+  });
+
   it('a route without a group keeps 60 per minute', async () => {
     for (let i = 0; i < 10; i++) {
       await request(app.getHttpServer()).get('/first/grouped');

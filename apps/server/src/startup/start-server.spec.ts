@@ -78,6 +78,15 @@ describe('startServer', () => {
     expect(response.body.code).toBe('not-found');
   });
 
+  it('rate-limits requests that the auth guard refuses (A-1.12)', async () => {
+    app = await start();
+
+    for (let i = 0; i < 60; i++) {
+      expect((await request(app.getHttpServer()).get('/api/v1/me')).status).toBe(401);
+    }
+    expect((await request(app.getHttpServer()).get('/api/v1/me')).status).toBe(429);
+  });
+
   it('limits JSON bodies to 2 MB', async () => {
     app = await start();
 

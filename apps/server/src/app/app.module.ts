@@ -27,7 +27,7 @@ export class AppModule {
         LoggingModule.forRoot(deps.requestLogger),
         RateLimitModule,
         HealthModule.forRoot({ migrationsApplied: deps.migrationsApplied }),
-        // After RateLimitModule: the rate limit guard runs before the auth guard.
+        // After RateLimitModule: the rate limit guard runs before the auth guard (A-1.12).
         AuthModule
       ],
       providers: [

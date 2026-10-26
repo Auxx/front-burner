@@ -30,8 +30,10 @@ const isAuthenticated = (context: ExecutionContext): boolean =>
           ttl: 60_000,
           limit: 10,
           skipIf: context => groupOf(context) === undefined,
-          // One counter per group and client, whichever route of the group is called.
-          generateKey: (context, tracker, name) => `${name}:${groupOf(context)}:${tracker}`
+          // One counter per group and client IP, whichever route of the group is called and
+          // whoever is logged in: holding sessions must not buy more login attempts (LG-65).
+          generateKey: (context, _tracker, name) =>
+            `${name}:${groupOf(context)}:${context.switchToHttp().getRequest<Request>().ip ?? ''}`
         }
       ],
       setHeaders: false
