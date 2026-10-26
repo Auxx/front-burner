@@ -15,7 +15,11 @@ describe('writeOpenApi', () => {
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'fb-openapi-'));
     app = await startServer({
-      env: { FRONT_BURNER_DATA_DIR: join(root, 'data'), FRONT_BURNER_LOG_LEVEL: 'error' },
+      env: {
+        FRONT_BURNER_DATA_DIR: join(root, 'data'),
+        FRONT_BURNER_LOG_LEVEL: 'error',
+        FRONT_BURNER_JWT_SECRET: 'server-spec-jwt-secret-0123456789abcdefghijklm'
+      },
       cwd: root,
       webRoot: join(root, 'web'),
       migrationsFolder: MIGRATIONS,

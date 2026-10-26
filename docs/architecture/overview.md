@@ -159,6 +159,11 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
 
   The deployment guide documents them (see `docs/wiki/todo.md`).
 
+  The same schema parses LG-61's variables (`FRONT_BURNER_JWT_SECRET`, also read
+  from `FRONT_BURNER_JWT_SECRET_FILE` as NF-8.2 describes, and the three
+  durations), so a missing or short JWT secret stops the startup with every
+  other invalid variable (LG-63).
+
 ## Consequences for the requirements
 
 These requirement texts should be adjusted when they are next edited:

@@ -21,7 +21,12 @@ describe('startServer', () => {
 
   const start = (env: Record<string, string | undefined> = {}) =>
     startServer({
-      env: { FRONT_BURNER_DATA_DIR: dataDir, FRONT_BURNER_LOG_FORMAT: 'json', ...env },
+      env: {
+        FRONT_BURNER_DATA_DIR: dataDir,
+        FRONT_BURNER_LOG_FORMAT: 'json',
+        FRONT_BURNER_JWT_SECRET: 'server-spec-jwt-secret-0123456789abcdefghijklm',
+        ...env
+      },
       cwd: root,
       webRoot,
       migrationsFolder,
@@ -225,7 +230,11 @@ describe('bootstrapLoggerFor', () => {
 
   it('honours the configured log level', () => {
     const logger = bootstrapLoggerFor(
-      { FRONT_BURNER_LOG_LEVEL: 'error', FRONT_BURNER_LOG_FORMAT: 'json' },
+      {
+        FRONT_BURNER_LOG_LEVEL: 'error',
+        FRONT_BURNER_LOG_FORMAT: 'json',
+        FRONT_BURNER_JWT_SECRET: 'server-spec-jwt-secret-0123456789abcdefghijklm'
+      },
       destination
     );
     logger.warn('hidden');

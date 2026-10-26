@@ -9,4 +9,10 @@ export interface Config {
   dataDir: string;
   /** Undefined when not set or too short (administrator onboarding is then unavailable). */
   setupToken: string | undefined;
+  /** Signs the auth tokens (LG-28). At least 32 characters. */
+  jwtSecret: string;
+  authTokenTtlMs: number;
+  /** The lifetime of a session and its refresh tokens, from login (LG-29). */
+  refreshTokenTtlMs: number;
+  loginAuditRetentionMs: number;
 }

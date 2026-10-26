@@ -7,6 +7,9 @@ import { join, resolve } from 'node:path';
 const MAIN = resolve(import.meta.dirname, '../../../../dist/apps/server/main.js');
 const TIMEOUT_MS = 10_000;
 
+/** The `FRONT_BURNER_JWT_SECRET` of every test server unless a test sets its own. */
+export const TEST_JWT_SECRET = 'server-e2e-jwt-secret-0123456789abcdefghijklmnop';
+
 export interface ServerProcess {
   url: string;
   dataDir: string;
@@ -60,6 +63,7 @@ async function spawnServer(env: Record<string, string>, options: ServerOptions):
       FRONT_BURNER_DATA_DIR: dataDir,
       FRONT_BURNER_PORT: String(port),
       FRONT_BURNER_LOG_FORMAT: 'json',
+      FRONT_BURNER_JWT_SECRET: TEST_JWT_SECRET,
       ...env
     },
     stdio: [ 'ignore', 'pipe', 'pipe' ]
