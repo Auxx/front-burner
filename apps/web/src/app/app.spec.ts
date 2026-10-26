@@ -38,7 +38,7 @@ describe('appRoutes', () => {
     const harness = await open(url);
 
     expect(TestBed.inject(Router).url).toBe('/login');
-    expect(harness.routeNativeElement?.textContent).toContain('Signing in isn\'t available yet.');
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toContain('Log in');
     expect(document.title).toBe('Log in · Front Burner');
   });
 

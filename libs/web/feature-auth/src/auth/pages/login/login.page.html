@@ -1,6 +1,43 @@
 <ng-container *transloco="let t; prefix: 'web-feature-auth.LoginPage'">
   <main>
-    <h1 class="heading">{{ t('title') }}</h1>
-    <ui-empty-state>{{ t('message') }}</ui-empty-state>
+    <div class="content">
+      <h1 class="heading" tabindex="-1">{{ t('title') }}</h1>
+      @if (message; as message) {
+        <ui-inline-banner status="info">{{ t('messages.' + message) }}</ui-inline-banner>
+      }
+      @if (insecure) {
+        <ui-inline-banner status="warning">
+          {{ t('insecure') }}
+          <a [href]="deploymentGuide">{{ t('insecureHowTo') }}</a>
+        </ui-inline-banner>
+      }
+      <form novalidate (submit)="submit($event)">
+        @if (failure(); as failure) {
+          <ui-inline-banner status="danger">
+            {{ failure.text }}
+            @if (failure.reference) {
+              <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+            }
+          </ui-inline-banner>
+        }
+        <ui-field [label]="t('email')" [error]="errorKey('email') ? t('errors.' + errorKey('email')) : undefined">
+          <input uiInput type="email" autocomplete="username" spellcheck="false" [formField]="model.email" />
+        </ui-field>
+        <ui-field
+          [label]="t('password')"
+          [error]="errorKey('password') ? t('errors.' + errorKey('password')) : undefined"
+        >
+          <input uiInput #password type="password" autocomplete="current-password" [formField]="model.password" />
+          <button uiIconButton [uiPasswordReveal]="password" [label]="t('showPassword')">
+            <ui-icon name="eye" />
+          </button>
+        </ui-field>
+        <div class="actions">
+          <button uiButton variant="primary" type="submit" [busy]="busy()" [unavailable]="model().invalid()">
+            {{ t('submit') }}
+          </button>
+        </div>
+      </form>
+    </div>
   </main>
 </ng-container>

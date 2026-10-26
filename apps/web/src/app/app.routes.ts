@@ -7,6 +7,7 @@ export const appRoutes: Route[] = [
     path: '',
     canActivateChild: [ onboardingGuard ],
     children: [
+      { path: '', pathMatch: 'full', redirectTo: 'login' },
       {
         path: '',
         loadChildren: () => import('@front-burner/web-feature-auth').then(m => m.authRoutes)

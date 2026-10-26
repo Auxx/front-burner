@@ -10,8 +10,22 @@ describe('i18n/en.json', () => {
     expect(texts[`errors.${code}`]).toEqual(expect.any(String));
   });
 
-  it.each([ 'title', 'message' ])('has web-feature-auth.LoginPage.%s', key => {
-    expect(texts[`${AUTH}.LoginPage.${key}`]).toEqual(expect.any(String));
+  it.each([ 'logged-out', 'session-expired', 'password-reset' ])('has the login message %s', message => {
+    expect(texts[`${AUTH}.LoginPage.messages.${message}`]).toEqual(expect.any(String));
+  });
+
+  it.each([
+    [ 'errors.wrong-credentials', 'Wrong username or password' ],
+    [ `${AUTH}.LoginPage.title`, 'Log in' ],
+    [ `${AUTH}.LoginPage.messages.logged-out`, 'You have been logged out' ],
+    [ `${AUTH}.LoginPage.messages.session-expired`, 'Your session has expired. Please log in again' ],
+    [
+      `${AUTH}.LoginPage.insecure`,
+      'This instance is not served over HTTPS. You will be logged out when your session token expires.'
+    ],
+    [ `${AUTH}.LoginPage.insecureHowTo`, 'How to set up HTTPS' ]
+  ])('has the fixed text %s', (key, text) => {
+    expect(texts[key]).toBe(text);
   });
 
   it.each(PASSWORD_RULES)('has the policy rule and the field error for %s', rule => {
