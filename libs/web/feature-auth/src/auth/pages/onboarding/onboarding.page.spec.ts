@@ -119,6 +119,36 @@ describe('OnboardingPage', () => {
     expect(element().querySelector('auth-setup-token-step')).not.toBeNull();
   });
 
+  it.each([
+    [ 'completed', status({ state: 'completed', setupTokenConfigured: false }) ],
+    [ 'pending from the environment', status({ state: 'oidc-pending', oidcFromEnvironment: true }) ]
+  ])('goes to the login page when a retry finds onboarding %s', async (_case, found) => {
+    await start({ kind: 'error', error: { code: 'network', params: {}, requestId: '', message: 'Network error' } });
+    refreshTo = found;
+    button(`${KEY}.retry`).click();
+    await settle(fixture);
+    expect(TestBed.inject(Router).url).toBe('/login');
+  });
+
+  it('never tells to set a setup token on a completed instance', async () => {
+    await start(status({ state: 'completed', setupTokenConfigured: false }));
+    expect(element().textContent).not.toContain(`${KEY}.noToken.message`);
+  });
+
+  it('shows the error, not an invalid token, when setup answers 404 and the state cannot be loaded', async () => {
+    await start(status());
+    await reachPasswordStep();
+    refreshTo = { kind: 'error', error: { code: 'network', params: {}, requestId: '', message: 'Network error' } };
+    await submitPasswordSetup();
+    await settle(fixture);
+    expect(element().querySelector('ui-inline-banner')).not.toBeNull();
+    refreshTo = status();
+    button(`${KEY}.retry`).click();
+    await settle(fixture);
+    expect(element().querySelector('auth-setup-token-step')).not.toBeNull();
+    expect(element().textContent).not.toContain('SetupTokenStepComponent.errors.invalid');
+  });
+
   it('walks token → method → password and back', async () => {
     await start(status());
     expect(element().querySelector('auth-setup-token-step')).not.toBeNull();

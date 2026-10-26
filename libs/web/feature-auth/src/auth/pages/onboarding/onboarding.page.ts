@@ -1,7 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ButtonComponent, InlineBannerComponent } from '@front-burner/ui';
-import { ApiErrorTextService, OnboardingStateService } from '@front-burner/web-core';
+import {
+  ApiErrorTextService,
+  onboardingDestination,
+  OnboardingStateService,
+  type OnboardingView
+} from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import { LoginMethodStepComponent } from '../../components/login-method-step/login-method-step.component';
@@ -9,6 +14,8 @@ import { PasswordSetupStepComponent } from '../../components/password-setup-step
 import { SetupTokenStepComponent } from '../../components/setup-token-step/setup-token-step.component';
 
 type Step = 'token' | 'method' | 'password';
+
+const ONBOARDING = '/onboarding';
 
 /**
  * The Administrator onboarding page (REQ-AUTH-001): setup token, login method,
@@ -40,9 +47,10 @@ export class OnboardingPage {
   protected readonly tokenRejected = signal(false);
   protected readonly retrying = signal(false);
 
+  /** The state, while it belongs on this page; a closed onboarding shows nothing until it has left. */
   protected readonly status = computed(() => {
     const view = this.view();
-    return view?.kind === 'status' ? view.status : null;
+    return view?.kind === 'status' && onboardingDestination(view, ONBOARDING) === true ? view.status : null;
   });
 
   protected readonly failure = computed(() => {
@@ -59,7 +67,7 @@ export class OnboardingPage {
   protected async retry(): Promise<void> {
     this.retrying.set(true);
     try {
-      await this.onboarding.refresh();
+      await this.leaveIfClosed(await this.onboarding.refresh());
     } finally {
       this.retrying.set(false);
     }
@@ -68,12 +76,19 @@ export class OnboardingPage {
   /** Setup answered 404: either onboarding closed meanwhile or the token changed. */
   protected async refused(): Promise<void> {
     const view = await this.onboarding.refresh();
-    if (view.kind === 'status' && view.status.state === 'completed') {
-      await this.router.navigateByUrl('/login');
-      return;
-    }
     this.setupToken.set('');
-    this.tokenRejected.set(true);
     this.step.set('token');
+    // When the state cannot be loaded, the page shows that error and a retry;
+    // the token may well be right.
+    this.tokenRejected.set(view.kind === 'status');
+    await this.leaveIfClosed(view);
+  }
+
+  /** After a refresh, goes where the guard would send this page (AO-3, AO-33). */
+  private async leaveIfClosed(view: OnboardingView): Promise<void> {
+    const target = onboardingDestination(view, ONBOARDING);
+    if (target !== true) {
+      await this.router.navigateByUrl(target);
+    }
   }
 }

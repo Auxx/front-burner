@@ -7,7 +7,7 @@ const ONBOARDING = '/onboarding';
 const LOGIN = '/login';
 
 /** Where a URL may go for a given onboarding state: `true`, or the URL to go to instead. */
-function destination(view: OnboardingView, url: string): string | true {
+export function onboardingDestination(view: OnboardingView, url: string): string | true {
   const toOnboarding = url === ONBOARDING || url.startsWith(`${ONBOARDING}?`) || url.startsWith(`${ONBOARDING}/`);
   // The onboarding page shows the error and offers a retry.
   if (view.kind === 'error') {
@@ -33,6 +33,6 @@ function destination(view: OnboardingView, url: string): string | true {
  */
 export const onboardingGuard: CanActivateChildFn = async (_route, state): Promise<boolean | UrlTree> => {
   const router = inject(Router);
-  const target = destination(await inject(OnboardingStateService).load(), state.url);
+  const target = onboardingDestination(await inject(OnboardingStateService).load(), state.url);
   return target === true ? true : router.parseUrl(target);
 };

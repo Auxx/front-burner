@@ -1,5 +1,5 @@
 export { toApiError } from './core/errors/to-api-error';
-export { onboardingGuard } from './core/guards/onboarding/onboarding.guard';
+export { onboardingDestination, onboardingGuard } from './core/guards/onboarding/onboarding.guard';
 export { TranslocoHttpLoader } from './core/i18n/transloco-http.loader';
 export { provideCore } from './core/providers/provide-core';
 export { PageTitleStrategy } from './core/routing/page-title.strategy';
