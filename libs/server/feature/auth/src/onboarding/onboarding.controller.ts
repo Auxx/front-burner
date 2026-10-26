@@ -1,4 +1,4 @@
-import { RateLimitGroup } from '@front-burner/server-core-security';
+import { Public, RateLimitGroup } from '@front-burner/server-core-security';
 import type { OnboardingStatus } from '@front-burner/shared-contracts';
 import { Body, Controller, Get, HttpCode, Logger, Post, UseGuards } from '@nestjs/common';
 import { ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
@@ -12,6 +12,7 @@ import { OnboardingService } from './onboarding.service';
  * refusal is the `404` of an unknown route (AO-3); see {@link OnboardingGuard}.
  */
 @ApiTags('onboarding')
+@Public()
 @UseGuards(OnboardingGuard)
 @Controller('onboarding')
 export class OnboardingController {

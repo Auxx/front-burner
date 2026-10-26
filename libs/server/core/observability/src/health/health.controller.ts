@@ -1,3 +1,4 @@
+import { Public } from '@front-burner/server-core-security';
 import { type HealthStatus, HealthStatusSchema } from '@front-burner/shared-contracts';
 import { Controller, Get, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiSchema, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
@@ -19,6 +20,7 @@ export class HealthStatusDto extends createZodDto(z.object(HealthStatusSchema.sh
  * and free of version or internals (NF-10.9).
  */
 @ApiTags('health')
+@Public()
 @SkipThrottle()
 @Controller('api/health')
 export class HealthController {

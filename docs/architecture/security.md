@@ -24,9 +24,13 @@ top of the security rules in the requirements and NF-11. See
 
 - **A-7.2** A global NestJS guard authenticates every request as LG-34
   describes; only routes marked `@Public()` skip it (login, refresh, onboarding,
-  health). Active sessions are cached in memory, which one process allows
-  (NF-4.2). Revoking a session (LG-37) removes it from the cache, closes its
-  push channel streams (A-3.10) and drops its key unlocks (AR-31).
+  health). An Express middleware that runs before every guard checks the auth
+  token and its session and puts the result on the request (`req.auth`, or
+  `req.authFailure`), so that the rate limit can count authenticated requests
+  per user (NF-11.4); the guard then refuses what needs a login (A-1.12). Active
+  sessions are cached in memory, which one process allows (NF-4.2). Revoking a
+  session (LG-37) removes it from the cache, closes its push channel streams
+  (A-3.10) and drops its key unlocks (AR-31).
 
 ## A-7: Authorisation
 
