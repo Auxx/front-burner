@@ -16,7 +16,7 @@ const status = (state: OnboardingStatus['state'], oidcFromEnvironment = false): 
 
 const failed: OnboardingView = {
   kind: 'error',
-  error: { code: 'network', params: {}, requestId: '', message: 'Network error' }
+  cause: new Error('offline')
 };
 
 describe('onboardingGuard', () => {

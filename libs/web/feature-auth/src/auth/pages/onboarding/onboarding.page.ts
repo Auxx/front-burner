@@ -5,7 +5,8 @@ import {
   ApiErrorTextService,
   onboardingDestination,
   OnboardingStateService,
-  type OnboardingView
+  type OnboardingView,
+  toApiError
 } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 
@@ -55,7 +56,7 @@ export class OnboardingPage {
 
   protected readonly failure = computed(() => {
     const view = this.view();
-    return view?.kind === 'error' ? this.errorText.describe(view.error) : null;
+    return view?.kind === 'error' ? this.errorText.describe(toApiError(view.cause)) : null;
   });
 
   protected tokenAccepted(token: string): void {

@@ -1,2 +1,5 @@
 <router-outlet />
-<ui-toast-outlet *transloco="let t" [label]="t('web.App.notifications')" />
+<!-- Toasts only follow what the user does, so the outlet and its overlay code load after the first render. -->
+@defer (on idle) {
+  <ui-toast-outlet *transloco="let t" [label]="t('web.App.notifications')" />
+}

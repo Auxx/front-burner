@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -110,7 +110,7 @@ describe('OnboardingPage', () => {
   });
 
   it('shows the state error with a retry', async () => {
-    await start({ kind: 'error', error: { code: 'network', params: {}, requestId: '', message: 'Network error' } });
+    await start({ kind: 'error', cause: new HttpErrorResponse({ status: 0 }) });
     expect(element().querySelector('ui-inline-banner')).not.toBeNull();
     refreshTo = status();
     button(`${KEY}.retry`).click();
@@ -123,7 +123,7 @@ describe('OnboardingPage', () => {
     [ 'completed', status({ state: 'completed', setupTokenConfigured: false }) ],
     [ 'pending from the environment', status({ state: 'oidc-pending', oidcFromEnvironment: true }) ]
   ])('goes to the login page when a retry finds onboarding %s', async (_case, found) => {
-    await start({ kind: 'error', error: { code: 'network', params: {}, requestId: '', message: 'Network error' } });
+    await start({ kind: 'error', cause: new HttpErrorResponse({ status: 0 }) });
     refreshTo = found;
     button(`${KEY}.retry`).click();
     await settle(fixture);
@@ -138,7 +138,7 @@ describe('OnboardingPage', () => {
   it('shows the error, not an invalid token, when setup answers 404 and the state cannot be loaded', async () => {
     await start(status());
     await reachPasswordStep();
-    refreshTo = { kind: 'error', error: { code: 'network', params: {}, requestId: '', message: 'Network error' } };
+    refreshTo = { kind: 'error', cause: new HttpErrorResponse({ status: 0 }) };
     await submitPasswordSetup();
     await settle(fixture);
     expect(element().querySelector('ui-inline-banner')).not.toBeNull();

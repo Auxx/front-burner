@@ -1,6 +1,6 @@
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideCore } from '@front-burner/web-core';
+import { provideCore } from '@front-burner/web-core/app';
 
 import { appRoutes } from './app.routes';
 

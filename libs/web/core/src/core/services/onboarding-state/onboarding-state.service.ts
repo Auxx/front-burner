@@ -1,15 +1,19 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import type { ApiError, OnboardingStatus } from '@front-burner/shared-contracts';
+import type { OnboardingStatus } from '@front-burner/shared-contracts';
 import { OnboardingApi } from '@front-burner/web-api-client';
 import { firstValueFrom } from 'rxjs';
 
-import { toApiError } from '../../errors/to-api-error';
-
-/** The onboarding state as the web client knows it, or why it could not be loaded. */
+/**
+ * The onboarding state as the web client knows it, or why it could not be
+ * loaded. `cause` is what the request threw: the page turns it into an
+ * `ApiError` with `toApiError`. This service runs before any lazy feature, and
+ * `toApiError` needs the contracts' schemas and Zod, which would otherwise
+ * double the initial bundle (NF-2.9).
+ */
 export type OnboardingView =
   | { kind: 'status'; status: OnboardingStatus; }
-  | { kind: 'error'; error: ApiError; };
+  | { kind: 'error'; cause: unknown; };
 
 // Clients treat a 404 from the state endpoint as `completed` (AO-3).
 const COMPLETED: OnboardingView = {
@@ -53,7 +57,7 @@ export class OnboardingStateService {
       if (error instanceof HttpErrorResponse && error.status === 404) {
         view = COMPLETED;
       } else {
-        view = { kind: 'error', error: toApiError(error) };
+        view = { kind: 'error', cause: error };
         this.cached = undefined;
       }
     }

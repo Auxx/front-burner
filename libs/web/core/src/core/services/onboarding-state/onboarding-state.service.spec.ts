@@ -57,7 +57,8 @@ describe('OnboardingStateService', () => {
       status: 500,
       statusText: 'Internal Server Error'
     });
-    expect(await failed).toEqual({ kind: 'error', error: expect.objectContaining({ code: 'internal' }) });
+    // The page turns the cause into an ApiError, so the initial bundle needs no Zod.
+    expect(await failed).toEqual({ kind: 'error', cause: expect.objectContaining({ status: 500 }) });
     expect(service.view()?.kind).toBe('error');
 
     const retried = service.load();

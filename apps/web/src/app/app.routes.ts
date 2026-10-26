@@ -1,5 +1,5 @@
 import { Route } from '@angular/router';
-import { onboardingGuard } from '@front-burner/web-core';
+import { onboardingGuard } from '@front-burner/web-core/app';
 
 export const appRoutes: Route[] = [
   {
