@@ -42,6 +42,5 @@ export class OnboardingService {
       }).run();
     });
     this.logger.log('Administrator onboarding completed');
-    this.logger.debug(`Administrator created: ${request.email}`);
   }
 }

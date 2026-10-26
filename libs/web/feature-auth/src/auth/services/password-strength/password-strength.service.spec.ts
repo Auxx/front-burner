@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 
-import { PasswordStrengthService } from './password-strength.service';
+import { PasswordStrengthService, ZXCVBN_LOADER } from './password-strength.service';
 
 describe('PasswordStrengthService', () => {
   let service: PasswordStrengthService;
@@ -17,8 +17,33 @@ describe('PasswordStrengthService', () => {
 
   it('rates a password made of parts of the email and name lower', async () => {
     const password = 'zqxbrtk.vlmwopa';
-    expect(await service.estimate(password, [ 'zqxbrtk@example.com', 'Vlmwopa' ])).toBeLessThan(
-      await service.estimate(password, [])
-    );
+    const without = await service.estimate(password, []);
+    expect(without).not.toBeNull();
+    expect(await service.estimate(password, [ 'zqxbrtk@example.com', 'Vlmwopa' ])).toBeLessThan(without as number);
+  });
+});
+
+describe('PasswordStrengthService when zxcvbn does not load', () => {
+  it('answers null instead of failing, and tries again next time', async () => {
+    let calls = 0;
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: ZXCVBN_LOADER,
+          useValue: async () => {
+            calls++;
+            if (calls === 1) {
+              throw new Error('Failed to fetch dynamically imported module');
+            }
+            return { check: () => ({ score: 3 }) };
+          }
+        }
+      ]
+    });
+    const service = TestBed.inject(PasswordStrengthService);
+
+    expect(await service.estimate('violet staircase 42', [])).toBeNull();
+    expect(await service.estimate('violet staircase 42', [])).toBe(3);
+    expect(calls).toBe(2);
   });
 });

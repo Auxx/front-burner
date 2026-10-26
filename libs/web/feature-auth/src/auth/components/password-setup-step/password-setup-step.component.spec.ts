@@ -156,6 +156,11 @@ describe('PasswordSetupStepComponent', () => {
     expect(fixture.componentInstance.events).toEqual([ 'refused' ]);
   });
 
+  it('checks the policy against the email as it will be sent, trimmed', async () => {
+    await fill({ email: ' alice@example.com ', password: 'alice@example.com' });
+    expect(element().querySelector('li[data-rule="equals-email"]')?.getAttribute('data-met')).toBe('false');
+  });
+
   it('goes back', () => {
     ([ ...element().querySelectorAll('button') ].find(b => b.textContent?.includes(`${KEY}.back`)) as HTMLElement)
       .click();

@@ -161,7 +161,16 @@ describe('OnboardingController', () => {
     expect(text).not.toContain(TOKEN);
     expect(text).not.toContain('a-wrong-token-0123456789');
     expect(text).not.toContain(PASSWORD);
-    // The email appears at debug only (NF-10.5).
-    expect(logger.lines.filter(line => line.includes(EMAIL)).every(line => line.startsWith('debug'))).toBe(true);
+    // Not even at debug: the completion line says enough.
+    expect(text).not.toContain(EMAIL);
+  });
+
+  it('stores the email trimmed, as typed otherwise', async () => {
+    await start();
+    const response = await http()
+      .post('/api/v1/onboarding/password-setup')
+      .send({ ...setup, email: '  Alice@Example.com ' });
+    expect(response.status).toBe(204);
+    expect(database.db.select().from(users).all()[0]?.email).toBe('Alice@Example.com');
   });
 });

@@ -115,6 +115,11 @@ export function loadConfig(
       `${tokenVariable} gives a setup token shorter than ${MIN_SETUP_TOKEN_LENGTH} characters; it is ignored.`
     );
     setupToken = undefined;
+  } else if (setupToken !== undefined && /^\s|\s$/.test(setupToken)) {
+    // It is kept as it is, but a password field cannot send a line break.
+    warnings.push(
+      `${tokenVariable} gives a setup token that starts or ends with whitespace; it must be typed exactly, and the onboarding page cannot send a line break.`
+    );
   }
 
   if (!parsed.success || issues.length > 0) {
