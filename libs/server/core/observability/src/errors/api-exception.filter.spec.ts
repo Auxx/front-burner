@@ -22,6 +22,11 @@ class TestController {
     throw new ApiErrorException(409, 'some-code', { a: 1 });
   }
 
+  @Get('fields')
+  fields() {
+    throw ApiErrorException.forFields([ { path: 'issuer', code: 'oidc-issuer-unreachable', params: { host: 'x' } } ]);
+  }
+
   @Get('throttled')
   throttled() {
     throw new ThrottlerException();
@@ -75,6 +80,19 @@ describe('ApiExceptionFilter', () => {
 
   afterAll(async () => {
     await app.close();
+  });
+
+  it('answers field errors thrown by a service', async () => {
+    const response = await request(app.getHttpServer()).get('/test/fields');
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      code: 'validation-failed',
+      params: {},
+      requestId: expect.any(String),
+      message: 'The request is invalid.',
+      fields: [ { path: 'issuer', code: 'oidc-issuer-unreachable', params: { host: 'x' } } ]
+    });
+    expect(ApiErrorSchema.safeParse(response.body).success).toBe(true);
   });
 
   it('answers an unknown route with 404 not-found and the request ID', async () => {

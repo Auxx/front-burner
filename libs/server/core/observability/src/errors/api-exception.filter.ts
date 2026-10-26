@@ -83,7 +83,8 @@ export class ApiExceptionFilter implements ExceptionFilter {
         status: exception.getStatus(),
         code: exception.code,
         params: exception.params,
-        message: exception.fallbackMessage
+        message: exception.fallbackMessage,
+        fields: exception.fields
       };
     }
     if (exception instanceof ZodValidationException) {
