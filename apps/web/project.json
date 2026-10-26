@@ -18,6 +18,9 @@
       "options": {
         "outputPath": "dist/apps/web",
         "browser": "apps/web/src/main.ts",
+        "polyfills": [
+          "apps/web/src/app/zod-jitless.ts"
+        ],
         "tsConfig": "apps/web/tsconfig.app.json",
         "inlineStyleLanguage": "scss",
         "assets": [

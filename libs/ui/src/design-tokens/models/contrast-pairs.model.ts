@@ -86,6 +86,9 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   // The progress bar's fill on its track
   graphic('accent', 'surface-sunken'),
 
+  // The strength meter's filled segments stand apart on the page surface: see
+  // the status icons on surface-island below.
+
   // Select options: the tick and the active option's ring on the hovered row
   graphic('icon-default', 'surface-raised', 'surface-hover'),
   graphic('border-focus', 'surface-raised', 'surface-hover'),

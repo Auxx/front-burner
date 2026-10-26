@@ -1,0 +1,18 @@
+@use '../../styles/step';
+
+@include step.step;
+
+:host {
+  display: grid;
+  gap: var(--ui-space-4);
+}
+
+p {
+  margin: 0;
+}
+
+.hint {
+  margin-block-start: calc(-1 * var(--ui-space-2));
+  font-size: var(--ui-font-size-ui-small);
+  color: var(--ui-text-muted);
+}

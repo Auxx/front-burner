@@ -9,7 +9,11 @@ libraries and [overview.md](overview.md) for the numbering conventions.
 
 - **A-8.1** `apps/web` holds the shell and routes; each feature library is
   loaded lazily from a route (A-2.2). The initial JavaScript stays within 300 KB
-  gzipped (NF-2.9).
+  gzipped (NF-2.9). The bundler puts every module that the initial code can
+  reach into the initial bundle, even one only a lazy feature uses, so the shell
+  imports `web/core` only through its `@front-burner/web-core/app` entry point
+  and loads `ui` components it does not need at first render with `@defer`. _(My
+  call.)_
 - **A-8.2** Component state uses **signals**. Services that hold more complex or
   shared state (current repository, file tree, sync state) use **RxJS** and
   expose signals to components where that is simpler. No NgRx.

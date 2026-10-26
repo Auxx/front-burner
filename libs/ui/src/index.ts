@@ -35,6 +35,10 @@ export { InlineBannerComponent } from './feedback/components/inline-banner/inlin
 export { PopoverComponent } from './feedback/components/popover/popover.component';
 export { ProgressBarComponent } from './feedback/components/progress-bar/progress-bar.component';
 export { SpinnerComponent } from './feedback/components/spinner/spinner.component';
+export {
+  StrengthMeterComponent,
+  type StrengthScore
+} from './feedback/components/strength-meter/strength-meter.component';
 export { ToastOutletComponent } from './feedback/components/toast-outlet/toast-outlet.component';
 export { PopoverTriggerDirective } from './feedback/directives/popover-trigger/popover-trigger.directive';
 export { TooltipDirective } from './feedback/directives/tooltip/tooltip.directive';

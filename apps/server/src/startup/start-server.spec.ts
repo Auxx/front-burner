@@ -8,6 +8,9 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { bootstrapLoggerFor, logStartupFailure, startServer, StartupError } from './start-server';
 
+// The real migrations: the application needs its tables.
+const MIGRATIONS = join(__dirname, '..', '..', '..', '..', 'libs', 'server', 'core', 'database', 'migrations');
+
 describe('startServer', () => {
   let root: string;
   let dataDir: string;
@@ -30,9 +33,8 @@ describe('startServer', () => {
     root = mkdtempSync(join(tmpdir(), 'fb-server-'));
     dataDir = join(root, 'data');
     webRoot = join(root, 'web');
-    migrationsFolder = join(root, 'migrations');
+    migrationsFolder = MIGRATIONS;
     mkdirSync(webRoot);
-    mkdirSync(migrationsFolder);
     logs = [];
     app = undefined;
   });

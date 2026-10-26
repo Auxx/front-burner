@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { startServer } from './start-server';
 import { writeOpenApi } from './write-openapi';
 
+// The real migrations: the application needs its tables.
+const MIGRATIONS = join(__dirname, '..', '..', '..', '..', 'libs', 'server', 'core', 'database', 'migrations');
+
 describe('writeOpenApi', () => {
   let root: string;
   let app: INestApplication;
@@ -15,7 +18,7 @@ describe('writeOpenApi', () => {
       env: { FRONT_BURNER_DATA_DIR: join(root, 'data'), FRONT_BURNER_LOG_LEVEL: 'error' },
       cwd: root,
       webRoot: join(root, 'web'),
-      migrationsFolder: join(root, 'migrations'),
+      migrationsFolder: MIGRATIONS,
       listen: false,
       logDestination: { write: () => undefined }
     });
@@ -35,9 +38,13 @@ describe('writeOpenApi', () => {
     expect(text.endsWith('}\n')).toBe(true);
     const document = JSON.parse(text);
     const operations = Object.values(document.paths).flatMap((p: any) => Object.values(p) as any[]);
-    expect(operations.map(o => o.operationId)).toEqual(expect.arrayContaining([ 'live', 'ready' ]));
-    expect(operations.every(o => o.tags.includes('health'))).toBe(true);
+    expect(operations.map(o => o.operationId)).toEqual(
+      expect.arrayContaining([ 'live', 'ready', 'status', 'checkSetupToken', 'setUpPassword' ])
+    );
+    // The client is generated one class per tag.
+    expect(operations.every(o => o.tags.length === 1)).toBe(true);
     expect(document.components.schemas).toHaveProperty('HealthStatus');
+    expect(document.components.schemas).toHaveProperty('PasswordSetupRequest');
   });
 
   it('is byte-stable across runs', () => {

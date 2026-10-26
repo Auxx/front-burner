@@ -1,0 +1,38 @@
+{
+  "name": "server-feature-auth",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/server/feature/auth/src",
+  "projectType": "library",
+  "tags": [
+    "scope:server",
+    "type:feature"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{workspaceRoot}/coverage/libs/server/feature/auth"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/server/feature/auth"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/server/feature/auth/tsconfig.lib.json",
+          "tsc --noEmit -p libs/server/feature/auth/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

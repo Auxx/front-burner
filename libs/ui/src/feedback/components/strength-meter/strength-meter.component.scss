@@ -1,0 +1,56 @@
+@layer components {
+  :host {
+    --ui-strength-meter-fill: var(--ui-danger-icon);
+
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    inline-size: 100%;
+    min-block-size: calc(var(--ui-font-size-ui-small) * var(--ui-line-height-ui));
+    font-size: var(--ui-font-size-ui-small);
+    line-height: var(--ui-line-height-ui);
+    color: var(--ui-text-muted);
+  }
+
+  :host([data-level='fair']) {
+    --ui-strength-meter-fill: var(--ui-warning-icon);
+  }
+
+  :host([data-level='strong']) {
+    --ui-strength-meter-fill: var(--ui-success-icon);
+  }
+
+  .track {
+    display: flex;
+    flex: 1;
+    gap: var(--ui-space-1);
+  }
+
+  .segment {
+    flex: 1;
+    block-size: var(--ui-space-1);
+    background: var(--ui-border-default);
+    border-radius: var(--ui-radius-pill);
+    transition: background var(--ui-duration-base) var(--ui-easing-standard);
+  }
+
+  .segment[data-filled] {
+    background: var(--ui-strength-meter-fill);
+  }
+
+  // Room for the longest English value, so that the track does not jump.
+  .text {
+    flex: none;
+    min-inline-size: 7ch;
+  }
+
+  @media (forced-colors: active) {
+    .segment {
+      border: var(--ui-border-width) solid CanvasText;
+    }
+
+    .segment[data-filled] {
+      background: Highlight;
+    }
+  }
+}

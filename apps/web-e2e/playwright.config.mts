@@ -1,9 +1,5 @@
-import { workspaceRoot } from '@nx/devkit';
 import { nxE2EPreset } from '@nx/playwright/preset';
 import { defineConfig, devices } from '@playwright/test';
-
-const port = 4300;
-const baseURL = `http://localhost:${port}`;
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -14,20 +10,16 @@ const baseURL = `http://localhost:${port}`;
  * `.mts` directly. Playwright's configLoader auto-discovers
  * `playwright.config.mts` via its extension list
  * (.ts/.js/.mts/.mjs/.cts/.cjs).
+ *
+ * There is no web server here: every test starts its own instance of the
+ * built server, which serves the built web client (the production path), and
+ * gets it as its `baseURL` (see `src/support/fixtures.ts`).
  */
 export default defineConfig({
   ...nxE2EPreset(import.meta.dirname, { testDir: './src' }),
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
-    baseURL,
     trace: 'on-first-retry'
-  },
-  // The production path: the built server serves the built web client.
-  webServer: {
-    command: `node apps/web-e2e/start-server.mjs ${port}`,
-    url: `${baseURL}/api/health/ready`,
-    reuseExistingServer: !process.env['CI'],
-    cwd: workspaceRoot
   },
   // NF-12.2: desktop and mobile browsers.
   projects: [

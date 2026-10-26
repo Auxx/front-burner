@@ -2,6 +2,9 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { expect, test } from './support/fixtures';
 
+// The login page is reachable once onboarding is completed (AO-3).
+test.use({ instanceOptions: { onboarded: true } });
+
 test.describe('login page', () => {
   for (const url of [ '/', '/no/such/page' ]) {
     test(`any URL ends on the login page: ${url}`, async ({ page }) => {

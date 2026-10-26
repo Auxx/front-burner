@@ -126,6 +126,18 @@ describe('loadConfig', () => {
     expect(enough.warnings).toEqual([]);
   });
 
+  it('keeps a setup token with whitespace at an end, with a warning', () => {
+    // The onboarding page's password field cannot send a line break.
+    for (const token of [ `${TOKEN}\n`, ` ${TOKEN}`, `${TOKEN}\t` ]) {
+      const { config, warnings } = loadConfig({ FRONT_BURNER_SETUP_TOKEN: token });
+      expect(config.setupToken).toBe(token);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('FRONT_BURNER_SETUP_TOKEN');
+      expect(warnings[0]).toContain('whitespace');
+      expect(warnings[0]).not.toContain(TOKEN);
+    }
+  });
+
   it('never puts a secret in an issue or warning', () => {
     const secret = 'short-secret';
     const { warnings } = loadConfig({ FRONT_BURNER_SETUP_TOKEN: secret });

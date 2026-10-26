@@ -39,11 +39,17 @@
       "@front-burner/web-api-client": [
         "./libs/web/api-client/src/index.ts"
       ],
+      "@front-burner/web-core/app": [
+        "./libs/web/core/src/app.ts"
+      ],
       "@front-burner/web-core": [
         "./libs/web/core/src/index.ts"
       ],
       "@front-burner/web-feature-auth": [
         "./libs/web/feature-auth/src/index.ts"
+      ],
+      "@front-burner/server-feature-auth": [
+        "./libs/server/feature/auth/src/index.ts"
       ]
     }
   },
