@@ -89,7 +89,8 @@
         "command": "node dist/apps/server/main.js --write-openapi apps/server/openapi.json && npx dprint fmt apps/server/openapi.json",
         "env": {
           "FRONT_BURNER_DATA_DIR": "tmp/openapi-data",
-          "FRONT_BURNER_LOG_LEVEL": "warn"
+          "FRONT_BURNER_LOG_LEVEL": "warn",
+          "FRONT_BURNER_JWT_SECRET": "openapi-only-jwt-secret-0123456789abcdefghijklmn"
         }
       }
     },
