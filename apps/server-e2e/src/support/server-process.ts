@@ -160,6 +160,63 @@ export async function startServerProcess(
   }
 }
 
+/** The setup token that {@link onboard} sends; start the server with it as `FRONT_BURNER_SETUP_TOKEN`. */
+export const E2E_SETUP_TOKEN = 'e2e-setup-token-0123456789abcdef';
+
+/** The administrator that {@link onboard} creates. */
+export const E2E_ADMIN = { email: 'admin@example.com', displayName: 'Admin', password: 'correct horse 1' };
+
+export function postJson(
+  server: ServerProcess,
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {}
+): Promise<Response> {
+  return fetch(`${server.url}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body)
+  });
+}
+
+/** Completes administrator onboarding with {@link E2E_ADMIN}. */
+export async function onboard(server: ServerProcess): Promise<void> {
+  const response = await postJson(server, '/api/v1/onboarding/password-setup', {
+    setupToken: E2E_SETUP_TOKEN,
+    ...E2E_ADMIN
+  });
+  if (response.status !== 204) {
+    throw new Error(`Onboarding failed with ${response.status}: ${await response.text()}`);
+  }
+}
+
+export interface LoggedIn {
+  response: Response;
+  authToken: string;
+  /** From the body or the cookie, depending on the delivery. */
+  refreshToken: string;
+}
+
+/** The refresh token in a response's `Set-Cookie`, or an empty string. */
+export function refreshCookieOf(response: Response): string {
+  const cookie = response.headers.getSetCookie().find(value => value.startsWith('front_burner_refresh='));
+  return /^front_burner_refresh=([^;]*)/.exec(cookie ?? '')?.[1] ?? '';
+}
+
+/** Logs {@link E2E_ADMIN} in, or whoever `credentials` names. */
+export async function login(
+  server: ServerProcess,
+  delivery: 'cookie' | 'body' = 'cookie',
+  credentials: { email: string; password: string; } = E2E_ADMIN
+): Promise<LoggedIn> {
+  const response = await postJson(server, '/api/v1/auth/login', { ...credentials, refreshTokenDelivery: delivery });
+  if (response.status !== 200) {
+    throw new Error(`Login failed with ${response.status}: ${await response.text()}`);
+  }
+  const body = (await response.clone().json()) as { authToken: string; refreshToken?: string; };
+  return { response, authToken: body.authToken, refreshToken: body.refreshToken ?? refreshCookieOf(response) };
+}
+
 /** Runs the built server until it exits, for startup failures. */
 export async function runServerToExit(
   env: Record<string, string>,
