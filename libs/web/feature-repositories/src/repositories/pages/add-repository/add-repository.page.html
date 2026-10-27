@@ -6,5 +6,6 @@
   <h1 class="heading" tabindex="-1">{{ t('heading') }}</h1>
   <form class="form" novalidate>
     <repo-remote-section [remoteUrl]="model.remoteUrl" [name]="model.name" [index]="index()" />
+    <repo-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="saved()" />
   </form>
 </ng-container>

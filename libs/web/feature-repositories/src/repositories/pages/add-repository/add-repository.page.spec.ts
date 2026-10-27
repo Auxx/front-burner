@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import type { RepositoryIndex } from '@front-burner/shared-contracts';
-import { RepositoriesApi } from '@front-burner/web-api-client';
+import { CredentialsApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { of } from 'rxjs';
 
 import { settle } from '../../../testing/settle';
@@ -20,7 +20,8 @@ describe('AddRepositoryPage', () => {
       imports: [ AddRepositoryPage, translocoTesting() ],
       providers: [
         provideRouter([]),
-        { provide: RepositoriesApi, useValue: { index: () => of(index) } }
+        { provide: RepositoriesApi, useValue: { index: () => of(index) } },
+        { provide: CredentialsApi, useValue: { list: () => of({ https: [], sshKeys: [] }) } }
       ]
     }).compileComponents();
     fixture = TestBed.createComponent(AddRepositoryPage);

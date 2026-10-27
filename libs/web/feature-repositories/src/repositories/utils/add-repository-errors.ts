@@ -9,7 +9,11 @@ import { fieldErrorCode } from './field-error-code';
  */
 const FIELD_CODES: Record<string, readonly string[]> = {
   remoteUrl: [ 'required', 'too-long', 'unsupported', 'credentials-in-url', 'empty-path', 'query-or-fragment' ],
-  name: [ 'too-small', 'too-big', 'control-character', 'name-taken' ]
+  name: [ 'too-small', 'too-big', 'control-character', 'name-taken' ],
+  'credentials.savedId': [ 'required' ],
+  'credentials.name': [ 'too-small', 'too-big', 'name-taken' ],
+  'credentials.username': [ 'too-small', 'too-big' ],
+  'credentials.password': [ 'too-small', 'too-big' ]
 };
 
 /**

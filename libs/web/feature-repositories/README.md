@@ -7,6 +7,9 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
   component per section.
 - `RemoteSectionComponent`: **Remote URL** and **Repository name**, with the
   duplicate-remote warning and the name filled from the URL (AR-8 to AR-15).
+- `CredentialsSectionComponent`: the options of the URL's protocol, reset when
+  the protocol changes (AR-11, AR-16); `HttpsCredentialsComponent` for HTTPS
+  (AR-19 to AR-22).
 
 ## Running unit tests
 

@@ -1,45 +1,37 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { form } from '@angular/forms/signals';
 import type { RepositoryIndex } from '@front-burner/shared-contracts';
 
+import { FormHostComponent, hostWith } from '../../../testing/form-host';
 import { control, errorOf, type } from '../../../testing/form-testing';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
-import { addRepositorySchema, emptyAddRepositoryForm } from '../../models/add-repository-form.model';
 import { RemoteSectionComponent } from './remote-section.component';
 
 const KEY = 'web-feature-repositories.RemoteSectionComponent';
 const ERRORS = 'web-feature-repositories.errors';
 
-@Component({
-  imports: [ RemoteSectionComponent ],
-  template: '<repo-remote-section [remoteUrl]="model.remoteUrl" [name]="model.name" [index]="index()" />',
-  changeDetection: ChangeDetectionStrategy.OnPush
-})
-class HostComponent {
-  readonly index = signal<RepositoryIndex['repositories']>([]);
-  readonly model = form(signal(emptyAddRepositoryForm('advanced')), addRepositorySchema({ index: this.index }));
-}
-
 describe('RemoteSectionComponent', () => {
-  let fixture: ComponentFixture<HostComponent>;
+  let fixture: ComponentFixture<FormHostComponent>;
 
   const page = () => fixture.nativeElement as HTMLElement;
   const url = () => control(page(), `${KEY}.remoteUrl`);
   const name = () => control(page(), `${KEY}.name`);
 
   async function open(index: RepositoryIndex['repositories'] = []): Promise<void> {
+    hostWith(
+      '<repo-remote-section [remoteUrl]="model.remoteUrl" [name]="model.name" [index]="index()" />',
+      [ RemoteSectionComponent ]
+    );
     await TestBed.configureTestingModule({
       imports: [
-        HostComponent,
+        FormHostComponent,
         translocoTesting({
           [`${KEY}.duplicate`]: 'You already have this remote as {{ names }}.',
           [`${ERRORS}.name.name-taken`]: 'You already have a repository named {{ name }}'
         })
       ]
     }).compileComponents();
-    fixture = TestBed.createComponent(HostComponent);
+    fixture = TestBed.createComponent(FormHostComponent);
     fixture.componentInstance.index.set(index);
     await settle(fixture);
   }
