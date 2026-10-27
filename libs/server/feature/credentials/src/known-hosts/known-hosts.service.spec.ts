@@ -1,5 +1,5 @@
 import { Database, knownHosts } from '@front-burner/server-core-database';
-import { fingerprintOf, GitOptions } from '@front-burner/server-core-git';
+import { BUILT_IN_KNOWN_HOSTS, fingerprintOf, GitOptions } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
@@ -7,6 +7,7 @@ import { KnownHostsService } from './known-hosts.service';
 
 const ED25519 = 'AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
 const OTHER = 'AAAAC3NzaC1lZDI1NTE5AAAAIIazEu89wgQZ4bqs3d63QSMzYVa0MuJ2e2gKTKqu+UUO';
+const RSA = (BUILT_IN_KNOWN_HOSTS.find(line => line.startsWith('github.com ssh-rsa ')) ?? '').split(' ')[2] ?? '';
 const host = { host: 'Git.Example.com', port: 22, type: 'ssh-ed25519', key: ED25519 };
 
 describe('KnownHostsService', () => {
@@ -61,7 +62,7 @@ describe('KnownHostsService', () => {
 
   it('refuses another key for a host the user already trusts, as ssh would call it changed', () => {
     service.trust(alice, host);
-    expect(() => service.trust(alice, { ...host, type: 'ssh-rsa', key: 'AAAAB3NzaC1yc2E' })).toThrow(
+    expect(() => service.trust(alice, { ...host, type: 'ssh-rsa', key: RSA })).toThrow(
       expect.objectContaining({ code: 'host-key-changed' })
     );
   });
@@ -79,6 +80,19 @@ describe('KnownHostsService', () => {
       `git.example.com ssh-ed25519 ${ED25519}`,
       `[git.example.com]:2222 ssh-ed25519 ${OTHER}`
     ]);
+  });
+
+  it('refuses a key whose blob names another type', () => {
+    expect(() => service.trust(alice, { ...host, type: 'ssh-rsa' })).toThrow(
+      expect.objectContaining({
+        code: 'validation-failed',
+        fields: [ { path: 'key', code: 'invalid-key', params: {} } ]
+      })
+    );
+    expect(() => service.trust(alice, { ...host, key: 'AAAA' })).toThrow(
+      expect.objectContaining({ code: 'validation-failed' })
+    );
+    expect(service.linesFor(alice)).toEqual([]);
   });
 
   it('keeps one row when the same key is trusted twice', () => {

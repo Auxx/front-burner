@@ -16,6 +16,9 @@ import { insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
 import { SavedCredentialsService } from './saved-credentials.service';
 
+const ED25519 = 'AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
+const OTHER_ED25519 = 'AAAAC3NzaC1lZDI1NTE5AAAAIIazEu89wgQZ4bqs3d63QSMzYVa0MuJ2e2gKTKqu+UUO';
+
 const config = {
   encryptionKey: 'credentials-controller-spec-key-0123456789',
   keyUnlockIdleMs: 3_600_000
@@ -215,7 +218,7 @@ describe('credentials endpoints', () => {
     await request(app.getHttpServer())
       .post('/api/v1/known-hosts')
       .set(as(alice))
-      .send({ host: 'git.example.com', port: 22, type: 'ssh-ed25519', key: 'AAAAC3NzaC1lZDI1NTE5AAAAIA' })
+      .send({ host: 'git.example.com', port: 22, type: 'ssh-ed25519', key: ED25519 })
       .expect(204);
 
     expect(database.db.select().from(knownHosts).all()).toEqual([
@@ -229,8 +232,18 @@ describe('credentials endpoints', () => {
         .post('/api/v1/known-hosts')
         .set(as(alice))
         .send({ host: 'git.example.com', port: 22, type: 'ssh-ed25519', key });
-    await trust('AAAA').expect(204);
-    const response = await trust('BBBB').expect(409);
+    await trust(ED25519).expect(204);
+    const response = await trust(OTHER_ED25519).expect(409);
     expect(response.body.code).toBe('host-key-changed');
+  });
+
+  it('refuses a host name that would match more hosts than one', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/known-hosts')
+      .set(as(alice))
+      .send({ host: 'github.com,evil.example.com', port: 22, type: 'ssh-ed25519', key: ED25519 })
+      .expect(400);
+    expect(response.body.code).toBe('validation-failed');
+    expect(database.db.select().from(knownHosts).all()).toEqual([]);
   });
 });

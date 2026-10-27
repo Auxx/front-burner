@@ -62,13 +62,27 @@ export const UnlockSshKeyRequestSchema = z
   .object({ passphrase: z.string().min(1).max(1024) })
   .meta({ id: 'UnlockSshKeyRequest' });
 
+/** The host key types the backend's probe accepts, as `ssh` names them. */
+export const HOST_KEY_TYPES = [
+  'ssh-ed25519',
+  'ecdsa-sha2-nistp256',
+  'ecdsa-sha2-nistp384',
+  'ecdsa-sha2-nistp521',
+  'ssh-rsa'
+] as const;
+
+// Written verbatim into `known_hosts`, so neither may hold anything `ssh`
+// reads as a pattern, a list or another field: a DNS name or an IP address,
+// and plain base64.
+const HOST_NAME = /^(?:[A-Za-z0-9.-]+|[0-9A-Fa-f.]*:[0-9A-Fa-f:.]*)$/;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
 const hostKeyFields = {
-  host: z.string().min(1).max(253),
+  host: z.string().min(1).max(253).regex(HOST_NAME),
   port: z.int().min(1).max(65_535),
-  /** As `ssh` names it, for example `ssh-ed25519`. */
-  type: z.string().min(1).max(64),
+  type: z.enum(HOST_KEY_TYPES),
   /** The public key blob in base64. */
-  key: z.string().min(1).max(4096)
+  key: z.string().min(1).max(4096).regex(BASE64)
 };
 
 /** A server's host key, as an unknown-host-key error describes it (AR-32). */
@@ -95,6 +109,7 @@ export const CREDENTIALS_FIELD_CODES = [
 
 export type CredentialsFieldCode = (typeof CREDENTIALS_FIELD_CODES)[number];
 export type SshKeyType = (typeof SSH_KEY_TYPES)[number];
+export type HostKeyType = (typeof HOST_KEY_TYPES)[number];
 export type NewHttpsCredentials = z.infer<typeof NewHttpsCredentialsSchema>;
 export type NewSshKey = z.infer<typeof NewSshKeySchema>;
 export type SavedHttpsCredentials = z.infer<typeof SavedHttpsCredentialsSchema>;

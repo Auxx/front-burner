@@ -85,6 +85,28 @@ describe('TrustHostRequestSchema', () => {
     expect(TrustHostRequestSchema.parse({ ...host, fingerprint: 'SHA256:x' })).toEqual(host);
   });
 
+  it('refuses a host name that is a pattern or a list', () => {
+    for (
+      const name of [ 'github.com,x', '*', '*.com', 'git?.example.com', '!a.io', '[a.io]:22', 'a.io b', 'a.io\nb', '' ]
+    ) {
+      expect(TrustHostRequestSchema.safeParse({ ...host, host: name }).success).toBe(false);
+    }
+    for (const name of [ 'git.example.com', 'GIT.example.com', '192.0.2.1', '2001:db8::1' ]) {
+      expect(TrustHostRequestSchema.safeParse({ ...host, host: name }).success).toBe(true);
+    }
+  });
+
+  it('refuses an unknown key type', () => {
+    expect(TrustHostRequestSchema.safeParse({ ...host, type: 'ssh-dss' }).success).toBe(false);
+    expect(TrustHostRequestSchema.safeParse({ ...host, type: 'ssh-ed25519\n@cert-authority' }).success).toBe(false);
+  });
+
+  it('refuses a key that is not base64', () => {
+    for (const key of [ 'AAAA BBBB', 'AAAA\ngithub.com ssh-ed25519 BBBB', 'AA*A', 'AAAA=A' ]) {
+      expect(TrustHostRequestSchema.safeParse({ ...host, key }).success).toBe(false);
+    }
+  });
+
   it('refuses a port out of range', () => {
     expect(TrustHostRequestSchema.safeParse({ ...host, port: 0 }).success).toBe(false);
     expect(TrustHostRequestSchema.safeParse({ ...host, port: 65_536 }).success).toBe(false);
