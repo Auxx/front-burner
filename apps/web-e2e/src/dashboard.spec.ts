@@ -149,19 +149,26 @@ test.describe('dashboard', () => {
     monitor.consoleErrors.splice(0);
   });
 
-  test('criterion 16: on a phone, the compact guide\'s button is below its text and nothing scrolls sideways', async ({ page, instance, isMobile }) => {
-    if (!isMobile) {
-      await page.setViewportSize({ width: 320, height: 640 });
-    }
-    seedRepositories(instance.dataDir, [
+  /** Whether the compact guide's button is below its text, and whether the page fits its width. */
+  async function compactGuideLayout(page: Page, dataDir: string): Promise<{ buttonBelow: boolean; fits: boolean; }> {
+    seedRepositories(dataDir, [
       { name: 'a-repository-with-a-rather-long-name', remoteUrl: 'git@bitbucket.org:a-team/with-a-long-path.git' }
     ]);
     await openDashboard(page);
 
     const text = await page.getByText('Add another repository from an HTTPS or SSH URL').boundingBox();
     const button = await addRepository(page).boundingBox();
-    expect((button?.y ?? 0) >= (text?.y ?? 0) + (text?.height ?? 0)).toBe(true);
-    expect(await fitsWidth(page)).toBe(true);
+    return { buttonBelow: (button?.y ?? 0) >= (text?.y ?? 0) + (text?.height ?? 0), fits: await fitsWidth(page) };
+  }
+
+  test('criterion 16: on a phone, the compact guide\'s button is below its text and nothing scrolls sideways', async ({ page, instance, isMobile }) => {
+    test.skip(!isMobile, 'the phone projects run it');
+    expect(await compactGuideLayout(page, instance.dataDir)).toEqual({ buttonBelow: true, fits: true });
+  });
+
+  test('criterion 16: at 320 px, the compact guide\'s button is below its text and nothing scrolls sideways', async ({ page, instance }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    expect(await compactGuideLayout(page, instance.dataDir)).toEqual({ buttonBelow: true, fits: true });
   });
 
   test('has no accessibility violations, empty or with repositories', async ({ page, instance }) => {
