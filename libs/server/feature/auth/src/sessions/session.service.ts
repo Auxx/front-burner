@@ -2,7 +2,7 @@ import { CONFIG, Config } from '@front-burner/server-core-config';
 import { DATABASE, Database, Session, sessions, users } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { constantTimeEquals } from '@front-burner/server-core-security';
+import { constantTimeEquals, SessionLifecycle } from '@front-burner/server-core-security';
 import type { RefreshTokenDelivery, SessionTokens } from '@front-burner/shared-contracts';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -48,7 +48,8 @@ export class SessionService {
     @Inject(CONFIG) private readonly config: Config,
     private readonly authTokens: AuthTokenService,
     @Inject(SESSION_REUSE_HANDLER) private readonly onReuse: SessionReuseHandler,
-    private readonly events: EventsHub
+    private readonly events: EventsHub,
+    private readonly lifecycle: SessionLifecycle
   ) {}
 
   start(
@@ -138,8 +139,7 @@ export class SessionService {
       .returning({ id: sessions.id })
       .all();
     for (const { id } of revoked) {
-      this.cache.delete(id);
-      this.events.closeSession(id);
+      this.ended(id);
     }
   }
 
@@ -162,9 +162,14 @@ export class SessionService {
       .set({ revokedAt: new Date() })
       .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)))
       .run();
+    this.ended(sessionId);
+  }
+
+  /** A revoked session keeps no open push channel (A-7.2) and no key unlock (AR-31). */
+  private ended(sessionId: string): void {
     this.cache.delete(sessionId);
-    // A revoked session keeps no open push channel (A-7.2).
     this.events.closeSession(sessionId);
+    this.lifecycle.notifyRevoked(sessionId);
   }
 
   private async issue(session: {

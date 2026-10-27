@@ -1,4 +1,4 @@
-import { BUILT_IN_KNOWN_HOSTS, knownHostsLine, loadInstanceKnownHosts } from './known-hosts';
+import { BUILT_IN_KNOWN_HOSTS, hasHostEntry, knownHostsLine, loadInstanceKnownHosts } from './known-hosts';
 import { fingerprintOf } from './ssh-keys';
 
 const KEY = 'AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
@@ -65,5 +65,25 @@ describe('loadInstanceKnownHosts', () => {
     };
 
     expect(() => loadInstanceKnownHosts({ knownHostsFile: '/k' }, readFile)).toThrow(/FRONT_BURNER_KNOWN_HOSTS_FILE/);
+  });
+});
+
+describe('hasHostEntry', () => {
+  const lines = [
+    'git.example.com ssh-ed25519 AAAA',
+    '[other.example.com]:2222 ssh-rsa BBBB',
+    'a.io,b.io ssh-rsa CCCC'
+  ];
+
+  it('finds a host on port 22', () => {
+    expect(hasHostEntry(lines, { host: 'git.example.com', port: 22 })).toBe(true);
+    expect(hasHostEntry(lines, { host: 'b.io', port: 22 })).toBe(true);
+    expect(hasHostEntry(lines, { host: 'unknown.example.com', port: 22 })).toBe(false);
+  });
+
+  it('finds a host on another port only under [host]:port, as ssh does', () => {
+    expect(hasHostEntry(lines, { host: 'other.example.com', port: 2222 })).toBe(true);
+    expect(hasHostEntry(lines, { host: 'git.example.com', port: 2222 })).toBe(false);
+    expect(hasHostEntry(lines, { host: 'other.example.com', port: 22 })).toBe(false);
   });
 });

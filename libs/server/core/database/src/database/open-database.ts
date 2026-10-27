@@ -21,3 +21,6 @@ export function openDatabase(file: string): Database {
   }
   return { sqlite, db: drizzle(sqlite, { schema }) };
 }
+
+/** A Drizzle transaction of {@link Database.db}, for services that write inside a caller's transaction. */
+export type Tx = Parameters<Parameters<Database['db']['transaction']>[0]>[0];

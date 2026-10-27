@@ -1,5 +1,6 @@
 export * from './auth/public.decorator';
 export * from './auth/request-auth';
+export * from './auth/session-lifecycle';
 export * from './compare/constant-time-equals';
 export * from './csp/csp';
 export * from './egress/address-policy';

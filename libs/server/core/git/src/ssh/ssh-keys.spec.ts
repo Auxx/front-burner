@@ -32,6 +32,48 @@ function problemOf(run: () => unknown): { problem: SshKeyProblem; field: string;
   return undefined;
 }
 
+/** An OpenSSH key with its bcrypt KDF round count replaced. */
+function withRounds(text: string, rounds: number): string {
+  const body = Buffer.from(
+    text.split('\n').filter(line => line !== '' && !line.startsWith('-----')).join(''),
+    'base64'
+  );
+  let offset = 'openssh-key-v1\0'.length;
+  const skipString = () => (offset += 4 + body.readUInt32BE(offset));
+  skipString(); // cipher name
+  skipString(); // KDF name
+  offset += 4; // KDF options length
+  skipString(); // salt
+  body.writeUInt32BE(rounds, offset);
+  const lines = body.toString('base64').match(/.{1,70}/g) ?? [];
+  return [ '-----BEGIN OPENSSH PRIVATE KEY-----', ...lines, '-----END OPENSSH PRIVATE KEY-----', '' ].join('\n');
+}
+
+describe('KDF rounds', () => {
+  it('accepts up to 100 rounds', () => {
+    expect(inspectPrivateKey(fixture('ed25519-passphrase'), 'correct horse').encrypted).toBe(true);
+    // Other rounds derive another key, so the passphrase no longer fits: but the KDF ran.
+    expect(problemOf(() => inspectPrivateKey(withRounds(fixture('ed25519-passphrase'), 100), 'wrong'))).toEqual({
+      problem: 'wrong-passphrase',
+      field: 'passphrase'
+    });
+  });
+
+  it('refuses more rounds on the private key, before running the KDF', () => {
+    const started = Date.now();
+    for (
+      const run of [
+        () => inspectPrivateKey(withRounds(fixture('ed25519-passphrase'), 0x7fffffff), 'correct horse'),
+        () => unlockPrivateKey(withRounds(fixture('ed25519-passphrase'), 101), 'correct horse'),
+        () => inspectPrivateKey(withRounds(fixture('ed25519-passphrase'), 101))
+      ]
+    ) {
+      expect(problemOf(run)).toEqual({ problem: 'kdf-rounds-too-high', field: 'privateKey' });
+    }
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+});
+
 describe('inspectPrivateKey', () => {
   it('inspects an Ed25519 key', () => {
     const info = inspectPrivateKey(fixture('ed25519'));

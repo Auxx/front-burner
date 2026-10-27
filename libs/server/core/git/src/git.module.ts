@@ -11,7 +11,7 @@ export class GitModule {
       module: GitModule,
       global: true,
       providers: [ { provide: GIT_OPTIONS, useValue: options }, GitRunner, GitEngine ],
-      exports: [ GitEngine ]
+      exports: [ GIT_OPTIONS, GitEngine ]
     };
   }
 }

@@ -122,6 +122,7 @@ const schema = z.object({
     })
     .transform(Number),
   FRONT_BURNER_GIT_TIMEOUT: duration('5m'),
+  FRONT_BURNER_KEY_UNLOCK_IDLE: duration('1h'),
   FRONT_BURNER_KNOWN_HOSTS_FILE: z.string().optional(),
   [OIDC_ISSUER]: z.string().refine(isHttpsIssuer, { message: 'must be an https: URL without query or fragment' })
     .optional(),
@@ -301,6 +302,7 @@ export function loadConfig(
       cloneTimeoutMs: values.FRONT_BURNER_CLONE_TIMEOUT,
       cloneConcurrency: values.FRONT_BURNER_CLONE_CONCURRENCY,
       gitTimeoutMs: values.FRONT_BURNER_GIT_TIMEOUT,
+      keyUnlockIdleMs: values.FRONT_BURNER_KEY_UNLOCK_IDLE,
       knownHostsFile: values.FRONT_BURNER_KNOWN_HOSTS_FILE === undefined
         ? undefined
         : resolve(cwd, values.FRONT_BURNER_KNOWN_HOSTS_FILE),

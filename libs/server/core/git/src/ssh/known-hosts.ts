@@ -36,6 +36,15 @@ export function knownHostsLine(entry: Pick<HostKey, 'host' | 'port' | 'type' | '
 }
 
 /**
+ * Whether `known_hosts` lines hold any key for a host and port. Like `ssh`, a
+ * port other than 22 matches only `[host]:port` entries.
+ */
+export function hasHostEntry(knownHosts: readonly string[], target: { host: string; port: number; }): boolean {
+  const name = target.port === 22 ? target.host : `[${target.host}]:${target.port}`;
+  return knownHosts.some(line => (line.split(/\s+/)[0] ?? '').split(',').includes(name));
+}
+
+/**
  * The instance-wide host keys (AR-32): the operator's
  * `FRONT_BURNER_KNOWN_HOSTS_FILE`, which replaces the built-ins, or the
  * built-ins. Comments and blank lines are dropped.

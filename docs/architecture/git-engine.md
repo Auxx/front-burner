@@ -109,6 +109,11 @@ by spike 1 (spikes.md).
   - a job never borrows an unlock from the user's other sessions. Without a
     usable unlock, a sync cycle commits and reports "saved but not uploaded"
     (D-2.6), and a fetch is skipped.
+  - Checking a passphrase runs the key's bcrypt KDF synchronously, and the round
+    count is chosen by whoever made the key. Keys with more than 100 rounds are
+    refused before the KDF runs (`kdf-rounds-too-high` on the private key;
+    `ssh-keygen` uses 16 by default), and unlock attempts are in their own
+    rate-limit group. _(Plan 10's call.)_
   - "Removed from memory" means the backend drops its last reference to the key.
     JavaScript cannot wipe strings, and `ssh2` keeps the decrypted key as a PEM
     string until garbage collection. _(My call: accepted. Anyone who can read
@@ -133,10 +138,14 @@ by spike 1 (spikes.md).
     is attempted. The error carries the key's type, fingerprint and key, which
     is stored when the user chooses **Trust**. _(Plan 8's call.)_
   - Host keys on a port other than 22 are written and stored as `[host]:port`,
-    so trusting such a port does not trust port 22 or any other port. (`ssh`
-    itself falls back to a host's port 22 entries for a port that has none of
-    its own; the engine does the same when it tells a changed key from an
-    unknown one.)
+    so trusting such a port does not trust port 22 or any other port. Like
+    `ssh`, the engine looks a port other than 22 up only under `[host]:port`
+    when it tells a changed key from an unknown one.
+  - **Trust** stores a key only for a host and port that neither the user's
+    known hosts nor the instance-wide list cover, in the sense above; any other
+    key is refused as changed, so the endpoint cannot replace a known key or add
+    a second one next to it. Trusting a key that is already known is accepted
+    again. _(Plan 10's call.)_
 
 ## A-5: Address restriction
 

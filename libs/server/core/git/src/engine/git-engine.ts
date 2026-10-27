@@ -8,6 +8,7 @@ import { assertSafeRepositoryConfig, UnsafeRepositoryConfigError } from '../conf
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult, GitRunner } from '../runner/git-runner';
 import { probeHostKey } from '../ssh/host-key-probe';
+import { hasHostEntry } from '../ssh/known-hosts';
 import { classifyGitFailure, GitOperationError } from './git-errors';
 
 /** AR-42. */
@@ -160,7 +161,7 @@ export class GitEngine implements BeforeApplicationShutdown {
       }
       let code = classifyGitFailure(result, broker.egress.refusals);
       // ssh calls a key of a type it does not know "unknown", even when it knows another key of this host.
-      if (code === 'host-key-unknown' && hasHostEntry(knownHosts, remote)) {
+      if (code === 'host-key-unknown' && hasHostEntry(knownHosts, { host: remote.host, port: remote.port ?? 22 })) {
         code = 'host-key-changed';
       }
       // The URL has no credentials: parseRemoteUrl refuses them (NF-10.5).
@@ -186,15 +187,4 @@ export class GitEngine implements BeforeApplicationShutdown {
     }
     throw failure;
   }
-}
-
-/**
- * Whether `known_hosts` lines hold any key for the remote's host and port. Like
- * `ssh`, a port without entries of its own falls back to the host's port 22
- * entries.
- */
-function hasHostEntry(knownHosts: string[], remote: ParsedRemote): boolean {
-  const port = remote.port ?? 22;
-  const names = port === 22 ? [ remote.host ] : [ `[${remote.host}]:${port}`, remote.host ];
-  return knownHosts.some(line => (line.split(/\s+/)[0] ?? '').split(',').some(name => names.includes(name)));
 }

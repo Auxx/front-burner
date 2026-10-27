@@ -17,12 +17,14 @@ import {
   GIT_LEVELS,
   instanceState,
   jobs,
+  knownHosts,
   LOGIN_AUDIT_REASONS,
   loginAudit,
   ONBOARDING_STATE_VALUES,
   repositories,
   REPOSITORY_ERROR_VALUES,
   REPOSITORY_STATUS_VALUES,
+  savedCredentials,
   sessions,
   systemSettings,
   users
@@ -216,6 +218,62 @@ describe('schema', () => {
     });
   });
 
+  describe('saved_credentials', () => {
+    const work = {
+      kind: 'https',
+      name: 'Work',
+      username: 'alice',
+      secret: 'encrypted',
+      createdAt: new Date(0)
+    } as const;
+
+    it('refuses a second name of the same kind differing only in case', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      database.db.insert(savedCredentials).values({ ...work, userId: id }).run();
+      expect(() => database.db.insert(savedCredentials).values({ ...work, userId: id, name: 'WORK' }).run())
+        .toThrow(expect.objectContaining({ code: 'SQLITE_CONSTRAINT_UNIQUE' }));
+    });
+
+    it('allows the same name for an HTTPS credential and an SSH key', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      database.db.insert(savedCredentials).values({ ...work, userId: id }).run();
+      database.db.insert(savedCredentials).values({ ...work, userId: id, kind: 'ssh-key', username: null }).run();
+      expect(database.db.select().from(savedCredentials).all()).toHaveLength(2);
+    });
+
+    it('deletes a user\'s saved credentials with the user', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      database.db.insert(savedCredentials).values({ ...work, userId: id }).run();
+
+      database.db.delete(users).run();
+
+      expect(database.db.select().from(savedCredentials).all()).toEqual([]);
+    });
+  });
+
+  describe('known_hosts', () => {
+    const host = {
+      host: 'git.example.com',
+      port: 22,
+      keyType: 'ssh-ed25519',
+      publicKey: 'AAAAC3NzaC1lZDI1NTE5AAAAIA',
+      fingerprint: 'SHA256:abc',
+      createdAt: new Date(0)
+    } as const;
+
+    it('refuses a second key of one type for one host and port', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      database.db.insert(knownHosts).values({ ...host, userId: id }).run();
+      expect(() =>
+        database.db.insert(knownHosts).values({ ...host, userId: id, publicKey: 'other', fingerprint: 'SHA256:x' })
+          .run()
+      ).toThrow(expect.objectContaining({ code: 'SQLITE_CONSTRAINT_UNIQUE' }));
+      database.db.insert(knownHosts).values({ ...host, userId: id, port: 2222 }).run();
+      database.db.insert(knownHosts).values({ ...host, userId: id, keyType: 'ssh-rsa' }).run();
+      expect(database.db.select().from(knownHosts).all()).toHaveLength(3);
+    });
+  });
+
   it('keeps audit entries when their user is deleted', () => {
     const { id } = database.db.insert(users).values(alice).returning().get();
     database.db.insert(loginAudit).values({
@@ -238,6 +296,10 @@ describe('schema', () => {
 describe('ENCRYPTED_COLUMNS', () => {
   it('registers the client secret as encrypted', () => {
     expect(ENCRYPTED_COLUMNS).toContainEqual({ table: systemSettings, column: systemSettings.oidcClientSecret });
+  });
+
+  it('registers the secret as encrypted', () => {
+    expect(ENCRYPTED_COLUMNS).toContainEqual({ table: savedCredentials, column: savedCredentials.secret });
   });
 });
 

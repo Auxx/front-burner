@@ -2,7 +2,7 @@ import { Config, ConfigModule } from '@front-burner/server-core-config';
 import { Database, DatabaseModule, users } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
 import { ApiExceptionFilter } from '@front-burner/server-core-observability';
-import { Public } from '@front-burner/server-core-security';
+import { Public, SessionLifecycle } from '@front-burner/server-core-security';
 import {
   Controller,
   Get,
@@ -57,6 +57,7 @@ class OpenController {
     AuthTokenService,
     SessionService,
     EventsHub,
+    SessionLifecycle,
     { provide: SESSION_REUSE_HANDLER, useValue: () => undefined },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_FILTER, useClass: ApiExceptionFilter }
