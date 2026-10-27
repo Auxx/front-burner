@@ -5,6 +5,8 @@ import { OIDC_EMAIL, type OidcProvider, startOidcProvider, TEST_CERTIFICATE_FILE
 
 // Each test has its own instance, so no test logs in more than the `oidc` rate-limit group allows (LG-65).
 const test = base.extend<{ provider: OidcProvider; }>({
+  // Playwright reads a fixture's dependencies from this pattern; this one has none.
+  // eslint-disable-next-line no-empty-pattern
   provider: async ({}, use) => {
     const provider = await startOidcProvider();
     try {
