@@ -21,7 +21,10 @@ const MESSAGES: Record<ErrorCode, string> = {
   'refresh-refused': 'Your session has expired. Please log in again',
   'cross-site-refused': 'The request came from another site.',
   'oidc-code-invalid': 'OIDC login failed',
-  'too-many-jobs': 'Too many tasks are waiting. Wait for one to finish and try again.'
+  'too-many-jobs': 'Too many tasks are waiting. Wait for one to finish and try again.',
+  'key-locked': 'Enter the passphrase of this key to unlock it for this session.',
+  'credentials-missing': 'These saved credentials are no longer available. Add them again.',
+  'host-key-changed': 'The server\'s identity has changed. This may be an attack.'
 };
 
 interface ZodIssueLike {

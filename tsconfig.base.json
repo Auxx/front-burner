@@ -83,6 +83,9 @@
       ],
       "@front-burner/server-core-jobs": [
         "./libs/server/core/jobs/src/index.ts"
+      ],
+      "@front-burner/server-feature-credentials": [
+        "./libs/server/feature/credentials/src/index.ts"
       ]
     }
   },

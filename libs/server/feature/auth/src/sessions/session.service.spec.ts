@@ -2,6 +2,7 @@ import type { Config } from '@front-burner/server-core-config';
 import { Database, Session, sessions, users } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
 import { ApiErrorException } from '@front-burner/server-core-observability';
+import { SessionLifecycle } from '@front-burner/server-core-security';
 import { eq } from 'drizzle-orm';
 import { createTestDatabase } from '../testing/test-database';
 import { AuthTokenService } from './auth-token.service';
@@ -19,6 +20,7 @@ describe('SessionService', () => {
   let database: Database;
   let onReuse: ReturnType<typeof vi.fn<(session: Session) => void>>;
   let events: EventsHub;
+  let revoked: string[];
   let service: SessionService;
   let userId: number;
 
@@ -39,7 +41,10 @@ describe('SessionService', () => {
     }).returning().get().id;
     onReuse = vi.fn();
     events = new EventsHub();
-    service = new SessionService(database, config, new AuthTokenService(config), onReuse, events);
+    const lifecycle = new SessionLifecycle();
+    revoked = [];
+    lifecycle.revoked.subscribe(id => revoked.push(id));
+    service = new SessionService(database, config, new AuthTokenService(config), onReuse, events, lifecycle);
   });
 
   afterEach(() => {
@@ -203,9 +208,41 @@ describe('SessionService', () => {
     });
   });
 
+  describe('session lifecycle', () => {
+    it('announces a logout', async () => {
+      const issued = await service.start({ id: userId }, 'password', 'cookie');
+      service.revokeByRefreshToken(issued.refreshToken);
+      expect(revoked).toEqual([ issued.sessionId ]);
+    });
+
+    it('announces every session of a user', async () => {
+      const first = await service.start({ id: userId }, 'password', 'cookie');
+      const second = await service.start({ id: userId }, 'oidc', 'body');
+      service.revokeByRefreshToken(first.refreshToken);
+
+      service.revokeAllOf(userId);
+
+      expect(revoked).toEqual([ first.sessionId, second.sessionId ]);
+    });
+
+    it('announces a session revoked for a reused refresh token', async () => {
+      const issued = await service.start({ id: userId }, 'password', 'cookie');
+      await service.refresh(issued.refreshToken);
+      await expect(service.refresh(issued.refreshToken)).rejects.toThrow();
+      expect(revoked).toEqual([ issued.sessionId ]);
+    });
+  });
+
   it('reads an uncached session from the database', async () => {
     const issued = await service.start({ id: userId }, 'password', 'cookie');
-    const restarted = new SessionService(database, config, new AuthTokenService(config), onReuse, events);
+    const restarted = new SessionService(
+      database,
+      config,
+      new AuthTokenService(config),
+      onReuse,
+      events,
+      new SessionLifecycle()
+    );
 
     expect(restarted.isActive(issued.sessionId, userId)).toBe(true);
     expect(restarted.isActive(issued.sessionId, userId + 1)).toBe(false);

@@ -5,8 +5,9 @@ import { EventsModule } from '@front-burner/server-core-events';
 import { GitModule, loadInstanceKnownHosts } from '@front-burner/server-core-git';
 import { JobsModule } from '@front-burner/server-core-jobs';
 import { ApiExceptionFilter, HealthModule, LoggingModule } from '@front-burner/server-core-observability';
-import { EgressModule, RateLimitModule } from '@front-burner/server-core-security';
+import { EgressModule, RateLimitModule, SessionLifecycleModule } from '@front-burner/server-core-security';
 import { AuthModule } from '@front-burner/server-feature-auth';
+import { CredentialsModule } from '@front-burner/server-feature-credentials';
 import { RepositoriesModule } from '@front-burner/server-feature-repositories';
 import { DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
@@ -44,9 +45,11 @@ export class AppModule {
         RateLimitModule,
         HealthModule.forRoot({ migrationsApplied: deps.migrationsApplied }),
         EventsModule,
+        SessionLifecycleModule,
         JobsModule,
         // After RateLimitModule: the rate limit guard runs before the auth guard (A-1.12).
         AuthModule,
+        CredentialsModule,
         RepositoriesModule
       ],
       providers: [

@@ -30,6 +30,7 @@ describe('ReadinessService', () => {
       cloneTimeoutMs: 1_800_000,
       cloneConcurrency: 2,
       gitTimeoutMs: 300_000,
+      keyUnlockIdleMs: 3_600_000,
       knownHostsFile: undefined,
       oidc: undefined
     };

@@ -47,6 +47,7 @@ describe('loadConfig', () => {
       cloneTimeoutMs: 1_800_000,
       cloneConcurrency: 2,
       gitTimeoutMs: 300_000,
+      keyUnlockIdleMs: 3_600_000,
       knownHostsFile: undefined,
       oidc: undefined
     });
@@ -142,13 +143,15 @@ describe('loadConfig', () => {
       FRONT_BURNER_REFRESH_TOKEN_TTL: '7d',
       FRONT_BURNER_LOGIN_AUDIT_RETENTION: '30d',
       FRONT_BURNER_CLONE_TIMEOUT: '2h',
-      FRONT_BURNER_GIT_TIMEOUT: '90s'
+      FRONT_BURNER_GIT_TIMEOUT: '90s',
+      FRONT_BURNER_KEY_UNLOCK_IDLE: '15m'
     });
     expect(config.authTokenTtlMs).toBe(300_000);
     expect(config.refreshTokenTtlMs).toBe(604_800_000);
     expect(config.loginAuditRetentionMs).toBe(2_592_000_000);
     expect(config.cloneTimeoutMs).toBe(7_200_000);
     expect(config.gitTimeoutMs).toBe(90_000);
+    expect(config.keyUnlockIdleMs).toBe(900_000);
   });
 
   it('reads the clone concurrency', () => {

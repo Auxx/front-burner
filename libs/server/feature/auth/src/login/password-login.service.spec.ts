@@ -2,6 +2,7 @@ import type { Config } from '@front-burner/server-core-config';
 import { Database, loginAudit, NewUser, sessions, users } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
 import { ApiErrorException } from '@front-burner/server-core-observability';
+import { SessionLifecycle } from '@front-burner/server-core-security';
 import { Logger } from '@nestjs/common';
 import { PasswordHasher } from '../passwords/password-hasher';
 import { AuthTokenService } from '../sessions/auth-token.service';
@@ -49,7 +50,8 @@ describe('PasswordLoginService', () => {
       config,
       new AuthTokenService(config),
       () => undefined,
-      new EventsHub()
+      new EventsHub(),
+      new SessionLifecycle()
     );
     service = new PasswordLoginService(database, hasher, sessionService, new LoginAuditService(database));
   });
