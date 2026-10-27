@@ -19,6 +19,11 @@ export interface ServerProcess {
   dataDir: string;
   stop(): Promise<void>;
   output(): string;
+  /**
+   * Waits until the output contains `text`. The server logs asynchronously, so
+   * a response can arrive before the lines logged while handling it.
+   */
+  waitForOutput(text: string): Promise<string>;
 }
 
 export interface ServerOptions {
@@ -101,6 +106,17 @@ function within<T>(promise: Promise<T>, what: string, output: () => string): Pro
   return Promise.race([ promise, timeout ]).finally(() => clearTimeout(timer));
 }
 
+async function outputContaining(text: string, output: () => string): Promise<string> {
+  const deadline = Date.now() + TIMEOUT_MS;
+  while (!output().includes(text)) {
+    if (Date.now() > deadline) {
+      throw new Error(`Waiting for ${JSON.stringify(text)} in the output timed out. Output:\n${output()}`);
+    }
+    await new Promise(r => setTimeout(r, 20));
+  }
+  return output();
+}
+
 async function startOnce(env: Record<string, string>, options: ServerOptions): Promise<ServerProcess> {
   const spawned = await spawnServer(env, options);
   const url = `http://127.0.0.1:${spawned.port}`;
@@ -134,6 +150,7 @@ async function startOnce(env: Record<string, string>, options: ServerOptions): P
     url,
     dataDir: spawned.dataDir,
     output: spawned.output,
+    waitForOutput: text => outputContaining(text, spawned.output),
     stop: async () => {
       polling = false;
       if (spawned.child.exitCode === null) {

@@ -217,9 +217,8 @@ describe('administrator onboarding', () => {
     const server = await start({ FRONT_BURNER_SETUP_TOKEN: TOKEN, FRONT_BURNER_LOG_LEVEL: 'info' });
     await post(server, CHECK, { setupToken: 'a-wrong-token-0123456789' });
     await post(server, SETUP, { setupToken: TOKEN, ...details });
-    const output = server.output();
-    expect(output).toContain('Setup token rejected');
-    expect(output).toContain('Administrator onboarding completed');
+    await server.waitForOutput('Setup token rejected');
+    const output = await server.waitForOutput('Administrator onboarding completed');
     for (const secret of [ TOKEN, 'a-wrong-token-0123456789', details.password, details.email ]) {
       expect(output).not.toContain(secret);
     }
@@ -366,7 +365,6 @@ describe('administrator onboarding with OIDC', () => {
   it('logs the saved setup without the secret', async () => {
     const target = await start({ FRONT_BURNER_LOG_LEVEL: 'info' });
     expect((await post(target, OIDC_SETUP, setup())).status).toBe(204);
-    expect(target.output()).toContain('OIDC setup saved');
-    expect(target.output()).not.toContain('e2e-client-secret');
+    expect(await target.waitForOutput('OIDC setup saved')).not.toContain('e2e-client-secret');
   });
 });
