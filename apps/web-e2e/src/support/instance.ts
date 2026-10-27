@@ -27,6 +27,10 @@ export interface InstanceOptions {
   onboarded?: boolean;
   /** More `FRONT_BURNER_*` variables, such as `FRONT_BURNER_AUTH_TOKEN_TTL`. */
   env?: Record<string, string>;
+  /** OIDC from the environment (AO-30), with `adminEmail` as `FRONT_BURNER_ADMIN_EMAIL`. */
+  oidc?: { issuer: string; adminEmail: string; };
+  /** A PEM file the server trusts besides the system's authorities (`NODE_EXTRA_CA_CERTS`). */
+  extraCaFile?: string;
 }
 
 export interface Instance {
@@ -94,6 +98,15 @@ export async function startInstance(options: InstanceOptions = {}): Promise<Inst
       FRONT_BURNER_JWT_SECRET: TEST_JWT_SECRET,
       FRONT_BURNER_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,
       ...(setupToken ? { FRONT_BURNER_SETUP_TOKEN: setupToken } : {}),
+      ...(options.oidc
+        ? {
+          FRONT_BURNER_OIDC_ISSUER: options.oidc.issuer,
+          FRONT_BURNER_OIDC_CLIENT_ID: 'web-e2e',
+          FRONT_BURNER_OIDC_CLIENT_SECRET: 'web-e2e-client-secret',
+          FRONT_BURNER_ADMIN_EMAIL: options.oidc.adminEmail
+        }
+        : {}),
+      ...(options.extraCaFile ? { NODE_EXTRA_CA_CERTS: options.extraCaFile } : {}),
       ...options.env
     },
     stdio: [ 'ignore', 'pipe', 'pipe' ]
