@@ -127,16 +127,24 @@ export class OidcLoginService {
     if (result.ok === false) {
       return fail({ reason: result.reason }, { ...auditIdentity, userId: result.userId });
     }
-    return { ok: true, code: this.codes.issue({ userId: result.user.id, ...auditIdentity }) };
+    // The state cookie stays with the browser that completed the login, which alone can exchange the code.
+    return { ok: true, code: this.codes.issue({ userId: result.user.id, ...auditIdentity }, cookieState) };
   }
 
   /**
-   * Exchanges a one-time code for a session (LG-22, LG-23).
+   * Exchanges a one-time code for a session (LG-22, LG-23), in the browser
+   * whose state cookie (`binding`) completed the login.
    *
-   * @throws ApiErrorException `oidc-code-invalid` (401) for an unknown, used or expired code.
+   * @throws ApiErrorException `oidc-code-invalid` (401) for an unknown, used or
+   *   expired code, or one from another browser.
    */
-  async exchange(code: string, delivery: RefreshTokenDelivery, info: RequestInfo): Promise<IssuedSession> {
-    const login = this.codes.take(code);
+  async exchange(
+    code: string,
+    binding: string | undefined,
+    delivery: RefreshTokenDelivery,
+    info: RequestInfo
+  ): Promise<IssuedSession> {
+    const login = this.codes.take(code, binding);
     const user = login === undefined
       ? undefined
       : this.database.db.select().from(users).where(eq(users.id, login.userId)).get();

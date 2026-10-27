@@ -63,7 +63,7 @@ describe('OIDC from the environment', () => {
     );
 
   /** start → provider → callback, as a browser would; every `Location` on the way, the last one first. */
-  async function throughProvider(): Promise<{ location: string; locations: string[]; }> {
+  async function throughProvider(): Promise<{ location: string; locations: string[]; cookie: string; }> {
     const url = server?.url ?? '';
     const started = await fetch(`${url}/api/v1/auth/oidc/start`, { redirect: 'manual' });
     const cookie = started.headers.getSetCookie()[0]?.split(';')[0] ?? '';
@@ -77,13 +77,16 @@ describe('OIDC from the environment', () => {
       headers: { cookie }
     });
     const locations = [ started, authorized, back ].map(response => response.headers.get('location') ?? '');
-    return { location: locations[2] ?? '', locations };
+    // After a success the cookie binds the one-time code to this "browser".
+    return { location: locations[2] ?? '', locations, cookie: back.headers.getSetCookie()[0]?.split(';')[0] ?? '' };
   }
 
   async function logIn(): Promise<{ location: string; locations: string[]; tokens: Response; }> {
     const result = await throughProvider();
     const code = new URL(result.location, 'http://x').searchParams.get('code') ?? '';
-    const tokens = await postJson(server as ServerProcess, '/api/v1/auth/oidc/exchange', { code });
+    const tokens = await postJson(server as ServerProcess, '/api/v1/auth/oidc/exchange', { code }, {
+      cookie: result.cookie
+    });
     return { ...result, tokens };
   }
 

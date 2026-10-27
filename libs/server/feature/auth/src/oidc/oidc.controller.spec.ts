@@ -82,6 +82,12 @@ describe('OidcController', () => {
     const callback = new URL(authorized.headers.get('location') ?? '');
     return http().get(`${callback.pathname}${callback.search}`).set('Cookie', cookie);
   }
+  /** The browser's `front_burner_oidc` cookie after a response, as a `Cookie` header. */
+  const oidcCookieOf = (response: request.Response) =>
+    ([] as string[]).concat(response.headers['set-cookie'] ?? []).find(cookie =>
+      cookie.startsWith('front_burner_oidc=')
+    )
+      ?.split(';')[0] ?? '';
   const codeOf = (response: request.Response) =>
     new URL(response.headers['location'] as string, 'https://x').searchParams.get('code') ?? '';
   const addUser = () =>
@@ -139,6 +145,15 @@ describe('OidcController', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers['location']).toMatch(/^\/login\/oidc\?code=[\w-]{43}$/);
+    // The cookie now binds the code to this browser, for the exchange only.
+    const [ cookie ] = ([] as string[]).concat(response.headers['set-cookie'] ?? []);
+    expect(cookie).toMatch(/^front_burner_oidc=[\w-]+;/);
+    expect(cookie).toMatch(/Max-Age=60;/);
+  });
+
+  it('clears the cookie after a failure', async () => {
+    await start(oidcEnvironment(), addUser);
+    const response = await loginThroughProvider();
     expect(([] as string[]).concat(response.headers['set-cookie'] ?? []).join()).toMatch(/front_burner_oidc=;/);
   });
 
@@ -188,8 +203,9 @@ describe('OidcController', () => {
 
   it('exchanges a code for tokens in a cookie', async () => {
     await start(oidcEnvironment());
-    const code = codeOf(await loginThroughProvider());
-    const response = await http().post(EXCHANGE).send({ code });
+    const callback = await loginThroughProvider();
+    const code = codeOf(callback);
+    const response = await http().post(EXCHANGE).set('Cookie', oidcCookieOf(callback)).send({ code });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -199,9 +215,23 @@ describe('OidcController', () => {
     });
     expect(([] as string[]).concat(response.headers['set-cookie'] ?? []).join()).toMatch(/front_burner_refresh=/);
 
-    const again = await http().post(EXCHANGE).send({ code });
+    expect(([] as string[]).concat(response.headers['set-cookie'] ?? []).join()).toMatch(/front_burner_oidc=;/);
+    const again = await http().post(EXCHANGE).set('Cookie', oidcCookieOf(callback)).send({ code });
     expect(again.status).toBe(401);
     expect(again.body).toMatchObject({ code: 'oidc-code-invalid' });
+  });
+
+  it('refuses a code from another browser (login CSRF)', async () => {
+    await start(oidcEnvironment());
+    const callback = await loginThroughProvider();
+    const code = codeOf(callback);
+
+    const withoutCookie = await http().post(EXCHANGE).send({ code });
+    expect(withoutCookie.status).toBe(401);
+    expect(withoutCookie.body).toMatchObject({ code: 'oidc-code-invalid' });
+
+    const otherCookie = await http().post(EXCHANGE).set('Cookie', 'front_burner_oidc=someone-else').send({ code });
+    expect(otherCookie.status).toBe(401);
   });
 
   it('puts no token in any redirect', async () => {

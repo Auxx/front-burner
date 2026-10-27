@@ -36,6 +36,14 @@ import { OidcExchangeRequestDto } from './oidc.dto';
 
 const CALLBACK_PATH = '/api/v1/auth/oidc/callback';
 
+/** As long as the one-time code it binds (LG-22). */
+const ONE_TIME_CODE_COOKIE_MAX_AGE_MS = 60_000;
+
+function stateCookieOf(req: Request): string | undefined {
+  const cookie = (req.cookies as Record<string, unknown> | undefined)?.[OIDC_STATE_COOKIE];
+  return typeof cookie === 'string' && cookie !== '' ? cookie : undefined;
+}
+
 /** The site's own origin, honouring `trust proxy` (A-1.15). */
 const originOf = (req: Request) => `${req.protocol}://${req.get('host') ?? ''}`;
 
@@ -83,18 +91,16 @@ export class OidcController {
   @UseFilters(OidcRateLimitFilter)
   @ApiFoundResponse({ description: 'To /login/oidc with a one-time code, or to the page that shows the failure.' })
   async callback(@Req() req: Request, @Res() res: Response): Promise<void> {
-    const cookie = (req.cookies as Record<string, unknown> | undefined)?.[OIDC_STATE_COOKIE];
-    res.clearCookie(OIDC_STATE_COOKIE, OIDC_STATE_COOKIE_OPTIONS);
+    const state = stateCookieOf(req);
     res.setHeader('Cache-Control', 'no-store');
-    const outcome = await this.login.complete(
-      new URL(req.originalUrl, originOf(req)),
-      typeof cookie === 'string' && cookie !== '' ? cookie : undefined,
-      requestInfoOf(req)
-    );
-    if (outcome.ok === false) {
-      res.redirect(302, this.failureLocation(outcome.reason));
+    const outcome = await this.login.complete(new URL(req.originalUrl, originOf(req)), state, requestInfoOf(req));
+    if (outcome.ok === false || state === undefined) {
+      res.clearCookie(OIDC_STATE_COOKIE, OIDC_STATE_COOKIE_OPTIONS);
+      res.redirect(302, this.failureLocation(outcome.ok === false ? outcome.reason : 'state-mismatch'));
       return;
     }
+    // The pending login is used up; the cookie now binds the one-time code to this browser.
+    res.cookie(OIDC_STATE_COOKIE, state, { ...OIDC_STATE_COOKIE_OPTIONS, maxAge: ONE_TIME_CODE_COOKIE_MAX_AGE_MS });
     res.redirect(302, `/login/oidc?code=${encodeURIComponent(outcome.code)}`);
   }
 
@@ -110,7 +116,12 @@ export class OidcController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<SessionTokens> {
-    return answerWithSession(await this.login.exchange(body.code, body.refreshTokenDelivery, requestInfoOf(req)), res);
+    const binding = stateCookieOf(req);
+    res.clearCookie(OIDC_STATE_COOKIE, OIDC_STATE_COOKIE_OPTIONS);
+    return answerWithSession(
+      await this.login.exchange(body.code, binding, body.refreshTokenDelivery, requestInfoOf(req)),
+      res
+    );
   }
 
   private failureLocation(reason: Parameters<typeof oidcFailureLocation>[0]): string {

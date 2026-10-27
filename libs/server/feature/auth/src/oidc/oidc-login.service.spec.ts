@@ -88,7 +88,7 @@ describe('OidcLoginService', () => {
     expect(outcome).toEqual({ ok: true, code: expect.any(String) });
     expect(audits()).toEqual([]);
 
-    const issued = await service.exchange((outcome as { code: string; }).code, 'body', info);
+    const issued = await service.exchange((outcome as { code: string; }).code, state, 'body', info);
     expect(issued.tokens.refreshToken).toEqual(expect.any(String));
     const [ user ] = database.db.select().from(users).all();
     expect(user).toMatchObject({ email: 'admin@example.com', role: 'administrator', oidcSubject: 'subject-1' });
@@ -164,19 +164,27 @@ describe('OidcLoginService', () => {
     }) ]);
   });
 
+  it('refuses a code without the state of the browser that completed the login', async () => {
+    const { callbackUrl, state } = await authorize();
+    const outcome = await service.complete(callbackUrl, state, info) as { code: string; };
+    await expect(service.exchange(outcome.code, undefined, 'body', info)).rejects.toMatchObject({
+      code: 'oidc-code-invalid'
+    });
+  });
+
   it('expires a code after 60 seconds', async () => {
     const { callbackUrl, state } = await authorize();
     const outcome = await service.complete(callbackUrl, state, info) as { code: string; };
     vi.useFakeTimers({ toFake: [ 'Date' ] });
     vi.advanceTimersByTime(60_001);
-    await expect(service.exchange(outcome.code, 'body', info)).rejects.toThrow(ApiErrorException);
+    await expect(service.exchange(outcome.code, state, 'body', info)).rejects.toThrow(ApiErrorException);
   });
 
   it('uses a code once', async () => {
     const { callbackUrl, state } = await authorize();
     const outcome = await service.complete(callbackUrl, state, info) as { code: string; };
-    await service.exchange(outcome.code, 'body', info);
-    await expect(service.exchange(outcome.code, 'body', info)).rejects.toMatchObject({
+    await service.exchange(outcome.code, state, 'body', info);
+    await expect(service.exchange(outcome.code, state, 'body', info)).rejects.toMatchObject({
       status: 401,
       code: 'oidc-code-invalid'
     });
