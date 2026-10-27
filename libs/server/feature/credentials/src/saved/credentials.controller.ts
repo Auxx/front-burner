@@ -1,3 +1,4 @@
+import { RateLimitGroup } from '@front-burner/server-core-security';
 import type { GeneratedSshKey, SavedCredentials } from '@front-burner/shared-contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Req } from '@nestjs/common';
 import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
@@ -36,8 +37,9 @@ export class CredentialsController {
     return this.credentials.generateKey(authOf(req).userId, body.name, `front-burner@${req.hostname}`);
   }
 
-  /** Unlocks a passphrase-protected key for this session (AR-31). */
+  /** Unlocks a passphrase-protected key for this session (AR-31). Each attempt runs the key's KDF. */
   @Post('ssh-keys/:id/unlock')
+  @RateLimitGroup('ssh-key-unlock')
   @ApiParam({ name: 'id', type: 'integer' })
   @HttpCode(204)
   @ApiNoContentResponse()

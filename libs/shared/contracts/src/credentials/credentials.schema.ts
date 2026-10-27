@@ -104,7 +104,8 @@ export const CREDENTIALS_FIELD_CODES = [
   'rsa-too-short',
   'passphrase-required',
   'wrong-passphrase',
-  'passphrase-not-needed'
+  'passphrase-not-needed',
+  'kdf-rounds-too-high'
 ] as const;
 
 export type CredentialsFieldCode = (typeof CREDENTIALS_FIELD_CODES)[number];

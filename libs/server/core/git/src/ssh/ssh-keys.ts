@@ -7,6 +7,13 @@ import { WireReader } from './wire';
 const MAX_KEY_BYTES = 16 * 1024;
 /** AR-27. */
 const MIN_RSA_BITS = 2048;
+/**
+ * bcrypt KDF rounds run on the event loop and cost about 9 ms each, so a key's
+ * own round count must not stall the instance. `ssh-keygen` uses 16 by
+ * default; 100 still allows the usual hardening advice. _(Plan 10's call.)_
+ */
+const MAX_KDF_ROUNDS = 100;
+const OPENSSH_MAGIC = 'openssh-key-v1\0';
 
 export const SSH_KEY_PROBLEMS = [
   'invalid-key',
@@ -14,7 +21,8 @@ export const SSH_KEY_PROBLEMS = [
   'rsa-too-short',
   'passphrase-required',
   'wrong-passphrase',
-  'passphrase-not-needed'
+  'passphrase-not-needed',
+  'kdf-rounds-too-high'
 ] as const;
 
 export type SshKeyProblem = (typeof SSH_KEY_PROBLEMS)[number];
@@ -60,6 +68,34 @@ function rsaBits(blob: Buffer): number {
   return (modulus.length - start - 1) * 8 + (first === 0 ? 0 : Math.floor(Math.log2(first)) + 1);
 }
 
+/**
+ * The bcrypt KDF round count of an encrypted OpenSSH key, read from its
+ * envelope (`PROTOCOL.key`); undefined for other formats and unencrypted keys.
+ */
+function kdfRounds(text: string): number | undefined {
+  const match = /-----BEGIN OPENSSH PRIVATE KEY-----([\s\S]*?)-----END OPENSSH PRIVATE KEY-----/.exec(text);
+  if (match === null) {
+    return undefined;
+  }
+  const body = Buffer.from((match[1] ?? '').replace(/\s+/g, ''), 'base64');
+  if (body.subarray(0, OPENSSH_MAGIC.length).toString('latin1') !== OPENSSH_MAGIC) {
+    return undefined;
+  }
+  try {
+    const reader = new WireReader(body.subarray(OPENSSH_MAGIC.length));
+    reader.string();
+    if (reader.string().toString('latin1') !== 'bcrypt') {
+      return undefined;
+    }
+    const options = new WireReader(reader.string());
+    options.string();
+    return options.uint32();
+  } catch {
+    // Truncated: ssh2 refuses it as invalid.
+    return undefined;
+  }
+}
+
 function parse(text: string, passphrase?: string): ParsedKey | Error {
   const parsed: ParsedKey | ParsedKey[] | Error = utils.parseKey(text, passphrase);
   return Array.isArray(parsed) ? (parsed[0] ?? new Error('no key')) : parsed;
@@ -69,6 +105,9 @@ function parse(text: string, passphrase?: string): ParsedKey | Error {
 function parsePrivateKey(text: string, passphrase?: string): { key: ParsedKey; info: SshKeyInfo; } {
   if (Buffer.byteLength(text) > MAX_KEY_BYTES || !text.trim().startsWith('-----BEGIN ')) {
     throw new SshKeyError('invalid-key');
+  }
+  if ((kdfRounds(text) ?? 0) > MAX_KDF_ROUNDS) {
+    throw new SshKeyError('kdf-rounds-too-high');
   }
   const plain = parse(text);
   const encrypted = plain instanceof Error && /no passphrase given/.test(plain.message);

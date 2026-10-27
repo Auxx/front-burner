@@ -4,7 +4,7 @@ import { Database, DatabaseModule, knownHosts } from '@front-burner/server-core-
 import { GIT_OPTIONS } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
-import { SessionLifecycleModule } from '@front-burner/server-core-security';
+import { RATE_LIMIT_GROUP, SessionLifecycleModule } from '@front-burner/server-core-security';
 import { CanActivate, ExecutionContext, Global, INestApplication, Injectable, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -14,6 +14,7 @@ import request from 'supertest';
 import { CredentialsModule } from '../credentials.module';
 import { insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
+import { CredentialsController } from './credentials.controller';
 import { SavedCredentialsService } from './saved-credentials.service';
 
 const ED25519 = 'AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
@@ -201,6 +202,10 @@ describe('credentials endpoints', () => {
     // The ETag hashes the body, which differs only by its request ID.
     const headers = (response: request.Response) => without(response.headers, 'x-request-id', 'date', 'etag');
     expect(headers(other)).toEqual(headers(unknown));
+  });
+
+  it('limits passphrase attempts, which run the key\'s KDF', () => {
+    expect(Reflect.getMetadata(RATE_LIMIT_GROUP, CredentialsController.prototype.unlockSshKey)).toBe('ssh-key-unlock');
   });
 
   it('answers 404 for a non-numeric ID', async () => {

@@ -109,6 +109,11 @@ by spike 1 (spikes.md).
   - a job never borrows an unlock from the user's other sessions. Without a
     usable unlock, a sync cycle commits and reports "saved but not uploaded"
     (D-2.6), and a fetch is skipped.
+  - Checking a passphrase runs the key's bcrypt KDF synchronously, and the round
+    count is chosen by whoever made the key. Keys with more than 100 rounds are
+    refused before the KDF runs (`kdf-rounds-too-high` on the private key;
+    `ssh-keygen` uses 16 by default), and unlock attempts are in their own
+    rate-limit group. _(Plan 10's call.)_
   - "Removed from memory" means the backend drops its last reference to the key.
     JavaScript cannot wipe strings, and `ssh2` keeps the decrypted key as a PEM
     string until garbage collection. _(My call: accepted. Anyone who can read
