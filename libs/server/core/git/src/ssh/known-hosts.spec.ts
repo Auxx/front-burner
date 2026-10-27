@@ -81,9 +81,9 @@ describe('hasHostEntry', () => {
     expect(hasHostEntry(lines, { host: 'unknown.example.com', port: 22 })).toBe(false);
   });
 
-  it('finds a host on another port, falling back to its port 22 entries as ssh does', () => {
+  it('finds a host on another port only under [host]:port, as ssh does', () => {
     expect(hasHostEntry(lines, { host: 'other.example.com', port: 2222 })).toBe(true);
-    expect(hasHostEntry(lines, { host: 'git.example.com', port: 2222 })).toBe(true);
+    expect(hasHostEntry(lines, { host: 'git.example.com', port: 2222 })).toBe(false);
     expect(hasHostEntry(lines, { host: 'other.example.com', port: 22 })).toBe(false);
   });
 });

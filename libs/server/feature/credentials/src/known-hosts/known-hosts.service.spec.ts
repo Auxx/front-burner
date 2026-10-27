@@ -72,6 +72,15 @@ describe('KnownHostsService', () => {
     );
   });
 
+  it('trusts another port of a host it knows on port 22', () => {
+    service.trust(alice, host);
+    service.trust(alice, { ...host, port: 2222, key: OTHER });
+    expect(service.linesFor(alice)).toEqual([
+      `git.example.com ssh-ed25519 ${ED25519}`,
+      `[git.example.com]:2222 ssh-ed25519 ${OTHER}`
+    ]);
+  });
+
   it('keeps one row when the same key is trusted twice', () => {
     service.trust(alice, host);
     service.trust(alice, { ...host, host: 'git.example.com' });

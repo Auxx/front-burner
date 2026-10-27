@@ -37,11 +37,11 @@ export function knownHostsLine(entry: Pick<HostKey, 'host' | 'port' | 'type' | '
 
 /**
  * Whether `known_hosts` lines hold any key for a host and port. Like `ssh`, a
- * port without entries of its own falls back to the host's port 22 entries.
+ * port other than 22 matches only `[host]:port` entries.
  */
 export function hasHostEntry(knownHosts: readonly string[], target: { host: string; port: number; }): boolean {
-  const names = target.port === 22 ? [ target.host ] : [ `[${target.host}]:${target.port}`, target.host ];
-  return knownHosts.some(line => (line.split(/\s+/)[0] ?? '').split(',').some(name => names.includes(name)));
+  const name = target.port === 22 ? target.host : `[${target.host}]:${target.port}`;
+  return knownHosts.some(line => (line.split(/\s+/)[0] ?? '').split(',').includes(name));
 }
 
 /**

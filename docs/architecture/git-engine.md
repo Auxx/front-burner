@@ -133,10 +133,9 @@ by spike 1 (spikes.md).
     is attempted. The error carries the key's type, fingerprint and key, which
     is stored when the user chooses **Trust**. _(Plan 8's call.)_
   - Host keys on a port other than 22 are written and stored as `[host]:port`,
-    so trusting such a port does not trust port 22 or any other port. (`ssh`
-    itself falls back to a host's port 22 entries for a port that has none of
-    its own; the engine does the same when it tells a changed key from an
-    unknown one.)
+    so trusting such a port does not trust port 22 or any other port. Like
+    `ssh`, the engine looks a port other than 22 up only under `[host]:port`
+    when it tells a changed key from an unknown one.
   - **Trust** stores a key only for a host and port that neither the user's
     known hosts nor the instance-wide list cover, in the sense above; any other
     key is refused as changed, so the endpoint cannot replace a known key or add
