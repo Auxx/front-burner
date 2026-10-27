@@ -15,6 +15,7 @@ import { ApiErrorTextService } from '@front-burner/web-core';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 import { BranchListService } from '../../services/branch-list/branch-list.service';
+import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { failureTexts, shownError } from '../../utils/add-repository-errors';
 
 const KEY = 'web-feature-repositories.CloneSectionComponent';
@@ -48,6 +49,7 @@ export class CloneSectionComponent {
 
   private readonly transloco = inject(TranslocoService);
   private readonly errorText = inject(ApiErrorTextService);
+  private readonly failures = inject(SubmitFailuresService, { optional: true });
   protected readonly branches = inject(BranchListService);
   protected readonly modes = CLONE_MODES;
 
@@ -81,7 +83,7 @@ export class CloneSectionComponent {
         ? this.errorText.describe(state.error).text
         : this.transloco.translate(`web-feature-repositories.errors.${failure.key}`, failure.params);
     }
-    const error = shownError(this.branch(), 'branch');
+    const error = this.failures?.forPath('branch') ?? shownError(this.branch(), 'branch');
     return error && this.transloco.translate(`web-feature-repositories.errors.${error.key}`, error.params);
   });
 

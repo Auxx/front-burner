@@ -317,5 +317,6 @@
   "web-feature-repositories.TrustHostDialog.keyType": "Key type",
   "web-feature-repositories.TrustHostDialog.fingerprint": "Fingerprint",
   "web-feature-repositories.TrustHostDialog.trust": "Trust",
-  "web-feature-repositories.TrustHostDialog.cancel": "Cancel"
+  "web-feature-repositories.TrustHostDialog.cancel": "Cancel",
+  "web-feature-repositories.errors.credentials.passphrase.passphrase-required": "Enter the passphrase of this key to unlock it for this session."
 }

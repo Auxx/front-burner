@@ -1,7 +1,10 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repositories.LevelSectionComponent'">
-  @if (options().length > 1) {
-    <ui-field [label]="t('label')" [hint]="t('hint')">
-      <ui-select [options]="options()" [formField]="gitLevel()" />
-    </ui-field>
-  }
+  <ng-container *transloco="let e; prefix: 'web-feature-repositories.errors'">
+    @if (options().length > 1) {
+      @let failure = error();
+      <ui-field [label]="t('label')" [hint]="t('hint')" [error]="failure ? e(failure.key, failure.params) : undefined">
+        <ui-select [options]="options()" [formField]="gitLevel()" />
+      </ui-field>
+    }
+  </ng-container>
 </ng-container>

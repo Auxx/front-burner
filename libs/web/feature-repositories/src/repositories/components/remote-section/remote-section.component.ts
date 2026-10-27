@@ -1,10 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
 import { type FieldTree, FormField } from '@angular/forms/signals';
 import type { RepositoryIndex } from '@front-burner/shared-contracts';
 import { defaultRepositoryName, parseRemoteUrl, remoteKey } from '@front-burner/shared-util';
 import { FieldComponent, InlineBannerComponent, InputComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
+import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { shownError } from '../../utils/add-repository-errors';
 
 /**
@@ -25,6 +26,8 @@ export class RemoteSectionComponent {
   /** The user's repositories; empty until loaded. */
   readonly index = input.required<RepositoryIndex['repositories']>();
 
+  private readonly failures = inject(SubmitFailuresService, { optional: true });
+
   private readonly remote = computed(() => {
     const result = parseRemoteUrl(this.remoteUrl()().value().trim());
     return result.ok ? result.remote : undefined;
@@ -40,8 +43,10 @@ export class RemoteSectionComponent {
     return this.index().filter(entry => entry.remoteKey === key).map(entry => entry.name).join(', ');
   });
 
-  protected readonly urlError = computed(() => shownError(this.remoteUrl(), 'remoteUrl'));
-  protected readonly nameError = computed(() => shownError(this.name(), 'name'));
+  protected readonly urlError = computed(() =>
+    this.failures?.forPath('remoteUrl') ?? shownError(this.remoteUrl(), 'remoteUrl')
+  );
+  protected readonly nameError = computed(() => this.failures?.forPath('name') ?? shownError(this.name(), 'name'));
 
   constructor() {
     // AR-13: a name typed by the user marks the field dirty; a filled one does not.

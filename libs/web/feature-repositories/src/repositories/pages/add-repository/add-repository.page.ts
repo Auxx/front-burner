@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
-import { apply, disabled, type FieldTree, form, submit, type ValidationError } from '@angular/forms/signals';
+import { apply, disabled, type FieldTree, form, submit } from '@angular/forms/signals';
 import { Router, RouterLink } from '@angular/router';
 import {
   type AddRepositoryRequest,
@@ -37,6 +37,7 @@ import {
 } from '../../models/add-repository-form.model';
 import { BranchListService } from '../../services/branch-list/branch-list.service';
 import { SessionKeysService } from '../../services/session-keys/session-keys.service';
+import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { failureTexts } from '../../utils/add-repository-errors';
 
 const KEY = 'web-feature-repositories.AddRepositoryPage';
@@ -75,7 +76,7 @@ function unknownHostKey(apiError: ApiError): HostKey | undefined {
   templateUrl: './add-repository.page.html',
   styleUrl: './add-repository.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [ SessionKeysService, BranchListService ],
+  providers: [ SessionKeysService, BranchListService, SubmitFailuresService ],
   host: {
     '(window:beforeunload)': 'warnBeforeUnload($event)'
   }
@@ -90,6 +91,7 @@ export class AddRepositoryPage implements LeavesWithCare {
   private readonly router = inject(Router);
   private readonly transloco = inject(TranslocoService);
   private readonly errorText = inject(ApiErrorTextService);
+  private readonly failures = inject(SubmitFailuresService);
 
   protected readonly index = signal<RepositoryIndex['repositories']>([]);
   private readonly sessionKeys = inject(SessionKeysService);
@@ -191,6 +193,15 @@ export class AddRepositoryPage implements LeavesWithCare {
   });
 
   constructor() {
+    // A failure stays on its field until the inputs change; passphrases are cleared after it (AR-46).
+    this.failures.watch(computed(() => {
+      const value = this.model().value();
+      return JSON.stringify({
+        ...value,
+        credentials: { ...value.credentials, passphrase: '' },
+        generated: this.sessionKeys.generated()?.key.id
+      });
+    }));
     void this.loadIndex();
     void this.loadCredentials();
     void this.loadLevels();
@@ -210,6 +221,19 @@ export class AddRepositoryPage implements LeavesWithCare {
       const hostKey = state.kind === 'failed' ? unknownHostKey(state.error) : undefined;
       if (hostKey !== undefined) {
         untracked(() => void this.trustAndRetryBranchList(hostKey));
+      }
+      // A key whose unlock ended since the page loaded asks for its passphrase again (AR-31).
+      const locked = state.kind === 'failed'
+        && state.error.fields?.some(field =>
+          field.path === 'credentials.passphrase' && field.code === 'passphrase-required'
+        );
+      if (locked) {
+        untracked(() => {
+          const { choice, savedId } = this.model.credentials().value();
+          if (choice === 'saved') {
+            this.sessionKeys.markLocked(savedId);
+          }
+        });
       }
     });
   }
@@ -251,6 +275,7 @@ export class AddRepositoryPage implements LeavesWithCare {
       const request = this.request();
       this.submitting.set(true);
       this.failure.set(null);
+      this.failures.clear();
       try {
         await this.trusting(() => firstValueFrom(this.repositoriesApi.add(request)));
       } catch (error) {
@@ -259,7 +284,8 @@ export class AddRepositoryPage implements LeavesWithCare {
         }
         // AR-46: everything else stays.
         this.model.credentials.passphrase().value.set('');
-        return this.refusal(error);
+        this.refusal(error);
+        return undefined;
       } finally {
         this.submitting.set(false);
       }
@@ -322,44 +348,58 @@ export class AddRepositoryPage implements LeavesWithCare {
     this.branchList.retry();
   }
 
-  /** Puts each failure on its field, or above the buttons (AR-6, AR-42). */
-  private refusal(error: unknown): ValidationError.WithOptionalFieldTree[] {
+  /**
+   * Puts each failure on its field, or above the buttons when it concerns no
+   * field the form shows (AR-6, AR-42). Field failures are not form errors, so
+   * the same inputs can be submitted again (see {@link SubmitFailuresService}).
+   */
+  private refusal(error: unknown): void {
     const apiError = toApiError(error);
-    const errors: ValidationError.WithOptionalFieldTree[] = [];
-    for (const failure of failureTexts(apiError)) {
-      const field = failure.path === null ? undefined : this.fieldAt(failure.path);
-      if (field !== undefined && failure.key !== null) {
-        const kind = failure.key.slice(failure.key.lastIndexOf('.') + 1);
-        errors.push({ kind, params: failure.params, fieldTree: field } as ValidationError.WithOptionalFieldTree);
-      } else if (failure.key !== null) {
-        this.failure.set({
-          text: this.transloco.translate(`web-feature-repositories.errors.${failure.key}`, failure.params),
-          reference: null
-        });
-      } else {
-        this.failure.set(this.errorText.describe(apiError));
-      }
+    const failures = failureTexts(apiError);
+    const credentials = this.model.credentials().value();
+    if (
+      credentials.choice === 'saved'
+      && failures.some(failure =>
+        failure.path === 'credentials.passphrase' && failure.key?.endsWith('passphrase-required')
+      )
+    ) {
+      // The key's unlock ended since the page loaded (AR-31): ask for the passphrase again.
+      this.sessionKeys.markLocked(credentials.savedId);
     }
-    return errors;
+    this.failures.record(failures.filter(failure => failure.path !== null && this.shows(failure.path)));
+    const elsewhere = failures.find(failure => failure.path === null || !this.shows(failure.path));
+    if (elsewhere === undefined) {
+      return;
+    }
+    this.failure.set(
+      elsewhere.key === null
+        ? this.errorText.describe(apiError)
+        : {
+          text: this.transloco.translate(`web-feature-repositories.errors.${elsewhere.key}`, elsewhere.params),
+          reference: null
+        }
+    );
   }
 
-  /** The field the API's `path` names, if the form shows it. */
-  private fieldAt(path: string): FieldTree<unknown> | undefined {
+  /** Whether the form shows the field the API's `path` names. */
+  private shows(path: string): boolean {
     const model = this.model;
-    const credentials = model.credentials;
-    const fields: Record<string, FieldTree<unknown> | undefined> = {
-      remoteUrl: model.remoteUrl,
-      name: model.name,
-      credentials,
-      'credentials.name': credentials.name,
-      'credentials.username': credentials.username,
-      'credentials.password': credentials.password,
-      'credentials.privateKey': credentials.privateKey,
-      'credentials.passphrase': credentials.passphrase,
-      branch: model.cloneMode().value() === 'single-branch' ? model.branch : undefined,
-      gitLevel: this.allowedLevels().length > 1 ? model.gitLevel : undefined
+    const { choice, savedId } = model.credentials().value();
+    const key = this.saved()?.sshKeys.find(sshKey => sshKey.id === savedId);
+    const shown: Record<string, boolean> = {
+      remoteUrl: true,
+      name: true,
+      credentials: this.protocol() !== undefined,
+      'credentials.name': choice === 'new-https' || choice === 'new-ssh-key',
+      'credentials.username': choice === 'new-https',
+      'credentials.password': choice === 'new-https',
+      'credentials.privateKey': choice === 'new-ssh-key',
+      'credentials.passphrase': choice === 'new-ssh-key'
+        || (choice === 'saved' && key !== undefined && key.passphraseProtected && !key.unlocked),
+      branch: model.cloneMode().value() === 'single-branch',
+      gitLevel: this.allowedLevels().length > 1
     };
-    return fields[path];
+    return shown[path] ?? false;
   }
 
   /** Without the index, the backend's checks on submit are the only ones (AR-15). */

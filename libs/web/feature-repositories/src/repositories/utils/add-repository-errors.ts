@@ -42,7 +42,14 @@ const FIELD_CODES: Record<string, readonly string[]> = {
     'passphrase-required',
     'kdf-rounds-too-high'
   ],
-  'credentials.passphrase': [ 'required', 'too-big', 'wrong-passphrase', 'passphrase-not-needed', 'unlock-failed' ],
+  'credentials.passphrase': [
+    'required',
+    'too-big',
+    'wrong-passphrase',
+    'passphrase-required',
+    'passphrase-not-needed',
+    'unlock-failed'
+  ],
   'credentials.generateName': [ 'too-small', 'too-big', 'name-taken', 'generate-failed' ],
   branch: [ 'required', 'branch-not-found', 'no-branches' ],
   understood: [ 'required' ],

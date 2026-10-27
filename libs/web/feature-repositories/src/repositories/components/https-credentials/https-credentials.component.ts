@@ -14,6 +14,7 @@ import {
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 import type { CredentialsChoice, CredentialsModel } from '../../models/add-repository-form.model';
+import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { type FieldErrorText, shownError } from '../../utils/add-repository-errors';
 
 const KEY = 'web-feature-repositories.HttpsCredentialsComponent';
@@ -45,6 +46,7 @@ export class HttpsCredentialsComponent {
   readonly saved = input.required<readonly SavedHttpsCredentials[]>();
 
   private readonly transloco = inject(TranslocoService);
+  private readonly failures = inject(SubmitFailuresService, { optional: true });
 
   protected readonly choices = computed<readonly ChoiceOption<CredentialsChoice>[]>(() => {
     // Re-evaluated when the language changes.
@@ -60,6 +62,6 @@ export class HttpsCredentialsComponent {
   );
 
   protected error(name: keyof CredentialsModel): FieldErrorText | undefined {
-    return shownError(this.credentials()[name], `credentials.${name}`);
+    return this.failures?.forPath(`credentials.${name}`) ?? shownError(this.credentials()[name], `credentials.${name}`);
   }
 }

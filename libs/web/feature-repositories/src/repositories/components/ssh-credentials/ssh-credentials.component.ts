@@ -16,6 +16,7 @@ import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 import type { CredentialsChoice, CredentialsModel } from '../../models/add-repository-form.model';
 import { SessionKeysService } from '../../services/session-keys/session-keys.service';
+import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { fieldErrorKey, type FieldErrorText, shownError } from '../../utils/add-repository-errors';
 import { GeneratedKeyComponent } from '../generated-key/generated-key.component';
 
@@ -51,6 +52,7 @@ export class SshCredentialsComponent {
   readonly keys = input.required<readonly SavedSshKey[]>();
 
   private readonly transloco = inject(TranslocoService);
+  private readonly failures = inject(SubmitFailuresService, { optional: true });
   private readonly sessionKeys = inject(SessionKeysService);
 
   protected readonly choices = computed<readonly ChoiceOption<CredentialsChoice>[]>(() => {
@@ -85,7 +87,7 @@ export class SshCredentialsComponent {
     if (name === 'passphrase' && unlockError !== null) {
       return unlockError;
     }
-    return shownError(this.credentials()[name], `credentials.${name}`);
+    return this.failures?.forPath(`credentials.${name}`) ?? shownError(this.credentials()[name], `credentials.${name}`);
   }
 
   /** Unlocks the chosen key for the session (AR-25, AR-31); the passphrase is then forgotten. */

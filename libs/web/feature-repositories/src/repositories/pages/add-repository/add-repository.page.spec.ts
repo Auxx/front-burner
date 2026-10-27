@@ -10,7 +10,8 @@ import type {
   GitLevel,
   HostKey,
   RepositoryIndex,
-  RepositorySummary
+  RepositorySummary,
+  SavedCredentials
 } from '@front-burner/shared-contracts';
 import { DialogService } from '@front-burner/ui';
 import { CredentialsApi, KnownHostsApi, RepositoriesApi } from '@front-burner/web-api-client';
@@ -63,7 +64,12 @@ describe('AddRepositoryPage', () => {
   const page = () => fixture.nativeElement as HTMLElement;
 
   async function open(
-    options: { index?: RepositoryIndex; allowedGitLevels?: GitLevel[]; cameFrom?: UrlTree; } = {}
+    options: {
+      index?: RepositoryIndex;
+      allowedGitLevels?: GitLevel[];
+      cameFrom?: UrlTree;
+      saved?: SavedCredentials;
+    } = {}
   ): Promise<void> {
     accessChecks = [];
     adds = [];
@@ -88,7 +94,7 @@ describe('AddRepositoryPage', () => {
       providers: [
         provideRouter([]),
         { provide: RepositoriesApi, useValue: repositoriesApi },
-        { provide: CredentialsApi, useValue: { list: () => of({ https: [], sshKeys: [] }) } },
+        { provide: CredentialsApi, useValue: { list: () => of(options.saved ?? { https: [], sshKeys: [] }) } },
         { provide: CurrentUserService, useValue: { load: () => Promise.resolve(user) } },
         { provide: KnownHostsApi, useValue: knownHosts },
         { provide: DialogService, useValue: dialogs }
@@ -408,6 +414,124 @@ describe('AddRepositoryPage', () => {
       await settle(fixture);
 
       expect(navigate).toHaveBeenCalledWith('/');
+    });
+
+    it('lets the user try the same inputs again after an access check failed', async () => {
+      await open();
+      await fillPublic();
+      addAnswers.push(() =>
+        throwError(() =>
+          failure(400, {
+            code: 'validation-failed',
+            fields: [ { path: 'credentials', code: 'credentials-refused', params: { generatedKey: true } } ]
+          })
+        )
+      );
+      await clickSubmit();
+      expect(page().querySelector('repo-credentials-section .error')?.textContent?.trim()).toBe(
+        `${REPOS}.errors.credentials.credentials-refused-generated`
+      );
+
+      // The user adds the key on the git server, and tries again without changing anything.
+      expect(submit()?.getAttribute('aria-disabled')).toBeNull();
+      await clickSubmit();
+
+      expect(adds).toHaveLength(2);
+    });
+
+    it('shows a failure until the inputs change', async () => {
+      await open();
+      await fillPublic();
+      addAnswers.push(() =>
+        throwError(() =>
+          failure(400, {
+            code: 'validation-failed',
+            fields: [ { path: 'remoteUrl', code: 'repository-not-found', params: {} } ]
+          })
+        )
+      );
+      await clickSubmit();
+      expect(errorOf(page(), `${REPOS}.RemoteSectionComponent.remoteUrl`)).toBe(
+        `${REPOS}.errors.remoteUrl.repository-not-found`
+      );
+
+      type(control(page(), `${REPOS}.RemoteSectionComponent.name`), 'handbook-2');
+      await settle(fixture);
+
+      expect(errorOf(page(), `${REPOS}.RemoteSectionComponent.remoteUrl`)).toBeUndefined();
+    });
+
+    it('asks for the passphrase again when the key\'s unlock has ended', async () => {
+      const key = {
+        id: 3,
+        name: 'Laptop',
+        keyType: 'ed25519' as const,
+        fingerprint: 'SHA256:locked',
+        passphraseProtected: true,
+        unlocked: true,
+        generated: false,
+        missing: false
+      };
+      await open({ saved: { https: [], sshKeys: [ key ] } });
+      await enterUrl('git@git.example.com:acme/handbook.git');
+      expect(page().textContent).toContain(`${REPOS}.SshCredentialsComponent.unlocked`);
+      addAnswers.push(() =>
+        throwError(() =>
+          failure(400, {
+            code: 'validation-failed',
+            fields: [ { path: 'credentials.passphrase', code: 'passphrase-required', params: {} } ]
+          })
+        )
+      );
+
+      await clickSubmit();
+
+      expect(page().textContent).not.toContain(`${REPOS}.SshCredentialsComponent.unlocked`);
+      expect(errorOf(page(), `${REPOS}.SshCredentialsComponent.passphrase`)).toBe(
+        `${REPOS}.errors.credentials.passphrase.passphrase-required`
+      );
+    });
+
+    it('shows a failure of a field the form does not show above the buttons', async () => {
+      await open({ allowedGitLevels: [ 'simple' ] });
+      await fillPublic();
+      addAnswers.push(() =>
+        throwError(() =>
+          failure(400, {
+            code: 'validation-failed',
+            fields: [ { path: 'gitLevel', code: 'level-not-allowed', params: {} } ]
+          })
+        )
+      );
+
+      await clickSubmit();
+
+      expect(page().querySelector('.failure')?.textContent).toContain(`${REPOS}.errors.gitLevel.level-not-allowed`);
+    });
+
+    it('asks for the passphrase again when the branch list finds the key locked', async () => {
+      const key = {
+        id: 3,
+        name: 'Laptop',
+        keyType: 'ed25519' as const,
+        fingerprint: 'SHA256:locked',
+        passphraseProtected: true,
+        unlocked: true,
+        generated: false,
+        missing: false
+      };
+      await open({ saved: { https: [], sshKeys: [ key ] } });
+      await enterUrl('git@git.example.com:acme/handbook.git');
+      choose(page(), `${REPOS}.CloneSectionComponent.modes.single-branch`);
+      await vi.waitFor(() => expect(accessChecks).toHaveLength(1), { timeout: 2000 });
+
+      accessChecks[0].answer.error(failure(400, {
+        code: 'validation-failed',
+        fields: [ { path: 'credentials.passphrase', code: 'passphrase-required', params: {} } ]
+      }));
+      await settle(fixture);
+
+      expect(field(page(), `${REPOS}.SshCredentialsComponent.passphrase`)).toBeTruthy();
     });
   });
 });

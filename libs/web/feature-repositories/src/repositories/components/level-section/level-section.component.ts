@@ -4,6 +4,8 @@ import { GIT_LEVELS, type GitLevel } from '@front-burner/shared-contracts';
 import { type ChoiceOption, FieldComponent, SelectComponent } from '@front-burner/ui';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
+import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
+
 const KEY = 'web-feature-repositories.LevelSectionComponent';
 
 /**
@@ -23,6 +25,10 @@ export class LevelSectionComponent {
   readonly allowed = input.required<readonly GitLevel[]>();
 
   private readonly transloco = inject(TranslocoService);
+  private readonly failures = inject(SubmitFailuresService, { optional: true });
+
+  /** A failure the backend reported for the level (AR-40). */
+  protected readonly error = computed(() => this.failures?.forPath('gitLevel'));
 
   protected readonly options = computed<readonly ChoiceOption<GitLevel>[]>(() => {
     // Re-evaluated when the language changes.
