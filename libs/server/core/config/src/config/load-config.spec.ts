@@ -2,7 +2,8 @@ import { ConfigError, loadConfig } from './load-config';
 
 const TOKEN = 'abcdefghijklmnop';
 const SECRET = 'jwt-secret-for-the-config-tests-0123456789abcdef';
-const BASE = { FRONT_BURNER_JWT_SECRET: SECRET };
+const KEY = 'encryption-key-for-the-config-tests-0123456789ab';
+const BASE = { FRONT_BURNER_JWT_SECRET: SECRET, FRONT_BURNER_ENCRYPTION_KEY: KEY };
 
 function issuesOf(env: Record<string, string | undefined>, options = {}) {
   try {
@@ -37,6 +38,9 @@ describe('loadConfig', () => {
       dataDir: '/data',
       setupToken: undefined,
       jwtSecret: SECRET,
+      encryptionKey: KEY,
+      encryptionKeyReset: false,
+      blockPrivateNetworks: false,
       authTokenTtlMs: 900_000,
       refreshTokenTtlMs: 2_592_000_000,
       loginAuditRetentionMs: 7_776_000_000
@@ -61,7 +65,10 @@ describe('loadConfig', () => {
 
   it('reads the JWT secret from a file', () => {
     const readFile = vi.fn().mockReturnValue(`${SECRET}\n`);
-    const { config } = loadConfig({ FRONT_BURNER_JWT_SECRET_FILE: '/run/secrets/jwt' }, { readFile });
+    const { config } = loadConfig(
+      { FRONT_BURNER_JWT_SECRET_FILE: '/run/secrets/jwt', FRONT_BURNER_ENCRYPTION_KEY: KEY },
+      { readFile }
+    );
     expect(config.jwtSecret).toBe(SECRET);
     expect(readFile).toHaveBeenCalledWith('/run/secrets/jwt');
   });
@@ -69,6 +76,58 @@ describe('loadConfig', () => {
   it('rejects both the JWT secret and its _FILE variant', () => {
     const issues = issuesOf({ FRONT_BURNER_JWT_SECRET_FILE: '/run/secrets/jwt' }, { readFile: () => SECRET });
     expect(issues.map(issue => issue.variable)).toEqual([ 'FRONT_BURNER_JWT_SECRET' ]);
+  });
+
+  it('requires the encryption key', () => {
+    expect(issuesOf({ FRONT_BURNER_ENCRYPTION_KEY: undefined })).toEqual([
+      { variable: 'FRONT_BURNER_ENCRYPTION_KEY', message: 'is required' }
+    ]);
+  });
+
+  it('refuses a key shorter than 32 characters', () => {
+    const short = KEY.slice(0, 31);
+    const issues = issuesOf({ FRONT_BURNER_ENCRYPTION_KEY: short });
+    expect(issues).toEqual([
+      { variable: 'FRONT_BURNER_ENCRYPTION_KEY', message: 'must be at least 32 characters' }
+    ]);
+    expect(JSON.stringify(issues)).not.toContain(short);
+  });
+
+  it('refuses a key equal to the JWT secret', () => {
+    const issues = issuesOf({ FRONT_BURNER_ENCRYPTION_KEY: SECRET });
+    expect(issues).toEqual([
+      { variable: 'FRONT_BURNER_ENCRYPTION_KEY', message: 'must differ from FRONT_BURNER_JWT_SECRET' }
+    ]);
+    expect(JSON.stringify(issues)).not.toContain(SECRET);
+  });
+
+  it('reads the key from a file', () => {
+    const readFile = vi.fn().mockReturnValue(`${KEY}\n`);
+    const { config } = loadConfig(
+      { FRONT_BURNER_JWT_SECRET: SECRET, FRONT_BURNER_ENCRYPTION_KEY_FILE: '/run/secrets/key' },
+      { readFile }
+    );
+    expect(config.encryptionKey).toBe(KEY);
+    expect(readFile).toHaveBeenCalledWith('/run/secrets/key');
+  });
+
+  it('accepts only confirm as a reset', () => {
+    expect(loadConfig({ ...BASE, FRONT_BURNER_ENCRYPTION_KEY_RESET: 'confirm' }).config.encryptionKeyReset)
+      .toBe(true);
+    expect(issuesOf({ FRONT_BURNER_ENCRYPTION_KEY_RESET: 'yes' })).toEqual([
+      { variable: 'FRONT_BURNER_ENCRYPTION_KEY_RESET', message: 'must be confirm' }
+    ]);
+  });
+
+  it('parses the private network switch', () => {
+    const switchOf = (value: string | undefined) =>
+      loadConfig({ ...BASE, FRONT_BURNER_BLOCK_PRIVATE_NETWORKS: value }).config.blockPrivateNetworks;
+    expect(switchOf('true')).toBe(true);
+    expect(switchOf('false')).toBe(false);
+    expect(switchOf(undefined)).toBe(false);
+    expect(issuesOf({ FRONT_BURNER_BLOCK_PRIVATE_NETWORKS: '1' })).toEqual([
+      { variable: 'FRONT_BURNER_BLOCK_PRIVATE_NETWORKS', message: 'must be true or false' }
+    ]);
   });
 
   it('parses the durations', () => {

@@ -18,7 +18,8 @@ describe('writeOpenApi', () => {
       env: {
         FRONT_BURNER_DATA_DIR: join(root, 'data'),
         FRONT_BURNER_LOG_LEVEL: 'error',
-        FRONT_BURNER_JWT_SECRET: 'server-spec-jwt-secret-0123456789abcdefghijklm'
+        FRONT_BURNER_JWT_SECRET: 'server-spec-jwt-secret-0123456789abcdefghijklm',
+        FRONT_BURNER_ENCRYPTION_KEY: 'server-spec-encryption-key-0123456789abcdefghi'
       },
       cwd: root,
       webRoot: join(root, 'web'),

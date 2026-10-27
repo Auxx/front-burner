@@ -21,6 +21,9 @@ describe('ReadinessService', () => {
       dataDir: dir,
       setupToken: undefined,
       jwtSecret: 'spec-jwt-secret-0123456789abcdefghijklmnopqrstu',
+      encryptionKey: 'spec-encryption-key-0123456789abcdefghijklmnop',
+      encryptionKeyReset: false,
+      blockPrivateNetworks: false,
       authTokenTtlMs: 900_000,
       refreshTokenTtlMs: 2_592_000_000,
       loginAuditRetentionMs: 7_776_000_000

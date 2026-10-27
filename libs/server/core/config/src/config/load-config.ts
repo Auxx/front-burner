@@ -12,6 +12,9 @@ const MIN_SETUP_TOKEN_LENGTH = 16;
 const JWT_SECRET = 'FRONT_BURNER_JWT_SECRET';
 const JWT_SECRET_FILE = 'FRONT_BURNER_JWT_SECRET_FILE';
 const MIN_JWT_SECRET_LENGTH = 32;
+const ENCRYPTION_KEY = 'FRONT_BURNER_ENCRYPTION_KEY';
+const ENCRYPTION_KEY_FILE = 'FRONT_BURNER_ENCRYPTION_KEY_FILE';
+const MIN_ENCRYPTION_KEY_LENGTH = 32;
 const DEFAULT_TRUSTED_PROXIES = 'loopback, linklocal, uniquelocal';
 
 function duration(defaultValue: string) {
@@ -76,6 +79,12 @@ const schema = z.object({
   [SETUP_TOKEN_FILE]: z.string().optional(),
   [JWT_SECRET]: z.string().optional(),
   [JWT_SECRET_FILE]: z.string().optional(),
+  [ENCRYPTION_KEY]: z.string().optional(),
+  [ENCRYPTION_KEY_FILE]: z.string().optional(),
+  FRONT_BURNER_ENCRYPTION_KEY_RESET: z.literal('confirm', { error: () => 'must be confirm' }).optional(),
+  FRONT_BURNER_BLOCK_PRIVATE_NETWORKS: z.enum([ 'true', 'false' ], {
+    error: () => 'must be true or false'
+  }).default('false').transform(v => v === 'true'),
   FRONT_BURNER_AUTH_TOKEN_TTL: duration('15m'),
   FRONT_BURNER_REFRESH_TOKEN_TTL: duration('30d'),
   FRONT_BURNER_LOGIN_AUDIT_RETENTION: duration('90d')
@@ -85,6 +94,9 @@ const schema = z.object({
 }).refine(v => v[JWT_SECRET] === undefined || v[JWT_SECRET_FILE] === undefined, {
   path: [ JWT_SECRET ],
   message: `cannot be set together with ${JWT_SECRET_FILE}`
+}).refine(v => v[ENCRYPTION_KEY] === undefined || v[ENCRYPTION_KEY_FILE] === undefined, {
+  path: [ ENCRYPTION_KEY ],
+  message: `cannot be set together with ${ENCRYPTION_KEY_FILE}`
 });
 
 const KNOWN_VARIABLES = new Set(Object.keys(schema.shape));
@@ -145,6 +157,20 @@ export function loadConfig(
     issues.push({ variable: jwtSecret.variable, message: `must be at least ${MIN_JWT_SECRET_LENGTH} characters` });
   }
 
+  const encryptionKey = readSecret(ENCRYPTION_KEY, ENCRYPTION_KEY_FILE);
+  if (encryptionKey.value === undefined) {
+    if (input[ENCRYPTION_KEY_FILE] === undefined) {
+      issues.push({ variable: ENCRYPTION_KEY, message: 'is required' });
+    }
+  } else if (encryptionKey.value.length < MIN_ENCRYPTION_KEY_LENGTH) {
+    issues.push({
+      variable: encryptionKey.variable,
+      message: `must be at least ${MIN_ENCRYPTION_KEY_LENGTH} characters`
+    });
+  } else if (encryptionKey.value === jwtSecret.value) {
+    issues.push({ variable: encryptionKey.variable, message: `must differ from ${JWT_SECRET}` });
+  }
+
   const token = readSecret(SETUP_TOKEN, SETUP_TOKEN_FILE);
   let setupToken = token.value;
   const tokenVariable = token.variable;
@@ -160,7 +186,12 @@ export function loadConfig(
     );
   }
 
-  if (!parsed.success || issues.length > 0 || jwtSecret.value === undefined) {
+  if (
+    !parsed.success
+    || issues.length > 0
+    || jwtSecret.value === undefined
+    || encryptionKey.value === undefined
+  ) {
     throw new ConfigError(issues, warnings);
   }
 
@@ -174,6 +205,9 @@ export function loadConfig(
       dataDir: resolve(cwd, values.FRONT_BURNER_DATA_DIR),
       setupToken,
       jwtSecret: jwtSecret.value,
+      encryptionKey: encryptionKey.value,
+      encryptionKeyReset: values.FRONT_BURNER_ENCRYPTION_KEY_RESET === 'confirm',
+      blockPrivateNetworks: values.FRONT_BURNER_BLOCK_PRIVATE_NETWORKS,
       authTokenTtlMs: values.FRONT_BURNER_AUTH_TOKEN_TTL,
       refreshTokenTtlMs: values.FRONT_BURNER_REFRESH_TOKEN_TTL,
       loginAuditRetentionMs: values.FRONT_BURNER_LOGIN_AUDIT_RETENTION
