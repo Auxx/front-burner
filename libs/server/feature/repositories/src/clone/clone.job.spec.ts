@@ -2,7 +2,7 @@ import type { Config } from '@front-burner/server-core-config';
 import { SecretBox } from '@front-burner/server-core-crypto';
 import { Database, jobs, repositories } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitOptions, GitRunner } from '@front-burner/server-core-git';
+import { GitEngine, GitOptions, GitRunner, unlockPrivateKey } from '@front-burner/server-core-git';
 import {
   FIXTURE_PASSPHRASE,
   GitHttpServer,
@@ -56,6 +56,7 @@ describe('CloneJob', () => {
   let engine: GitEngine;
   let publish: ReturnType<typeof vi.fn<(userId: number, event: PushEvent) => void>>;
   let adding: AddRepositoryService;
+  let cloneKeys: CloneKeys;
   let alice: { id: number; sessionId: string; };
 
   function build(gitOptions: GitOptions = testGitOptions()): void {
@@ -64,7 +65,7 @@ describe('CloneJob', () => {
     runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, events);
     engine = new GitEngine(gitOptions, new GitRunner());
     const knownHosts = new KnownHostsService(database, gitOptions);
-    const cloneKeys = new CloneKeys();
+    cloneKeys = new CloneKeys();
     new CloneJob(database, runner, engine, saved, knownHosts, cloneKeys, events, layout).onModuleInit();
     adding = new AddRepositoryService(
       database,
@@ -184,6 +185,17 @@ describe('CloneJob', () => {
 
     expect(rowOf(id)).toMatchObject({ status: 'error', errorCode: 'clone-timed-out' });
     expect(existsSync(layout.workingCopy(alice.id, id))).toBe(false);
+  });
+
+  it('drops the held key of a clone cancelled before it ran', async () => {
+    const { id } = await add();
+    const [ job ] = database.db.select().from(jobs).where(eq(jobs.repositoryId, id)).all();
+    cloneKeys.hold(job?.id ?? 0, unlockPrivateKey(sshKeyFixture('ed25519')));
+
+    runner.cancel({ id: job?.id ?? 0 });
+
+    expect(cloneKeys.take(job?.id ?? 0)).toBeUndefined();
+    expect(rowOf(id)?.status).toBe('cloning');
   });
 
   it('fails an interrupted clone on start', async () => {

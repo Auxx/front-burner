@@ -97,6 +97,8 @@ export class CloneJob implements OnModuleInit {
   }
 
   private finished(job: Job, outcome: 'done' | 'failed' | 'cancelled', errorCode: string | null): void {
+    // Also for a job that never ran, such as one cancelled while queued (AR-49).
+    this.cloneKeys.release(job.id);
     if (outcome === 'cancelled' || job.repositoryId === null) {
       return;
     }
