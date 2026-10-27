@@ -1,0 +1,38 @@
+{
+  "name": "server-core-jobs",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/server/core/jobs/src",
+  "projectType": "library",
+  "tags": [
+    "scope:server",
+    "type:core"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{workspaceRoot}/coverage/libs/server/core/jobs"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/server/core/jobs"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/server/core/jobs/tsconfig.lib.json",
+          "tsc --noEmit -p libs/server/core/jobs/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

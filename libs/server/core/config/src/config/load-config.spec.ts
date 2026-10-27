@@ -45,6 +45,7 @@ describe('loadConfig', () => {
       refreshTokenTtlMs: 2_592_000_000,
       loginAuditRetentionMs: 7_776_000_000,
       cloneTimeoutMs: 1_800_000,
+      cloneConcurrency: 2,
       gitTimeoutMs: 300_000,
       knownHostsFile: undefined,
       oidc: undefined
@@ -148,6 +149,18 @@ describe('loadConfig', () => {
     expect(config.loginAuditRetentionMs).toBe(2_592_000_000);
     expect(config.cloneTimeoutMs).toBe(7_200_000);
     expect(config.gitTimeoutMs).toBe(90_000);
+  });
+
+  it('reads the clone concurrency', () => {
+    expect(loadConfig({ ...BASE, FRONT_BURNER_CLONE_CONCURRENCY: '16' }).config.cloneConcurrency).toBe(16);
+  });
+
+  it('refuses a clone concurrency outside 1 to 16', () => {
+    for (const value of [ '0', '17', '2.5', 'two' ]) {
+      expect(issuesOf({ FRONT_BURNER_CLONE_CONCURRENCY: value })).toEqual([
+        { variable: 'FRONT_BURNER_CLONE_CONCURRENCY', message: 'must be an integer from 1 to 16' }
+      ]);
+    }
   });
 
   it('refuses an unreadable duration', () => {

@@ -20,7 +20,8 @@ const MESSAGES: Record<ErrorCode, string> = {
   'wrong-credentials': 'Wrong username or password',
   'refresh-refused': 'Your session has expired. Please log in again',
   'cross-site-refused': 'The request came from another site.',
-  'oidc-code-invalid': 'OIDC login failed'
+  'oidc-code-invalid': 'OIDC login failed',
+  'too-many-jobs': 'Too many tasks are waiting. Wait for one to finish and try again.'
 };
 
 interface ZodIssueLike {

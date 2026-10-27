@@ -114,6 +114,13 @@ const schema = z.object({
   FRONT_BURNER_REFRESH_TOKEN_TTL: duration('30d'),
   FRONT_BURNER_LOGIN_AUDIT_RETENTION: duration('90d'),
   FRONT_BURNER_CLONE_TIMEOUT: duration('30m'),
+  FRONT_BURNER_CLONE_CONCURRENCY: z
+    .string()
+    .default('2')
+    .refine(v => /^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 16, {
+      message: 'must be an integer from 1 to 16'
+    })
+    .transform(Number),
   FRONT_BURNER_GIT_TIMEOUT: duration('5m'),
   FRONT_BURNER_KNOWN_HOSTS_FILE: z.string().optional(),
   [OIDC_ISSUER]: z.string().refine(isHttpsIssuer, { message: 'must be an https: URL without query or fragment' })
@@ -292,6 +299,7 @@ export function loadConfig(
       refreshTokenTtlMs: values.FRONT_BURNER_REFRESH_TOKEN_TTL,
       loginAuditRetentionMs: values.FRONT_BURNER_LOGIN_AUDIT_RETENTION,
       cloneTimeoutMs: values.FRONT_BURNER_CLONE_TIMEOUT,
+      cloneConcurrency: values.FRONT_BURNER_CLONE_CONCURRENCY,
       gitTimeoutMs: values.FRONT_BURNER_GIT_TIMEOUT,
       knownHostsFile: values.FRONT_BURNER_KNOWN_HOSTS_FILE === undefined
         ? undefined

@@ -80,6 +80,9 @@
       ],
       "@front-burner/server-core-events": [
         "./libs/server/core/events/src/index.ts"
+      ],
+      "@front-burner/server-core-jobs": [
+        "./libs/server/core/jobs/src/index.ts"
       ]
     }
   },
