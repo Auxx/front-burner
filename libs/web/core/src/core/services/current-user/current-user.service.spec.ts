@@ -8,7 +8,13 @@ import { of, Subject, throwError } from 'rxjs';
 import { AuthSessionService } from '../auth-session/auth-session.service';
 import { CurrentUserService } from './current-user.service';
 
-const ada: CurrentUser = { id: 1, email: 'ada@example.com', displayName: 'Ada Lovelace', role: 'administrator' };
+const ada: CurrentUser = {
+  id: 1,
+  email: 'ada@example.com',
+  displayName: 'Ada Lovelace',
+  role: 'administrator',
+  allowedGitLevels: [ 'advanced' ]
+};
 
 describe('CurrentUserService', () => {
   let current: ReturnType<typeof vi.fn>;

@@ -308,7 +308,22 @@ describe('AuthController', () => {
     const response = await http().get('/api/v1/me').set('Authorization', `Bearer ${authToken}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ id: alice.id, email: 'alice@x.io', displayName: 'Alice', role: 'administrator' });
+    expect(response.body).toEqual({
+      id: alice.id,
+      email: 'alice@x.io',
+      displayName: 'Alice',
+      role: 'administrator',
+      allowedGitLevels: [ 'advanced' ]
+    });
+  });
+
+  it('returns the allowed levels', async () => {
+    addUser({ email: 'alice@x.io', allowedGitLevels: [ 'advanced', 'simple' ] });
+    const { authToken } = (await login()).body;
+
+    const response = await http().get('/api/v1/me').set('Authorization', `Bearer ${authToken}`);
+
+    expect(response.body.allowedGitLevels).toEqual([ 'simple', 'advanced' ]);
   });
 
   it('refuses me without a token', async () => {

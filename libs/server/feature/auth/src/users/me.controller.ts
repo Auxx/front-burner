@@ -1,6 +1,6 @@
 import { DATABASE, Database, users } from '@front-burner/server-core-database';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import type { CurrentUser } from '@front-burner/shared-contracts';
+import { type CurrentUser, GIT_LEVELS } from '@front-burner/shared-contracts';
 import { Controller, Get, Inject, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { eq } from 'drizzle-orm';
@@ -24,11 +24,12 @@ export class MeController {
         id: users.id,
         email: users.email,
         displayName: users.displayName,
-        role: users.role
+        role: users.role,
+        allowedGitLevels: users.allowedGitLevels
       }).from(users).where(eq(users.id, req.auth.userId)).get();
     if (user === undefined) {
       throw new ApiErrorException(401, 'unauthenticated');
     }
-    return user;
+    return { ...user, allowedGitLevels: GIT_LEVELS.filter(level => user.allowedGitLevels.includes(level)) };
   }
 }

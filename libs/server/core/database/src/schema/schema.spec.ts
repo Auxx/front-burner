@@ -61,7 +61,7 @@ describe('schema', () => {
     database.db.insert(instanceState).values({ id: 1, onboardingState: 'completed' }).run();
 
     expect(database.db.select().from(users).all()).toEqual([
-      { id: 1, ...alice, disabled: false, oidcIssuer: null, oidcSubject: null }
+      { id: 1, ...alice, disabled: false, oidcIssuer: null, oidcSubject: null, allowedGitLevels: [ 'advanced' ] }
     ]);
     expect(database.db.select().from(instanceState).all()).toEqual([
       { id: 1, onboardingState: 'completed', encryptionCheck: null, pendingAdminEmail: null }
@@ -120,6 +120,11 @@ describe('schema', () => {
     expect(() => database.db.insert(systemSettings).values({ id: 2 }).run()).toThrow(
       expect.objectContaining({ code: 'SQLITE_CONSTRAINT_CHECK' })
     );
+  });
+
+  it('allows only Advanced by default', () => {
+    database.db.insert(users).values(alice).run();
+    expect(database.db.select().from(users).all()[0]?.allowedGitLevels).toEqual([ 'advanced' ]);
   });
 
   it('defaults a user to enabled', () => {
@@ -184,7 +189,41 @@ describe('schema', () => {
     it('stores no branch or error by default', () => {
       const { id } = database.db.insert(users).values(alice).returning().get();
       const row = database.db.insert(repositories).values({ ...handbook, userId: id }).returning().get();
-      expect(row).toMatchObject({ branch: null, errorCode: null });
+      expect(row).toMatchObject({ branch: null, errorCode: null, credentialId: null });
+    });
+
+    it('sets the credential to null when it is deleted', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      const credential = database.db.insert(savedCredentials).values({
+        userId: id,
+        kind: 'https',
+        name: 'Work',
+        username: 'alice',
+        secret: 'encrypted',
+        createdAt: new Date(0)
+      }).returning().get();
+      database.db.insert(repositories).values({ ...handbook, userId: id, credentialId: credential.id }).run();
+
+      database.db.delete(savedCredentials).run();
+
+      expect(database.db.select().from(repositories).all()).toMatchObject([ { credentialId: null } ]);
+    });
+
+    it('deletes a repository\'s jobs with it', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      const repository = database.db.insert(repositories).values({ ...handbook, userId: id }).returning().get();
+      database.db.insert(jobs).values({
+        type: 'repositories.clone',
+        status: 'queued',
+        runAt: new Date(0),
+        createdAt: new Date(0),
+        userId: id,
+        repositoryId: repository.id
+      }).run();
+
+      database.db.delete(repositories).run();
+
+      expect(database.db.select().from(jobs).all()).toEqual([]);
     });
   });
 
@@ -214,7 +253,7 @@ describe('schema', () => {
 
     it('stores an empty payload by default', () => {
       const row = database.db.insert(jobs).values(job).returning().get();
-      expect(row).toMatchObject({ payload: '{}', attempts: 0, progress: null, dedupeKey: null });
+      expect(row).toMatchObject({ payload: '{}', attempts: 0, progress: null, dedupeKey: null, repositoryId: null });
     });
   });
 

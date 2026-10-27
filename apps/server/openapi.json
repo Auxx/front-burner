@@ -643,13 +643,25 @@
               "administrator",
               "user"
             ]
+          },
+          "allowedGitLevels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "simple",
+                "guided",
+                "advanced"
+              ]
+            }
           }
         },
         "required": [
           "id",
           "email",
           "displayName",
-          "role"
+          "role",
+          "allowedGitLevels"
         ]
       },
       "SavedHttpsCredentials": {

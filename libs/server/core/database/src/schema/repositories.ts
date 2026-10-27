@@ -1,6 +1,7 @@
 import type { CloneMode, GitLevel, RepositoryError, RepositoryStatus } from '@front-burner/shared-contracts';
 import { sql } from 'drizzle-orm';
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { savedCredentials } from './saved-credentials';
 import { users } from './users';
 
 // drizzle-kit loads this file without the workspace's path aliases, so only a
@@ -15,10 +16,7 @@ export const REPOSITORY_ERROR_VALUES = [
   'working-copy-missing'
 ] as const satisfies readonly RepositoryError[];
 
-/**
- * A user's working copy of a remote (REQ-REPO-001, A-4.4). The credentials
- * reference arrives with the add-repository API.
- */
+/** A user's working copy of a remote (REQ-REPO-001, A-4.4). */
 export const repositories = sqliteTable(
   'repositories',
   {
@@ -27,6 +25,12 @@ export const repositories = sqliteTable(
     /** Unique among the user's repositories, ignoring case (AR-15). */
     name: text('name').notNull(),
     remoteUrl: text('remote_url').notNull(),
+    /**
+     * The saved credentials git uses; null for a public repository. Credentials
+     * outlive repositories, and deleting them leaves the repository without
+     * (A-4.5b).
+     */
+    credentialId: integer('credential_id').references(() => savedCredentials.id, { onDelete: 'set null' }),
     cloneMode: text('clone_mode', { enum: CLONE_MODES }).notNull(),
     /** The cloned branch of a single-branch clone; null for a full clone. */
     branch: text('branch'),

@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { repositories } from './repositories';
 import { users } from './users';
 
 export const JOB_STATUSES = [ 'queued', 'running', 'done', 'failed', 'cancelled' ] as const;
@@ -15,6 +16,8 @@ export const jobs = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     type: text('type').notNull(),
     userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /** The repository the job works on; its jobs go with it (A-4.5b). */
+    repositoryId: integer('repository_id').references(() => repositories.id, { onDelete: 'cascade' }),
     payload: text('payload').notNull().default('{}'),
     status: text('status', { enum: JOB_STATUSES }).notNull(),
     runAt: integer('run_at', { mode: 'timestamp_ms' }).notNull(),

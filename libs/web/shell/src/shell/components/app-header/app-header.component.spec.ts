@@ -10,7 +10,13 @@ import { translocoTesting } from '../../../testing/transloco-testing';
 import { AppHeaderComponent } from './app-header.component';
 
 const KEY = 'web-shell.AppHeaderComponent';
-const ada: CurrentUser = { id: 1, email: 'ada@example.com', displayName: 'Ada Lovelace', role: 'administrator' };
+const ada: CurrentUser = {
+  id: 1,
+  email: 'ada@example.com',
+  displayName: 'Ada Lovelace',
+  role: 'administrator',
+  allowedGitLevels: [ 'advanced' ]
+};
 
 @Component({ imports: [ AppHeaderComponent ], template: '<shell-app-header [user]="user" />' })
 class HostPage {

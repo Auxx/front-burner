@@ -1,3 +1,4 @@
+import type { GitLevel } from '@front-burner/shared-contracts';
 import { sql } from 'drizzle-orm';
 import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
@@ -22,7 +23,10 @@ export const users = sqliteTable(
     disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),
     /** The OIDC identity of a linked OIDC user (LG-18); null until the first OIDC login. */
     oidcIssuer: text('oidc_issuer'),
-    oidcSubject: text('oidc_subject')
+    oidcSubject: text('oidc_subject'),
+    /** The git control levels an administrator allows (AR-38); only Advanced in the MVP. */
+    allowedGitLevels: text('allowed_git_levels', { mode: 'json' }).$type<GitLevel[]>().notNull()
+      .default(sql`'["advanced"]'`)
   },
   table => [
     uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`),
