@@ -24,6 +24,7 @@ describe('writeOpenApi', () => {
       cwd: root,
       webRoot: join(root, 'web'),
       migrationsFolder: MIGRATIONS,
+      gitHelpersDir: join(MIGRATIONS, '..', '..', 'git', 'helpers'),
       listen: false,
       logDestination: { write: () => undefined }
     });
