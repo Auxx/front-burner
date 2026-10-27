@@ -86,5 +86,15 @@
   "web-feature-auth.PasswordPolicyComponent.rules.control-character": "not contain tabs, line breaks or other control characters",
   "web-feature-auth.PasswordPolicyComponent.rules.equals-email": "not be your email address",
   "web-feature-auth.PasswordPolicyComponent.met": "(met)",
-  "web-feature-auth.PasswordPolicyComponent.notMet": "(not met)"
+  "web-feature-auth.PasswordPolicyComponent.notMet": "(not met)",
+  "web-shell.ShellLayoutComponent.skipToContent": "Skip to content",
+  "web-shell.AppHeaderComponent.navigation": "Main",
+  "web-shell.AppHeaderComponent.dashboard": "Dashboard",
+  "web-shell.AppHeaderComponent.repositories": "Repositories",
+  "web-shell.AppHeaderComponent.menu": "Menu",
+  "web-shell.UserMenuComponent.label": "Account menu for {{ name }}",
+  "web-shell.UserMenuComponent.logout": "Log out",
+  "web-shell.PageNotFoundPage.title": "Page not found",
+  "web-shell.PageNotFoundPage.heading": "This page doesn't exist.",
+  "web-shell.PageNotFoundPage.dashboard": "Go to the dashboard"
 }

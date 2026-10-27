@@ -23,7 +23,12 @@ describe('i18n/en.json', () => {
       `${AUTH}.LoginPage.insecure`,
       'This instance is not served over HTTPS. You will be logged out when your session token expires.'
     ],
-    [ `${AUTH}.LoginPage.insecureHowTo`, 'How to set up HTTPS' ]
+    [ `${AUTH}.LoginPage.insecureHowTo`, 'How to set up HTTPS' ],
+    [ 'web-shell.ShellLayoutComponent.skipToContent', 'Skip to content' ],
+    [ 'web-shell.UserMenuComponent.label', 'Account menu for {{ name }}' ],
+    [ 'web-shell.UserMenuComponent.logout', 'Log out' ],
+    [ 'web-shell.PageNotFoundPage.title', 'Page not found' ],
+    [ 'web-shell.PageNotFoundPage.heading', 'This page doesn\'t exist.' ]
   ])('has the fixed text %s', (key, text) => {
     expect(texts[key]).toBe(text);
   });

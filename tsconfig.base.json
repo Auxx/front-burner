@@ -53,6 +53,9 @@
       ],
       "@front-burner/shared-util": [
         "./libs/shared/util/src/index.ts"
+      ],
+      "@front-burner/web-shell": [
+        "./libs/web/shell/src/index.ts"
       ]
     }
   },
