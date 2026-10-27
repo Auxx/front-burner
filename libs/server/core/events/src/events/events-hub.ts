@@ -17,9 +17,14 @@ export interface EventStream {
 @Injectable()
 export class EventsHub implements BeforeApplicationShutdown {
   private readonly streams = new Set<EventStream>();
+  private stopped = false;
 
-  /** Adds a stream; the returned function removes it without closing it. */
+  /** Adds a stream; the returned function removes it without closing it. Closes it at once after shutdown began. */
   open(stream: EventStream): () => void {
+    if (this.stopped) {
+      stream.close();
+      return () => undefined;
+    }
     this.streams.add(stream);
     return () => this.streams.delete(stream);
   }
@@ -43,6 +48,7 @@ export class EventsHub implements BeforeApplicationShutdown {
 
   /** Before the HTTP server closes, which would otherwise wait for every open stream (A-1.14). */
   beforeApplicationShutdown(): void {
+    this.stopped = true;
     this.closeAll();
   }
 

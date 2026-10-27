@@ -4,7 +4,7 @@ import type { EventsHub } from '@front-burner/server-core-events';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
 import { createTestDatabase } from '../testing/test-database';
-import { JobRunner, SHUTDOWN_GRACE_MS, START_SPREAD_MS } from './job-runner';
+import { INTERRUPTED_ATTEMPT_LIMIT, JobRunner, SHUTDOWN_GRACE_MS, START_SPREAD_MS } from './job-runner';
 import type { JobTypeDefinition, RunningJob } from './job-types';
 
 const NOW = new Date('2026-10-27T12:00:00Z');
@@ -238,6 +238,34 @@ describe('JobRunner', () => {
     expect(publish).toHaveBeenCalledWith(userId, { type: 'job.finished', jobId: running, outcome: 'cancelled' });
   });
 
+  it('refuses to cancel without a filter', () => {
+    controlledType();
+    const id = runner.enqueue({ type: 'test.controlled', payload: {} });
+
+    expect(() => runner.cancel({})).toThrow(/filter/);
+    expect(rowOf(id)?.status).toBe('queued');
+  });
+
+  it('fails a job whose outcome could not be stored', async () => {
+    runner.register({
+      type: 'test.unstorable',
+      pool: 'fetch',
+      onInterrupted: 'fail',
+      perUserLimit: 1,
+      // JSON.stringify cannot store a bigint.
+      handler: () => Promise.resolve({ size: BigInt(1) })
+    });
+    runner.start();
+
+    const id = runner.enqueue({ type: 'test.unstorable', userId, payload: {} });
+    await settle();
+
+    expect(rowOf(id)).toMatchObject({ status: 'failed', errorCode: 'failed', finishedAt: NOW });
+    expect(publish).toHaveBeenCalledWith(userId, { type: 'job.finished', jobId: id, outcome: 'failed' });
+    // The user's slot is free again.
+    expect(() => runner.enqueue({ type: 'test.unstorable', userId, payload: {} })).not.toThrow();
+  });
+
   it('leaves other jobs alone when cancelling by ID', async () => {
     controlledType();
     const kept = runner.enqueue({ type: 'test.controlled', payload: {} });
@@ -291,7 +319,8 @@ describe('JobRunner', () => {
       { auth: { token: 'x' } },
       { list: [ { clientSecret: 'x' } ] },
       { privateKey: 'x' },
-      { key: { passphrase: 'x' } }
+      { key: { passphrase: 'x' } },
+      { apiKey: 'x' }
     ];
     for (const payload of payloads) {
       expect(() => runner.enqueue({ type: 'test.controlled', payload })).toThrow(/secret/);
@@ -353,6 +382,19 @@ describe('JobRunner', () => {
 
       expect(handler).toHaveBeenCalledOnce();
       expect(rowOf(id)).toMatchObject({ status: 'done', attempts: 2 });
+    });
+
+    it('fails an interrupted job that keeps being interrupted', () => {
+      register('test.fetch', { pool: 'fetch' });
+      const poison = leftover('test.fetch', 'running');
+      database.db.update(jobs).set({ attempts: INTERRUPTED_ATTEMPT_LIMIT }).where(eq(jobs.id, poison)).run();
+      const retried = leftover('test.fetch', 'running');
+      database.db.update(jobs).set({ attempts: INTERRUPTED_ATTEMPT_LIMIT - 1 }).where(eq(jobs.id, retried)).run();
+
+      runner.start();
+
+      expect(rowOf(poison)).toMatchObject({ status: 'failed', errorCode: 'interrupted' });
+      expect(rowOf(retried)?.status).not.toBe('failed');
     });
 
     it('fails a running job of an unknown type', () => {

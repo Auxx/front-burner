@@ -26,6 +26,7 @@ describe('PushChannelService', () => {
   let loggedIn: ReturnType<typeof signal<boolean>>;
   let token: string;
   let refresh: ReturnType<typeof vi.fn<(failed: string) => Promise<string>>>;
+  let expire: ReturnType<typeof vi.fn<(returnUrl?: string) => Promise<void>>>;
   let fetch: ReturnType<typeof vi.fn<(url: string, init: RequestInit) => Promise<Response>>>;
   /** What the next requests answer; a stream when empty. */
   let answers: (() => Response)[];
@@ -90,12 +91,13 @@ describe('PushChannelService', () => {
       token = 'token-2';
       return Promise.resolve(token);
     });
+    expire = vi.fn(() => Promise.resolve());
     answers = [];
     streams = [];
     fetch = vi.fn((_url: string, init: RequestInit) => Promise.resolve(answers.shift()?.() ?? streamResponse(init)));
     vi.stubGlobal('fetch', fetch);
     TestBed.configureTestingModule({
-      providers: [ { provide: AuthSessionService, useValue: { loggedIn, authToken: () => token, refresh } } ]
+      providers: [ { provide: AuthSessionService, useValue: { loggedIn, authToken: () => token, refresh, expire } } ]
     });
     service = TestBed.inject(PushChannelService);
   });
@@ -205,13 +207,27 @@ describe('PushChannelService', () => {
     expect(streams[0]?.init.headers).toMatchObject({ Authorization: 'Bearer token-2' });
   });
 
-  it('stops on unauthenticated', async () => {
+  it('refreshes once per attempt, then waits for the backoff', async () => {
+    answers = [ refused('auth-token-expired'), refused('auth-token-expired') ];
+    subscribe();
+    await settle();
+
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(streams).toHaveLength(1);
+  });
+
+  it('ends the session and stops on unauthenticated', async () => {
     answers = [ refused('unauthenticated') ];
     subscribe();
     await vi.advanceTimersByTimeAsync(60_000);
 
     expect(fetch).toHaveBeenCalledOnce();
     expect(refresh).not.toHaveBeenCalled();
+    expect(expire).toHaveBeenCalledOnce();
   });
 
   it('closes on logout', async () => {

@@ -16,7 +16,13 @@ const PROGRESS_INTERVAL_MS = 1000;
 const UNFINISHED = [ 'queued', 'running' ] as const;
 
 /** Keys that suggest a secret: none may reach the table (A-6.3). */
-const SECRET_KEY = /password|token|secret|private_?key|passphrase/i;
+const SECRET_KEY = /password|token|secret|private_?key|api_?key|passphrase/i;
+
+/**
+ * An interrupted job of a `requeue` type that has started this often fails
+ * instead, so that a job that kills the backend cannot do it on every start.
+ */
+export const INTERRUPTED_ATTEMPT_LIMIT = 3;
 
 interface ActiveJob {
   job: Job;
@@ -136,6 +142,9 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
 
   /** Queued jobs become `cancelled`; running ones get their signal aborted. */
   cancel(where: CancelFilter): void {
+    if (where.id === undefined && where.userId === undefined && where.types === undefined) {
+      throw new Error('Cancelling jobs needs a filter');
+    }
     const conditions: SQL[] = [];
     if (where.id !== undefined) {
       conditions.push(eq(jobs.id, where.id));
@@ -189,7 +198,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
   private resolveInterrupted(): void {
     const interrupted = this.database.db.select().from(jobs).where(eq(jobs.status, 'running')).all();
     for (const job of interrupted) {
-      if (this.types.get(job.type)?.onInterrupted === 'requeue') {
+      if (this.types.get(job.type)?.onInterrupted === 'requeue' && job.attempts < INTERRUPTED_ATTEMPT_LIMIT) {
         this.database.db.update(jobs).set({ status: 'queued' }).where(eq(jobs.id, job.id)).run();
         this.logger.log({ jobId: job.id, type: job.type }, 'An interrupted job is queued again');
       } else {
@@ -292,7 +301,10 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
         result => this.finish(job, { status: 'done', result: result === undefined ? null : JSON.stringify(result) }),
         (error: unknown) => this.handleFailure(active, definition, error)
       )
-      .catch((error: unknown) => this.logger.error({ err: error, jobId: job.id }, 'Could not record a job outcome'))
+      .catch((error: unknown) => {
+        this.logger.error({ err: error, jobId: job.id }, 'Could not record a job outcome');
+        this.failLostOutcome(job);
+      })
       .finally(() => {
         this.active.delete(job.id);
         this.wake();
@@ -333,12 +345,35 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     this.publishFinished(job, outcome.status);
     const repeatEveryMs = this.types.get(job.type)?.repeatEveryMs;
     if (repeatEveryMs !== undefined) {
-      this.enqueue({
-        type: job.type,
-        payload: {},
-        dedupeKey: repeatKeyOf(job.type),
-        runAt: new Date(Date.now() + repeatEveryMs)
-      });
+      try {
+        this.enqueue({
+          type: job.type,
+          payload: {},
+          dedupeKey: repeatKeyOf(job.type),
+          runAt: new Date(Date.now() + repeatEveryMs)
+        });
+      } catch (error) {
+        // The outcome is stored; the next start queues the type again.
+        this.logger.error({ err: error, type: job.type }, 'Could not queue a repeating job');
+      }
+    }
+  }
+
+  /**
+   * Fails a job whose outcome could not be stored, so that it holds no
+   * per-user slot until the next start and its user hears that it ended.
+   */
+  private failLostOutcome(job: Job): void {
+    try {
+      const updated = this.database.db.update(jobs)
+        .set({ status: 'failed', errorCode: 'failed', finishedAt: new Date() })
+        .where(and(eq(jobs.id, job.id), eq(jobs.status, 'running')))
+        .run();
+      if (updated.changes === 1) {
+        this.publishFinished(job, 'failed');
+      }
+    } catch (error) {
+      this.logger.error({ err: error, jobId: job.id }, 'Could not fail a job whose outcome was lost');
     }
   }
 

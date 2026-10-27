@@ -122,6 +122,17 @@ describe('EventsController', () => {
     hub.publish(1, { type: 'job.progress', jobId: 1, percent: 1 });
   });
 
+  it('keeps a stream open when the auth token outlives a timer', async () => {
+    const stream = await open(1, 30 * 86_400_000);
+
+    const ended = await Promise.race([
+      stream.ended.then(() => true),
+      new Promise(done => setTimeout(done, 100, false))
+    ]);
+
+    expect(ended).toBe(false);
+  });
+
   it('closes the streams of a session', async () => {
     const stream = await open(1);
 

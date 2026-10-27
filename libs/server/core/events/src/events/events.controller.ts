@@ -9,6 +9,9 @@ import { EventsHub } from './events-hub';
 /** Keeps proxies from closing an idle stream (A-3.10). */
 export const KEEP_ALIVE_MS = 30_000;
 
+/** The longest delay `setTimeout` takes; a longer one fires at once. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
 /** One event in the SSE wire format. */
 export function formatEvent(event: PushEvent): string {
   return `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -41,7 +44,7 @@ export class EventsController {
 
     const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), KEEP_ALIVE_MS);
     // The client reconnects with a fresh token (A-3.10).
-    const expiry = setTimeout(() => end(), Math.max(0, authTokenExpiresAt - Date.now()));
+    const expiry = setTimeout(() => end(), Math.min(MAX_TIMEOUT_MS, Math.max(0, authTokenExpiresAt - Date.now())));
     const remove = this.hub.open({
       userId,
       sessionId,

@@ -59,4 +59,14 @@ describe('EventsHub', () => {
       expect(tab.close).toHaveBeenCalledOnce();
     }
   });
+
+  it('closes a stream opened after shutdown began', () => {
+    hub.beforeApplicationShutdown();
+
+    const late = stream(1, 'a1');
+    hub.publish(1, event);
+
+    expect(late.close).toHaveBeenCalledOnce();
+    expect(late.send).not.toHaveBeenCalled();
+  });
 });

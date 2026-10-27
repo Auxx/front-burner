@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { inject, Injectable } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { EMPTY, Observable, share, Subject, switchMap } from 'rxjs';
 
@@ -55,6 +56,7 @@ async function codeOf(response: Response): Promise<string | undefined> {
 export class PushChannelService {
   private readonly auth = inject(AuthSessionService);
   private readonly document = inject(DOCUMENT);
+  private readonly router = inject(Router);
   private readonly reconnectedSubject = new Subject<void>();
 
   /** Emits after every successful connect, the first included. */
@@ -74,7 +76,8 @@ export class PushChannelService {
       let retry: ReturnType<typeof setTimeout> | undefined;
       let failures = 0;
 
-      const connect = async (): Promise<void> => {
+      /** `afterRefresh`: the token was just refreshed, so another expiry waits for the backoff. */
+      const connect = async (afterRefresh = false): Promise<void> => {
         retry = undefined;
         const token = this.auth.authToken();
         if (closed || token === undefined) {
@@ -89,13 +92,19 @@ export class PushChannelService {
             signal: controller.signal
           });
           if (response.status === 401) {
-            if (await codeOf(response) !== 'auth-token-expired') {
-              // The interceptor's expiry of the session handles the rest.
+            const code = await codeOf(response);
+            if (code === 'auth-token-expired' && !afterRefresh) {
+              await this.auth.refresh(token);
+              void connect(true);
               return;
             }
-            await this.auth.refresh(token);
-            void connect();
-            return;
+            if (code !== 'auth-token-expired') {
+              // The session was revoked or the user disabled: this request bypasses the interceptor,
+              // so the channel ends the session itself, as the interceptor would (LG-40).
+              void this.auth.expire(this.router.url);
+              return;
+            }
+            throw new Error('The refreshed auth token was refused as expired');
           }
           if (!response.ok || response.body === null) {
             throw new Error(`The push channel answered ${response.status}`);
