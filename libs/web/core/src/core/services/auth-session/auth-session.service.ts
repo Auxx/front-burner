@@ -15,6 +15,9 @@ const REFRESH_LOCK = 'front-burner.refresh';
 
 const LOGIN = '/login';
 
+/** How long a tab that waited for the refresh lock waits for the other tab's new token. */
+const OTHER_TAB_WAIT_MS = 250;
+
 /** What is stored: never the refresh token, which stays in its cookie (LG-40). */
 interface StoredSession {
   authToken: string;
@@ -57,6 +60,8 @@ export class AuthSessionService {
   private readonly session = signal<StoredSession | undefined>(this.read());
   /** Serialises refreshes in this tab where the browser has no Web Locks (insecure contexts, LG-68). */
   private localLock: Promise<unknown> = Promise.resolve();
+  /** Whether the session could be stored; without storage it lives in this tab only. */
+  private storageWorks = true;
 
   readonly loggedIn = computed(() => this.session() !== undefined);
 
@@ -82,9 +87,20 @@ export class AuthSessionService {
    * failure the session expires and the promise rejects.
    */
   refresh(failedToken: string): Promise<string> {
-    return this.withLock(async () => {
-      const current = this.read() ?? this.session();
-      if (current && current.authToken !== failedToken) {
+    return this.withLock(async waited => {
+      // Where storage works it is the truth: no session there means another tab
+      // logged out, and this tab follows it on the storage event.
+      let current = this.storageWorks ? this.read() : this.session();
+      if (waited && current?.authToken === failedToken) {
+        // The tab that held the lock has most likely refreshed, but some
+        // browsers (Firefox) hand its write over only after the lock.
+        current = await this.tokenFromOtherTab(failedToken);
+      }
+      if (current === undefined) {
+        this.session.set(undefined);
+        throw new Error('The session ended in another tab.');
+      }
+      if (current.authToken !== failedToken) {
         this.session.set(current);
         return current.authToken;
       }
@@ -117,14 +133,38 @@ export class AuthSessionService {
     await this.showLogin('session-expired', returnUrl);
   }
 
-  private async withLock<T>(callback: () => Promise<T>): Promise<T> {
+  /** Runs `callback` under the refresh lock; `waited` tells whether another tab held it. */
+  private async withLock<T>(callback: (waited: boolean) => Promise<T>): Promise<T> {
     const locks = this.window?.navigator.locks;
     if (locks) {
-      return locks.request(REFRESH_LOCK, callback);
+      return locks.request(
+        REFRESH_LOCK,
+        { ifAvailable: true },
+        lock => lock ? callback(false) : locks.request(REFRESH_LOCK, () => callback(true))
+      );
     }
-    const run = this.localLock.then(callback);
+    // Within one tab a refresh updates the session at once: there is nothing to wait for.
+    const run = this.localLock.then(() => callback(false));
     this.localLock = run.catch(() => undefined);
     return run;
+  }
+
+  /** The session once another tab's new token arrives, or what is stored after a short wait. */
+  private tokenFromOtherTab(failedToken: string): Promise<StoredSession | undefined> {
+    return new Promise(resolve => {
+      const done = () => {
+        clearTimeout(timer);
+        this.window?.removeEventListener('storage', listener);
+        resolve(this.read());
+      };
+      const listener = (event: StorageEvent) => {
+        if (event.key === AUTH_STORAGE_KEY && parse(event.newValue)?.authToken !== failedToken) {
+          done();
+        }
+      };
+      const timer = setTimeout(done, OTHER_TAB_WAIT_MS);
+      this.window?.addEventListener('storage', listener);
+    });
   }
 
   private followOtherTab(event: StorageEvent): void {
@@ -160,7 +200,9 @@ export class AuthSessionService {
     this.session.set(session);
     try {
       this.window?.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+      this.storageWorks = true;
     } catch {
+      this.storageWorks = false;
       // Without storage the session lasts as long as the tab.
     }
   }

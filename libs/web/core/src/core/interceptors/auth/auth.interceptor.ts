@@ -48,8 +48,10 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
     return next(request);
   }
 
-  const expire = (error: unknown) => {
-    if (is401(error)) {
+  // A 401 ends the session only while the token it was sent with is still the
+  // current one: after a logout, or a new login meanwhile, it is old news.
+  const expire = (sent: string) => (error: unknown) => {
+    if (is401(error) && session.authToken() === sent) {
       void session.expire(router.url);
     }
     return throwError(() => error);
@@ -58,12 +60,12 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   return next(withToken(request, token)).pipe(
     catchError(error => {
       if (!is401(error) || errorCode(error) !== 'auth-token-expired') {
-        return expire(error);
+        return expire(token)(error);
       }
       return from(session.refresh(token)).pipe(
         // A failed refresh has already expired the session.
         catchError(() => throwError(() => error)),
-        switchMap(refreshed => next(withToken(request, refreshed)).pipe(catchError(expire)))
+        switchMap(refreshed => next(withToken(request, refreshed)).pipe(catchError(expire(refreshed))))
       );
     })
   );

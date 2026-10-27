@@ -22,7 +22,11 @@ describe('authInterceptor', () => {
   beforeEach(() => {
     session = {
       authToken: vi.fn(() => 'old'),
-      refresh: vi.fn(() => Promise.resolve('new')),
+      // Like the real service, a refresh makes the new token the current one.
+      refresh: vi.fn(() => {
+        session.authToken.mockReturnValue('new');
+        return Promise.resolve('new');
+      }),
       expire: vi.fn(() => Promise.resolve())
     };
     TestBed.configureTestingModule({
@@ -134,6 +138,27 @@ describe('authInterceptor', () => {
 
     await expect(response).rejects.toMatchObject({ status: 500 });
     expect(session.refresh).not.toHaveBeenCalled();
+    expect(session.expire).not.toHaveBeenCalled();
+  });
+
+  it('does not expire a newer session for a 401 of a token that is no longer current', async () => {
+    const response = firstValueFrom(http.get('/api/v1/me'));
+    // The user logged out and in again while the request was on its way.
+    session.authToken.mockReturnValue('newer');
+    backend.expectOne('/api/v1/me').flush(apiError('unauthenticated'), UNAUTHORIZED);
+
+    await expect(response).rejects.toMatchObject({ status: 401 });
+    expect(session.expire).not.toHaveBeenCalled();
+  });
+
+  it('does not expire a newer session when the retry fails after another login', async () => {
+    const response = firstValueFrom(http.get('/api/v1/me'));
+    backend.expectOne('/api/v1/me').flush(apiError('auth-token-expired'), UNAUTHORIZED);
+    await settle();
+    session.authToken.mockReturnValue('newer');
+    backend.expectOne('/api/v1/me').flush(apiError('unauthenticated'), UNAUTHORIZED);
+
+    await expect(response).rejects.toMatchObject({ status: 401 });
     expect(session.expire).not.toHaveBeenCalled();
   });
 });

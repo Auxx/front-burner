@@ -15,15 +15,40 @@ const tokens = (authToken: string): SessionTokens => ({
 
 const stored = (authToken: string): string => JSON.stringify(tokens(authToken));
 
-/** Web Locks as the browser runs them for one name: one callback at a time, in order. */
+/**
+ * Web Locks as the browser runs them for one name: one callback at a time, in
+ * order; with `ifAvailable`, the callback gets `null` while the lock is held.
+ */
 class FakeLocks {
   private tail: Promise<unknown> = Promise.resolve();
+  private held = 0;
 
-  request<T>(_name: string, callback: () => Promise<T>): Promise<T> {
-    const run = this.tail.then(() => callback());
+  request<T>(
+    _name: string,
+    optionsOrCallback: { ifAvailable?: boolean; } | ((lock: object | null) => Promise<T>),
+    maybeCallback?: (lock: object | null) => Promise<T>
+  ): Promise<T> {
+    const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
+    if (!callback) {
+      throw new TypeError('A lock request needs a callback.');
+    }
+    const ifAvailable = typeof optionsOrCallback === 'object' && optionsOrCallback.ifAvailable;
+    if (ifAvailable && this.held > 0) {
+      return callback(null);
+    }
+    this.held++;
+    const run = this.tail.then(() => callback({})).finally(() => this.held--);
     this.tail = run.catch(() => undefined);
     return run;
   }
+}
+
+/** What another tab's write looks like to this one: the storage event, after the lock is released. */
+function storeFromOtherTab(authToken: string): void {
+  localStorage.setItem(AUTH_STORAGE_KEY, stored(authToken));
+  window.dispatchEvent(
+    new StorageEvent('storage', { key: AUTH_STORAGE_KEY, newValue: stored(authToken), storageArea: localStorage })
+  );
 }
 
 describe('AuthSessionService', () => {
@@ -214,5 +239,63 @@ describe('AuthSessionService', () => {
     expect(service.loggedIn()).toBe(true);
     expect(service.authToken()).toBe('other');
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('does not refresh after another tab logged out', async () => {
+    localStorage.setItem(AUTH_STORAGE_KEY, stored('old'));
+    const { service, navigate } = create();
+    // The other tab's storage event has not arrived yet.
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+
+    await expect(service.refresh('old')).rejects.toThrow();
+    expect(api.refresh).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(service.loggedIn()).toBe(false);
+  });
+
+  it('refreshes from memory where the browser blocks storage', async () => {
+    api.login.mockReturnValue(of(tokens('old')));
+    api.refresh.mockReturnValue(of(tokens('new')));
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    const { service } = create();
+    await service.login('ada@example.com', 'secret');
+
+    expect(await service.refresh('old')).toBe('new');
+    setItem.mockRestore();
+  });
+
+  it('waits for the token of the tab that held the lock when it arrives late', async () => {
+    localStorage.setItem(AUTH_STORAGE_KEY, stored('old'));
+    const { service } = create();
+    let release: (() => void) | undefined;
+    const held = locks.request('front-burner.refresh', () => new Promise<void>(resolve => (release = resolve)));
+    await vi.waitFor(() => expect(release).toBeDefined());
+
+    const refreshed = service.refresh('old');
+    // Some browsers hand the other tab's write over only after the lock.
+    release?.();
+    await held;
+    setTimeout(() => storeFromOtherTab('from-other-tab'), 20);
+
+    expect(await refreshed).toBe('from-other-tab');
+    expect(api.refresh).not.toHaveBeenCalled();
+  });
+
+  it('refreshes itself when the tab that held the lock stored nothing', async () => {
+    localStorage.setItem(AUTH_STORAGE_KEY, stored('old'));
+    api.refresh.mockReturnValue(of(tokens('new')));
+    const { service } = create();
+    let release: (() => void) | undefined;
+    const held = locks.request('front-burner.refresh', () => new Promise<void>(resolve => (release = resolve)));
+    await vi.waitFor(() => expect(release).toBeDefined());
+
+    const refreshed = service.refresh('old');
+    release?.();
+    await held;
+
+    expect(await refreshed).toBe('new');
+    expect(api.refresh).toHaveBeenCalledTimes(1);
   });
 });

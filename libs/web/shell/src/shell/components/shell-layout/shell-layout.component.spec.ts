@@ -76,6 +76,42 @@ describe('ShellLayoutComponent', () => {
     expect(host().querySelector('shell-app-header')).toBeNull();
   });
 
+  it('tries again to load the user when the backend could not be reached', async () => {
+    user.set(undefined);
+    load.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => {
+      user.set(ada);
+      return Promise.resolve(ada);
+    });
+    vi.useFakeTimers({ toFake: [ 'setTimeout', 'clearTimeout' ] });
+    try {
+      TestBed.configureTestingModule({
+        imports: [ translocoTesting() ],
+        providers: [
+          provideRouter([ {
+            path: '',
+            component: ShellLayoutComponent,
+            children: [ { path: '', component: FirstPage } ]
+          } ]),
+          { provide: AuthSessionService, useValue: { loggedIn, logout: vi.fn() } },
+          { provide: CurrentUserService, useValue: { user, load } }
+        ]
+      });
+      harness = await RouterTestingHarness.create();
+      const navigation = harness.navigateByUrl('/');
+      await vi.advanceTimersByTimeAsync(0);
+      await navigation;
+      expect(load).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(5_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await settle(harness.fixture);
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(host().querySelector('shell-app-header')).not.toBeNull();
+  });
+
   it('does not load the user when logged out', async () => {
     loggedIn.set(false);
     user.set(undefined);

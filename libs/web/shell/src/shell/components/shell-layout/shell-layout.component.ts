@@ -17,6 +17,10 @@ import { filter } from 'rxjs';
 import { AppHeaderComponent } from '../app-header/app-header.component';
 import { RouteAnnouncerComponent } from '../route-announcer/route-announcer.component';
 
+/** The first delay before loading the user again; it doubles up to the maximum. */
+const RETRY_FIRST_MS = 1_000;
+const RETRY_MAX_MS = 30_000;
+
 /**
  * The layout of the pages inside the web client (NV-5, NV-17, NV-18): the skip
  * link, the app header while the user is logged in, and the page in `main`.
@@ -37,12 +41,28 @@ export class ShellLayoutComponent {
 
   constructor() {
     const session = inject(AuthSessionService);
-    effect(() => {
-      if (session.loggedIn()) {
-        // Without the user there is no header; a request that failed for its
-        // token has already sent the user to the login page.
-        this.currentUser.load().catch(() => undefined);
+    effect(onCleanup => {
+      if (!session.loggedIn()) {
+        return;
       }
+      // Without the user there is no header, so a failure is tried again until
+      // the backend answers; a 401 has already sent the user to the login page.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let stopped = false;
+      const load = (attempt: number) => {
+        this.currentUser.load().catch(() => {
+          if (stopped) {
+            return;
+          }
+          const delay = Math.min(RETRY_FIRST_MS * 2 ** attempt, RETRY_MAX_MS);
+          timer = setTimeout(() => load(attempt + 1), delay);
+        });
+      };
+      load(0);
+      onCleanup(() => {
+        stopped = true;
+        clearTimeout(timer);
+      });
     });
 
     const router = inject(Router);
