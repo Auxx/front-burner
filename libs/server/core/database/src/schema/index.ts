@@ -4,4 +4,5 @@ export * from './encrypted-columns';
 export * from './instance-state';
 export * from './login-audit';
 export * from './sessions';
+export * from './system-settings';
 export * from './users';

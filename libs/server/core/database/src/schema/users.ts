@@ -19,9 +19,15 @@ export const users = sqliteTable(
     passwordHash: text('password_hash'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     /** A disabled user cannot log in or refresh (LG-13, LG-24). */
-    disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false)
+    disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),
+    /** The OIDC identity of a linked OIDC user (LG-18); null until the first OIDC login. */
+    oidcIssuer: text('oidc_issuer'),
+    oidcSubject: text('oidc_subject')
   },
-  table => [ uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`) ]
+  table => [
+    uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`),
+    uniqueIndex('users_oidc_identity_unique').on(table.oidcIssuer, table.oidcSubject)
+  ]
 );
 
 export type User = typeof users.$inferSelect;

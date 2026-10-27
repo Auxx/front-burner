@@ -5,7 +5,16 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { applyMigrations } from '../database/migrations';
 import { Database, openDatabase } from '../database/open-database';
-import { instanceState, LOGIN_AUDIT_REASONS, loginAudit, ONBOARDING_STATE_VALUES, sessions, users } from './index';
+import {
+  ENCRYPTED_COLUMNS,
+  instanceState,
+  LOGIN_AUDIT_REASONS,
+  loginAudit,
+  ONBOARDING_STATE_VALUES,
+  sessions,
+  systemSettings,
+  users
+} from './index';
 
 const migrationsFolder = join(__dirname, '..', '..', 'migrations');
 
@@ -37,9 +46,11 @@ describe('schema', () => {
     database.db.insert(users).values(alice).run();
     database.db.insert(instanceState).values({ id: 1, onboardingState: 'completed' }).run();
 
-    expect(database.db.select().from(users).all()).toEqual([ { id: 1, ...alice, disabled: false } ]);
+    expect(database.db.select().from(users).all()).toEqual([
+      { id: 1, ...alice, disabled: false, oidcIssuer: null, oidcSubject: null }
+    ]);
     expect(database.db.select().from(instanceState).all()).toEqual([
-      { id: 1, onboardingState: 'completed', encryptionCheck: null }
+      { id: 1, onboardingState: 'completed', encryptionCheck: null, pendingAdminEmail: null }
     ]);
   });
 
@@ -57,6 +68,42 @@ describe('schema', () => {
 
   it('allows only one instance_state row', () => {
     expect(() => database.db.insert(instanceState).values({ id: 2, onboardingState: 'required' }).run()).toThrow(
+      expect.objectContaining({ code: 'SQLITE_CONSTRAINT_CHECK' })
+    );
+  });
+
+  it('refuses a second user with the same OIDC identity', () => {
+    const identity = { oidcIssuer: 'https://id.example.com', oidcSubject: 'sub-1' };
+    database.db.insert(users).values({ ...alice, ...identity, loginMethod: 'oidc', passwordHash: null }).run();
+    expect(() =>
+      database.db.insert(users).values({
+        ...alice,
+        ...identity,
+        email: 'bob@x.io',
+        loginMethod: 'oidc',
+        passwordHash: null
+      }).run()
+    ).toThrow(expect.objectContaining({ code: 'SQLITE_CONSTRAINT_UNIQUE' }));
+  });
+
+  it('allows many users without one', () => {
+    database.db.insert(users).values(alice).run();
+    database.db.insert(users).values({ ...alice, email: 'bob@x.io' }).run();
+    expect(database.db.select().from(users).all()).toHaveLength(2);
+  });
+
+  it('allows only one system_settings row', () => {
+    database.db.insert(systemSettings).values({ id: 1 }).run();
+    expect(database.db.select().from(systemSettings).all()).toEqual([ {
+      id: 1,
+      automaticRegistration: false,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+      oidcScopes: null,
+      oidcRequireVerifiedEmail: null
+    } ]);
+    expect(() => database.db.insert(systemSettings).values({ id: 2 }).run()).toThrow(
       expect.objectContaining({ code: 'SQLITE_CONSTRAINT_CHECK' })
     );
   });
@@ -101,6 +148,12 @@ describe('schema', () => {
     const entries = database.db.select().from(loginAudit).all();
     expect(entries).toHaveLength(1);
     expect(entries[0]?.userId).toBeNull();
+  });
+});
+
+describe('ENCRYPTED_COLUMNS', () => {
+  it('registers the client secret as encrypted', () => {
+    expect(ENCRYPTED_COLUMNS).toContainEqual({ table: systemSettings, column: systemSettings.oidcClientSecret });
   });
 });
 
