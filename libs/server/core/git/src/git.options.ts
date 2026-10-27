@@ -10,4 +10,6 @@ export interface GitOptions {
   cloneTimeoutMs: number;
   /** `FRONT_BURNER_GIT_TIMEOUT` (NF-11.8). */
   gitTimeoutMs: number;
+  /** The instance-wide `known_hosts` lines, added to every SSH command (AR-32, A-5.6). */
+  knownHosts: string[];
 }

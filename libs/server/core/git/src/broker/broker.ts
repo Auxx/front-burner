@@ -1,15 +1,20 @@
 import { constantTimeEquals, Lookup } from '@front-burner/server-core-security';
 import type { ParsedRemote } from '@front-burner/shared-util';
 import { randomBytes } from 'node:crypto';
-import { chmod, mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer, Server, Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EgressProxy, openEgressProxy } from '../egress/egress-proxy';
 import type { GitOptions } from '../git.options';
+import { openSshAgent } from '../ssh/ssh-agent';
+import type { UnlockedKey } from '../ssh/unlocked-key';
 
 /** What git authenticates with. The secret stays in this process (AR-17, A-5.4). */
-export type GitCredentials = { kind: 'none'; } | { kind: 'https'; username: string; password: string; };
+export type GitCredentials =
+  | { kind: 'none'; }
+  | { kind: 'https'; username: string; password: string; }
+  | { kind: 'ssh'; key: UnlockedKey; };
 
 export interface Broker {
   /** For git's environment: the proxy and, with HTTPS credentials, the askpass helper. Holds no secret. */
@@ -25,6 +30,8 @@ export interface BrokerOptions {
   remote: ParsedRemote;
   credentials: GitCredentials;
   gitOptions: GitOptions;
+  /** For SSH: `known_hosts` lines, the instance's and the user's (A-5.6). */
+  knownHosts?: string[];
   lookup?: Lookup;
 }
 
@@ -70,6 +77,50 @@ function listen(server: Server, path: string): Promise<void> {
   });
 }
 
+/** Paths written into `ssh_config` and `GIT_SSH_COMMAND`: no spaces, quotes, `%` or shell characters. */
+function safePath(path: string): string {
+  if (!/^[A-Za-z0-9_./+-]+$/.test(path)) {
+    throw new Error(`unsupported characters in the path ${JSON.stringify(path)}`);
+  }
+  return path;
+}
+
+/**
+ * The per-command `ssh_config` (A-5.4, A-5.7): only our own paths and fixed
+ * values. The remote's host and port reach the `ProxyCommand` helper through
+ * its environment, never through this file or a shell.
+ */
+function sshConfig(dir: string, gitOptions: GitOptions, agent: boolean, user: string | undefined): string {
+  const lines = [
+    'Host *',
+    agent ? `IdentityAgent ${dir}/s` : 'IdentityAgent none',
+    ...(agent ? [ `IdentityFile ${dir}/id.pub` ] : []),
+    'IdentitiesOnly yes',
+    'BatchMode yes',
+    'StrictHostKeyChecking yes',
+    `UserKnownHostsFile ${dir}/known_hosts`,
+    'GlobalKnownHostsFile /dev/null',
+    'UpdateHostKeys no',
+    'HashKnownHosts no',
+    'CheckHostIP no',
+    'PreferredAuthentications publickey',
+    'ForwardAgent no',
+    'ForwardX11 no',
+    'ClearAllForwardings yes',
+    'ControlMaster no',
+    'ControlPath none',
+    'PermitLocalCommand no',
+    `ProxyCommand ${safePath(process.execPath)} ${safePath(gitOptions.helpersDir)}/proxy-connect.cjs`,
+    ...(user === undefined ? [ 'User git' ] : [])
+  ];
+  return lines.map((line, i) => i === 0 ? line : `  ${line}`).join('\n') + '\n';
+}
+
+/** `host:port` for the `ProxyCommand` helper. */
+function egressTarget({ host, port }: ParsedRemote): string {
+  return `${host.includes(':') ? `[${host}]` : host}:${port ?? 22}`;
+}
+
 /** Git's config through the environment, so values stay off command lines (A-5.7). */
 function configEnv(entries: [ string, string ][]): Record<string, string> {
   const env: Record<string, string> = { GIT_CONFIG_COUNT: String(entries.length) };
@@ -82,15 +133,21 @@ function configEnv(entries: [ string, string ][]): Record<string, string> {
 
 /**
  * Opens the broker of one git command (A-5.4, A-5.7): a `0700` directory with
- * the egress proxy and, for HTTPS credentials, the askpass server, both guarded
- * by the command's one-time token.
+ * the egress proxy, guarded by the command's one-time token, and for HTTPS
+ * credentials the askpass server, or for an SSH remote the `ssh_config`, the
+ * known hosts and, with a key, the ssh-agent.
  */
 export async function openBroker(options: BrokerOptions): Promise<Broker> {
-  const dir = await mkdtemp(join(tmpdir(), 'fb-broker-'));
+  const { credentials, remote } = options;
+  if (credentials.kind !== 'none' && credentials.kind !== remote.protocol) {
+    throw new Error(`${credentials.kind} credentials cannot be used with an ${remote.protocol} remote`);
+  }
+  const dir = safePath(await mkdtemp(join(tmpdir(), 'fb-broker-')));
   await chmod(dir, 0o700);
   const token = randomBytes(32).toString('base64url');
   const sockets = new Set<Socket>();
   const servers: Server[] = [];
+  const closers: (() => Promise<void>)[] = [];
   const refusedPrompts: string[] = [];
   let egress: EgressProxy | undefined;
 
@@ -99,6 +156,7 @@ export async function openBroker(options: BrokerOptions): Promise<Broker> {
       socket.destroy();
     }
     await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve))));
+    await Promise.all(closers.map(closer => closer()));
     await egress?.close();
     await rm(dir, { recursive: true, force: true });
   };
@@ -113,7 +171,33 @@ export async function openBroker(options: BrokerOptions): Promise<Broker> {
     });
     const env = configEnv([ [ 'http.proxy', `socks5h://fb:${token}@localhost${proxySocket}` ] ]);
 
-    const { credentials } = options;
+    if (remote.protocol === 'ssh') {
+      const agent = credentials.kind === 'ssh';
+      if (agent) {
+        const sshAgent = await openSshAgent({
+          socketPath: join(dir, 's'),
+          key: credentials.key,
+          user: remote.user ?? 'git'
+        });
+        closers.push(() => sshAgent.close());
+        await writeFile(
+          join(dir, 'id.pub'),
+          `${credentials.key.algorithm} ${credentials.key.publicBlob.toString('base64')}\n`,
+          { mode: 0o600 }
+        );
+      }
+      const knownHosts = options.knownHosts ?? [];
+      await writeFile(join(dir, 'known_hosts'), knownHosts.map(line => `${line}\n`).join(''), { mode: 0o600 });
+      await writeFile(join(dir, 'ssh_config'), sshConfig(dir, options.gitOptions, agent, remote.user), { mode: 0o600 });
+      Object.assign(env, {
+        GIT_SSH_COMMAND: `ssh -F ${dir}/ssh_config`,
+        GIT_SSH_VARIANT: 'ssh',
+        FB_EGRESS_SOCK: proxySocket,
+        FB_BROKER_TOKEN: token,
+        FB_EGRESS_TARGET: egressTarget(remote)
+      });
+    }
+
     if (credentials.kind === 'https') {
       const askpassSocket = join(dir, 'a');
       let prompts = 0;

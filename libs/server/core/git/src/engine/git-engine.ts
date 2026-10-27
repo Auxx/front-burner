@@ -7,6 +7,7 @@ import { Broker, GitCredentials, openBroker } from '../broker/broker';
 import { assertSafeRepositoryConfig, UnsafeRepositoryConfigError } from '../config/repository-config';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult, GitRunner } from '../runner/git-runner';
+import { probeHostKey } from '../ssh/host-key-probe';
 import { classifyGitFailure, GitOperationError } from './git-errors';
 
 /** AR-42. */
@@ -32,6 +33,8 @@ export interface CloneRequest {
   tmpRoot: string;
   /** Must not exist yet; its parent must. */
   destination: string;
+  /** For SSH: the user's accepted hosts as `known_hosts` lines; the instance's are always added. */
+  knownHosts?: string[];
 }
 
 /** `git ls-remote --symref` output: `ref: <target>\t<name>` and `<oid>\t<name>` lines. */
@@ -66,11 +69,16 @@ export class GitEngine implements BeforeApplicationShutdown {
    *
    * @throws GitOperationError
    */
-  async accessCheck(remoteUrl: string, credentials: GitCredentials): Promise<AccessCheckResult> {
+  async accessCheck(
+    remoteUrl: string,
+    credentials: GitCredentials,
+    knownHosts: string[] = []
+  ): Promise<AccessCheckResult> {
     const result = await this.runNetwork(
       'access check',
       remoteUrl,
       credentials,
+      knownHosts,
       remote => [ 'ls-remote', '--symref', '--', remote, 'HEAD', 'refs/heads/*' ],
       ACCESS_CHECK_TIMEOUT_MS
     );
@@ -93,6 +101,7 @@ export class GitEngine implements BeforeApplicationShutdown {
         'clone',
         request.remoteUrl,
         request.credentials,
+        request.knownHosts ?? [],
         remote => [ ...NO_LFS, 'clone', '--no-recurse-submodules', ...single, '--', remote, dir ],
         this.options.cloneTimeoutMs,
         request.branch === undefined ? {} : { branch: request.branch }
@@ -124,29 +133,68 @@ export class GitEngine implements BeforeApplicationShutdown {
     operation: string,
     remoteUrl: string,
     credentials: GitCredentials,
+    userKnownHosts: string[],
     args: (remote: string) => string[],
     timeoutMs: number,
     params: Record<string, string> = {}
   ): Promise<GitResult> {
     const parsed = parseRemoteUrl(remoteUrl);
-    // SSH comes with plan 8.
-    if (!parsed.ok || parsed.remote.protocol !== 'https') {
-      throw new GitOperationError('failed', 'The remote URL is not a supported HTTPS URL.');
+    if (!parsed.ok) {
+      throw new GitOperationError('failed', 'The remote URL is not a supported HTTPS or SSH URL.');
     }
     const remote: ParsedRemote = parsed.remote;
+    if (credentials.kind !== 'none' && credentials.kind !== remote.protocol) {
+      throw new GitOperationError(
+        'failed',
+        `${credentials.kind} credentials cannot be used with an ${remote.protocol} remote.`
+      );
+    }
+    const knownHosts = [ ...this.options.knownHosts, ...userKnownHosts ];
     let broker: Broker | undefined;
+    let failure: GitOperationError;
     try {
-      broker = await openBroker({ remote, credentials, gitOptions: this.options });
+      broker = await openBroker({ remote, credentials, gitOptions: this.options, knownHosts });
       const result = await this.runner.run(args(remoteUrl), { env: broker.env, timeoutMs });
       if (result.exitCode === 0) {
         return result;
       }
-      const code = classifyGitFailure(result, broker.egress.refusals);
+      let code = classifyGitFailure(result, broker.egress.refusals);
+      // ssh calls a key of a type it does not know "unknown", even when it knows another key of this host.
+      if (code === 'host-key-unknown' && hasHostEntry(knownHosts, remote)) {
+        code = 'host-key-changed';
+      }
       // The URL has no credentials: parseRemoteUrl refuses them (NF-10.5).
       this.logger.debug(`git ${operation} of ${remoteUrl} failed with ${code}: ${result.stderr.trim()}`);
-      throw new GitOperationError(code, result.stderr, { host: remote.host, ...params });
+      failure = new GitOperationError(code, result.stderr, { host: remote.host, ...params });
     } finally {
       await broker?.close();
     }
+    if (failure.code === 'host-key-unknown') {
+      // AR-32: the user decides whether to trust the key `ssh` was shown.
+      const { host, port, type, key, fingerprint } = await probeHostKey(
+        { host: remote.host, port: remote.port ?? 22 },
+        this.options.egress
+      );
+      throw new GitOperationError('host-key-unknown', failure.detail, {
+        ...failure.params,
+        host,
+        port: String(port),
+        type,
+        key,
+        fingerprint
+      });
+    }
+    throw failure;
   }
+}
+
+/**
+ * Whether `known_hosts` lines hold any key for the remote's host and port. Like
+ * `ssh`, a port without entries of its own falls back to the host's port 22
+ * entries.
+ */
+function hasHostEntry(knownHosts: string[], remote: ParsedRemote): boolean {
+  const port = remote.port ?? 22;
+  const names = port === 22 ? [ remote.host ] : [ `[${remote.host}]:${port}`, remote.host ];
+  return knownHosts.some(line => (line.split(/\s+/)[0] ?? '').split(',').some(name => names.includes(name)));
 }

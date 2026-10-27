@@ -25,6 +25,8 @@ export interface Config {
   cloneTimeoutMs: number;
   /** The timeout of every other git command (NF-11.8). */
   gitTimeoutMs: number;
+  /** `FRONT_BURNER_KNOWN_HOSTS_FILE`: replaces the built-in host keys (AR-32). Always absolute. */
+  knownHostsFile: string | undefined;
   /** OIDC and the first administrator from the environment (AO-30); undefined when none of the variables is set. */
   oidc: OidcEnvironment | undefined;
 }

@@ -1,7 +1,7 @@
 import { Config, ConfigModule } from '@front-burner/server-core-config';
 import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule } from '@front-burner/server-core-database';
-import { GitModule } from '@front-burner/server-core-git';
+import { GitModule, loadInstanceKnownHosts } from '@front-burner/server-core-git';
 import { ApiExceptionFilter, HealthModule, LoggingModule } from '@front-burner/server-core-observability';
 import { EgressModule, RateLimitModule } from '@front-burner/server-core-security';
 import { AuthModule } from '@front-burner/server-feature-auth';
@@ -35,7 +35,8 @@ export class AppModule {
           helpersDir: deps.gitHelpersDir,
           egress: { blockPrivateNetworks: deps.config.blockPrivateNetworks },
           cloneTimeoutMs: deps.config.cloneTimeoutMs,
-          gitTimeoutMs: deps.config.gitTimeoutMs
+          gitTimeoutMs: deps.config.gitTimeoutMs,
+          knownHosts: loadInstanceKnownHosts(deps.config)
         }),
         LoggingModule.forRoot(deps.requestLogger),
         RateLimitModule,
