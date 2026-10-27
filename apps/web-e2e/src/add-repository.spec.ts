@@ -125,6 +125,11 @@ test.describe('Add repository, against a git server', () => {
     // Openable once the clone ends, without a reload (DS criterion 14).
     await expect(entries.getByRole('link', { name: 'handbook' })).toBeVisible({ timeout: 30_000 });
 
+    // The message shows once: not again on reload.
+    await page.reload();
+    await expect(entries.getByRole('link', { name: 'handbook' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Notifications' }).getByText(/^Cloning handbook/)).toHaveCount(0);
+
     // Nothing was saved to the profile (criterion 7).
     await revisit(page);
     await enterUrl(page, publicUrl());
@@ -192,6 +197,22 @@ test.describe('Add repository, against a git server', () => {
     await cancel(page).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Discard' }).click();
     await expect(page).toHaveURL(/\/$/);
+  });
+
+  test('criterion 20: Back asks first, and Keep editing keeps the way back', async ({ page }) => {
+    await openAddRepository(page);
+    await repositoryName(page).fill('handbook');
+
+    await page.goBack();
+    await page.getByRole('dialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Keep editing' })
+      .click();
+    await expect(page).toHaveURL(/\/repositories\/new$/);
+    await expect(repositoryName(page)).toHaveValue('handbook');
+
+    await page.goBack();
+    await page.getByRole('dialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Discard' }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
   });
 
   test('criterion 26: usable at 320 px, with no axe violations', async ({ page }) => {
