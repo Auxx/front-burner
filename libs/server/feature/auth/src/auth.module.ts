@@ -5,6 +5,8 @@ import { AuthController } from './login/auth.controller';
 import { LoginAuditService } from './login/login-audit.service';
 import { PasswordLoginService } from './login/password-login.service';
 import { RateLimitAuditFilter } from './login/rate-limit-audit.filter';
+import { OidcProviderService } from './oidc/oidc-provider.service';
+import { OidcSettingsService } from './oidc/oidc-settings.service';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { PasswordHasher } from './passwords/password-hasher';
 import { AuthTokenService } from './sessions/auth-token.service';
@@ -28,6 +30,8 @@ import { MeController } from './users/me.controller';
     PasswordHasher,
     PasswordLoginService,
     RateLimitAuditFilter,
+    OidcSettingsService,
+    OidcProviderService,
     {
       provide: SESSION_REUSE_HANDLER,
       inject: [ LoginAuditService ],

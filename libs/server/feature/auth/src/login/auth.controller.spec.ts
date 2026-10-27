@@ -1,7 +1,8 @@
 import { Config, ConfigModule } from '@front-burner/server-core-config';
+import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule, loginAudit, NewUser, users } from '@front-burner/server-core-database';
 import { ApiExceptionFilter } from '@front-burner/server-core-observability';
-import { RateLimitModule } from '@front-burner/server-core-security';
+import { EgressHttpClient, EgressModule, RateLimitModule } from '@front-burner/server-core-security';
 import { INestApplication } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -10,6 +11,7 @@ import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import request from 'supertest';
 import { AuthModule } from '../auth.module';
 import { PasswordHasher } from '../passwords/password-hasher';
+import { MockOidcProvider, startMockOidcProvider } from '../testing/mock-oidc-provider';
 import { createTestDatabase } from '../testing/test-database';
 
 const PASSWORD = 'correct horse 1';
@@ -19,6 +21,8 @@ const LOGOUT = '/api/v1/auth/session/logout';
 const config = {
   setupToken: undefined,
   jwtSecret: 'auth-controller-spec-secret-0123456789abcdefghi',
+  encryptionKey: 'auth-controller-spec-encryption-key-0123456789',
+  blockPrivateNetworks: false,
   authTokenTtlMs: 15 * 60_000,
   refreshTokenTtlMs: 30 * 86_400_000
 } as Config;
@@ -51,20 +55,32 @@ describe('AuthController', () => {
     passwordHash = await new PasswordHasher().hash(PASSWORD);
   });
 
-  beforeEach(async () => {
+  async function start(withConfig: Config = config, ca?: string): Promise<void> {
     database = createTestDatabase();
     const moduleRef = await Test.createTestingModule({
-      imports: [ ConfigModule.forRoot(config), DatabaseModule.forRoot(database), RateLimitModule, AuthModule ],
+      imports: [
+        ConfigModule.forRoot(withConfig),
+        DatabaseModule.forRoot(database),
+        CryptoModule.forRoot(withConfig),
+        EgressModule,
+        RateLimitModule,
+        AuthModule
+      ],
       providers: [
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
         { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor }
       ]
-    }).compile();
+    }).overrideProvider(EgressHttpClient).useFactory({ factory: () => new EgressHttpClient(withConfig, { ca }) })
+      .compile();
     app = moduleRef.createNestApplication({ logger: false });
     app.use(cookieParser());
     app.setGlobalPrefix('api/v1');
     await app.init();
+  }
+
+  beforeEach(async () => {
+    await start();
   });
 
   afterEach(async () => {
@@ -76,6 +92,33 @@ describe('AuthController', () => {
     const response = await http().get('/api/v1/auth/methods');
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ oidc: 'not-configured', passwordReset: false });
+  });
+
+  it('says OIDC is available once the provider is discovered', async () => {
+    let provider: MockOidcProvider | undefined = await startMockOidcProvider();
+    try {
+      await app.close();
+      database.sqlite.close();
+      const oidc = {
+        issuer: provider.issuer,
+        clientId: 'front-burner',
+        clientSecret: 'client-secret',
+        scopes: 'openid email profile',
+        requireVerifiedEmail: true,
+        adminEmail: 'admin@example.com'
+      };
+      await start({ ...config, oidc }, provider.ca);
+      expect((await http().get('/api/v1/auth/methods')).body).toEqual({ oidc: 'available', passwordReset: false });
+
+      await provider.stop();
+      provider = undefined;
+      await app.close();
+      database.sqlite.close();
+      await start({ ...config, oidc }, undefined);
+      expect((await http().get('/api/v1/auth/methods')).body).toEqual({ oidc: 'unavailable', passwordReset: false });
+    } finally {
+      await provider?.stop();
+    }
   });
 
   it('logs in with a cookie', async () => {

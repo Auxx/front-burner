@@ -4,6 +4,14 @@ import { createServer } from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 
+const FIXTURES = join(__dirname, 'fixtures');
+
+/** Paths of the test certificate and its key: self-signed for `localhost`, `127.0.0.1` and `::1`, valid until 2036. */
+export const TEST_CERTIFICATE_FILES = {
+  cert: join(FIXTURES, 'test.crt'),
+  key: join(FIXTURES, 'test.key')
+} as const;
+
 export interface HttpsTestServer {
   /** `https://127.0.0.1:<port>`, without a trailing slash. */
   url: string;
@@ -14,9 +22,8 @@ export interface HttpsTestServer {
 
 /** An HTTPS server on 127.0.0.1 with a test certificate, for specs of outbound connections. */
 export async function startHttpsTestServer(handler: RequestListener): Promise<HttpsTestServer> {
-  const fixtures = join(__dirname, 'fixtures');
-  const ca = readFileSync(join(fixtures, 'test.crt'), 'utf8');
-  const server = createServer({ cert: ca, key: readFileSync(join(fixtures, 'test.key'), 'utf8') }, handler);
+  const ca = readFileSync(TEST_CERTIFICATE_FILES.cert, 'utf8');
+  const server = createServer({ cert: ca, key: readFileSync(TEST_CERTIFICATE_FILES.key, 'utf8') }, handler);
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;
   return {

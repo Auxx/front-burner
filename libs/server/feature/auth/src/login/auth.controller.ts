@@ -5,6 +5,7 @@ import { Body, Controller, Get, HttpCode, Logger, Post, Req, Res, UseFilters } f
 import { ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
+import { OidcProviderService } from '../oidc/oidc-provider.service';
 import { IssuedSession, SessionService } from '../sessions/session.service';
 import { LoginMethodsDto, LoginRequestDto, RefreshRequestDto, SessionTokensDto } from './auth.dto';
 import { PasswordLoginService } from './password-login.service';
@@ -21,14 +22,15 @@ export class AuthController {
 
   constructor(
     private readonly passwordLogin: PasswordLoginService,
-    private readonly sessions: SessionService
+    private readonly sessions: SessionService,
+    private readonly oidcProvider: OidcProviderService
   ) {}
 
-  /** The login methods of the instance (LG-7, LG-8). OIDC and password reset come later. */
+  /** The login methods of the instance (LG-7, LG-8). Password reset comes later. */
   @Get('methods')
   @ApiOkResponse({ type: LoginMethodsDto })
-  methods(): LoginMethods {
-    return { oidc: 'not-configured', passwordReset: false };
+  async methods(): Promise<LoginMethods> {
+    return { oidc: await this.oidcProvider.availability(), passwordReset: false };
   }
 
   /** Username + password login (LG-10 to LG-16). With cookie delivery the refresh token is only in the cookie. */
