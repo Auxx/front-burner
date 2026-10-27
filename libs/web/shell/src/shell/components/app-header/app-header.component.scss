@@ -1,0 +1,76 @@
+// The narrow layout applies below the medium breakpoint, as `NARROW_VIEWPORT`
+// and `below(breakpoint.$medium)` of the ui library (600 px, NV-6).
+$narrow: '(max-width: calc(37.5em - 0.02px))';
+
+:host {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2);
+  inline-size: 100%;
+}
+
+nav {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-4);
+  min-inline-size: 0;
+}
+
+.brand,
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-1-5);
+  min-block-size: var(--ui-control-height);
+  color: var(--ui-text-default);
+  text-decoration: none;
+  border-radius: var(--ui-radius-control);
+
+  &:hover {
+    color: var(--ui-text-link);
+  }
+}
+
+.brand {
+  font-weight: var(--ui-font-weight-semibold);
+  white-space: nowrap;
+}
+
+.link.active {
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
+.narrow {
+  display: none;
+}
+
+@media #{$narrow} {
+  nav {
+    gap: var(--ui-space-2);
+  }
+
+  .brand {
+    justify-content: center;
+    min-inline-size: var(--ui-control-height);
+  }
+
+  // Still the link's name for screen readers.
+  .brand-name {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .wide {
+    display: none;
+  }
+
+  .narrow {
+    display: inline-flex;
+  }
+}

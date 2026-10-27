@@ -1,0 +1,26 @@
+<ng-container *transloco="let t; prefix: 'web-shell.AppHeaderComponent'">
+  <nav [attr.aria-label]="t('navigation')">
+    <a
+      class="brand"
+      routerLink="/"
+      routerLinkActive="active"
+      ariaCurrentWhenActive="page"
+      [routerLinkActiveOptions]="{ exact: true }"
+    >
+      <ui-icon name="flame" />
+      <span class="brand-name">Front Burner</span>
+    </a>
+    <a class="link wide" routerLink="/repositories" routerLinkActive="active" ariaCurrentWhenActive="page">
+      {{ t('repositories') }}
+    </a>
+    <button uiButton variant="ghost" class="narrow" [uiMenuTrigger]="links.aria">
+      <ui-icon name="menu" />
+      {{ t('menu') }}
+    </button>
+    <ui-menu #links="uiMenu">
+      <a uiMenuItem="dashboard" routerLink="/">{{ t('dashboard') }}</a>
+      <a uiMenuItem="repositories" routerLink="/repositories">{{ t('repositories') }}</a>
+    </ui-menu>
+  </nav>
+  <shell-user-menu [user]="user()" />
+</ng-container>

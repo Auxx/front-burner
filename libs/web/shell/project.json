@@ -1,0 +1,36 @@
+{
+  "name": "web-shell",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/web/shell/src",
+  "prefix": "shell",
+  "projectType": "library",
+  "tags": [
+    "scope:web",
+    "type:domain"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/web/shell"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/web/shell/tsconfig.lib.json",
+          "tsc --noEmit -p libs/web/shell/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

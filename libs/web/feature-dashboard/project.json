@@ -1,0 +1,36 @@
+{
+  "name": "web-feature-dashboard",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/web/feature-dashboard/src",
+  "prefix": "dash",
+  "projectType": "library",
+  "tags": [
+    "scope:web",
+    "type:feature"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/web/feature-dashboard"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/web/feature-dashboard/tsconfig.lib.json",
+          "tsc --noEmit -p libs/web/feature-dashboard/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

@@ -85,3 +85,16 @@ export const test = base.extend<{ instanceOptions: InstanceOptions; instance: In
 });
 
 export const expect = base.expect;
+
+/**
+ * Removes the console errors browsers log for failed requests to `pathname`,
+ * for a test that expects them, such as a refused login.
+ */
+export function drainFailedRequests(monitor: Monitor, pathname: string): void {
+  const failed = (error: ConsoleError) => new URL(error.url, 'http://x').pathname === pathname;
+  monitor.consoleErrors.splice(
+    0,
+    monitor.consoleErrors.length,
+    ...monitor.consoleErrors.filter(error => !failed(error))
+  );
+}

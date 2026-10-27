@@ -1,0 +1,35 @@
+// A round button with the initials; its size is the controls' height, which
+// grows to 44 px on touch screens (NF-13.5).
+.trigger {
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--ui-control-height);
+  block-size: var(--ui-control-height);
+  padding: 0;
+  border: var(--ui-border-width) solid var(--ui-border-default);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-default);
+  font: inherit;
+  font-weight: var(--ui-font-weight-semibold);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--ui-surface-hover);
+  }
+}
+
+.identity {
+  display: grid;
+  padding: var(--ui-space-1) var(--ui-space-2) var(--ui-space-2);
+  max-inline-size: 18rem;
+  overflow-wrap: anywhere;
+}
+
+.name {
+  font-weight: var(--ui-font-weight-semibold);
+}
+
+.email {
+  color: var(--ui-text-muted);
+}

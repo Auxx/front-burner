@@ -16,6 +16,8 @@ import { AppShellSideDirective } from '../../directives/app-shell-side/app-shell
 import { injectNarrowViewport } from '../../utils/narrow-viewport/narrow-viewport.util';
 import { SplitPaneComponent, SplitPaneShow } from '../split-pane/split-pane.component';
 
+let nextId = 0;
+
 /**
  * The layout of every page that needs a login (A-10.5, A-10.6): the header, an
  * optional activity bar and side panel, the main content and an optional status
@@ -64,6 +66,9 @@ export class AppShellComponent {
     }
     return this.sideOpen() ? 'both' : 'end';
   });
+
+  /** The skip link names `main` as its target, so that checkers such as axe count it as a skip link. */
+  protected readonly mainId = `ui-app-shell-main-${nextId++}`;
 
   private readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
   private drawerShown = false;

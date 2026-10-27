@@ -1,0 +1,26 @@
+:host {
+  display: grid;
+  justify-items: center;
+  padding: var(--ui-space-8) var(--ui-space-4);
+}
+
+.content {
+  display: grid;
+  gap: var(--ui-space-2);
+  text-align: center;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--ui-font-size-title);
+  font-weight: var(--ui-font-weight-semibold);
+  line-height: var(--ui-line-height-tight);
+
+  &:focus {
+    outline: none;
+  }
+}
+
+a {
+  color: var(--ui-text-link);
+}
