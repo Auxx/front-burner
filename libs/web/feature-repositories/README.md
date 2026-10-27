@@ -11,6 +11,12 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
   the protocol changes (AR-11, AR-16); `HttpsCredentialsComponent` for HTTPS
   (AR-19 to AR-22); `SshCredentialsComponent` and `GeneratedKeyComponent` for
   SSH (AR-23 to AR-31).
+- `CloneSectionComponent` and `LevelSectionComponent`: clone mode, branch and
+  git control level (AR-33 to AR-40).
+- `BranchListService`: the branch list's access check, debounced, with stale
+  answers dropped (AR-35); provided by the page.
+- `failureTexts` (`utils/add-repository-errors.ts`): the one mapping from the
+  API's failures to AR-42's texts and where they are shown.
 - `SessionKeysService`: the key generated and the keys unlocked on this visit,
   provided by the page.
 

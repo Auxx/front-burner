@@ -7,5 +7,7 @@
   <form class="form" novalidate>
     <repo-remote-section [remoteUrl]="model.remoteUrl" [name]="model.name" [index]="index()" />
     <repo-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="saved()" />
+    <repo-clone-section [cloneMode]="model.cloneMode" [branch]="model.branch" [understood]="model.understood" />
+    <repo-level-section [gitLevel]="model.gitLevel" [allowed]="allowedLevels()" />
   </form>
 </ng-container>

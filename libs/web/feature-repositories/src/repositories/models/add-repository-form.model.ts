@@ -165,5 +165,11 @@ export function addRepositorySchema(context: AddRepositoryContext): SchemaFn<Add
         return value() ? undefined : { kind: 'required' };
       });
     });
+
+    // AR-34: a branch, and the warning acknowledged.
+    applyWhen(path, ({ valueOf }) => valueOf(path.cloneMode) === 'single-branch', single => {
+      validate(single.branch, ({ value }) => value() === '' ? { kind: 'required' } : undefined);
+      validate(single.understood, ({ value }) => value() ? undefined : { kind: 'required' });
+    });
   };
 }
