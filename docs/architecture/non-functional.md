@@ -200,7 +200,9 @@ sees the result.
   decrypt it, the container refuses to start, and the log explains why.
 - **NF-8.6** Recovery from a lost key: the operator starts once with the new key
   and `FRONT_BURNER_ENCRYPTION_KEY_RESET=confirm`. Front Burner deletes every
-  encrypted value and stores a new check value. Then:
+  encrypted value and stores a new check value. The reset acts only when the key
+  does not match the check value, so leaving the variable set afterwards deletes
+  nothing; Front Burner then logs a warning to remove it _(plan's call)_. Then:
   - repositories, working copies, their content, unpushed commits, users and
     their logins are unaffected;
   - users enter their HTTPS credentials and provider tokens again;

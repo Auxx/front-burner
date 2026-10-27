@@ -204,6 +204,31 @@ describe('startServer', () => {
     expect((failure as StartupError).step).toBe('database');
   });
 
+  it('stops at encryption-key with another key', async () => {
+    app = await start();
+    await app.close();
+    app = undefined;
+
+    const failure = await start({
+      FRONT_BURNER_ENCRYPTION_KEY: 'another-server-spec-encryption-key-0123456789'
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(StartupError);
+    expect((failure as StartupError).step).toBe('encryption-key');
+    expect((failure as StartupError).message).toContain('FRONT_BURNER_ENCRYPTION_KEY');
+  });
+
+  it('warns about a reset that the matching key made unnecessary', async () => {
+    app = await start();
+    await app.close();
+
+    app = await start({ FRONT_BURNER_ENCRYPTION_KEY_RESET: 'confirm' });
+
+    const warnings = logEntries().filter(e => String(e['message']).includes('FRONT_BURNER_ENCRYPTION_KEY_RESET'));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]['level']).toBe('warn');
+  });
+
   it('logs the configuration warnings once, before Nest exists (A-1.11)', async () => {
     app = await start({ FRONT_BURNER_PROT: '1' });
 

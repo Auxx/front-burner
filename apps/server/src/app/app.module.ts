@@ -1,4 +1,5 @@
 import { Config, ConfigModule } from '@front-burner/server-core-config';
+import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule } from '@front-burner/server-core-database';
 import { ApiExceptionFilter, HealthModule, LoggingModule } from '@front-burner/server-core-observability';
 import { RateLimitModule } from '@front-burner/server-core-security';
@@ -24,6 +25,7 @@ export class AppModule {
       imports: [
         ConfigModule.forRoot(deps.config),
         DatabaseModule.forRoot(deps.database),
+        CryptoModule.forRoot(deps.config),
         LoggingModule.forRoot(deps.requestLogger),
         RateLimitModule,
         HealthModule.forRoot({ migrationsApplied: deps.migrationsApplied }),

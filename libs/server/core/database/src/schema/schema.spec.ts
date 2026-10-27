@@ -38,7 +38,9 @@ describe('schema', () => {
     database.db.insert(instanceState).values({ id: 1, onboardingState: 'completed' }).run();
 
     expect(database.db.select().from(users).all()).toEqual([ { id: 1, ...alice, disabled: false } ]);
-    expect(database.db.select().from(instanceState).all()).toEqual([ { id: 1, onboardingState: 'completed' } ]);
+    expect(database.db.select().from(instanceState).all()).toEqual([
+      { id: 1, onboardingState: 'completed', encryptionCheck: null }
+    ]);
   });
 
   it('allows a user without a password hash', () => {
