@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -243,6 +244,46 @@ describe('DashboardPage', () => {
 
       expect(push.events.observed).toBe(false);
       expect(push.reconnected.observed).toBe(false);
+    });
+
+    it('shows the cloning message once: not again on reload or Back', async () => {
+      navigationState = { addedRepository: 'handbook' };
+      const location = { getState: vi.fn(() => ({ navigationId: 3, addedRepository: 'handbook' })), path: () => '/' };
+      const replaceState = vi.fn();
+      TestBed.overrideProvider(Location, { useValue: { ...location, replaceState } });
+
+      await open(of({ repositories: [ cloning ] }));
+
+      expect(toast.show).toHaveBeenCalledTimes(1);
+      expect(replaceState).toHaveBeenCalledWith('/', '', { navigationId: 3 });
+    });
+
+    it('keeps the newest list when answers arrive out of order', async () => {
+      const first = new Subject<RecentRepositories>();
+      const second = new Subject<RecentRepositories>();
+      await open(first, second);
+
+      push.reconnected.next();
+      second.next({ repositories: [ handbook ] });
+      second.complete();
+      first.next({ repositories: [ cloning ] });
+      first.complete();
+      await settle(fixture);
+
+      expect(link()).not.toBeNull();
+    });
+
+    it('applies a status event that arrives while the list loads', async () => {
+      const first = new Subject<RecentRepositories>();
+      await open(first, of({ repositories: [ handbook ] }));
+
+      await statusOf({ repositoryId: 1, status: 'ready', error: null });
+      first.next({ repositories: [ cloning ] });
+      first.complete();
+      await settle(fixture);
+
+      expect(requests).toBe(2);
+      expect(link()).not.toBeNull();
     });
   });
 });

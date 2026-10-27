@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
@@ -44,11 +45,16 @@ export class DashboardPage {
   private readonly hint = inject(DashboardHintService);
   private readonly push = inject(PushChannelService);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
 
   protected readonly list = signal<RecentList>({ kind: 'loading' });
   protected readonly retrying = signal(false);
+  /** The number of the latest request for the list. */
+  private loads = 0;
+  /** A status event came while the list was loading. */
+  private reloadAfterLoad = false;
   protected readonly repositories = computed(() => {
     const list = this.list();
     return list.kind === 'loaded' ? list.repositories : null;
@@ -91,6 +97,13 @@ export class DashboardPage {
       dismissLabel: this.transloco.translate(`${KEY}.dismiss`),
       status: 'info'
     });
+    // The router restores this state on reload and on Back: drop it, so that the message shows once.
+    const state = (this.location.getState() ?? {}) as Record<string, unknown>;
+    this.location.replaceState(
+      this.location.path(),
+      '',
+      Object.fromEntries(Object.entries(state).filter(([ key ]) => key !== 'addedRepository'))
+    );
   }
 
   /** Updates a listed repository in place; one not listed may belong at the top, so the list is fetched again. */
@@ -100,6 +113,8 @@ export class DashboardPage {
     }
     const list = this.list();
     if (list.kind !== 'loaded') {
+      // The answer on its way may predate the event.
+      this.reloadAfterLoad = true;
       return;
     }
     if (!list.repositories.some(repository => repository.id === event.repositoryId)) {
@@ -114,18 +129,29 @@ export class DashboardPage {
     });
   }
 
-  /** `keepOnFailure`: a reload that fails leaves the list on screen as it was. */
+  /**
+   * Fetches the list; only the answer to the latest request counts.
+   * `keepOnFailure`: a reload that fails leaves the list on screen as it was.
+   */
   private async load(options: { keepOnFailure?: boolean; } = {}): Promise<void> {
+    const request = ++this.loads;
     let repositories: readonly RepositorySummary[];
     try {
       ({ repositories } = await firstValueFrom(this.api.recent()));
     } catch {
-      if (!(options.keepOnFailure && this.list().kind === 'loaded')) {
+      if (request === this.loads && !(options.keepOnFailure && this.list().kind === 'loaded')) {
         this.list.set({ kind: 'failed' });
       }
       return;
     }
+    if (request !== this.loads) {
+      return;
+    }
     this.list.set({ kind: 'loaded', repositories });
+    if (this.reloadAfterLoad) {
+      this.reloadAfterLoad = false;
+      void this.load({ keepOnFailure: true });
+    }
     const user = await this.currentUser.load().catch(() => undefined);
     if (user !== undefined) {
       this.hint.remember(user.id, repositories.length > 0);
