@@ -137,6 +137,11 @@ by spike 1 (spikes.md).
     itself falls back to a host's port 22 entries for a port that has none of
     its own; the engine does the same when it tells a changed key from an
     unknown one.)
+  - **Trust** stores a key only for a host and port that neither the user's
+    known hosts nor the instance-wide list cover, in the sense above; any other
+    key is refused as changed, so the endpoint cannot replace a known key or add
+    a second one next to it. Trusting a key that is already known is accepted
+    again. _(Plan 10's call.)_
 
 ## A-5: Address restriction
 
