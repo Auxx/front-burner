@@ -59,6 +59,9 @@
       ],
       "@front-burner/web-feature-dashboard": [
         "./libs/web/feature-dashboard/src/index.ts"
+      ],
+      "@front-burner/server-core-crypto": [
+        "./libs/server/core/crypto/src/index.ts"
       ]
     }
   },

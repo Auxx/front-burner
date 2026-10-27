@@ -1,0 +1,38 @@
+{
+  "name": "server-core-crypto",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/server/core/crypto/src",
+  "projectType": "library",
+  "tags": [
+    "scope:server",
+    "type:core"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{workspaceRoot}/coverage/libs/server/core/crypto"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/server/core/crypto"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/server/core/crypto/tsconfig.lib.json",
+          "tsc --noEmit -p libs/server/core/crypto/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

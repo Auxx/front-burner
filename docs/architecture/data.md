@@ -69,12 +69,18 @@ numbering conventions.
 
 ## A-4: Encryption of stored secrets
 
-- **A-4.8** `server/crypto` is the only code that encrypts and decrypts stored
-  secrets (saved credentials, SMTP password, OIDC client secret):
-  - the key is derived from `FRONT_BURNER_ENCRYPTION_KEY` with HKDF-SHA-256;
+- **A-4.8** `server/core/crypto` (its `SecretBox`) is the only code that
+  encrypts and decrypts stored secrets (saved credentials, SMTP password, OIDC
+  client secret):
+  - the key is derived from `FRONT_BURNER_ENCRYPTION_KEY` with HKDF-SHA-256
+    (empty salt, info `front-burner/secrets/v1`);
   - values are encrypted with AES-256-GCM, a random 96-bit nonce per value, and
-    the owning table, record ID and user ID as associated data (NF-8.3);
-  - every stored value starts with a format version and a key ID (NF-7.5).
+    the owning table, record ID and user ID as associated data, joined by NUL
+    characters (`<table>\0<record ID>\0<user ID or empty>`, NF-8.3);
+  - a stored value is `fb1.<key ID>.<base64url(nonce ‖ ciphertext ‖ tag)>`: the
+    format version and a key ID (NF-7.5). The key ID is 8 base64url characters
+    of HKDF with info `front-burner/key-id`, which identifies the key without
+    revealing it.
 - **A-4.9** Rotation (NF-8.4): with `FRONT_BURNER_ENCRYPTION_KEY_PREVIOUS` set,
   values are decrypted with whichever key their key ID names, and a background
   job (A-6) re-encrypts every value with the current key.
