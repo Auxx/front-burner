@@ -22,6 +22,8 @@ const stored = (authToken: string): string => JSON.stringify(tokens(authToken));
 class FakeLocks {
   private tail: Promise<unknown> = Promise.resolve();
   private held = 0;
+  /** What every callback returned, settled. */
+  readonly outcomes: Promise<PromiseSettledResult<unknown>>[] = [];
 
   request<T>(
     _name: string,
@@ -33,11 +35,16 @@ class FakeLocks {
       throw new TypeError('A lock request needs a callback.');
     }
     const ifAvailable = typeof optionsOrCallback === 'object' && optionsOrCallback.ifAvailable;
+    const observed = (lock: object | null) => {
+      const result = callback(lock);
+      this.outcomes.push(Promise.allSettled([ result ]).then(([ outcome ]) => outcome));
+      return result;
+    };
     if (ifAvailable && this.held > 0) {
-      return callback(null);
+      return observed(null);
     }
     this.held++;
-    const run = this.tail.then(() => callback({})).finally(() => this.held--);
+    const run = this.tail.then(() => observed({})).finally(() => this.held--);
     this.tail = run.catch(() => undefined);
     return run;
   }
@@ -182,6 +189,22 @@ describe('AuthSessionService', () => {
     expect(await refreshed).toBe('from-other-tab');
     expect(api.refresh).not.toHaveBeenCalled();
     expect(service.authToken()).toBe('from-other-tab');
+  });
+
+  it('never rejects inside the lock, which Firefox reports as uncaught', async () => {
+    localStorage.setItem(AUTH_STORAGE_KEY, stored('old'));
+    const failure = new HttpErrorResponse({ status: 401, error: { code: 'refresh-refused' } });
+    api.refresh.mockReturnValue(throwError(() => failure));
+    const { service } = create();
+
+    // The second one waits, then finds the session ended.
+    const results = await Promise.allSettled([ service.refresh('old'), service.refresh('old') ]);
+
+    expect(results.map(result => result.status)).toEqual([ 'rejected', 'rejected' ]);
+    expect((results[0] as PromiseRejectedResult).reason).toBe(failure);
+    const outcomes = await Promise.all(locks.outcomes);
+    expect(outcomes.length).toBeGreaterThan(0);
+    expect(outcomes.map(outcome => outcome.status)).not.toContain('rejected');
   });
 
   it('refreshes without Web Locks, where the browser has none', async () => {
