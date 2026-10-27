@@ -66,7 +66,9 @@ numbering conventions.
     revoked; the client reconnects with a fresh token;
   - the response sets `X-Accel-Buffering: no` and `Cache-Control: no-cache`, and
     the backend sends a comment line every 30 seconds to keep proxies from
-    closing an idle stream. _(My call: 30 seconds.)_
+    closing an idle stream. _(My call: 30 seconds.)_ It also sends one as soon
+    as the stream opens, because some browsers resolve `fetch` only once body
+    bytes arrive, and the client counts a connection from then (A-3.11).
 - **A-3.11** **Events are notifications, not state.** Each says what changed,
   with a small payload, for example `repository.status` (repository ID, new
   status), `job.progress` (job ID, percentage), `job.finished` (job ID,
