@@ -12,7 +12,10 @@ export const ERROR_CODES = [
   'refresh-refused',
   'cross-site-refused',
   'oidc-code-invalid',
-  'too-many-jobs'
+  'too-many-jobs',
+  'key-locked',
+  'credentials-missing',
+  'host-key-changed'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
