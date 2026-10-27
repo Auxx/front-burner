@@ -1,0 +1,11 @@
+Test keys only; never used anywhere else. Made once with OpenSSH 10.2 / OpenSSL 3.5:
+
+ed25519             ssh-keygen -t ed25519 -N '' -C '' -f ed25519
+ed25519-passphrase  ssh-keygen -t ed25519 -N 'correct horse' -C '' -f ed25519-passphrase
+ecdsa-p256          ssh-keygen -t ecdsa -b 256 -N '' -C '' -f ecdsa-p256
+rsa-2048            ssh-keygen -t rsa -b 2048 -N '' -C '' -f rsa-2048
+rsa-1024            ssh-keygen -t rsa -b 1024 -N '' -C '' -f rsa-1024
+rsa-2048-pem        ssh-keygen -t rsa -b 2048 -m PEM -N '' -C '' -f rsa-2048-pem
+dsa                 openssl genpkey -genparam -algorithm DSA -pkeyopt dsa_paramgen_bits:1024 -out dsa.param
+                    openssl genpkey -paramfile dsa.param | openssl pkey -traditional -out dsa
+                    (OpenSSH 10 no longer generates DSA keys)
