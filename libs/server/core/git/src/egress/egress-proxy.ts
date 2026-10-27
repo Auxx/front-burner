@@ -144,7 +144,8 @@ function readRequest(buffer: Buffer): Step<Request> {
   return { value: { command, host, port: buffer.readUInt16BE(end) }, rest: buffer.subarray(end + 2) };
 }
 
-function connectTo(address: string, port: number, timeoutMs: number): Promise<Socket> {
+/** Connects to one checked address. */
+export function connectTo(address: string, port: number, timeoutMs: number): Promise<Socket> {
   return new Promise((resolve, reject) => {
     const socket = connect({ host: address, port, timeout: timeoutMs, allowHalfOpen: true });
     socket.once('timeout', () => socket.destroy(new Error('timeout')));

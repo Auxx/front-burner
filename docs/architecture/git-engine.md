@@ -126,6 +126,14 @@ by spike 1 (spikes.md).
     IDENTIFICATION HAS CHANGED" to a changed host key, then "No … host key is
     known" or "Host key verification failed" (which `ssh` prints in both cases)
     to an unknown one. The web client shows either as AR-32's dialog.
+  - On an unknown host key, the engine **probes** the host for the key `ssh`
+    would see: it resolves the host and connects only to addresses the AR-57
+    rules allow (A-5.8), runs an SSH handshake with OpenSSH's default host key
+    algorithm order (`ssh-ed25519` first) and stops at the host key, so no login
+    is attempted. The error carries the key's type, fingerprint and key, which
+    is stored when the user chooses **Trust**. _(Plan 8's call.)_
+  - Host keys on a port other than 22 are written and stored as `[host]:port`,
+    so trusting one port does not trust another.
 
 ## A-5: Address restriction
 

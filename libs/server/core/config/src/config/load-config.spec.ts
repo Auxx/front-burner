@@ -46,6 +46,7 @@ describe('loadConfig', () => {
       loginAuditRetentionMs: 7_776_000_000,
       cloneTimeoutMs: 1_800_000,
       gitTimeoutMs: 300_000,
+      knownHostsFile: undefined,
       oidc: undefined
     });
     expect(warnings).toEqual([]);
@@ -176,6 +177,11 @@ describe('loadConfig', () => {
   it('resolves a relative data directory against the working directory', () => {
     const { config } = loadConfig({ ...BASE, FRONT_BURNER_DATA_DIR: 'tmp/data' }, { cwd: '/work' });
     expect(config.dataDir).toBe('/work/tmp/data');
+  });
+
+  it('resolves the known hosts file against the working directory', () => {
+    const { config } = loadConfig({ ...BASE, FRONT_BURNER_KNOWN_HOSTS_FILE: 'etc/known_hosts' }, { cwd: '/work' });
+    expect(config.knownHostsFile).toBe('/work/etc/known_hosts');
   });
 
   it('reports every invalid variable', () => {
