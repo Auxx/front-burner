@@ -33,7 +33,9 @@ describe('OnboardingStateService', () => {
 
   it('is required on an empty database', () => {
     expect(service().current()).toBe('required');
-    expect(database.db.select().from(instanceState).all()).toEqual([ { id: 1, onboardingState: 'required' } ]);
+    expect(database.db.select().from(instanceState).all()).toEqual([
+      { id: 1, onboardingState: 'required', encryptionCheck: null }
+    ]);
   });
 
   it('is completed when a user exists', () => {
