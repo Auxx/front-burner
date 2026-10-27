@@ -2,7 +2,9 @@
 const { route, utils, modelTypes } = it;
 const { pascalCase } = utils;
 const className = `${pascalCase(route.moduleName)}Api`;
-const routes = route.routes;
+// A route that only redirects (such as auth/oidc/start) is a browser
+// navigation, not a call: it stays in the OpenAPI document but gets no method.
+const routes = route.routes.filter((r) => !Object.keys(r.raw.responses || {}).every((code) => /^3\d\d$/.test(code)));
 // Every request and response type lives in @front-burner/shared-contracts
 // (A-3.6): import the ones this class uses, declare none. A type that is not a
 // component schema (an inline schema) or a primitive fails the generation. A

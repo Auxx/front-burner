@@ -6,11 +6,11 @@ import { ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { OidcProviderService } from '../oidc/oidc-provider.service';
-import { IssuedSession, SessionService } from '../sessions/session.service';
+import { SessionService } from '../sessions/session.service';
 import { LoginMethodsDto, LoginRequestDto, RefreshRequestDto, SessionTokensDto } from './auth.dto';
 import { PasswordLoginService } from './password-login.service';
 import { RateLimitAuditFilter } from './rate-limit-audit.filter';
-import { clearRefreshCookie, readRefreshToken, setRefreshCookie } from './refresh-cookie';
+import { answerWithSession, clearRefreshCookie, readRefreshToken } from './refresh-cookie';
 import { requestInfoOf } from './request-info';
 
 /** Login, refresh and logout (REQ-AUTH-003). Every route here works without an auth token. */
@@ -45,7 +45,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<SessionTokens> {
-    return answer(await this.passwordLogin.login(request, requestInfoOf(req)), res);
+    return answerWithSession(await this.passwordLogin.login(request, requestInfoOf(req)), res);
   }
 
   /** Exchanges a refresh token for new tokens and rotates it (LG-35, LG-36). */
@@ -62,7 +62,7 @@ export class AuthController {
     if (refreshToken === undefined) {
       throw new ApiErrorException(401, 'refresh-refused');
     }
-    return answer(await this.sessions.refresh(refreshToken), res);
+    return answerWithSession(await this.sessions.refresh(refreshToken), res);
   }
 
   /** Ends the session of a refresh token and clears its cookie (LG-39). */
@@ -77,12 +77,4 @@ export class AuthController {
     clearRefreshCookie(res);
     this.logger.log('Logout');
   }
-}
-
-/** The response body; with cookie delivery the refresh token goes into the cookie instead (LG-31). */
-function answer(issued: IssuedSession, res: Response): SessionTokens {
-  if (issued.delivery === 'cookie') {
-    setRefreshCookie(res, issued.refreshToken, new Date(issued.tokens.refreshTokenExpiresAt));
-  }
-  return issued.tokens;
 }

@@ -11,6 +11,7 @@
   "errors.wrong-credentials": "Wrong username or password",
   "errors.refresh-refused": "Your session has expired. Please log in again",
   "errors.cross-site-refused": "This request came from another site and was refused.",
+  "errors.oidc-code-invalid": "OIDC login failed",
   "errors.network": "Could not reach the server. Check your connection.",
   "web-feature-auth.LoginPage.title": "Log in",
   "web-feature-auth.LoginPage.messages.logged-out": "You have been logged out",

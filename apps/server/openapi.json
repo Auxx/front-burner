@@ -160,6 +160,65 @@
         ]
       }
     },
+    "/api/v1/auth/oidc/start": {
+      "get": {
+        "operationId": "start",
+        "parameters": [],
+        "responses": {
+          "302": {
+            "description": "To the OIDC provider, or back to the web client when it cannot be reached."
+          }
+        },
+        "tags": [
+          "oidc"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc/callback": {
+      "get": {
+        "operationId": "callback",
+        "parameters": [],
+        "responses": {
+          "302": {
+            "description": "To /login/oidc with a one-time code, or to the page that shows the failure."
+          }
+        },
+        "tags": [
+          "oidc"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc/exchange": {
+      "post": {
+        "operationId": "exchange",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcExchangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTokens"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "oidc"
+        ]
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "current",
@@ -357,6 +416,27 @@
             "maxLength": 256
           }
         }
+      },
+      "OidcExchangeRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "refreshTokenDelivery": {
+            "default": "cookie",
+            "type": "string",
+            "enum": [
+              "cookie",
+              "body"
+            ]
+          }
+        },
+        "required": [
+          "code"
+        ]
       },
       "CurrentUser": {
         "type": "object",
