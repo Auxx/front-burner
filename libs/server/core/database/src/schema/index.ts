@@ -2,6 +2,7 @@
 // `nx run server-core-database:db-generate` turns them into migrations.
 export * from './encrypted-columns';
 export * from './instance-state';
+export * from './jobs';
 export * from './login-audit';
 export * from './repositories';
 export * from './sessions';
