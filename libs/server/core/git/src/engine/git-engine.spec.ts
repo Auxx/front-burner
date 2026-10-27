@@ -7,7 +7,9 @@ import { join } from 'node:path';
 import type { GitCredentials } from '../broker/broker';
 import type { GitOptions } from '../git.options';
 import { GitRunner } from '../runner/git-runner';
+import { fingerprintOf, unlockPrivateKey } from '../ssh/ssh-keys';
 import { GitHttpServer, startGitHttpServer } from '../testing/git-http-server';
+import { GitSshServer, startGitSshServer } from '../testing/git-ssh-server';
 import { GitEngine } from './git-engine';
 import { GitOperationError } from './git-errors';
 
@@ -122,7 +124,8 @@ describe('GitEngine', () => {
       helpersDir: join(__dirname, '../../helpers'),
       egress: { blockPrivateNetworks: false },
       cloneTimeoutMs: 60_000,
-      gitTimeoutMs: 60_000
+      gitTimeoutMs: 60_000,
+      knownHosts: []
     };
     server = await startGitHttpServer({
       repositories: { 'fixture.git': join(root, 'fixture.git'), 'empty.git': join(root, 'empty.git') }
@@ -351,6 +354,187 @@ describe('GitEngine', () => {
       for (const file of filesUnder(join(root, 'repos', 'one'))) {
         const content = readFileSync(file, 'latin1');
         for (const text of encoded) {
+          expect(content.includes(text), file).toBe(false);
+        }
+      }
+    });
+  });
+
+  describe('over SSH', () => {
+    const KEYS = join(__dirname, '../testing/fixtures/keys');
+    const keyText = (name: string) => readFileSync(join(KEYS, name), 'utf8');
+    const SSH: GitCredentials = { kind: 'ssh', key: unlockPrivateKey(keyText('ed25519')) };
+    let ssh: GitSshServer;
+
+    const startSsh = async (delayMs?: number) => {
+      await ssh?.close();
+      ssh = await startGitSshServer({
+        repositories: { 'fixture.git': join(root, 'fixture.git') },
+        authorizedKeys: [ keyText('ed25519.pub') ],
+        delayMs
+      });
+      return ssh;
+    };
+    const url = () => `ssh://git@127.0.0.1:${ssh.port}/fixture.git`;
+    const clone = (overrides: Partial<Parameters<GitEngine['clone']>[0]> = {}, gitOptions?: Partial<GitOptions>) =>
+      engine(gitOptions).clone({
+        remoteUrl: url(),
+        credentials: SSH,
+        mode: 'full',
+        tmpRoot,
+        destination: join(root, 'repos', 'one'),
+        knownHosts: [ ssh.hostKeyLine ],
+        ...overrides
+      });
+
+    beforeEach(async () => {
+      await startSsh();
+    });
+
+    afterEach(async () => {
+      await ssh.close();
+    });
+
+    it('checks access over SSH with an unlocked key', async () => {
+      const result = await engine().accessCheck(url(), SSH, [ ssh.hostKeyLine ]);
+
+      expect(result).toEqual({ branches: [ 'feature/x', 'main' ], defaultBranch: 'main' });
+    });
+
+    it('trusts the instance-wide known hosts', async () => {
+      const result = await engine({ knownHosts: [ ssh.hostKeyLine ] }).accessCheck(url(), SSH);
+
+      expect(result.defaultBranch).toBe('main');
+    });
+
+    it('clones every branch over SSH', async () => {
+      await clone();
+      const destination = join(root, 'repos', 'one');
+
+      expect(git(destination, 'branch', '-r').split('\n').map(line => line.trim())).toEqual(
+        expect.arrayContaining([ 'origin/main', 'origin/feature/x' ])
+      );
+      expect(git(destination, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('main');
+    });
+
+    it('clones a single branch over SSH', async () => {
+      await clone({ mode: 'single-branch', branch: 'feature/x' });
+      const destination = join(root, 'repos', 'one');
+
+      expect(git(destination, 'rev-list', '--count', 'HEAD').trim()).toBe('1');
+      expect(git(destination, 'branch', '-r').trim()).toBe('origin/feature/x');
+    });
+
+    it('reports an unknown host key with its fingerprint', async () => {
+      const error = await failureOf(engine().accessCheck(url(), SSH, []));
+      const [ , type, key ] = ssh.hostKeyLine.split(' ');
+
+      expect(error.code).toBe('host-key-unknown');
+      expect(error.params).toEqual({
+        host: '127.0.0.1',
+        port: String(ssh.port),
+        type,
+        key,
+        fingerprint: fingerprintOf(`${type} ${key}`)
+      });
+      expect(ssh.refusedLogins).toBe(0);
+    });
+
+    it('tells a changed host key from an unknown one', async () => {
+      const other = keyText('ed25519-passphrase.pub').trim().split(' ');
+      const error = await failureOf(
+        engine().accessCheck(url(), SSH, [ `[127.0.0.1]:${ssh.port} ${other[0]} ${other[1]}` ])
+      );
+
+      expect(error.code).toBe('host-key-changed');
+    });
+
+    it('reports a host key of another type than the known one as changed', async () => {
+      const other = keyText('rsa-2048.pub').trim().split(' ');
+      const error = await failureOf(
+        engine().accessCheck(url(), SSH, [ `[127.0.0.1]:${ssh.port} ${other[0]} ${other[1]}` ])
+      );
+
+      expect(error.code).toBe('host-key-changed');
+    });
+
+    it('does not trust the same host on another port', async () => {
+      const [ , type, key ] = ssh.hostKeyLine.split(' ');
+      const error = await failureOf(
+        engine().accessCheck(url(), SSH, [ `[127.0.0.1]:${ssh.port + 1} ${type} ${key}` ])
+      );
+
+      expect(error.code).toBe('host-key-unknown');
+    });
+
+    it('reports a key the server does not accept as auth-failed', async () => {
+      const other: GitCredentials = { kind: 'ssh', key: unlockPrivateKey(keyText('ecdsa-p256')) };
+      const error = await failureOf(engine().accessCheck(url(), other, [ ssh.hostKeyLine ]));
+
+      expect(error.code).toBe('auth-failed');
+    });
+
+    it('refuses a blocked address over SSH', async () => {
+      const error = await failureOf(
+        engine({ egress: { blockPrivateNetworks: true } }).accessCheck(url(), SSH, [ ssh.hostKeyLine ])
+      );
+
+      expect(error.code).toBe('host-unreachable');
+    });
+
+    it('refuses HTTPS credentials for an SSH remote', async () => {
+      const error = await failureOf(engine().accessCheck(url(), HTTPS, [ ssh.hostKeyLine ]));
+
+      expect(error.code).toBe('failed');
+    });
+
+    it('keeps the private key out of files and the environment', async () => {
+      await startSsh(300);
+      // The base64 lines of the private key file, and the key's private part.
+      const secrets = keyText('ed25519').split('\n').filter(line => /^[A-Za-z0-9+/=]{40,}$/.test(line));
+      expect(secrets.length).toBeGreaterThan(2);
+      const leaks: string[] = [];
+      const seen = new Set<string>();
+      const brokerFiles = new Map<string, string>();
+      let sampling = true;
+      const sampler = (async () => {
+        while (sampling) {
+          for (const sample of sampleProcesses()) {
+            if (sample.environ.includes('FB_BROKER_TOKEN')) {
+              seen.add(sample.cmdline.split('\0')[0] ?? '');
+            }
+            for (const text of secrets) {
+              if (sample.cmdline.includes(text) || sample.environ.includes(text)) {
+                leaks.push(`${sample.pid}: ${sample.cmdline.replace(/\0/g, ' ')}`);
+              }
+            }
+          }
+          for (const dir of readdirSync(tmpdir()).filter(name => name.startsWith('fb-broker-'))) {
+            try {
+              for (const file of filesUnder(join(tmpdir(), dir))) {
+                brokerFiles.set(file, readFileSync(file, 'latin1'));
+              }
+            } catch {
+              // Removed meanwhile.
+            }
+          }
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+      })();
+
+      try {
+        await clone();
+      } finally {
+        sampling = false;
+        await sampler;
+      }
+
+      expect(leaks).toEqual([]);
+      // The sampler did see git and ssh while they ran, and the broker's files.
+      expect([ ...seen ].some(name => name.endsWith('ssh'))).toBe(true);
+      expect([ ...brokerFiles.keys() ].some(file => file.endsWith('ssh_config'))).toBe(true);
+      for (const [ file, content ] of brokerFiles) {
+        for (const text of secrets) {
           expect(content.includes(text), file).toBe(false);
         }
       }

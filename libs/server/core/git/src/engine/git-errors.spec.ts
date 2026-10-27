@@ -74,3 +74,26 @@ describe('GitOperationError', () => {
     expect(error.message).toContain('host-unreachable');
   });
 });
+
+describe('classifyGitFailure over SSH', () => {
+  it.each([
+    [
+      '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\n'
+      + 'Host key for [127.0.0.1]:2222 has changed and you have requested strict checking.\nHost key verification failed.',
+      'host-key-changed'
+    ],
+    [ 'Host key for git.example.com has changed and you have requested strict checking.', 'host-key-changed' ],
+    [
+      'No ED25519 host key is known for [127.0.0.1]:2222 and you have requested strict checking.\nHost key verification failed.\nfatal: Could not read from remote repository.',
+      'host-key-unknown'
+    ],
+    [ 'Host key verification failed.\nfatal: Could not read from remote repository.', 'host-key-unknown' ],
+    [ 'git@127.0.0.1: Permission denied (publickey).\nfatal: Could not read from remote repository.', 'auth-failed' ],
+    [
+      'egress proxy refused the connection (code 2)\nConnection closed by UNKNOWN port 65535\nfatal: Could not read from remote repository.',
+      'host-unreachable'
+    ]
+  ])('maps %j to %s', (stderr, code) => {
+    expect(classifyGitFailure(failed(stderr), [])).toBe(code);
+  });
+});

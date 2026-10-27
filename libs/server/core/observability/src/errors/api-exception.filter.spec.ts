@@ -64,6 +64,7 @@ const config: Config = {
   loginAuditRetentionMs: 7_776_000_000,
   cloneTimeoutMs: 1_800_000,
   gitTimeoutMs: 300_000,
+  knownHostsFile: undefined,
   oidc: undefined
 };
 

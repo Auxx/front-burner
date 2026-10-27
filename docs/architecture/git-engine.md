@@ -133,7 +133,10 @@ by spike 1 (spikes.md).
     is attempted. The error carries the key's type, fingerprint and key, which
     is stored when the user chooses **Trust**. _(Plan 8's call.)_
   - Host keys on a port other than 22 are written and stored as `[host]:port`,
-    so trusting one port does not trust another.
+    so trusting such a port does not trust port 22 or any other port. (`ssh`
+    itself falls back to a host's port 22 entries for a port that has none of
+    its own; the engine does the same when it tells a changed key from an
+    unknown one.)
 
 ## A-5: Address restriction
 

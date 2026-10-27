@@ -1,7 +1,7 @@
 import type { EgressRefusal } from '../egress/egress-proxy';
 import type { GitResult } from '../runner/git-runner';
 
-/** Why a git operation failed. `host-key-*` come with SSH (plan 8). */
+/** Why a git operation failed. */
 export const GIT_ERROR_CODES = [
   'host-unreachable',
   'timeout',
@@ -30,6 +30,12 @@ export class GitOperationError extends Error {
 
 // git's and the servers' messages, in one place (RC-5). The first match wins.
 const PATTERNS: [ RegExp, GitErrorCode ][] = [
+  // ssh's, first (A-5.6): a changed host key also prints "Host key verification failed".
+  [ /REMOTE HOST IDENTIFICATION HAS CHANGED|Host key for .* has changed/, 'host-key-changed' ],
+  [ /No .* host key is known|Host key verification failed/, 'host-key-unknown' ],
+  [ /Permission denied \(publickey/, 'auth-failed' ],
+  // From proxy-connect.cjs.
+  [ /egress proxy refused/, 'host-unreachable' ],
   [
     /SSL certificate (problem|OpenSSL verify result)|server certificate verification failed|SSL: no alternative certificate subject name/,
     'tls-untrusted'
