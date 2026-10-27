@@ -1,4 +1,10 @@
-import { ONBOARDING_STATES } from '@front-burner/shared-contracts';
+import {
+  CLONE_MODES as CONTRACT_CLONE_MODES,
+  GIT_LEVELS as CONTRACT_GIT_LEVELS,
+  ONBOARDING_STATES,
+  REPOSITORY_ERRORS,
+  REPOSITORY_STATUSES
+} from '@front-burner/shared-contracts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,11 +12,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { applyMigrations } from '../database/migrations';
 import { Database, openDatabase } from '../database/open-database';
 import {
+  CLONE_MODES,
   ENCRYPTED_COLUMNS,
+  GIT_LEVELS,
   instanceState,
   LOGIN_AUDIT_REASONS,
   loginAudit,
   ONBOARDING_STATE_VALUES,
+  repositories,
+  REPOSITORY_ERROR_VALUES,
+  REPOSITORY_STATUS_VALUES,
   sessions,
   systemSettings,
   users
@@ -132,6 +143,48 @@ describe('schema', () => {
     expect(database.db.select().from(sessions).all()).toEqual([]);
   });
 
+  describe('repositories', () => {
+    const handbook = {
+      name: 'Handbook',
+      remoteUrl: 'https://github.com/acme/handbook.git',
+      cloneMode: 'full',
+      gitLevel: 'advanced',
+      status: 'ready',
+      createdAt: new Date(0),
+      lastAccessedAt: new Date(0)
+    } as const;
+
+    it('refuses a second name differing only in case for one user', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      database.db.insert(repositories).values({ ...handbook, userId: id }).run();
+      expect(() => database.db.insert(repositories).values({ ...handbook, userId: id, name: 'HANDBOOK' }).run())
+        .toThrow(expect.objectContaining({ code: 'SQLITE_CONSTRAINT_UNIQUE' }));
+    });
+
+    it('allows the same name for two users', () => {
+      const a = database.db.insert(users).values(alice).returning().get();
+      const b = database.db.insert(users).values({ ...alice, email: 'bob@x.io' }).returning().get();
+      database.db.insert(repositories).values({ ...handbook, userId: a.id }).run();
+      database.db.insert(repositories).values({ ...handbook, userId: b.id }).run();
+      expect(database.db.select().from(repositories).all()).toHaveLength(2);
+    });
+
+    it('deletes a user\'s repositories with the user', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      database.db.insert(repositories).values({ ...handbook, userId: id }).run();
+
+      database.db.delete(users).run();
+
+      expect(database.db.select().from(repositories).all()).toEqual([]);
+    });
+
+    it('stores no branch or error by default', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      const row = database.db.insert(repositories).values({ ...handbook, userId: id }).returning().get();
+      expect(row).toMatchObject({ branch: null, errorCode: null });
+    });
+  });
+
   it('keeps audit entries when their user is deleted', () => {
     const { id } = database.db.insert(users).values(alice).returning().get();
     database.db.insert(loginAudit).values({
@@ -168,5 +221,17 @@ describe('LOGIN_AUDIT_REASONS', () => {
 describe('ONBOARDING_STATE_VALUES', () => {
   it('lists the states of the contracts', () => {
     expect(ONBOARDING_STATE_VALUES).toEqual(ONBOARDING_STATES);
+  });
+});
+
+describe('repository value lists', () => {
+  it('lists the contracts\' values', () => {
+    expect(CLONE_MODES).toEqual(CONTRACT_CLONE_MODES);
+    expect(GIT_LEVELS).toEqual(CONTRACT_GIT_LEVELS);
+    expect(REPOSITORY_ERROR_VALUES).toEqual(REPOSITORY_ERRORS);
+  });
+
+  it('stores every status but the unbuilt needs-confirmation', () => {
+    expect(REPOSITORY_STATUS_VALUES).toEqual(REPOSITORY_STATUSES.filter(status => status !== 'needs-confirmation'));
   });
 });
