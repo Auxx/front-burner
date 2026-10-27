@@ -308,6 +308,61 @@
           "onboarding"
         ]
       }
+    },
+    "/api/v1/onboarding/oidc-setup": {
+      "post": {
+        "operationId": "saveOidcSetup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcSetupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboarding/oidc-setup/current": {
+      "post": {
+        "operationId": "currentOidcSetup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcSetupView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "onboarding"
+        ]
+      }
     }
   },
   "info": {
@@ -527,6 +582,78 @@
           "email",
           "displayName",
           "password"
+        ]
+      },
+      "OidcSetupRequest": {
+        "type": "object",
+        "properties": {
+          "setupToken": {
+            "type": "string",
+            "minLength": 1
+          },
+          "issuer": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "clientId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "clientSecret": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "scopes": {
+            "default": "openid email profile",
+            "type": "string",
+            "maxLength": 512
+          },
+          "requireVerifiedEmail": {
+            "default": true,
+            "type": "boolean"
+          },
+          "adminEmail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "setupToken",
+          "issuer",
+          "clientId",
+          "adminEmail"
+        ]
+      },
+      "OidcSetupView": {
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "string"
+          },
+          "requireVerifiedEmail": {
+            "type": "boolean"
+          },
+          "adminEmail": {
+            "type": "string"
+          },
+          "hasClientSecret": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "issuer",
+          "clientId",
+          "scopes",
+          "requireVerifiedEmail",
+          "adminEmail",
+          "hasClientSecret"
         ]
       }
     }

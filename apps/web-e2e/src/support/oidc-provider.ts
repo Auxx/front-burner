@@ -10,6 +10,8 @@ export const TEST_CERTIFICATE_FILE = join(FIXTURES, 'test.crt');
 export interface OidcProvider {
   /** `https://localhost:<port>`. */
   issuer: string;
+  /** The next token request answers this status with `invalid_grant`. */
+  failTokenRequest(status: number): void;
   stop(): Promise<void>;
 }
 
@@ -27,6 +29,20 @@ export async function startOidcProvider(): Promise<OidcProvider> {
   server.service.on('beforeTokenSigning', (token: { payload: Record<string, unknown>; }) => {
     Object.assign(token.payload, { sub: 'web-e2e-subject', email: OIDC_EMAIL, email_verified: true, name: 'Admin' });
   });
+  let tokenStatus: number | undefined;
+  server.service.on('beforeResponse', (response: { statusCode: number; body: unknown; }) => {
+    if (tokenStatus !== undefined) {
+      response.statusCode = tokenStatus;
+      response.body = { error: 'invalid_grant', error_description: 'The code is not valid.' };
+      tokenStatus = undefined;
+    }
+  });
   await server.start(0, 'localhost');
-  return { issuer: `https://localhost:${server.address().port}`, stop: () => server.stop() };
+  return {
+    issuer: `https://localhost:${server.address().port}`,
+    failTokenRequest: status => {
+      tokenStatus = status;
+    },
+    stop: () => server.stop()
+  };
 }

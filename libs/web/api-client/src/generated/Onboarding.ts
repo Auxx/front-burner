@@ -2,7 +2,13 @@
 
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import type { OnboardingStatus, PasswordSetupRequest, SetupTokenRequest } from '@front-burner/shared-contracts';
+import type {
+  OidcSetupRequest,
+  OidcSetupView,
+  OnboardingStatus,
+  PasswordSetupRequest,
+  SetupTokenRequest
+} from '@front-burner/shared-contracts';
 import type { Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -17,5 +23,14 @@ export class OnboardingApi {
   }
   setUpPassword(data: PasswordSetupRequest): Observable<void> {
     return this.http.post<void>(`/api/v1/onboarding/password-setup`, data);
+  }
+  saveOidcSetup(data: OidcSetupRequest): Observable<void> {
+    return this.http.post<void>(`/api/v1/onboarding/oidc-setup`, data);
+  }
+  currentOidcSetup(data: SetupTokenRequest): Observable<OidcSetupView> {
+    return this.http.post<OidcSetupView>(
+      `/api/v1/onboarding/oidc-setup/current`,
+      data
+    );
   }
 }

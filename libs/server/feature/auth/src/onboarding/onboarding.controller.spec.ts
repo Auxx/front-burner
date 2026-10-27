@@ -1,12 +1,14 @@
 import { Config, ConfigModule } from '@front-burner/server-core-config';
+import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule, users } from '@front-burner/server-core-database';
 import { ApiExceptionFilter } from '@front-burner/server-core-observability';
-import { RateLimitModule } from '@front-burner/server-core-security';
+import { EgressHttpClient, EgressModule, RateLimitModule } from '@front-burner/server-core-security';
 import { INestApplication, LoggerService } from '@nestjs/common';
-import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
-import { ZodValidationPipe } from 'nestjs-zod';
+import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import request from 'supertest';
+import { MockOidcProvider, startMockOidcProvider } from '../testing/mock-oidc-provider';
 import { createTestDatabase } from '../testing/test-database';
 import { OnboardingModule } from './onboarding.module';
 
@@ -34,22 +36,30 @@ describe('OnboardingController', () => {
   let app: INestApplication;
   let database: Database;
   let logger: CollectingLogger;
+  let provider: MockOidcProvider | undefined;
+  let egress: EgressHttpClient | undefined;
 
-  async function start(config: Partial<Config> = { setupToken: TOKEN }): Promise<void> {
+  async function start(partial: Partial<Config> = { setupToken: TOKEN }): Promise<void> {
+    const config = { encryptionKey: 'onboarding-spec-encryption-key-0123456789', ...partial } as Config;
     database = createTestDatabase();
     logger = new CollectingLogger();
+    provider = await startMockOidcProvider();
+    egress = new EgressHttpClient({ blockPrivateNetworks: false }, { ca: provider.ca });
     const moduleRef = await Test.createTestingModule({
       imports: [
-        ConfigModule.forRoot(config as Config),
+        ConfigModule.forRoot(config),
         DatabaseModule.forRoot(database),
+        CryptoModule.forRoot(config),
+        EgressModule,
         RateLimitModule,
         OnboardingModule
       ],
       providers: [
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
-        { provide: APP_PIPE, useClass: ZodValidationPipe }
+        { provide: APP_PIPE, useClass: ZodValidationPipe },
+        { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor }
       ]
-    }).compile();
+    }).overrideProvider(EgressHttpClient).useValue(egress).compile();
     app = moduleRef.createNestApplication({ logger });
     app.setGlobalPrefix('api/v1');
     await app.init();
@@ -57,6 +67,16 @@ describe('OnboardingController', () => {
 
   afterEach(async () => {
     await app.close();
+    await provider?.stop();
+    await egress?.onModuleDestroy();
+  });
+
+  const oidcSetup = () => ({
+    setupToken: TOKEN,
+    issuer: provider?.issuer,
+    clientId: 'front-burner',
+    clientSecret: 'a-client-secret-0123',
+    adminEmail: 'admin@example.com'
   });
 
   const http = () => request(app.getHttpServer());
@@ -172,5 +192,68 @@ describe('OnboardingController', () => {
       .send({ ...setup, email: '  Alice@Example.com ' });
     expect(response.status).toBe(204);
     expect(database.db.select().from(users).all()[0]?.email).toBe('Alice@Example.com');
+  });
+
+  it('answers 404 for a wrong token, before validating the body', async () => {
+    await start();
+    for (const route of [ 'oidc-setup', 'oidc-setup/current' ]) {
+      for (const body of [ { setupToken: 'wrong' }, {}, { ...oidcSetup(), setupToken: `${TOKEN}x` } ]) {
+        const response = await http().post(`/api/v1/onboarding/${route}`).send(body);
+        expect(response.status).toBe(404);
+        expect(response.body.code).toBe('not-found');
+      }
+    }
+  });
+
+  it('answers 404 when OIDC comes from the environment', async () => {
+    await start({
+      setupToken: TOKEN,
+      oidc: {
+        issuer: 'https://env.example.com',
+        clientId: 'env',
+        clientSecret: 'env-secret',
+        scopes: 'openid',
+        requireVerifiedEmail: true,
+        adminEmail: 'admin@example.com'
+      }
+    });
+    expect((await http().post('/api/v1/onboarding/oidc-setup').send(oidcSetup())).status).toBe(404);
+    expect((await http().post('/api/v1/onboarding/oidc-setup/current').send({ setupToken: TOKEN })).status).toBe(
+      404
+    );
+  });
+
+  it('saves an OIDC setup and returns it without the secret', async () => {
+    await start();
+    const current = () => http().post('/api/v1/onboarding/oidc-setup/current').send({ setupToken: TOKEN });
+    expect((await current()).status).toBe(404);
+
+    expect((await http().post('/api/v1/onboarding/oidc-setup').send(oidcSetup())).status).toBe(204);
+    const response = await current();
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      issuer: provider?.issuer,
+      clientId: 'front-burner',
+      scopes: 'openid email profile',
+      requireVerifiedEmail: true,
+      adminEmail: 'admin@example.com',
+      hasClientSecret: true
+    });
+    expect((await http().get('/api/v1/onboarding')).body.state).toBe('oidc-pending');
+
+    const text = logger.lines.join('\n');
+    expect(text).toContain('OIDC setup saved');
+    expect(text).not.toContain('a-client-secret-0123');
+  });
+
+  it('reports a refused issuer on the field', async () => {
+    await start();
+    const response = await http()
+      .post('/api/v1/onboarding/oidc-setup')
+      .send({ ...oidcSetup(), issuer: `${provider?.issuer}/` });
+    expect(response.status).toBe(400);
+    expect(response.body.fields).toEqual([
+      { path: 'issuer', code: 'oidc-issuer-mismatch', params: { expected: provider?.issuer } }
+    ]);
   });
 });

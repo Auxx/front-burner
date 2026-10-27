@@ -2,9 +2,8 @@
   <h2 class="step-heading">{{ t('heading') }}</h2>
   <p>{{ t('intro') }}</p>
   <ui-segmented-control [label]="t('label')" [options]="options()" [(value)]="method" />
-  <p class="hint">{{ t('oidcUnavailable') }}</p>
   <div class="actions">
     <button uiButton (click)="back.emit()">{{ t('back') }}</button>
-    <button uiButton variant="primary" (click)="chosen.emit()">{{ t('continue') }}</button>
+    <button uiButton variant="primary" (click)="continue()">{{ t('continue') }}</button>
   </div>
 </ng-container>

@@ -1,9 +1,12 @@
+import { TEST_CERTIFICATE_FILES } from '@front-burner/server-core-security/testing';
+import { type MockOidcProvider, startMockOidcProvider } from '@front-burner/server-feature-auth/testing';
 import BetterSqlite3 from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { login, type ServerProcess, startServerProcess } from './support/server-process';
+import { Agent, fetch as fetchTrusting } from 'undici';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { login, postJson, type ServerProcess, startServerProcess } from './support/server-process';
 
 const TOKEN = 'e2e-setup-token-0123456789abcdef';
 const ONBOARDING = '/api/v1/onboarding';
@@ -220,5 +223,150 @@ describe('administrator onboarding', () => {
     for (const secret of [ TOKEN, 'a-wrong-token-0123456789', details.password, details.email ]) {
       expect(output).not.toContain(secret);
     }
+  });
+});
+
+describe('administrator onboarding with OIDC', () => {
+  const OIDC_SETUP = `${ONBOARDING}/oidc-setup`;
+  const ADMIN_EMAIL = 'admin@example.com';
+  let provider: MockOidcProvider;
+  let browser: Agent;
+  let server: ServerProcess | undefined;
+
+  const setup = (overrides: Record<string, unknown> = {}) => ({
+    setupToken: TOKEN,
+    issuer: provider.issuer,
+    clientId: 'front-burner',
+    clientSecret: 'e2e-client-secret',
+    adminEmail: ADMIN_EMAIL,
+    ...overrides
+  });
+
+  async function start(env: Record<string, string> = {}): Promise<ServerProcess> {
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: TOKEN, ...env }, {
+      extraCaFile: TEST_CERTIFICATE_FILES.cert
+    });
+    return server;
+  }
+
+  /** start → provider → callback, as a browser would; returns where the callback sends the browser. */
+  async function throughProvider(target: ServerProcess): Promise<{ location: string; cookie: string; }> {
+    const started = await fetch(`${target.url}/api/v1/auth/oidc/start`, { redirect: 'manual' });
+    const cookie = started.headers.getSetCookie()[0]?.split(';')[0] ?? '';
+    const authorized = await fetchTrusting(started.headers.get('location') ?? '', {
+      redirect: 'manual',
+      dispatcher: browser
+    });
+    const callback = new URL(authorized.headers.get('location') ?? '');
+    const back = await fetch(`${target.url}${callback.pathname}${callback.search}`, {
+      redirect: 'manual',
+      headers: { cookie }
+    });
+    return {
+      location: back.headers.get('location') ?? '',
+      cookie: back.headers.getSetCookie()[0]?.split(';')[0] ?? ''
+    };
+  }
+
+  async function logIn(target: ServerProcess): Promise<Response> {
+    const { location, cookie } = await throughProvider(target);
+    const code = new URL(location, 'http://x').searchParams.get('code') ?? '';
+    return postJson(target, '/api/v1/auth/oidc/exchange', { code }, { cookie });
+  }
+
+  const state = async (target: ServerProcess) =>
+    ((await (await fetch(`${target.url}${ONBOARDING}`)).json()) as { state: string; }).state;
+
+  const users = (target: ServerProcess) => {
+    const sqlite = new BetterSqlite3(join(target.dataDir, 'db', 'front-burner.sqlite'), { readonly: true });
+    try {
+      return sqlite.prepare('SELECT email, role, login_method FROM users ORDER BY id').all();
+    } finally {
+      sqlite.close();
+    }
+  };
+
+  beforeEach(async () => {
+    provider = await startMockOidcProvider();
+    provider.setClaims({ email: ADMIN_EMAIL });
+    browser = new Agent({ connect: { ca: provider.ca } });
+  });
+
+  afterEach(async () => {
+    await server?.stop();
+    server = undefined;
+    await provider.stop();
+    await browser.close();
+  });
+
+  it('criterion 6: saving the setup, then the first OIDC login creates the administrator', async () => {
+    const target = await start();
+    expect((await post(target, OIDC_SETUP, setup())).status).toBe(204);
+    expect(await state(target)).toBe('oidc-pending');
+    const methods = await (await fetch(`${target.url}/api/v1/auth/methods`)).json();
+    expect(methods).toMatchObject({ oidc: 'available' });
+
+    const tokens = await logIn(target);
+    expect(tokens.status).toBe(200);
+    expect(users(target)).toEqual([ { email: ADMIN_EMAIL, role: 'administrator', login_method: 'oidc' } ]);
+
+    await expectSameAsUnknownRoute(target, await fetch(`${target.url}${ONBOARDING}`), 'GET');
+    await expectSameAsUnknownRoute(target, await post(target, OIDC_SETUP, setup()), 'POST', setup());
+  });
+
+  it('criterion 7: a failed login comes back to onboarding, and saving with the secret blank keeps it', async () => {
+    const target = await start();
+    expect((await post(target, OIDC_SETUP, setup())).status).toBe(204);
+
+    provider.failTokenRequest(401);
+    const failed = await throughProvider(target);
+    expect(failed.location).toBe('/onboarding?oidcError=code-exchange-failed');
+    expect(users(target)).toEqual([]);
+
+    const current = await post(target, `${OIDC_SETUP}/current`, { setupToken: TOKEN });
+    expect(current.status).toBe(200);
+    const view = await current.json();
+    expect(view).toMatchObject({ issuer: provider.issuer, adminEmail: ADMIN_EMAIL, hasClientSecret: true });
+    expect(JSON.stringify(view)).not.toContain('e2e-client-secret');
+
+    expect((await post(target, OIDC_SETUP, setup({ clientSecret: '' }))).status).toBe(204);
+    expect((await logIn(target)).status).toBe(200);
+    expect(users(target)).toHaveLength(1);
+  });
+
+  it('criterion 10: the password path discards a pending OIDC setup', async () => {
+    const target = await start();
+    expect((await post(target, OIDC_SETUP, setup())).status).toBe(204);
+    expect((await post(target, SETUP, { setupToken: TOKEN, ...details, email: 'pw@example.com' })).status).toBe(
+      204
+    );
+    expect(users(target)).toEqual([ { email: 'pw@example.com', role: 'administrator', login_method: 'password' } ]);
+    const methods = await (await fetch(`${target.url}/api/v1/auth/methods`)).json();
+    expect(methods).toMatchObject({ oidc: 'not-configured' });
+  });
+
+  it('refuses an issuer that differs from the discovery document\'s', async () => {
+    const target = await start();
+    const response = await post(target, OIDC_SETUP, setup({ issuer: `${provider.issuer}/` }));
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { fields: unknown; }).fields).toEqual([
+      { path: 'issuer', code: 'oidc-issuer-mismatch', params: { expected: provider.issuer } }
+    ]);
+    expect(await state(target)).toBe('required');
+  });
+
+  it('saving answers 404 once onboarding is completed', async () => {
+    const target = await start();
+    expect((await post(target, SETUP, { setupToken: TOKEN, ...details })).status).toBe(204);
+    await expectSameAsUnknownRoute(target, await post(target, OIDC_SETUP, setup()), 'POST', setup());
+    const body = { setupToken: TOKEN };
+    await expectSameAsUnknownRoute(target, await post(target, `${OIDC_SETUP}/current`, body), 'POST', body);
+  });
+
+  it('logs the saved setup without the secret', async () => {
+    const target = await start({ FRONT_BURNER_LOG_LEVEL: 'info' });
+    expect((await post(target, OIDC_SETUP, setup())).status).toBe(204);
+    expect(target.output()).toContain('OIDC setup saved');
+    expect(target.output()).not.toContain('e2e-client-secret');
   });
 });

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -8,9 +8,14 @@ const KEY = 'web-feature-auth.LoginMethodStepComponent';
 
 @Component({
   imports: [ LoginMethodStepComponent ],
-  template: `<auth-login-method-step (chosen)="events.push('chosen')" (back)="events.push('back')" />`
+  template: `<auth-login-method-step
+    [initial]="initial()"
+    (chosen)="events.push($event)"
+    (back)="events.push('back')"
+  />`
 })
 class HostComponent {
+  readonly initial = signal<'password' | 'oidc'>('password');
   readonly events: string[] = [];
 }
 
@@ -29,18 +34,33 @@ describe('LoginMethodStepComponent', () => {
     await fixture.whenStable();
   });
 
-  it('explains the step and offers both methods, OIDC disabled', () => {
+  const radios = () => [ ...element().querySelectorAll<HTMLInputElement>('input[type="radio"]') ];
+
+  it('explains the step and offers both methods', () => {
     expect(element().textContent).toContain(`${KEY}.intro`);
-    const radios = [ ...element().querySelectorAll<HTMLInputElement>('input[type="radio"]') ];
-    expect(radios).toHaveLength(2);
-    expect(radios[0]?.checked).toBe(true);
-    expect(radios[1]?.disabled).toBe(true);
-    expect(element().textContent).toContain(`${KEY}.oidcUnavailable`);
+    expect(radios()).toHaveLength(2);
+    expect(radios()[0]?.checked).toBe(true);
+  });
+
+  it('offers OIDC', async () => {
+    expect(radios()[1]?.disabled).toBe(false);
+    radios()[1]?.click();
+    await fixture.whenStable();
+    button('continue').click();
+    expect(fixture.componentInstance.events).toEqual([ 'oidc' ]);
+  });
+
+  it('preselects OIDC while pending', async () => {
+    fixture.componentInstance.initial.set('oidc');
+    await fixture.whenStable();
+    expect(radios()[1]?.checked).toBe(true);
+    button('continue').click();
+    expect(fixture.componentInstance.events).toEqual([ 'oidc' ]);
   });
 
   it('continues with username and password', () => {
     button('continue').click();
-    expect(fixture.componentInstance.events).toEqual([ 'chosen' ]);
+    expect(fixture.componentInstance.events).toEqual([ 'password' ]);
   });
 
   it('goes back', () => {
