@@ -1,4 +1,4 @@
-<a class="skip-link" href="#" (click)="skipToMain($event)">{{ skipLinkLabel() }}</a>
+<a class="skip-link" [href]="'#' + mainId" (click)="skipToMain($event)">{{ skipLinkLabel() }}</a>
 <header class="header">
   <ng-content select="[uiAppShellHeader]" />
 </header>
@@ -14,7 +14,7 @@
   <div uiSplitPaneStart class="side">
     <ng-content select="[uiAppShellSide]" />
   </div>
-  <main #main uiSplitPaneEnd tabindex="-1">
+  <main #main uiSplitPaneEnd tabindex="-1" [id]="mainId">
     <ng-content />
   </main>
 </ui-split-pane>

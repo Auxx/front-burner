@@ -80,6 +80,12 @@ describe('AppShellComponent', () => {
     expect(document.activeElement).toBe(main());
   });
 
+  it('points the skip link at main, so that checkers count it as a skip link', () => {
+    const skip = query<HTMLAnchorElement>('a.skip-link') as HTMLAnchorElement;
+    expect(skip.getAttribute('href')).toBe(`#${main().id}`);
+    expect(main().id).not.toBe('');
+  });
+
   it('shows side and main side by side on wide screens', () => {
     expect(separator()?.getAttribute('aria-label')).toBe('Resize side panel');
     expect(isShown(side())).toBe(true);

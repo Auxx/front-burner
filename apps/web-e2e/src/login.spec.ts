@@ -1,23 +1,87 @@
 import AxeBuilder from '@axe-core/playwright';
-import type { Page } from '@playwright/test';
-import { expect, test } from './support/fixtures';
+import type { BrowserContext, Page } from '@playwright/test';
+import { drainFailedRequests, expect, test } from './support/fixtures';
+import { logIn, TEST_ADMIN } from './support/instance';
 
 // The login page is reachable once onboarding is completed (AO-3).
 test.use({ instanceOptions: { onboarded: true } });
 
+const REFRESH_COOKIE = 'front_burner_refresh';
+const SHORT_TOKENS = { onboarded: true, env: { FRONT_BURNER_AUTH_TOKEN_TTL: '2s' } };
+
+const loginHeading = (page: Page) => page.getByRole('heading', { level: 1, name: 'Log in', exact: true });
+const dashboardHeading = (page: Page) => page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true });
+
+async function refreshCookie(context: BrowserContext) {
+  return (await context.cookies()).find(cookie => cookie.name === REFRESH_COOKIE);
+}
+
 test.describe('login page', () => {
-  for (const url of [ '/', '/no/such/page' ]) {
-    test(`any URL ends on the login page: ${url}`, async ({ page }) => {
-      await page.goto(url);
-      await expect(page).toHaveURL(/\/login$/);
-      await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
-      await expect(page).toHaveTitle('Log in · Front Burner');
-    });
-  }
+  test('opens without a login', async ({ page }) => {
+    await page.goto('/login');
+    await expect(loginHeading(page)).toBeVisible();
+    await expect(page).toHaveTitle('Log in · Front Burner');
+    await expect(page.getByRole('banner')).toHaveCount(0);
+  });
+
+  test('logs in and goes to the page asked for, with the refresh token in a cookie', async ({ page, context }) => {
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/login\?returnUrl=%2F$/);
+    await expect(loginHeading(page)).toBeVisible();
+
+    const login = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/auth/login');
+    await logIn(page);
+    const body = await (await login).json() as Record<string, unknown>;
+
+    await expect(page).toHaveURL(/\/$/);
+    await expect(dashboardHeading(page)).toBeVisible();
+    await expect(page).toHaveTitle('Dashboard · Front Burner');
+    expect(body['authToken']).toEqual(expect.any(String));
+    expect(body).not.toHaveProperty('refreshToken');
+    expect(await refreshCookie(context)).toMatchObject({ httpOnly: true, secure: true, sameSite: 'Strict' });
+  });
+
+  test('accepts the email in another letter case', async ({ page }) => {
+    await page.goto('/login');
+    await logIn(page, TEST_ADMIN.email.toUpperCase());
+    await expect(dashboardHeading(page)).toBeVisible();
+  });
+
+  test('says "Wrong username or password" and clears the password', async ({ page, monitor }) => {
+    await page.goto('/login');
+    await page.getByLabel('Email').fill(TEST_ADMIN.email);
+    await page.getByLabel('Password', { exact: true }).fill('not the password');
+    await page.getByRole('button', { name: 'Log in' }).click();
+
+    await expect(page.getByText('Wrong username or password')).toBeVisible();
+    await expect(page.getByLabel('Password', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('Password', { exact: true })).toBeFocused();
+    await expect(page).toHaveURL(/\/login$/);
+    drainFailedRequests(monitor, '/api/v1/auth/login');
+  });
+
+  test('asks for a login again after Log out', async ({ page }) => {
+    await page.goto('/login');
+    await logIn(page);
+    await page.getByRole('button', { name: /^Account menu for / }).click();
+    await page.getByRole('menuitem', { name: 'Log out' }).click();
+
+    await expect(loginHeading(page)).toBeVisible();
+    await expect(page.getByText('You have been logged out')).toBeVisible();
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/login\?returnUrl=%2F$/);
+    await expect(page.getByText('You have been logged out')).toHaveCount(0);
+  });
+
+  test('does not warn about HTTPS on localhost', async ({ page }) => {
+    await page.goto('/login');
+    await expect(loginHeading(page)).toBeVisible();
+    await expect(page.getByText('This instance is not served over HTTPS.', { exact: false })).toHaveCount(0);
+  });
 
   test('has no accessibility violations', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
+    await expect(loginHeading(page)).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations).toEqual([]);
   });
@@ -41,13 +105,14 @@ test.describe('login page', () => {
 
   test('runs without CSP or Trusted Types violations', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
-    await expect(page.getByText(`Signing in isn't available yet.`)).toBeVisible();
+    await expect(loginHeading(page)).toBeVisible();
+    await logIn(page);
+    await expect(dashboardHeading(page)).toBeVisible();
   });
 
   test('applies the global styles', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
+    await expect(loginHeading(page)).toBeVisible();
     const fontFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
     expect(fontFamily).toContain('Inter');
     // The family is declared; check that the font file really loaded.
@@ -67,15 +132,65 @@ test.describe('login page', () => {
   test('does not scroll sideways at the device width', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'only the mobile projects have a phone viewport of their own');
     await page.goto('/login');
-    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
+    await expect(loginHeading(page)).toBeVisible();
     expect(await fitsWidth(page)).toBe(true);
   });
 
   test('does not scroll sideways at 320 px', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/login');
-    await expect(page.getByRole('heading', { level: 1, name: 'Log in', exact: true })).toBeVisible();
+    await expect(loginHeading(page)).toBeVisible();
     expect(await fitsWidth(page)).toBe(true);
+  });
+});
+
+test.describe('expiring auth tokens', () => {
+  test.use({ instanceOptions: SHORT_TOKENS });
+
+  test('sends the user to the login page when the refresh fails', async ({ page, context, request, monitor }) => {
+    await page.goto('/login');
+    await logIn(page);
+    await expect(dashboardHeading(page)).toBeVisible();
+
+    // Revoke the session behind the web client's back.
+    const cookie = await refreshCookie(context);
+    expect(cookie).toBeDefined();
+    const logout = await request.post('/api/v1/auth/session/logout', { data: { refreshToken: cookie?.value } });
+    expect(logout.status()).toBe(204);
+
+    await page.waitForTimeout(3_000);
+    await page.reload();
+
+    await expect(loginHeading(page)).toBeVisible();
+    await expect(page.getByText('Your session has expired. Please log in again')).toBeVisible();
+    await expect(page).toHaveURL(/\/login\?returnUrl=%2F$/);
+    drainFailedRequests(monitor, '/api/v1/me');
+    drainFailedRequests(monitor, '/api/v1/auth/session/refresh');
+  });
+
+  test('two tabs share one refresh', async ({ page, context, monitor }) => {
+    await page.goto('/login');
+    await logIn(page);
+    const other = await context.newPage();
+    await other.goto('/');
+    await expect(dashboardHeading(other)).toBeVisible();
+
+    let refreshes = 0;
+    context.on('request', request => {
+      if (new URL(request.url()).pathname === '/api/v1/auth/session/refresh') {
+        refreshes++;
+      }
+    });
+    await page.waitForTimeout(3_000);
+    // Both tabs ask for the current user with an expired token at once.
+    await Promise.all([ page.reload(), other.reload() ]);
+
+    await expect(dashboardHeading(page)).toBeVisible();
+    await expect(dashboardHeading(other)).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Account menu for / })).toBeVisible();
+    await expect(other.getByRole('button', { name: /^Account menu for / })).toBeVisible();
+    expect(refreshes).toBe(1);
+    drainFailedRequests(monitor, '/api/v1/me');
   });
 });
 

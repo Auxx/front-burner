@@ -1,4 +1,5 @@
 import { workspaceRoot } from '@nx/devkit';
+import type { Page } from '@playwright/test';
 import { type ChildProcess, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -21,6 +22,8 @@ export interface InstanceOptions {
   setupToken?: string;
   /** Completes onboarding through the API before the test. */
   onboarded?: boolean;
+  /** More `FRONT_BURNER_*` variables, such as `FRONT_BURNER_AUTH_TOKEN_TTL`. */
+  env?: Record<string, string>;
 }
 
 export interface Instance {
@@ -86,7 +89,8 @@ export async function startInstance(options: InstanceOptions = {}): Promise<Inst
       FRONT_BURNER_LOG_FORMAT: 'json',
       FRONT_BURNER_LOG_LEVEL: 'warn',
       FRONT_BURNER_JWT_SECRET: TEST_JWT_SECRET,
-      ...(setupToken ? { FRONT_BURNER_SETUP_TOKEN: setupToken } : {})
+      ...(setupToken ? { FRONT_BURNER_SETUP_TOKEN: setupToken } : {}),
+      ...options.env
     },
     stdio: [ 'ignore', 'pipe', 'pipe' ]
   });
@@ -113,4 +117,12 @@ export async function startInstance(options: InstanceOptions = {}): Promise<Inst
     throw error;
   }
   return { url, stop };
+}
+
+/** Logs in as `TEST_ADMIN` on the login page, which `page` must show, and waits for the page after it. */
+export async function logIn(page: Page, email = TEST_ADMIN.email): Promise<void> {
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password', { exact: true }).fill(TEST_ADMIN.password);
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await page.waitForURL(url => url.pathname !== '/login');
 }
