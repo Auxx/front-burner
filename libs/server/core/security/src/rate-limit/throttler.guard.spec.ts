@@ -37,13 +37,28 @@ class SecondController {
   }
 }
 
+@Controller('remote')
+class RemoteController {
+  @Get('check')
+  @RateLimitGroup('access-check')
+  check(): { ok: boolean; } {
+    return { ok: true };
+  }
+
+  @Get('add')
+  @RateLimitGroup('access-check')
+  add(): { ok: boolean; } {
+    return { ok: true };
+  }
+}
+
 describe('AppThrottlerGuard', () => {
   let app: INestApplication;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [ RateLimitModule ],
-      controllers: [ PingController, FirstController, SecondController ]
+      controllers: [ PingController, FirstController, SecondController, RemoteController ]
     }).compile();
     app = moduleRef.createNestApplication();
     // Stands in for the authentication middleware, which runs before every guard.
@@ -124,6 +139,18 @@ describe('AppThrottlerGuard', () => {
     }
     expect((await request(app.getHttpServer()).get('/first/grouped').set('x-test-user', '3')).status).toBe(429);
     expect((await request(app.getHttpServer()).get('/first/grouped')).status).toBe(429);
+  });
+
+  it('allows each user 30 access checks per minute across the group', async () => {
+    for (let i = 0; i < 15; i++) {
+      expect((await request(app.getHttpServer()).get('/remote/check').set('x-test-user', '1')).status).toBe(200);
+      expect((await request(app.getHttpServer()).get('/remote/add').set('x-test-user', '1')).status).toBe(200);
+    }
+    expect((await request(app.getHttpServer()).get('/remote/check').set('x-test-user', '1')).status).toBe(429);
+    // AR-55: per user, so another user of the same address is not limited.
+    expect((await request(app.getHttpServer()).get('/remote/check').set('x-test-user', '2')).status).toBe(200);
+    // Each group has its own counter.
+    expect((await request(app.getHttpServer()).get('/first/grouped').set('x-test-user', '1')).status).toBe(200);
   });
 
   it('a route without a group keeps 60 per minute', async () => {

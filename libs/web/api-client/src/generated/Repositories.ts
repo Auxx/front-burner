@@ -2,7 +2,14 @@
 
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import type { RecentRepositories } from '@front-burner/shared-contracts';
+import type {
+  AccessCheckRequest,
+  AccessCheckResult,
+  AddRepositoryRequest,
+  RecentRepositories,
+  RepositoryIndex,
+  RepositorySummary
+} from '@front-burner/shared-contracts';
 import type { Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -11,5 +18,17 @@ export class RepositoriesApi {
 
   recent(): Observable<RecentRepositories> {
     return this.http.get<RecentRepositories>(`/api/v1/repositories/recent`);
+  }
+  index(): Observable<RepositoryIndex> {
+    return this.http.get<RepositoryIndex>(`/api/v1/repositories/index`);
+  }
+  accessCheck(data: AccessCheckRequest): Observable<AccessCheckResult> {
+    return this.http.post<AccessCheckResult>(
+      `/api/v1/repositories/access-check`,
+      data
+    );
+  }
+  add(data: AddRepositoryRequest): Observable<RepositorySummary> {
+    return this.http.post<RepositorySummary>(`/api/v1/repositories`, data);
   }
 }

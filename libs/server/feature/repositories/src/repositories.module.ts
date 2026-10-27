@@ -1,6 +1,8 @@
 import { CredentialsModule } from '@front-burner/server-feature-credentials';
 import { Module } from '@nestjs/common';
+import { AddRepositoryService } from './add/add-repository.service';
 import { RequestCredentials } from './add/request-credentials';
+import { CloneKeys } from './clone/clone-keys';
 import { RepositoriesController } from './repositories/repositories.controller';
 import { RepositoryQueries } from './repositories/repository-queries';
 
@@ -8,6 +10,6 @@ import { RepositoryQueries } from './repositories/repository-queries';
 @Module({
   imports: [ CredentialsModule ],
   controllers: [ RepositoriesController ],
-  providers: [ RepositoryQueries, RequestCredentials ]
+  providers: [ RepositoryQueries, RequestCredentials, AddRepositoryService, CloneKeys ]
 })
 export class RepositoriesModule {}

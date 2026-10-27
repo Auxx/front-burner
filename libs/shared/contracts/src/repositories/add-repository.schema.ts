@@ -1,7 +1,7 @@
 import { parseRemoteUrl } from '@front-burner/shared-util';
 import { z } from 'zod';
 import { CREDENTIALS_FIELD_CODES, NewHttpsCredentialsSchema, NewSshKeySchema } from '../credentials/credentials.schema';
-import { CLONE_MODES, GIT_LEVELS } from './repository-summary.schema';
+import { CLONE_MODES, type CloneMode, GIT_LEVELS } from './repository-summary.schema';
 
 /** A remote URL of AR-8 to AR-10; the issue's code is the parser's problem. */
 export const RemoteUrlSchema = z.string().trim().superRefine((url, ctx) => {
@@ -46,8 +46,11 @@ const MODE_PROTOCOLS: Record<RepositoryCredentials['mode'], readonly ('https' | 
   'new-ssh-key': [ 'ssh' ]
 };
 
-/** No credentials or new ones only with a matching protocol (AR-16, AR-22). */
-function checkProtocol(
+/**
+ * No credentials or new ones only with a matching protocol (AR-16, AR-22).
+ * Exported for DTOs, which copy the shape and so lose object refinements.
+ */
+export function refineCredentialsProtocol(
   value: { remoteUrl: string; credentials?: RepositoryCredentials; },
   ctx: z.core.$RefinementCtx
 ): void {
@@ -61,13 +64,24 @@ function checkProtocol(
 /** Runs an access check for the form's branch list (AR-35). */
 export const AccessCheckRequestSchema = z
   .object({ remoteUrl: RemoteUrlSchema, credentials: RepositoryCredentialsSchema })
-  .superRefine(checkProtocol)
+  .superRefine(refineCredentialsProtocol)
   .meta({ id: 'AccessCheckRequest' });
 
 /** The remote's branches, sorted by name, and its default branch (null for an empty remote, AR-37). */
 export const AccessCheckResultSchema = z
   .object({ branches: z.array(z.string()), defaultBranch: z.string().nullable() })
   .meta({ id: 'AccessCheckResult' });
+
+/** {@link refineCredentialsProtocol}, and a branch exactly for a single-branch clone; exported for DTOs. */
+export function refineAddRepository(
+  value: { remoteUrl: string; credentials?: RepositoryCredentials; cloneMode?: CloneMode; branch?: string; },
+  ctx: z.core.$RefinementCtx
+): void {
+  refineCredentialsProtocol(value, ctx);
+  if (value.cloneMode === 'single-branch' && value.branch === undefined) {
+    ctx.addIssue({ code: 'custom', path: [ 'branch' ], params: { code: 'required' } });
+  }
+}
 
 /**
  * The Add repository form (AR-5, AR-41). `branch` is required for a
@@ -83,12 +97,7 @@ export const AddRepositoryRequestSchema = z
     branch: z.string().min(1).max(255).optional(),
     gitLevel: z.enum(GIT_LEVELS).optional()
   })
-  .superRefine((value, ctx) => {
-    checkProtocol(value, ctx);
-    if (value.cloneMode === 'single-branch' && value.branch === undefined) {
-      ctx.addIssue({ code: 'custom', path: [ 'branch' ], params: { code: 'required' } });
-    }
-  })
+  .superRefine(refineAddRepository)
   .meta({ id: 'AddRepositoryRequest' });
 
 /** Every repository of the user (at most 50, NF-1.3), for the form's early checks (AR-12, AR-15). */

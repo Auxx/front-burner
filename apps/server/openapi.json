@@ -370,6 +370,89 @@
         ]
       }
     },
+    "/api/v1/repositories/index": {
+      "get": {
+        "operationId": "index",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryIndex"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/api/v1/repositories/access-check": {
+      "post": {
+        "operationId": "accessCheck",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessCheckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessCheckResult"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/api/v1/repositories": {
+      "post": {
+        "operationId": "add",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddRepositoryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositorySummary"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
     "/api/v1/onboarding": {
       "get": {
         "operationId": "status",
@@ -909,6 +992,216 @@
         },
         "required": [
           "repositories"
+        ]
+      },
+      "RepositoryIndex": {
+        "type": "object",
+        "properties": {
+          "repositories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "remoteKey": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "remoteKey"
+              ]
+            }
+          }
+        },
+        "required": [
+          "repositories"
+        ]
+      },
+      "RepositoryCredentials": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "none"
+                ]
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "saved"
+                ]
+              },
+              "credentialId": {
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991,
+                "minimum": 0
+              },
+              "passphrase": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              }
+            },
+            "required": [
+              "mode",
+              "credentialId"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "new-https"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "username": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "password": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "mode",
+              "name",
+              "username",
+              "password"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "new-ssh-key"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "privateKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16384
+              },
+              "passphrase": {
+                "type": "string",
+                "maxLength": 1024
+              }
+            },
+            "required": [
+              "mode",
+              "name",
+              "privateKey"
+            ]
+          }
+        ]
+      },
+      "AccessCheckRequest": {
+        "type": "object",
+        "properties": {
+          "remoteUrl": {
+            "type": "string"
+          },
+          "credentials": {
+            "$ref": "#/components/schemas/RepositoryCredentials"
+          }
+        },
+        "required": [
+          "remoteUrl",
+          "credentials"
+        ]
+      },
+      "AccessCheckResult": {
+        "type": "object",
+        "properties": {
+          "branches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "defaultBranch": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "branches",
+          "defaultBranch"
+        ]
+      },
+      "AddRepositoryRequest": {
+        "type": "object",
+        "properties": {
+          "remoteUrl": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "credentials": {
+            "$ref": "#/components/schemas/RepositoryCredentials"
+          },
+          "cloneMode": {
+            "type": "string",
+            "enum": [
+              "full",
+              "single-branch"
+            ]
+          },
+          "branch": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "gitLevel": {
+            "type": "string",
+            "enum": [
+              "simple",
+              "guided",
+              "advanced"
+            ]
+          }
+        },
+        "required": [
+          "remoteUrl",
+          "name",
+          "credentials",
+          "cloneMode"
         ]
       },
       "OnboardingStatus": {

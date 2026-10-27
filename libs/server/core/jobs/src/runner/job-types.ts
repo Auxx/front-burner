@@ -47,6 +47,8 @@ export interface JobTypeDefinition<P = unknown, R = unknown> {
 export interface EnqueueRequest {
   type: string;
   userId?: number;
+  /** The repository the job works on; the job is deleted with it (A-4.5b). */
+  repositoryId?: number;
   /** JSON; never a secret (A-6.3). */
   payload: object;
   runAt?: Date;

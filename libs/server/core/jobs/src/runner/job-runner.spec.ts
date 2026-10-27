@@ -1,5 +1,5 @@
 import type { Config } from '@front-burner/server-core-config';
-import { Database, jobs, JobStatus, users } from '@front-burner/server-core-database';
+import { Database, jobs, JobStatus, repositories, users } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
@@ -332,6 +332,44 @@ describe('JobRunner', () => {
     controlledType();
     const id = runner.enqueue({ type: 'test.controlled', userId, payload: { repositoryId: 4, credentialsId: 2 } });
     expect(rowOf(id)).toMatchObject({ userId, payload: '{"repositoryId":4,"credentialsId":2}', status: 'queued' });
+  });
+
+  it('stores the repository of a job', () => {
+    controlledType();
+    const repositoryId = database.db.insert(repositories).values({
+      userId,
+      name: 'handbook',
+      remoteUrl: 'https://github.com/acme/handbook.git',
+      cloneMode: 'full',
+      gitLevel: 'advanced',
+      status: 'cloning',
+      createdAt: NOW,
+      lastAccessedAt: NOW
+    }).returning().get().id;
+
+    const id = runner.enqueue({ type: 'test.controlled', userId, repositoryId, payload: {} });
+
+    expect(rowOf(id)?.repositoryId).toBe(repositoryId);
+  });
+
+  it('enqueues inside the caller\'s transaction', async () => {
+    const started = controlledType();
+    runner.start();
+
+    expect(() =>
+      database.db.transaction(tx => {
+        runner.enqueue({ type: 'test.controlled', payload: { n: 1 } }, tx);
+        throw new Error('rolled back');
+      })
+    ).toThrow('rolled back');
+    await settle();
+    expect(database.db.select().from(jobs).all()).toEqual([]);
+
+    database.db.transaction(tx => {
+      runner.enqueue({ type: 'test.controlled', payload: { n: 2 } }, tx);
+    });
+    await settle();
+    expect(started.map(({ job }) => job.payload)).toEqual([ { n: 2 } ]);
   });
 
   it('refuses an unknown type', () => {

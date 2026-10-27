@@ -16,6 +16,20 @@ describe('RepositoryQueries', () => {
 
   afterEach(() => database.sqlite.close());
 
+  it('indexes every repository of the user by name and remote', () => {
+    const bob = insertUser(database, 'bob@example.com');
+    insertRepository(database, alice, { name: 'Handbook', remoteUrl: 'https://GitHub.com/acme/handbook.git/' });
+    insertRepository(database, alice, { name: 'notes', remoteUrl: 'git@github.com:acme/notes.git' });
+    insertRepository(database, bob, { name: 'secret' });
+
+    expect(queries.index(alice)).toEqual({
+      repositories: [
+        { name: 'Handbook', remoteKey: 'github.com/acme/handbook' },
+        { name: 'notes', remoteKey: 'github.com/acme/notes' }
+      ]
+    });
+  });
+
   it('returns at most 10, most recent first', () => {
     for (let i = 0; i < 12; i++) {
       insertRepository(database, alice, { name: `repo-${i}`, lastAccessedAt: new Date(i * 1000) });
