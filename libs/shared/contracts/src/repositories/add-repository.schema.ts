@@ -6,7 +6,8 @@ import { CLONE_MODES, GIT_LEVELS } from './repository-summary.schema';
 /** A remote URL of AR-8 to AR-10; the issue's code is the parser's problem. */
 export const RemoteUrlSchema = z.string().trim().superRefine((url, ctx) => {
   const result = parseRemoteUrl(url);
-  if (!result.ok) {
+  // `in` narrows under every project's compiler settings, `strict` or not.
+  if ('problem' in result) {
     ctx.addIssue({ code: 'custom', message: 'Use an HTTPS or SSH URL', params: { code: result.problem } });
   }
 });
@@ -47,11 +48,12 @@ const MODE_PROTOCOLS: Record<RepositoryCredentials['mode'], readonly ('https' | 
 
 /** No credentials or new ones only with a matching protocol (AR-16, AR-22). */
 function checkProtocol(
-  value: { remoteUrl: string; credentials: RepositoryCredentials; },
+  value: { remoteUrl: string; credentials?: RepositoryCredentials; },
   ctx: z.core.$RefinementCtx
 ): void {
   const result = parseRemoteUrl(value.remoteUrl);
-  if (result.ok && !MODE_PROTOCOLS[value.credentials.mode].includes(result.remote.protocol)) {
+  const mode = value.credentials?.mode;
+  if ('remote' in result && mode !== undefined && !MODE_PROTOCOLS[mode].includes(result.remote.protocol)) {
     ctx.addIssue({ code: 'custom', path: [ 'credentials' ], params: { code: 'protocol-mismatch' } });
   }
 }

@@ -60,6 +60,7 @@ describe('toSummary', () => {
       userId: 1,
       name: 'handbook',
       remoteUrl: 'https://u:t@github.com/acme/handbook.git',
+      credentialId: null,
       cloneMode: 'full',
       branch: null,
       gitLevel: 'advanced',

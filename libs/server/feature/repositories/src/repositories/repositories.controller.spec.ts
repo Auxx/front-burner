@@ -1,6 +1,10 @@
+import { Config, ConfigModule } from '@front-burner/server-core-config';
+import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule } from '@front-burner/server-core-database';
+import { GIT_OPTIONS } from '@front-burner/server-core-git';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
-import { CanActivate, ExecutionContext, INestApplication, Injectable } from '@nestjs/common';
+import { SessionLifecycleModule } from '@front-burner/server-core-security';
+import { CanActivate, ExecutionContext, Global, INestApplication, Injectable, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import type { NextFunction, Request, Response } from 'express';
@@ -9,6 +13,13 @@ import request from 'supertest';
 import { RepositoriesModule } from '../repositories.module';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
+
+const config = { encryptionKey: 'repositories-controller-spec-key-0123456789', keyUnlockIdleMs: 3_600_000 } as Config;
+
+/** Stands in for the global git module's options. */
+@Global()
+@Module({ providers: [ { provide: GIT_OPTIONS, useValue: { knownHosts: [] } } ], exports: [ GIT_OPTIONS ] })
+class StubGitModule {}
 
 /** Mirrors the global auth guard of `server-feature-auth` (LG-34). */
 @Injectable()
@@ -28,7 +39,14 @@ describe('RepositoriesController', () => {
   beforeEach(async () => {
     database = createTestDatabase();
     const moduleRef = await Test.createTestingModule({
-      imports: [ DatabaseModule.forRoot(database), RepositoriesModule ],
+      imports: [
+        ConfigModule.forRoot(config),
+        DatabaseModule.forRoot(database),
+        CryptoModule.forRoot(config),
+        SessionLifecycleModule,
+        StubGitModule,
+        RepositoriesModule
+      ],
       providers: [
         { provide: APP_GUARD, useClass: StubAuthGuard },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
