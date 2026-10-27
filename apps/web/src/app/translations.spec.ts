@@ -31,7 +31,10 @@ describe('i18n/en.json', () => {
     [ 'web-shell.PageNotFoundPage.title', 'Page not found' ],
     [ 'web-feature-dashboard.DashboardPage.title', 'Dashboard' ],
     [ 'web-shell.PageNotFoundPage.heading', 'This page doesn\'t exist.' ],
+    [ 'web-feature-dashboard.DashboardPage.added', 'Cloning {{ name }}. It will be ready to open soon.' ],
     [ `${REPOS}.AddRepositoryPage.title`, 'Add repository' ],
+    [ `${REPOS}.AddRepositoryPage.discard.heading`, 'Discard your changes?' ],
+    [ `${REPOS}.TrustHostDialog.heading`, 'Do you trust this server?' ],
     [ `${REPOS}.errors.remoteUrl.unsupported`, 'Use an HTTPS or SSH URL' ],
     [
       `${REPOS}.errors.remoteUrl.credentials-in-url`,

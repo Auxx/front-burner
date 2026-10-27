@@ -160,6 +160,8 @@
   "web-feature-dashboard.DashboardPage.loading": "Loading your repositories",
   "web-feature-dashboard.DashboardPage.loadFailed": "Your repositories could not be loaded.",
   "web-feature-dashboard.DashboardPage.retry": "Try again",
+  "web-feature-dashboard.DashboardPage.added": "Cloning {{ name }}. It will be ready to open soon.",
+  "web-feature-dashboard.DashboardPage.dismiss": "Dismiss",
   "web-feature-dashboard.AddRepositoryGuideComponent.heading": "Add your first repository",
   "web-feature-dashboard.AddRepositoryGuideComponent.explanation": "Front Burner edits Markdown files in git repositories that already exist on a remote. It never creates repositories, so you need one before you start.",
   "web-feature-dashboard.AddRepositoryGuideComponent.copyUrl": "Copy the remote URL",

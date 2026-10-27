@@ -1,11 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
-import type { CurrentUser, RecentRepositories, RepositorySummary } from '@front-burner/shared-contracts';
+import { provideRouter, Router } from '@angular/router';
+import type { CurrentUser, PushEvent, RecentRepositories, RepositorySummary } from '@front-burner/shared-contracts';
+import { ToastService } from '@front-burner/ui';
 import { RepositoriesApi } from '@front-burner/web-api-client';
-import { CurrentUserService } from '@front-burner/web-core';
-import { NEVER, Observable, of, throwError } from 'rxjs';
+import { CurrentUserService, PushChannelService } from '@front-burner/web-core';
+import { NEVER, Observable, of, Subject, throwError } from 'rxjs';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -36,6 +37,10 @@ describe('DashboardPage', () => {
   let fixture: ComponentFixture<DashboardPage>;
   let responses: Observable<RecentRepositories>[];
   let hint: { hadRepositories: ReturnType<typeof vi.fn>; remember: ReturnType<typeof vi.fn>; };
+  let push: { events: Subject<PushEvent>; reconnected: Subject<void>; };
+  let toast: { show: ReturnType<typeof vi.fn>; };
+  let navigationState: Record<string, unknown> | undefined;
+  let requests: number;
 
   const page = () => fixture.nativeElement as HTMLElement;
   const guide = () => page().querySelector('dash-add-repository-guide');
@@ -52,21 +57,35 @@ describe('DashboardPage', () => {
     ...answers: Observable<RecentRepositories>[]
   ): Promise<void> {
     responses = answers;
+    requests = 0;
+    const recent = () => {
+      requests++;
+      return responses.shift() ?? NEVER;
+    };
     await TestBed.configureTestingModule({
       imports: [ DashboardPage, translocoTesting() ],
       providers: [
         provideRouter([]),
-        { provide: RepositoriesApi, useValue: { recent: () => responses.shift() ?? NEVER } },
+        { provide: RepositoriesApi, useValue: { recent } },
         { provide: CurrentUserService, useValue: { user: current, load: () => Promise.resolve(user) } },
-        { provide: DashboardHintService, useValue: hint }
+        { provide: DashboardHintService, useValue: hint },
+        { provide: PushChannelService, useValue: push },
+        { provide: ToastService, useValue: toast }
       ]
     }).compileComponents();
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'currentNavigation').mockReturnValue(
+      navigationState === undefined ? null : { extras: { state: navigationState } } as never
+    );
     fixture = TestBed.createComponent(DashboardPage);
     await settle(fixture);
   }
 
   beforeEach(() => {
     hint = { hadRepositories: vi.fn(() => false), remember: vi.fn() };
+    push = { events: new Subject(), reconnected: new Subject() };
+    toast = { show: vi.fn() };
+    navigationState = undefined;
   });
 
   it('has one h1, "Dashboard", that takes the focus after navigation', async () => {
@@ -139,5 +158,91 @@ describe('DashboardPage', () => {
 
     expect(page().textContent).not.toContain(`${KEY}.loadFailed`);
     expect(recent()).not.toBeNull();
+  });
+
+  describe('after adding a repository', () => {
+    const cloning: RepositorySummary = { ...handbook, status: 'cloning' };
+    const link = () => page().querySelector<HTMLAnchorElement>('dash-repository-entry a.name');
+
+    async function statusOf(event: Omit<Extract<PushEvent, { type: 'repository.status'; }>, 'type'>): Promise<void> {
+      push.events.next({ type: 'repository.status', ...event });
+      await settle(fixture);
+    }
+
+    it('shows the cloning message after adding', async () => {
+      navigationState = { addedRepository: 'handbook' };
+
+      await open(of({ repositories: [ cloning ] }));
+
+      expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ message: `${KEY}.added`, status: 'info' }));
+    });
+
+    it('shows no message on an ordinary visit', async () => {
+      await open(of({ repositories: [ handbook ] }));
+
+      expect(toast.show).not.toHaveBeenCalled();
+    });
+
+    it('makes a cloning repository openable when its clone ends', async () => {
+      await open(of({ repositories: [ cloning ] }));
+      expect(link()).toBeNull();
+
+      await statusOf({ repositoryId: 1, status: 'ready', error: null });
+
+      expect(link()?.getAttribute('href')).toBe('/repositories/1');
+      expect(requests).toBe(1);
+    });
+
+    it('shows a clone that failed', async () => {
+      await open(of({ repositories: [ cloning ] }));
+
+      await statusOf({ repositoryId: 1, status: 'error', error: 'clone-failed' });
+
+      expect(page().querySelector('dash-repository-entry .error')?.textContent?.trim()).toBe(
+        'web-feature-dashboard.RepositoryEntryComponent.error.clone-failed'
+      );
+    });
+
+    it('reloads the list after a reconnect', async () => {
+      await open(of({ repositories: [ cloning ] }), of({ repositories: [ handbook ] }));
+
+      push.reconnected.next();
+      await settle(fixture);
+
+      expect(requests).toBe(2);
+      expect(link()).not.toBeNull();
+    });
+
+    it('reloads the list for an unknown repository', async () => {
+      await open(
+        of({ repositories: [ handbook ] }),
+        of({ repositories: [ { ...handbook, id: 2, name: 'wiki' }, handbook ] })
+      );
+
+      await statusOf({ repositoryId: 2, status: 'ready', error: null });
+
+      expect(requests).toBe(2);
+      expect(page().querySelectorAll('dash-repository-entry')).toHaveLength(2);
+    });
+
+    it('keeps the list when a reload fails', async () => {
+      await open(of({ repositories: [ handbook ] }), throwError(() => new HttpErrorResponse({ status: 0 })));
+
+      push.reconnected.next();
+      await settle(fixture);
+
+      expect(page().querySelectorAll('dash-repository-entry')).toHaveLength(1);
+      expect(page().querySelector('ui-inline-banner')).toBeNull();
+    });
+
+    it('stops listening when the page is left', async () => {
+      await open(of({ repositories: [ handbook ] }));
+      expect(push.events.observed).toBe(true);
+
+      fixture.destroy();
+
+      expect(push.events.observed).toBe(false);
+      expect(push.reconnected.observed).toBe(false);
+    });
   });
 });
