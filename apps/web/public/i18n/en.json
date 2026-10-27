@@ -96,5 +96,7 @@
   "web-shell.UserMenuComponent.logout": "Log out",
   "web-shell.PageNotFoundPage.title": "Page not found",
   "web-shell.PageNotFoundPage.heading": "This page doesn't exist.",
-  "web-shell.PageNotFoundPage.dashboard": "Go to the dashboard"
+  "web-shell.PageNotFoundPage.dashboard": "Go to the dashboard",
+  "web-feature-dashboard.DashboardPage.title": "Dashboard",
+  "web-feature-dashboard.DashboardPage.heading": "Dashboard"
 }

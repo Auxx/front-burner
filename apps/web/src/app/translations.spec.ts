@@ -28,6 +28,7 @@ describe('i18n/en.json', () => {
     [ 'web-shell.UserMenuComponent.label', 'Account menu for {{ name }}' ],
     [ 'web-shell.UserMenuComponent.logout', 'Log out' ],
     [ 'web-shell.PageNotFoundPage.title', 'Page not found' ],
+    [ 'web-feature-dashboard.DashboardPage.title', 'Dashboard' ],
     [ 'web-shell.PageNotFoundPage.heading', 'This page doesn\'t exist.' ]
   ])('has the fixed text %s', (key, text) => {
     expect(texts[key]).toBe(text);

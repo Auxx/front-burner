@@ -56,6 +56,9 @@
       ],
       "@front-burner/web-shell": [
         "./libs/web/shell/src/index.ts"
+      ],
+      "@front-burner/web-feature-dashboard": [
+        "./libs/web/feature-dashboard/src/index.ts"
       ]
     }
   },
