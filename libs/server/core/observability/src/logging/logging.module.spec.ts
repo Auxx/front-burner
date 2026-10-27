@@ -41,7 +41,8 @@ const config: Config = {
   blockPrivateNetworks: false,
   authTokenTtlMs: 900_000,
   refreshTokenTtlMs: 2_592_000_000,
-  loginAuditRetentionMs: 7_776_000_000
+  loginAuditRetentionMs: 7_776_000_000,
+  oidc: undefined
 };
 
 describe('LoggingModule', () => {

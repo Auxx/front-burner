@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compile } from 'proxy-addr';
 import { z } from 'zod';
-import { Config } from './config.model';
+import { Config, OidcEnvironment } from './config.model';
 
 const PREFIX = 'FRONT_BURNER_';
 const SETUP_TOKEN = 'FRONT_BURNER_SETUP_TOKEN';
@@ -15,6 +15,22 @@ const MIN_JWT_SECRET_LENGTH = 32;
 const ENCRYPTION_KEY = 'FRONT_BURNER_ENCRYPTION_KEY';
 const ENCRYPTION_KEY_FILE = 'FRONT_BURNER_ENCRYPTION_KEY_FILE';
 const MIN_ENCRYPTION_KEY_LENGTH = 32;
+const OIDC_ISSUER = 'FRONT_BURNER_OIDC_ISSUER';
+const OIDC_CLIENT_ID = 'FRONT_BURNER_OIDC_CLIENT_ID';
+const OIDC_CLIENT_SECRET = 'FRONT_BURNER_OIDC_CLIENT_SECRET';
+const OIDC_CLIENT_SECRET_FILE = 'FRONT_BURNER_OIDC_CLIENT_SECRET_FILE';
+const OIDC_SCOPES = 'FRONT_BURNER_OIDC_SCOPES';
+const OIDC_REQUIRE_VERIFIED_EMAIL = 'FRONT_BURNER_OIDC_REQUIRE_VERIFIED_EMAIL';
+const ADMIN_EMAIL = 'FRONT_BURNER_ADMIN_EMAIL';
+const OIDC_VARIABLES = [
+  OIDC_ISSUER,
+  OIDC_CLIENT_ID,
+  OIDC_CLIENT_SECRET,
+  OIDC_CLIENT_SECRET_FILE,
+  OIDC_SCOPES,
+  OIDC_REQUIRE_VERIFIED_EMAIL,
+  ADMIN_EMAIL
+];
 const DEFAULT_TRUSTED_PROXIES = 'loopback, linklocal, uniquelocal';
 
 function duration(defaultValue: string) {
@@ -41,6 +57,15 @@ export class ConfigError extends Error {
     );
     this.name = 'ConfigError';
   }
+}
+
+function isHttpsIssuer(value: string): boolean {
+  if (!URL.canParse(value)) {
+    return false;
+  }
+  const url = new URL(value);
+  return url.protocol === 'https:' && url.search === '' && url.hash === '' && !value.includes('#')
+    && !value.includes('?');
 }
 
 function isTrustedProxy(entry: string): boolean {
@@ -87,7 +112,21 @@ const schema = z.object({
   }).default('false').transform(v => v === 'true'),
   FRONT_BURNER_AUTH_TOKEN_TTL: duration('15m'),
   FRONT_BURNER_REFRESH_TOKEN_TTL: duration('30d'),
-  FRONT_BURNER_LOGIN_AUDIT_RETENTION: duration('90d')
+  FRONT_BURNER_LOGIN_AUDIT_RETENTION: duration('90d'),
+  [OIDC_ISSUER]: z.string().refine(isHttpsIssuer, { message: 'must be an https: URL without query or fragment' })
+    .optional(),
+  [OIDC_CLIENT_ID]: z.string().optional(),
+  [OIDC_CLIENT_SECRET]: z.string().optional(),
+  [OIDC_CLIENT_SECRET_FILE]: z.string().optional(),
+  [OIDC_SCOPES]: z.string().default('openid email profile'),
+  [OIDC_REQUIRE_VERIFIED_EMAIL]: z.enum([ 'true', 'false' ], {
+    error: () => 'must be true or false'
+  }).default('true').transform(v => v === 'true'),
+  [ADMIN_EMAIL]: z.string().trim().pipe(
+    z.email({ error: () => 'must be a valid email address' }).max(254, {
+      error: () => 'must be a valid email address'
+    })
+  ).optional()
 }).refine(v => v[SETUP_TOKEN] === undefined || v[SETUP_TOKEN_FILE] === undefined, {
   path: [ SETUP_TOKEN ],
   message: `cannot be set together with ${SETUP_TOKEN_FILE}`
@@ -97,6 +136,9 @@ const schema = z.object({
 }).refine(v => v[ENCRYPTION_KEY] === undefined || v[ENCRYPTION_KEY_FILE] === undefined, {
   path: [ ENCRYPTION_KEY ],
   message: `cannot be set together with ${ENCRYPTION_KEY_FILE}`
+}).refine(v => v[OIDC_CLIENT_SECRET] === undefined || v[OIDC_CLIENT_SECRET_FILE] === undefined, {
+  path: [ OIDC_CLIENT_SECRET ],
+  message: `cannot be set together with ${OIDC_CLIENT_SECRET_FILE}`
 });
 
 const KNOWN_VARIABLES = new Set(Object.keys(schema.shape));
@@ -186,6 +228,41 @@ export function loadConfig(
     );
   }
 
+  // AO-31: all required OIDC variables or none of them.
+  let oidc: OidcEnvironment | undefined;
+  const oidcSet = OIDC_VARIABLES.some(variable => input[variable] !== undefined);
+  const clientSecret = readSecret(OIDC_CLIENT_SECRET, OIDC_CLIENT_SECRET_FILE);
+  if (oidcSet) {
+    const required: [ string, string | undefined ][] = [
+      [ OIDC_ISSUER, input[OIDC_ISSUER] ],
+      [ OIDC_CLIENT_ID, input[OIDC_CLIENT_ID] ],
+      [ OIDC_CLIENT_SECRET, input[OIDC_CLIENT_SECRET] ?? input[OIDC_CLIENT_SECRET_FILE] ],
+      [ ADMIN_EMAIL, input[ADMIN_EMAIL] ]
+    ];
+    for (const [ variable, value ] of required) {
+      if (value === undefined) {
+        issues.push({ variable, message: 'is required when other FRONT_BURNER_OIDC_* variables are set' });
+      }
+    }
+    const values = parsed.data;
+    const issuer = values?.[OIDC_ISSUER];
+    const clientId = values?.[OIDC_CLIENT_ID];
+    const adminEmail = values?.[ADMIN_EMAIL];
+    if (
+      values !== undefined && issuer !== undefined && clientId !== undefined && adminEmail !== undefined
+      && clientSecret.value !== undefined
+    ) {
+      oidc = {
+        issuer,
+        clientId,
+        clientSecret: clientSecret.value,
+        scopes: values[OIDC_SCOPES],
+        requireVerifiedEmail: values[OIDC_REQUIRE_VERIFIED_EMAIL],
+        adminEmail
+      };
+    }
+  }
+
   if (
     !parsed.success
     || issues.length > 0
@@ -210,7 +287,8 @@ export function loadConfig(
       blockPrivateNetworks: values.FRONT_BURNER_BLOCK_PRIVATE_NETWORKS,
       authTokenTtlMs: values.FRONT_BURNER_AUTH_TOKEN_TTL,
       refreshTokenTtlMs: values.FRONT_BURNER_REFRESH_TOKEN_TTL,
-      loginAuditRetentionMs: values.FRONT_BURNER_LOGIN_AUDIT_RETENTION
+      loginAuditRetentionMs: values.FRONT_BURNER_LOGIN_AUDIT_RETENTION,
+      oidc
     },
     warnings
   };
