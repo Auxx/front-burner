@@ -1,0 +1,9 @@
+<ng-container *transloco="let t; prefix: 'web-feature-dashboard.RecentRepositoriesComponent'">
+  <h2 class="heading">{{ t('heading') }}</h2>
+  <ul class="list">
+    @for (repository of repositories(); track repository.id) {
+      <li class="item"><dash-repository-entry [repository]="repository" /></li>
+    }
+  </ul>
+  <a class="all" routerLink="/repositories">{{ t('all') }}</a>
+</ng-container>

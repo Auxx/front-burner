@@ -1,0 +1,38 @@
+<ng-container *transloco="let t; prefix: 'web-feature-dashboard.RepositoryEntryComponent'">
+  @let repository = this.repository();
+  <div class="title">
+    @if (openable()) {
+      <a class="name" [routerLink]="['/repositories', repository.id]">{{ repository.name }}</a>
+    } @else {
+      <span class="name">{{ repository.name }}</span>
+    }
+    @if (statusBadge(); as badge) {
+      <span uiBadge [status]="badge.look">{{ t('status.' + badge.status) }}</span>
+    }
+    @for (warning of repository.warnings; track warning) {
+      <span uiBadge status="warning">{{ t('warning.' + warning) }}</span>
+    }
+  </div>
+  <span class="remote">{{ repository.remote }}</span>
+  @if (repository.error) {
+    <span class="error">{{ t('error.' + repository.error) }}</span>
+  }
+  <div class="meta">
+    <span class="accessed">
+      {{ t('lastAccessed') }}
+      <time
+        tabindex="0"
+        [attr.datetime]="repository.lastAccessedAt"
+        [uiTooltip]="exact()"
+        uiTooltipShowOnClick
+      >{{ relative() }}</time>
+    </span>
+    @if (hasSettingsLink()) {
+      <a
+        class="settings"
+        [routerLink]="['/repositories', repository.id, 'settings']"
+        [attr.aria-label]="t('settingsLabel', { name: repository.name })"
+      >{{ t('settings') }}</a>
+    }
+  </div>
+</ng-container>
