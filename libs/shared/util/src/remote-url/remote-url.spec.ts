@@ -155,6 +155,18 @@ describe('remoteDisplay', () => {
     expect(remoteDisplay('ssh://git:p@github.com/acme/handbook.git')).toBe('github.com/acme/handbook');
     expect(remoteDisplay('ssh://git@github.com/acme/handbook.git')).toBe('github.com/acme/handbook');
   });
+
+  it.each([
+    'https://alice:pa#secret@github.com/acme/handbook.git',
+    'https://alice:p?secret@github.com/acme/handbook.git',
+    'https://alice:p/secret@github.com/acme/handbook.git',
+    'https://alice/secret@github.com/acme/handbook.git',
+    'ssh://alice:p/secret@github.com/acme/handbook.git'
+  ])('drops credentials with a /, ? or # in them: %s', url => {
+    const display = remoteDisplay(url);
+    expect(display).not.toContain('secret');
+    expect(display).not.toContain('alice');
+  });
 });
 
 describe('defaultRepositoryName', () => {

@@ -240,6 +240,27 @@
         ]
       }
     },
+    "/api/v1/repositories/recent": {
+      "get": {
+        "operationId": "recent",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentRepositories"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
     "/api/v1/onboarding": {
       "get": {
         "operationId": "status",
@@ -520,6 +541,82 @@
           "email",
           "displayName",
           "role"
+        ]
+      },
+      "RepositorySummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "name": {
+            "type": "string"
+          },
+          "remote": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "needs-confirmation",
+              "cloning",
+              "ready",
+              "error"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "enum": [
+              "clone-failed",
+              "clone-timed-out",
+              "working-copy-missing",
+              null
+            ],
+            "nullable": true
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "credentials-refused",
+                "cannot-push",
+                "host-key-changed",
+                "key-locked"
+              ]
+            }
+          },
+          "lastAccessedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "remote",
+          "status",
+          "error",
+          "warnings",
+          "lastAccessedAt"
+        ]
+      },
+      "RecentRepositories": {
+        "type": "object",
+        "properties": {
+          "repositories": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RepositorySummary"
+            }
+          }
+        },
+        "required": [
+          "repositories"
         ]
       },
       "OnboardingStatus": {

@@ -1,0 +1,41 @@
+:host {
+  display: grid;
+  gap: var(--ui-space-1);
+  min-inline-size: 0;
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1) var(--ui-space-2);
+}
+
+.name {
+  font-weight: var(--ui-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.remote,
+.meta {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: var(--ui-danger-text);
+  font-size: var(--ui-font-size-sm);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--ui-space-1) var(--ui-space-3);
+}
+
+time {
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+}

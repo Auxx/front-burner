@@ -1,3 +1,4 @@
+import BetterSqlite3 from 'better-sqlite3';
 import { type ChildProcess, spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -18,6 +19,11 @@ export interface ServerProcess {
   dataDir: string;
   stop(): Promise<void>;
   output(): string;
+  /**
+   * Waits until the output contains `text`. The server logs asynchronously, so
+   * a response can arrive before the lines logged while handling it.
+   */
+  waitForOutput(text: string): Promise<string>;
 }
 
 export interface ServerOptions {
@@ -100,6 +106,17 @@ function within<T>(promise: Promise<T>, what: string, output: () => string): Pro
   return Promise.race([ promise, timeout ]).finally(() => clearTimeout(timer));
 }
 
+async function outputContaining(text: string, output: () => string): Promise<string> {
+  const deadline = Date.now() + TIMEOUT_MS;
+  while (!output().includes(text)) {
+    if (Date.now() > deadline) {
+      throw new Error(`Waiting for ${JSON.stringify(text)} in the output timed out. Output:\n${output()}`);
+    }
+    await new Promise(r => setTimeout(r, 20));
+  }
+  return output();
+}
+
 async function startOnce(env: Record<string, string>, options: ServerOptions): Promise<ServerProcess> {
   const spawned = await spawnServer(env, options);
   const url = `http://127.0.0.1:${spawned.port}`;
@@ -133,6 +150,7 @@ async function startOnce(env: Record<string, string>, options: ServerOptions): P
     url,
     dataDir: spawned.dataDir,
     output: spawned.output,
+    waitForOutput: text => outputContaining(text, spawned.output),
     stop: async () => {
       polling = false;
       if (spawned.child.exitCode === null) {
@@ -235,5 +253,63 @@ export async function runServerToExit(
     return { code, output: spawned.output(), dataDir: spawned.dataDir };
   } finally {
     await spawned.cleanup();
+  }
+}
+
+export interface SeedUser {
+  email: string;
+  displayName?: string;
+}
+
+export interface SeedRepository {
+  userId: number;
+  name: string;
+  remoteUrl?: string;
+  status?: 'cloning' | 'ready' | 'error';
+  errorCode?: 'clone-failed' | 'clone-timed-out' | 'working-copy-missing';
+  lastAccessedAt: Date;
+}
+
+/**
+ * Inserts users and repositories into a running server's database, which the
+ * server has migrated (WAL lets both write). Every seeded user is a password
+ * user with {@link E2E_ADMIN}'s password, so onboard first. Returns the new IDs.
+ */
+export function seed(
+  dataDir: string,
+  rows: { users?: SeedUser[]; repositories?: SeedRepository[]; }
+): { userIds: number[]; repositoryIds: number[]; } {
+  const sqlite = new BetterSqlite3(join(dataDir, 'db', 'front-burner.sqlite'));
+  try {
+    const { password_hash: passwordHash } = sqlite.prepare('SELECT password_hash FROM users ORDER BY id LIMIT 1')
+      .get() as { password_hash: string; };
+    const insertUser = sqlite.prepare(
+      `INSERT INTO users (email, display_name, role, login_method, password_hash, created_at)
+       VALUES (?, ?, 'user', 'password', ?, ?)`
+    );
+    const insertRepository = sqlite.prepare(
+      `INSERT INTO repositories
+         (user_id, name, remote_url, clone_mode, git_level, status, error_code, created_at, last_accessed_at)
+       VALUES (?, ?, ?, 'full', 'advanced', ?, ?, ?, ?)`
+    );
+    const userIds = (rows.users ?? []).map(user =>
+      Number(insertUser.run(user.email, user.displayName ?? user.email, passwordHash, Date.now()).lastInsertRowid)
+    );
+    const repositoryIds = (rows.repositories ?? []).map(repository =>
+      Number(
+        insertRepository.run(
+          repository.userId,
+          repository.name,
+          repository.remoteUrl ?? `https://github.com/acme/${repository.name}.git`,
+          repository.status ?? 'ready',
+          repository.errorCode ?? null,
+          repository.lastAccessedAt.getTime(),
+          repository.lastAccessedAt.getTime()
+        ).lastInsertRowid
+      )
+    );
+    return { userIds, repositoryIds };
+  } finally {
+    sqlite.close();
   }
 }

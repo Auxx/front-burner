@@ -165,6 +165,7 @@ test.describe('expiring auth tokens', () => {
     await expect(page.getByText('Your session has expired. Please log in again')).toBeVisible();
     await expect(page).toHaveURL(/\/login\?returnUrl=%2F$/);
     drainFailedRequests(monitor, '/api/v1/me');
+    drainFailedRequests(monitor, '/api/v1/repositories/recent');
     drainFailedRequests(monitor, '/api/v1/auth/session/refresh');
   });
 
@@ -190,7 +191,9 @@ test.describe('expiring auth tokens', () => {
     await expect(page.getByRole('button', { name: /^Account menu for / })).toBeVisible();
     await expect(other.getByRole('button', { name: /^Account menu for / })).toBeVisible();
     expect(refreshes).toBe(1);
+    // The dashboard asks for its list with the expired token too.
     drainFailedRequests(monitor, '/api/v1/me');
+    drainFailedRequests(monitor, '/api/v1/repositories/recent');
   });
 });
 

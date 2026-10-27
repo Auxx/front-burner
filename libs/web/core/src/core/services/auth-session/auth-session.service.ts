@@ -143,11 +143,22 @@ export class AuthSessionService {
   private async withLock<T>(callback: (waited: boolean) => Promise<T>): Promise<T> {
     const locks = this.window?.navigator.locks;
     if (locks) {
-      return locks.request(
+      // Firefox reports a rejected callback as uncaught even though the request
+      // is handled, so the callback always fulfils and the failure is thrown here.
+      const settled = (waited: boolean) =>
+        callback(waited).then(
+          value => ({ ok: true as const, value }),
+          (error: unknown) => ({ ok: false as const, error })
+        );
+      const outcome = await locks.request(
         REFRESH_LOCK,
         { ifAvailable: true },
-        lock => lock ? callback(false) : locks.request(REFRESH_LOCK, () => callback(true))
+        lock => lock ? settled(false) : locks.request(REFRESH_LOCK, () => settled(true))
       );
+      if (!outcome.ok) {
+        throw outcome.error;
+      }
+      return outcome.value;
     }
     // Within one tab a refresh updates the session at once: there is nothing to wait for.
     const run = this.localLock.then(() => callback(false));

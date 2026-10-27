@@ -4,6 +4,7 @@ import { Database, DatabaseModule } from '@front-burner/server-core-database';
 import { ApiExceptionFilter, HealthModule, LoggingModule } from '@front-burner/server-core-observability';
 import { EgressModule, RateLimitModule } from '@front-burner/server-core-security';
 import { AuthModule } from '@front-burner/server-feature-auth';
+import { RepositoriesModule } from '@front-burner/server-feature-repositories';
 import { DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
@@ -31,7 +32,8 @@ export class AppModule {
         RateLimitModule,
         HealthModule.forRoot({ migrationsApplied: deps.migrationsApplied }),
         // After RateLimitModule: the rate limit guard runs before the auth guard (A-1.12).
-        AuthModule
+        AuthModule,
+        RepositoriesModule
       ],
       providers: [
         { provide: APP_FILTER, useClass: ApiExceptionFilter },

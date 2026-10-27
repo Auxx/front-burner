@@ -1,0 +1,47 @@
+<ng-container *transloco="let t; prefix: 'web-feature-dashboard.AddRepositoryGuideComponent'">
+  <ng-template #details>
+    <p class="explanation">{{ t('explanation') }}</p>
+    <ol class="steps">
+      <li>
+        <strong>{{ t('copyUrl') }}</strong>
+        {{ t('copyUrlText') }}
+        <span class="examples">
+          <code>https://github.com/org/repo.git</code>
+          <code>git&#64;github.com:org/repo.git</code>
+        </span>
+      </li>
+      <li><strong>{{ t('credentials') }}</strong> {{ t('credentialsText') }}</li>
+      <li><strong>{{ t('cloneMode') }}</strong> {{ t('cloneModeText') }}</li>
+    </ol>
+  </ng-template>
+
+  @if (form() === 'full') {
+    <h2 class="heading">{{ t('heading') }}</h2>
+    <ng-container [ngTemplateOutlet]="details" />
+    <div>
+      <a uiButton variant="primary" routerLink="/repositories/new">{{ t('add') }}</a>
+    </div>
+  } @else {
+    <div class="strip">
+      <p class="strip-text">{{ t('compactText') }}</p>
+      <button
+        uiButton
+        variant="ghost"
+        size="small"
+        class="how"
+        [attr.aria-expanded]="expanded()"
+        [attr.aria-controls]="detailsId"
+        (click)="expanded.set(!expanded())"
+      >
+        {{ t('howItWorks') }}
+        <ui-icon [name]="expanded() ? 'chevron-down' : 'chevron-right'" />
+      </button>
+      <a uiButton variant="primary" class="add" routerLink="/repositories/new">{{ t('add') }}</a>
+    </div>
+    <div class="details" [id]="detailsId">
+      @if (expanded()) {
+        <ng-container [ngTemplateOutlet]="details" />
+      }
+    </div>
+  }
+</ng-container>

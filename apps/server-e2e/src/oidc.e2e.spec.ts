@@ -223,9 +223,8 @@ describe('OIDC from the environment', () => {
       [ 'user-disabled', null ],
       [ 'registration-disabled', null ]
     ]);
-    const output = server?.output() ?? '';
     for (const text of [ 'provider-error', 'access_denied', 'user-disabled', 'registration-disabled' ]) {
-      expect(output).toContain(text);
+      await expect(server?.waitForOutput(text)).resolves.toContain(text);
     }
   });
 
