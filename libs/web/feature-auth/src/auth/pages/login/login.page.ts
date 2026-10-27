@@ -1,8 +1,10 @@
+import { DOCUMENT } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { form, FormField, submit, validateStandardSchema } from '@angular/forms/signals';
 import { ActivatedRoute, Router } from '@angular/router';
-import { LoginRequestSchema } from '@front-burner/shared-contracts';
+import { LoginRequestSchema, OIDC_FAILURE_REASONS, type OidcFailureReason } from '@front-burner/shared-contracts';
 import {
   ButtonComponent,
   FieldComponent,
@@ -12,6 +14,7 @@ import {
   InputComponent,
   PasswordRevealDirective
 } from '@front-burner/ui';
+import { AuthApi } from '@front-burner/web-api-client';
 import {
   ApiErrorTextService,
   AuthSessionService,
@@ -20,8 +23,10 @@ import {
   toApiError
 } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { catchError, map, of } from 'rxjs';
 
 import { BROWSER_LOCATION } from '../../utils/browser-location';
+import { OIDC_RETURN_KEY } from '../../utils/oidc-return';
 
 const SCHEMA = LoginRequestSchema.pick({ email: true, password: true });
 
@@ -37,10 +42,14 @@ interface Credentials {
   password: string;
 }
 
+/** Starts an OIDC login: a full navigation, as the backend redirects to the provider (LG-17). */
+const OIDC_START = '/api/v1/auth/oidc/start';
+
 /**
- * The login page (REQ-AUTH-003): username + password (LG-10, LG-11), a one-off
- * message from another page (LG-9) and the plain HTTP warning (LG-68). On
- * success it goes to the page the user asked for, or the dashboard (LG-4).
+ * The login page (REQ-AUTH-003): username + password (LG-10, LG-11), OIDC
+ * when it is configured (LG-7, LG-21), a one-off message from another page
+ * (LG-9) and the plain HTTP warning (LG-68). On success it goes to the page
+ * the user asked for, or the dashboard (LG-4).
  */
 @Component({
   selector: 'auth-login',
@@ -65,8 +74,19 @@ export class LoginPage {
   private readonly route = inject(ActivatedRoute);
   private readonly errorText = inject(ApiErrorTextService);
   private readonly passwordInput = viewChild.required('password', { read: ElementRef<HTMLInputElement> });
+  private readonly window = inject(DOCUMENT).defaultView;
 
   protected readonly deploymentGuide = DEPLOYMENT_GUIDE;
+  protected readonly oidcStart = OIDC_START;
+
+  /** Undefined until known, and when the methods cannot be loaded: the password form still works. */
+  protected readonly oidc = toSignal(
+    inject(AuthApi).methods().pipe(map(methods => methods.oidc), catchError(() => of(undefined))),
+    { initialValue: undefined }
+  );
+
+  /** A failed OIDC login: the reason only while onboarding is pending from the environment (AO-34). */
+  protected readonly oidcError = this.oidcFailure();
 
   protected readonly model = form(signal<Credentials>({ email: '', password: '' }), path => {
     validateStandardSchema(path, SCHEMA);
@@ -112,6 +132,26 @@ export class LoginPage {
       await this.router.navigateByUrl(safeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl')));
       return undefined;
     });
+  }
+
+  /** Remembers where to go after the provider sends the user back. */
+  protected rememberReturn(): void {
+    try {
+      this.window?.sessionStorage.setItem(
+        OIDC_RETURN_KEY,
+        safeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl'))
+      );
+    } catch {
+      // Without storage the login ends on the dashboard.
+    }
+  }
+
+  private oidcFailure(): OidcFailureReason | null {
+    const reason = this.route.snapshot.queryParamMap.get('oidcError');
+    if (reason === null) {
+      return null;
+    }
+    return OIDC_FAILURE_REASONS.find(known => known === reason) ?? 'failed';
   }
 
   private refusal(error: unknown): void {

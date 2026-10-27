@@ -1,6 +1,7 @@
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { REFRESH_HEADER, type RefreshRequest } from '@front-burner/shared-contracts';
+import { REFRESH_HEADER, type RefreshRequest, type SessionTokens } from '@front-burner/shared-contracts';
 import type { CookieOptions, Request, Response } from 'express';
+import type { IssuedSession } from '../sessions/session.service';
 
 /** The cookie that holds the refresh token with cookie delivery (LG-31, LG-32). */
 export const REFRESH_COOKIE = 'front_burner_refresh';
@@ -43,4 +44,12 @@ export function readRefreshToken(req: Request, body: RefreshRequest): string | u
     throw new ApiErrorException(403, 'cross-site-refused');
   }
   return fromCookie;
+}
+
+/** The response body; with cookie delivery the refresh token goes into the cookie instead (LG-31). */
+export function answerWithSession(issued: IssuedSession, res: Response): SessionTokens {
+  if (issued.delivery === 'cookie') {
+    setRefreshCookie(res, issued.refreshToken, new Date(issued.tokens.refreshTokenExpiresAt));
+  }
+  return issued.tokens;
 }

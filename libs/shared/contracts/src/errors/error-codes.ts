@@ -10,7 +10,8 @@ export const ERROR_CODES = [
   'auth-token-expired',
   'wrong-credentials',
   'refresh-refused',
-  'cross-site-refused'
+  'cross-site-refused',
+  'oidc-code-invalid'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

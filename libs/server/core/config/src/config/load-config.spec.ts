@@ -43,7 +43,8 @@ describe('loadConfig', () => {
       blockPrivateNetworks: false,
       authTokenTtlMs: 900_000,
       refreshTokenTtlMs: 2_592_000_000,
-      loginAuditRetentionMs: 7_776_000_000
+      loginAuditRetentionMs: 7_776_000_000,
+      oidc: undefined
     });
     expect(warnings).toEqual([]);
   });
@@ -261,5 +262,89 @@ describe('loadConfig', () => {
   it('warns about unknown FRONT_BURNER_ variables', () => {
     const { warnings } = loadConfig({ ...BASE, FRONT_BURNER_PROT: '1', PATH: '/bin', OTHER: 'x' });
     expect(warnings).toEqual([ 'Unknown variable FRONT_BURNER_PROT is ignored.' ]);
+  });
+  describe('OIDC', () => {
+    const CLIENT_SECRET = 'oidc-client-secret-0123456789';
+    const OIDC = {
+      FRONT_BURNER_OIDC_ISSUER: 'https://id.example.com/realms/main',
+      FRONT_BURNER_OIDC_CLIENT_ID: 'front-burner',
+      FRONT_BURNER_OIDC_CLIENT_SECRET: CLIENT_SECRET,
+      FRONT_BURNER_ADMIN_EMAIL: 'admin@example.com'
+    };
+
+    it('leaves OIDC unset without variables', () => {
+      expect(loadConfig(BASE).config.oidc).toBeUndefined();
+    });
+
+    it('reads a full OIDC configuration', () => {
+      expect(loadConfig({ ...BASE, ...OIDC }).config.oidc).toEqual({
+        issuer: 'https://id.example.com/realms/main',
+        clientId: 'front-burner',
+        clientSecret: CLIENT_SECRET,
+        scopes: 'openid email profile',
+        requireVerifiedEmail: true,
+        adminEmail: 'admin@example.com'
+      });
+      const { config } = loadConfig({
+        ...BASE,
+        ...OIDC,
+        FRONT_BURNER_OIDC_SCOPES: 'openid email',
+        FRONT_BURNER_OIDC_REQUIRE_VERIFIED_EMAIL: 'false'
+      });
+      expect(config.oidc?.scopes).toBe('openid email');
+      expect(config.oidc?.requireVerifiedEmail).toBe(false);
+    });
+
+    it('names every missing variable', () => {
+      expect(issuesOf({ FRONT_BURNER_OIDC_ISSUER: OIDC.FRONT_BURNER_OIDC_ISSUER })).toEqual([
+        'FRONT_BURNER_OIDC_CLIENT_ID',
+        'FRONT_BURNER_OIDC_CLIENT_SECRET',
+        'FRONT_BURNER_ADMIN_EMAIL'
+      ].map(variable => ({ variable, message: 'is required when other FRONT_BURNER_OIDC_* variables are set' })));
+    });
+
+    it('refuses the admin email alone', () => {
+      expect(issuesOf({ FRONT_BURNER_ADMIN_EMAIL: 'admin@example.com' }).map(issue => issue.variable)).toEqual([
+        'FRONT_BURNER_OIDC_ISSUER',
+        'FRONT_BURNER_OIDC_CLIENT_ID',
+        'FRONT_BURNER_OIDC_CLIENT_SECRET'
+      ]);
+    });
+
+    it('refuses an http issuer', () => {
+      for (
+        const issuer of [ 'http://id.example.com', 'https://id.example.com/?a=1', 'https://id.example.com/#x', 'id' ]
+      ) {
+        expect(issuesOf({ ...OIDC, FRONT_BURNER_OIDC_ISSUER: issuer }).map(issue => issue.variable)).toEqual([
+          'FRONT_BURNER_OIDC_ISSUER'
+        ]);
+      }
+    });
+
+    it('refuses an invalid admin email or flag', () => {
+      expect(issuesOf({ ...OIDC, FRONT_BURNER_ADMIN_EMAIL: 'admin' }).map(issue => issue.variable)).toEqual([
+        'FRONT_BURNER_ADMIN_EMAIL'
+      ]);
+      expect(issuesOf({ ...OIDC, FRONT_BURNER_OIDC_REQUIRE_VERIFIED_EMAIL: 'yes' }).map(issue => issue.variable))
+        .toEqual([ 'FRONT_BURNER_OIDC_REQUIRE_VERIFIED_EMAIL' ]);
+    });
+
+    it('reads the client secret from a file', () => {
+      const readFile = vi.fn().mockReturnValue(`${CLIENT_SECRET}\n`);
+      const { config } = loadConfig({
+        ...BASE,
+        ...OIDC,
+        FRONT_BURNER_OIDC_CLIENT_SECRET: undefined,
+        FRONT_BURNER_OIDC_CLIENT_SECRET_FILE: '/run/secrets/oidc'
+      }, { readFile });
+      expect(config.oidc?.clientSecret).toBe(CLIENT_SECRET);
+      expect(readFile).toHaveBeenCalledWith('/run/secrets/oidc');
+    });
+
+    it('puts the client secret in no issue', () => {
+      const issues = issuesOf({ ...OIDC, FRONT_BURNER_OIDC_ISSUER: undefined });
+      expect(issues.map(issue => issue.variable)).toEqual([ 'FRONT_BURNER_OIDC_ISSUER' ]);
+      expect(JSON.stringify(issues)).not.toContain(CLIENT_SECRET);
+    });
   });
 });

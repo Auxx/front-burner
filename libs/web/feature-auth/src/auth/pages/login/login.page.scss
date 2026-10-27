@@ -39,3 +39,12 @@ form {
   display: block;
   color: var(--ui-text-muted);
 }
+
+.oidc {
+  display: grid;
+}
+
+.oidc-unavailable {
+  margin: 0;
+  color: var(--ui-text-muted);
+}

@@ -53,6 +53,23 @@ describe('LoginAuditService', () => {
     expect(JSON.stringify(debug.mock.calls)).toContain('alice@x.io');
   });
 
+  it('logs the provider\'s error code with an OIDC failure (LG-21)', () => {
+    const info = vi.spyOn(Logger.prototype, 'log');
+    service.record({
+      method: 'oidc',
+      outcome: 'failure',
+      reason: 'provider-error',
+      providerError: 'access_denied',
+      providerErrorDescription: 'Cancelled by ada@example.com'
+    });
+
+    expect(info).toHaveBeenCalledWith(
+      { reason: 'provider-error', method: 'oidc', providerError: 'access_denied' },
+      'Login failed'
+    );
+    expect(JSON.stringify(info.mock.calls)).not.toContain('ada@example.com');
+  });
+
   it('does not log a success', () => {
     const info = vi.spyOn(Logger.prototype, 'log');
     service.record({ ...failure, outcome: 'success', reason: 'success', sessionId: 's' });

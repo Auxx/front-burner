@@ -33,6 +33,9 @@
       "@front-burner/server-core-observability": [
         "./libs/server/core/observability/src/index.ts"
       ],
+      "@front-burner/server-feature-auth/testing": [
+        "./libs/server/feature/auth/src/testing/index.ts"
+      ],
       "@front-burner/server-core-security/testing": [
         "./libs/server/core/security/src/testing/index.ts"
       ],

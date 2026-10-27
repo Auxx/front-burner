@@ -5,11 +5,12 @@ import { Body, Controller, Get, HttpCode, Logger, Post, Req, Res, UseFilters } f
 import { ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
-import { IssuedSession, SessionService } from '../sessions/session.service';
+import { OidcProviderService } from '../oidc/oidc-provider.service';
+import { SessionService } from '../sessions/session.service';
 import { LoginMethodsDto, LoginRequestDto, RefreshRequestDto, SessionTokensDto } from './auth.dto';
 import { PasswordLoginService } from './password-login.service';
 import { RateLimitAuditFilter } from './rate-limit-audit.filter';
-import { clearRefreshCookie, readRefreshToken, setRefreshCookie } from './refresh-cookie';
+import { answerWithSession, clearRefreshCookie, readRefreshToken } from './refresh-cookie';
 import { requestInfoOf } from './request-info';
 
 /** Login, refresh and logout (REQ-AUTH-003). Every route here works without an auth token. */
@@ -21,14 +22,15 @@ export class AuthController {
 
   constructor(
     private readonly passwordLogin: PasswordLoginService,
-    private readonly sessions: SessionService
+    private readonly sessions: SessionService,
+    private readonly oidcProvider: OidcProviderService
   ) {}
 
-  /** The login methods of the instance (LG-7, LG-8). OIDC and password reset come later. */
+  /** The login methods of the instance (LG-7, LG-8). Password reset comes later. */
   @Get('methods')
   @ApiOkResponse({ type: LoginMethodsDto })
-  methods(): LoginMethods {
-    return { oidc: 'not-configured', passwordReset: false };
+  async methods(): Promise<LoginMethods> {
+    return { oidc: await this.oidcProvider.availability(), passwordReset: false };
   }
 
   /** Username + password login (LG-10 to LG-16). With cookie delivery the refresh token is only in the cookie. */
@@ -43,7 +45,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<SessionTokens> {
-    return answer(await this.passwordLogin.login(request, requestInfoOf(req)), res);
+    return answerWithSession(await this.passwordLogin.login(request, requestInfoOf(req)), res);
   }
 
   /** Exchanges a refresh token for new tokens and rotates it (LG-35, LG-36). */
@@ -60,7 +62,7 @@ export class AuthController {
     if (refreshToken === undefined) {
       throw new ApiErrorException(401, 'refresh-refused');
     }
-    return answer(await this.sessions.refresh(refreshToken), res);
+    return answerWithSession(await this.sessions.refresh(refreshToken), res);
   }
 
   /** Ends the session of a refresh token and clears its cookie (LG-39). */
@@ -75,12 +77,4 @@ export class AuthController {
     clearRefreshCookie(res);
     this.logger.log('Logout');
   }
-}
-
-/** The response body; with cookie delivery the refresh token goes into the cookie instead (LG-31). */
-function answer(issued: IssuedSession, res: Response): SessionTokens {
-  if (issued.delivery === 'cookie') {
-    setRefreshCookie(res, issued.refreshToken, new Date(issued.tokens.refreshTokenExpiresAt));
-  }
-  return issued.tokens;
 }

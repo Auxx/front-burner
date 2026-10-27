@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import type { SessionTokens } from '@front-burner/shared-contracts';
-import { AuthApi } from '@front-burner/web-api-client';
+import { AuthApi, OidcApi } from '@front-burner/web-api-client';
 import { firstValueFrom } from 'rxjs';
 
 import type { LoginMessage } from '../../models/login-message.model';
@@ -54,6 +54,7 @@ function parse(value: string | null): StoredSession | undefined {
 @Injectable({ providedIn: 'root' })
 export class AuthSessionService {
   private readonly api = inject(AuthApi);
+  private readonly oidcApi = inject(OidcApi);
   private readonly router = inject(Router);
   private readonly window = inject(DOCUMENT).defaultView;
 
@@ -78,6 +79,11 @@ export class AuthSessionService {
   /** Logs in with the refresh token in a cookie; rejects with the `HttpErrorResponse`. */
   async login(email: string, password: string): Promise<void> {
     this.store(await firstValueFrom(this.api.login({ email, password, refreshTokenDelivery: 'cookie' })));
+  }
+
+  /** Exchanges the one-time code of an OIDC login (LG-22); rejects with the `HttpErrorResponse`. */
+  async completeOidc(code: string): Promise<void> {
+    this.store(await firstValueFrom(this.oidcApi.exchange({ code, refreshTokenDelivery: 'cookie' })));
   }
 
   /**

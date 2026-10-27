@@ -3,6 +3,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/apps/server-e2e',
+  // For the mock OIDC provider of @front-burner/server-feature-auth/testing.
+  resolve: { tsconfigPaths: true },
   test: {
     name: 'server-e2e',
     watch: false,

@@ -5,6 +5,7 @@ import { OnboardingStateService, type OnboardingView } from '../../services/onbo
 
 const ONBOARDING = '/onboarding';
 const LOGIN = '/login';
+const LOGIN_OIDC = '/login/oidc';
 
 /** Where a URL may go for a given onboarding state: `true`, or the URL to go to instead. */
 export function onboardingDestination(view: OnboardingView, url: string): string | true {
@@ -21,8 +22,9 @@ export function onboardingDestination(view: OnboardingView, url: string): string
   if (toOnboarding) {
     return true;
   }
-  // AO-2: while pending from the onboarding page, the login page stays open for trying OIDC.
-  const isLogin = url === LOGIN || url.startsWith(`${LOGIN}?`);
+  // AO-2: while pending from the onboarding page, the login page stays open for trying OIDC,
+  // and so does the page that finishes an OIDC login.
+  const isLogin = [ LOGIN, LOGIN_OIDC ].some(page => url === page || url.startsWith(`${page}?`));
   return state === 'oidc-pending' && isLogin ? true : ONBOARDING;
 }
 

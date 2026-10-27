@@ -24,6 +24,8 @@ export interface ServerOptions {
   /** Called with the data directory before the server starts. */
   prepare?: (dataDir: string) => void;
   cwd?: string;
+  /** A PEM file the server trusts besides the system's authorities (`NODE_EXTRA_CA_CERTS`). */
+  extraCaFile?: string;
 }
 
 export async function freePort(): Promise<number> {
@@ -68,6 +70,7 @@ async function spawnServer(env: Record<string, string>, options: ServerOptions):
       FRONT_BURNER_LOG_FORMAT: 'json',
       FRONT_BURNER_JWT_SECRET: TEST_JWT_SECRET,
       FRONT_BURNER_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,
+      ...(options.extraCaFile === undefined ? {} : { NODE_EXTRA_CA_CERTS: options.extraCaFile }),
       ...env
     },
     stdio: [ 'ignore', 'pipe', 'pipe' ]

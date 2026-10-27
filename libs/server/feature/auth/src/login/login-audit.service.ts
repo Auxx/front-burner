@@ -26,7 +26,9 @@ export class LoginAuditService {
     const { email, ...loggable } = entry;
     if (entry.outcome === 'failure') {
       const message = entry.reason === 'refresh-token-reused' ? 'Refresh token reused' : 'Login failed';
-      this.logger.log({ reason: entry.reason, method: entry.method }, message);
+      // The provider's error code helps operators (LG-47); its description may name the user.
+      const providerError = entry.providerError ? { providerError: entry.providerError } : {};
+      this.logger.log({ reason: entry.reason, method: entry.method, ...providerError }, message);
       this.logger.debug({ reason: entry.reason, email }, message);
     }
     try {

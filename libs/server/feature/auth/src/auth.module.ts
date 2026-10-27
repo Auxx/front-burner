@@ -5,6 +5,14 @@ import { AuthController } from './login/auth.controller';
 import { LoginAuditService } from './login/login-audit.service';
 import { PasswordLoginService } from './login/password-login.service';
 import { RateLimitAuditFilter } from './login/rate-limit-audit.filter';
+import { OidcLoginService } from './oidc/oidc-login.service';
+import { OidcProviderService } from './oidc/oidc-provider.service';
+import { OidcRateLimitFilter } from './oidc/oidc-rate-limit.filter';
+import { OidcSettingsService } from './oidc/oidc-settings.service';
+import { OidcUserService } from './oidc/oidc-user.service';
+import { OidcController } from './oidc/oidc.controller';
+import { OneTimeCodes } from './oidc/one-time-codes';
+import { PendingLogins } from './oidc/pending-logins';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { PasswordHasher } from './passwords/password-hasher';
 import { AuthTokenService } from './sessions/auth-token.service';
@@ -20,7 +28,7 @@ import { MeController } from './users/me.controller';
  */
 @Module({
   imports: [ OnboardingModule ],
-  controllers: [ AuthController, MeController ],
+  controllers: [ AuthController, OidcController, MeController ],
   providers: [
     AuthTokenService,
     SessionService,
@@ -28,6 +36,13 @@ import { MeController } from './users/me.controller';
     PasswordHasher,
     PasswordLoginService,
     RateLimitAuditFilter,
+    OidcSettingsService,
+    OidcProviderService,
+    OidcUserService,
+    OidcLoginService,
+    PendingLogins,
+    OneTimeCodes,
+    OidcRateLimitFilter,
     {
       provide: SESSION_REUSE_HANDLER,
       inject: [ LoginAuditService ],

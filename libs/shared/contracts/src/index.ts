@@ -1,5 +1,6 @@
 export * from './auth/current-user.schema';
 export * from './auth/login.schema';
+export * from './auth/oidc.schema';
 export * from './auth/password-policy';
 export * from './errors/api-error.schema';
 export * from './errors/error-codes';

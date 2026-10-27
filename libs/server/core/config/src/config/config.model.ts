@@ -21,4 +21,17 @@ export interface Config {
   /** The lifetime of a session and its refresh tokens, from login (LG-29). */
   refreshTokenTtlMs: number;
   loginAuditRetentionMs: number;
+  /** OIDC and the first administrator from the environment (AO-30); undefined when none of the variables is set. */
+  oidc: OidcEnvironment | undefined;
+}
+
+/** The `FRONT_BURNER_OIDC_*` variables and `FRONT_BURNER_ADMIN_EMAIL` (AO-30). */
+export interface OidcEnvironment {
+  /** An `https:` URL without query or fragment. */
+  issuer: string;
+  clientId: string;
+  clientSecret: string;
+  scopes: string;
+  requireVerifiedEmail: boolean;
+  adminEmail: string;
 }

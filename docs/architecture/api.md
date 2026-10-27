@@ -39,6 +39,9 @@ numbering conventions.
   - there is one client class per OpenAPI tag, and methods are named by
     `operationId`, which is the controller method's name;
   - OpenAPI component names come from the Zod schemas' `.meta({ id })`;
+  - a route whose only responses are redirects (`3xx`), such as `GET
+    /api/v1/auth/oidc/start`, is a browser navigation: it is in the OpenAPI
+    document but gets no client method;
   - the health endpoints are under `/api/health`, outside `/api/v1`.
 - **A-3.7** CI regenerates the OpenAPI document and the client and fails if
   either differs from what is committed.

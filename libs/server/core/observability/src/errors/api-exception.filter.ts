@@ -19,7 +19,8 @@ const MESSAGES: Record<ErrorCode, string> = {
   'auth-token-expired': 'The auth token has expired.',
   'wrong-credentials': 'Wrong username or password',
   'refresh-refused': 'Your session has expired. Please log in again',
-  'cross-site-refused': 'The request came from another site.'
+  'cross-site-refused': 'The request came from another site.',
+  'oidc-code-invalid': 'OIDC login failed'
 };
 
 interface ZodIssueLike {
