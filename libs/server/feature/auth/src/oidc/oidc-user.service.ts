@@ -58,7 +58,7 @@ export class OidcUserService {
     }
 
     const user = this.findOrCreate(identity);
-    if (!user.ok) {
+    if (user.ok === false) {
       return user;
     }
     if (user.user.disabled) {
