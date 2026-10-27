@@ -33,7 +33,12 @@ describe('AuthTokenService', () => {
 
   it('verifies its own token', async () => {
     const token = await service().sign(claims, inMinutes(15));
-    expect(await service().verify(token)).toEqual({ ok: true, userId: 7, sessionId: 'session-1' });
+    expect(await service().verify(token)).toEqual({
+      ok: true,
+      userId: 7,
+      sessionId: 'session-1',
+      expiresAt: inMinutes(15).getTime()
+    });
   });
 
   it('refuses an auth token with another algorithm', async () => {

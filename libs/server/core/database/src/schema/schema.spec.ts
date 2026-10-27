@@ -16,6 +16,7 @@ import {
   ENCRYPTED_COLUMNS,
   GIT_LEVELS,
   instanceState,
+  jobs,
   LOGIN_AUDIT_REASONS,
   loginAudit,
   ONBOARDING_STATE_VALUES,
@@ -182,6 +183,36 @@ describe('schema', () => {
       const { id } = database.db.insert(users).values(alice).returning().get();
       const row = database.db.insert(repositories).values({ ...handbook, userId: id }).returning().get();
       expect(row).toMatchObject({ branch: null, errorCode: null });
+    });
+  });
+
+  describe('jobs', () => {
+    const job = { type: 'repository.clone', status: 'queued', runAt: new Date(0), createdAt: new Date(0) } as const;
+
+    it('allows one unfinished job per dedupe key', () => {
+      const first = database.db.insert(jobs).values({ ...job, dedupeKey: 'clone:1' }).returning().get();
+      expect(() => database.db.insert(jobs).values({ ...job, dedupeKey: 'clone:1' }).run()).toThrow(
+        expect.objectContaining({ code: 'SQLITE_CONSTRAINT_UNIQUE' })
+      );
+
+      database.db.update(jobs).set({ status: 'done' }).run();
+      database.db.insert(jobs).values({ ...job, dedupeKey: 'clone:1' }).run();
+
+      expect(database.db.select().from(jobs).all().map(row => row.id)).toEqual([ first.id, first.id + 1 ]);
+    });
+
+    it('deletes a user\'s jobs with the user', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      database.db.insert(jobs).values({ ...job, userId: id }).run();
+
+      database.db.delete(users).run();
+
+      expect(database.db.select().from(jobs).all()).toEqual([]);
+    });
+
+    it('stores an empty payload by default', () => {
+      const row = database.db.insert(jobs).values(job).returning().get();
+      expect(row).toMatchObject({ payload: '{}', attempts: 0, progress: null, dedupeKey: null });
     });
   });
 

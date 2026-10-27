@@ -5,7 +5,7 @@ import { decodeJwt, decodeProtectedHeader, errors, jwtVerify, SignJWT } from 'jo
 const ALGORITHM = 'HS256';
 
 export type AuthTokenResult =
-  | { ok: true; userId: number; sessionId: string; }
+  | { ok: true; userId: number; sessionId: string; expiresAt: number; }
   | { ok: false; reason: 'expired' | 'invalid'; };
 
 /** Signs and verifies auth tokens: HS256 JWTs with the claims of LG-28 and nothing else. */
@@ -31,10 +31,10 @@ export class AuthTokenService {
     try {
       const { payload } = await jwtVerify(token, this.key, { algorithms: [ ALGORITHM ] });
       const userId = Number(payload.sub);
-      if (!Number.isSafeInteger(userId) || typeof payload['sid'] !== 'string') {
+      if (!Number.isSafeInteger(userId) || typeof payload['sid'] !== 'string' || typeof payload.exp !== 'number') {
         return { ok: false, reason: 'invalid' };
       }
-      return { ok: true, userId, sessionId: payload['sid'] };
+      return { ok: true, userId, sessionId: payload['sid'], expiresAt: payload.exp * 1000 };
     } catch (error) {
       if (error instanceof errors.JWTExpired) {
         return { ok: false, reason: 'expired' };

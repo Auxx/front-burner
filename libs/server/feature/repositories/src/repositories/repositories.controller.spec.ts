@@ -41,7 +41,7 @@ describe('RepositoriesController', () => {
     app.use((req: Request, _res: Response, next: NextFunction) => {
       const userId = req.header('x-test-user');
       if (userId !== undefined) {
-        req.auth = { userId: Number(userId), sessionId: 'session' };
+        req.auth = { userId: Number(userId), sessionId: 'session', authTokenExpiresAt: Number.MAX_SAFE_INTEGER };
       }
       next();
     });

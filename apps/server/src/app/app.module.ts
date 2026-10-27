@@ -1,7 +1,9 @@
 import { Config, ConfigModule } from '@front-burner/server-core-config';
 import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule } from '@front-burner/server-core-database';
+import { EventsModule } from '@front-burner/server-core-events';
 import { GitModule, loadInstanceKnownHosts } from '@front-burner/server-core-git';
+import { JobsModule } from '@front-burner/server-core-jobs';
 import { ApiExceptionFilter, HealthModule, LoggingModule } from '@front-burner/server-core-observability';
 import { EgressModule, RateLimitModule } from '@front-burner/server-core-security';
 import { AuthModule } from '@front-burner/server-feature-auth';
@@ -41,6 +43,8 @@ export class AppModule {
         LoggingModule.forRoot(deps.requestLogger),
         RateLimitModule,
         HealthModule.forRoot({ migrationsApplied: deps.migrationsApplied }),
+        EventsModule,
+        JobsModule,
         // After RateLimitModule: the rate limit guard runs before the auth guard (A-1.12).
         AuthModule,
         RepositoriesModule

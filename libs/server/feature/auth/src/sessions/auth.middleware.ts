@@ -26,7 +26,7 @@ export class AuthMiddleware implements NestMiddleware {
       if ('reason' in result) {
         req.authFailure = result.reason;
       } else if (this.sessions.isActive(result.sessionId, result.userId)) {
-        req.auth = { userId: result.userId, sessionId: result.sessionId };
+        req.auth = { userId: result.userId, sessionId: result.sessionId, authTokenExpiresAt: result.expiresAt };
       } else {
         req.authFailure = 'invalid';
       }

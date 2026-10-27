@@ -1,6 +1,8 @@
 import { Config, ConfigModule } from '@front-burner/server-core-config';
 import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule, loginAudit, NewUser, users } from '@front-burner/server-core-database';
+import { EventsModule } from '@front-burner/server-core-events';
+import { JobsModule } from '@front-burner/server-core-jobs';
 import { ApiExceptionFilter } from '@front-burner/server-core-observability';
 import { EgressHttpClient, EgressModule, RateLimitModule } from '@front-burner/server-core-security';
 import { INestApplication } from '@nestjs/common';
@@ -64,6 +66,8 @@ describe('AuthController', () => {
         CryptoModule.forRoot(withConfig),
         EgressModule,
         RateLimitModule,
+        EventsModule,
+        JobsModule,
         AuthModule
       ],
       providers: [

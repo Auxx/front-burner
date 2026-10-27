@@ -23,6 +23,8 @@ export interface Config {
   loginAuditRetentionMs: number;
   /** A clone that runs longer is stopped and fails (AR-51). */
   cloneTimeoutMs: number;
+  /** How many clones run at once, instance-wide (AR-52, A-6.5). */
+  cloneConcurrency: number;
   /** The timeout of every other git command (NF-11.8). */
   gitTimeoutMs: number;
   /** `FRONT_BURNER_KNOWN_HOSTS_FILE`: replaces the built-in host keys (AR-32). Always absolute. */

@@ -1,6 +1,7 @@
 import { Session } from '@front-burner/server-core-database';
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { AuthHousekeeping } from './housekeeping/auth-housekeeping';
 import { AuthController } from './login/auth.controller';
 import { LoginAuditService } from './login/login-audit.service';
 import { PasswordLoginService } from './login/password-login.service';
@@ -43,6 +44,7 @@ import { MeController } from './users/me.controller';
     PendingLogins,
     OneTimeCodes,
     OidcRateLimitFilter,
+    AuthHousekeeping,
     {
       provide: SESSION_REUSE_HANDLER,
       inject: [ LoginAuditService ],

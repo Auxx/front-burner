@@ -48,5 +48,6 @@ See [overview.md](overview.md) for the numbering conventions.
 ## A-6: Restart
 
 - **A-6.8** On startup, jobs left `running` are resolved by type as in NF-9.5
-  before the loop starts. Overdue scheduled jobs are spread over the first few
-  minutes instead of all running at once.
+  before the loop starts. Overdue scheduled jobs of the types that ask for it,
+  such as housekeeping, are spread over the first two minutes instead of all
+  running at once. _(My call: which types, and two minutes.)_
