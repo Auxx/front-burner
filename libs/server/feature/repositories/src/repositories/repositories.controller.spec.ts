@@ -4,7 +4,7 @@ import { Database, DatabaseModule, jobs } from '@front-burner/server-core-databa
 import { EventsModule } from '@front-burner/server-core-events';
 import { GitModule } from '@front-burner/server-core-git';
 import { GitHttpServer, startGitHttpServer } from '@front-burner/server-core-git/testing';
-import { JobRunner, JobsModule } from '@front-burner/server-core-jobs';
+import { JobsModule } from '@front-burner/server-core-jobs';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
 import { RateLimitModule, SessionLifecycleModule } from '@front-burner/server-core-security';
 import { StorageModule } from '@front-burner/server-core-storage';
@@ -95,16 +95,6 @@ describe('RepositoriesController', () => {
       next();
     });
     app.setGlobalPrefix('api/v1');
-    if (!moduleRef.get(JobRunner)['types'].has('repositories.clone')) {
-      // Until the clone job exists: a type whose jobs never run here.
-      moduleRef.get(JobRunner).register({
-        type: 'repositories.clone',
-        pool: 'clone',
-        onInterrupted: 'fail',
-        handler: job =>
-          new Promise((_, reject) => job.signal.addEventListener('abort', () => reject(new Error('stop'))))
-      });
-    }
     await app.init();
   });
 

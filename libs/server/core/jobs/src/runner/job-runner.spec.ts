@@ -166,6 +166,60 @@ describe('JobRunner', () => {
     expect(rowOf(numbered)).toMatchObject({ status: 'failed', errorCode: 'failed' });
   });
 
+  it('tells the type how each job ended', async () => {
+    const onFinished = vi.fn();
+    runner.register({
+      type: 'test.outcome',
+      pool: 'fetch',
+      onInterrupted: 'fail',
+      maxAttempts: 1,
+      handler: ({ payload }: RunningJob<{ fail?: string; }>) =>
+        payload.fail === undefined
+          ? Promise.resolve()
+          : Promise.reject(Object.assign(new Error(), { code: payload.fail })),
+      onFinished
+    });
+    runner.start();
+
+    const done = runner.enqueue({ type: 'test.outcome', payload: {} });
+    const failed = runner.enqueue({ type: 'test.outcome', payload: { fail: 'timeout' } });
+    await settle();
+
+    expect(onFinished).toHaveBeenCalledWith(expect.objectContaining({ id: done }), 'done', null);
+    expect(onFinished).toHaveBeenCalledWith(expect.objectContaining({ id: failed }), 'failed', 'timeout');
+  });
+
+  it('tells the type a cancelled job ended', async () => {
+    const onFinished = vi.fn();
+    controlledType({ onFinished });
+    runner.start();
+    const id = runner.enqueue({ type: 'test.controlled', payload: {} });
+    await settle();
+
+    runner.cancel({ id });
+    await settle();
+
+    expect(onFinished).toHaveBeenCalledWith(expect.objectContaining({ id }), 'cancelled', null);
+  });
+
+  it('keeps a job\'s outcome when its type\'s callback throws', async () => {
+    runner.register({
+      type: 'test.throwing',
+      pool: 'fetch',
+      onInterrupted: 'fail',
+      handler: () => Promise.resolve(),
+      onFinished: () => {
+        throw new Error('boom');
+      }
+    });
+    runner.start();
+
+    const id = runner.enqueue({ type: 'test.throwing', payload: {} });
+    await settle();
+
+    expect(rowOf(id)?.status).toBe('done');
+  });
+
   it('retries with the delay while attempts remain', async () => {
     const attempts: number[] = [];
     runner.register({
@@ -396,6 +450,16 @@ describe('JobRunner', () => {
         handler: () => new Promise(() => undefined),
         ...overrides
       });
+
+    it('tells the type an interrupted job failed', () => {
+      const onFinished = vi.fn();
+      register('test.interrupted', { onInterrupted: 'fail', onFinished });
+      const id = leftover('test.interrupted', 'running');
+
+      runner.start();
+
+      expect(onFinished).toHaveBeenCalledWith(expect.objectContaining({ id }), 'failed', 'interrupted');
+    });
 
     it('fails an interrupted job whose type says so', async () => {
       const handler = vi.fn(() => Promise.resolve());

@@ -164,7 +164,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
       .returning()
       .all();
     for (const job of cancelled) {
-      this.publishFinished(job, 'cancelled');
+      this.ended(job, 'cancelled', null);
     }
     for (const active of this.active.values()) {
       const { job } = active;
@@ -209,8 +209,8 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
           .set({ status: 'failed', errorCode: 'interrupted', finishedAt: new Date() })
           .where(eq(jobs.id, job.id))
           .run();
-        this.publishFinished(job, 'failed');
         this.logger.warn({ jobId: job.id, type: job.type }, 'An interrupted job failed');
+        this.ended(job, 'failed', 'interrupted');
       }
     }
   }
@@ -345,7 +345,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     }
   ): void {
     this.database.db.update(jobs).set({ ...outcome, finishedAt: new Date() }).where(eq(jobs.id, job.id)).run();
-    this.publishFinished(job, outcome.status);
+    this.ended(job, outcome.status, outcome.status === 'failed' ? outcome.errorCode : null);
     const repeatEveryMs = this.types.get(job.type)?.repeatEveryMs;
     if (repeatEveryMs !== undefined) {
       try {
@@ -373,16 +373,23 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
         .where(and(eq(jobs.id, job.id), eq(jobs.status, 'running')))
         .run();
       if (updated.changes === 1) {
-        this.publishFinished(job, 'failed');
+        this.ended(job, 'failed', 'failed');
       }
     } catch (error) {
       this.logger.error({ err: error, jobId: job.id }, 'Could not fail a job whose outcome was lost');
     }
   }
 
-  private publishFinished(job: Job, outcome: 'done' | 'failed' | 'cancelled'): void {
+  /** Every end of a job comes here, once its outcome is stored. */
+  private ended(job: Job, outcome: 'done' | 'failed' | 'cancelled', errorCode: string | null): void {
     if (job.userId !== null) {
       this.events.publish(job.userId, { type: 'job.finished', jobId: job.id, outcome });
+    }
+    try {
+      this.types.get(job.type)?.onFinished?.(job, outcome, errorCode);
+    } catch (error) {
+      // The outcome is stored; the type's own follow-up failed.
+      this.logger.error({ err: error, jobId: job.id, type: job.type }, 'A job type could not handle a job\'s end');
     }
   }
 
