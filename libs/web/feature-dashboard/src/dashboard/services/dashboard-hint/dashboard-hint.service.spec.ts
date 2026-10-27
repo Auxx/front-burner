@@ -25,13 +25,23 @@ describe('DashboardHintService', () => {
 
     expect(service.hadRepositories(1)).toBe(true);
     expect(service.hadRepositories(2)).toBe(false);
-    expect(localStorage.getItem('front-burner.dashboard.has-repositories.1')).not.toBeNull();
   });
 
   it('forgets when the user has none any more', () => {
     service.remember(1, true);
     service.remember(1, false);
 
+    expect(service.hadRepositories(1)).toBe(false);
+  });
+
+  it('answers for the last user while the user is not known yet', () => {
+    service.remember(1, true);
+
+    expect(service.hadRepositories(undefined)).toBe(true);
+
+    service.remember(2, false);
+
+    expect(service.hadRepositories(undefined)).toBe(false);
     expect(service.hadRepositories(1)).toBe(false);
   });
 

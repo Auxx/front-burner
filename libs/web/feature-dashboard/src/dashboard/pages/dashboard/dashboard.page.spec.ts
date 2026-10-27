@@ -38,13 +38,20 @@ describe('DashboardPage', () => {
     [ ...page().querySelectorAll('button') ].find(button => button.textContent?.trim() === `${KEY}.retry`);
 
   async function open(...answers: Observable<RecentRepositories>[]): Promise<void> {
+    await openAs(signal<CurrentUser | undefined>(user), ...answers);
+  }
+
+  async function openAs(
+    current: ReturnType<typeof signal<CurrentUser | undefined>>,
+    ...answers: Observable<RecentRepositories>[]
+  ): Promise<void> {
     responses = answers;
     await TestBed.configureTestingModule({
       imports: [ DashboardPage, translocoTesting() ],
       providers: [
         provideRouter([]),
         { provide: RepositoriesApi, useValue: { recent: () => responses.shift() ?? NEVER } },
-        { provide: CurrentUserService, useValue: { user: signal(user), load: () => Promise.resolve(user) } },
+        { provide: CurrentUserService, useValue: { user: current, load: () => Promise.resolve(user) } },
         { provide: DashboardHintService, useValue: hint }
       ]
     }).compileComponents();
@@ -95,6 +102,13 @@ describe('DashboardPage', () => {
     expect(guide()?.getAttribute('data-form')).toBe('compact');
     expect(page().querySelector('ui-spinner')).not.toBeNull();
     expect(recent()).toBeNull();
+  });
+
+  it('uses the remembered form while loading, before the user is known', async () => {
+    hint.hadRepositories.mockImplementation((userId: number | undefined) => userId === undefined);
+    await openAs(signal<CurrentUser | undefined>(undefined), NEVER);
+
+    expect(guide()?.getAttribute('data-form')).toBe('compact');
   });
 
   it('shows the full guide at once while loading without a hint', async () => {

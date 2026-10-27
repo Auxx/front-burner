@@ -51,8 +51,7 @@ export class DashboardPage {
     if (repositories !== null) {
       return repositories.length > 0 ? 'compact' : 'full';
     }
-    const user = this.currentUser.user();
-    return user !== undefined && this.hint.hadRepositories(user.id) ? 'compact' : 'full';
+    return this.hint.hadRepositories(this.currentUser.user()?.id) ? 'compact' : 'full';
   });
 
   constructor() {
