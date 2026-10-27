@@ -1,0 +1,38 @@
+{
+  "name": "server-core-events",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/server/core/events/src",
+  "projectType": "library",
+  "tags": [
+    "scope:server",
+    "type:core"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{workspaceRoot}/coverage/libs/server/core/events"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/server/core/events"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/server/core/events/tsconfig.lib.json",
+          "tsc --noEmit -p libs/server/core/events/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { CONFIG, Config } from '@front-burner/server-core-config';
 import { DATABASE, Database, Session, sessions, users } from '@front-burner/server-core-database';
+import { EventsHub } from '@front-burner/server-core-events';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { constantTimeEquals } from '@front-burner/server-core-security';
 import type { RefreshTokenDelivery, SessionTokens } from '@front-burner/shared-contracts';
@@ -46,7 +47,8 @@ export class SessionService {
     @Inject(DATABASE) private readonly database: Database,
     @Inject(CONFIG) private readonly config: Config,
     private readonly authTokens: AuthTokenService,
-    @Inject(SESSION_REUSE_HANDLER) private readonly onReuse: SessionReuseHandler
+    @Inject(SESSION_REUSE_HANDLER) private readonly onReuse: SessionReuseHandler,
+    private readonly events: EventsHub
   ) {}
 
   start(
@@ -137,6 +139,7 @@ export class SessionService {
       .all();
     for (const { id } of revoked) {
       this.cache.delete(id);
+      this.events.closeSession(id);
     }
   }
 
@@ -160,6 +163,8 @@ export class SessionService {
       .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)))
       .run();
     this.cache.delete(sessionId);
+    // A revoked session keeps no open push channel (A-7.2).
+    this.events.closeSession(sessionId);
   }
 
   private async issue(session: {

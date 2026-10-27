@@ -2,6 +2,8 @@
 export interface RequestAuth {
   userId: number;
   sessionId: string;
+  /** When the auth token expires, in epoch milliseconds; the push channel closes then (A-3.10). */
+  authTokenExpiresAt: number;
 }
 
 declare global {

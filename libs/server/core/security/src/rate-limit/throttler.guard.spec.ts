@@ -50,7 +50,7 @@ describe('AppThrottlerGuard', () => {
     app.use((req: Request, _res: unknown, next: () => void) => {
       const user = req.headers['x-test-user'];
       if (typeof user === 'string') {
-        req.auth = { userId: Number(user), sessionId: `session-${user}` };
+        req.auth = { userId: Number(user), sessionId: `session-${user}`, authTokenExpiresAt: Number.MAX_SAFE_INTEGER };
       }
       next();
     });

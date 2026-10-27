@@ -1,5 +1,6 @@
 import type { Config } from '@front-burner/server-core-config';
 import { Database, Session, sessions, users } from '@front-burner/server-core-database';
+import { EventsHub } from '@front-burner/server-core-events';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { eq } from 'drizzle-orm';
 import { createTestDatabase } from '../testing/test-database';
@@ -17,6 +18,7 @@ const config = {
 describe('SessionService', () => {
   let database: Database;
   let onReuse: ReturnType<typeof vi.fn<(session: Session) => void>>;
+  let events: EventsHub;
   let service: SessionService;
   let userId: number;
 
@@ -36,7 +38,8 @@ describe('SessionService', () => {
       createdAt: NOW
     }).returning().get().id;
     onReuse = vi.fn();
-    service = new SessionService(database, config, new AuthTokenService(config), onReuse);
+    events = new EventsHub();
+    service = new SessionService(database, config, new AuthTokenService(config), onReuse, events);
   });
 
   afterEach(() => {
@@ -158,9 +161,51 @@ describe('SessionService', () => {
     await expect(service.refresh(two.refreshToken)).rejects.toEqual(refused);
   });
 
+  describe('push channel streams', () => {
+    const openStream = (sessionId: string) => {
+      const close = vi.fn();
+      events.open({ userId, sessionId, send: vi.fn(), close });
+      return close;
+    };
+
+    it('closes the streams of a revoked session', async () => {
+      const issued = await service.start({ id: userId }, 'password', 'cookie');
+      const other = await service.start({ id: userId }, 'password', 'cookie');
+      const closed = openStream(issued.sessionId);
+      const kept = openStream(other.sessionId);
+
+      service.revokeByRefreshToken(issued.refreshToken);
+
+      expect(closed).toHaveBeenCalledOnce();
+      expect(kept).not.toHaveBeenCalled();
+    });
+
+    it('closes the streams of every session of a user', async () => {
+      const one = await service.start({ id: userId }, 'password', 'cookie');
+      const two = await service.start({ id: userId }, 'password', 'body');
+      const closes = [ openStream(one.sessionId), openStream(two.sessionId) ];
+
+      service.revokeAllOf(userId);
+
+      for (const close of closes) {
+        expect(close).toHaveBeenCalledOnce();
+      }
+    });
+
+    it('closes the streams of a session revoked for a reused refresh token', async () => {
+      const first = await service.start({ id: userId }, 'password', 'body');
+      await service.refresh(first.refreshToken);
+      const close = openStream(first.sessionId);
+
+      await expect(service.refresh(first.refreshToken)).rejects.toEqual(refused);
+
+      expect(close).toHaveBeenCalledOnce();
+    });
+  });
+
   it('reads an uncached session from the database', async () => {
     const issued = await service.start({ id: userId }, 'password', 'cookie');
-    const restarted = new SessionService(database, config, new AuthTokenService(config), onReuse);
+    const restarted = new SessionService(database, config, new AuthTokenService(config), onReuse, events);
 
     expect(restarted.isActive(issued.sessionId, userId)).toBe(true);
     expect(restarted.isActive(issued.sessionId, userId + 1)).toBe(false);

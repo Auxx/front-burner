@@ -1,5 +1,6 @@
 import type { Config } from '@front-burner/server-core-config';
 import { Database, loginAudit, NewUser, sessions, users } from '@front-burner/server-core-database';
+import { EventsHub } from '@front-burner/server-core-events';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { Logger } from '@nestjs/common';
 import { PasswordHasher } from '../passwords/password-hasher';
@@ -43,7 +44,13 @@ describe('PasswordLoginService', () => {
 
   beforeEach(() => {
     database = createTestDatabase();
-    const sessionService = new SessionService(database, config, new AuthTokenService(config), () => undefined);
+    const sessionService = new SessionService(
+      database,
+      config,
+      new AuthTokenService(config),
+      () => undefined,
+      new EventsHub()
+    );
     service = new PasswordLoginService(database, hasher, sessionService, new LoginAuditService(database));
   });
 

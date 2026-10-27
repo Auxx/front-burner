@@ -18,7 +18,7 @@ describe('AuthMiddleware', () => {
   }
 
   beforeEach(() => {
-    result = { ok: true, userId: 7, sessionId: 'session-1' };
+    result = { ok: true, userId: 7, sessionId: 'session-1', expiresAt: 1_800_000_000_000 };
     active = true;
     verify = vi.fn(() => Promise.resolve(result));
     middleware = new AuthMiddleware(
@@ -32,7 +32,7 @@ describe('AuthMiddleware', () => {
   it('sets req.auth for a valid token', async () => {
     const req = await run('Bearer the-token');
     expect(verify).toHaveBeenCalledWith('the-token');
-    expect(req.auth).toEqual({ userId: 7, sessionId: 'session-1' });
+    expect(req.auth).toEqual({ userId: 7, sessionId: 'session-1', authTokenExpiresAt: 1_800_000_000_000 });
     expect(req.authFailure).toBeUndefined();
   });
 
