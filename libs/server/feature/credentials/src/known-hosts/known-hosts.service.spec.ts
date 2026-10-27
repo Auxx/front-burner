@@ -1,6 +1,7 @@
 import { Database, knownHosts } from '@front-burner/server-core-database';
 import { BUILT_IN_KNOWN_HOSTS, fingerprintOf, GitOptions } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
+import type { TrustHostRequest } from '@front-burner/shared-contracts';
 import { insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
 import { KnownHostsService } from './known-hosts.service';
@@ -8,7 +9,7 @@ import { KnownHostsService } from './known-hosts.service';
 const ED25519 = 'AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
 const OTHER = 'AAAAC3NzaC1lZDI1NTE5AAAAIIazEu89wgQZ4bqs3d63QSMzYVa0MuJ2e2gKTKqu+UUO';
 const RSA = (BUILT_IN_KNOWN_HOSTS.find(line => line.startsWith('github.com ssh-rsa ')) ?? '').split(' ')[2] ?? '';
-const host = { host: 'Git.Example.com', port: 22, type: 'ssh-ed25519', key: ED25519 };
+const host: TrustHostRequest = { host: 'Git.Example.com', port: 22, type: 'ssh-ed25519', key: ED25519 };
 
 describe('KnownHostsService', () => {
   let database: Database;
