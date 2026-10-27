@@ -86,6 +86,9 @@
       ],
       "@front-burner/server-feature-credentials": [
         "./libs/server/feature/credentials/src/index.ts"
+      ],
+      "@front-burner/server-core-storage": [
+        "./libs/server/core/storage/src/index.ts"
       ]
     }
   },

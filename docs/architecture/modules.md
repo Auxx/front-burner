@@ -29,7 +29,8 @@ libs/
       jobs/               job runner (A-6)
       events/             push channel hub (A-3.10)
       git/                git engine (A-5), egress proxy, credential broker
-      storage/            data layout, path resolution, disk monitor (NF-5, A-7.6)
+      storage/            data layout (NF-5); path resolution for files
+                          arrives with REQ-FILE-001; disk monitor (A-7.6)
       mail/               SMTP sending and templates
       observability/      logging, request IDs, metrics, health (NF-10)
       security/           headers, CSP nonce, rate limits, shared HTTP client (A-7.8)
