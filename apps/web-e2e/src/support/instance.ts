@@ -14,6 +14,9 @@ export const TEST_TOKEN = 'web-e2e-setup-token-0123456789ab';
 /** The `FRONT_BURNER_JWT_SECRET` of every instance. */
 const TEST_JWT_SECRET = 'web-e2e-jwt-secret-0123456789abcdefghijklmnopqr';
 
+/** The `FRONT_BURNER_ENCRYPTION_KEY` of every instance. */
+const TEST_ENCRYPTION_KEY = 'web-e2e-encryption-key-0123456789abcdefghijklmn';
+
 /** The administrator that `onboarded` instances are created with. */
 export const TEST_ADMIN = { email: 'admin@example.com', displayName: 'Admin', password: 'correct horse 1' };
 
@@ -89,6 +92,7 @@ export async function startInstance(options: InstanceOptions = {}): Promise<Inst
       FRONT_BURNER_LOG_FORMAT: 'json',
       FRONT_BURNER_LOG_LEVEL: 'warn',
       FRONT_BURNER_JWT_SECRET: TEST_JWT_SECRET,
+      FRONT_BURNER_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,
       ...(setupToken ? { FRONT_BURNER_SETUP_TOKEN: setupToken } : {}),
       ...options.env
     },

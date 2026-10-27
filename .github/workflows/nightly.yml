@@ -49,3 +49,6 @@ jobs:
 
       - name: Test
         run: npx nx run-many -t test test-storybook e2e --parallel=3
+        env:
+          # Local runs skip WebKit unless asked for it.
+          E2E_BROWSERS: chromium,firefox,webkit

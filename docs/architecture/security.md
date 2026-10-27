@@ -64,9 +64,15 @@ top of the security rules in the requirements and NF-11. See
 
 - **A-7.7** Git connects only through the egress proxy (A-5.7).
 - **A-7.8** Every other outbound HTTP call (provider APIs, OIDC discovery and
-  token exchange) uses one shared HTTP client in `server/security` that applies
-  the same address rules as AR-57. SMTP connections are checked the same way.
-  Provider hosts are fixed at launch (D-8.2).
+  token exchange) uses one shared HTTP client, `EgressHttpClient` in
+  `server/core/security`, that applies the same address rules as AR-57
+  (`resolveAllowed`, shared with the git egress proxy of A-5.8). It is built on
+  `undici` with a connector that checks every connection, redirects included:
+  host names through a checked `lookup` that hands the socket only the checked
+  addresses, IP addresses before connecting. It speaks HTTPS only, plain HTTP
+  redirects included, and aborts a request after 10 seconds unless the caller
+  sets another timeout. SMTP connections are checked the same way. Provider
+  hosts are fixed at launch (D-8.2).
 
 ## A-7: Browser
 

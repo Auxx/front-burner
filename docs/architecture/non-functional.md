@@ -200,7 +200,9 @@ sees the result.
   decrypt it, the container refuses to start, and the log explains why.
 - **NF-8.6** Recovery from a lost key: the operator starts once with the new key
   and `FRONT_BURNER_ENCRYPTION_KEY_RESET=confirm`. Front Burner deletes every
-  encrypted value and stores a new check value. Then:
+  encrypted value and stores a new check value. The reset acts only when the key
+  does not match the check value, so leaving the variable set afterwards deletes
+  nothing; Front Burner then logs a warning to remove it _(plan's call)_. Then:
   - repositories, working copies, their content, unpushed commits, users and
     their logins are unaffected;
   - users enter their HTTPS credentials and provider tokens again;
@@ -394,7 +396,9 @@ These rules add to the security rules already in the requirements.
 - **NF-12.2** End-to-end tests (Playwright) run in Chromium, Firefox and WebKit
   on desktop, and in Chromium and WebKit with a phone-sized viewport, in a
   nightly CI run. CI on pull requests and pushes runs them in Chromium only, on
-  desktop and with a phone-sized viewport, to keep it fast. Before each release,
+  desktop and with a phone-sized viewport, to keep it fast. Local runs use
+  Chromium and Firefox and skip WebKit, which does not run on every developer's
+  operating system; the nightly run is the WebKit check. Before each release,
   the web client is checked by hand on a real iPhone and a real Android phone.
 - **NF-12.3** Not supported: Internet Explorer, legacy Edge, browsers with
   JavaScript disabled, and in-app webviews (they usually work but are not

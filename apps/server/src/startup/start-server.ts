@@ -1,4 +1,5 @@
 import { Config, ConfigError, loadConfig } from '@front-burner/server-core-config';
+import { checkEncryptionKey, SecretBox } from '@front-burner/server-core-crypto';
 import { applyMigrations, assertNoNewerMigrations, Database, openDatabase } from '@front-burner/server-core-database';
 import { createBootstrapLogger, createRequestLogger } from '@front-burner/server-core-observability';
 import { securityHeaders, serveWebClient } from '@front-burner/server-core-security';
@@ -12,7 +13,7 @@ import type { HttpLogger } from 'pino-http';
 import { AppModule } from '../app/app.module';
 import { prepareDataDir } from './prepare-data-dir';
 
-export type StartupStep = 'config' | 'data-dir' | 'database' | 'migrations' | 'http';
+export type StartupStep = 'config' | 'data-dir' | 'database' | 'migrations' | 'encryption-key' | 'http';
 
 /** A startup step failed (A-1.11); `cause` holds the reason. */
 export class StartupError extends Error {
@@ -104,7 +105,7 @@ function configure(
 
 /**
  * Runs the startup sequence of A-1.11: configuration, data directory,
- * database, migrations, then the HTTP server. With `listen: false` the
+ * database, migrations, the encryption key check, then the HTTP server. With `listen: false` the
  * application is built but not bound to a port.
  *
  * @throws StartupError naming the step that failed.
@@ -123,6 +124,19 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
       assertNoNewerMigrations(database, options.migrationsFolder);
       applyMigrations(database, options.migrationsFolder);
     });
+    const keyCheck = step(
+      'encryption-key',
+      () => checkEncryptionKey(database, new SecretBox(config.encryptionKey), { reset: config.encryptionKeyReset })
+    );
+    if (keyCheck === 'reset') {
+      bootstrapLogger.warn(
+        'FRONT_BURNER_ENCRYPTION_KEY_RESET: every stored secret was deleted and a new check value stored. Remove the variable.'
+      );
+    } else if (config.encryptionKeyReset) {
+      bootstrapLogger.warn(
+        'FRONT_BURNER_ENCRYPTION_KEY_RESET is set but the key matches; nothing was deleted. Remove the variable.'
+      );
+    }
     const requestLogger = createRequestLogger(config, options.logDestination);
     const app = await NestFactory.create<NestExpressApplication>(
       AppModule.register({

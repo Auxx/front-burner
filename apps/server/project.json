@@ -90,7 +90,8 @@
         "env": {
           "FRONT_BURNER_DATA_DIR": "tmp/openapi-data",
           "FRONT_BURNER_LOG_LEVEL": "warn",
-          "FRONT_BURNER_JWT_SECRET": "openapi-only-jwt-secret-0123456789abcdefghijklmn"
+          "FRONT_BURNER_JWT_SECRET": "openapi-only-jwt-secret-0123456789abcdefghijklmn",
+          "FRONT_BURNER_ENCRYPTION_KEY": "openapi-only-encryption-key-0123456789abcdefghi"
         }
       }
     },

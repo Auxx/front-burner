@@ -33,6 +33,9 @@
       "@front-burner/server-core-observability": [
         "./libs/server/core/observability/src/index.ts"
       ],
+      "@front-burner/server-core-security/testing": [
+        "./libs/server/core/security/src/testing/index.ts"
+      ],
       "@front-burner/server-core-security": [
         "./libs/server/core/security/src/index.ts"
       ],
@@ -59,6 +62,9 @@
       ],
       "@front-burner/web-feature-dashboard": [
         "./libs/web/feature-dashboard/src/index.ts"
+      ],
+      "@front-burner/server-core-crypto": [
+        "./libs/server/core/crypto/src/index.ts"
       ]
     }
   },

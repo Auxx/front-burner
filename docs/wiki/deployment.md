@@ -72,15 +72,35 @@ You configure the container with environment variables.
 
 ### Required
 
-| Variable                  | Meaning                                                                                                     |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `FRONT_BURNER_JWT_SECRET` | Secret used to sign login tokens. At least 32 characters. Generate a long random value and keep it private. |
+| Variable                      | Meaning                                                                                                                      |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_JWT_SECRET`     | Secret used to sign login tokens. At least 32 characters. Generate a long random value and keep it private.                  |
+| `FRONT_BURNER_ENCRYPTION_KEY` | Key that encrypts the passwords, tokens and keys Front Burner stores. At least 32 characters, different from the JWT secret. |
 
-Front Burner does not start if `FRONT_BURNER_JWT_SECRET` is missing or too
-short. The container log says which variable is wrong.
+Each of them can also be read from a file: set `FRONT_BURNER_JWT_SECRET_FILE` or
+`FRONT_BURNER_ENCRYPTION_KEY_FILE` to its path, for Docker and Podman secrets.
+
+Front Burner does not start if either of them is missing or too short, or if
+they are equal. The container log says which variable is wrong.
 
 If you change `FRONT_BURNER_JWT_SECRET`, users stay logged in: their clients get
 new tokens automatically.
+
+Back up `FRONT_BURNER_ENCRYPTION_KEY` separately from the data volume. Front
+Burner does not start with a different key, because it could not read the
+secrets it stored. If the key is lost, start once with
+`FRONT_BURNER_ENCRYPTION_KEY_RESET=confirm` and the new key: Front Burner
+deletes every stored secret, and users and administrators enter them again. Then
+remove `FRONT_BURNER_ENCRYPTION_KEY_RESET`.
+
+### Outbound connections
+
+| Variable                              | Default | Meaning                                                                                                    |
+| ------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_BLOCK_PRIVATE_NETWORKS` | `false` | `true` also refuses connections to private networks and to the container itself, for example from remotes. |
+
+Front Burner never connects to link-local addresses, such as a cloud metadata
+service, or to reserved ones.
 
 ### Login and sessions
 

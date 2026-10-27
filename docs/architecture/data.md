@@ -69,19 +69,30 @@ numbering conventions.
 
 ## A-4: Encryption of stored secrets
 
-- **A-4.8** `server/crypto` is the only code that encrypts and decrypts stored
-  secrets (saved credentials, SMTP password, OIDC client secret):
-  - the key is derived from `FRONT_BURNER_ENCRYPTION_KEY` with HKDF-SHA-256;
+- **A-4.8** `server/core/crypto` (its `SecretBox`) is the only code that
+  encrypts and decrypts stored secrets (saved credentials, SMTP password, OIDC
+  client secret):
+  - the key is derived from `FRONT_BURNER_ENCRYPTION_KEY` with HKDF-SHA-256
+    (empty salt, info `front-burner/secrets/v1`);
   - values are encrypted with AES-256-GCM, a random 96-bit nonce per value, and
-    the owning table, record ID and user ID as associated data (NF-8.3);
-  - every stored value starts with a format version and a key ID (NF-7.5).
+    the owning table, record ID and user ID as associated data, joined by NUL
+    characters (`<table>\0<record ID>\0<user ID or empty>`, NF-8.3);
+  - a stored value is `fb1.<key ID>.<base64url(nonce ‖ ciphertext ‖ tag)>`: the
+    format version and a key ID (NF-7.5). The key ID is 8 base64url characters
+    of HKDF with info `front-burner/key-id`, which identifies the key without
+    revealing it.
 - **A-4.9** Rotation (NF-8.4): with `FRONT_BURNER_ENCRYPTION_KEY_PREVIOUS` set,
   values are decrypted with whichever key their key ID names, and a background
   job (A-6) re-encrypts every value with the current key.
-- **A-4.10** The check value in `instance_state` is a known plaintext encrypted
-  with the current key. If it does not decrypt, the backend refuses to start
-  (NF-8.5); `FRONT_BURNER_ENCRYPTION_KEY_RESET=confirm` deletes every encrypted
-  value and stores a new check value (NF-8.6).
+- **A-4.10** The check value in `instance_state` (`encryption_check`) is a known
+  plaintext encrypted with the current key, stored at the first start. If it
+  does not decrypt, the backend refuses to start (NF-8.5);
+  `FRONT_BURNER_ENCRYPTION_KEY_RESET=confirm` deletes every encrypted value and
+  stores a new check value (NF-8.6). A reset acts only when the check value does
+  not decrypt: with the right key it is ignored with a warning, so a variable
+  left in place after a reset never deletes secrets again _(plan's call)_. Every
+  encrypted column is nullable and registered in `ENCRYPTED_COLUMNS`
+  (`server/core/database`); a reset sets them all to `null` in one transaction.
 - **A-4.11** Decrypted secrets live only in local variables for the duration of
   one use, apart from unlocked SSH keys, which follow AR-31 (A-5.5).
 

@@ -15,7 +15,9 @@ export const instanceState = sqliteTable(
   'instance_state',
   {
     id: integer('id').primaryKey(),
-    onboardingState: text('onboarding_state', { enum: ONBOARDING_STATE_VALUES }).notNull()
+    onboardingState: text('onboarding_state', { enum: ONBOARDING_STATE_VALUES }).notNull(),
+    /** A known plaintext encrypted with the current key (A-4.10); set at the first start. */
+    encryptionCheck: text('encryption_check')
   },
   table => [ check('instance_state_single_row', sql`${table.id} = 1`) ]
 );
