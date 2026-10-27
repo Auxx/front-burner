@@ -164,8 +164,11 @@ export function remoteKey(remote: ParsedRemote): string {
  * without its user name and password.
  */
 export function remoteDisplay(url: string): string {
+  // The user info runs to the last `@`, so that a password with an unencoded
+  // `/`, `?` or `#` (a hand-edited database) is dropped whole; an `@` in the
+  // path costs only the start of the display form.
   const withoutCredentials = url.trim().replace(
-    /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)([^/?#]*)@/,
+    /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)([\s\S]*)@/,
     (whole, scheme: string, userInfo: string) =>
       scheme.toLowerCase() === 'https://' || userInfo.includes(':') ? scheme : whole
   );
