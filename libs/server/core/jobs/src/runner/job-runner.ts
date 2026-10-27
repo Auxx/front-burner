@@ -1,5 +1,5 @@
 import { CONFIG, Config } from '@front-burner/server-core-config';
-import { DATABASE, Database, Job, jobs } from '@front-burner/server-core-database';
+import { DATABASE, Database, Job, jobs, Tx } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { BeforeApplicationShutdown, Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
@@ -95,20 +95,22 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
 
   /**
    * Queues a job and returns its ID; for a dedupe key that an unfinished job
-   * already has, that job's ID.
+   * already has, that job's ID. With `tx`, the job is written in the caller's
+   * transaction; the loop wakes in a microtask, after that transaction ends.
    * @throws ApiErrorException `too-many-jobs` (429) at the type's per-user limit.
    */
-  enqueue(request: EnqueueRequest): number {
+  enqueue(request: EnqueueRequest, tx?: Tx): number {
+    const db = tx ?? this.database.db;
     const definition = this.definitionOf(request.type);
     assertNoSecret(request.payload, 'payload');
     if (request.dedupeKey !== undefined) {
-      const existing = this.unfinishedWithKey(request.dedupeKey);
+      const existing = this.unfinishedWithKey(db, request.dedupeKey);
       if (existing !== undefined) {
         return existing;
       }
     }
     if (definition.perUserLimit !== undefined && request.userId !== undefined) {
-      const [ { waiting } ] = this.database.db.select({ waiting: count() }).from(jobs).where(and(
+      const [ { waiting } ] = db.select({ waiting: count() }).from(jobs).where(and(
         eq(jobs.type, request.type),
         eq(jobs.userId, request.userId),
         inArray(jobs.status, UNFINISHED)
@@ -120,9 +122,10 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     const now = new Date();
     let id: number;
     try {
-      id = this.database.db.insert(jobs).values({
+      id = db.insert(jobs).values({
         type: request.type,
         userId: request.userId ?? null,
+        repositoryId: request.repositoryId ?? null,
         payload: JSON.stringify(request.payload),
         status: 'queued',
         runAt: request.runAt ?? now,
@@ -130,7 +133,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
         dedupeKey: request.dedupeKey ?? null
       }).returning({ id: jobs.id }).get().id;
     } catch (error) {
-      const existing = request.dedupeKey === undefined ? undefined : this.unfinishedWithKey(request.dedupeKey);
+      const existing = request.dedupeKey === undefined ? undefined : this.unfinishedWithKey(db, request.dedupeKey);
       if (existing === undefined) {
         throw error;
       }
@@ -161,7 +164,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
       .returning()
       .all();
     for (const job of cancelled) {
-      this.publishFinished(job, 'cancelled');
+      this.ended(job, 'cancelled', null);
     }
     for (const active of this.active.values()) {
       const { job } = active;
@@ -206,8 +209,8 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
           .set({ status: 'failed', errorCode: 'interrupted', finishedAt: new Date() })
           .where(eq(jobs.id, job.id))
           .run();
-        this.publishFinished(job, 'failed');
         this.logger.warn({ jobId: job.id, type: job.type }, 'An interrupted job failed');
+        this.ended(job, 'failed', 'interrupted');
       }
     }
   }
@@ -342,7 +345,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     }
   ): void {
     this.database.db.update(jobs).set({ ...outcome, finishedAt: new Date() }).where(eq(jobs.id, job.id)).run();
-    this.publishFinished(job, outcome.status);
+    this.ended(job, outcome.status, outcome.status === 'failed' ? outcome.errorCode : null);
     const repeatEveryMs = this.types.get(job.type)?.repeatEveryMs;
     if (repeatEveryMs !== undefined) {
       try {
@@ -370,21 +373,28 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
         .where(and(eq(jobs.id, job.id), eq(jobs.status, 'running')))
         .run();
       if (updated.changes === 1) {
-        this.publishFinished(job, 'failed');
+        this.ended(job, 'failed', 'failed');
       }
     } catch (error) {
       this.logger.error({ err: error, jobId: job.id }, 'Could not fail a job whose outcome was lost');
     }
   }
 
-  private publishFinished(job: Job, outcome: 'done' | 'failed' | 'cancelled'): void {
+  /** Every end of a job comes here, once its outcome is stored. */
+  private ended(job: Job, outcome: 'done' | 'failed' | 'cancelled', errorCode: string | null): void {
     if (job.userId !== null) {
       this.events.publish(job.userId, { type: 'job.finished', jobId: job.id, outcome });
     }
+    try {
+      this.types.get(job.type)?.onFinished?.(job, outcome, errorCode);
+    } catch (error) {
+      // The outcome is stored; the type's own follow-up failed.
+      this.logger.error({ err: error, jobId: job.id, type: job.type }, 'A job type could not handle a job\'s end');
+    }
   }
 
-  private unfinishedWithKey(dedupeKey: string): number | undefined {
-    return this.database.db.select({ id: jobs.id }).from(jobs)
+  private unfinishedWithKey(db: Tx | Database['db'], dedupeKey: string): number | undefined {
+    return db.select({ id: jobs.id }).from(jobs)
       .where(and(eq(jobs.dedupeKey, dedupeKey), inArray(jobs.status, UNFINISHED)))
       .get()?.id;
   }

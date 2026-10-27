@@ -24,7 +24,10 @@ const MESSAGES: Record<ErrorCode, string> = {
   'too-many-jobs': 'Too many tasks are waiting. Wait for one to finish and try again.',
   'key-locked': 'Enter the passphrase of this key to unlock it for this session.',
   'credentials-missing': 'These saved credentials are no longer available. Add them again.',
-  'host-key-changed': 'The server\'s identity has changed. This may be an attack.'
+  'host-key-changed': 'The server\'s identity has changed. This may be an attack.',
+  'remote-timeout': 'The remote didn\'t answer in time. Try again later.',
+  'remote-failed': 'Something went wrong while contacting the remote.',
+  'host-key-unknown': 'The server\'s host key is not known yet.'
 };
 
 interface ZodIssueLike {

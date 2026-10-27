@@ -1,5 +1,5 @@
 import type { Config } from '@front-burner/server-core-config';
-import { Database, jobs, JobStatus, users } from '@front-burner/server-core-database';
+import { Database, jobs, JobStatus, repositories, users } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
@@ -164,6 +164,60 @@ describe('JobRunner', () => {
 
     expect(rowOf(coded)).toMatchObject({ status: 'failed', errorCode: 'clone-failed', finishedAt: NOW });
     expect(rowOf(numbered)).toMatchObject({ status: 'failed', errorCode: 'failed' });
+  });
+
+  it('tells the type how each job ended', async () => {
+    const onFinished = vi.fn();
+    runner.register({
+      type: 'test.outcome',
+      pool: 'fetch',
+      onInterrupted: 'fail',
+      maxAttempts: 1,
+      handler: ({ payload }: RunningJob<{ fail?: string; }>) =>
+        payload.fail === undefined
+          ? Promise.resolve()
+          : Promise.reject(Object.assign(new Error(), { code: payload.fail })),
+      onFinished
+    });
+    runner.start();
+
+    const done = runner.enqueue({ type: 'test.outcome', payload: {} });
+    const failed = runner.enqueue({ type: 'test.outcome', payload: { fail: 'timeout' } });
+    await settle();
+
+    expect(onFinished).toHaveBeenCalledWith(expect.objectContaining({ id: done }), 'done', null);
+    expect(onFinished).toHaveBeenCalledWith(expect.objectContaining({ id: failed }), 'failed', 'timeout');
+  });
+
+  it('tells the type a cancelled job ended', async () => {
+    const onFinished = vi.fn();
+    controlledType({ onFinished });
+    runner.start();
+    const id = runner.enqueue({ type: 'test.controlled', payload: {} });
+    await settle();
+
+    runner.cancel({ id });
+    await settle();
+
+    expect(onFinished).toHaveBeenCalledWith(expect.objectContaining({ id }), 'cancelled', null);
+  });
+
+  it('keeps a job\'s outcome when its type\'s callback throws', async () => {
+    runner.register({
+      type: 'test.throwing',
+      pool: 'fetch',
+      onInterrupted: 'fail',
+      handler: () => Promise.resolve(),
+      onFinished: () => {
+        throw new Error('boom');
+      }
+    });
+    runner.start();
+
+    const id = runner.enqueue({ type: 'test.throwing', payload: {} });
+    await settle();
+
+    expect(rowOf(id)?.status).toBe('done');
   });
 
   it('retries with the delay while attempts remain', async () => {
@@ -334,6 +388,44 @@ describe('JobRunner', () => {
     expect(rowOf(id)).toMatchObject({ userId, payload: '{"repositoryId":4,"credentialsId":2}', status: 'queued' });
   });
 
+  it('stores the repository of a job', () => {
+    controlledType();
+    const repositoryId = database.db.insert(repositories).values({
+      userId,
+      name: 'handbook',
+      remoteUrl: 'https://github.com/acme/handbook.git',
+      cloneMode: 'full',
+      gitLevel: 'advanced',
+      status: 'cloning',
+      createdAt: NOW,
+      lastAccessedAt: NOW
+    }).returning().get().id;
+
+    const id = runner.enqueue({ type: 'test.controlled', userId, repositoryId, payload: {} });
+
+    expect(rowOf(id)?.repositoryId).toBe(repositoryId);
+  });
+
+  it('enqueues inside the caller\'s transaction', async () => {
+    const started = controlledType();
+    runner.start();
+
+    expect(() =>
+      database.db.transaction(tx => {
+        runner.enqueue({ type: 'test.controlled', payload: { n: 1 } }, tx);
+        throw new Error('rolled back');
+      })
+    ).toThrow('rolled back');
+    await settle();
+    expect(database.db.select().from(jobs).all()).toEqual([]);
+
+    database.db.transaction(tx => {
+      runner.enqueue({ type: 'test.controlled', payload: { n: 2 } }, tx);
+    });
+    await settle();
+    expect(started.map(({ job }) => job.payload)).toEqual([ { n: 2 } ]);
+  });
+
   it('refuses an unknown type', () => {
     expect(() => runner.enqueue({ type: 'test.unknown', payload: {} })).toThrow(/Unknown job type/);
   });
@@ -358,6 +450,16 @@ describe('JobRunner', () => {
         handler: () => new Promise(() => undefined),
         ...overrides
       });
+
+    it('tells the type an interrupted job failed', () => {
+      const onFinished = vi.fn();
+      register('test.interrupted', { onInterrupted: 'fail', onFinished });
+      const id = leftover('test.interrupted', 'running');
+
+      runner.start();
+
+      expect(onFinished).toHaveBeenCalledWith(expect.objectContaining({ id }), 'failed', 'interrupted');
+    });
 
     it('fails an interrupted job whose type says so', async () => {
       const handler = vi.fn(() => Promise.resolve());

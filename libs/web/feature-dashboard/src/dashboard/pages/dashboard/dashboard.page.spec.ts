@@ -14,7 +14,13 @@ import { DashboardPage } from './dashboard.page';
 
 const KEY = 'web-feature-dashboard.DashboardPage';
 
-const user: CurrentUser = { id: 4, email: 'ada@example.com', displayName: 'Ada', role: 'user' };
+const user: CurrentUser = {
+  id: 4,
+  email: 'ada@example.com',
+  displayName: 'Ada',
+  role: 'user',
+  allowedGitLevels: [ 'advanced' ]
+};
 
 const handbook: RepositorySummary = {
   id: 1,

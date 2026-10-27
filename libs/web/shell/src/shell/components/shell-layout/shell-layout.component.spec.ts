@@ -9,7 +9,13 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { ShellLayoutComponent } from './shell-layout.component';
 
-const ada: CurrentUser = { id: 1, email: 'ada@example.com', displayName: 'Ada Lovelace', role: 'administrator' };
+const ada: CurrentUser = {
+  id: 1,
+  email: 'ada@example.com',
+  displayName: 'Ada Lovelace',
+  role: 'administrator',
+  allowedGitLevels: [ 'advanced' ]
+};
 
 @Component({ template: '<h1 tabindex="-1">First</h1>' })
 class FirstPage {}

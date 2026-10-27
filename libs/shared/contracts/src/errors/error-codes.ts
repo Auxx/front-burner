@@ -15,7 +15,13 @@ export const ERROR_CODES = [
   'too-many-jobs',
   'key-locked',
   'credentials-missing',
-  'host-key-changed'
+  'host-key-changed',
+  /** The remote did not answer in time; params `{ host }` (AR-42). */
+  'remote-timeout',
+  /** Any other failure of the remote (AR-42). */
+  'remote-failed',
+  /** 409; params are a `HostKey` for the user to trust (AR-32). */
+  'host-key-unknown'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

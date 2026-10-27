@@ -1,4 +1,5 @@
 import type { Config } from '@front-burner/server-core-config';
+import type { Job } from '@front-burner/server-core-database';
 
 /** The concurrency pools of A-6.5. */
 export type JobPool = 'clone' | 'fetch' | 'email' | 'housekeeping';
@@ -42,11 +43,18 @@ export interface JobTypeDefinition<P = unknown, R = unknown> {
   repeatEveryMs?: number;
   /** Overdue jobs of this type are spread over the first two minutes after a start (A-6.8). */
   spreadOnStart?: boolean;
+  /**
+   * Called once after every end of a job, its outcome stored: done, failed
+   * (`interrupted` for a job failed on start, NF-9.5) or cancelled.
+   */
+  onFinished?: (job: Job, outcome: 'done' | 'failed' | 'cancelled', errorCode: string | null) => void;
 }
 
 export interface EnqueueRequest {
   type: string;
   userId?: number;
+  /** The repository the job works on; the job is deleted with it (A-4.5b). */
+  repositoryId?: number;
   /** JSON; never a secret (A-6.3). */
   payload: object;
   runAt?: Date;

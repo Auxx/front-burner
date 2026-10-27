@@ -9,7 +9,13 @@ import en from '../../public/i18n/en.json';
 import { appRoutes } from './app.routes';
 
 const required: OnboardingStatus = { state: 'required', oidcFromEnvironment: false, setupTokenConfigured: true };
-const ada: CurrentUser = { id: 1, email: 'ada@example.com', displayName: 'Ada Lovelace', role: 'administrator' };
+const ada: CurrentUser = {
+  id: 1,
+  email: 'ada@example.com',
+  displayName: 'Ada Lovelace',
+  role: 'administrator',
+  allowedGitLevels: [ 'advanced' ]
+};
 const session = {
   authToken: 'token',
   authTokenExpiresAt: '2026-10-26T10:15:00.000Z',

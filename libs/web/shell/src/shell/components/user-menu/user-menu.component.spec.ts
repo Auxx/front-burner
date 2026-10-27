@@ -7,7 +7,13 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { UserMenuComponent } from './user-menu.component';
 
-const ada: CurrentUser = { id: 1, email: 'ada@example.com', displayName: 'Ada Lovelace', role: 'administrator' };
+const ada: CurrentUser = {
+  id: 1,
+  email: 'ada@example.com',
+  displayName: 'Ada Lovelace',
+  role: 'administrator',
+  allowedGitLevels: [ 'advanced' ]
+};
 
 @Component({ imports: [ UserMenuComponent ], template: '<shell-user-menu [user]="user" />' })
 class HostComponent {

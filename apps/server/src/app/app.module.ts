@@ -6,6 +6,7 @@ import { GitModule, loadInstanceKnownHosts } from '@front-burner/server-core-git
 import { JobsModule } from '@front-burner/server-core-jobs';
 import { ApiExceptionFilter, HealthModule, LoggingModule } from '@front-burner/server-core-observability';
 import { EgressModule, RateLimitModule, SessionLifecycleModule } from '@front-burner/server-core-security';
+import { StorageModule } from '@front-burner/server-core-storage';
 import { AuthModule } from '@front-burner/server-feature-auth';
 import { CredentialsModule } from '@front-burner/server-feature-credentials';
 import { RepositoriesModule } from '@front-burner/server-feature-repositories';
@@ -33,6 +34,7 @@ export class AppModule {
         ConfigModule.forRoot(deps.config),
         DatabaseModule.forRoot(deps.database),
         CryptoModule.forRoot(deps.config),
+        StorageModule,
         EgressModule,
         GitModule.forRoot({
           helpersDir: deps.gitHelpersDir,
