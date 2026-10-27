@@ -146,7 +146,7 @@ function readRequest(buffer: Buffer): Step<Request> {
 
 function connectTo(address: string, port: number, timeoutMs: number): Promise<Socket> {
   return new Promise((resolve, reject) => {
-    const socket = connect({ host: address, port, timeout: timeoutMs });
+    const socket = connect({ host: address, port, timeout: timeoutMs, allowHalfOpen: true });
     socket.once('timeout', () => socket.destroy(new Error('timeout')));
     socket.once('error', reject);
     socket.once('connect', () => {
@@ -215,7 +215,9 @@ export async function openEgressProxy(options: EgressProxyOptions): Promise<Egre
     client.on('close', () => upstream.destroy());
   };
 
-  const server = createServer(client => {
+  // Half-open on both sides: a client that has finished sending still gets
+  // the answer, and each side's end is passed on through the pipes.
+  const server = createServer({ allowHalfOpen: true }, client => {
     track(client);
     let buffer: Buffer = Buffer.alloc(0);
     let state: 'greeting' | 'auth' | 'request' = 'greeting';
@@ -264,6 +266,7 @@ export async function openEgressProxy(options: EgressProxyOptions): Promise<Egre
           }
           // Paused until the tunnel's pipe resumes it, so nothing is lost while the host resolves.
           client.removeListener('data', onData);
+          client.removeListener('end', onEnd);
           client.pause();
           const request = step.value;
           if (!('command' in request)) {
@@ -278,7 +281,10 @@ export async function openEgressProxy(options: EgressProxyOptions): Promise<Egre
         }
       }
     };
+    // A client that ends during the handshake gets no tunnel.
+    const onEnd = () => client.end();
     client.on('data', onData);
+    client.on('end', onEnd);
   });
 
   await new Promise<void>((resolve, reject) => {

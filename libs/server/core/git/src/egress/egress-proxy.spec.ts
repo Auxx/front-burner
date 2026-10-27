@@ -71,6 +71,25 @@ describe('openEgressProxy', () => {
     expect(running.refusals).toEqual([]);
   });
 
+  it('relays the answer after the client has finished sending', async () => {
+    // Answers only after the client's end, as a server does to a half-closed connection.
+    const late = createServer({ allowHalfOpen: true }, socket => {
+      let received = '';
+      socket.on('data', chunk => (received += chunk));
+      socket.on('end', () => setTimeout(() => socket.end(`late: ${received}`), 100));
+    });
+    await new Promise<void>(resolve => late.listen(0, '127.0.0.1', resolve));
+    try {
+      await open(false);
+
+      const result = await connectThrough(socketPath, `127.0.0.1:${(late.address() as AddressInfo).port}`, 'question');
+
+      expect(result.stdout).toBe('late: question');
+    } finally {
+      await new Promise(resolve => late.close(resolve));
+    }
+  });
+
   it('relays to a name it resolves itself', async () => {
     const lookups: string[] = [];
     await open(false, async host => {
