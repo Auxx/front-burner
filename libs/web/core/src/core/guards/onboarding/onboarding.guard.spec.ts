@@ -30,6 +30,7 @@ describe('onboardingGuard', () => {
             children: [
               { path: 'onboarding', component: BlankComponent },
               { path: 'login', component: BlankComponent },
+              { path: 'login/oidc', component: BlankComponent },
               { path: 'repositories', component: BlankComponent },
               { path: '**', redirectTo: 'login' }
             ]
@@ -59,6 +60,7 @@ describe('onboardingGuard', () => {
   it.each([
     [ '/onboarding', '/onboarding' ],
     [ '/login', '/login' ],
+    [ '/login/oidc?code=abc', '/login/oidc?code=abc' ],
     [ '/repositories', '/onboarding' ]
   ])('oidc-pending from the onboarding page: %s ends on %s', async (url, expected) => {
     expect(await navigate(status('oidc-pending'), url)).toBe(expected);
@@ -67,6 +69,7 @@ describe('onboardingGuard', () => {
   it.each([
     [ '/onboarding', '/login' ],
     [ '/login', '/login' ],
+    [ '/login/oidc?code=abc', '/login/oidc?code=abc' ],
     [ '/repositories', '/repositories' ]
   ])('oidc-pending from the environment: %s ends on %s', async (url, expected) => {
     expect(await navigate(status('oidc-pending', true), url)).toBe(expected);

@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import type { SessionTokens } from '@front-burner/shared-contracts';
-import { AuthApi } from '@front-burner/web-api-client';
+import { AuthApi, OidcApi } from '@front-burner/web-api-client';
 import { of, throwError } from 'rxjs';
 
 import { AUTH_STORAGE_KEY, AuthSessionService } from './auth-session.service';
@@ -53,6 +53,7 @@ function storeFromOtherTab(authToken: string): void {
 
 describe('AuthSessionService', () => {
   let api: { login: ReturnType<typeof vi.fn>; refresh: ReturnType<typeof vi.fn>; logout: ReturnType<typeof vi.fn>; };
+  let oidcApi: { exchange: ReturnType<typeof vi.fn>; };
   let locks: FakeLocks;
 
   beforeEach(() => {
@@ -60,8 +61,13 @@ describe('AuthSessionService', () => {
     locks = new FakeLocks();
     Object.defineProperty(navigator, 'locks', { value: locks, configurable: true });
     api = { login: vi.fn(), refresh: vi.fn(), logout: vi.fn() };
+    oidcApi = { exchange: vi.fn() };
     TestBed.configureTestingModule({
-      providers: [ provideRouter([]), { provide: AuthApi, useValue: api } ]
+      providers: [
+        provideRouter([]),
+        { provide: AuthApi, useValue: api },
+        { provide: OidcApi, useValue: oidcApi }
+      ]
     });
   });
 
@@ -97,6 +103,26 @@ describe('AuthSessionService', () => {
     const { service } = create();
 
     await expect(service.login('ada@example.com', 'wrong')).rejects.toBe(failure);
+    expect(service.loggedIn()).toBe(false);
+  });
+
+  it('completes an OIDC login with the refresh token in a cookie', async () => {
+    oidcApi.exchange.mockReturnValue(of(tokens('oidc')));
+    const { service } = create();
+
+    await service.completeOidc('one-time-code');
+
+    expect(oidcApi.exchange).toHaveBeenCalledWith({ code: 'one-time-code', refreshTokenDelivery: 'cookie' });
+    expect(service.authToken()).toBe('oidc');
+    expect(JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) ?? 'null')).toEqual(tokens('oidc'));
+  });
+
+  it('rejects a failed OIDC exchange with the response', async () => {
+    const failure = new HttpErrorResponse({ status: 401, error: { code: 'oidc-code-invalid' } });
+    oidcApi.exchange.mockReturnValue(throwError(() => failure));
+    const { service } = create();
+
+    await expect(service.completeOidc('used')).rejects.toBe(failure);
     expect(service.loggedIn()).toBe(false);
   });
 

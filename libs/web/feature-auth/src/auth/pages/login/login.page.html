@@ -5,6 +5,11 @@
       @if (message; as message) {
         <ui-inline-banner status="info">{{ t('messages.' + message) }}</ui-inline-banner>
       }
+      @if (oidcError; as reason) {
+        <ng-container *transloco="let root">
+          <ui-inline-banner status="danger">{{ root('web-feature-auth.oidcErrors.' + reason) }}</ui-inline-banner>
+        </ng-container>
+      }
       @if (insecure) {
         <ui-inline-banner status="warning">
           {{ t('insecure') }}
@@ -38,6 +43,16 @@
           </button>
         </div>
       </form>
+      @switch (oidc()) {
+        @case ('available') {
+          <div class="oidc">
+            <a uiButton [href]="oidcStart" (click)="rememberReturn()">{{ t('oidc') }}</a>
+          </div>
+        }
+        @case ('unavailable') {
+          <p class="oidc-unavailable">{{ t('oidcUnavailable') }}</p>
+        }
+      }
     </div>
   </main>
 </ng-container>

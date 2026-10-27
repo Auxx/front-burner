@@ -3,7 +3,10 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import type { LoginMethods } from '@front-burner/shared-contracts';
+import { AuthApi } from '@front-burner/web-api-client';
 import { AuthSessionService } from '@front-burner/web-core';
+import { of } from 'rxjs';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -20,6 +23,7 @@ const apiError = (code: string, status: number) =>
 
 describe('LoginPage', () => {
   let login: ReturnType<typeof vi.fn>;
+  let methods: LoginMethods;
   let harness: RouterTestingHarness;
 
   const page = () => harness.routeNativeElement as HTMLElement;
@@ -36,6 +40,7 @@ describe('LoginPage', () => {
       providers: [
         provideRouter([ { path: 'login', component: LoginPage }, { path: '**', component: BlankComponent } ]),
         { provide: AuthSessionService, useValue: { login } },
+        { provide: AuthApi, useValue: { methods: () => of(methods) } },
         { provide: BROWSER_LOCATION, useValue: options.location ?? { protocol: 'https:', hostname: 'fb.example' } }
       ]
     });
@@ -62,6 +67,52 @@ describe('LoginPage', () => {
 
   beforeEach(() => {
     login = vi.fn(() => Promise.resolve());
+    methods = { oidc: 'not-configured', passwordReset: false };
+    sessionStorage.clear();
+  });
+
+  describe('OIDC', () => {
+    const oidcLink = () => page().querySelector('a[href="/api/v1/auth/oidc/start"]') as HTMLAnchorElement | null;
+    const banners = () => [ ...page().querySelectorAll('ui-inline-banner') ];
+
+    it('offers no OIDC login when it is not configured', async () => {
+      await open();
+      expect(oidcLink()).toBeNull();
+      expect(page().textContent).not.toContain(`${KEY}.oidcUnavailable`);
+    });
+
+    it('shows Log in with OIDC when available', async () => {
+      methods = { oidc: 'available', passwordReset: false };
+      await open('/login?returnUrl=%2Frepositories%2F3');
+
+      expect(oidcLink()?.textContent).toContain(`${KEY}.oidc`);
+      oidcLink()?.addEventListener('click', event => event.preventDefault());
+      oidcLink()?.click();
+      expect(sessionStorage.getItem('front-burner.oidc-return')).toBe('/repositories/3');
+    });
+
+    it('says OIDC is unavailable', async () => {
+      methods = { oidc: 'unavailable', passwordReset: false };
+      await open();
+      expect(oidcLink()).toBeNull();
+      expect(page().textContent).toContain(`${KEY}.oidcUnavailable`);
+    });
+
+    it('shows the generic OIDC error', async () => {
+      await open('/login?oidcError=failed');
+      expect(banners().map(banner => banner.getAttribute('status'))).toEqual([ 'danger' ]);
+      expect(banners()[0]?.textContent).toContain('web-feature-auth.oidcErrors.failed');
+    });
+
+    it('shows the reason while onboarding is pending from the environment', async () => {
+      await open('/login?oidcError=admin-email-mismatch');
+      expect(banners()[0]?.textContent).toContain('web-feature-auth.oidcErrors.admin-email-mismatch');
+    });
+
+    it('shows an unknown reason as the generic error', async () => {
+      await open('/login?oidcError=%3Cb%3E');
+      expect(banners()[0]?.textContent).toContain('web-feature-auth.oidcErrors.failed');
+    });
   });
 
   it('is the main landmark with one h1, "Log in"', async () => {
