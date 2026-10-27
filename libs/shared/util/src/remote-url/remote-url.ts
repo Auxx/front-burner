@@ -28,8 +28,14 @@ const HOST_NAME =
   /^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/;
 // The user of the scp-like form: anything up to the first `@`, but no `:`, `/` or `\`.
 const SCP_USER = /^([^@:/\\]+)@/;
+// Backslashes and control characters: parsers disagree on them (WHATWG reads `\` as `/`).
+const hasUnsafeCharacter = (text: string): boolean =>
+  [ ...text ].some(character => character === '\\' || character <= '\u001f' || character === '\u007f');
 
 const failure = (problem: RemoteUrlProblem): RemoteUrlResult => ({ ok: false, problem });
+
+/** A user that ssh cannot take for an option. */
+const isValidUser = (user: string): boolean => !user.startsWith('-');
 
 function isIPv6(host: string): boolean {
   try {
@@ -54,7 +60,9 @@ function parseUrlForm(input: string, protocol: 'https' | 'ssh'): RemoteUrlResult
     return failure('query-or-fragment');
   }
   const host = url.hostname.replace(/^\[(.*)\]$/, '$1');
-  if (host === '') {
+  const bracketed = url.hostname.startsWith('[');
+  // Non-special URLs (ssh://) keep any host as written, so it is checked here.
+  if ((bracketed ? !isIPv6(host) : !HOST_NAME.test(host)) || !isValidUser(url.username)) {
     return failure('unsupported');
   }
   // The path as written: everything after the authority's first `/`.
@@ -98,8 +106,15 @@ function parseScpForm(input: string): RemoteUrlResult {
     }
     path = afterUser.slice(colon + 1);
   }
+  if (userMatch && !isValidUser(userMatch[1] ?? '')) {
+    return failure('unsupported');
+  }
   if (path === '') {
     return failure('empty-path');
+  }
+  // `<helper>::<address>` makes git run a remote helper (git-remote-<helper>).
+  if (path.startsWith(':')) {
+    return failure('unsupported');
   }
   return { ok: true, remote: { protocol: 'ssh', host, port: undefined, user: userMatch?.[1], path } };
 }
@@ -112,6 +127,9 @@ export function parseRemoteUrl(input: string): RemoteUrlResult {
   }
   if (trimmed.length > REMOTE_URL_MAX_LENGTH) {
     return failure('too-long');
+  }
+  if (hasUnsafeCharacter(trimmed)) {
+    return failure('unsupported');
   }
   const scheme = SCHEME.exec(trimmed)?.[1]?.toLowerCase();
   if (scheme === 'https' || scheme === 'ssh') {

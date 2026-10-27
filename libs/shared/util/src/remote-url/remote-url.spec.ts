@@ -72,6 +72,33 @@ describe('parseRemoteUrl', () => {
     }
   });
 
+  it('refuses git\'s remote helper syntax', () => {
+    for (const input of [ 'ext::sh -c touch% /tmp/pwned', 'fd::17', 'https::host/x' ]) {
+      expect(problemOf(input)).toBe('unsupported');
+    }
+  });
+
+  it('refuses a host or user that is not a host name or user', () => {
+    for (
+      const input of [
+        'ssh://-oProxyCommand=calc/x',
+        'ssh://ho%20st/x',
+        'ssh://-oProxyCommand=x@host/x',
+        '-oProxyCommand=x@host:path'
+      ]
+    ) {
+      expect(problemOf(input)).toBe('unsupported');
+    }
+  });
+
+  it('refuses backslashes and control characters', () => {
+    for (
+      const input of [ 'https://host\\@evil.com/x', 'https://github.com/a\tb', 'git@host:a\nb', 'ssh://h/a\u0000b' ]
+    ) {
+      expect(problemOf(input)).toBe('unsupported');
+    }
+  });
+
   it('refuses credentials', () => {
     for (const input of [ 'https://u:t@h/x', 'https://u@h/x', 'ssh://u:p@h/x' ]) {
       expect(problemOf(input)).toBe('credentials-in-url');
