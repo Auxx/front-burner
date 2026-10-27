@@ -7,6 +7,11 @@ import { join, resolve } from 'node:path';
 
 const MAIN = resolve(import.meta.dirname, '../../../../dist/apps/server/main.js');
 const TIMEOUT_MS = 10_000;
+/** The certificate of the git test servers (`TEST_CERTIFICATE_FILES` of server-core-security's testing). */
+const TEST_CERTIFICATE = resolve(
+  import.meta.dirname,
+  '../../../../libs/server/core/security/src/testing/fixtures/test.crt'
+);
 
 /** The `FRONT_BURNER_JWT_SECRET` of every test server unless a test sets its own. */
 export const TEST_JWT_SECRET = 'server-e2e-jwt-secret-0123456789abcdefghijklmnop';
@@ -18,6 +23,8 @@ export interface ServerProcess {
   url: string;
   dataDir: string;
   stop(): Promise<void>;
+  /** Stops the server with `SIGKILL`, as a crash or a power cut would. */
+  kill(): Promise<void>;
   output(): string;
   /**
    * Waits until the output contains `text`. The server logs asynchronously, so
@@ -76,6 +83,8 @@ async function spawnServer(env: Record<string, string>, options: ServerOptions):
       FRONT_BURNER_LOG_FORMAT: 'json',
       FRONT_BURNER_JWT_SECRET: TEST_JWT_SECRET,
       FRONT_BURNER_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,
+      // git trusts the certificate of the git test servers (AR-43: through the container's authorities).
+      GIT_SSL_CAINFO: TEST_CERTIFICATE,
       ...(options.extraCaFile === undefined ? {} : { NODE_EXTRA_CA_CERTS: options.extraCaFile }),
       ...env
     },
@@ -151,6 +160,10 @@ async function startOnce(env: Record<string, string>, options: ServerOptions): P
     dataDir: spawned.dataDir,
     output: spawned.output,
     waitForOutput: text => outputContaining(text, spawned.output),
+    kill: async () => {
+      polling = false;
+      await spawned.cleanup();
+    },
     stop: async () => {
       polling = false;
       if (spawned.child.exitCode === null) {
