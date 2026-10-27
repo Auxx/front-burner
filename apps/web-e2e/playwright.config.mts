@@ -27,10 +27,12 @@ const projects = [
 /**
  * `E2E_BROWSERS` (comma-separated browser engines, e.g. `chromium`) limits the
  * run to the projects on those engines. CI sets it to `chromium` on every
- * pull request; the nightly workflow leaves it unset to run every project.
+ * pull request; the nightly workflow sets `chromium,firefox,webkit` to run
+ * every project. Unset, as in local runs, it skips WebKit, which does not run
+ * on every developer's operating system; the nightly run covers it (NF-12.2).
  */
-const browsers = process.env['E2E_BROWSERS']
-  ?.split(',')
+const browsers = (process.env['E2E_BROWSERS'] || 'chromium,firefox')
+  .split(',')
   .map(browser => browser.trim());
 
 export default defineConfig({
@@ -39,7 +41,5 @@ export default defineConfig({
   use: {
     trace: 'on-first-retry'
   },
-  projects: browsers
-    ? projects.filter(project => browsers.includes(project.use.defaultBrowserType))
-    : projects
+  projects: projects.filter(project => browsers.includes(project.use.defaultBrowserType))
 });

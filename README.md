@@ -86,8 +86,14 @@ production dependencies in `package-lock.json`. Run the same checks locally with
 lint test build test-storybook e2e`. Node.js is pinned to 24.22.1 in `.nvmrc`,
 and `.npmrc` sets `engine-strict`, so `npm ci` refuses an older Node.js.
 Accepted Trivy findings go in `.trivyignore`, with a reason and a review date.
-Dependabot opens weekly update pull requests for npm packages and GitHub
-Actions.
+
+CI runs the web e2e suite in Chromium only. A nightly workflow
+(`.github/workflows/nightly.yml`) runs it in Chromium, Firefox and WebKit, on
+desktop and mobile. Local runs use Chromium and Firefox and skip WebKit, which
+does not run on every operating system. Set `E2E_BROWSERS` (comma-separated
+engines, e.g. `E2E_BROWSERS=chromium,firefox,webkit`) to choose the browsers
+yourself. Dependabot opens weekly update pull requests for npm packages and
+GitHub Actions.
 
 ## Install Nx Console
 
