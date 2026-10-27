@@ -68,6 +68,9 @@
       ],
       "@front-burner/server-core-crypto": [
         "./libs/server/core/crypto/src/index.ts"
+      ],
+      "@front-burner/server-feature-repositories": [
+        "./libs/server/feature/repositories/src/index.ts"
       ]
     }
   },

@@ -1,0 +1,38 @@
+{
+  "name": "server-feature-repositories",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/server/feature/repositories/src",
+  "projectType": "library",
+  "tags": [
+    "scope:server",
+    "type:feature"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{workspaceRoot}/coverage/libs/server/feature/repositories"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/server/feature/repositories"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/server/feature/repositories/tsconfig.lib.json",
+          "tsc --noEmit -p libs/server/feature/repositories/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}
