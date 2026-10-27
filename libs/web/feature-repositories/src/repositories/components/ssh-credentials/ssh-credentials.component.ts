@@ -16,7 +16,7 @@ import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 import type { CredentialsChoice, CredentialsModel } from '../../models/add-repository-form.model';
 import { SessionKeysService } from '../../services/session-keys/session-keys.service';
-import { fieldErrorKey, shownErrorKey } from '../../utils/add-repository-errors';
+import { fieldErrorKey, type FieldErrorText, shownError } from '../../utils/add-repository-errors';
 import { GeneratedKeyComponent } from '../generated-key/generated-key.component';
 
 const KEY = 'web-feature-repositories.SshCredentialsComponent';
@@ -71,7 +71,7 @@ export class SshCredentialsComponent {
   );
 
   /** A refused unlock, until the passphrase changes. */
-  protected readonly unlockError = linkedSignal<string, string | null>({
+  protected readonly unlockError = linkedSignal<string, FieldErrorText | null>({
     source: () => this.credentials().passphrase().value(),
     computation: () => null
   });
@@ -80,11 +80,12 @@ export class SshCredentialsComponent {
     return this.keys().find(key => key.id === id);
   }
 
-  protected error(name: keyof CredentialsModel): string | undefined {
-    if (name === 'passphrase' && this.unlockError()) {
-      return this.unlockError() ?? undefined;
+  protected error(name: keyof CredentialsModel): FieldErrorText | undefined {
+    const unlockError = this.unlockError();
+    if (name === 'passphrase' && unlockError !== null) {
+      return unlockError;
     }
-    return shownErrorKey(this.credentials()[name], `credentials.${name}`);
+    return shownError(this.credentials()[name], `credentials.${name}`);
   }
 
   /** Unlocks the chosen key for the session (AR-25, AR-31); the passphrase is then forgotten. */
@@ -98,7 +99,7 @@ export class SshCredentialsComponent {
       await this.sessionKeys.unlock(key.id, passphrase().value());
     } catch (error) {
       const code = toApiError(error).fields?.find(field => field.path === 'passphrase')?.code ?? 'unlock-failed';
-      this.unlockError.set(fieldErrorKey('credentials.passphrase', code));
+      this.unlockError.set({ key: fieldErrorKey('credentials.passphrase', code), params: {} });
       return;
     }
     passphrase().value.set('');

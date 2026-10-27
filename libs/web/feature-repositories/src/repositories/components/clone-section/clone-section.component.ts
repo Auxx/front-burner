@@ -15,7 +15,7 @@ import { ApiErrorTextService } from '@front-burner/web-core';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 import { BranchListService } from '../../services/branch-list/branch-list.service';
-import { failureTexts, shownErrorKey } from '../../utils/add-repository-errors';
+import { failureTexts, shownError } from '../../utils/add-repository-errors';
 
 const KEY = 'web-feature-repositories.CloneSectionComponent';
 
@@ -81,8 +81,8 @@ export class CloneSectionComponent {
         ? this.errorText.describe(state.error).text
         : this.transloco.translate(`web-feature-repositories.errors.${failure.key}`, failure.params);
     }
-    const key = shownErrorKey(this.branch(), 'branch');
-    return key === undefined ? undefined : this.transloco.translate(`web-feature-repositories.errors.${key}`);
+    const error = shownError(this.branch(), 'branch');
+    return error && this.transloco.translate(`web-feature-repositories.errors.${error.key}`, error.params);
   });
 
   constructor() {

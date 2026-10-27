@@ -16,7 +16,7 @@ import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 import type { CredentialsModel } from '../../models/add-repository-form.model';
 import { SessionKeysService } from '../../services/session-keys/session-keys.service';
-import { fieldErrorKey, shownErrorKey } from '../../utils/add-repository-errors';
+import { fieldErrorKey, type FieldErrorText, shownError } from '../../utils/add-repository-errors';
 
 const KEY = 'web-feature-repositories.GeneratedKeyComponent';
 
@@ -53,14 +53,14 @@ export class GeneratedKeyComponent {
   protected readonly keys = inject(SessionKeysService);
 
   /** A name the backend refused, until the name changes. */
-  protected readonly nameError = linkedSignal<string, string | null>({
+  protected readonly nameError = linkedSignal<string, FieldErrorText | null>({
     source: () => this.credentials().generateName().value(),
     computation: () => null
   });
   protected readonly failure = signal<{ text: string; reference: string | null; } | null>(null);
 
-  protected error(): string | undefined {
-    return this.nameError() ?? shownErrorKey(this.credentials().generateName, 'credentials.generateName');
+  protected error(): FieldErrorText | undefined {
+    return this.nameError() ?? shownError(this.credentials().generateName, 'credentials.generateName');
   }
 
   protected async generate(): Promise<void> {
@@ -76,7 +76,7 @@ export class GeneratedKeyComponent {
       const apiError = toApiError(error);
       const code = apiError.fields?.find(field => field.path === 'name')?.code;
       if (code) {
-        this.nameError.set(fieldErrorKey('credentials.generateName', code));
+        this.nameError.set({ key: fieldErrorKey('credentials.generateName', code), params: {} });
       } else {
         this.failure.set(this.errorText.describe(apiError));
       }

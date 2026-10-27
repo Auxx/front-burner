@@ -301,5 +301,19 @@
   "web-feature-repositories.errors.gitLevel.level-not-allowed": "You aren't allowed this level. Choose another one.",
   "web-feature-repositories.errors.form.remote-timeout": "{{ host }} didn't answer in time. Try again later.",
   "web-feature-repositories.errors.form.remote-failed": "Something went wrong while contacting the remote.",
-  "web-feature-repositories.errors.form.rate-limited": "Too many attempts. Try again in a minute."
+  "web-feature-repositories.errors.form.rate-limited": "Too many attempts. Try again in a minute.",
+  "web-feature-repositories.AddRepositoryPage.submit": "Add repository",
+  "web-feature-repositories.AddRepositoryPage.cancel": "Cancel",
+  "web-feature-repositories.AddRepositoryPage.reference": "Reference:",
+  "web-feature-repositories.AddRepositoryPage.discard.heading": "Discard your changes?",
+  "web-feature-repositories.AddRepositoryPage.discard.message": "The repository has not been added. What you entered will be lost. A key you generated stays in your saved keys.",
+  "web-feature-repositories.AddRepositoryPage.discard.confirm": "Discard",
+  "web-feature-repositories.AddRepositoryPage.discard.cancel": "Keep editing",
+  "web-feature-repositories.TrustHostDialog.heading": "Do you trust this server?",
+  "web-feature-repositories.TrustHostDialog.message": "Front Burner has not connected to this server before. Check that the fingerprint is the one your git server publishes before you trust it.",
+  "web-feature-repositories.TrustHostDialog.host": "Server",
+  "web-feature-repositories.TrustHostDialog.keyType": "Key type",
+  "web-feature-repositories.TrustHostDialog.fingerprint": "Fingerprint",
+  "web-feature-repositories.TrustHostDialog.trust": "Trust",
+  "web-feature-repositories.TrustHostDialog.cancel": "Cancel"
 }

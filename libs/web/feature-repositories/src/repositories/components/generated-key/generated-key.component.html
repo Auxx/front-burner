@@ -21,7 +21,8 @@
           }
         </ui-inline-banner>
       }
-      <ui-field [label]="t('name')" [error]="error() ? e(error()!) : undefined">
+      @let nameError = error();
+      <ui-field [label]="t('name')" [error]="nameError ? e(nameError.key, nameError.params) : undefined">
         <input uiInput autocomplete="off" [formField]="credentials().generateName" />
       </ui-field>
       <div class="generate">

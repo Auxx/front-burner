@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, effect, input, untracked } from '@angular/core';
 import type { FieldTree } from '@angular/forms/signals';
 import type { SavedCredentials } from '@front-burner/shared-contracts';
-import { SpinnerComponent } from '@front-burner/ui';
+import { IconComponent, SpinnerComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import { type CredentialsModel, defaultCredentials } from '../../models/add-repository-form.model';
+import { shownError } from '../../utils/add-repository-errors';
 import { HttpsCredentialsComponent } from '../https-credentials/https-credentials.component';
 import { SshCredentialsComponent } from '../ssh-credentials/ssh-credentials.component';
 
@@ -15,7 +16,7 @@ import { SshCredentialsComponent } from '../ssh-credentials/ssh-credentials.comp
  */
 @Component({
   selector: 'repo-credentials-section',
-  imports: [ TranslocoDirective, SpinnerComponent, HttpsCredentialsComponent, SshCredentialsComponent ],
+  imports: [ TranslocoDirective, IconComponent, SpinnerComponent, HttpsCredentialsComponent, SshCredentialsComponent ],
   templateUrl: './credentials-section.component.html',
   styleUrl: './credentials-section.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -27,6 +28,8 @@ export class CredentialsSectionComponent {
   readonly saved = input.required<SavedCredentials | null>();
 
   protected readonly loaded = computed(() => this.saved() !== null);
+  /** A failure of the credentials as a whole, such as refused credentials (AR-22, AR-42). */
+  protected readonly sectionError = computed(() => shownError(this.credentials(), 'credentials'));
 
   /** The last valid protocol, so that editing the URL through invalid states keeps the choices. */
   private shownProtocol: 'https' | 'ssh' | undefined;

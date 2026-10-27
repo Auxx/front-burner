@@ -5,7 +5,7 @@ import { defaultRepositoryName, parseRemoteUrl, remoteKey } from '@front-burner/
 import { FieldComponent, InlineBannerComponent, InputComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import { shownErrorKey } from '../../utils/add-repository-errors';
+import { shownError } from '../../utils/add-repository-errors';
 
 /**
  * **Remote URL** and **Repository name** (AR-8 to AR-15): the warning about a
@@ -40,8 +40,8 @@ export class RemoteSectionComponent {
     return this.index().filter(entry => entry.remoteKey === key).map(entry => entry.name).join(', ');
   });
 
-  protected readonly urlError = computed(() => shownErrorKey(this.remoteUrl(), 'remoteUrl'));
-  protected readonly nameError = computed(() => shownErrorKey(this.name(), 'name'));
+  protected readonly urlError = computed(() => shownError(this.remoteUrl(), 'remoteUrl'));
+  protected readonly nameError = computed(() => shownError(this.name(), 'name'));
 
   constructor() {
     // AR-13: a name typed by the user marks the field dirty; a filled one does not.

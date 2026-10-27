@@ -14,7 +14,7 @@ import {
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 import type { CredentialsChoice, CredentialsModel } from '../../models/add-repository-form.model';
-import { shownErrorKey } from '../../utils/add-repository-errors';
+import { type FieldErrorText, shownError } from '../../utils/add-repository-errors';
 
 const KEY = 'web-feature-repositories.HttpsCredentialsComponent';
 
@@ -59,7 +59,7 @@ export class HttpsCredentialsComponent {
     this.saved().map(saved => ({ value: saved.id, label: `${saved.name} (${saved.username})` }))
   );
 
-  protected error(name: keyof CredentialsModel): string | undefined {
-    return shownErrorKey(this.credentials()[name], `credentials.${name}`);
+  protected error(name: keyof CredentialsModel): FieldErrorText | undefined {
+    return shownError(this.credentials()[name], `credentials.${name}`);
   }
 }

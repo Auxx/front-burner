@@ -1,5 +1,11 @@
 import type { Signal } from '@angular/core';
-import { applyWhen, type SchemaFn, validate, validateStandardSchema } from '@angular/forms/signals';
+import {
+  applyWhen,
+  type SchemaFn,
+  validate,
+  validateStandardSchema,
+  type ValidationError
+} from '@angular/forms/signals';
 import {
   type CloneMode,
   credentialName,
@@ -131,7 +137,7 @@ export function addRepositorySchema(context: AddRepositoryContext): SchemaFn<Add
     validate(path.name, ({ value }) => {
       const name = value().trim().toLowerCase();
       const taken = name !== '' && context.index().some(entry => entry.name.toLowerCase() === name);
-      return taken ? { kind: 'name-taken' } : undefined;
+      return taken ? { kind: 'name-taken', params: { name: value().trim() } } as ValidationError : undefined;
     });
 
     const credentials = path.credentials;

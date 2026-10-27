@@ -17,6 +17,10 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
   answers dropped (AR-35); provided by the page.
 - `failureTexts` (`utils/add-repository-errors.ts`): the one mapping from the
   API's failures to AR-42's texts and where they are shown.
+- `TrustHostDialog`: "Do you trust this server?" for an unknown SSH host
+  (AR-32); **Trust** saves it and repeats the request.
+- `unsavedChangesGuard`: asks before leaving a changed form (AR-48); the page
+  also asks on reload or closing the tab.
 - `SessionKeysService`: the key generated and the keys unlocked on this visit,
   provided by the page.
 

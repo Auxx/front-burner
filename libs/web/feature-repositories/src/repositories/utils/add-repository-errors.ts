@@ -1,4 +1,4 @@
-import type { FieldTree } from '@angular/forms/signals';
+import type { FieldTree, ValidationError } from '@angular/forms/signals';
 import type { ApiError } from '@front-burner/shared-contracts';
 
 import { fieldErrorCode } from './field-error-code';
@@ -73,11 +73,28 @@ export function fieldErrorKey(path: string, code: string): string {
   return FIELD_CODES[path]?.includes(code) ? `${path}.${code}` : 'invalid';
 }
 
-/** The key of a field's first error, once the field is touched or the form submitted (AR-6). */
-export function shownErrorKey(field: FieldTree<unknown>, path: string): string | undefined {
+/** The text of a field error: its key, relative to `web-feature-repositories.errors`, and parameters. */
+export interface FieldErrorText {
+  readonly key: string;
+  readonly params: Record<string, unknown>;
+}
+
+/**
+ * A field's first error, once the field is touched or the form submitted
+ * (AR-6). An error may carry the parameters of its text in `params`, as the
+ * API's field errors do.
+ */
+export function shownError(field: FieldTree<unknown>, path: string): FieldErrorText | undefined {
   const state = field();
-  const error = state.touched() ? state.errors()[0] : undefined;
-  return error ? fieldErrorKey(path, fieldErrorCode(error)) : undefined;
+  const error: ValidationError | undefined = state.touched() ? state.errors()[0] : undefined;
+  if (!error) {
+    return undefined;
+  }
+  const params = (error as { params?: unknown; }).params;
+  return {
+    key: fieldErrorKey(path, fieldErrorCode(error)),
+    params: typeof params === 'object' && params !== null ? params as Record<string, unknown> : {}
+  };
 }
 
 /**

@@ -4,10 +4,24 @@
     <span *uiBreadcrumb>{{ t('heading') }}</span>
   </ui-breadcrumbs>
   <h1 class="heading" tabindex="-1">{{ t('heading') }}</h1>
-  <form class="form" novalidate>
+  <form class="form" novalidate (submit)="submit($event)">
     <repo-remote-section [remoteUrl]="model.remoteUrl" [name]="model.name" [index]="index()" />
     <repo-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="saved()" />
     <repo-clone-section [cloneMode]="model.cloneMode" [branch]="model.branch" [understood]="model.understood" />
     <repo-level-section [gitLevel]="model.gitLevel" [allowed]="allowedLevels()" />
+    @if (failure(); as failure) {
+      <ui-inline-banner class="failure" status="danger" announce>
+        {{ failure.text }}
+        @if (failure.reference) {
+          <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+        }
+      </ui-inline-banner>
+    }
+    <div class="actions">
+      <button uiButton variant="primary" type="submit" [busy]="submitting()" [unavailable]="!ready()">
+        {{ t('submit') }}
+      </button>
+      <button uiButton (click)="cancel()">{{ t('cancel') }}</button>
+    </div>
   </form>
 </ng-container>

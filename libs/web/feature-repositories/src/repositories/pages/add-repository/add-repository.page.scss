@@ -21,3 +21,9 @@
   max-inline-size: 40rem;
   min-inline-size: 0;
 }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
