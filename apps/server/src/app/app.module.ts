@@ -2,7 +2,7 @@ import { Config, ConfigModule } from '@front-burner/server-core-config';
 import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule } from '@front-burner/server-core-database';
 import { ApiExceptionFilter, HealthModule, LoggingModule } from '@front-burner/server-core-observability';
-import { RateLimitModule } from '@front-burner/server-core-security';
+import { EgressModule, RateLimitModule } from '@front-burner/server-core-security';
 import { AuthModule } from '@front-burner/server-feature-auth';
 import { DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
@@ -26,6 +26,7 @@ export class AppModule {
         ConfigModule.forRoot(deps.config),
         DatabaseModule.forRoot(deps.database),
         CryptoModule.forRoot(deps.config),
+        EgressModule,
         LoggingModule.forRoot(deps.requestLogger),
         RateLimitModule,
         HealthModule.forRoot({ migrationsApplied: deps.migrationsApplied }),

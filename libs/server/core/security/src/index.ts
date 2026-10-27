@@ -3,6 +3,8 @@ export * from './auth/request-auth';
 export * from './compare/constant-time-equals';
 export * from './csp/csp';
 export * from './egress/address-policy';
+export * from './egress/egress-http-client';
+export * from './egress/egress.module';
 export * from './headers/security-headers';
 export * from './rate-limit/rate-limit-group.decorator';
 export * from './rate-limit/rate-limit.module';
