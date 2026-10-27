@@ -1,8 +1,8 @@
 import BetterSqlite3 from 'better-sqlite3';
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { accessSync, chmodSync, constants, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runServerToExit, startServerProcess } from './support/server-process';
 
@@ -71,5 +71,17 @@ describe('server startup', () => {
     const server = await startServerProcess({ FRONT_BURNER_DATA_DIR: 'relative-data' }, { cwd });
     cleanups.push(() => server.stop());
     expect(server.output()).toContain(join(realpathSync(cwd), 'relative-data'));
+  });
+
+  it('ships executable git helpers', async () => {
+    const helpers = resolve(import.meta.dirname, '../../../dist/apps/server/git-helpers');
+    for (const helper of [ 'askpass.cjs', 'proxy-connect.cjs' ]) {
+      expect(() => accessSync(join(helpers, helper), constants.X_OK), helper).not.toThrow();
+    }
+
+    const server = await startServerProcess({});
+    cleanups.push(() => server.stop());
+
+    expect(server.output()).not.toContain('"step":"git"');
   });
 });

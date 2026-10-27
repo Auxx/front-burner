@@ -1,6 +1,7 @@
 import { Config, ConfigError, loadConfig } from '@front-burner/server-core-config';
 import { checkEncryptionKey, SecretBox } from '@front-burner/server-core-crypto';
 import { applyMigrations, assertNoNewerMigrations, Database, openDatabase } from '@front-burner/server-core-database';
+import { assertHelpersExecutable, assertSupportedGit, GitRunner } from '@front-burner/server-core-git';
 import { createBootstrapLogger, createRequestLogger } from '@front-burner/server-core-observability';
 import { securityHeaders, serveWebClient } from '@front-burner/server-core-security';
 import { INestApplication, Logger as NestLogger } from '@nestjs/common';
@@ -13,7 +14,7 @@ import type { HttpLogger } from 'pino-http';
 import { AppModule } from '../app/app.module';
 import { prepareDataDir } from './prepare-data-dir';
 
-export type StartupStep = 'config' | 'data-dir' | 'database' | 'migrations' | 'encryption-key' | 'http';
+export type StartupStep = 'config' | 'data-dir' | 'database' | 'migrations' | 'encryption-key' | 'git' | 'http';
 
 /** A startup step failed (A-1.11); `cause` holds the reason. */
 export class StartupError extends Error {
@@ -28,6 +29,8 @@ export interface StartServerOptions {
   cwd?: string;
   webRoot: string;
   migrationsFolder: string;
+  /** The folder of the git helpers shipped with the server (A-5.4). */
+  gitHelpersDir: string;
   listen: boolean;
   /** Replaces stdout as the log destination; meant for tests. */
   logDestination?: DestinationStream;
@@ -36,6 +39,14 @@ export interface StartServerOptions {
 function step<T>(name: StartupStep, run: () => T): T {
   try {
     return run();
+  } catch (error) {
+    throw new StartupError(name, error);
+  }
+}
+
+async function stepAsync<T>(name: StartupStep, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
   } catch (error) {
     throw new StartupError(name, error);
   }
@@ -105,7 +116,7 @@ function configure(
 
 /**
  * Runs the startup sequence of A-1.11: configuration, data directory,
- * database, migrations, the encryption key check, then the HTTP server. With `listen: false` the
+ * database, migrations, the encryption key check, git and its helpers, then the HTTP server. With `listen: false` the
  * application is built but not bound to a port.
  *
  * @throws StartupError naming the step that failed.
@@ -137,13 +148,18 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
         'FRONT_BURNER_ENCRYPTION_KEY_RESET is set but the key matches; nothing was deleted. Remove the variable.'
       );
     }
+    await stepAsync('git', async () => {
+      assertHelpersExecutable(options.gitHelpersDir);
+      await assertSupportedGit(new GitRunner());
+    });
     const requestLogger = createRequestLogger(config, options.logDestination);
     const app = await NestFactory.create<NestExpressApplication>(
       AppModule.register({
         config,
         database,
         migrationsApplied: true,
-        requestLogger
+        requestLogger,
+        gitHelpersDir: options.gitHelpersDir
       }),
       { bodyParser: false, bufferLogs: true }
     ).catch((error: unknown) => {

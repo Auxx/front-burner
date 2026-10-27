@@ -13,7 +13,10 @@ where git may connect. Lives in `server/git` (A-2). See
   - every command is spawned with an argument array, never through a shell;
   - the environment is built from scratch: `HOME` set to an empty private
     directory, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`,
-    `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C` (NF-11.7);
+    `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C` (NF-11.7); from the backend's own
+    environment only `GIT_SSL_CAINFO`, `SSL_CERT_FILE` and `SSL_CERT_DIR` are
+    passed through when set, so that an operator with a private certificate
+    authority can point git at it (AR-43); _(my call)_
   - hardening is passed as `-c` options on every call: `protocol.allow=never`,
     `protocol.https.allow=always`, `protocol.ssh.allow=always` (NF-11.6),
     `core.hooksPath=/dev/null`, `core.autocrlf=false`,
@@ -190,6 +193,14 @@ Confirmed by spike 2 (spikes.md).
   (including the automatic commit of D-2.3), merge, rebase, continue and abort,
   push, read a conflict, resolve a file, create and switch branches. Features
   never build git command lines themselves.
+  - The access check (`git ls-remote --symref`) returns the remote's branch
+    names, sorted, and its default branch: the branch its `HEAD` points to, if
+    that branch exists. An empty remote has no branches and no default branch
+    (AR-37). Failures are reported as error codes (`host-unreachable`,
+    `timeout`, `tls-untrusted`, `auth-failed`, `repository-not-found`,
+    `branch-not-found`, `unsafe-repository-config`, `failed`, and with SSH
+    `host-key-unknown` and `host-key-changed`); an egress refusal is
+    `host-unreachable` (AR-57). _(My call.)_
   - The MVP requirements add: which entries of a folder are ignored (`git
     check-ignore`, FB-16); the diff of one file against the last commit (GA-14
     to GA-16); discarding selected files (GA-23); committing exactly a list of

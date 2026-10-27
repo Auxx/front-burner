@@ -71,6 +71,12 @@
       ],
       "@front-burner/server-feature-repositories": [
         "./libs/server/feature/repositories/src/index.ts"
+      ],
+      "@front-burner/server-core-git/testing": [
+        "./libs/server/core/git/src/testing/index.ts"
+      ],
+      "@front-burner/server-core-git": [
+        "./libs/server/core/git/src/index.ts"
       ]
     }
   },

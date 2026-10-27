@@ -10,6 +10,7 @@ async function bootstrap(): Promise<void> {
     env: process.env,
     webRoot: resolve(__dirname, '../web/browser'),
     migrationsFolder: join(__dirname, 'migrations'),
+    gitHelpersDir: join(__dirname, 'git-helpers'),
     listen: openApiFile === undefined
   });
 

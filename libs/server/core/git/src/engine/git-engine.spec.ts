@@ -1,0 +1,359 @@
+import { startHttpsTestServer, TEST_CERTIFICATE_FILES } from '@front-burner/server-core-security/testing';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { AddressInfo, createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { GitCredentials } from '../broker/broker';
+import type { GitOptions } from '../git.options';
+import { GitRunner } from '../runner/git-runner';
+import { GitHttpServer, startGitHttpServer } from '../testing/git-http-server';
+import { GitEngine } from './git-engine';
+import { GitOperationError } from './git-errors';
+
+const TOKEN = 'ghp_sup3r-s3cret-token-value';
+const USER = 'x-access-token';
+const HTTPS: GitCredentials = { kind: 'https', username: USER, password: TOKEN };
+const NONE: GitCredentials = { kind: 'none' };
+
+const gitEnv = {
+  PATH: process.env['PATH'] ?? '/usr/bin:/bin',
+  HOME: tmpdir(),
+  GIT_CONFIG_NOSYSTEM: '1',
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_AUTHOR_NAME: 'Fixture',
+  GIT_AUTHOR_EMAIL: 'fixture@example.com',
+  GIT_COMMITTER_NAME: 'Fixture',
+  GIT_COMMITTER_EMAIL: 'fixture@example.com'
+};
+const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, env: gitEnv, encoding: 'utf8' });
+
+/** A bare repository with `main` (two commits) and `feature/x`. */
+function createFixture(root: string): string {
+  const work = join(root, 'work');
+  const bare = join(root, 'fixture.git');
+  mkdirSync(work);
+  git(root, 'init', '-q', '--bare', '-b', 'main', bare);
+  git(work, 'init', '-q', '-b', 'main');
+  git(work, 'commit', '-q', '--allow-empty', '-m', 'first');
+  git(work, 'commit', '-q', '--allow-empty', '-m', 'second');
+  git(work, 'branch', 'feature/x');
+  git(work, 'push', '-q', bare, 'main', 'feature/x');
+  return bare;
+}
+
+async function failureOf(promise: Promise<unknown>): Promise<GitOperationError> {
+  try {
+    await promise;
+  } catch (error) {
+    expect(error).toBeInstanceOf(GitOperationError);
+    return error as GitOperationError;
+  }
+  throw new Error('the operation did not fail');
+}
+
+/** Every file under a folder, recursively. */
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .map(name => join(dir, name))
+    .filter(path => statSync(path).isFile());
+}
+
+/** The command line and environment of every process this user can read, except this one. */
+function sampleProcesses(): { pid: string; cmdline: string; environ: string; }[] {
+  const samples: { pid: string; cmdline: string; environ: string; }[] = [];
+  for (const pid of readdirSync('/proc')) {
+    if (!/^\d+$/.test(pid) || Number(pid) === process.pid) {
+      continue;
+    }
+    try {
+      samples.push({
+        pid,
+        cmdline: readFileSync(`/proc/${pid}/cmdline`, 'latin1'),
+        environ: readFileSync(`/proc/${pid}/environ`, 'latin1')
+      });
+    } catch {
+      // Another user's process, or it ended meanwhile.
+    }
+  }
+  return samples;
+}
+
+describe('GitEngine', () => {
+  const savedCaInfo = process.env['GIT_SSL_CAINFO'];
+  const runner = new GitRunner();
+  let root: string;
+  let tmpRoot: string;
+  let server: GitHttpServer;
+  let options: GitOptions;
+
+  const engine = (overrides: Partial<GitOptions> = {}) => new GitEngine({ ...options, ...overrides }, runner);
+  const serve = async (users?: Record<string, string>, delayMs?: number) => {
+    await server.close();
+    server = await startGitHttpServer({
+      repositories: { 'fixture.git': join(root, 'fixture.git'), 'empty.git': join(root, 'empty.git') },
+      users,
+      delayMs
+    });
+    return server;
+  };
+
+  beforeAll(() => {
+    process.env['GIT_SSL_CAINFO'] = TEST_CERTIFICATE_FILES.cert;
+  });
+
+  afterAll(() => {
+    if (savedCaInfo === undefined) {
+      delete process.env['GIT_SSL_CAINFO'];
+    } else {
+      process.env['GIT_SSL_CAINFO'] = savedCaInfo;
+    }
+  });
+
+  beforeEach(async () => {
+    process.env['GIT_SSL_CAINFO'] = TEST_CERTIFICATE_FILES.cert;
+    root = mkdtempSync(join(tmpdir(), 'fb-engine-spec-'));
+    tmpRoot = join(root, 'tmp');
+    mkdirSync(tmpRoot);
+    mkdirSync(join(root, 'repos'));
+    createFixture(root);
+    git(root, 'init', '-q', '--bare', '-b', 'main', join(root, 'empty.git'));
+    options = {
+      helpersDir: join(__dirname, '../../helpers'),
+      egress: { blockPrivateNetworks: false },
+      cloneTimeoutMs: 60_000,
+      gitTimeoutMs: 60_000
+    };
+    server = await startGitHttpServer({
+      repositories: { 'fixture.git': join(root, 'fixture.git'), 'empty.git': join(root, 'empty.git') }
+    });
+  });
+
+  afterEach(async () => {
+    await server.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  describe('accessCheck', () => {
+    it('lists the branches and the default branch', async () => {
+      const result = await engine().accessCheck(`${server.url}/fixture.git`, NONE);
+
+      expect(result).toEqual({ branches: [ 'feature/x', 'main' ], defaultBranch: 'main' });
+    });
+
+    it('checks an empty remote', async () => {
+      const result = await engine().accessCheck(`${server.url}/empty.git`, NONE);
+
+      expect(result).toEqual({ branches: [], defaultBranch: undefined });
+    });
+
+    it('checks access with a username and token', async () => {
+      const running = await serve({ [USER]: TOKEN });
+
+      const result = await engine().accessCheck(`${running.url}/fixture.git`, HTTPS);
+
+      expect(result.branches).toEqual([ 'feature/x', 'main' ]);
+    });
+
+    it('reports wrong credentials as auth-failed', async () => {
+      const running = await serve({ [USER]: TOKEN });
+
+      const error = await failureOf(
+        engine().accessCheck(`${running.url}/fixture.git`, { ...HTTPS, password: 'wrong-token' })
+      );
+
+      expect(error.code).toBe('auth-failed');
+    });
+
+    it('reports a private repository without credentials as auth-failed', async () => {
+      const running = await serve({ [USER]: TOKEN });
+
+      const error = await failureOf(engine().accessCheck(`${running.url}/fixture.git`, NONE));
+
+      expect(error.code).toBe('auth-failed');
+    });
+
+    it('reports a missing repository as repository-not-found', async () => {
+      const error = await failureOf(engine().accessCheck(`${server.url}/missing.git`, NONE));
+
+      expect(error.code).toBe('repository-not-found');
+    });
+
+    it('reports an untrusted certificate', async () => {
+      delete process.env['GIT_SSL_CAINFO'];
+
+      const error = await failureOf(engine().accessCheck(`${server.url}/fixture.git`, NONE));
+
+      expect(error.code).toBe('tls-untrusted');
+    });
+
+    it('reports a closed port as host-unreachable', async () => {
+      const closed = createServer();
+      await new Promise<void>(resolve => closed.listen(0, '127.0.0.1', resolve));
+      const { port } = closed.address() as AddressInfo;
+      await new Promise(resolve => closed.close(resolve));
+
+      const error = await failureOf(engine().accessCheck(`https://127.0.0.1:${port}/fixture.git`, NONE));
+
+      expect(error.code).toBe('host-unreachable');
+      expect(error.params).toEqual({ host: '127.0.0.1' });
+    });
+
+    it('refuses loopback with the switch as host-unreachable', async () => {
+      const error = await failureOf(
+        engine({ egress: { blockPrivateNetworks: true } }).accessCheck(`${server.url}/fixture.git`, NONE)
+      );
+
+      expect(error.code).toBe('host-unreachable');
+    });
+
+    it('refuses a redirect to a blocked address', async () => {
+      const redirecting = await startHttpsTestServer((_request, response) => {
+        response.writeHead(302, { Location: 'https://169.254.169.254/x' });
+        response.end();
+      });
+      try {
+        const error = await failureOf(engine().accessCheck(`${redirecting.url}/fixture.git`, HTTPS));
+
+        expect(error.code).toBe('host-unreachable');
+      } finally {
+        await redirecting.close();
+      }
+    });
+
+    it('refuses a remote URL that is not https', async () => {
+      const error = await failureOf(engine().accessCheck('file:///etc', NONE));
+
+      expect(error.code).toBe('failed');
+    });
+  });
+
+  describe('clone', () => {
+    const clone = (overrides: Partial<Parameters<GitEngine['clone']>[0]> = {}, gitOptions?: Partial<GitOptions>) =>
+      engine(gitOptions).clone({
+        remoteUrl: `${server.url}/fixture.git`,
+        credentials: NONE,
+        mode: 'full',
+        tmpRoot,
+        destination: join(root, 'repos', 'one'),
+        ...overrides
+      });
+
+    it('clones every branch', async () => {
+      await clone();
+
+      const destination = join(root, 'repos', 'one');
+      expect(git(destination, 'branch', '-r').split('\n').map(line => line.trim())).toEqual(
+        expect.arrayContaining([ 'origin/feature/x', 'origin/main' ])
+      );
+      expect(git(destination, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('main');
+      expect(readdirSync(tmpRoot)).toEqual([]);
+    });
+
+    it('clones a single branch at depth 1', async () => {
+      await clone({ mode: 'single-branch', branch: 'feature/x' });
+
+      const destination = join(root, 'repos', 'one');
+      expect(git(destination, 'rev-list', '--count', 'HEAD').trim()).toBe('1');
+      expect(git(destination, 'branch', '-r').trim()).toBe('origin/feature/x');
+      expect(git(destination, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('feature/x');
+    });
+
+    it('clones with a username and token, and keeps them out of the working copy', async () => {
+      const running = await serve({ [USER]: TOKEN });
+
+      await clone({ remoteUrl: `${running.url}/fixture.git`, credentials: HTTPS });
+
+      const config = readFileSync(join(root, 'repos', 'one', '.git', 'config'), 'utf8');
+      expect(config).toContain(`url = ${running.url}/fixture.git`);
+      expect(config).not.toContain(USER);
+    });
+
+    it('reports a missing branch as branch-not-found', async () => {
+      const error = await failureOf(clone({ mode: 'single-branch', branch: 'nope' }));
+
+      expect(error.code).toBe('branch-not-found');
+      expect(error.params).toEqual({ host: '127.0.0.1', branch: 'nope' });
+    });
+
+    it('leaves nothing behind when a clone fails', async () => {
+      const error = await failureOf(clone({ remoteUrl: `${server.url}/missing.git` }));
+
+      expect(error.code).toBe('repository-not-found');
+      expect(readdirSync(tmpRoot)).toEqual([]);
+      expect(existsSync(join(root, 'repos', 'one'))).toBe(false);
+    });
+
+    it('stops a clone at the timeout', async () => {
+      const stalling = await startHttpsTestServer(() => undefined);
+      try {
+        const started = Date.now();
+
+        const error = await failureOf(
+          clone({ remoteUrl: `${stalling.url}/fixture.git` }, { cloneTimeoutMs: 500 })
+        );
+
+        expect(error.code).toBe('timeout');
+        expect(Date.now() - started).toBeLessThan(5_000);
+        expect(readdirSync(tmpRoot)).toEqual([]);
+        expect(existsSync(join(root, 'repos', 'one'))).toBe(false);
+      } finally {
+        await stalling.close();
+      }
+    });
+
+    it('keeps the password out of git\'s arguments, environment and files', async () => {
+      const running = await serve({ [USER]: TOKEN }, 300);
+      const encoded = [
+        TOKEN,
+        Buffer.from(`${USER}:${TOKEN}`).toString('base64'),
+        encodeURIComponent(TOKEN)
+      ];
+      const leaks: string[] = [];
+      const seen = new Set<string>();
+      const brokerFiles: string[] = [];
+      let sampling = true;
+      const sampler = (async () => {
+        while (sampling) {
+          for (const sample of sampleProcesses()) {
+            if (/git/.test(sample.cmdline) && sample.environ.includes('FB_BROKER_TOKEN')) {
+              seen.add(sample.cmdline.split('\0')[0] ?? '');
+            }
+            for (const text of encoded) {
+              if (sample.cmdline.includes(text) || sample.environ.includes(text)) {
+                leaks.push(`${sample.pid}: ${sample.cmdline.replace(/\0/g, ' ')}`);
+              }
+            }
+          }
+          for (const dir of readdirSync(tmpdir()).filter(name => name.startsWith('fb-broker-'))) {
+            try {
+              brokerFiles.push(...filesUnder(join(tmpdir(), dir)));
+            } catch {
+              // Removed meanwhile.
+            }
+          }
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+      })();
+
+      try {
+        await clone({ remoteUrl: `${running.url}/fixture.git`, credentials: HTTPS });
+      } finally {
+        sampling = false;
+        await sampler;
+      }
+
+      expect(leaks).toEqual([]);
+      // The sampler did see git and its HTTPS helper while they ran.
+      expect([ ...seen ].some(name => name.endsWith('git'))).toBe(true);
+      expect([ ...seen ].some(name => name.includes('remote-https'))).toBe(true);
+      expect(brokerFiles).toEqual([]);
+      for (const file of filesUnder(join(root, 'repos', 'one'))) {
+        const content = readFileSync(file, 'latin1');
+        for (const text of encoded) {
+          expect(content.includes(text), file).toBe(false);
+        }
+      }
+    });
+  });
+});

@@ -10,12 +10,14 @@ import { bootstrapLoggerFor, logStartupFailure, startServer, StartupError } from
 
 // The real migrations: the application needs its tables.
 const MIGRATIONS = join(__dirname, '..', '..', '..', '..', 'libs', 'server', 'core', 'database', 'migrations');
+const GIT_HELPERS = join(__dirname, '..', '..', '..', '..', 'libs', 'server', 'core', 'git', 'helpers');
 
 describe('startServer', () => {
   let root: string;
   let dataDir: string;
   let webRoot: string;
   let migrationsFolder: string;
+  let gitHelpersDir: string;
   let logs: string[];
   let app: INestApplication | undefined;
 
@@ -31,6 +33,7 @@ describe('startServer', () => {
       cwd: root,
       webRoot,
       migrationsFolder,
+      gitHelpersDir,
       listen: false,
       logDestination: { write: (line: string) => void logs.push(line) }
     });
@@ -40,6 +43,7 @@ describe('startServer', () => {
     dataDir = join(root, 'data');
     webRoot = join(root, 'web');
     migrationsFolder = MIGRATIONS;
+    gitHelpersDir = GIT_HELPERS;
     mkdirSync(webRoot);
     logs = [];
     app = undefined;
@@ -216,6 +220,17 @@ describe('startServer', () => {
     expect(failure).toBeInstanceOf(StartupError);
     expect((failure as StartupError).step).toBe('encryption-key');
     expect((failure as StartupError).message).toContain('FRONT_BURNER_ENCRYPTION_KEY');
+  });
+
+  it('stops at git when a helper is missing', async () => {
+    gitHelpersDir = join(root, 'helpers');
+    mkdirSync(gitHelpersDir);
+
+    const failure = await start().catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(StartupError);
+    expect((failure as StartupError).step).toBe('git');
+    expect((failure as StartupError).message).toContain('askpass.cjs');
   });
 
   it('warns about a reset that the matching key made unnecessary', async () => {
