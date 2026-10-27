@@ -6,6 +6,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 
 import { type CredentialsModel, defaultCredentials } from '../../models/add-repository-form.model';
 import { HttpsCredentialsComponent } from '../https-credentials/https-credentials.component';
+import { SshCredentialsComponent } from '../ssh-credentials/ssh-credentials.component';
 
 /**
  * **Credentials** (AR-11, AR-16): the options of the remote URL's protocol,
@@ -14,7 +15,7 @@ import { HttpsCredentialsComponent } from '../https-credentials/https-credential
  */
 @Component({
   selector: 'repo-credentials-section',
-  imports: [ TranslocoDirective, SpinnerComponent, HttpsCredentialsComponent ],
+  imports: [ TranslocoDirective, SpinnerComponent, HttpsCredentialsComponent, SshCredentialsComponent ],
   templateUrl: './credentials-section.component.html',
   styleUrl: './credentials-section.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush

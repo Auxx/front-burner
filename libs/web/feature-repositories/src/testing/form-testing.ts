@@ -27,6 +27,7 @@ export function errorOf(root: HTMLElement, label: string): string | undefined {
 export function type(element: HTMLInputElement | HTMLTextAreaElement, text: string): void {
   element.value = text;
   element.dispatchEvent(new Event('input'));
+  element.dispatchEvent(new Event('change'));
   element.dispatchEvent(new Event('blur'));
 }
 
@@ -58,4 +59,24 @@ export function button(root: HTMLElement, text: string): HTMLButtonElement | und
   return [ ...root.querySelectorAll<HTMLButtonElement>('button') ].find(
     element => element.textContent?.trim() === text
   );
+}
+
+/** Opens the `ui-select` of the field labelled `label`; its options are then in the overlay. */
+export function openSelect(root: HTMLElement, label: string): void {
+  const trigger = field(root, label).querySelector<HTMLElement>('[role="combobox"]');
+  if (!trigger) {
+    throw new Error(`No select in the field labelled ${label}`);
+  }
+  trigger.focus();
+  trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+}
+
+/** The options of the open `ui-select`. */
+export function selectOptions(): HTMLElement[] {
+  return [ ...document.querySelectorAll<HTMLElement>('.cdk-overlay-container [role="option"]') ];
+}
+
+/** The text a `ui-select` of the field labelled `label` shows for its value. */
+export function selectValue(root: HTMLElement, label: string): string | undefined {
+  return field(root, label).querySelector('.value')?.textContent?.trim();
 }

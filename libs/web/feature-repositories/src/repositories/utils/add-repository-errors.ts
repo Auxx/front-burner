@@ -13,7 +13,18 @@ const FIELD_CODES: Record<string, readonly string[]> = {
   'credentials.savedId': [ 'required' ],
   'credentials.name': [ 'too-small', 'too-big', 'name-taken' ],
   'credentials.username': [ 'too-small', 'too-big' ],
-  'credentials.password': [ 'too-small', 'too-big' ]
+  'credentials.password': [ 'too-small', 'too-big' ],
+  'credentials.privateKey': [
+    'too-small',
+    'too-big',
+    'invalid-key',
+    'unsupported-type',
+    'rsa-too-short',
+    'passphrase-required',
+    'kdf-rounds-too-high'
+  ],
+  'credentials.passphrase': [ 'required', 'too-big', 'wrong-passphrase', 'passphrase-not-needed', 'unlock-failed' ],
+  'credentials.generateName': [ 'too-small', 'too-big', 'name-taken', 'generate-failed' ]
 };
 
 /**

@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { RepositoryIndex } from '@front-burner/shared-contracts';
+import { CredentialsApi } from '@front-burner/web-api-client';
 
 import { FormHostComponent, hostWith } from '../../../testing/form-host';
 import { control, errorOf, type } from '../../../testing/form-testing';
@@ -23,6 +24,7 @@ describe('RemoteSectionComponent', () => {
       [ RemoteSectionComponent ]
     );
     await TestBed.configureTestingModule({
+      providers: [ { provide: CredentialsApi, useValue: {} } ],
       imports: [
         FormHostComponent,
         translocoTesting({

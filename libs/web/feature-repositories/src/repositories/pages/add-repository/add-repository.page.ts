@@ -11,6 +11,7 @@ import { firstValueFrom } from 'rxjs';
 import { CredentialsSectionComponent } from '../../components/credentials-section/credentials-section.component';
 import { RemoteSectionComponent } from '../../components/remote-section/remote-section.component';
 import { addRepositorySchema, emptyAddRepositoryForm } from '../../models/add-repository-form.model';
+import { SessionKeysService } from '../../services/session-keys/session-keys.service';
 
 const NO_CREDENTIALS: SavedCredentials = { https: [], sshKeys: [] };
 
@@ -30,18 +31,29 @@ const NO_CREDENTIALS: SavedCredentials = { https: [], sshKeys: [] };
   ],
   templateUrl: './add-repository.page.html',
   styleUrl: './add-repository.page.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [ SessionKeysService ]
 })
 export class AddRepositoryPage {
   private readonly repositoriesApi = inject(RepositoriesApi);
   private readonly credentialsApi = inject(CredentialsApi);
 
   protected readonly index = signal<RepositoryIndex['repositories']>([]);
-  /** The user's saved credentials; `null` while they load. */
-  protected readonly saved = signal<SavedCredentials | null>(null);
+  private readonly sessionKeys = inject(SessionKeysService);
+  /** The user's saved credentials as loaded; `null` while they load. */
+  private readonly loaded = signal<SavedCredentials | null>(null);
+  /** With this visit's generated key and unlocks (AR-25, AR-30). */
+  protected readonly saved = computed(() => {
+    const loaded = this.loaded();
+    return loaded === null ? null : this.sessionKeys.withSessionKeys(loaded);
+  });
   protected readonly model = form(
     signal(emptyAddRepositoryForm('advanced')),
-    addRepositorySchema({ index: this.index, saved: computed(() => this.saved() ?? NO_CREDENTIALS) })
+    addRepositorySchema({
+      index: this.index,
+      saved: computed(() => this.saved() ?? NO_CREDENTIALS),
+      generated: this.sessionKeys.generated
+    })
   );
 
   /** The protocol of a valid remote URL, which decides the credentials shown (AR-11, AR-16). */
@@ -68,9 +80,9 @@ export class AddRepositoryPage {
   /** Without them, the user can still add new credentials or a public repository. */
   private async loadCredentials(): Promise<void> {
     try {
-      this.saved.set(await firstValueFrom(this.credentialsApi.list()));
+      this.loaded.set(await firstValueFrom(this.credentialsApi.list()));
     } catch {
-      this.saved.set(NO_CREDENTIALS);
+      this.loaded.set(NO_CREDENTIALS);
     }
   }
 }

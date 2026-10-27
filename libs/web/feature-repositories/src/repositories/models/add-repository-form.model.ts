@@ -3,8 +3,10 @@ import { applyWhen, type SchemaFn, validate, validateStandardSchema } from '@ang
 import {
   type CloneMode,
   credentialName,
+  type GeneratedSshKey,
   type GitLevel,
   NewHttpsCredentialsSchema,
+  NewSshKeySchema,
   RemoteUrlSchema,
   type RepositoryCredentials,
   type RepositoryIndex,
@@ -55,8 +57,10 @@ export interface AddRepositoryForm {
 export interface AddRepositoryContext {
   /** The user's repositories, for the early checks of AR-12 and AR-15; empty until loaded. */
   readonly index: Signal<RepositoryIndex['repositories']>;
-  /** The user's saved credentials; empty until loaded. */
+  /** The user's saved credentials, with this visit's generated key and unlocks; empty until loaded. */
   readonly saved: Signal<SavedCredentials>;
+  /** The key generated on this visit (AR-29). */
+  readonly generated: Signal<GeneratedSshKey | null>;
 }
 
 /** The credentials of a protocol as they start (AR-16, AR-19, AR-23): saved ones first, when there are any. */
@@ -89,17 +93,22 @@ export function emptyAddRepositoryForm(gitLevel: GitLevel): AddRepositoryForm {
   };
 }
 
-/** The API's value for the section, or `undefined` while it cannot have one. */
-export function toRepositoryCredentials(credentials: CredentialsModel): RepositoryCredentials | undefined {
+/**
+ * The API's value for the section, or `undefined` while it cannot have one. A
+ * generated key is saved already, so it is sent as `saved` (AR-29).
+ */
+export function toRepositoryCredentials(
+  credentials: CredentialsModel,
+  generated: GeneratedSshKey | null
+): RepositoryCredentials | undefined {
+  const passphrase = credentials.passphrase === '' ? {} : { passphrase: credentials.passphrase };
   switch (credentials.choice) {
     case 'none':
       return { mode: 'none' };
     case 'saved':
-      return credentials.savedId === 0 ? undefined : {
-        mode: 'saved',
-        credentialId: credentials.savedId,
-        ...(credentials.passphrase === '' ? {} : { passphrase: credentials.passphrase })
-      };
+      return credentials.savedId === 0
+        ? undefined
+        : { mode: 'saved', credentialId: credentials.savedId, ...passphrase };
     case 'new-https':
       return {
         mode: 'new-https',
@@ -107,8 +116,10 @@ export function toRepositoryCredentials(credentials: CredentialsModel): Reposito
         username: credentials.username,
         password: credentials.password
       };
-    default:
-      return undefined;
+    case 'new-ssh-key':
+      return { mode: 'new-ssh-key', name: credentials.name.trim(), privateKey: credentials.privateKey, ...passphrase };
+    case 'generate':
+      return generated === null ? undefined : { mode: 'saved', credentialId: generated.key.id };
   }
 }
 
@@ -126,11 +137,33 @@ export function addRepositorySchema(context: AddRepositoryContext): SchemaFn<Add
     const credentials = path.credentials;
     applyWhen(credentials, ({ valueOf }) => valueOf(credentials.choice) === 'saved', saved => {
       validate(saved.savedId, ({ value }) => value() === 0 ? { kind: 'required' } : undefined);
+      // A locked key needs its passphrase (AR-25); an unlocked one has none to give.
+      validate(saved.passphrase, ({ value, valueOf }) => {
+        const key = context.saved().sshKeys.find(sshKey => sshKey.id === valueOf(saved.savedId));
+        return key?.passphraseProtected && !key.unlocked && value() === '' ? { kind: 'required' } : undefined;
+      });
     });
     applyWhen(credentials, ({ valueOf }) => valueOf(credentials.choice) === 'new-https', https => {
       validateStandardSchema(https.name, credentialName);
       validateStandardSchema(https.username, NewHttpsCredentialsSchema.shape.username);
       validateStandardSchema(https.password, NewHttpsCredentialsSchema.shape.password);
+    });
+    applyWhen(credentials, ({ valueOf }) => valueOf(credentials.choice) === 'new-ssh-key', paste => {
+      validateStandardSchema(paste.name, credentialName);
+      validateStandardSchema(paste.privateKey, NewSshKeySchema.shape.privateKey);
+      validateStandardSchema(paste.passphrase, NewSshKeySchema.shape.passphrase);
+    });
+    applyWhen(credentials, ({ valueOf }) => valueOf(credentials.choice) === 'generate', generate => {
+      applyWhen(generate, () => context.generated() === null, notYet => {
+        validateStandardSchema(notYet.generateName, credentialName);
+      });
+      // Generated, and added on the git server (AR-29).
+      validate(generate.keyAdded, ({ value }) => {
+        if (context.generated() === null) {
+          return { kind: 'not-generated' };
+        }
+        return value() ? undefined : { kind: 'required' };
+      });
     });
   };
 }

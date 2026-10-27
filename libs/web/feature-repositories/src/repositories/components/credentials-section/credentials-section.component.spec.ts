@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { SavedCredentials } from '@front-burner/shared-contracts';
+import { CredentialsApi } from '@front-burner/web-api-client';
 
 import { FormHostComponent, hostWith } from '../../../testing/form-host';
 import { choose, control, type } from '../../../testing/form-testing';
@@ -23,10 +24,13 @@ describe('CredentialsSectionComponent', () => {
 
   async function open(saved: SavedCredentials | null = { https: [], sshKeys: [] }): Promise<void> {
     hostWith(
-      '<repo-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="saved()" />',
+      '<repo-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
       [ CredentialsSectionComponent ]
     );
-    await TestBed.configureTestingModule({ imports: [ FormHostComponent, translocoTesting() ] }).compileComponents();
+    await TestBed.configureTestingModule({
+      imports: [ FormHostComponent, translocoTesting() ],
+      providers: [ { provide: CredentialsApi, useValue: {} } ]
+    }).compileComponents();
     fixture = TestBed.createComponent(FormHostComponent);
     host().saved.set(saved);
     await settle(fixture);

@@ -9,7 +9,10 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
   duplicate-remote warning and the name filled from the URL (AR-8 to AR-15).
 - `CredentialsSectionComponent`: the options of the URL's protocol, reset when
   the protocol changes (AR-11, AR-16); `HttpsCredentialsComponent` for HTTPS
-  (AR-19 to AR-22).
+  (AR-19 to AR-22); `SshCredentialsComponent` and `GeneratedKeyComponent` for
+  SSH (AR-23 to AR-31).
+- `SessionKeysService`: the key generated and the keys unlocked on this visit,
+  provided by the page.
 
 ## Running unit tests
 
