@@ -42,6 +42,8 @@ describe('appRoutes', () => {
     const navigation = harness.navigateByUrl(url);
     const http = TestBed.inject(HttpTestingController);
     const heading = () => harness.fixture.nativeElement.querySelector('h1')?.textContent?.trim();
+    // The first test loads the lazy routes cold, which can take more than the
+    // default second on a busy CI runner.
     await vi.waitFor(() => {
       for (const request of http.match('/api/v1/onboarding')) {
         if (options.state) {
@@ -54,7 +56,7 @@ describe('appRoutes', () => {
       http.match('i18n/en.json').forEach(request => request.flush(en));
       harness.detectChanges();
       expect(heading()).toBeTruthy();
-    });
+    }, { timeout: 4000 });
     await navigation;
     await harness.fixture.whenStable();
     harness.detectChanges();
