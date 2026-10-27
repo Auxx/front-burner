@@ -34,6 +34,14 @@ export interface JobTypeDefinition<P = unknown, R = unknown> {
   retryDelayMs?: (attempt: number) => number;
   /** At most this many queued or running jobs of this type per user (NF-11.4). */
   perUserLimit?: number;
+  /**
+   * A repeating type: the runner keeps one unfinished job of it, with the
+   * dedupe key `repeat:<type>`, and queues the next one this long after each
+   * finishes.
+   */
+  repeatEveryMs?: number;
+  /** Overdue jobs of this type are spread over the first two minutes after a start (A-6.8). */
+  spreadOnStart?: boolean;
 }
 
 export interface EnqueueRequest {

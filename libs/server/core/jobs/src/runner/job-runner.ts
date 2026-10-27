@@ -10,6 +10,8 @@ import { CancelFilter, EnqueueRequest, JobPool, jobPoolSizes, JobTypeDefinition,
 export const TICK_MS = 1000;
 /** How long shutdown waits for aborted jobs to settle (A-1.14). */
 export const SHUTDOWN_GRACE_MS = 25_000;
+/** Overdue jobs of `spreadOnStart` types run within this time after a start (A-6.8). */
+export const START_SPREAD_MS = 120_000;
 const PROGRESS_INTERVAL_MS = 1000;
 const UNFINISHED = [ 'queued', 'running' ] as const;
 
@@ -58,10 +60,26 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     this.start();
   }
 
-  /** Starts the loop, after every feature registered its types. */
+  /**
+   * Resolves the jobs a stopped backend left running, spreads overdue ones,
+   * queues the repeating types, then starts the loop (A-6.8). Runs after every
+   * feature registered its types.
+   */
   start(): void {
     if (this.running) {
       return;
+    }
+    this.resolveInterrupted();
+    this.spreadOverdue();
+    for (const definition of this.types.values()) {
+      if (definition.repeatEveryMs !== undefined) {
+        this.enqueue({
+          type: definition.type,
+          payload: {},
+          dedupeKey: repeatKeyOf(definition.type),
+          runAt: definition.spreadOnStart ? spreadTime() : new Date()
+        });
+      }
     }
     this.running = true;
     this.tick = setInterval(() => this.wake(), TICK_MS);
@@ -165,6 +183,37 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
       })
     ]);
     clearTimeout(timer);
+  }
+
+  /** NF-9.5: by the type's rule; a job of a type no feature registers any more fails. */
+  private resolveInterrupted(): void {
+    const interrupted = this.database.db.select().from(jobs).where(eq(jobs.status, 'running')).all();
+    for (const job of interrupted) {
+      if (this.types.get(job.type)?.onInterrupted === 'requeue') {
+        this.database.db.update(jobs).set({ status: 'queued' }).where(eq(jobs.id, job.id)).run();
+        this.logger.log({ jobId: job.id, type: job.type }, 'An interrupted job is queued again');
+      } else {
+        this.database.db.update(jobs)
+          .set({ status: 'failed', errorCode: 'interrupted', finishedAt: new Date() })
+          .where(eq(jobs.id, job.id))
+          .run();
+        this.publishFinished(job, 'failed');
+        this.logger.warn({ jobId: job.id, type: job.type }, 'An interrupted job failed');
+      }
+    }
+  }
+
+  private spreadOverdue(): void {
+    const types = [ ...this.types.values() ].filter(({ spreadOnStart }) => spreadOnStart).map(({ type }) => type);
+    if (types.length === 0) {
+      return;
+    }
+    const overdue = this.database.db.select({ id: jobs.id }).from(jobs)
+      .where(and(eq(jobs.status, 'queued'), inArray(jobs.type, types), lte(jobs.runAt, new Date())))
+      .all();
+    for (const { id } of overdue) {
+      this.database.db.update(jobs).set({ runAt: spreadTime() }).where(eq(jobs.id, id)).run();
+    }
   }
 
   private wake(): void {
@@ -282,6 +331,15 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
   ): void {
     this.database.db.update(jobs).set({ ...outcome, finishedAt: new Date() }).where(eq(jobs.id, job.id)).run();
     this.publishFinished(job, outcome.status);
+    const repeatEveryMs = this.types.get(job.type)?.repeatEveryMs;
+    if (repeatEveryMs !== undefined) {
+      this.enqueue({
+        type: job.type,
+        payload: {},
+        dedupeKey: repeatKeyOf(job.type),
+        runAt: new Date(Date.now() + repeatEveryMs)
+      });
+    }
   }
 
   private publishFinished(job: Job, outcome: 'done' | 'failed' | 'cancelled'): void {
@@ -304,6 +362,10 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     return definition;
   }
 }
+
+const repeatKeyOf = (type: string) => `repeat:${type}`;
+
+const spreadTime = () => new Date(Date.now() + Math.floor(Math.random() * START_SPREAD_MS));
 
 /** `error.code` when it is a string, else `failed`. */
 function codeOf(error: unknown): string {

@@ -2,6 +2,7 @@ import { Config, ConfigModule } from '@front-burner/server-core-config';
 import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule, loginAudit, users } from '@front-burner/server-core-database';
 import { EventsModule } from '@front-burner/server-core-events';
+import { JobsModule } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { EgressHttpClient, EgressModule } from '@front-burner/server-core-security';
 import { INestApplicationContext } from '@nestjs/common';
@@ -55,6 +56,7 @@ describe('OidcLoginService', () => {
         CryptoModule.forRoot(config),
         EgressModule,
         EventsModule,
+        JobsModule,
         AuthModule
       ]
     }).overrideProvider(EgressHttpClient).useValue(egress).compile();

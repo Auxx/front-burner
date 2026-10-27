@@ -1,10 +1,10 @@
 import type { Config } from '@front-burner/server-core-config';
-import { Database, jobs, users } from '@front-burner/server-core-database';
+import { Database, jobs, JobStatus, users } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
 import { createTestDatabase } from '../testing/test-database';
-import { JobRunner, SHUTDOWN_GRACE_MS } from './job-runner';
+import { JobRunner, SHUTDOWN_GRACE_MS, START_SPREAD_MS } from './job-runner';
 import type { JobTypeDefinition, RunningJob } from './job-types';
 
 const NOW = new Date('2026-10-27T12:00:00Z');
@@ -307,5 +307,128 @@ describe('JobRunner', () => {
 
   it('refuses an unknown type', () => {
     expect(() => runner.enqueue({ type: 'test.unknown', payload: {} })).toThrow(/Unknown job type/);
+  });
+
+  describe('on start', () => {
+    /** A row as a stopped backend left it. */
+    const leftover = (type: string, status: JobStatus, runAt = NOW) =>
+      database.db.insert(jobs).values({
+        type,
+        userId,
+        status,
+        runAt,
+        createdAt: NOW,
+        attempts: status === 'running' ? 1 : 0
+      })
+        .returning().get().id;
+    const register = (type: string, overrides: Partial<JobTypeDefinition> = {}) =>
+      runner.register({
+        type,
+        pool: 'housekeeping',
+        onInterrupted: 'requeue',
+        handler: () => new Promise(() => undefined),
+        ...overrides
+      });
+
+    it('fails an interrupted job whose type says so', async () => {
+      const handler = vi.fn(() => Promise.resolve());
+      register('test.clone', { pool: 'clone', onInterrupted: 'fail', handler });
+      const id = leftover('test.clone', 'running');
+
+      runner.start();
+      await settle();
+
+      expect(rowOf(id)).toMatchObject({ status: 'failed', errorCode: 'interrupted', finishedAt: NOW, attempts: 1 });
+      expect(handler).not.toHaveBeenCalled();
+      expect(publish).toHaveBeenCalledWith(userId, { type: 'job.finished', jobId: id, outcome: 'failed' });
+    });
+
+    it('requeues an interrupted job whose type says so', async () => {
+      const handler = vi.fn(() => Promise.resolve());
+      register('test.fetch', { pool: 'fetch', handler });
+      const id = leftover('test.fetch', 'running');
+
+      runner.start();
+      await settle();
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(rowOf(id)).toMatchObject({ status: 'done', attempts: 2 });
+    });
+
+    it('fails a running job of an unknown type', () => {
+      const id = leftover('test.removed', 'running');
+
+      runner.start();
+
+      expect(rowOf(id)).toMatchObject({ status: 'failed', errorCode: 'interrupted' });
+    });
+
+    it('spreads overdue housekeeping over two minutes', () => {
+      register('test.housekeeping', { spreadOnStart: true });
+      register('test.other');
+      const random = vi.spyOn(Math, 'random').mockReturnValueOnce(0).mockReturnValueOnce(0.5).mockReturnValueOnce(
+        0.999
+      );
+      const spread = [
+        leftover('test.housekeeping', 'queued', new Date(NOW.getTime() - 3_600_000)),
+        leftover(
+          'test.housekeeping',
+          'queued',
+          new Date(NOW.getTime() - 1)
+        ),
+        leftover('test.housekeeping', 'running')
+      ];
+      const future = leftover('test.housekeeping', 'queued', new Date(NOW.getTime() + 600_000));
+      const other = leftover('test.other', 'queued', new Date(NOW.getTime() - 1));
+
+      runner.start();
+      random.mockRestore();
+
+      expect(spread.map(id => rowOf(id)?.runAt.getTime())).toEqual([
+        NOW.getTime(),
+        NOW.getTime() + START_SPREAD_MS / 2,
+        NOW.getTime() + Math.floor(0.999 * START_SPREAD_MS)
+      ]);
+      expect(rowOf(future)?.runAt).toEqual(new Date(NOW.getTime() + 600_000));
+      expect(rowOf(other)?.runAt).toEqual(new Date(NOW.getTime() - 1));
+    });
+
+    it('keeps one repeating job per type', async () => {
+      const runs: number[] = [];
+      register('test.repeat', {
+        repeatEveryMs: 60_000,
+        handler: job => {
+          runs.push(job.id);
+          return Promise.resolve();
+        }
+      });
+      leftover('test.repeat', 'queued', new Date(NOW.getTime() + 30_000));
+      database.db.update(jobs).set({ dedupeKey: 'repeat:test.repeat' }).run();
+
+      runner.start();
+      const unfinished = () =>
+        database.db.select().from(jobs).all().filter(({ status }) => status === 'queued' || status === 'running');
+      expect(unfinished()).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(runs).toHaveLength(1);
+      expect(unfinished()).toEqual([
+        expect.objectContaining({ dedupeKey: 'repeat:test.repeat', runAt: new Date(NOW.getTime() + 90_000) })
+      ]);
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(runs).toHaveLength(2);
+    });
+
+    it('queues a missing repeating job', async () => {
+      const handler = vi.fn(() => Promise.resolve());
+      register('test.repeat', { repeatEveryMs: 60_000, handler });
+
+      runner.start();
+      await settle();
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(database.db.select().from(jobs).all().map(({ status }) => status)).toEqual([ 'done', 'queued' ]);
+    });
   });
 });
