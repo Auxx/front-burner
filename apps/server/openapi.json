@@ -240,6 +240,115 @@
         ]
       }
     },
+    "/api/v1/credentials": {
+      "get": {
+        "operationId": "list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedCredentials"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "credentials"
+        ]
+      }
+    },
+    "/api/v1/credentials/ssh-keys/generate": {
+      "post": {
+        "operationId": "generateSshKey",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateSshKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedSshKey"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "credentials"
+        ]
+      }
+    },
+    "/api/v1/credentials/ssh-keys/{id}/unlock": {
+      "post": {
+        "operationId": "unlockSshKey",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnlockSshKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "credentials"
+        ]
+      }
+    },
+    "/api/v1/known-hosts": {
+      "post": {
+        "operationId": "trust",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrustHostRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "known-hosts"
+        ]
+      }
+    },
     "/api/v1/repositories/recent": {
       "get": {
         "operationId": "recent",
@@ -541,6 +650,170 @@
           "email",
           "displayName",
           "role"
+        ]
+      },
+      "SavedHttpsCredentials": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "name": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "missing": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "username",
+          "missing"
+        ]
+      },
+      "SavedSshKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "name": {
+            "type": "string"
+          },
+          "keyType": {
+            "type": "string",
+            "enum": [
+              "ed25519",
+              "ecdsa",
+              "rsa"
+            ]
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "passphraseProtected": {
+            "type": "boolean"
+          },
+          "unlocked": {
+            "type": "boolean"
+          },
+          "generated": {
+            "type": "boolean"
+          },
+          "missing": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "keyType",
+          "fingerprint",
+          "passphraseProtected",
+          "unlocked",
+          "generated",
+          "missing"
+        ]
+      },
+      "SavedCredentials": {
+        "type": "object",
+        "properties": {
+          "https": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedHttpsCredentials"
+            }
+          },
+          "sshKeys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedSshKey"
+            }
+          }
+        },
+        "required": [
+          "https",
+          "sshKeys"
+        ]
+      },
+      "GenerateSshKeyRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "GeneratedSshKey": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/SavedSshKey"
+          },
+          "publicKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "publicKey"
+        ]
+      },
+      "UnlockSshKeyRequest": {
+        "type": "object",
+        "properties": {
+          "passphrase": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "passphrase"
+        ]
+      },
+      "TrustHostRequest": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "host",
+          "port",
+          "type",
+          "key"
         ]
       },
       "RepositorySummary": {

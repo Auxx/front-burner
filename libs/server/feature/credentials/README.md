@@ -3,6 +3,11 @@
 A user's saved credentials, known hosts and key unlocks (REQ-REPO-001, AR-17 to
 AR-32).
 
+- `CredentialsModule`: `GET /api/v1/credentials`, `POST
+  /api/v1/credentials/ssh-keys/generate`, `POST
+  /api/v1/credentials/ssh-keys/:id/unlock` and `POST /api/v1/known-hosts`,
+  always for the logged-in user and session. Relies on the global auth guard of
+  `server-feature-auth`.
 - `SavedCredentialsService`: saves HTTPS credentials and pasted keys inside a
   caller's transaction, generates keys, lists them without secrets and resolves
   them for git (`key-locked`, `credentials-missing`). Every lookup is by ID and
