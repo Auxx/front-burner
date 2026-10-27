@@ -9,5 +9,6 @@ export { ApiErrorTextService } from './core/services/api-error-text/api-error-te
 export { AuthSessionService } from './core/services/auth-session/auth-session.service';
 export { CurrentUserService } from './core/services/current-user/current-user.service';
 export { OnboardingStateService, type OnboardingView } from './core/services/onboarding-state/onboarding-state.service';
+export { PushChannelService } from './core/services/push-channel/push-channel.service';
 export { relativeTime } from './core/utils/relative-time/relative-time';
 export { safeReturnUrl } from './core/utils/safe-return-url/safe-return-url';
