@@ -1,7 +1,6 @@
-import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { DefaultUrlSerializer, provideRouter, Router, type UrlTree } from '@angular/router';
 import type {
   AccessCheckRequest,
   AccessCheckResult,
@@ -64,7 +63,7 @@ describe('AddRepositoryPage', () => {
   const page = () => fixture.nativeElement as HTMLElement;
 
   async function open(
-    options: { index?: RepositoryIndex; allowedGitLevels?: GitLevel[]; } = {}
+    options: { index?: RepositoryIndex; allowedGitLevels?: GitLevel[]; cameFrom?: UrlTree; } = {}
   ): Promise<void> {
     accessChecks = [];
     adds = [];
@@ -95,6 +94,14 @@ describe('AddRepositoryPage', () => {
         { provide: DialogService, useValue: dialogs }
       ]
     }).compileComponents();
+    if (options.cameFrom) {
+      // As after a navigation inside the web client.
+      const finalUrl = options.cameFrom;
+      Object.defineProperty(TestBed.inject(Router), 'lastSuccessfulNavigation', {
+        get: () => () => ({ finalUrl }),
+        configurable: true
+      });
+    }
     fixture = TestBed.createComponent(AddRepositoryPage);
     await settle(fixture);
   }
@@ -383,19 +390,14 @@ describe('AddRepositoryPage', () => {
     });
 
     it('goes back to the previous page on Cancel', async () => {
-      await open();
-      const router = TestBed.inject(Router);
-      // As after a navigation inside the web client.
-      Object.defineProperty(router, 'lastSuccessfulNavigation', {
-        get: () => () => ({ previousNavigation: {} }),
-        configurable: true
-      });
-      const back = vi.spyOn(TestBed.inject(Location), 'back').mockImplementation(() => undefined);
+      const previous = new DefaultUrlSerializer().parse('/repositories/7');
+      await open({ cameFrom: previous });
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
 
       cancel()?.click();
       await settle(fixture);
 
-      expect(back).toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith(previous);
     });
 
     it('goes to the dashboard on Cancel when there is no previous page', async () => {

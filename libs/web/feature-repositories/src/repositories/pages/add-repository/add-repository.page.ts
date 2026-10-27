@@ -1,4 +1,3 @@
-import { Location } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { apply, disabled, type FieldTree, form, submit, type ValidationError } from '@angular/forms/signals';
 import { Router, RouterLink } from '@angular/router';
@@ -89,7 +88,6 @@ export class AddRepositoryPage implements LeavesWithCare {
   private readonly knownHostsApi = inject(KnownHostsApi);
   private readonly dialogs = inject(DialogService);
   private readonly router = inject(Router);
-  private readonly location = inject(Location);
   private readonly transloco = inject(TranslocoService);
   private readonly errorText = inject(ApiErrorTextService);
 
@@ -119,6 +117,13 @@ export class AddRepositoryPage implements LeavesWithCare {
   protected readonly failure = signal<{ text: string; reference: string | null; } | null>(null);
   /** The repository was added: leaving needs no confirmation. */
   private added = false;
+  /**
+   * The page the user came from in the web client: while this page is
+   * created, the last successful navigation is still the one before it. A
+   * navigation rather than `history.back()`, whose entry is stale once the
+   * guard has cancelled a back navigation.
+   */
+  private readonly cameFrom = this.router.lastSuccessfulNavigation()?.finalUrl;
 
   /** The levels the administrator allows the user (AR-38); the dropdown waits for them. */
   protected readonly allowedLevels = signal<readonly GitLevel[]>([]);
@@ -231,11 +236,7 @@ export class AddRepositoryPage implements LeavesWithCare {
 
   /** Back to where the user came from in the web client, or the dashboard (AR-47). */
   protected async cancel(): Promise<void> {
-    if (this.router.lastSuccessfulNavigation()?.previousNavigation) {
-      this.location.back();
-    } else {
-      await this.router.navigateByUrl('/');
-    }
+    await this.router.navigateByUrl(this.cameFrom ?? '/');
   }
 
   protected async submit(event: Event): Promise<void> {
