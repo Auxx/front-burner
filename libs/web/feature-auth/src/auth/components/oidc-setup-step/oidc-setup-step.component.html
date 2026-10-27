@@ -1,0 +1,73 @@
+<ng-container *transloco="let t; prefix: 'web-feature-auth.OidcSetupStepComponent'">
+  <form novalidate (submit)="submit($event)">
+    <h2 class="step-heading">{{ t('heading') }}</h2>
+    @if (loginFailure(); as reason) {
+      <ng-container *transloco="let root">
+        <ui-inline-banner status="danger">
+          <!-- The shared text names FRONT_BURNER_ADMIN_EMAIL; here the email comes from this form. -->
+          {{ reason === 'admin-email-mismatch' ? t('adminEmailMismatch') : root('web-feature-auth.oidcErrors.' + reason) }}
+        </ui-inline-banner>
+      </ng-container>
+    }
+    @if (requestFailure(); as failure) {
+      <ui-inline-banner status="danger">
+        {{ failure.text }}
+        @if (failure.reference) {
+          <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+        }
+      </ui-inline-banner>
+    }
+    <ui-field [label]="t('redirectUri')" [hint]="t('redirectUriHint')">
+      <input uiInput code readonly [value]="redirectUri" />
+      <button uiButton (click)="copyRedirectUri()">{{ t('copy') }}</button>
+    </ui-field>
+    @let issuerError = error('issuer');
+    <ui-field [label]="t('issuer')" [error]="issuerError ? t(issuerError.key, issuerError.params) : undefined">
+      <input uiInput type="url" autocomplete="off" [formField]="model.issuer" />
+    </ui-field>
+    @let clientIdError = error('clientId');
+    <ui-field [label]="t('clientId')" [error]="clientIdError ? t(clientIdError.key, clientIdError.params) : undefined">
+      <input uiInput autocomplete="off" [formField]="model.clientId" />
+    </ui-field>
+    @let clientSecretError = error('clientSecret');
+    <ui-field
+      [label]="t('clientSecret')"
+      [hint]="keepsSecret() ? t('clientSecretKeep') : undefined"
+      [error]="clientSecretError ? t(clientSecretError.key, clientSecretError.params) : undefined"
+    >
+      <input uiInput #secret type="password" autocomplete="off" [formField]="model.clientSecret" />
+      <button uiIconButton [uiPasswordReveal]="secret" [label]="t('showClientSecret')">
+        <ui-icon name="eye" />
+      </button>
+    </ui-field>
+    @let scopesError = error('scopes');
+    <ui-field
+      [label]="t('scopes')"
+      [hint]="t('scopesHint')"
+      [error]="scopesError ? t(scopesError.key, scopesError.params) : undefined"
+    >
+      <input uiInput code autocomplete="off" [formField]="model.scopes" />
+    </ui-field>
+    <div class="verified-email">
+      <label uiChoice>
+        <input type="checkbox" uiCheckbox aria-describedby="oidc-verified-email-hint" [formField]="model.requireVerifiedEmail" />
+        {{ t('requireVerifiedEmail') }}
+      </label>
+      <p class="hint" id="oidc-verified-email-hint">{{ t('requireVerifiedEmailHint') }}</p>
+    </div>
+    @let adminEmailError = error('adminEmail');
+    <ui-field
+      [label]="t('adminEmail')"
+      [hint]="t('adminEmailHint')"
+      [error]="adminEmailError ? t(adminEmailError.key, adminEmailError.params) : undefined"
+    >
+      <input uiInput type="email" autocomplete="email" [formField]="model.adminEmail" />
+    </ui-field>
+    <div class="actions">
+      <button uiButton (click)="back.emit()">{{ t('back') }}</button>
+      <button uiButton variant="primary" type="submit" [busy]="busy()" [unavailable]="model().invalid()">
+        {{ t('submit') }}
+      </button>
+    </div>
+  </form>
+</ng-container>

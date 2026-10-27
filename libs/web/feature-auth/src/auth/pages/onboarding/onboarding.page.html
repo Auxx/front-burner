@@ -26,10 +26,20 @@
               <auth-setup-token-step [rejected]="tokenRejected()" (accepted)="tokenAccepted($event)" />
             }
             @case ('method') {
-              <auth-login-method-step (back)="step.set('token')" (chosen)="step.set('password')" />
+              <auth-login-method-step [initial]="initialMethod()" (back)="step.set('token')" (chosen)="step.set($event)" />
             }
             @case ('password') {
               <auth-password-setup-step [setupToken]="setupToken()" (back)="step.set('method')" (refused)="refused()" />
+            }
+            @case ('oidc') {
+              <auth-oidc-setup-step
+                [setupToken]="setupToken()"
+                [saved]="savedOidcSetup()"
+                [failure]="oidcFailure"
+                (back)="step.set('method')"
+                (refused)="refused()"
+                (submitted)="oidcSetupSaved()"
+              />
             }
           }
         }

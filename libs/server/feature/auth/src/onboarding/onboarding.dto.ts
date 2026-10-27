@@ -1,4 +1,6 @@
 import {
+  OidcSetupRequestSchema,
+  OidcSetupViewSchema,
   OnboardingStatusSchema,
   PasswordSetupRequestSchema,
   refinePasswordNotEmail,
@@ -22,3 +24,9 @@ export class SetupTokenRequestDto extends createZodDto(z.object(SetupTokenReques
 export class PasswordSetupRequestDto extends createZodDto(
   z.object(PasswordSetupRequestSchema.shape).superRefine(refinePasswordNotEmail)
 ) {}
+
+@ApiSchema({ name: 'OidcSetupRequest' })
+export class OidcSetupRequestDto extends createZodDto(z.object(OidcSetupRequestSchema.shape)) {}
+
+@ApiSchema({ name: 'OidcSetupView' })
+export class OidcSetupViewDto extends createZodDto(z.object(OidcSetupViewSchema.shape)) {}

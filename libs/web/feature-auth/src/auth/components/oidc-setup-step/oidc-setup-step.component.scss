@@ -1,0 +1,24 @@
+@use '../../styles/step';
+
+@include step.step;
+
+form {
+  display: grid;
+  gap: var(--ui-space-4);
+}
+
+.verified-email {
+  display: grid;
+  gap: var(--ui-space-1);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--ui-font-size-ui-small);
+  color: var(--ui-text-muted);
+}
+
+.reference {
+  display: block;
+  color: var(--ui-text-muted);
+}

@@ -1,14 +1,21 @@
 import { Public, RateLimitGroup } from '@front-burner/server-core-security';
-import type { OnboardingStatus } from '@front-burner/shared-contracts';
-import { Body, Controller, Get, HttpCode, Logger, Post, UseGuards } from '@nestjs/common';
+import type { OidcSetupView, OnboardingStatus } from '@front-burner/shared-contracts';
+import { Body, Controller, Get, HttpCode, Logger, NotFoundException, Post, UseGuards } from '@nestjs/common';
 import { ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { OidcSetupService } from './oidc-setup.service';
 import { OnboardingStateService } from './onboarding-state.service';
-import { OnboardingStatusDto, PasswordSetupRequestDto, SetupTokenRequestDto } from './onboarding.dto';
+import {
+  OidcSetupRequestDto,
+  OidcSetupViewDto,
+  OnboardingStatusDto,
+  PasswordSetupRequestDto,
+  SetupTokenRequestDto
+} from './onboarding.dto';
 import { OnboardingGuard } from './onboarding.guard';
 import { OnboardingService } from './onboarding.service';
 
 /**
- * Administrator onboarding, username + password path (REQ-AUTH-001). Every
+ * Administrator onboarding, username + password and OIDC paths (REQ-AUTH-001). Every
  * refusal is the `404` of an unknown route (AO-3); see {@link OnboardingGuard}.
  */
 @ApiTags('onboarding')
@@ -20,7 +27,8 @@ export class OnboardingController {
 
   constructor(
     private readonly state: OnboardingStateService,
-    private readonly onboarding: OnboardingService
+    private readonly onboarding: OnboardingService,
+    private readonly oidcSetup: OidcSetupService
   ) {}
 
   /** The onboarding state, for clients to decide what to show (AO-5). */
@@ -46,5 +54,30 @@ export class OnboardingController {
   @ApiNoContentResponse()
   async setUpPassword(@Body() request: PasswordSetupRequestDto): Promise<void> {
     await this.onboarding.setUpPassword(request);
+  }
+
+  /** Checks the provider and saves the OIDC setup; onboarding becomes `oidc-pending` (AO-23, AO-24). */
+  @Post('oidc-setup')
+  @HttpCode(204)
+  @RateLimitGroup('setup-token')
+  @ApiNoContentResponse()
+  async saveOidcSetup(@Body() request: OidcSetupRequestDto): Promise<void> {
+    await this.oidcSetup.save(request);
+  }
+
+  /**
+   * The saved OIDC setup without its secret, to pre-fill the form (AO-16, AO-26).
+   * A `POST`, because the setup token travels in the body.
+   */
+  @Post('oidc-setup/current')
+  @HttpCode(200)
+  @RateLimitGroup('setup-token')
+  @ApiOkResponse({ type: OidcSetupViewDto })
+  currentOidcSetup(@Body() _request: SetupTokenRequestDto): OidcSetupView {
+    const view = this.oidcSetup.current();
+    if (view === undefined) {
+      throw new NotFoundException();
+    }
+    return view;
   }
 }

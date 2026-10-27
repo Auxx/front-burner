@@ -2,8 +2,8 @@ import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
-import type { OnboardingStatus } from '@front-burner/shared-contracts';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
+import type { OidcSetupView, OnboardingStatus } from '@front-burner/shared-contracts';
 import { OnboardingStateService, type OnboardingView } from '@front-burner/web-core';
 
 import { settle } from '../../../testing/settle';
@@ -36,7 +36,7 @@ describe('OnboardingPage', () => {
   const button = (key: string) =>
     [ ...element().querySelectorAll('button') ].find(b => b.textContent?.includes(key)) as HTMLButtonElement;
 
-  async function start(initial: OnboardingView): Promise<void> {
+  async function start(initial: OnboardingView, query: Record<string, string> = {}): Promise<void> {
     view = signal<OnboardingView | undefined>(initial);
     refresh.mockClear();
     await TestBed.configureTestingModule({
@@ -49,7 +49,8 @@ describe('OnboardingPage', () => {
           provide: OnboardingStateService,
           useValue: { view, refresh, load: async () => view(), markCompleted: vi.fn() }
         },
-        { provide: PasswordStrengthService, useValue: { estimate: () => Promise.resolve(2) } }
+        { provide: PasswordStrengthService, useValue: { estimate: () => Promise.resolve(2) } },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(query) } } }
       ]
     }).compileComponents();
     fixture = TestBed.createComponent(OnboardingPage);
@@ -197,5 +198,80 @@ describe('OnboardingPage', () => {
       setItem.mockRestore();
       cookie.mockRestore();
     }
+  });
+
+  describe('OIDC', () => {
+    const SAVED: OidcSetupView = {
+      issuer: 'https://id.example.com',
+      clientId: 'front-burner',
+      scopes: 'openid email',
+      requireVerifiedEmail: true,
+      adminEmail: 'admin@example.com',
+      hasClientSecret: true
+    };
+    const oidcField = (name: string) =>
+      element().querySelector(`auth-oidc-setup-step input[name$=".${name}"]`) as HTMLInputElement;
+    const flushCurrent = () => {
+      const request = http.expectOne('/api/v1/onboarding/oidc-setup/current');
+      expect(request.request.body).toEqual({ setupToken: TOKEN });
+      request.flush(SAVED);
+    };
+
+    it('pre-fills the form while pending', async () => {
+      await start(status({ state: 'oidc-pending' }));
+      await enterToken();
+      flushCurrent();
+      await settle(fixture);
+      expect(element().querySelector('auth-login-method-step input[type="radio"]:checked')).not.toBeNull();
+      button('LoginMethodStepComponent.continue').click();
+      await settle(fixture);
+      expect(oidcField('issuer').value).toBe(SAVED.issuer);
+      expect(oidcField('clientSecret').value).toBe('');
+    });
+
+    it('keeps the OIDC error until the token is entered', async () => {
+      await start(status({ state: 'oidc-pending' }), { oidcError: 'code-exchange-failed' });
+      expect(element().querySelector('auth-setup-token-step')).not.toBeNull();
+      await enterToken();
+      flushCurrent();
+      await settle(fixture);
+      expect(element().textContent).toContain('web-feature-auth.oidcErrors.code-exchange-failed');
+      expect(oidcField('issuer').value).toBe(SAVED.issuer);
+    });
+
+    it('reads an unknown OIDC error as failed', async () => {
+      await start(status({ state: 'oidc-pending' }), { oidcError: '<b>' });
+      await enterToken();
+      flushCurrent();
+      await settle(fixture);
+      expect(element().textContent).toContain('web-feature-auth.oidcErrors.failed');
+    });
+
+    it('goes to the login page after saving', async () => {
+      await start(status());
+      await enterToken();
+      const radios = element().querySelectorAll<HTMLInputElement>('auth-login-method-step input[type="radio"]');
+      radios[1]?.click();
+      await settle(fixture);
+      button('LoginMethodStepComponent.continue').click();
+      await settle(fixture);
+      const values: Record<string, string> = {
+        issuer: 'https://id.example.com',
+        clientId: 'front-burner',
+        clientSecret: 'a-client-secret',
+        adminEmail: 'admin@example.com'
+      };
+      for (const [ name, value ] of Object.entries(values)) {
+        oidcField(name).value = value;
+        oidcField(name).dispatchEvent(new Event('input'));
+      }
+      element().querySelector('auth-oidc-setup-step form')?.dispatchEvent(new Event('submit'));
+      await settle(fixture);
+      refreshTo = status({ state: 'oidc-pending' });
+      http.expectOne('/api/v1/onboarding/oidc-setup').flush(null, { status: 204, statusText: 'No Content' });
+      await settle(fixture);
+      expect(refresh).toHaveBeenCalled();
+      expect(TestBed.inject(Router).url).toBe('/login');
+    });
   });
 });
