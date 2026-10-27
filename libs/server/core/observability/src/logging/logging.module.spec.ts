@@ -42,6 +42,8 @@ const config: Config = {
   authTokenTtlMs: 900_000,
   refreshTokenTtlMs: 2_592_000_000,
   loginAuditRetentionMs: 7_776_000_000,
+  cloneTimeoutMs: 1_800_000,
+  gitTimeoutMs: 300_000,
   oidc: undefined
 };
 

@@ -113,6 +113,8 @@ const schema = z.object({
   FRONT_BURNER_AUTH_TOKEN_TTL: duration('15m'),
   FRONT_BURNER_REFRESH_TOKEN_TTL: duration('30d'),
   FRONT_BURNER_LOGIN_AUDIT_RETENTION: duration('90d'),
+  FRONT_BURNER_CLONE_TIMEOUT: duration('30m'),
+  FRONT_BURNER_GIT_TIMEOUT: duration('5m'),
   [OIDC_ISSUER]: z.string().refine(isHttpsIssuer, { message: 'must be an https: URL without query or fragment' })
     .optional(),
   [OIDC_CLIENT_ID]: z.string().optional(),
@@ -288,6 +290,8 @@ export function loadConfig(
       authTokenTtlMs: values.FRONT_BURNER_AUTH_TOKEN_TTL,
       refreshTokenTtlMs: values.FRONT_BURNER_REFRESH_TOKEN_TTL,
       loginAuditRetentionMs: values.FRONT_BURNER_LOGIN_AUDIT_RETENTION,
+      cloneTimeoutMs: values.FRONT_BURNER_CLONE_TIMEOUT,
+      gitTimeoutMs: values.FRONT_BURNER_GIT_TIMEOUT,
       oidc
     },
     warnings

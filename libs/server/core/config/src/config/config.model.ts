@@ -21,6 +21,10 @@ export interface Config {
   /** The lifetime of a session and its refresh tokens, from login (LG-29). */
   refreshTokenTtlMs: number;
   loginAuditRetentionMs: number;
+  /** A clone that runs longer is stopped and fails (AR-51). */
+  cloneTimeoutMs: number;
+  /** The timeout of every other git command (NF-11.8). */
+  gitTimeoutMs: number;
   /** OIDC and the first administrator from the environment (AO-30); undefined when none of the variables is set. */
   oidc: OidcEnvironment | undefined;
 }

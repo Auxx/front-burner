@@ -44,6 +44,8 @@ describe('loadConfig', () => {
       authTokenTtlMs: 900_000,
       refreshTokenTtlMs: 2_592_000_000,
       loginAuditRetentionMs: 7_776_000_000,
+      cloneTimeoutMs: 1_800_000,
+      gitTimeoutMs: 300_000,
       oidc: undefined
     });
     expect(warnings).toEqual([]);
@@ -136,11 +138,15 @@ describe('loadConfig', () => {
       ...BASE,
       FRONT_BURNER_AUTH_TOKEN_TTL: '5m',
       FRONT_BURNER_REFRESH_TOKEN_TTL: '7d',
-      FRONT_BURNER_LOGIN_AUDIT_RETENTION: '30d'
+      FRONT_BURNER_LOGIN_AUDIT_RETENTION: '30d',
+      FRONT_BURNER_CLONE_TIMEOUT: '2h',
+      FRONT_BURNER_GIT_TIMEOUT: '90s'
     });
     expect(config.authTokenTtlMs).toBe(300_000);
     expect(config.refreshTokenTtlMs).toBe(604_800_000);
     expect(config.loginAuditRetentionMs).toBe(2_592_000_000);
+    expect(config.cloneTimeoutMs).toBe(7_200_000);
+    expect(config.gitTimeoutMs).toBe(90_000);
   });
 
   it('refuses an unreadable duration', () => {
