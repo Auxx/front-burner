@@ -5,7 +5,7 @@ import type { Request } from 'express';
 import { OnboardingStateService } from './onboarding-state.service';
 
 /**
- * Hides onboarding (AO-3, AO-9, AO-10). Guards run before the validation pipe,
+ * Hides onboarding (AO-3, AO-9, AO-10, AO-33). Guards run before the validation pipe,
  * so a closed onboarding or a wrong token answers exactly like an unknown
  * route, whatever the body holds.
  */
@@ -25,6 +25,10 @@ export class OnboardingGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<Request>();
     if (req.method === 'GET') {
       return true;
+    }
+    // AO-33: with OIDC from the environment, only the first OIDC login completes onboarding.
+    if (this.config.oidc !== undefined) {
+      throw new NotFoundException();
     }
     const expected = this.config.setupToken;
     if (expected === undefined) {
