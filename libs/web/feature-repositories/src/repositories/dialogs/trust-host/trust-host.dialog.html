@@ -1,0 +1,14 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.TrustHostDialog'">
+  <ui-dialog [heading]="t('heading')">
+    <p class="message">{{ t('message') }}</p>
+    <dl uiKeyValueList>
+      <div uiKeyValue [label]="t('host')">{{ host() }}</div>
+      <div uiKeyValue [label]="t('keyType')">{{ hostKey.type }}</div>
+      <div uiKeyValue [label]="t('fingerprint')"><code class="fingerprint">{{ hostKey.fingerprint }}</code></div>
+    </dl>
+    <div uiDialogFooter>
+      <button uiButton data-autofocus (click)="ref.close(false)">{{ t('cancel') }}</button>
+      <button uiButton variant="primary" (click)="ref.close(true)">{{ t('trust') }}</button>
+    </div>
+  </ui-dialog>
+</ng-container>

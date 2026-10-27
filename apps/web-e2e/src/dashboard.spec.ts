@@ -134,13 +134,15 @@ test.describe('dashboard', () => {
 
   test('criterion 15: a failed load shows Try again, and Add repository still works', async ({ page, instance, monitor }) => {
     seedRepositories(instance.dataDir, [ { name: 'handbook' } ]);
-    let failures = 1;
-    await page.route('**/api/v1/repositories/recent', route => (failures-- > 0 ? route.abort() : route.fallback()));
+    // Fails until Try again, also for the reload after the push channel connects (A-3.11).
+    let failing = true;
+    await page.route('**/api/v1/repositories/recent', route => (failing ? route.abort() : route.fallback()));
     await page.goto('/');
     await logIn(page);
 
     await expect(page.getByRole('main').getByText('Your repositories could not be loaded.')).toBeVisible();
     await expect(addRepository(page)).toBeEnabled();
+    failing = false;
     await page.getByRole('button', { name: 'Try again' }).click();
     await expect(heading(page, 'Recent repositories')).toBeVisible();
     await expect(page.getByRole('main').getByText('Your repositories could not be loaded.')).toHaveCount(0);

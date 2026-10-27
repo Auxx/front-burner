@@ -1,0 +1,14 @@
+:host {
+  display: grid;
+  gap: var(--ui-space-3);
+  min-inline-size: 0;
+}
+
+.instructions {
+  margin: 0;
+}
+
+.copy,
+.generate {
+  display: flex;
+}

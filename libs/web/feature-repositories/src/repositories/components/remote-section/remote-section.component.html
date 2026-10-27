@@ -1,0 +1,17 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.RemoteSectionComponent'">
+  <ng-container *transloco="let e; prefix: 'web-feature-repositories.errors'">
+    @let url = urlError();
+    <ui-field [label]="t('remoteUrl')" [hint]="t('remoteUrlHint')" [error]="url ? e(url.key, url.params) : undefined">
+      <input uiInput code autocomplete="off" spellcheck="false" [formField]="remoteUrl()" />
+    </ui-field>
+    @if (duplicates()) {
+      <ui-inline-banner class="duplicate" status="warning" quiet announce>
+        {{ t('duplicate', { names: duplicates() }) }}
+      </ui-inline-banner>
+    }
+    @let nameShown = nameError();
+    <ui-field [label]="t('name')" [error]="nameShown ? e(nameShown.key, nameShown.params) : undefined">
+      <input uiInput autocomplete="off" [formField]="name()" />
+    </ui-field>
+  </ng-container>
+</ng-container>

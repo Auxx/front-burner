@@ -42,6 +42,8 @@ describe('appRoutes', () => {
     const navigation = harness.navigateByUrl(url);
     const http = TestBed.inject(HttpTestingController);
     const heading = () => harness.fixture.nativeElement.querySelector('h1')?.textContent?.trim();
+    // The first test loads the lazy routes cold, which can take more than the
+    // default second on a busy CI runner.
     await vi.waitFor(() => {
       for (const request of http.match('/api/v1/onboarding')) {
         if (options.state) {
@@ -54,7 +56,7 @@ describe('appRoutes', () => {
       http.match('i18n/en.json').forEach(request => request.flush(en));
       harness.detectChanges();
       expect(heading()).toBeTruthy();
-    });
+    }, { timeout: 4000 });
     await navigation;
     await harness.fixture.whenStable();
     harness.detectChanges();
@@ -95,11 +97,27 @@ describe('appRoutes', () => {
     expect(document.title).toBe('Page not found · Front Burner');
   });
 
-  it('shows Page not found with the header when logged in', async () => {
+  it('shows Page not found at /repositories, with the header, when logged in', async () => {
     const { heading, header } = await open('/repositories', { loggedIn: true });
 
     expect(heading()).toBe('This page doesn\'t exist.');
     await vi.waitFor(() => expect(header()).not.toBeNull());
+  });
+
+  it('opens the Add repository page at /repositories/new when logged in', async () => {
+    const { heading, header } = await open('/repositories/new', { loggedIn: true });
+
+    expect(TestBed.inject(Router).url).toBe('/repositories/new');
+    expect(heading()).toBe('Add repository');
+    await vi.waitFor(() => expect(header()).not.toBeNull());
+    expect(document.title).toBe('Add repository · Front Burner');
+  });
+
+  it('sends /repositories/new to the login page when logged out', async () => {
+    const { heading } = await open('/repositories/new');
+
+    expect(TestBed.inject(Router).url).toBe('/login?returnUrl=%2Frepositories%2Fnew');
+    expect(heading()).toBe('Log in');
   });
 
   it.each([ '/', '/login', '/nowhere/at/all' ])('sends %s to the onboarding page while it is required', async url => {

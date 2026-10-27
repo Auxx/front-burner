@@ -32,6 +32,8 @@ export interface InstanceOptions {
   oidc?: { issuer: string; adminEmail: string; };
   /** A PEM file the server trusts besides the system's authorities (`NODE_EXTRA_CA_CERTS`). */
   extraCaFile?: string;
+  /** A PEM file git trusts for HTTPS remotes (`GIT_SSL_CAINFO`), such as a test git server's. */
+  gitCaFile?: string;
 }
 
 export interface Instance {
@@ -78,12 +80,34 @@ async function onboard(url: string): Promise<void> {
   }
 }
 
+/** How often {@link startInstance} tries again when its port was taken. */
+const START_ATTEMPTS = 3;
+
+/** How long a server that failed to start gets to exit and say why. */
+const EXIT_WAIT_MS = 2_000;
+
+/** Another listener took the port between {@link freePort} and the server's `listen()`. */
+class PortTaken extends Error {}
+
 /**
  * Starts the built server, serving the built web client, on a free port with
  * an empty data directory: the production path. Every test gets its own,
- * because a completed onboarding cannot be undone.
+ * because a completed onboarding cannot be undone. A port that another
+ * listener takes before the server binds it is replaced by a new one.
  */
 export async function startInstance(options: InstanceOptions = {}): Promise<Instance> {
+  for (let attempt = 1;; attempt++) {
+    try {
+      return await startOnce(options);
+    } catch (error) {
+      if (!(error instanceof PortTaken) || attempt === START_ATTEMPTS) {
+        throw error;
+      }
+    }
+  }
+}
+
+async function startOnce(options: InstanceOptions): Promise<Instance> {
   const dataDir = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-'));
   const port = await freePort();
   const url = `http://localhost:${port}`;
@@ -110,6 +134,7 @@ export async function startInstance(options: InstanceOptions = {}): Promise<Inst
         }
         : {}),
       ...(options.extraCaFile ? { NODE_EXTRA_CA_CERTS: options.extraCaFile } : {}),
+      ...(options.gitCaFile ? { GIT_SSL_CAINFO: options.gitCaFile } : {}),
       ...options.env
     },
     stdio: [ 'ignore', 'pipe', 'pipe' ]
@@ -133,7 +158,12 @@ export async function startInstance(options: InstanceOptions = {}): Promise<Inst
       await onboard(url);
     }
   } catch (error) {
+    // The answer may have come from whoever holds the port, while this server fails to bind it.
+    await Promise.race([ exited, new Promise(done => setTimeout(done, EXIT_WAIT_MS)) ]);
     await stop();
+    if (output.includes('EADDRINUSE')) {
+      throw new PortTaken(`Port ${port} was taken`);
+    }
     throw error;
   }
   return { url, dataDir, stop };

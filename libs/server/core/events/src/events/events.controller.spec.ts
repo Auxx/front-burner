@@ -94,6 +94,12 @@ describe('EventsController', () => {
     expect(response.headers).toMatchObject({ 'cache-control': 'no-cache', 'x-accel-buffering': 'no' });
   });
 
+  it('sends a comment at once, so that a browser\'s fetch sees the stream open', async () => {
+    const stream = await open(1);
+
+    expect(await stream.waitFor('\n\n')).toBe(': connected\n\n');
+  });
+
   it('writes events in SSE format', async () => {
     const stream = await open(1);
     const event: PushEvent = { type: 'job.finished', jobId: 3, outcome: 'done' };
@@ -101,8 +107,9 @@ describe('EventsController', () => {
     hub.publish(2, { type: 'job.progress', jobId: 9, percent: 10 });
     hub.publish(1, event);
 
-    const received = await stream.waitFor('\n\n');
-    expect(received).toBe(`event: job.finished\ndata: ${JSON.stringify(event)}\n\n`);
+    expect(await stream.waitFor('}\n\n')).toBe(
+      `: connected\n\nevent: job.finished\ndata: ${JSON.stringify(event)}\n\n`
+    );
   });
 
   it('sends a comment every 30 seconds', async () => {
@@ -110,9 +117,11 @@ describe('EventsController', () => {
     const stream = await open(1);
 
     vi.advanceTimersByTime(KEEP_ALIVE_MS);
-    expect(await stream.waitFor('\n\n')).toBe(': keep-alive\n\n');
+    expect(await stream.waitFor(': keep-alive\n\n')).toBe(': connected\n\n: keep-alive\n\n');
     vi.advanceTimersByTime(KEEP_ALIVE_MS);
-    expect(await stream.waitFor('keep-alive\n\n: keep-alive\n\n')).toBe(': keep-alive\n\n: keep-alive\n\n');
+    expect(await stream.waitFor('keep-alive\n\n: keep-alive\n\n')).toBe(
+      ': connected\n\n: keep-alive\n\n: keep-alive\n\n'
+    );
   });
 
   it('closes a stream when its auth token expires', async () => {

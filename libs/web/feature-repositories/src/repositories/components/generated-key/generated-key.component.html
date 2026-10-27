@@ -1,0 +1,33 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.GeneratedKeyComponent'">
+  <ng-container *transloco="let e; prefix: 'web-feature-repositories.errors'">
+    @if (keys.generated(); as generated) {
+      <ui-field [label]="t('publicKey')">
+        <textarea uiTextarea code readonly rows="3" [value]="generated.publicKey"></textarea>
+      </ui-field>
+      <div class="copy">
+        <button uiButton type="button" (click)="copy(generated.publicKey)">{{ t('copy') }}</button>
+      </div>
+      <p class="instructions">{{ t('instructions') }}</p>
+      <label uiChoice>
+        <input type="checkbox" uiCheckbox [formField]="credentials().keyAdded" />
+        {{ t('keyAdded') }}
+      </label>
+    } @else {
+      @if (failure(); as failure) {
+        <ui-inline-banner status="danger" announce>
+          {{ failure.text }}
+          @if (failure.reference) {
+            <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+          }
+        </ui-inline-banner>
+      }
+      @let nameError = error();
+      <ui-field [label]="t('name')" [error]="nameError ? e(nameError.key, nameError.params) : undefined">
+        <input uiInput autocomplete="off" [formField]="credentials().generateName" />
+      </ui-field>
+      <div class="generate">
+        <button uiButton type="button" [busy]="keys.busy()" (click)="generate()">{{ t('generate') }}</button>
+      </div>
+    }
+  </ng-container>
+</ng-container>

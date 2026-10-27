@@ -41,6 +41,9 @@ export class EventsController {
       Connection: 'keep-alive'
     });
     res.flushHeaders();
+    // Some browsers (Firefox) resolve `fetch` only once body bytes arrive, so
+    // the client would see the stream open only at the first keep-alive.
+    res.write(': connected\n\n');
 
     const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), KEEP_ALIVE_MS);
     // The client reconnects with a fresh token (A-3.10).

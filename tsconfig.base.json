@@ -89,6 +89,9 @@
       ],
       "@front-burner/server-core-storage": [
         "./libs/server/core/storage/src/index.ts"
+      ],
+      "@front-burner/web-feature-repositories": [
+        "./libs/web/feature-repositories/src/index.ts"
       ]
     }
   },

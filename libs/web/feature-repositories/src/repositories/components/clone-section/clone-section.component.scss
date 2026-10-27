@@ -1,0 +1,33 @@
+@use '../../styles/section';
+
+@include section.section;
+
+:host {
+  display: block;
+}
+
+.descriptions {
+  display: grid;
+  gap: var(--ui-space-1);
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-ui-small);
+
+  dt {
+    display: inline;
+    font-weight: var(--ui-font-weight-medium);
+
+    &::after {
+      content: ': ';
+    }
+  }
+
+  dd {
+    display: inline;
+    margin: 0;
+  }
+}
+
+.retry {
+  display: flex;
+}
