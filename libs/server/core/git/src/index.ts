@@ -8,5 +8,6 @@ export * from './git.options';
 export * from './runner/git-runner';
 export * from './runner/git-version';
 export * from './runner/redact';
+export * from './ssh/ssh-agent';
 export * from './ssh/ssh-keys';
 export * from './ssh/unlocked-key';
