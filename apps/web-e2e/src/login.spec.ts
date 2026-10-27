@@ -167,6 +167,8 @@ test.describe('expiring auth tokens', () => {
     drainFailedRequests(monitor, '/api/v1/me');
     drainFailedRequests(monitor, '/api/v1/repositories/recent');
     drainFailedRequests(monitor, '/api/v1/auth/session/refresh');
+    // The dashboard's push channel connects with the expired token too.
+    drainFailedRequests(monitor, '/api/v1/events');
   });
 
   test('two tabs share one refresh', async ({ page, context, monitor }) => {
@@ -191,9 +193,10 @@ test.describe('expiring auth tokens', () => {
     await expect(page.getByRole('button', { name: /^Account menu for / })).toBeVisible();
     await expect(other.getByRole('button', { name: /^Account menu for / })).toBeVisible();
     expect(refreshes).toBe(1);
-    // The dashboard asks for its list with the expired token too.
+    // The dashboard asks for its list, and connects its push channel, with the expired token too.
     drainFailedRequests(monitor, '/api/v1/me');
     drainFailedRequests(monitor, '/api/v1/repositories/recent');
+    drainFailedRequests(monitor, '/api/v1/events');
   });
 });
 

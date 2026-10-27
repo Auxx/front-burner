@@ -32,6 +32,8 @@ export interface InstanceOptions {
   oidc?: { issuer: string; adminEmail: string; };
   /** A PEM file the server trusts besides the system's authorities (`NODE_EXTRA_CA_CERTS`). */
   extraCaFile?: string;
+  /** A PEM file git trusts for HTTPS remotes (`GIT_SSL_CAINFO`), such as a test git server's. */
+  gitCaFile?: string;
 }
 
 export interface Instance {
@@ -110,6 +112,7 @@ export async function startInstance(options: InstanceOptions = {}): Promise<Inst
         }
         : {}),
       ...(options.extraCaFile ? { NODE_EXTRA_CA_CERTS: options.extraCaFile } : {}),
+      ...(options.gitCaFile ? { GIT_SSL_CAINFO: options.gitCaFile } : {}),
       ...options.env
     },
     stdio: [ 'ignore', 'pipe', 'pipe' ]
