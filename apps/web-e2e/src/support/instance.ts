@@ -1,5 +1,6 @@
 import { workspaceRoot } from '@nx/devkit';
 import type { Page } from '@playwright/test';
+import BetterSqlite3 from 'better-sqlite3';
 import { type ChildProcess, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -35,6 +36,8 @@ export interface InstanceOptions {
 
 export interface Instance {
   url: string;
+  /** The instance's data directory, for {@link seed}. */
+  dataDir: string;
   stop(): Promise<void>;
 }
 
@@ -133,7 +136,7 @@ export async function startInstance(options: InstanceOptions = {}): Promise<Inst
     await stop();
     throw error;
   }
-  return { url, stop };
+  return { url, dataDir, stop };
 }
 
 /** Logs in as `TEST_ADMIN` on the login page, which `page` must show, and waits for the page after it. */
@@ -142,4 +145,64 @@ export async function logIn(page: Page, email = TEST_ADMIN.email): Promise<void>
   await page.getByLabel('Password', { exact: true }).fill(TEST_ADMIN.password);
   await page.getByRole('button', { name: 'Log in' }).click();
   await page.waitForURL(url => url.pathname !== '/login');
+}
+
+export interface SeedUser {
+  email: string;
+  displayName?: string;
+}
+
+export interface SeedRepository {
+  userId: number;
+  name: string;
+  remoteUrl?: string;
+  status?: 'cloning' | 'ready' | 'error';
+  errorCode?: 'clone-failed' | 'clone-timed-out' | 'working-copy-missing';
+  lastAccessedAt?: Date;
+}
+
+/**
+ * Inserts users and repositories into a running instance's database, which the
+ * server has migrated (WAL lets both write). Every seeded user is a password
+ * user with `TEST_ADMIN`'s password, so the instance must be onboarded. Returns
+ * the new IDs.
+ */
+export function seed(
+  dataDir: string,
+  rows: { users?: SeedUser[]; repositories?: SeedRepository[]; }
+): { userIds: number[]; repositoryIds: number[]; } {
+  const sqlite = new BetterSqlite3(join(dataDir, 'db', 'front-burner.sqlite'));
+  try {
+    const { password_hash: passwordHash } = sqlite.prepare('SELECT password_hash FROM users ORDER BY id LIMIT 1')
+      .get() as { password_hash: string; };
+    const insertUser = sqlite.prepare(
+      `INSERT INTO users (email, display_name, role, login_method, password_hash, created_at)
+       VALUES (?, ?, 'user', 'password', ?, ?)`
+    );
+    const insertRepository = sqlite.prepare(
+      `INSERT INTO repositories
+         (user_id, name, remote_url, clone_mode, git_level, status, error_code, created_at, last_accessed_at)
+       VALUES (?, ?, ?, 'full', 'advanced', ?, ?, ?, ?)`
+    );
+    const userIds = (rows.users ?? []).map(user =>
+      Number(insertUser.run(user.email, user.displayName ?? user.email, passwordHash, Date.now()).lastInsertRowid)
+    );
+    const repositoryIds = (rows.repositories ?? []).map(repository => {
+      const at = (repository.lastAccessedAt ?? new Date()).getTime();
+      return Number(
+        insertRepository.run(
+          repository.userId,
+          repository.name,
+          repository.remoteUrl ?? `https://github.com/acme/${repository.name}.git`,
+          repository.status ?? 'ready',
+          repository.errorCode ?? null,
+          at,
+          at
+        ).lastInsertRowid
+      );
+    });
+    return { userIds, repositoryIds };
+  } finally {
+    sqlite.close();
+  }
 }
