@@ -1,0 +1,10 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.AddRepositoryPage'">
+  <ui-breadcrumbs [label]="t('breadcrumbs')">
+    <a *uiBreadcrumb routerLink="/repositories">{{ t('repositories') }}</a>
+    <span *uiBreadcrumb>{{ t('heading') }}</span>
+  </ui-breadcrumbs>
+  <h1 class="heading" tabindex="-1">{{ t('heading') }}</h1>
+  <form class="form" novalidate>
+    <repo-remote-section [remoteUrl]="model.remoteUrl" [name]="model.name" [index]="index()" />
+  </form>
+</ng-container>
