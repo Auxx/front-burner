@@ -1,0 +1,15 @@
+<a
+  *transloco="let t; prefix: 'web-shell.BrandLinkComponent'"
+  class="brand"
+  routerLink="/"
+  routerLinkActive="active"
+  ariaCurrentWhenActive="page"
+  [routerLinkActiveOptions]="{ exact: true }"
+  [class.compact]="compact()"
+  [attr.aria-label]="compact() ? t('dashboard') : null"
+>
+  <ui-icon name="flame" />
+  @if (!compact()) {
+    <span class="brand-name">Front Burner</span>
+  }
+</a>

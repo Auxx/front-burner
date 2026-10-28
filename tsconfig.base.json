@@ -98,6 +98,9 @@
       ],
       "@front-burner/web-code-editor": [
         "./libs/web/code-editor/src/index.ts"
+      ],
+      "@front-burner/web-feature-repository-screen": [
+        "./libs/web/feature-repository-screen/src/index.ts"
       ]
     }
   },

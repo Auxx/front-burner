@@ -43,6 +43,8 @@ let nextId = 0;
 export class AppShellComponent {
   /** The text of the skip link to the main content (NV-17). */
   readonly skipLinkLabel = input.required<string>();
+  /** The accessible name of `main`, where a page has several regions, such as "Editor" (NV-17). */
+  readonly mainLabel = input<string>();
   /** Whether the side panel is beside the content on wide screens. */
   readonly sideOpen = model(true);
   /**

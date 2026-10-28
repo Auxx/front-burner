@@ -1,0 +1,22 @@
+// As the shell layout: `ui-app-shell` lays out the whole page.
+:host {
+  display: contents;
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  min-block-size: 100dvh;
+}
+
+.failed {
+  padding: var(--ui-space-4);
+}
+
+.reference {
+  display: block;
+}
+
+.files {
+  block-size: 100%;
+}

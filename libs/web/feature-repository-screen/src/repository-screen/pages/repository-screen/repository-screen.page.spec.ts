@@ -1,0 +1,263 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { HttpErrorResponse } from '@angular/common/http';
+import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+import type { CurrentUser, RepositorySummary } from '@front-burner/shared-contracts';
+import { RepositoriesApi } from '@front-burner/web-api-client';
+import { AuthSessionService, CurrentUserService, PageTitleService } from '@front-burner/web-core';
+import { Observable, of, Subject, throwError } from 'rxjs';
+
+import { settle } from '../../../testing/settle';
+import { translocoTesting } from '../../../testing/transloco-testing';
+import { routes } from '../../repository-screen.routes';
+
+const KEY = 'web-feature-repository-screen.RepositoryScreenPage';
+
+const ada: CurrentUser = {
+  id: 4,
+  email: 'ada@example.com',
+  displayName: 'Ada Lovelace',
+  role: 'user',
+  allowedGitLevels: [ 'advanced' ]
+};
+
+const handbook: RepositorySummary = {
+  id: 12,
+  name: 'handbook',
+  remote: 'github.com/acme/handbook',
+  status: 'ready',
+  error: null,
+  warnings: [],
+  lastAccessedAt: '2026-10-28T10:00:00.000Z'
+};
+
+function failure(status: number, code: string): Observable<never> {
+  return throwError(() =>
+    new HttpErrorResponse({ status, error: { code, params: {}, requestId: 'abcdef1234567890', message: code } })
+  );
+}
+
+describe('RepositoryScreenPage', () => {
+  let answers: Observable<RepositorySummary>[];
+  let open: ReturnType<typeof vi.fn>;
+  let harness: RouterTestingHarness;
+  let narrow: boolean;
+
+  const page = () => harness.fixture.nativeElement as HTMLElement;
+  const button = (text: string) =>
+    [ ...page().querySelectorAll('button') ].find(element => element.textContent?.trim() === text);
+
+  async function visit(url: string): Promise<void> {
+    TestBed.configureTestingModule({
+      imports: [ translocoTesting({ 'errors.internal': 'Something went wrong.' }) ],
+      providers: [
+        provideRouter([ { path: 'repositories/:id', children: routes } ]),
+        { provide: RepositoriesApi, useValue: { open } },
+        { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
+        { provide: AuthSessionService, useValue: { loggedIn: signal(true), logout: vi.fn() } },
+        {
+          provide: BreakpointObserver,
+          useValue: { observe: () => of({ matches: narrow, breakpoints: {} }), isMatched: () => narrow }
+        }
+      ]
+    });
+    harness = await RouterTestingHarness.create();
+    await go(url);
+  }
+
+  async function go(url: string): Promise<void> {
+    await harness.navigateByUrl(url);
+    await settle(harness.fixture);
+  }
+
+  beforeEach(() => {
+    answers = [];
+    narrow = false;
+    localStorage.clear();
+    open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
+    document.title = '';
+  });
+
+  it('opens once per repository visit', async () => {
+    await visit('/repositories/12');
+    await go('/repositories/12/files/docs/guide.md');
+    await go('/repositories/12/files/README.md');
+    await go('/repositories/12');
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(12);
+
+    await go('/repositories/13/files/README.md');
+
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenLastCalledWith(13);
+  });
+
+  it('shows Page not found for a missing repository', async () => {
+    const answer = new Subject<RepositorySummary>();
+    answers.push(answer);
+    await visit('/repositories/12');
+
+    // Nothing of the screen shows while the repository opens.
+    expect(page().querySelector('ui-app-shell')).toBeNull();
+    expect(page().querySelector('ui-spinner')).not.toBeNull();
+
+    answer.error(
+      new HttpErrorResponse({ status: 404, error: { code: 'not-found', params: {}, requestId: '', message: '' } })
+    );
+    await settle(harness.fixture);
+
+    expect(page().querySelector('shell-page-not-found h1')?.textContent?.trim()).toBe(
+      'web-shell.PageNotFoundPage.heading'
+    );
+    expect(page().querySelector('shell-app-header')).not.toBeNull();
+    expect(page().querySelector('rs-not-openable')).toBeNull();
+    expect(document.title).toBe('web-shell.PageNotFoundPage.title · Front Burner');
+  });
+
+  it('AC-FILE-001.3: shows the status and the settings link for a cloning repository', async () => {
+    answers.push(of({ ...handbook, status: 'cloning' }));
+    await visit('/repositories/12');
+
+    const notOpenable = page().querySelector('rs-not-openable') as HTMLElement;
+    expect(notOpenable.textContent).toContain('web-feature-repository-screen.NotOpenableComponent.cloning');
+    expect(notOpenable.querySelector('a')?.getAttribute('href')).toBe('/repositories/12/settings');
+  });
+
+  it('offers Try again when opening fails', async () => {
+    answers.push(failure(500, 'internal'));
+    await visit('/repositories/12');
+
+    expect(page().textContent).toContain(`${KEY}.openFailed`);
+    expect(page().textContent).toContain('Something went wrong.');
+    expect(page().textContent).toContain('abcdef12');
+
+    button(`${KEY}.retry`)?.click();
+    await settle(harness.fixture);
+
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(page().textContent).not.toContain(`${KEY}.openFailed`);
+  });
+
+  it('shows no other page\'s title while opening or after a failure', async () => {
+    document.title = 'Dashboard · Front Burner';
+    const answer = new Subject<RepositorySummary>();
+    answers.push(answer);
+    await visit('/repositories/12');
+    expect(document.title).toBe('Front Burner');
+
+    answer.error(new HttpErrorResponse({ status: 500 }));
+    await settle(harness.fixture);
+    expect(document.title).toBe('Front Burner');
+  });
+
+  it('drops the previous repository\'s title when moving to another', async () => {
+    await visit('/repositories/12');
+    expect(document.title).toBe('handbook · Front Burner');
+
+    answers.push(new Subject());
+    await go('/repositories/13');
+
+    expect(document.title).toBe('Front Burner');
+  });
+
+  it('publishes its title for the route announcer, again for each file', async () => {
+    const published: string[] = [];
+    await visit('/repositories/12');
+    TestBed.inject(PageTitleService).changes.subscribe(title => published.push(title));
+
+    await go('/repositories/12/files/README.md');
+
+    expect(published).toEqual([ 'handbook · Front Burner' ]);
+  });
+
+  it('titles the page with the repository name', async () => {
+    await visit('/repositories/12');
+    expect(document.title).toBe('handbook · Front Burner');
+
+    // The title stays when only the open file changes.
+    await go('/repositories/12/files/README.md');
+    expect(document.title).toBe('handbook · Front Burner');
+  });
+
+  describe('when the repository has opened', () => {
+    const files = () => button('web-feature-repository-screen.RepositoryBarComponent.files') as HTMLButtonElement;
+    const tree = () => page().querySelector('section[aria-label]') as HTMLElement;
+    const shown = (element: Element) => !element.closest('[hidden]');
+
+    afterEach(() => localStorage.clear());
+
+    it('labels the regions', async () => {
+      await visit('/repositories/12');
+
+      expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
+      expect(tree().getAttribute('aria-label')).toBe(`${KEY}.files`);
+      expect(page().querySelector('[role="separator"]')?.getAttribute('aria-label')).toBe(`${KEY}.resizeFiles`);
+      expect(page().querySelector('main')?.getAttribute('aria-label')).toBe(`${KEY}.editor`);
+      expect(page().querySelector('main rs-editor-area')).not.toBeNull();
+    });
+
+    it('shows the empty state', async () => {
+      await visit('/repositories/12');
+
+      expect(page().querySelector('main ui-empty-state')?.textContent).toContain(
+        'web-feature-repository-screen.EditorAreaComponent.empty'
+      );
+    });
+
+    it('collapses and expands the tree with Files, and remembers it', async () => {
+      await visit('/repositories/12');
+      expect(shown(tree())).toBe(true);
+      expect(files().getAttribute('aria-expanded')).toBe('true');
+
+      files().click();
+      await settle(harness.fixture);
+
+      expect(shown(tree())).toBe(false);
+      expect(files().getAttribute('aria-expanded')).toBe('false');
+      expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('false');
+
+      files().click();
+      await settle(harness.fixture);
+      expect(shown(tree())).toBe(true);
+    });
+
+    it('remembers the size of the tree', async () => {
+      await visit('/repositories/12');
+      const separator = page().querySelector('[role="separator"]') as HTMLElement;
+
+      separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      await settle(harness.fixture);
+
+      expect(separator.getAttribute('aria-valuenow')).toBe('25');
+      expect(localStorage.getItem('fb.4.repositoryScreen.sideSize')).toBe('25');
+    });
+
+    it('opens the tree as a drawer with Files on narrow screens', async () => {
+      narrow = true;
+      await visit('/repositories/12');
+      expect(shown(tree())).toBe(false);
+      expect(shown(page().querySelector('main') as HTMLElement)).toBe(true);
+      expect(files().getAttribute('aria-expanded')).toBe('false');
+
+      files().click();
+      await settle(harness.fixture);
+
+      expect(shown(tree())).toBe(true);
+      expect(files().getAttribute('aria-expanded')).toBe('true');
+      // The drawer does not collapse the tree of wide screens.
+      expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('true');
+    });
+
+    it('shows the bar without Files for a repository that cannot be opened', async () => {
+      answers.push(of({ ...handbook, status: 'cloning' }));
+      await visit('/repositories/12');
+
+      expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
+      expect(files()).toBeUndefined();
+      expect(page().querySelector('section[aria-label]')).toBeNull();
+    });
+  });
+});

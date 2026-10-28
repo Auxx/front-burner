@@ -27,7 +27,8 @@ describe('PageTitleStrategy', () => {
       providers: [
         provideRouter([
           { path: 'login', title: 'feature.title', component: BlankComponent },
-          { path: 'plain', component: BlankComponent }
+          { path: 'plain', component: BlankComponent },
+          { path: 'own', data: { ownTitle: true }, component: BlankComponent }
         ]),
         { provide: TitleStrategy, useClass: PageTitleStrategy }
       ]
@@ -43,6 +44,13 @@ describe('PageTitleStrategy', () => {
   it('uses the product name alone for a route without a title', async () => {
     await router.navigateByUrl('/plain');
     expect(document.title).toBe('Front Burner');
+  });
+
+  it('leaves the title to a page whose route has `ownTitle`', async () => {
+    await router.navigateByUrl('/login');
+    document.title = 'handbook · Front Burner';
+    await router.navigateByUrl('/own');
+    expect(document.title).toBe('handbook · Front Burner');
   });
 });
 
