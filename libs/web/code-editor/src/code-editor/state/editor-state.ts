@@ -5,7 +5,8 @@ import { syntaxHighlighting } from '@codemirror/language';
 import { search, searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState, type Extension, type TransactionSpec } from '@codemirror/state';
 import { drawSelection, EditorView, keymap } from '@codemirror/view';
-import { classHighlighter } from '@lezer/highlight';
+import { classHighlighter, tagHighlighter, tags } from '@lezer/highlight';
+import { editorTheme } from '../theme/editor-theme';
 
 export interface EditorStateOptions {
   content: string;
@@ -21,6 +22,16 @@ export interface EditorStateOptions {
 // The Markdown language, without languages for fenced code and without its keymap, which
 // continues lists on Enter (ED-9).
 const language = yamlFrontmatter({ content: markdown({ codeLanguages: [], addKeymap: false }) });
+
+// The Markdown tags that `classHighlighter` has no class for. Both highlighters run in the
+// same pass over the syntax tree, so this costs no extra work while typing.
+const markdownHighlighter = tagHighlighter([
+  { tag: tags.quote, class: 'tok-quote' },
+  { tag: tags.monospace, class: 'tok-monospace' },
+  { tag: tags.processingInstruction, class: 'tok-mark' },
+  { tag: tags.tagName, class: 'tok-tagName' },
+  { tag: tags.attributeName, class: 'tok-attributeName' }
+]);
 
 const highlighting = new Compartment();
 const readOnly = new Compartment();
@@ -42,6 +53,7 @@ export function createEditorState(options: EditorStateOptions): EditorState {
       keymap.of([ ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab ]),
       highlighting.of(options.highlight ? language : []),
       syntaxHighlighting(classHighlighter),
+      syntaxHighlighting(markdownHighlighter),
       EditorView.lineWrapping,
       EditorView.perLineTextDirection.of(true),
       EditorView.contentAttributes.of({
@@ -51,7 +63,8 @@ export function createEditorState(options: EditorStateOptions): EditorState {
         'aria-label': options.label
       }),
       readOnly.of(options.readOnly ? readOnlyExtension : []),
-      EditorView.cspNonce.of(options.nonce ?? '')
+      EditorView.cspNonce.of(options.nonce ?? ''),
+      editorTheme
     ]
   });
 }
