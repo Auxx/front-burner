@@ -71,9 +71,9 @@ export class CodeEditorComponent {
     this.view?.focus();
   }
 
-  /** Scrolls so that the line (1-based) is at the top. */
+  /** Scrolls so that the line (1-based) is at the top; does nothing for a line that is not a number. */
   scrollToLine(line: number): void {
-    if (this.view) {
+    if (this.view && Number.isFinite(line)) {
       const { doc } = this.view.state;
       const { from } = doc.line(Math.min(Math.max(1, Math.round(line)), doc.lines));
       this.view.dispatch({ effects: EditorView.scrollIntoView(from, { y: 'start' }) });

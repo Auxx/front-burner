@@ -8,6 +8,7 @@ import {
   type EditorStateOptions,
   isHighlighting,
   setHighlighting,
+  setLabel,
   setReadOnly
 } from './editor-state';
 
@@ -27,6 +28,16 @@ function runUndo(state: EditorState): EditorState {
   let result = state;
   undo({ state, dispatch: (transaction: Transaction) => (result = transaction.state) });
   return result;
+}
+
+/** Presses a key in a view of `content` with the selection from `anchor` to `head`. */
+function press(content: string, key: string, anchor: number, head = anchor, options: { shiftKey?: boolean; } = {}) {
+  const view = new EditorView({ state: create({ content }) });
+  view.dispatch({ selection: { anchor, head } });
+  runScopeHandlers(view, new KeyboardEvent('keydown', { key, ...options }), 'editor');
+  const text = view.state.doc.toString();
+  view.destroy();
+  return text;
 }
 
 describe('createEditorState', () => {
@@ -52,7 +63,7 @@ describe('createEditorState', () => {
 
   it('keeps the undo history when highlighting is switched', () => {
     const edited = create({ highlight: false }).update({ changes: { from: 0, insert: 'x' } }).state;
-    const switched = edited.update(setHighlighting(edited, true)).state;
+    const switched = edited.update(setHighlighting(true)).state;
 
     expect(isHighlighting(switched)).toBe(true);
     expect(nodeNames(switched)).toContain('ATXHeading1');
@@ -78,16 +89,71 @@ describe('createEditorState', () => {
     view.destroy();
   });
 
+  it('keeps a line of spaces on Enter', () => {
+    expect(press('a\n    ', 'Enter', 6)).toBe('a\n    \n');
+  });
+
+  it('does not indent the new line on Enter', () => {
+    const content = '---\nkey:\n  sub: 1\n---\n';
+
+    expect(press(content, 'Enter', 16)).toBe('---\nkey:\n  sub: \n1\n---\n');
+    expect(press('  - item', 'Enter', 8)).toBe('  - item\n');
+    expect(press('  - item', 'Enter', 8, 8, { shiftKey: true })).toBe('  - item\n');
+  });
+
+  it('inserts a tab at the cursor', () => {
+    expect(press('foo bar', 'Tab', 3)).toBe('foo\t bar');
+  });
+
+  it('replaces the selection with a tab', () => {
+    expect(press('one\ntwo', 'Tab', 1, 5)).toBe('o\two');
+  });
+
+  it('moves the focus out on Esc then Tab', () => {
+    const view = new EditorView({ state: create({ content: 'text' }) });
+    const key = (keyCode: number) => {
+      const event = new KeyboardEvent('keydown', { key: keyCode === 9 ? 'Tab' : 'Escape', keyCode, cancelable: true });
+      view.contentDOM.dispatchEvent(event);
+      return event;
+    };
+
+    key(27);
+    const tab = key(9);
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(view.state.doc.toString()).toBe('text');
+    view.destroy();
+  });
+
   it('makes the state read-only', () => {
     const state = create({ readOnly: true });
 
     expect(state.readOnly).toBe(true);
     expect(state.facet(EditorView.editable)).toBe(false);
 
-    const editable = state.update(setReadOnly(state, false)).state;
+    const editable = state.update(setReadOnly(false)).state;
 
     expect(editable.readOnly).toBe(false);
     expect(editable.facet(EditorView.editable)).toBe(true);
+  });
+
+  it('inserts no tab when read-only', () => {
+    const view = new EditorView({ state: create({ content: 'text', readOnly: true }) });
+
+    runScopeHandlers(view, new KeyboardEvent('keydown', { key: 'Tab' }), 'editor');
+
+    expect(view.state.doc.toString()).toBe('text');
+    view.destroy();
+  });
+
+  it('renames the editor and keeps the undo history', () => {
+    const edited = create().update({ changes: { from: 0, insert: 'x' } }).state;
+    const renamed = edited.update(setLabel('ideas.md')).state;
+    const view = new EditorView({ state: renamed });
+
+    expect(view.contentDOM.getAttribute('aria-label')).toBe('ideas.md');
+    expect(runUndo(renamed).doc.toString()).toBe(FILE);
+    view.destroy();
   });
 
   it('returns the text with LF', () => {

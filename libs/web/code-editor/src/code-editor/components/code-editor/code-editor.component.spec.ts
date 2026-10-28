@@ -110,6 +110,13 @@ describe('CodeEditorComponent', () => {
     expect(fixture.nativeElement.querySelector('.cm-panels-top .cm-search')).not.toBeNull();
   });
 
+  it('ignores a line that is not a number', async () => {
+    await setUp();
+
+    expect(() => fixture.componentInstance.scrollToLine(Number.NaN)).not.toThrow();
+    expect(changes).toEqual([]);
+  });
+
   it('passes the CSP nonce to CodeMirror', async () => {
     await setUp('test-nonce');
 

@@ -5,9 +5,11 @@ code (ED-4, NF-2.9).
 
 - `createEditorState`: a file's editor state with exactly the extensions of
   A-8.11, no `basicSetup` and nothing that changes the text on its own (ED-9).
-  `setHighlighting` and `setReadOnly` switch Markdown highlighting (ED-9a) and
-  read-only through compartments, keeping the undo history (ED-8). `contentOf`
-  returns the text with `\n` line breaks.
+  Enter inserts a line break and Tab a tab, nothing more (ED-9, ED-11, ED-12).
+  `setHighlighting`, `setReadOnly` and `setLabel` switch Markdown highlighting
+  (ED-9a), read-only and the accessible name (ED-37) through compartments,
+  keeping the undo history (ED-8). `contentOf` returns the text with `\n` line
+  breaks.
 - `CodeEditorComponent` (`ce-code-editor`): the one `EditorView`. It shows the
   `state` it is given and emits `stateChange` after every transaction, so that
   the caller keeps one state per file (A-8.15). `openSearch`, `focus`,

@@ -73,11 +73,6 @@ ce-code-editor {
     color: var(--ui-syntax-function);
   }
 
-  .tok-heading {
-    color: var(--ui-syntax-heading);
-    font-weight: var(--ui-font-weight-semibold);
-  }
-
   .tok-strong {
     color: var(--ui-syntax-strong);
     font-weight: var(--ui-font-weight-semibold);
@@ -86,5 +81,11 @@ ce-code-editor {
   .tok-emphasis {
     color: var(--ui-syntax-emphasis);
     font-style: italic;
+  }
+
+  // Last, so that everything in a heading has its colour, also bold and italic text.
+  .tok-heading {
+    color: var(--ui-syntax-heading);
+    font-weight: var(--ui-font-weight-semibold);
   }
 }

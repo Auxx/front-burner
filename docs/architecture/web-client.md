@@ -80,6 +80,10 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     a small highlighter for the Markdown tags it has no class for (quote, inline
     code, marks, HTML tags and attributes), styled on the `--ui-syntax-*` tokens
     (A-10.14). Both run in the same pass over the syntax tree.
+  - Enter inserts a line break and Tab a tab, nothing more: CodeMirror's own
+    Enter indents the new line and clears a line of spaces, and `indentWithTab`
+    indents the whole line (ED-9, ED-11, ED-12). `Esc` then `Tab` moves the
+    focus out, which CodeMirror handles before any key binding (NF-13.3).
 - **A-8.12** `web/markdown` holds the preview pipeline (D-7.3 to D-7.5) and the
   one component that writes sanitised HTML to the page (D-7.6). It is loaded
   lazily with the editor. Confirmed by spike 3 (spikes.md).
