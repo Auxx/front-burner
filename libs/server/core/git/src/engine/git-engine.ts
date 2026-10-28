@@ -133,13 +133,52 @@ export class GitEngine implements BeforeApplicationShutdown {
   /**
    * The paths among `paths` that `.gitignore` rules ignore (`git check-ignore`),
    * including everything inside an ignored folder. Tracked paths are never
-   * reported, even when a rule matches them (FB-20b).
+   * reported, even when a rule matches them (FB-20b). git scans the whole index
+   * once per path, so this is for a few paths; a folder's entries take `ignoredIn`.
    */
   async ignoredAmong(workingCopy: string, paths: string[]): Promise<Set<string>> {
-    // With the index, check-ignore scans the whole index once per path; without
-    // it, it only reads the rules. So the rules pick the few candidates first.
-    const candidates = await this.checkIgnore(workingCopy, paths, [ '--no-index' ]);
-    return this.checkIgnore(workingCopy, [ ...candidates ], []);
+    if (paths.length === 0) {
+      return new Set();
+    }
+    // check-ignore reads each path as a pathspec, and has no literal mode: `./`
+    // keeps a name such as `:!x` from being read as pathspec magic.
+    const result = await this.runLocal(
+      workingCopy,
+      [ 'check-ignore', '--stdin', '-z' ],
+      paths.map(path => `./${path}\0`).join('')
+    );
+    // 1: none of the paths is ignored.
+    if (result.exitCode !== 0 && result.exitCode !== 1) {
+      throw new Error(`git check-ignore failed: ${result.stderr.trim()}`);
+    }
+    return new Set(result.stdout.split('\0').filter(path => path !== '').map(path => path.replace(/^\.\//, '')));
+  }
+
+  /**
+   * The names (not paths) of the untracked entries directly inside `folder`
+   * (`''` is the root) that `.gitignore` rules ignore; a folder that holds a
+   * tracked file is never one of them. `folder` must not be inside an ignored
+   * folder: everything there is ignored, and git refuses to list it.
+   */
+  async ignoredIn(workingCopy: string, folder: string): Promise<Set<string>> {
+    const prefix = folder === '' ? '' : `${folder}/`;
+    const result = await this.runLocal(workingCopy, [
+      'ls-files',
+      '--others',
+      '--ignored',
+      '--exclude-standard',
+      '--directory',
+      '-z',
+      '--',
+      `:(glob)${escapeGlob(prefix)}*`
+    ]);
+    if (result.exitCode !== 0) {
+      throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
+    }
+    // --directory: an ignored folder is one entry with a trailing `/`.
+    return new Set(
+      result.stdout.split('\0').filter(path => path !== '').map(path => path.slice(prefix.length).replace(/\/$/, ''))
+    );
   }
 
   /**
@@ -172,22 +211,6 @@ export class GitEngine implements BeforeApplicationShutdown {
       }
       throw error;
     }
-  }
-
-  /** `git check-ignore` with the paths on stdin; exit 1 means none is ignored. */
-  private async checkIgnore(workingCopy: string, paths: string[], options: string[]): Promise<Set<string>> {
-    if (paths.length === 0) {
-      return new Set();
-    }
-    const result = await this.runLocal(
-      workingCopy,
-      [ 'check-ignore', ...options, '--stdin', '-z' ],
-      paths.join('\0') + '\0'
-    );
-    if (result.exitCode !== 0 && result.exitCode !== 1) {
-      throw new Error(`git check-ignore failed: ${result.stderr.trim()}`);
-    }
-    return new Set(result.stdout.split('\0').filter(path => path !== ''));
   }
 
   /**

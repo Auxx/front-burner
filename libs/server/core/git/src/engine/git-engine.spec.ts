@@ -303,6 +303,28 @@ describe('GitEngine', () => {
       expect([ ...ignored ].sort()).toEqual([ 'a\nb.log', 'café\t.log', 'say "hi".log' ]);
     });
 
+    it('takes names that look like pathspec magic literally', async () => {
+      const names = [ ':!draft.md', ':^notes.md', ':x.log', ':(glob)*.md' ];
+      for (const name of names) {
+        writeFileSync(join(work, name), '\n');
+      }
+      expect([ ...await engine().ignoredAmong(work, names) ]).toEqual([ ':x.log' ]);
+      expect(await engine().ignoredIn(work, '')).toEqual(new Set([ ':x.log', 'build', 'out.log' ]));
+    });
+
+    it('lists the ignored entries directly inside a folder', async () => {
+      git(work, 'add', '-f', 'build/app.js');
+      writeFileSync(join(work, 'build', 'other.js'), '\n');
+      mkdirSync(join(work, 'logs', 'deep'), { recursive: true });
+      writeFileSync(join(work, 'logs', 'a.log'), '\n');
+      writeFileSync(join(work, 'logs', 'deep', 'b.log'), '\n');
+      writeFileSync(join(work, 'logs', 'c.md'), '\n');
+
+      expect(await engine().ignoredIn(work, '')).toEqual(new Set([ 'out.log' ]));
+      expect(await engine().ignoredIn(work, 'build')).toEqual(new Set([ 'other.js' ]));
+      expect(await engine().ignoredIn(work, 'logs')).toEqual(new Set([ 'a.log' ]));
+    });
+
     it('throws when git fails', async () => {
       await expect(engine().ignoredAmong(work, [ '../outside' ])).rejects.toThrow();
     });

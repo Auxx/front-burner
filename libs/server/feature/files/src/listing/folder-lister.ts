@@ -103,47 +103,37 @@ export class FolderLister {
     }
     const folder = await openInWorkingCopy(root, resolved);
     try {
-      const [ dirents, gitlinks ] = await Promise.all([
+      const slash = path.lastIndexOf('/');
+      const [ parent, name ] = slash === -1 ? [ '', path ] : [ path.slice(0, slash), path.slice(slash + 1) ];
+      const [ dirents, gitlinks, folderIgnored, isSubmodule ] = await Promise.all([
         readdir(folder.path, { withFileTypes: true }),
-        this.git.gitlinksIn(root, path)
+        this.git.gitlinksIn(root, path),
+        path !== '' && this.git.ignoredAmong(root, [ path ]).then(ignored => ignored.has(path)),
+        path !== '' && this.git.gitlinksIn(root, parent).then(names => names.has(name))
       ]);
+      // A submodule is not a folder of this repository, and cannot be expanded (FB-23).
+      if (isSubmodule) {
+        throw new PathRefusedError('not-found');
+      }
       const all = dirents
         .filter(dirent => !isGit(dirent.name))
         .map(dirent => ({ name: dirent.name, kind: kindOf(dirent, gitlinks) }))
         .sort(byGroupAndName);
       const listed = all.slice(0, MAX_LISTED_ENTRIES);
       const [ ignored, entries ] = await Promise.all([
-        this.ignoredNames(root, path, listed),
+        // Inside an ignored folder everything is ignored (FB-20b), and git refuses to list it.
+        folderIgnored ? new Set(listed.map(entry => entry.name)) : this.git.ignoredIn(root, path),
         mapLimited(listed, DESCRIBE_CONCURRENCY, entry => this.describe(folder.path, entry))
       ]);
       return {
         path,
-        ignored: ignored.folder,
-        entries: entries.map(entry => ({ ...entry, ignored: ignored.names.has(entry.name) })),
+        ignored: folderIgnored,
+        entries: entries.map(entry => ({ ...entry, ignored: ignored.has(entry.name) })),
         more: all.length - listed.length
       };
     } finally {
       await folder.handle.close();
     }
-  }
-
-  /**
-   * Inside an ignored folder everything is ignored (FB-20b), which saves asking
-   * git about each entry; elsewhere git decides per entry. git never reports a
-   * folder that holds a tracked file, so a tracked file is never ignored.
-   */
-  private async ignoredNames(
-    root: string,
-    path: string,
-    listed: Listed[]
-  ): Promise<{ folder: boolean; names: Set<string>; }> {
-    const folder = path !== '' && (await this.git.ignoredAmong(root, [ path ])).has(path);
-    if (folder) {
-      return { folder, names: new Set(listed.map(entry => entry.name)) };
-    }
-    const prefix = path === '' ? '' : `${path}/`;
-    const ignored = await this.git.ignoredAmong(root, listed.map(entry => prefix + entry.name));
-    return { folder, names: new Set([ ...ignored ].map(entry => entry.slice(prefix.length))) };
   }
 
   private async describe(folder: string, { name, kind }: Listed): Promise<Entry> {

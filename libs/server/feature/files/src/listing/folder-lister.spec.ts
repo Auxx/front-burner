@@ -194,6 +194,28 @@ describe('FolderLister', () => {
     );
   });
 
+  it('handles names that look like pathspec magic', async () => {
+    write(join(root, '.gitignore'), '*.log\n');
+    for (const name of [ ':!draft.md', ':^notes.md', ':x.log' ]) {
+      write(join(root, name));
+    }
+
+    const listing = await lister.list(root, '');
+
+    expect(listing.entries.map(entry => [ entry.name, entry.ignored ])).toEqual(
+      [ [ ':!draft.md', false ], [ ':^notes.md', false ], [ ':x.log', true ], [ '.gitignore', false ] ]
+    );
+  });
+
+  it('refuses to list a submodule', async () => {
+    git(root, [ 'commit', '-q', '--allow-empty', '-m', 'base' ]);
+    const sha = git(root, [ 'rev-parse', 'HEAD' ]).trim();
+    git(root, [ 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib` ]);
+    mkdirSync(join(root, 'vendor', 'lib'), { recursive: true });
+
+    expect(await refusal('vendor/lib')).toBe('not-found');
+  });
+
   it('refuses a file, a missing folder and malformed paths', async () => {
     write(join(root, 'a.md'));
 
@@ -264,6 +286,10 @@ describe('FolderLister', () => {
         }
       }
       git(big, [ 'update-index', '--index-info' ], lines.join('\n') + '\n');
+      mkdirSync(join(big, 'logs'));
+      for (let i = 0; i < 5000; i++) {
+        writeFileSync(join(big, 'logs', `run-${i}.log`), '');
+      }
     }, 120_000);
 
     afterAll(() => {
@@ -277,6 +303,19 @@ describe('FolderLister', () => {
         const listing = await lister.list(big, 'docs');
         times.push(performance.now() - start);
         expect(listing.entries).toHaveLength(1000);
+      }
+      times.sort((a, b) => a - b);
+
+      expect(times[2]).toBeLessThan(300);
+    }, 120_000);
+
+    it('lists 5,000 files that a rule ignores within 300 ms in a repository of 100,000 files', async () => {
+      const times: number[] = [];
+      for (let run = 0; run < 5; run++) {
+        const start = performance.now();
+        const listing = await lister.list(big, 'logs');
+        times.push(performance.now() - start);
+        expect(listing.entries.every(entry => entry.ignored)).toBe(true);
       }
       times.sort((a, b) => a - b);
 

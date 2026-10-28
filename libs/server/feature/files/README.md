@@ -9,8 +9,8 @@ The files of a user's working copies (REQ-FILE-001). So far: the folder listing.
   repositories, or `404 not-found` / `409 repository-not-openable` (FB-2, FB-3).
   Every files endpoint starts with it.
 - `toFilesError`: the one mapping from a refused path to an API answer.
-- `FolderLister`: reads one folder through a descriptor (A-7.6), with two git
-  calls scoped to it. Never walks the working copy and takes no lock (A-5.3).
+- `FolderLister`: reads one folder through a descriptor (A-7.6), with git calls
+  scoped to it. Never walks the working copy and takes no lock (A-5.3).
 
 ## Running unit tests
 
