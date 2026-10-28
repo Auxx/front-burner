@@ -87,6 +87,8 @@ export class RepositoryScreenPage {
 
   /** Counts the paths shown, so that only the latest one's answer counts. */
   private showing = 0;
+  /** Whether the path shown could not be found because a folder could not be listed. */
+  private failed = false;
 
   constructor() {
     effect(() => {
@@ -124,12 +126,27 @@ export class RepositoryScreenPage {
   }
 
   /**
-   * Shows the route's path in the file tree and the editor area. Without one,
+   * **Try again** on a folder (FB-44); the route's path is shown again if
+   * finding it failed, now that the folder is listed again.
+   */
+  protected retry(folder: string): void {
+    this.tree.load(folder);
+    const repository = this.session.repository();
+    if (this.failed && repository) {
+      void this.show(repository.id, this.path());
+    }
+  }
+
+  /**
+   * Shows the route's path in the file tree and the editor area. While a
+   * folder it needs cannot be listed, the editor area stays empty: the
+   * folder shows **Try again**. Without one,
    * goes to the first file, in place of this URL, so that Back leaves the
    * screen (FB-12).
    */
   private async show(repositoryId: number, path: string): Promise<void> {
     const showing = ++this.showing;
+    this.failed = false;
     this.tree.init(repositoryId);
     this.openEntry.set(undefined);
     if (path === '') {
@@ -138,7 +155,9 @@ export class RepositoryScreenPage {
       if (showing !== this.showing) {
         return;
       }
-      if (first === null) {
+      if (first === 'failed') {
+        this.failed = true;
+      } else if (first === null) {
         this.openPath.set(null);
       } else {
         void this.router.navigate([ '/repositories', repositoryId, 'files', ...first.split('/') ], {
@@ -150,6 +169,10 @@ export class RepositoryScreenPage {
     this.openPath.set(path);
     const found = await this.tree.resolve(path);
     if (showing !== this.showing) {
+      return;
+    }
+    if (found === 'failed') {
+      this.failed = true;
       return;
     }
     this.openEntry.set(found);

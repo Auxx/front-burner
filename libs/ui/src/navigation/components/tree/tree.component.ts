@@ -64,6 +64,8 @@ let nextId = 0;
  *   folders are not, unless a node says otherwise.
  * - `[(expanded)]` holds the values of the expanded folders, so that they can
  *   be restored (FB-14).
+ * - `(activated)` tells that a selectable row was opened, even the one already
+ *   selected, such as to close a drawer once a file is chosen (FB-9).
  * - `(loadChildren)` asks for the children of every visible folder that is
  *   expanded while its `children` is still undefined (FB-15), whether the user
  *   expanded it or `[expanded]` restored it: once per folder, until it gets
@@ -98,6 +100,8 @@ export class TreeComponent {
   readonly selected = model<string | null>(null);
   readonly expanded = model<readonly string[]>([]);
   readonly loadChildren = output<string>();
+  /** A selectable row was opened by click, tap, Enter or Space, also when it was already selected. */
+  readonly activated = output<string>();
 
   protected readonly id = `ui-tree-${nextId++}`;
   protected readonly nodeTemplate = contentChild(TreeNodeDirective);
@@ -370,6 +374,7 @@ export class TreeComponent {
     const row = this.rows()[index];
     if (row.selectable) {
       this.selected.set(row.node.value);
+      this.activated.emit(row.node.value);
     }
     if (row.expandable) {
       this.setExpanded(row.node, !row.expanded);

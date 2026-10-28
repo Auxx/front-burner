@@ -316,6 +316,17 @@ describe('FileTreeStoreService', () => {
     }
   );
 
+  it('resolves to failed when a folder on the way cannot be listed', async () => {
+    answers['docs'] = [ failure(500, 'internal') ];
+    store.init(12);
+
+    expect(await store.resolve('docs/api/index.md')).toBe('failed');
+    // It stays failed until Try again lists it.
+    expect(await store.resolve('docs/api/index.md')).toBe('failed');
+    store.load('docs');
+    expect(await store.resolve('docs/api/index.md')).toEqual(entry('index.md'));
+  });
+
   it('resolves a path again without listing its folders again', async () => {
     store.init(12);
     await store.resolve('docs/guide.md');

@@ -20,18 +20,26 @@ export class FirstFileService {
   /**
    * The last file opened in the repository on this device, if it still exists
    * and is a Markdown file; else the root folder's README; else `null`.
+   * `failed` when a folder it needs cannot be listed, so that the choice is
+   * not made on what could not be seen.
    */
-  async pick(repositoryId: number): Promise<string | null> {
+  async pick(repositoryId: number): Promise<string | null | 'failed'> {
     const user = await this.currentUser.load();
     const last = read(key(user.id, repositoryId));
     if (last) {
       const found = await this.store.resolve(last);
+      if (found === 'failed') {
+        return 'failed';
+      }
       if (found?.kind === 'file' && found.markdown) {
         return last;
       }
     }
     const entries = await this.store.entries('');
-    return entries?.find(item => item.kind === 'file' && item.markdown && README.test(item.name))?.name ?? null;
+    if (entries === null) {
+      return 'failed';
+    }
+    return entries.find(item => item.kind === 'file' && item.markdown && README.test(item.name))?.name ?? null;
   }
 
   /** Remembers `path` as the last file opened in the repository on this device. */

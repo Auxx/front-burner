@@ -123,17 +123,20 @@ export class FileTreeStoreService {
   /**
    * The entry at `path`, listing and expanding the folders that lead to it, so
    * that it is shown in the tree (FB-14). `null` when any part of it is
-   * missing, or a folder on the way cannot be listed (it then shows **Try
-   * again**).
+   * missing; `failed` when a folder on the way cannot be listed (it then
+   * shows **Try again**, and the path can be resolved again).
    */
-  async resolve(path: string): Promise<Entry | null> {
+  async resolve(path: string): Promise<Entry | null | 'failed'> {
     const generation = this.generation;
     const names = path.split('/');
     let folder = '';
     let pending = this.listingOf('');
     for (const [ index, name ] of names.entries()) {
       const listing = await pending;
-      if (generation !== this.generation || typeof listing === 'string') {
+      if (listing === 'failed') {
+        return 'failed';
+      }
+      if (generation !== this.generation || listing === 'missing') {
         return null;
       }
       const found = listing.entries.find(item => item.name === name);
@@ -200,11 +203,17 @@ export class FileTreeStoreService {
     }
   }
 
-  /** The folder's listing: the loaded one, the one on its way, or a new request. */
+  /**
+   * The folder's listing: the loaded one, the one on its way, or a new
+   * request. A folder that failed stays failed until **Try again** (`load`).
+   */
   private listingOf(folder: string): Promise<Outcome> {
     const state = this.folders().get(folder);
     if (state?.status === 'loaded') {
       return Promise.resolve(state.listing);
+    }
+    if (state?.status === 'error') {
+      return Promise.resolve('failed');
     }
     const request = this.requests.get(folder);
     return state?.status === 'loading' && request ? request.done : this.fetch(folder);

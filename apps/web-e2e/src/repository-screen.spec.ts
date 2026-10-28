@@ -242,12 +242,14 @@ test.describe('repository screen', () => {
     await entry(page, 'guide.md').click();
     await expect(page).toHaveURL(/\/files\/docs\/guide.md$/);
 
-    await page.goto('/');
-    await page.goto(`/repositories/${handbook}`);
+    // Back to the dashboard and into the repository again, within the web client.
+    await page.getByRole('banner').getByRole('link', { name: /Front Burner|Dashboard/ }).click();
+    await page.getByRole('link', { name: 'handbook', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/guide.md$`));
     await expect(editor(page).getByRole('heading', { name: 'guide.md' })).toBeVisible();
 
-    await page.goto(`/repositories/${empty}`);
+    await page.getByRole('banner').getByRole('link', { name: /Front Burner|Dashboard/ }).click();
+    await page.getByRole('link', { name: 'empty-one', exact: true }).click();
     await expect(editor(page).getByText('Choose a file from the tree, or create one')).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/repositories/${empty}$`));
   });
@@ -363,6 +365,31 @@ test.describe('repository screen', () => {
     await error.click();
     await expect(entry(page, 'guide.md')).toBeVisible();
     await expect(entry(page, '2-setup.md')).toHaveAttribute('aria-selected', 'true');
+
+    drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/folder`);
+  });
+
+  test('AC-FILE-001.22: opens the route\'s file once its folder loads on Try again', async ({ page, instance, monitor }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    let failures = 1;
+    await page.route(/\/api\/v1\/repositories\/\d+\/folder\?path=docs$/, route =>
+      failures-- > 0
+        ? route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'internal', params: {}, requestId: '', message: 'Internal error' })
+        })
+        : route.continue());
+    await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
+    await showTree(page);
+
+    const error = page.getByRole('treeitem', { name: /^This folder could not be loaded/ });
+    await expect(error).toBeVisible();
+    await expect(editor(page).getByText('This file doesn\'t exist.')).toHaveCount(0);
+
+    await error.click();
+    // On a phone the drawer stays open over the editor area after Try again.
+    await expect(page.locator('main h2')).toHaveText('guide.md');
 
     drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/folder`);
   });

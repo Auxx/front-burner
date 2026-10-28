@@ -45,6 +45,8 @@ describe('RepositoryScreenPage', () => {
   let answers: Observable<RepositorySummary>[];
   /** The working copy, by folder path. */
   let folders: Record<string, FolderListing>;
+  /** Folders whose next listing fails with a server error. */
+  let failOnce: Set<string>;
   let open: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
@@ -63,7 +65,11 @@ describe('RepositoryScreenPage', () => {
           provide: FilesApi,
           useValue: {
             listFolder: (_id: number, query: { path: string; }) =>
-              folders[query.path] ? of(folders[query.path]) : failure(404, 'not-found')
+              failOnce.delete(query.path)
+                ? failure(500, 'internal')
+                : folders[query.path]
+                ? of(folders[query.path])
+                : failure(404, 'not-found')
           }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
@@ -89,6 +95,7 @@ describe('RepositoryScreenPage', () => {
 
   beforeEach(() => {
     answers = [];
+    failOnce = new Set();
     folders = {
       '': listing('', [
         folder('docs'),
@@ -301,6 +308,55 @@ describe('RepositoryScreenPage', () => {
       expect(row(name).getAttribute('aria-selected')).toBe('true');
       // Only Markdown files are remembered as the last file.
       expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBeNull();
+    });
+
+    const tryAgain = () =>
+      page().querySelector<HTMLElement>(
+        '[role="treeitem"][aria-label^="web-feature-repository-screen.FileTreeStoreService.loadFailed"]'
+      ) as HTMLElement;
+
+    it('shows the file once its folder loads on Try again', async () => {
+      failOnce.add('docs');
+      await visit('/repositories/12/files/docs/guide.md');
+
+      // Not "doesn't exist": the folder could not be listed.
+      expect(editor().textContent).not.toContain(`${MESSAGE}.missing`);
+      expect(editor().querySelector('h2')).toBeNull();
+
+      tryAgain().click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
+      expect(row('guide.md').getAttribute('aria-selected')).toBe('true');
+    });
+
+    it('opens the first file once the root loads on Try again', async () => {
+      localStorage.setItem('fb.4.repo.12.lastFile', 'docs/guide.md');
+      failOnce.add('');
+      await visit('/repositories/12');
+
+      expect(url()).toBe('/repositories/12');
+      expect(page().querySelector('main ui-empty-state')).toBeNull();
+
+      tryAgain().click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(url()).toBe('/repositories/12/files/docs/guide.md');
+    });
+
+    it('closes the drawer when the open file is selected again', async () => {
+      narrow = true;
+      await visit('/repositories/12/files/README.md');
+      files().click();
+      await settle(harness.fixture);
+
+      row('README.md').click();
+      await settle(harness.fixture);
+
+      expect(shown(tree())).toBe(false);
+      expect(url()).toBe('/repositories/12/files/README.md');
     });
 
     it('opens the selected file', async () => {

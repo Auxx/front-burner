@@ -3,7 +3,7 @@
     [label]="t('label')"
     [nodes]="store.nodes()"
     [selected]="selected()"
-    (selectedChange)="onSelected($event)"
+    (activated)="onActivated($event)"
     [(expanded)]="store.expanded"
     (loadChildren)="store.load($event)"
   >
@@ -29,7 +29,10 @@
           <ui-icon class="kind" [name]="icon(item)" />
           <span class="name" [class.ignored]="item.entry?.ignored">{{ item.label }}</span>
           @if (item.entry?.ignored) {
-            <!-- The row's accessible name says "ignored"; the button only explains it. -->
+            <!--
+              The row's accessible name says "ignored"; the button only explains it,
+              and does not take the focus from the tree.
+            -->
             <button
               uiIconButton
               class="ignored-icon"
@@ -39,6 +42,7 @@
               [uiTooltip]="t(item.kind === 'folder' ? 'ignoredFolder' : 'ignoredFile')"
               uiTooltipShowOnClick
               [uiTooltipShown]="active"
+              (mousedown)="$event.preventDefault()"
               (click)="$event.stopPropagation()"
             >
               <ui-icon name="diff-ignored" />

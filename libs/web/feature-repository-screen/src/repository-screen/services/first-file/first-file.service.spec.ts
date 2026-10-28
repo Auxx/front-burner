@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { CurrentUser, Entry, FolderListing } from '@front-burner/shared-contracts';
@@ -23,6 +24,8 @@ const LAST_FILE = 'fb.4.repo.12.lastFile';
 describe('FirstFileService', () => {
   let folders: Record<string, FolderListing>;
   let first: FirstFileService;
+  /** Folders whose listing fails with a server error. */
+  let failing: Set<string>;
 
   function withRoot(...entries: Entry[]): void {
     folders[''] = listing('', entries);
@@ -35,6 +38,7 @@ describe('FirstFileService', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    failing = new Set();
     folders = {
       '': listing('', [ folder('docs'), entry('README.md') ]),
       docs: listing('docs', [ entry('guide.md'), entry('logo.png') ])
@@ -48,7 +52,15 @@ describe('FirstFileService', () => {
           provide: FilesApi,
           useValue: {
             listFolder: (_id: number, query: { path: string; }) =>
-              folders[query.path] ? of(folders[query.path]) : throwError(() => ({ status: 404 }))
+              failing.has(query.path)
+                ? throwError(() =>
+                  new HttpErrorResponse({ status: 500, error: { code: 'internal', params: {}, requestId: '' } })
+                )
+                : folders[query.path]
+                ? of(folders[query.path])
+                : throwError(() =>
+                  new HttpErrorResponse({ status: 404, error: { code: 'not-found', params: {}, requestId: '' } })
+                )
           }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } }
@@ -97,6 +109,19 @@ describe('FirstFileService', () => {
       expect(await pick()).toBe('README.md');
     }
   );
+
+  it('fails, keeping the last file, when its folder cannot be listed', async () => {
+    localStorage.setItem(LAST_FILE, 'docs/guide.md');
+    failing.add('docs');
+
+    expect(await pick()).toBe('failed');
+  });
+
+  it('fails when the root folder cannot be listed', async () => {
+    failing.add('');
+
+    expect(await pick()).toBe('failed');
+  });
 
   it('works without localStorage', async () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {

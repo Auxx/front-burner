@@ -53,6 +53,7 @@ const NODES: readonly TreeNode[] = [
       [(selected)]="selected"
       [(expanded)]="expanded"
       (loadChildren)="requested.push($event)"
+      (activated)="activated.push($event)"
     >
       <ng-template uiTreeNode let-node let-active="active">
         <span>{{ node.label }}</span>
@@ -73,6 +74,7 @@ class HostComponent {
   readonly selected = signal<string | null>(null);
   readonly expanded = signal<readonly string[]>([]);
   readonly requested: string[] = [];
+  readonly activated: string[] = [];
 }
 
 @Component({
@@ -321,6 +323,19 @@ describe('TreeComponent', () => {
     outside().focus();
     await stable();
     expect(marked()).toEqual([]);
+  });
+
+  it('reports every file opened, also the one already open', async () => {
+    await create();
+
+    row('README.md').click();
+    row('README.md').click();
+    row('src').click();
+    await stable();
+    await activate('CHANGELOG.md');
+    await press('Enter');
+
+    expect(host.activated).toEqual([ 'README.md', 'README.md', 'CHANGELOG.md' ]);
   });
 
   it('opens a file with a click', async () => {

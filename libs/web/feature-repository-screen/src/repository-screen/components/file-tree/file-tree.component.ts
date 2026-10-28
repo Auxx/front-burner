@@ -21,7 +21,8 @@ import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-s
  * name in the ignored colour and an icon that explains it on hover, on the
  * keyboard's active row and on tap, without selecting the row (FB-20a).
  *
- * Selecting a file, symbolic link or submodule emits its path as `selectPath`;
+ * Selecting a file, symbolic link or submodule emits its path as `selectPath`,
+ * also when it is the open one;
  * folders expand and collapse (FB-22). Selecting a folder's error row emits the
  * folder as `retry` (FB-44) and leaves the selection as it was.
  */
@@ -49,8 +50,6 @@ export class FileTreeComponent {
 
   protected readonly store = inject(FileTreeStoreService);
   private readonly tree = viewChild.required(TreeComponent);
-  /** Set while the selection is put back after the error row was selected. */
-  private restoring = false;
 
   /** The rows are the store's; `ui-tree` hands them back as plain nodes. */
   protected row(node: TreeNode): TreeEntry {
@@ -70,16 +69,15 @@ export class FileTreeComponent {
     }
   }
 
-  protected onSelected(value: string | null): void {
-    const row = value === null || this.restoring ? undefined : this.find(this.store.nodes(), value);
+  /** A row was opened by click, tap or key, also the open file again (FB-9). */
+  protected onActivated(value: string): void {
+    const row = this.find(this.store.nodes(), value);
     if (!row) {
       return;
     }
     if (row.kind === 'error') {
       // `ui-tree` selected the error row itself; the open file stays selected.
-      this.restoring = true;
       this.tree().selected.set(this.selected());
-      this.restoring = false;
       this.retry.emit(row.path);
     } else {
       this.selectPath.emit(row.path);

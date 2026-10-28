@@ -147,6 +147,26 @@ describe('FileTreeComponent', () => {
     expect(row('intro.md')).toBeDefined();
   });
 
+  it('selects the open file again, such as to close the drawer', async () => {
+    await create();
+    host.selected.set('guide.md');
+    await settle(fixture);
+
+    row('guide.md').click();
+    await settle(fixture);
+
+    expect(host.selects).toEqual([ 'guide.md' ]);
+  });
+
+  it('keeps the focus on the tree when the ignored icon is pressed', async () => {
+    await create();
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+
+    (row('debug.log').querySelector('.ignored-icon') as HTMLElement).dispatchEvent(press);
+
+    expect(press.defaultPrevented).toBe(true);
+  });
+
   it('highlights the selected path', async () => {
     await create();
 
