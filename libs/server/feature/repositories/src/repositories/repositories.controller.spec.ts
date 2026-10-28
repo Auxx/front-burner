@@ -145,6 +145,67 @@ describe('RepositoriesController', () => {
     await http().get('/api/v1/repositories/index').expect(401);
     await http().post('/api/v1/repositories/access-check').send({}).expect(401);
     await http().post('/api/v1/repositories').send({}).expect(401);
+    await http().get('/api/v1/repositories/1').expect(401);
+    await http().post('/api/v1/repositories/1/open').expect(401);
+  });
+
+  it('gets one repository', async () => {
+    const alice = insertUser(database, 'alice@example.com');
+    const id = insertRepository(database, alice, { name: 'handbook' });
+
+    const response = await http().get(`/api/v1/repositories/${id}`).set('x-test-user', String(alice)).expect(200);
+
+    expect(response.body).toMatchObject({ id, name: 'handbook', status: 'ready' });
+  });
+
+  it('AC-FILE-001.1: opening a ready repository moves it to the top of the recent list', async () => {
+    const alice = insertUser(database, 'alice@example.com');
+    const older = insertRepository(database, alice, { name: 'older', lastAccessedAt: new Date(1000) });
+    insertRepository(database, alice, { name: 'newer', lastAccessedAt: new Date(2000) });
+    const before = Date.now();
+
+    const opened = await http().post(`/api/v1/repositories/${older}/open`).set('x-test-user', String(alice))
+      .expect(200);
+
+    expect(opened.body.id).toBe(older);
+    expect(Date.parse(opened.body.lastAccessedAt)).toBeGreaterThanOrEqual(before - 1000);
+    const recent = await http().get('/api/v1/repositories/recent').set('x-test-user', String(alice)).expect(200);
+    expect(recent.body.repositories.map((r: { name: string; }) => r.name)).toEqual([ 'older', 'newer' ]);
+  });
+
+  it('does not mark a cloning repository as opened', async () => {
+    const alice = insertUser(database, 'alice@example.com');
+    const id = insertRepository(database, alice, { name: 'handbook', status: 'cloning' });
+
+    const response = await http().post(`/api/v1/repositories/${id}/open`).set('x-test-user', String(alice))
+      .expect(200);
+
+    expect(response.body).toMatchObject({ status: 'cloning', lastAccessedAt: new Date(0).toISOString() });
+  });
+
+  it('answers another user\'s repository like a missing one', async () => {
+    const alice = insertUser(database, 'alice@example.com');
+    const bob = insertUser(database, 'bob@example.com');
+    const secret = insertRepository(database, bob, { name: 'secret' });
+    const missing = secret + 100;
+    const strip = (body: Record<string, unknown>) => ({ ...body, requestId: undefined });
+
+    for (const [ method, suffix ] of [ [ 'get', '' ], [ 'post', '/open' ] ] as const) {
+      const other = await http()[method](`/api/v1/repositories/${secret}${suffix}`).set('x-test-user', String(alice));
+      const none = await http()[method](`/api/v1/repositories/${missing}${suffix}`).set('x-test-user', String(alice));
+      expect(other.status).toBe(404);
+      expect(none.status).toBe(404);
+      expect(strip(other.body)).toEqual(strip(none.body));
+      expect(other.body.code).toBe('not-found');
+    }
+    expect(database.sqlite.prepare('select last_accessed_at from repositories where id = ?').get(secret))
+      .toEqual({ last_accessed_at: 0 });
+  });
+
+  it('refuses an id that is not a positive integer', async () => {
+    const alice = insertUser(database, 'alice@example.com');
+    await http().get('/api/v1/repositories/0').set('x-test-user', String(alice)).expect(400);
+    await http().post('/api/v1/repositories/abc/open').set('x-test-user', String(alice)).expect(400);
   });
 
   it('indexes the user\'s names and remotes', async () => {

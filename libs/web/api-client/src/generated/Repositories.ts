@@ -31,4 +31,15 @@ export class RepositoriesApi {
   add(data: AddRepositoryRequest): Observable<RepositorySummary> {
     return this.http.post<RepositorySummary>(`/api/v1/repositories`, data);
   }
+  get(id: number): Observable<RepositorySummary> {
+    return this.http.get<RepositorySummary>(
+      `/api/v1/repositories/${encodeURIComponent(id)}`
+    );
+  }
+  open(id: number): Observable<RepositorySummary> {
+    return this.http.request<RepositorySummary>(
+      'POST',
+      `/api/v1/repositories/${encodeURIComponent(id)}/open`
+    );
+  }
 }

@@ -2,7 +2,7 @@ import { DATABASE, Database, repositories, Repository } from '@front-burner/serv
 import type { RepositoryIndex, RepositorySummary } from '@front-burner/shared-contracts';
 import { remoteDisplay } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
-import { asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 
 /** Reads a user's repositories; every query is limited to that user (DS-3, A-7.3). */
 @Injectable()
@@ -18,6 +18,25 @@ export class RepositoryQueries {
       .all();
     // The display form is the remote's key for every URL that parses (AR-12, DS-18).
     return { repositories: rows.map(row => ({ name: row.name, remoteKey: remoteDisplay(row.remoteUrl) })) };
+  }
+
+  /** One of the user's repositories; another user's is not found, like a missing one (FB-2). */
+  find(userId: number, id: number): Repository | undefined {
+    return this.database.db.select().from(repositories)
+      .where(and(eq(repositories.id, id), eq(repositories.userId, userId)))
+      .get();
+  }
+
+  /**
+   * Records that the user opened the repository in the editor, only when it is
+   * `ready` (DS-8, DS-9, FB-11). Returns the row either way, for its status (FB-3).
+   */
+  markOpened(userId: number, id: number, now: Date): Repository | undefined {
+    this.database.db.update(repositories)
+      .set({ lastAccessedAt: now })
+      .where(and(eq(repositories.id, id), eq(repositories.userId, userId), eq(repositories.status, 'ready')))
+      .run();
+    return this.find(userId, id);
   }
 
   /** The dashboard's list: most recently accessed first, ties by name ignoring case (DS-16, DS-17). */

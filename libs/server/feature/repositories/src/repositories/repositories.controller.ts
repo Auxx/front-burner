@@ -1,5 +1,7 @@
 // For the `req.auth` declaration.
 import '@front-burner/server-core-security';
+import type { Repository } from '@front-burner/server-core-database';
+import { ApiErrorException } from '@front-burner/server-core-observability';
 import { RateLimitGroup, type RequestAuth } from '@front-burner/server-core-security';
 import type {
   AccessCheckResult,
@@ -7,7 +9,7 @@ import type {
   RepositoryIndex,
   RepositorySummary
 } from '@front-burner/shared-contracts';
-import { Body, Controller, Get, HttpCode, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Req } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
@@ -18,6 +20,7 @@ import {
   AddRepositoryRequestDto,
   RecentRepositoriesDto,
   RepositoryIndexDto,
+  RepositoryParamsDto,
   RepositorySummaryDto
 } from './repositories.dto';
 import { RepositoryQueries, toSummary } from './repository-queries';
@@ -28,6 +31,14 @@ function authOf(req: Request): RequestAuth {
     throw new Error('RepositoriesController reached without req.auth');
   }
   return req.auth;
+}
+
+/** The repository as clients see it, or `404 not-found`. */
+function found(row: Repository | undefined): RepositorySummary {
+  if (row === undefined) {
+    throw new ApiErrorException(404, 'not-found');
+  }
+  return toSummary(row);
 }
 
 /** The logged-in user's repositories; never another user's (DS-3, AR-56). */
@@ -71,5 +82,25 @@ export class RepositoriesController {
   add(@Req() req: Request, @Body() body: AddRepositoryRequestDto): Promise<RepositorySummary> {
     const { userId, sessionId } = authOf(req);
     return this.adding.add({ id: userId, sessionId }, body);
+  }
+
+  /** One repository; another user's is answered like a missing one (FB-2). */
+  @Get(':id')
+  @ApiOkResponse({ type: RepositorySummaryDto })
+  @ZodSerializerDto(RepositorySummaryDto)
+  get(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositorySummary {
+    return found(this.queries.find(authOf(req).userId, params.id));
+  }
+
+  /**
+   * Opens the repository in the editor: sets its last access time when it is
+   * `ready` (DS-8, FB-11), and answers its status either way (FB-3).
+   */
+  @Post(':id/open')
+  @HttpCode(200)
+  @ApiOkResponse({ type: RepositorySummaryDto })
+  @ZodSerializerDto(RepositorySummaryDto)
+  open(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositorySummary {
+    return found(this.queries.markOpened(authOf(req).userId, params.id, new Date()));
   }
 }

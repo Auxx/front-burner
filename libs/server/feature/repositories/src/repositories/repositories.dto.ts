@@ -6,6 +6,7 @@ import {
   refineAddRepository,
   refineCredentialsProtocol,
   RepositoryIndexSchema,
+  RepositoryParamsSchema,
   RepositorySummarySchema
 } from '@front-burner/shared-contracts';
 import { ApiSchema } from '@nestjs/swagger';
@@ -36,3 +37,6 @@ export class AccessCheckResultDto extends createZodDto(z.object(AccessCheckResul
 export class AddRepositoryRequestDto extends createZodDto(
   z.object(AddRepositoryRequestSchema.shape).superRefine(refineAddRepository)
 ) {}
+
+@ApiSchema({ name: 'RepositoryParams' })
+export class RepositoryParamsDto extends createZodDto(z.object(RepositoryParamsSchema.shape)) {}
