@@ -60,6 +60,41 @@ describe('RepositoryQueries', () => {
     expect(queries.recent(bob)).toHaveLength(2);
   });
 
+  it('finds only the user\'s own repository', () => {
+    const bob = insertUser(database, 'bob@example.com');
+    const own = insertRepository(database, alice, { name: 'handbook' });
+    const other = insertRepository(database, bob, { name: 'secret' });
+
+    expect(queries.find(alice, own)?.name).toBe('handbook');
+    expect(queries.find(alice, other)).toBeUndefined();
+    expect(queries.find(alice, 999)).toBeUndefined();
+  });
+
+  it('marks a ready repository as opened', () => {
+    const id = insertRepository(database, alice, { name: 'handbook' });
+    const now = new Date(Date.UTC(2026, 9, 28, 12));
+
+    expect(queries.markOpened(alice, id, now)?.lastAccessedAt).toEqual(now);
+    expect(queries.find(alice, id)?.lastAccessedAt).toEqual(now);
+  });
+
+  it('does not mark a cloning repository as opened', () => {
+    const id = insertRepository(database, alice, { name: 'handbook', status: 'cloning' });
+
+    const row = queries.markOpened(alice, id, new Date(Date.UTC(2026, 9, 28, 12)));
+
+    expect(row?.status).toBe('cloning');
+    expect(row?.lastAccessedAt).toEqual(new Date(0));
+  });
+
+  it('does not mark another user\'s repository as opened', () => {
+    const bob = insertUser(database, 'bob@example.com');
+    const id = insertRepository(database, bob, { name: 'secret' });
+
+    expect(queries.markOpened(alice, id, new Date(5000))).toBeUndefined();
+    expect(queries.find(bob, id)?.lastAccessedAt).toEqual(new Date(0));
+  });
+
   it('honours a smaller limit', () => {
     insertRepository(database, alice, { name: 'a' });
     insertRepository(database, alice, { name: 'b' });

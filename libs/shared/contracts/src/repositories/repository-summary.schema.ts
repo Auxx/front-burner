@@ -44,3 +44,10 @@ export const RecentRepositoriesSchema = z
 
 export type RepositorySummary = z.infer<typeof RepositorySummarySchema>;
 export type RecentRepositories = z.infer<typeof RecentRepositoriesSchema>;
+
+/** The `:id` of every `/repositories/:id` route. */
+export const RepositoryParamsSchema = z
+  .object({ id: z.coerce.number().int().positive() })
+  .meta({ id: 'RepositoryParams' });
+
+export type RepositoryParams = z.infer<typeof RepositoryParamsSchema>;

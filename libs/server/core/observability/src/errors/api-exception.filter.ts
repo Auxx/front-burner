@@ -27,7 +27,10 @@ const MESSAGES: Record<ErrorCode, string> = {
   'host-key-changed': 'The server\'s identity has changed. This may be an attack.',
   'remote-timeout': 'The remote didn\'t answer in time. Try again later.',
   'remote-failed': 'Something went wrong while contacting the remote.',
-  'host-key-unknown': 'The server\'s host key is not known yet.'
+  'host-key-unknown': 'The server\'s host key is not known yet.',
+  'path-refused': 'This path can\'t be used.',
+  'entry-not-found': 'This file or folder doesn\'t exist.',
+  'repository-not-openable': 'This repository can\'t be opened yet.'
 };
 
 interface ZodIssueLike {

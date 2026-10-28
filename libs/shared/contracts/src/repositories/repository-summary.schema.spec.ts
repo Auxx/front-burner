@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RecentRepositoriesSchema, RepositorySummarySchema } from './repository-summary.schema';
+import { RecentRepositoriesSchema, RepositoryParamsSchema, RepositorySummarySchema } from './repository-summary.schema';
 
 const summary = {
   id: 1,
@@ -40,5 +40,20 @@ describe('registry', () => {
     ] as const
   )('registers %#', (schema, id) => {
     expect(z.globalRegistry.get(schema as z.ZodType)?.id).toBe(id);
+  });
+});
+
+describe('RepositoryParamsSchema', () => {
+  it('coerces the id', () => {
+    expect(RepositoryParamsSchema.parse({ id: '7' })).toEqual({ id: 7 });
+  });
+
+  it('refuses an id that is not a positive integer', () => {
+    expect(RepositoryParamsSchema.safeParse({ id: '0' }).success).toBe(false);
+    expect(RepositoryParamsSchema.safeParse({ id: 'abc' }).success).toBe(false);
+  });
+
+  it('registers the schema for OpenAPI', () => {
+    expect(z.globalRegistry.get(RepositoryParamsSchema)?.id).toBe('RepositoryParams');
   });
 });

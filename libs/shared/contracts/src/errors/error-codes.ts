@@ -21,7 +21,13 @@ export const ERROR_CODES = [
   /** Any other failure of the remote (AR-42). */
   'remote-failed',
   /** 409; params are a `HostKey` for the user to trust (AR-32). */
-  'host-key-unknown'
+  'host-key-unknown',
+  /** 400; a client path the backend refuses to use; params `{ reason }` (FB-5, A-7.6). */
+  'path-refused',
+  /** 404; no file or folder at a path of a working copy. */
+  'entry-not-found',
+  /** 409; the repository is not `ready`; params `{ status }` (FB-3). */
+  'repository-not-openable'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

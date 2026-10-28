@@ -85,8 +85,7 @@
       "cache": true,
       "inputs": [
         "default",
-        "^default",
-        "{workspaceRoot}/tsconfig.base.json"
+        "^default"
       ],
       "options": {
         "parallel": false

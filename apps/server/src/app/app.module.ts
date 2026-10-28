@@ -9,6 +9,7 @@ import { EgressModule, RateLimitModule, SessionLifecycleModule } from '@front-bu
 import { StorageModule } from '@front-burner/server-core-storage';
 import { AuthModule } from '@front-burner/server-feature-auth';
 import { CredentialsModule } from '@front-burner/server-feature-credentials';
+import { FilesModule } from '@front-burner/server-feature-files';
 import { RepositoriesModule } from '@front-burner/server-feature-repositories';
 import { DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
@@ -52,7 +53,8 @@ export class AppModule {
         // After RateLimitModule: the rate limit guard runs before the auth guard (A-1.12).
         AuthModule,
         CredentialsModule,
-        RepositoriesModule
+        RepositoriesModule,
+        FilesModule
       ],
       providers: [
         { provide: APP_FILTER, useClass: ApiExceptionFilter },

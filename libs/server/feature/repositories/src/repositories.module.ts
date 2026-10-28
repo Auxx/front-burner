@@ -12,6 +12,7 @@ import { RepositoryQueries } from './repositories/repository-queries';
 @Module({
   imports: [ CredentialsModule ],
   controllers: [ RepositoriesController ],
-  providers: [ RepositoryQueries, RequestCredentials, AddRepositoryService, CloneKeys, CloneJob, WorkingCopyCheck ]
+  providers: [ RepositoryQueries, RequestCredentials, AddRepositoryService, CloneKeys, CloneJob, WorkingCopyCheck ],
+  exports: [ RepositoryQueries ]
 })
 export class RepositoriesModule {}
