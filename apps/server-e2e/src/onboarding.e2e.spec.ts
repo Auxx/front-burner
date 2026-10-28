@@ -95,7 +95,7 @@ describe('administrator onboarding', () => {
     return (await (await fetch(`${server.url}${ONBOARDING}`)).json() as { state: unknown; }).state;
   }
 
-  it('AC2 without a token, data-changing requests answer 404', async () => {
+  it('AC-AUTH-001.2: without a token, data-changing requests answer 404', async () => {
     const server = await start({});
     expect(await (await fetch(`${server.url}${ONBOARDING}`)).json()).toEqual({
       state: 'required',
@@ -109,7 +109,7 @@ describe('administrator onboarding', () => {
     await expectSameAsUnknownRoute(server, await post(server, SETUP, setup), 'POST', setup);
   });
 
-  it('AC3 a missing or wrong token answers 404 and changes nothing', async () => {
+  it('AC-AUTH-001.3: a missing or wrong token answers 404 and changes nothing', async () => {
     const server = await start();
     for (const body of [ details, { setupToken: `${TOKEN}x`, ...details } ]) {
       await expectSameAsUnknownRoute(server, await post(server, SETUP, body), 'POST', body);
@@ -123,7 +123,7 @@ describe('administrator onboarding', () => {
     await expectSameAsUnknownRoute(server, await post(server, SETUP, body), 'POST', body);
   });
 
-  it('AC4 password setup completes onboarding', async () => {
+  it('AC-AUTH-001.4: password setup completes onboarding', async () => {
     const dataDir = ownDataDir();
     const server = await start({ FRONT_BURNER_SETUP_TOKEN: TOKEN, FRONT_BURNER_DATA_DIR: dataDir });
 
@@ -143,7 +143,7 @@ describe('administrator onboarding', () => {
     expect(countUsers(dataDir)).toBe(1);
   });
 
-  it('AC5 a policy-failing password is refused', async () => {
+  it('AC-AUTH-001.5: a policy-failing password is refused', async () => {
     const server = await start();
     const response = await post(server, SETUP, { setupToken: TOKEN, ...details, password: 'abcdefghij' });
     expect(response.status).toBe(400);
@@ -153,7 +153,7 @@ describe('administrator onboarding', () => {
     expect(await state(server)).toBe('required');
   });
 
-  it('AC13 two simultaneous setups create one administrator', async () => {
+  it('AC-AUTH-001.13: two simultaneous setups create one administrator', async () => {
     const dataDir = ownDataDir();
     const server = await start({ FRONT_BURNER_SETUP_TOKEN: TOKEN, FRONT_BURNER_DATA_DIR: dataDir });
 
@@ -167,7 +167,7 @@ describe('administrator onboarding', () => {
     expect(countUsers(dataDir)).toBe(1);
   });
 
-  it('AC14 a completed instance stays closed after a restart', async () => {
+  it('AC-AUTH-001.14: a completed instance stays closed after a restart', async () => {
     const dataDir = ownDataDir();
     const env = { FRONT_BURNER_SETUP_TOKEN: TOKEN, FRONT_BURNER_DATA_DIR: dataDir };
     const first = await start(env);

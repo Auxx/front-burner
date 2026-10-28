@@ -3,7 +3,7 @@ import { PasswordHasher } from './password-hasher';
 describe('PasswordHasher', () => {
   const hasher = new PasswordHasher();
 
-  it('stores an Argon2id hash', async () => {
+  it('AC-AUTH-002.12: stores an Argon2id hash', async () => {
     expect(await hasher.hash('abcdefghi1')).toMatch(/^\$argon2id\$/);
   });
 

@@ -1,3 +1,4 @@
+import { argon2id, hash } from 'argon2';
 import BetterSqlite3 from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -77,7 +78,7 @@ describe('password login and sessions', () => {
     return dataDir;
   }
 
-  it('AC3 a login returns the auth token in the body and the refresh token in a cookie', async () => {
+  it('AC-AUTH-003.3: a login returns the auth token in the body and the refresh token in a cookie', async () => {
     const server = await onboarded();
     const { response, authToken } = await login(server);
 
@@ -94,13 +95,13 @@ describe('password login and sessions', () => {
     expect(await current.json()).toMatchObject({ email: E2E_ADMIN.email, role: 'administrator' });
   });
 
-  it('AC4 an email in another letter case logs in', async () => {
+  it('AC-AUTH-003.4: an email in another letter case logs in', async () => {
     const server = await onboarded();
     await expect(login(server, 'cookie', { email: ' ADMIN@Example.com ', password: E2E_ADMIN.password })).resolves
       .toMatchObject({ authToken: expect.any(String) });
   });
 
-  it('AC5 every refused login answers the same 401, with its own reason in the audit log', async () => {
+  it('AC-AUTH-003.5: every refused login answers the same 401, with its own reason in the audit log', async () => {
     const server = await onboarded();
     withDatabase(server, sqlite => {
       const insert = sqlite.prepare(
@@ -150,14 +151,14 @@ describe('password login and sessions', () => {
     ]);
   });
 
-  it('AC6 body delivery returns the refresh token in the body and sets no cookie', async () => {
+  it('AC-AUTH-003.6: body delivery returns the refresh token in the body and sets no cookie', async () => {
     const server = await onboarded();
     const { response, refreshToken } = await login(server, 'body');
     expect(refreshToken).toMatch(/^[\w-]+\.[\w-]+$/);
     expect(response.headers.getSetCookie()).toEqual([]);
   });
 
-  it('AC10 an auth token is refused after FRONT_BURNER_AUTH_TOKEN_TTL', async () => {
+  it('AC-AUTH-003.10: an auth token is refused after FRONT_BURNER_AUTH_TOKEN_TTL', async () => {
     const server = await onboarded({ FRONT_BURNER_AUTH_TOKEN_TTL: '2s' });
     const { authToken } = await login(server);
     expect((await me(server, authToken)).status).toBe(200);
@@ -169,7 +170,7 @@ describe('password login and sessions', () => {
     expect(await codeOf(expired)).toBe('auth-token-expired');
   });
 
-  it('AC12 reusing a rotated refresh token revokes the session', async () => {
+  it('AC-AUTH-003.12: reusing a rotated refresh token revokes the session', async () => {
     const server = await onboarded();
     const first = await login(server, 'body');
     const rotated = await postJson(server, REFRESH, { refreshToken: first.refreshToken });
@@ -187,7 +188,48 @@ describe('password login and sessions', () => {
     expect(auditReasons(server)).toContain('refresh-token-reused');
   });
 
-  it('AC13 a cookie refresh without the header, or from another origin, is refused', async () => {
+  it('AC-AUTH-003.25: no login audit entry contains a password or token', async () => {
+    const server = await onboarded();
+    const wrongPassword = 'wrong horse 1';
+    expect((await postJson(server, LOGIN, { email: E2E_ADMIN.email, password: wrongPassword })).status).toBe(401);
+    const first = await login(server, 'body');
+    const rotated = (await (await postJson(server, REFRESH, { refreshToken: first.refreshToken })).json()) as {
+      authToken: string;
+      refreshToken: string;
+    };
+    expect((await postJson(server, REFRESH, { refreshToken: first.refreshToken })).status).toBe(401);
+
+    const entries = JSON.stringify(withDatabase(server, sqlite => sqlite.prepare('SELECT * FROM login_audit').all()));
+    expect(auditReasons(server)).toEqual([ 'wrong-password', 'success', 'refresh-token-reused' ]);
+    for (
+      const secret of [
+        E2E_ADMIN.password,
+        wrongPassword,
+        first.authToken,
+        first.refreshToken,
+        rotated.authToken,
+        rotated.refreshToken
+      ]
+    ) {
+      expect(entries).not.toContain(secret);
+    }
+  });
+
+  it('AC-AUTH-002.14: a stored password that does not meet the policy still logs in', async () => {
+    const server = await onboarded();
+    const weak = 'abc';
+    const weakHash = await hash(weak, { type: argon2id });
+    withDatabase(
+      server,
+      sqlite => sqlite.prepare('UPDATE users SET password_hash = ? WHERE email = ?').run(weakHash, E2E_ADMIN.email)
+    );
+
+    await expect(login(server, 'body', { email: E2E_ADMIN.email, password: weak })).resolves.toMatchObject({
+      authToken: expect.any(String)
+    });
+  });
+
+  it('AC-AUTH-003.13: a cookie refresh without the header, or from another origin, is refused', async () => {
     const server = await onboarded();
     const { refreshToken } = await login(server);
 
@@ -206,7 +248,7 @@ describe('password login and sessions', () => {
     expect(refreshCookieOf(sameSite)).not.toBe(refreshToken);
   });
 
-  it('AC15 after logout both tokens are refused and the cookie is cleared, even with an expired auth token', async () => {
+  it('AC-AUTH-003.15: after logout both tokens are refused and the cookie is cleared, even with an expired auth token', async () => {
     const server = await onboarded({ FRONT_BURNER_AUTH_TOKEN_TTL: '1s' });
     const { authToken, refreshToken } = await login(server);
     await new Promise(resolve => setTimeout(resolve, 2_000));
@@ -223,7 +265,7 @@ describe('password login and sessions', () => {
     expect(refresh.status).toBe(401);
   });
 
-  it('AC15 after logout an unexpired auth token is refused too', async () => {
+  it('AC-AUTH-003.15: after logout an unexpired auth token is refused too', async () => {
     const server = await onboarded();
     const { authToken, refreshToken } = await login(server, 'body');
     expect((await postJson(server, LOGOUT, { refreshToken })).status).toBe(204);
@@ -233,7 +275,7 @@ describe('password login and sessions', () => {
     expect(await codeOf(refused)).toBe('unauthenticated');
   });
 
-  it('AC17 the backend does not start without FRONT_BURNER_JWT_SECRET or with a short one', async () => {
+  it('AC-AUTH-003.17: the backend does not start without FRONT_BURNER_JWT_SECRET or with a short one', async () => {
     for (const secret of [ '', 'x'.repeat(31) ]) {
       const { code, output } = await runServerToExit({ FRONT_BURNER_JWT_SECRET: secret });
       expect(code).not.toBe(0);
@@ -244,7 +286,7 @@ describe('password login and sessions', () => {
     }
   });
 
-  it('AC24 too many logins get 429, for known and unknown emails alike', async () => {
+  it('AC-AUTH-003.24: too many logins get 429, for known and unknown emails alike', async () => {
     const server = await onboarded();
     for (let i = 0; i < 10; i++) {
       const email = i % 2 === 0 ? E2E_ADMIN.email : 'nobody@example.com';

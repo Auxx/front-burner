@@ -3,12 +3,16 @@ import { main, print, table, UsageError } from '../lib/cli.mjs';
 import {
   applyMapping,
   checkIds,
+  criteriaCoverage,
   DEFAULT_ROOTS,
   findIds,
+  formatCriteria,
+  MVP,
   parseId,
   renameMapping,
   scan,
-  shiftMapping
+  shiftMapping,
+  TEST_ROOTS
 } from '../lib/doc-ids.mjs';
 
 const SCAN_OPTIONS = {
@@ -109,6 +113,32 @@ ${SCAN_HELP}`,
         }
         const files = readFiles(options);
         return report(options, shiftMapping(allIds(files), family, from, by), files);
+      }
+    },
+    criteria: {
+      usage: '[--json]',
+      summary: `Lists, per requirement, the MVP criteria (${MVP}) that no test names in its title.`,
+      help: `A criterion counts as tested when a spec file under ${TEST_ROOTS.join(' or ')} has a test whose
+title starts with its ID, such as it('AC-REPO-001.2: …'). The MVP criteria are
+those in the In MVP and Limited in MVP columns of the In scope tables. Use the
+result for the "MVP criteria without a test" column of the implementation
+status table; consecutive IDs are written as ranges, ready to paste.`,
+      options: { json: { type: 'boolean' } },
+      run(options) {
+        const [ mvp ] = scan({ roots: [ MVP ] });
+        const tests = scan({ roots: TEST_ROOTS }).filter(({ path }) => /\.spec\.(ts|mjs)$/.test(path));
+        const coverage = criteriaCoverage(mvp.text, tests);
+        print(options.json, coverage, () =>
+          table([
+            [ 'requirement', 'MVP criteria', 'with a test', 'without a test' ],
+            ...coverage.map(c => [
+              c.requirement,
+              c.criteria.length,
+              c.criteria.length - c.untested.length,
+              c.untested.length === c.criteria.length && c.criteria.length ? 'All' : formatCriteria(c.untested) || '—'
+            ])
+          ]));
+        return 0;
       }
     },
     rename: {

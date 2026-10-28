@@ -242,9 +242,62 @@ someone:
    and key unlock.
 4. Pull, fetch notices, branches and conflict resolution.
 5. The repository management page.
-6. The deployment guide, the security review and the release checks (NF-11.12,
-   and the hand checks on real phones in
-   [non-functional.md](../architecture/non-functional.md)).
+6. The deployment guide, the security review and the release checks: every
+   non-functional requirement in the MVP (section 11 of
+   [In scope](#11-non-functional-requirements)), including NF-11.12 and the hand
+   checks on real phones in
+   [non-functional.md](../architecture/non-functional.md).
+
+## Implementation status
+
+How far the code is. [In scope](#in-scope) says which points and acceptance
+criteria the MVP needs; this table says which of those are built and tested.
+Points and criteria that are not in the MVP are left out. The pull request that
+builds a part updates its row.
+
+- **Not started**: none of its MVP points are built.
+- **In progress**: some of its MVP points are built.
+- **Built**: every MVP point is built, but some MVP criteria have no test yet.
+- **Done**: every MVP point is built, and every MVP criterion has a test.
+
+A criterion has a test when a test title starts with its ID, for example
+`it('AC-REPO-001.2: two quick submits create one repository', …)`. `node
+tools/ai-tools/src/bin/doc-ids.mjs criteria` lists the MVP criteria that no test
+names, in the form of the last column.
+
+The non-functional requirements are not tracked here. They are checked with the
+release checks (order of work, step 6).
+
+**Keeping it up to date.** An agent that implements any part of the MVP updates
+this section in the same change, without being asked:
+
+- it starts the title of every test that covers an MVP criterion with the
+  criterion's ID;
+- for every requirement its change touches, it updates **State**, **Built in**
+  (the pull request number, or the branch name until the pull request has a
+  number) and **MVP points not built**;
+- it runs `doc-ids.mjs criteria` and copies the result into **MVP criteria
+  without a test**;
+- it checks that every **State** still matches its definition above.
+
+| Requirement                                             | Step | State       | Built in           | MVP points not built                                                                                           | MVP criteria without a test   |
+| ------------------------------------------------------- | ---- | ----------- | ------------------ | -------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| [REQ-AUTH-001](../requirements/auth-onboarding.md)      | 1    | Done        | #18, #28, #29      | —                                                                                                              | —                             |
+| [REQ-AUTH-002](../requirements/auth-password-policy.md) | 1    | Done        | #18                | —                                                                                                              | —                             |
+| [REQ-AUTH-003](../requirements/auth-login.md)           | 1    | Done        | #25, #26, #28, #33 | —                                                                                                              | —                             |
+| [REQ-APP-001](../requirements/navigation.md)            | 1    | In progress | #26, #30, #36      | NV-1 (the routes of pages not built yet), NV-7 (Preferences and the version line), NV-9 to NV-12, NV-15, NV-16 | All                           |
+| [REQ-DASH-001](../requirements/dashboard.md)            | 1    | In progress | #30, #35, #36      | DS-7 (on opening), DS-8, DS-20                                                                                 | AC-DASH-001.6, AC-DASH-001.11 |
+| [REQ-REPO-001](../requirements/repo-add.md)             | 1    | Done        | #27, #31 to #36    | —                                                                                                              | —                             |
+| [REQ-FILE-001](../requirements/file-browser.md)         | 2    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-EDIT-001](../requirements/editor.md)               | 2    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-EDIT-002](../requirements/preview-html.md)         | 2    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-EDIT-003](../requirements/preview-images.md)       | 2    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-GIT-001](../requirements/commit-author.md)         | 3    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-REPO-002](../requirements/repo-credentials.md)     | 3    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-GIT-002](../requirements/git-advanced.md)          | 3, 4 | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-GIT-003](../requirements/git-conflicts.md)         | 4    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-REPO-003](../requirements/repo-manage.md)          | 5    | In progress | #30, #35           | All except the RM-6 and RM-8 labels on the dashboard                                                           | All                           |
+| [Deployment guide](../wiki/deployment.md)               | 6    | In progress | —                  | The operator-facing parts listed in `docs/wiki/todo.md`                                                        | —                             |
 
 ## Risks
 

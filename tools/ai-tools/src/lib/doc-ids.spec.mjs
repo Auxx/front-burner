@@ -1,7 +1,21 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { applyMapping, checkIds, familyOf, findIds, parseId, renameMapping, scan, shiftMapping } from './doc-ids.mjs';
+import {
+  applyMapping,
+  checkIds,
+  criteriaCoverage,
+  familyOf,
+  findIds,
+  formatCriteria,
+  MVP,
+  mvpCriteria,
+  parseId,
+  renameMapping,
+  scan,
+  shiftMapping,
+  testedCriteria
+} from './doc-ids.mjs';
 import { OutsideWorkspaceError, WORKSPACE_ROOT, workspacePath } from './workspace.mjs';
 
 const file = (path, text) => ({ path, file: path, text });
@@ -166,6 +180,88 @@ describe('doc-ids', () => {
 
     it('refuses paths outside the workspace', () => {
       expect(() => scan({ roots: [ '../' ] })).toThrow(OutsideWorkspaceError);
+    });
+  });
+
+  describe('MVP criteria', () => {
+    const mvp = [
+      '## In scope',
+      '',
+      '| Requirement | Status | In MVP | Limited in MVP | Not in MVP | MVP notes |',
+      '| --- | --- | --- | --- | --- | --- |',
+      '| [REQ-AUTH-003](a.md) | Accepted | LG-2 to LG-4; AC-AUTH-003.2 to AC-AUTH-003.4, AC-AUTH-003.7 | LG-1; AC-AUTH-003.1 | AC-AUTH-003.5 | Note. |',
+      '| [REQ-DASH-001](d.md) | Accepted | DS-1 to DS-3; AC-DASH-001.1 to AC-DASH-001.2 | — | — | — |',
+      '| NF-1: Scale | NF-1.1 | — | — | |',
+      '',
+      '## Order of work'
+    ].join('\n');
+
+    it('reads the In MVP and Limited in MVP criteria, with ranges written out', () => {
+      expect(mvpCriteria(mvp)).toEqual(
+        new Map([
+          [ 'REQ-AUTH-003', [ 'AC-AUTH-003.2', 'AC-AUTH-003.3', 'AC-AUTH-003.4', 'AC-AUTH-003.7', 'AC-AUTH-003.1' ] ],
+          [ 'REQ-DASH-001', [ 'AC-DASH-001.1', 'AC-DASH-001.2' ] ]
+        ])
+      );
+    });
+
+    it('throws on a section or row it does not understand', () => {
+      expect(() => mvpCriteria('## Goal')).toThrow('no "## In scope" section');
+      expect(() => mvpCriteria('## In scope\n| [REQ-A-001](a.md) | Accepted | AC-A-001.1 |\n## End')).toThrow(
+        '3 cells instead of 6'
+      );
+      expect(() => mvpCriteria('## In scope\n| [REQ-A-001](a) | x | AC-A-001.1 to AC-B-001.3 | | | |\n## End'))
+        .toThrow('spans two requirements');
+    });
+
+    it('finds criteria at the start of test titles only', () => {
+      const spec = [
+        'it(\'AC-AUTH-003.2: one\', () => {});',
+        'test(\'AC-AUTH-003.3, AC-AUTH-003.4 and AC-DASH-001.1: several\', () => {});',
+        'it.each([ \'a\', \'b\' ])(\'AC-AUTH-003.7 with %s\', () => {});',
+        'it(',
+        '  \'AC-DASH-001.2: wrapped\',',
+        '  () => {}',
+        ');',
+        'describe(\'AC-AUTH-003.1: a group\', () => {});',
+        'it(\'checks AC-AUTH-003.1 in passing\', () => {});',
+        '// AC-AUTH-003.1 in a comment'
+      ].join('\n');
+      const tested = testedCriteria([ file('a.spec.ts', spec) ]);
+      expect([ ...tested.keys() ]).toEqual([
+        'AC-AUTH-003.2',
+        'AC-AUTH-003.3',
+        'AC-AUTH-003.4',
+        'AC-DASH-001.1',
+        'AC-AUTH-003.7',
+        'AC-DASH-001.2'
+      ]);
+      expect(tested.get('AC-DASH-001.2')).toEqual([ { path: 'a.spec.ts', line: 4 } ]);
+    });
+
+    it('lists the MVP criteria without a test', () => {
+      const spec = file('a.spec.ts', 'it(\'AC-AUTH-003.2: x\', () => {}); it(\'AC-DASH-001.1: y\', () => {});');
+      expect(criteriaCoverage(mvp, [ spec ]).map(c => [ c.requirement, c.untested ])).toEqual([
+        [ 'REQ-AUTH-003', [ 'AC-AUTH-003.3', 'AC-AUTH-003.4', 'AC-AUTH-003.7', 'AC-AUTH-003.1' ] ],
+        [ 'REQ-DASH-001', [ 'AC-DASH-001.2' ] ]
+      ]);
+    });
+
+    it('writes consecutive criteria as ranges', () => {
+      expect(formatCriteria([ 'AC-A-001.1', 'AC-A-001.2', 'AC-A-001.3', 'AC-A-001.5', 'AC-B-001.6' ])).toBe(
+        'AC-A-001.1 to AC-A-001.3, AC-A-001.5, AC-B-001.6'
+      );
+      expect(formatCriteria([])).toBe('');
+    });
+
+    it('reads the workspace\'s MVP document, whose criteria are all defined', () => {
+      const [ document ] = scan({ roots: [ MVP ] });
+      const defined = new Set(
+        scan({ roots: [ 'docs/requirements' ] }).flatMap(f => findIds(f.text).filter(x => x.definition).map(x => x.id))
+      );
+      const criteria = [ ...mvpCriteria(document.text).values() ].flat();
+      expect(criteria.length).toBeGreaterThan(0);
+      expect(criteria.filter(id => !defined.has(id))).toEqual([]);
     });
   });
 });

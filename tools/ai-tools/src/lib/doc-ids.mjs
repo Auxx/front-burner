@@ -305,3 +305,107 @@ export function applyMapping(files, mapping, { write = false } = {}) {
   }
   return { changed, changes };
 }
+
+/** The MVP document, whose In scope tables list the points and criteria the MVP needs. */
+export const MVP = 'docs/product/mvp.md';
+
+/** Where tests are looked for: spec files under the projects. */
+export const TEST_ROOTS = [ 'apps', 'libs' ];
+
+const CRITERION = /AC-[A-Z]+-\d+\.\d+/g;
+
+/**
+ * A test whose title starts with one or more criterion IDs and a colon or a
+ * space: `it('AC-REPO-001.2: …')`, `test('AC-REPO-001.1, AC-REPO-001.4 and
+ * AC-REPO-001.15: …')`, `it.each([…])('AC-AUTH-003.26: …')`.
+ */
+const TEST_TITLE = /\b(?:it|test)(?:\.\w+)*(?:\([^)]*\))?\(\s*['"`]((?:AC-[A-Z]+-\d+\.\d+(?:, | and )?)+)(?=[:\s])/g;
+
+/** The criterion IDs of a table cell, with ranges such as `AC-X-001.2 to AC-X-001.5` written out. */
+function criteriaOf(cell, where) {
+  const ids = [];
+  for (const part of cell.split(/[,;]/)) {
+    const found = part.match(CRITERION) ?? [];
+    if (found.length === 2 && part.includes(' to ')) {
+      const [ from, to ] = found.map(parseId);
+      const family = familyOf(found[0]);
+      if (familyOf(found[1]) !== family) {
+        throw new Error(`${where}: the range "${part.trim()}" spans two requirements`);
+      }
+      for (let n = Number(from.numbers.at(-1)); n <= Number(to.numbers.at(-1)); n++) {
+        ids.push(`${family}.${n}`);
+      }
+    } else {
+      ids.push(...found);
+    }
+  }
+  return ids;
+}
+
+/**
+ * The acceptance criteria that the MVP needs, by requirement: those in the
+ * **In MVP** and **Limited in MVP** columns of the In scope tables of
+ * {@link MVP}. Throws when the section or a row is not in the expected shape.
+ */
+export function mvpCriteria(text) {
+  const section = /^## In scope\n([\s\S]*?)^## /m.exec(text)?.[1];
+  if (!section) {
+    throw new Error(`${MVP}: no "## In scope" section`);
+  }
+  const criteria = new Map();
+  for (const [ index, line ] of section.split('\n').entries()) {
+    const requirement = /^\|\s*\[(REQ-[A-Z]+-\d+)\]/.exec(line)?.[1];
+    if (!requirement) {
+      continue;
+    }
+    const where = `${MVP}, In scope line ${index + 1}`;
+    const cells = line.split('|').slice(1, -1);
+    if (cells.length !== 6) {
+      throw new Error(`${where}: the row of ${requirement} has ${cells.length} cells instead of 6`);
+    }
+    criteria.set(requirement, [ ...criteriaOf(cells[2], where), ...criteriaOf(cells[3], where) ]);
+  }
+  return criteria;
+}
+
+/** Where tests name criteria in their titles: criterion ID → `[{ path, line }]`. */
+export function testedCriteria(files) {
+  const tested = new Map();
+  for (const { path, text } of files) {
+    for (const match of text.matchAll(TEST_TITLE)) {
+      const line = text.slice(0, match.index).split('\n').length;
+      for (const id of match[1].match(CRITERION)) {
+        tested.set(id, [ ...(tested.get(id) ?? []), { path, line } ]);
+      }
+    }
+  }
+  return tested;
+}
+
+/** Writes consecutive criteria as ranges: `AC-X-001.1 to AC-X-001.3, AC-X-001.5`. */
+export function formatCriteria(ids) {
+  const parts = [];
+  for (const id of ids) {
+    const last = parts.at(-1);
+    const n = Number(parseId(id).numbers.at(-1));
+    if (last && familyOf(last.to) === familyOf(id) && Number(parseId(last.to).numbers.at(-1)) === n - 1) {
+      last.to = id;
+    } else {
+      parts.push({ from: id, to: id });
+    }
+  }
+  return parts.map(({ from, to }) => (from === to ? from : `${from} to ${to}`)).join(', ');
+}
+
+/**
+ * For each requirement of the MVP, its MVP criteria and those that no test
+ * names: `[{ requirement, criteria, untested }]`.
+ */
+export function criteriaCoverage(mvpText, testFiles) {
+  const tested = testedCriteria(testFiles);
+  return [ ...mvpCriteria(mvpText) ].map(([ requirement, criteria ]) => ({
+    requirement,
+    criteria,
+    untested: criteria.filter(id => !tested.has(id))
+  }));
+}

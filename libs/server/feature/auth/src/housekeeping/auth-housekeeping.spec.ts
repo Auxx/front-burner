@@ -77,7 +77,7 @@ describe('AuthHousekeeping', () => {
     expect(database.db.select({ id: sessions.id }).from(sessions).all()).toEqual([ { id: 'active' } ]);
   });
 
-  it('deletes entries older than the retention only', () => {
+  it('AC-AUTH-003.25: deletes entries older than the retention only', () => {
     const insert = (offsetMs: number) =>
       database.db.insert(loginAudit).values({
         at: at(offsetMs),

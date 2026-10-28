@@ -38,7 +38,7 @@ function drainExpected404(monitor: { consoleErrors: { text: string; url: string;
 
 test.describe('administrator onboarding', () => {
   for (const url of [ '/', '/login', '/no/such/page' ]) {
-    test(`AC1 any URL shows the onboarding page: ${url}`, async ({ page }) => {
+    test(`AC-AUTH-001.1: any URL shows the onboarding page: ${url}`, async ({ page }) => {
       await page.goto(url);
       await expect(page).toHaveURL(/\/onboarding$/);
       await expect(heading(page)).toBeVisible();
@@ -66,7 +66,7 @@ test.describe('administrator onboarding', () => {
     drainExpected404(monitor);
   });
 
-  test('happy path ends on the login page', async ({ page }) => {
+  test('AC-AUTH-002.13: shows the policy and a live strength meter, and ends on the login page', async ({ page }) => {
     await reachPasswordStep(page);
 
     await page.getByLabel('Email address').fill('admin@example.com');

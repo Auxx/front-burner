@@ -108,7 +108,7 @@ test.describe('Add repository, against a git server', () => {
     await expect(page).toHaveURL(/\/login\?returnUrl=%2Frepositories%2Fnew$/);
   });
 
-  test('AC-REPO-001.2, AC-REPO-001.7 and AC-REPO-001.18: a public repository, submitted twice, lands on the dashboard as Cloning', async ({ page }) => {
+  test('AC-REPO-001.2, AC-REPO-001.7, AC-REPO-001.18 and AC-DASH-001.14: a public repository, submitted twice, lands on the dashboard as Cloning', async ({ page }) => {
     await openAddRepository(page);
     await enterUrl(page, publicUrl());
     await choose(page, 'No credentials (public repository)');
