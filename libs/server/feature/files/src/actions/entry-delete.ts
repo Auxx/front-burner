@@ -63,7 +63,7 @@ export class EntryDelete {
       await rename(entry.absolute, join(this.layout.tmpDir, name));
       this.jobs.enqueue({
         type: DELETE_FOLDER_JOB_TYPE,
-        userId,
+        // No user: the job's end is not the user's business, the folder is already gone.
         repositoryId,
         payload: { name } satisfies DeleteFolderJobPayload
       });

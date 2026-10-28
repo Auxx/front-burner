@@ -1,5 +1,6 @@
 import { RepositoriesModule } from '@front-burner/server-feature-repositories';
 import { Module } from '@nestjs/common';
+import { DeleteFolderJob } from './actions/delete-folder.job';
 import { EntryActions } from './actions/entry-actions';
 import { EntryDelete } from './actions/entry-delete';
 import { WorkingTreeGuard } from './actions/working-tree-guard';
@@ -15,7 +16,15 @@ import { EntrySummaries } from './summary/entry-summaries';
 @Module({
   imports: [ RepositoriesModule ],
   controllers: [ FilesController ],
-  providers: [ OpenableRepository, FolderLister, WorkingTreeGuard, EntryActions, EntryDelete, EntrySummaries ],
+  providers: [
+    OpenableRepository,
+    FolderLister,
+    WorkingTreeGuard,
+    EntryActions,
+    EntryDelete,
+    DeleteFolderJob,
+    EntrySummaries
+  ],
   exports: [ OpenableRepository, WorkingTreeGuard ]
 })
 export class FilesModule {}

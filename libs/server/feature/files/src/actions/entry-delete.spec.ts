@@ -145,7 +145,6 @@ describe('EntryDelete', () => {
     expect(readFileSync(join(layout.tmpDir, name, 'deep', 'a.md'), 'utf8')).toBe('a\n');
     expect(enqueue).toHaveBeenCalledExactlyOnceWith({
       type: DELETE_FOLDER_JOB_TYPE,
-      userId: USER,
       repositoryId: REPO,
       payload: { name }
     });
