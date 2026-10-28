@@ -312,6 +312,13 @@ describe('GitEngine', () => {
       expect(await engine().gitlinksIn(work, '')).toEqual(new Set());
     });
 
+    it('does not report a tracked file inside an ignored folder', async () => {
+      git(work, 'add', '-f', 'build/app.js');
+      writeFileSync(join(work, 'build', 'other.js'), '\n');
+      const ignored = await engine().ignoredAmong(work, [ 'build/app.js', 'build/other.js' ]);
+      expect([ ...ignored ]).toEqual([ 'build/other.js' ]);
+    });
+
     it('treats glob characters in the folder name literally', async () => {
       const sha = git(work, 'rev-parse', 'HEAD').trim();
       git(work, 'update-index', '--add', '--cacheinfo', `160000,${sha},v[e]ndor*/mod`);

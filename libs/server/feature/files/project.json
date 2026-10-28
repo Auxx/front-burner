@@ -1,0 +1,38 @@
+{
+  "name": "server-feature-files",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/server/feature/files/src",
+  "projectType": "library",
+  "tags": [
+    "scope:server",
+    "type:feature"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{workspaceRoot}/coverage/libs/server/feature/files"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/server/feature/files"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/server/feature/files/tsconfig.lib.json",
+          "tsc --noEmit -p libs/server/feature/files/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

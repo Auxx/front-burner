@@ -131,47 +131,24 @@ export class GitEngine implements BeforeApplicationShutdown {
   }
 
   /**
-   * The paths among `paths` that `.gitignore` rules ignore (`git check-ignore`).
-   * Tracked paths are never reported, even when a rule matches them (FB-20b).
+   * The paths among `paths` that `.gitignore` rules ignore (`git check-ignore`),
+   * including everything inside an ignored folder. Tracked paths are never
+   * reported, even when a rule matches them (FB-20b).
    */
   async ignoredAmong(workingCopy: string, paths: string[]): Promise<Set<string>> {
-    if (paths.length === 0) {
-      return new Set();
-    }
-    const result = await this.runLocal(workingCopy, [ 'check-ignore', '--stdin', '-z' ], paths.join('\0') + '\0');
-    // 1: none of the paths is ignored.
-    if (result.exitCode !== 0 && result.exitCode !== 1) {
-      throw new Error(`git check-ignore failed: ${result.stderr.trim()}`);
-    }
-    return new Set(result.stdout.split('\0').filter(path => path !== ''));
+    // With the index, check-ignore scans the whole index once per path; without
+    // it, it only reads the rules. So the rules pick the few candidates first.
+    const candidates = await this.checkIgnore(workingCopy, paths, [ '--no-index' ]);
+    return this.checkIgnore(workingCopy, [ ...candidates ], []);
   }
 
   /**
-   * The names of the submodules (gitlinks) of the index directly inside
-   * `folder` (`''` is the root). Lists only that folder's index entries: the
-   * glob's `*` does not cross `/` (FB-15).
+   * The names (not paths) of the submodules (gitlinks) of the index directly
+   * inside `folder` (`''` is the root).
    */
   async gitlinksIn(workingCopy: string, folder: string): Promise<Set<string>> {
-    const prefix = folder === '' ? '' : `${folder}/`;
-    const result = await this.runLocal(workingCopy, [
-      'ls-files',
-      '--stage',
-      '-z',
-      '--',
-      `:(glob)${escapeGlob(prefix)}*`
-    ]);
-    if (result.exitCode !== 0) {
-      throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
-    }
-    const names = new Set<string>();
-    // -z: "<mode> <object> <stage>\t<path>\0" per entry.
-    for (const line of result.stdout.split('\0')) {
-      const tab = line.indexOf('\t');
-      if (tab > 0 && line.startsWith(`${GITLINK_MODE} `)) {
-        names.add(line.slice(tab + 1 + prefix.length));
-      }
-    }
-    return names;
+    const entries = await this.indexEntriesIn(workingCopy, folder);
+    return new Set([ ...entries ].filter(([ , mode ]) => mode === GITLINK_MODE).map(([ name ]) => name));
   }
 
   /** True while a merge or rebase is in progress in the working copy (FB-26). */
@@ -195,6 +172,49 @@ export class GitEngine implements BeforeApplicationShutdown {
       }
       throw error;
     }
+  }
+
+  /** `git check-ignore` with the paths on stdin; exit 1 means none is ignored. */
+  private async checkIgnore(workingCopy: string, paths: string[], options: string[]): Promise<Set<string>> {
+    if (paths.length === 0) {
+      return new Set();
+    }
+    const result = await this.runLocal(
+      workingCopy,
+      [ 'check-ignore', ...options, '--stdin', '-z' ],
+      paths.join('\0') + '\0'
+    );
+    if (result.exitCode !== 0 && result.exitCode !== 1) {
+      throw new Error(`git check-ignore failed: ${result.stderr.trim()}`);
+    }
+    return new Set(result.stdout.split('\0').filter(path => path !== ''));
+  }
+
+  /**
+   * The index entries directly inside `folder`, by name, with their modes.
+   * Lists only that folder's entries: the glob's `*` does not cross `/` (FB-15).
+   */
+  private async indexEntriesIn(workingCopy: string, folder: string): Promise<Map<string, string>> {
+    const prefix = folder === '' ? '' : `${folder}/`;
+    const result = await this.runLocal(workingCopy, [
+      'ls-files',
+      '--stage',
+      '-z',
+      '--',
+      `:(glob)${escapeGlob(prefix)}*`
+    ]);
+    if (result.exitCode !== 0) {
+      throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
+    }
+    const entries = new Map<string, string>();
+    // -z: "<mode> <object> <stage>\t<path>\0" per entry; a conflict has one per stage.
+    for (const line of result.stdout.split('\0')) {
+      const tab = line.indexOf('\t');
+      if (tab > 0) {
+        entries.set(line.slice(tab + 1 + prefix.length), line.slice(0, line.indexOf(' ')));
+      }
+    }
+    return entries;
   }
 
   private runLocal(cwd: string, args: string[], stdin?: string): Promise<GitResult> {

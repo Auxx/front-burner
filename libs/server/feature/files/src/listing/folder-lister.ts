@@ -1,0 +1,144 @@
+import { GitEngine } from '@front-burner/server-core-git';
+import { openInWorkingCopy, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
+import type { Entry, EntryKind, FolderListing } from '@front-burner/shared-contracts';
+import { compareEntryNames, isMarkdownName } from '@front-burner/shared-util';
+import { Injectable } from '@nestjs/common';
+import type { Dirent } from 'node:fs';
+import { constants } from 'node:fs';
+import { lstat, open, opendir, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+
+/** FB-18. */
+export const MAX_LISTED_ENTRIES = 5000;
+
+/** Never listed, in any case (FB-5, FB-19). */
+const isGit = (name: string) => name.toLowerCase() === '.git';
+
+const SUBFOLDER_FLAGS = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
+
+interface Listed {
+  name: string;
+  kind: EntryKind;
+}
+
+const kindOf = (dirent: Dirent, gitlinks: Set<string>): EntryKind => {
+  if (dirent.isSymbolicLink()) {
+    return 'symlink';
+  }
+  if (dirent.isDirectory()) {
+    return gitlinks.has(dirent.name) ? 'submodule' : 'folder';
+  }
+  // Anything else git could not have put there (a FIFO, a socket) is shown as a
+  // file; reading one is refused by `openInWorkingCopy`.
+  return 'file';
+};
+
+const byGroupAndName = (a: Listed, b: Listed) =>
+  Number(b.kind === 'folder') - Number(a.kind === 'folder') || compareEntryNames(a.name, b.name);
+
+/**
+ * True when the sub-folder has nothing listable in it. Opened through the
+ * parent's descriptor without following a link, and read for at most two entries.
+ */
+async function isEmptyFolder(path: string): Promise<boolean> {
+  let handle;
+  try {
+    handle = await open(path, SUBFOLDER_FLAGS);
+  } catch {
+    // Gone or swapped for a link since `readdir`; the next listing shows it as it is.
+    return false;
+  }
+  try {
+    const dir = await opendir(`/proc/self/fd/${handle.fd}`);
+    try {
+      for (let read = 0; read < 2; read++) {
+        const entry = await dir.read();
+        if (entry === null) {
+          return true;
+        }
+        if (!isGit(entry.name)) {
+          return false;
+        }
+      }
+      return (await dir.read()) === null;
+    } finally {
+      await dir.close();
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Lists one folder of a working copy (FB-15 to FB-20b). Reads only that
+ * folder; its git queries are scoped to it too, so the cost does not grow with
+ * the size of the working copy (NF-2.10). Takes no lock (A-5.3).
+ */
+@Injectable()
+export class FolderLister {
+  constructor(private readonly git: GitEngine) {}
+
+  /** @throws PathRefusedError — `not-found` for a path that is not a folder. */
+  async list(root: string, path: string): Promise<FolderListing> {
+    const resolved = await resolveInWorkingCopy(root, path);
+    if (resolved.type !== 'folder') {
+      throw new PathRefusedError('not-found');
+    }
+    const folder = await openInWorkingCopy(root, resolved);
+    try {
+      const [ dirents, gitlinks ] = await Promise.all([
+        readdir(folder.path, { withFileTypes: true }),
+        this.git.gitlinksIn(root, path)
+      ]);
+      const all = dirents
+        .filter(dirent => !isGit(dirent.name))
+        .map(dirent => ({ name: dirent.name, kind: kindOf(dirent, gitlinks) }))
+        .sort(byGroupAndName);
+      const listed = all.slice(0, MAX_LISTED_ENTRIES);
+      const [ ignored, entries ] = await Promise.all([
+        this.ignoredNames(root, path, listed),
+        Promise.all(listed.map(entry => this.describe(folder.path, entry)))
+      ]);
+      return {
+        path,
+        ignored: ignored.folder,
+        entries: entries.map(entry => ({ ...entry, ignored: ignored.names.has(entry.name) })),
+        more: all.length - listed.length
+      };
+    } finally {
+      await folder.handle.close();
+    }
+  }
+
+  /**
+   * Inside an ignored folder everything is ignored (FB-20b), which saves asking
+   * git about each entry; elsewhere git decides per entry. git never reports a
+   * folder that holds a tracked file, so a tracked file is never ignored.
+   */
+  private async ignoredNames(
+    root: string,
+    path: string,
+    listed: Listed[]
+  ): Promise<{ folder: boolean; names: Set<string>; }> {
+    const folder = path !== '' && (await this.git.ignoredAmong(root, [ path ])).has(path);
+    if (folder) {
+      return { folder, names: new Set(listed.map(entry => entry.name)) };
+    }
+    const prefix = path === '' ? '' : `${path}/`;
+    const ignored = await this.git.ignoredAmong(root, listed.map(entry => prefix + entry.name));
+    return { folder, names: new Set([ ...ignored ].map(entry => entry.slice(prefix.length))) };
+  }
+
+  private async describe(folder: string, { name, kind }: Listed): Promise<Entry> {
+    const path = join(folder, name);
+    const entry: Entry = { name, kind, size: null, markdown: false, ignored: false, empty: false };
+    if (kind === 'file') {
+      // Gone since `readdir`: listed with no size rather than failing the listing.
+      entry.size = await lstat(path).then(stats => stats.size, () => null);
+      entry.markdown = isMarkdownName(name);
+    } else if (kind === 'folder') {
+      entry.empty = await isEmptyFolder(path);
+    }
+    return entry;
+  }
+}
