@@ -258,40 +258,44 @@ When onboarding ends, it is disabled for good.
 
 ## Acceptance criteria
 
-1. On a fresh instance with an empty database and no OIDC environment variables,
-   opening any web client URL shows the Administrator onboarding page.
-2. If `FRONT_BURNER_SETUP_TOKEN` is not set, the page explains how to set it,
-   and onboarding requests that change data return `404 Not Found`.
-3. Onboarding requests with a missing or wrong setup token return `404 Not
-   Found` and change nothing.
-4. Completing the username + password path creates exactly one administrator,
-   sends the user to the login page, and that user can log in. After that, the
-   onboarding page and onboarding API cannot be reached.
-5. A password that does not meet REQ-AUTH-002 is refused.
-6. Completing the OIDC path with a valid configuration sends the user to the
-   login page. After a successful OIDC login with the matching email, an OIDC
-   administrator exists and is logged in, and onboarding cannot be reached.
-7. Completing the OIDC path with a wrong client secret, then trying to log in,
-   brings the user back to the onboarding page with the form pre-filled. Fixing
-   the secret and logging in again completes onboarding.
-8. While OIDC onboarding is pending, an OIDC login with a different email is
-   refused and creates no account.
-9. With **Require verified email** on, an OIDC login whose `email_verified`
-   claim is missing or `false` is refused. With it off, the same login is
-   accepted.
-10. While OIDC onboarding is pending, switching to the username + password path
-    and completing it creates a password administrator and discards the pending
-    OIDC setup.
-11. With all required OIDC environment variables set and an empty database, the
-    onboarding page is never shown. The first OIDC login with
-    `FRONT_BURNER_ADMIN_EMAIL` creates an OIDC administrator. Onboarding
-    requests that change data return `404 Not Found`.
-12. With only some of the required OIDC environment variables set, the backend
-    refuses to start and names the missing variables.
-13. Two onboarding requests sent at the same time create only one administrator.
-14. With onboarding `completed`, calling any onboarding endpoint directly
-    returns `404 Not Found`, the same response as an unknown route, and changes
-    nothing.
+- **AC-AUTH-001.1** On a fresh instance with an empty database and no OIDC
+  environment variables, opening any web client URL shows the Administrator
+  onboarding page.
+- **AC-AUTH-001.2** If `FRONT_BURNER_SETUP_TOKEN` is not set, the page explains
+  how to set it, and onboarding requests that change data return `404 Not
+  Found`.
+- **AC-AUTH-001.3** Onboarding requests with a missing or wrong setup token
+  return `404 Not Found` and change nothing.
+- **AC-AUTH-001.4** Completing the username + password path creates exactly one
+  administrator, sends the user to the login page, and that user can log in.
+  After that, the onboarding page and onboarding API cannot be reached.
+- **AC-AUTH-001.5** A password that does not meet REQ-AUTH-002 is refused.
+- **AC-AUTH-001.6** Completing the OIDC path with a valid configuration sends
+  the user to the login page. After a successful OIDC login with the matching
+  email, an OIDC administrator exists and is logged in, and onboarding cannot be
+  reached.
+- **AC-AUTH-001.7** Completing the OIDC path with a wrong client secret, then
+  trying to log in, brings the user back to the onboarding page with the form
+  pre-filled. Fixing the secret and logging in again completes onboarding.
+- **AC-AUTH-001.8** While OIDC onboarding is pending, an OIDC login with a
+  different email is refused and creates no account.
+- **AC-AUTH-001.9** With **Require verified email** on, an OIDC login whose
+  `email_verified` claim is missing or `false` is refused. With it off, the same
+  login is accepted.
+- **AC-AUTH-001.10** While OIDC onboarding is pending, switching to the
+  username + password path and completing it creates a password administrator
+  and discards the pending OIDC setup.
+- **AC-AUTH-001.11** With all required OIDC environment variables set and an
+  empty database, the onboarding page is never shown. The first OIDC login with
+  `FRONT_BURNER_ADMIN_EMAIL` creates an OIDC administrator. Onboarding requests
+  that change data return `404 Not Found`.
+- **AC-AUTH-001.12** With only some of the required OIDC environment variables
+  set, the backend refuses to start and names the missing variables.
+- **AC-AUTH-001.13** Two onboarding requests sent at the same time create only
+  one administrator.
+- **AC-AUTH-001.14** With onboarding `completed`, calling any onboarding
+  endpoint directly returns `404 Not Found`, the same response as an unknown
+  route, and changes nothing.
 
 ## Out of scope
 

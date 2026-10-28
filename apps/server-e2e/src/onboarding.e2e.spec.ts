@@ -129,7 +129,7 @@ describe('administrator onboarding', () => {
 
     expect((await post(server, CHECK, { setupToken: TOKEN })).status).toBe(204);
     expect((await post(server, SETUP, { setupToken: TOKEN, ...details })).status).toBe(204);
-    // Criterion 4: that user can log in.
+    // AC-AUTH-001.4: that user can log in.
     await expect(login(server, 'cookie', details)).resolves.toMatchObject({ authToken: expect.any(String) });
 
     await expectSameAsUnknownRoute(server, await fetch(`${server.url}${ONBOARDING}`), 'GET');
@@ -298,7 +298,7 @@ describe('administrator onboarding with OIDC', () => {
     await browser.close();
   });
 
-  it('criterion 6: saving the setup, then the first OIDC login creates the administrator', async () => {
+  it('AC-AUTH-001.6: saving the setup, then the first OIDC login creates the administrator', async () => {
     const target = await start();
     expect((await post(target, OIDC_SETUP, setup())).status).toBe(204);
     expect(await state(target)).toBe('oidc-pending');
@@ -313,7 +313,7 @@ describe('administrator onboarding with OIDC', () => {
     await expectSameAsUnknownRoute(target, await post(target, OIDC_SETUP, setup()), 'POST', setup());
   });
 
-  it('criterion 7: a failed login comes back to onboarding, and saving with the secret blank keeps it', async () => {
+  it('AC-AUTH-001.7: a failed login comes back to onboarding, and saving with the secret blank keeps it', async () => {
     const target = await start();
     expect((await post(target, OIDC_SETUP, setup())).status).toBe(204);
 
@@ -333,7 +333,7 @@ describe('administrator onboarding with OIDC', () => {
     expect(users(target)).toHaveLength(1);
   });
 
-  it('criterion 10: the password path discards a pending OIDC setup', async () => {
+  it('AC-AUTH-001.10: the password path discards a pending OIDC setup', async () => {
     const target = await start();
     expect((await post(target, OIDC_SETUP, setup())).status).toBe(204);
     expect((await post(target, SETUP, { setupToken: TOKEN, ...details, email: 'pw@example.com' })).status).toBe(

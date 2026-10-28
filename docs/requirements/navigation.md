@@ -173,37 +173,41 @@ rules that every page shares.
 
 ## Acceptance criteria
 
-1. Every page that needs a login has the app header with **Front Burner**,
-   **Repositories** and the user menu; the login page has no app header.
-2. **Front Burner** leads to the dashboard and **Repositories** to the
-   repository management page; the current page's link is marked as current.
-3. The user menu shows the user's display name, email and the instance's
-   version, and offers **Preferences** and **Log out**. **Log out** logs out
-   every open tab and deletes browser drafts.
-4. On a phone, the links are in a **Menu** button, and nothing scrolls sideways.
-5. On the repository screen there is one bar, with the home link, the repository
-   name, the branch and counts, the git actions, the save status and the user
-   menu. On a phone, the git actions are in a menu and the save status and
-   counts stay visible.
-6. The repository name opens the repository switcher with up to 10 recent
-   repositories, **All repositories** and **Repository settings**. Choosing
-   another repository opens it, and an edit typed just before is saved.
-7. `/no-such-page`, and a repository ID that belongs to another user, show "This
-   page doesn't exist." with a link to the dashboard.
-8. The browser's back button returns from a file to the previously opened file,
-   and from the repository screen to the dashboard.
-9. The browser tab shows "guide.md · handbook · Front Burner", with "•" in front
-   while an edit is not saved.
-10. The repository settings page shows "Repositories › handbook › Settings", and
-    the first two items are links.
-11. After a new version is deployed, every page shows "A new version of Front
-    Burner is available." with **Reload**. Turning the network off shows the
-    offline banner, which goes away when the network returns.
-12. **Skip to content** is the first element reached with `Tab`. After moving to
-    another page, focus is on its heading and a screen reader announces its
-    title.
-13. The menus open and close with the keyboard, and `Esc` returns focus to their
-    button. axe-core reports no violations in the app header.
+- **AC-APP-001.1** Every page that needs a login has the app header with **Front
+  Burner**, **Repositories** and the user menu; the login page has no app
+  header.
+- **AC-APP-001.2** **Front Burner** leads to the dashboard and **Repositories**
+  to the repository management page; the current page's link is marked as
+  current.
+- **AC-APP-001.3** The user menu shows the user's display name, email and the
+  instance's version, and offers **Preferences** and **Log out**. **Log out**
+  logs out every open tab and deletes browser drafts.
+- **AC-APP-001.4** On a phone, the links are in a **Menu** button, and nothing
+  scrolls sideways.
+- **AC-APP-001.5** On the repository screen there is one bar, with the home
+  link, the repository name, the branch and counts, the git actions, the save
+  status and the user menu. On a phone, the git actions are in a menu and the
+  save status and counts stay visible.
+- **AC-APP-001.6** The repository name opens the repository switcher with up to
+  10 recent repositories, **All repositories** and **Repository settings**.
+  Choosing another repository opens it, and an edit typed just before is saved.
+- **AC-APP-001.7** `/no-such-page`, and a repository ID that belongs to another
+  user, show "This page doesn't exist." with a link to the dashboard.
+- **AC-APP-001.8** The browser's back button returns from a file to the
+  previously opened file, and from the repository screen to the dashboard.
+- **AC-APP-001.9** The browser tab shows "guide.md · handbook · Front Burner",
+  with "•" in front while an edit is not saved.
+- **AC-APP-001.10** The repository settings page shows "Repositories › handbook
+  › Settings", and the first two items are links.
+- **AC-APP-001.11** After a new version is deployed, every page shows "A new
+  version of Front Burner is available." with **Reload**. Turning the network
+  off shows the offline banner, which goes away when the network returns.
+- **AC-APP-001.12** **Skip to content** is the first element reached with `Tab`.
+  After moving to another page, focus is on its heading and a screen reader
+  announces its title.
+- **AC-APP-001.13** The menus open and close with the keyboard, and `Esc`
+  returns focus to their button. axe-core reports no violations in the app
+  header.
 
 ## Out of scope
 

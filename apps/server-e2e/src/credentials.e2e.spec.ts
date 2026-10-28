@@ -92,7 +92,7 @@ describe('saved credentials (REQ-REPO-001)', () => {
   const unlock = (authToken: string, id: number, passphrase = FIXTURE_PASSPHRASE) =>
     postJson(server, `/api/v1/credentials/ssh-keys/${id}/unlock`, { passphrase }, authorized(authToken));
 
-  it('criterion 10: an unlock ends with the session and is never stored or logged', async () => {
+  it('AC-REPO-001.10: an unlock ends with the session and is never stored or logged', async () => {
     const id = seedProtectedKey(dataDir, 1, 'Laptop');
     const first = await login(server, 'body');
 
@@ -121,7 +121,7 @@ describe('saved credentials (REQ-REPO-001)', () => {
     }
   });
 
-  it('criterion 22: another user\'s credential answers 404 and is not listed', async () => {
+  it('AC-REPO-001.22: another user\'s credential answers 404 and is not listed', async () => {
     const [ bob ] = seed(dataDir, { users: [ { email: 'bob@example.com' } ] }).userIds;
     const bobsKey = seedProtectedKey(dataDir, bob as number, 'Bob\'s key');
     const { authToken } = await login(server, 'body');

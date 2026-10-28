@@ -103,7 +103,7 @@ describe('OIDC from the environment', () => {
     await browser.close();
   });
 
-  it('REQ-AUTH-001 criterion 11: the first OIDC login with the admin email creates the administrator', async () => {
+  it('AC-AUTH-001.11: the first OIDC login with the admin email creates the administrator', async () => {
     await start();
     const state = await (await fetch(`${server?.url}/api/v1/onboarding`)).json();
     expect(state).toEqual({ state: 'oidc-pending', oidcFromEnvironment: true, setupTokenConfigured: true });
@@ -123,7 +123,7 @@ describe('OIDC from the environment', () => {
     expect(await (await fetch(`${server?.url}/api/v1/onboarding`)).json()).toMatchObject({ code: 'not-found' });
   });
 
-  it('REQ-AUTH-001 criterion 12: refuses to start with some OIDC variables and names the missing ones', async () => {
+  it('AC-AUTH-001.12: refuses to start with some OIDC variables and names the missing ones', async () => {
     const { code, output } = await runServerToExit({ FRONT_BURNER_OIDC_ISSUER: 'https://id.example.com' });
     expect(code).not.toBe(0);
     for (
@@ -133,7 +133,7 @@ describe('OIDC from the environment', () => {
     }
   });
 
-  it('REQ-AUTH-001 criterion 8: refuses another email while pending and creates no account', async () => {
+  it('AC-AUTH-001.8: refuses another email while pending and creates no account', async () => {
     await start();
     provider?.setClaims({ email: 'eve@example.com' });
 
@@ -142,7 +142,7 @@ describe('OIDC from the environment', () => {
     expect(audit().map(row => row.reason)).toEqual([ 'admin-email-mismatch' ]);
   });
 
-  it('REQ-AUTH-001 criterion 9: refuses an unverified email when required, accepts it when not', async () => {
+  it('AC-AUTH-001.9: refuses an unverified email when required, accepts it when not', async () => {
     await start();
     provider?.setClaims({ email_verified: false });
     expect((await throughProvider()).location).toBe('/login?oidcError=email-not-verified');
@@ -152,7 +152,7 @@ describe('OIDC from the environment', () => {
     expect((await throughProvider()).location).toMatch(/^\/login\/oidc\?code=/);
   });
 
-  it('REQ-AUTH-003 criterion 2: offers OIDC while the provider answers', async () => {
+  it('AC-AUTH-003.2: offers OIDC while the provider answers', async () => {
     await start();
     expect(await (await fetch(`${server?.url}/api/v1/auth/methods`)).json()).toEqual({
       oidc: 'available',
@@ -182,7 +182,7 @@ describe('OIDC from the environment', () => {
     expect(server.output()).toContain('OIDC provider discovery failed');
   });
 
-  it('REQ-AUTH-003 criterion 7: returns tokens like a password login, with no token in any URL', async () => {
+  it('AC-AUTH-003.7: returns tokens like a password login, with no token in any URL', async () => {
     await start();
     const { locations, tokens } = await logIn();
 
@@ -198,7 +198,7 @@ describe('OIDC from the environment', () => {
     }
   });
 
-  it('REQ-AUTH-003 criterion 8: cancelled, disabled and unregistered logins fail alike with different reasons', async () => {
+  it('AC-AUTH-003.8: cancelled, disabled and unregistered logins fail alike with different reasons', async () => {
     await start();
     expect((await logIn()).tokens.status).toBe(200);
 
@@ -228,7 +228,7 @@ describe('OIDC from the environment', () => {
     }
   });
 
-  it('REQ-AUTH-003 criterion 9: creates an OIDC user only with automatic registration', async () => {
+  it('AC-AUTH-003.9: creates an OIDC user only with automatic registration', async () => {
     await start();
     expect((await logIn()).tokens.status).toBe(200);
     provider?.setClaims({ sub: 'subject-2', email: 'new@example.com' });

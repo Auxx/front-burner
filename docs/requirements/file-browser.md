@@ -327,71 +327,77 @@ to them, as code editors usually do.
 
 ## Acceptance criteria
 
-1. Opening an openable repository from the dashboard shows the repository screen
-   with the file tree, and moves the repository to the top of the recent
-   repositories list.
-2. A visitor who is not logged in is sent to the login page. A request for
-   another user's repository gets the same response as a repository that does
-   not exist.
-3. A repository that is still cloning shows its status and a link to the
-   repository management page, not the tree.
-4. On a desktop browser the tree, editor and preview are side by side; the tree
-   collapses and expands, and the panes can be resized with the keyboard. On a
-   phone the tree is a drawer that closes when a file is opened.
-5. Opening a repository for the first time opens the root `README.md`. Opening
-   it again on the same device opens the last file opened there. A repository
-   with no README shows "Choose a file from the tree, or create one".
-6. Reloading `/repositories/<id>/files/docs/guide.md` reopens that file, with
-   `docs` expanded and `guide.md` highlighted.
-7. Expanding a folder lists only that folder's entries, sorted folders first and
-   in natural order (`2-setup.md` before `10-deploy.md`). In a repository of
-   100,000 files, a folder of 1,000 entries opens within NF-2.1.
-8. `.github` and `.claude` are listed; `.git` is not, and requests for paths
-   inside `.git` are refused.
-9. `.md`, `.MARKDOWN` and `.mdx` files open in the editor. A `.png` file, a
-   symbolic link and a submodule each show their message and do not open.
-10. A 2 MB `.md` file shows "This file is too large to edit". A `.md` file in
-    Latin-1 with non-ASCII characters shows "This file isn't UTF-8 text".
-11. A symbolic link pointing to `/etc/passwd` is listed but cannot be opened,
-    renamed onto or read through the API. Deleting it removes only the link.
-12. A file and a folder matched by `.gitignore` are shown with their names in a
-    different colour and the ignored icon. Hovering over the icon on a desktop,
-    or tapping it on a phone, shows "Ignored by .gitignore…" without opening the
-    entry. A tracked file that matches a rule looks like any other file.
-13. **New file** with the name `notes` creates `notes.md`, empty and untracked,
-    and opens it in the editor. Creating it inside an ignored folder shows the
-    .gitignore warning first.
-14. Creating `README.md` next to `readme.md` is refused. Renaming `readme.md` to
-    `README.md` works.
-15. **New folder** creates an empty folder, marked empty, with the note that
-    empty folders aren't saved in git.
-16. Renaming a Markdown file to `guide.txt` results in `guide.txt.md`.
-    **Rename** is not offered for a `.png` file. Renaming a folder that holds
-    images asks for a second confirmation with the number of images.
-17. Renaming the open file keeps it open in the editor under its new name, and
-    no edit made just before the rename is lost.
-18. Deleting a committed file asks for confirmation; deleting an untracked file
-    also warns that it can't be recovered. Deleting a folder says how many
-    files, non-Markdown files and uncommitted files it holds.
-19. Deleting the open file closes it in the editor.
-20. While a merge with conflicts is in progress, the file tree is replaced by
-    the list of conflicting files, and the API refuses create, rename and
-    delete.
-21. A file created from a second device appears in the first device's expanded
-    folder without a reload. A file deleted there closes in the first device's
-    editor with "This file was deleted or renamed elsewhere." when it has no
-    unsaved edits; with unsaved edits, the edits are kept and **Recreate it** is
-    offered.
-22. A folder that cannot be listed shows the error with **Try again**, and the
-    rest of the tree still works.
-23. Every action in the tree can be done with the keyboard alone and by touch
-    alone. axe-core reports no violations on the repository screen.
-24. A folder of 6,000 entries lists the first 5,000 in sort order and says "1000
-    more items not shown".
-25. A file named `café.md` typed with a decomposed é (`e` followed by U+0301) is
-    stored with the composed é, in NFC.
-26. Deleting a folder of 20,000 files shows it as "Deleting…" until it is gone,
-    and the screen stays usable meanwhile.
+- **AC-FILE-001.1** Opening an openable repository from the dashboard shows the
+  repository screen with the file tree, and moves the repository to the top of
+  the recent repositories list.
+- **AC-FILE-001.2** A visitor who is not logged in is sent to the login page. A
+  request for another user's repository gets the same response as a repository
+  that does not exist.
+- **AC-FILE-001.3** A repository that is still cloning shows its status and a
+  link to the repository management page, not the tree.
+- **AC-FILE-001.4** On a desktop browser the tree, editor and preview are side
+  by side; the tree collapses and expands, and the panes can be resized with the
+  keyboard. On a phone the tree is a drawer that closes when a file is opened.
+- **AC-FILE-001.5** Opening a repository for the first time opens the root
+  `README.md`. Opening it again on the same device opens the last file opened
+  there. A repository with no README shows "Choose a file from the tree, or
+  create one".
+- **AC-FILE-001.6** Reloading `/repositories/<id>/files/docs/guide.md` reopens
+  that file, with `docs` expanded and `guide.md` highlighted.
+- **AC-FILE-001.7** Expanding a folder lists only that folder's entries, sorted
+  folders first and in natural order (`2-setup.md` before `10-deploy.md`). In a
+  repository of 100,000 files, a folder of 1,000 entries opens within NF-2.1.
+- **AC-FILE-001.8** `.github` and `.claude` are listed; `.git` is not, and
+  requests for paths inside `.git` are refused.
+- **AC-FILE-001.9** `.md`, `.MARKDOWN` and `.mdx` files open in the editor. A
+  `.png` file, a symbolic link and a submodule each show their message and do
+  not open.
+- **AC-FILE-001.10** A 2 MB `.md` file shows "This file is too large to edit". A
+  `.md` file in Latin-1 with non-ASCII characters shows "This file isn't UTF-8
+  text".
+- **AC-FILE-001.11** A symbolic link pointing to `/etc/passwd` is listed but
+  cannot be opened, renamed onto or read through the API. Deleting it removes
+  only the link.
+- **AC-FILE-001.12** A file and a folder matched by `.gitignore` are shown with
+  their names in a different colour and the ignored icon. Hovering over the icon
+  on a desktop, or tapping it on a phone, shows "Ignored by .gitignore…" without
+  opening the entry. A tracked file that matches a rule looks like any other
+  file.
+- **AC-FILE-001.13** **New file** with the name `notes` creates `notes.md`,
+  empty and untracked, and opens it in the editor. Creating it inside an ignored
+  folder shows the .gitignore warning first.
+- **AC-FILE-001.14** Creating `README.md` next to `readme.md` is refused.
+  Renaming `readme.md` to `README.md` works.
+- **AC-FILE-001.15** **New folder** creates an empty folder, marked empty, with
+  the note that empty folders aren't saved in git.
+- **AC-FILE-001.16** Renaming a Markdown file to `guide.txt` results in
+  `guide.txt.md`. **Rename** is not offered for a `.png` file. Renaming a folder
+  that holds images asks for a second confirmation with the number of images.
+- **AC-FILE-001.17** Renaming the open file keeps it open in the editor under
+  its new name, and no edit made just before the rename is lost.
+- **AC-FILE-001.18** Deleting a committed file asks for confirmation; deleting
+  an untracked file also warns that it can't be recovered. Deleting a folder
+  says how many files, non-Markdown files and uncommitted files it holds.
+- **AC-FILE-001.19** Deleting the open file closes it in the editor.
+- **AC-FILE-001.20** While a merge with conflicts is in progress, the file tree
+  is replaced by the list of conflicting files, and the API refuses create,
+  rename and delete.
+- **AC-FILE-001.21** A file created from a second device appears in the first
+  device's expanded folder without a reload. A file deleted there closes in the
+  first device's editor with "This file was deleted or renamed elsewhere." when
+  it has no unsaved edits; with unsaved edits, the edits are kept and **Recreate
+  it** is offered.
+- **AC-FILE-001.22** A folder that cannot be listed shows the error with **Try
+  again**, and the rest of the tree still works.
+- **AC-FILE-001.23** Every action in the tree can be done with the keyboard
+  alone and by touch alone. axe-core reports no violations on the repository
+  screen.
+- **AC-FILE-001.24** A folder of 6,000 entries lists the first 5,000 in sort
+  order and says "1000 more items not shown".
+- **AC-FILE-001.25** A file named `café.md` typed with a decomposed é (`e`
+  followed by U+0301) is stored with the composed é, in NFC.
+- **AC-FILE-001.26** Deleting a folder of 20,000 files shows it as "Deleting…"
+  until it is gone, and the screen stays usable meanwhile.
 
 ## Out of scope
 

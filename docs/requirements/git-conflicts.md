@@ -215,43 +215,47 @@ has not been pushed (D-4.6). Pushing the merge is a normal push.
 
 ## Acceptance criteria
 
-1. A pull that conflicts on `guide.md` switches the repository screen to
-   conflict resolution, with "Merging origin/main into main" and "0 of 1 files
-   resolved". Another device that opens the repository sees the same screen.
-2. `guide.md` opens in the editor with plain markers labelled `<<<<<<< main` and
-   `>>>>>>> origin/main`, even if the working copy's configuration sets
-   `merge.conflictStyle=zdiff3`.
-3. "Conflict 1 of 3" with **Next** moves to the second conflict.
-4. **Accept mine**, **Accept theirs** and **Accept both** each replace the
-   conflict as described; the editor's undo brings the conflict back.
-5. While markers remain, the preview says it will come back when no conflict
-   markers are left; after the last one is removed, the preview renders again.
-6. **Mark as resolved** with a marker left asks to confirm; without markers it
-   marks the file resolved at once.
-7. A conflicting PNG offers only **Use my version** and **Use their version**. A
-   file deleted on the remote and changed locally offers **Keep the file** and
-   **Delete the file**, saying which side deleted it.
-8. **Start over** on a resolved file brings back its conflict markers and marks
-   it unresolved.
-9. During the merge, saving a file that is not conflicting, switching branches,
-   pulling and pushing are refused by the API.
-10. Resolving one file on a phone and the other on a desktop, then committing,
-    works; no lease expires in between.
-11. **Commit merge** is disabled until every file is resolved. It commits with
-    git's default message, as edited, and the user's commit author. The screen
-    then returns to normal on every device, and the notice offers **Push** and
-    **Undo merge**.
-12. **Abort merge** after resolving some files puts the branch and every file
-    back exactly as before the pull; `git status` shows no merge in progress.
-13. **Undo merge** after committing and before pushing puts the branch back to
-    its commit before the pull. After pushing, **Undo merge** is no longer
-    offered.
-14. Restarting the backend during a merge keeps the merge in progress and every
-    resolution made so far.
-15. The conflict list, the conflict bar and the buttons work with the keyboard
-    alone and by touch alone, and axe-core reports no violations.
-16. **Show mine** and **Show theirs** on a conflicting Markdown file open that
-    version read-only, and the list shows the size of each version.
+- **AC-GIT-003.1** A pull that conflicts on `guide.md` switches the repository
+  screen to conflict resolution, with "Merging origin/main into main" and "0 of
+  1 files resolved". Another device that opens the repository sees the same
+  screen.
+- **AC-GIT-003.2** `guide.md` opens in the editor with plain markers labelled
+  `<<<<<<< main` and `>>>>>>> origin/main`, even if the working copy's
+  configuration sets `merge.conflictStyle=zdiff3`.
+- **AC-GIT-003.3** "Conflict 1 of 3" with **Next** moves to the second conflict.
+- **AC-GIT-003.4** **Accept mine**, **Accept theirs** and **Accept both** each
+  replace the conflict as described; the editor's undo brings the conflict back.
+- **AC-GIT-003.5** While markers remain, the preview says it will come back when
+  no conflict markers are left; after the last one is removed, the preview
+  renders again.
+- **AC-GIT-003.6** **Mark as resolved** with a marker left asks to confirm;
+  without markers it marks the file resolved at once.
+- **AC-GIT-003.7** A conflicting PNG offers only **Use my version** and **Use
+  their version**. A file deleted on the remote and changed locally offers
+  **Keep the file** and **Delete the file**, saying which side deleted it.
+- **AC-GIT-003.8** **Start over** on a resolved file brings back its conflict
+  markers and marks it unresolved.
+- **AC-GIT-003.9** During the merge, saving a file that is not conflicting,
+  switching branches, pulling and pushing are refused by the API.
+- **AC-GIT-003.10** Resolving one file on a phone and the other on a desktop,
+  then committing, works; no lease expires in between.
+- **AC-GIT-003.11** **Commit merge** is disabled until every file is resolved.
+  It commits with git's default message, as edited, and the user's commit
+  author. The screen then returns to normal on every device, and the notice
+  offers **Push** and **Undo merge**.
+- **AC-GIT-003.12** **Abort merge** after resolving some files puts the branch
+  and every file back exactly as before the pull; `git status` shows no merge in
+  progress.
+- **AC-GIT-003.13** **Undo merge** after committing and before pushing puts the
+  branch back to its commit before the pull. After pushing, **Undo merge** is no
+  longer offered.
+- **AC-GIT-003.14** Restarting the backend during a merge keeps the merge in
+  progress and every resolution made so far.
+- **AC-GIT-003.15** The conflict list, the conflict bar and the buttons work
+  with the keyboard alone and by touch alone, and axe-core reports no
+  violations.
+- **AC-GIT-003.16** **Show mine** and **Show theirs** on a conflicting Markdown
+  file open that version read-only, and the list shows the size of each version.
 
 ## Out of scope
 

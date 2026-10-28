@@ -201,43 +201,44 @@ managing saved credentials as a list come later ([mvp.md](../product/mvp.md)).
 
 ## Acceptance criteria
 
-1. The repository management page lists all of a user's repositories sorted by
-   name, with name, remote, last access time and status, and filters them as the
-   user types. **Add repository** opens the Add repository page.
-2. The dashboard's **All repositories** link opens this page; its link for a
-   repository in error opens that repository's settings page.
-3. A cloning repository shows its progress without a reload, and becomes
-   **Ready** with **Open** when the clone ends.
-4. A failed clone shows "Clone failed" and, under **Details**, the git error
-   without secrets and with the request ID. **Retry clone** clones again with
-   the same settings; changing the credentials first is possible.
-5. Deleting a working copy's directory on disk while the backend is stopped
-   shows "Working copy is missing or damaged" after the next start. **Clone
-   again** warns about lost work, clones it, and keeps the repository's name and
-   commit author override.
-6. A repository whose last push was refused shows "Credentials refused" on the
-   dashboard, this page and its settings page, and can still be opened. A
-   successful background fetch does not remove the warning; the next successful
-   push does.
-7. After a backend restart, a repository with a passphrase-protected key shows
-   "Key locked" with **Unlock**.
-8. The **Credentials** section shows the credentials' name, kind and, for an SSH
-   key, its fingerprint, never the secret. **Change credentials** opens the
-   repository credentials dialog.
-9. The **Commit author** section shows the author in use and switches between an
-   override and the default.
-10. **Clone details** shows "Single branch: main" for a single-branch clone, and
-    the git control level.
-11. Removing a repository with no uncommitted changes and nothing to push needs
-    one click. With 2 uncommitted files and 3 commits not pushed, the dialog
-    lists both and needs the repository name typed.
-12. After removing, the repository is gone from every list, its working copy is
-    deleted from disk, its saved credentials remain in the profile, and a second
-    device that had it open goes to the dashboard.
-13. Removing a repository that is cloning cancels the clone.
-14. A request for another user's repository settings, or to remove another
-    user's repository, gets the same response as for a repository that does not
-    exist.
+- **AC-REPO-003.1** The repository management page lists all of a user's
+  repositories sorted by name, with name, remote, last access time and status,
+  and filters them as the user types. **Add repository** opens the Add
+  repository page.
+- **AC-REPO-003.2** The dashboard's **All repositories** link opens this page;
+  its link for a repository in error opens that repository's settings page.
+- **AC-REPO-003.3** A cloning repository shows its progress without a reload,
+  and becomes **Ready** with **Open** when the clone ends.
+- **AC-REPO-003.4** A failed clone shows "Clone failed" and, under **Details**,
+  the git error without secrets and with the request ID. **Retry clone** clones
+  again with the same settings; changing the credentials first is possible.
+- **AC-REPO-003.5** Deleting a working copy's directory on disk while the
+  backend is stopped shows "Working copy is missing or damaged" after the next
+  start. **Clone again** warns about lost work, clones it, and keeps the
+  repository's name and commit author override.
+- **AC-REPO-003.6** A repository whose last push was refused shows "Credentials
+  refused" on the dashboard, this page and its settings page, and can still be
+  opened. A successful background fetch does not remove the warning; the next
+  successful push does.
+- **AC-REPO-003.7** After a backend restart, a repository with a
+  passphrase-protected key shows "Key locked" with **Unlock**.
+- **AC-REPO-003.8** The **Credentials** section shows the credentials' name,
+  kind and, for an SSH key, its fingerprint, never the secret. **Change
+  credentials** opens the repository credentials dialog.
+- **AC-REPO-003.9** The **Commit author** section shows the author in use and
+  switches between an override and the default.
+- **AC-REPO-003.10** **Clone details** shows "Single branch: main" for a
+  single-branch clone, and the git control level.
+- **AC-REPO-003.11** Removing a repository with no uncommitted changes and
+  nothing to push needs one click. With 2 uncommitted files and 3 commits not
+  pushed, the dialog lists both and needs the repository name typed.
+- **AC-REPO-003.12** After removing, the repository is gone from every list, its
+  working copy is deleted from disk, its saved credentials remain in the
+  profile, and a second device that had it open goes to the dashboard.
+- **AC-REPO-003.13** Removing a repository that is cloning cancels the clone.
+- **AC-REPO-003.14** A request for another user's repository settings, or to
+  remove another user's repository, gets the same response as for a repository
+  that does not exist.
 
 ## Out of scope
 

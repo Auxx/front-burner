@@ -214,46 +214,50 @@ file, only from the preview.
 
 ## Acceptance criteria
 
-1. `<p align="center"><img src="logo.png" width="120" alt="Logo"></p>` renders a
-   centred image 120 px wide with its alt text.
-2. `<details><summary>More</summary>Hidden text</details>` renders a collapsed
-   block that opens on click; with `open` it starts open.
-3. `<kbd>Ctrl</kbd>`, `<sub>`, `<sup>`, `<mark>` and `<abbr title="…">` render
-   as on GitHub.
-4. A raw HTML table with `colspan`, `rowspan` and `align` renders with them.
-5. `<picture><source media="(prefers-color-scheme: dark)" srcset="dark.png">
-   <img src="light.png"></picture>` keeps both images' addresses and their
-   `media` rule.
-6. `<center>Hello</center>` and `<my-widget>Hello</my-widget>` render "Hello"
-   without the tags.
-7. `<script>alert(1)</script>`, `<style>body{display:none}</style>` and `<iframe
-   src="https://example.com"></iframe>` render nothing, run nothing and load
-   nothing.
-8. `<img src=x onerror="alert(1)">`, `<a href="javascript:alert(1)">x</a>`, `<a
-   href="JaVaScRiPt&colon;alert(1)">x</a>` and `[x](javascript:alert(1))` run
-   nothing; the links render as plain text.
-9. `<div style="position:fixed;inset:0">` and `<div class="app-header">` have
-   their `style` and `class` removed; the page layout is unchanged.
-10. `<a name="install"></a>` becomes `name="user-content-install"`, and a link
-    to `#install` in the same file still scrolls to it. An element with
-    `id="app"` does not clash with the page.
-11. `<input type="checkbox" checked>` renders a ticked, disabled checkbox;
-    `<input type="text">` is removed.
-12. A code block's `language-ts` class is kept and highlighted; `<code
-    class="evil">` loses its class.
-13. A file with removed HTML shows "Some HTML isn't shown in the preview."
-    **Details** lists for example "`<iframe>` × 2" and "`style` attribute × 5",
-    and never shows removed content or values. Deleting the HTML in the editor
-    removes the notice. A file with only HTML comments shows no notice.
-14. **Hide** hides the notice until the file is opened again.
-15. The editor still shows every removed tag in the source, and saving leaves
-    the file unchanged.
-16. The XSS corpus test and the end-to-end Content Security Policy test pass in
-    CI; previewing the corpus reports no Content Security Policy violation for
-    script, styles or event handlers.
-17. `<img src="//cdn.example.com/a.png">` is kept as an `https:` address
-    (SH-16), and `<a href="//example.com">` opens `https://example.com` in a new
-    tab.
+- **AC-EDIT-002.1** `<p align="center"><img src="logo.png" width="120"
+  alt="Logo"></p>` renders a centred image 120 px wide with its alt text.
+- **AC-EDIT-002.2** `<details><summary>More</summary>Hidden text</details>`
+  renders a collapsed block that opens on click; with `open` it starts open.
+- **AC-EDIT-002.3** `<kbd>Ctrl</kbd>`, `<sub>`, `<sup>`, `<mark>` and `<abbr
+  title="…">` render as on GitHub.
+- **AC-EDIT-002.4** A raw HTML table with `colspan`, `rowspan` and `align`
+  renders with them.
+- **AC-EDIT-002.5** `<picture><source media="(prefers-color-scheme: dark)"
+  srcset="dark.png"> <img src="light.png"></picture>` keeps both images'
+  addresses and their `media` rule.
+- **AC-EDIT-002.6** `<center>Hello</center>` and `<my-widget>Hello</my-widget>`
+  render "Hello" without the tags.
+- **AC-EDIT-002.7** `<script>alert(1)</script>`,
+  `<style>body{display:none}</style>` and `<iframe
+  src="https://example.com"></iframe>` render nothing, run nothing and load
+  nothing.
+- **AC-EDIT-002.8** `<img src=x onerror="alert(1)">`, `<a
+  href="javascript:alert(1)">x</a>`, `<a href="JaVaScRiPt&colon;alert(1)">x</a>`
+  and `[x](javascript:alert(1))` run nothing; the links render as plain text.
+- **AC-EDIT-002.9** `<div style="position:fixed;inset:0">` and `<div
+  class="app-header">` have their `style` and `class` removed; the page layout
+  is unchanged.
+- **AC-EDIT-002.10** `<a name="install"></a>` becomes
+  `name="user-content-install"`, and a link to `#install` in the same file still
+  scrolls to it. An element with `id="app"` does not clash with the page.
+- **AC-EDIT-002.11** `<input type="checkbox" checked>` renders a ticked,
+  disabled checkbox; `<input type="text">` is removed.
+- **AC-EDIT-002.12** A code block's `language-ts` class is kept and highlighted;
+  `<code class="evil">` loses its class.
+- **AC-EDIT-002.13** A file with removed HTML shows "Some HTML isn't shown in
+  the preview." **Details** lists for example "`<iframe>` × 2" and "`style`
+  attribute × 5", and never shows removed content or values. Deleting the HTML
+  in the editor removes the notice. A file with only HTML comments shows no
+  notice.
+- **AC-EDIT-002.14** **Hide** hides the notice until the file is opened again.
+- **AC-EDIT-002.15** The editor still shows every removed tag in the source, and
+  saving leaves the file unchanged.
+- **AC-EDIT-002.16** The XSS corpus test and the end-to-end Content Security
+  Policy test pass in CI; previewing the corpus reports no Content Security
+  Policy violation for script, styles or event handlers.
+- **AC-EDIT-002.17** `<img src="//cdn.example.com/a.png">` is kept as an
+  `https:` address (SH-16), and `<a href="//example.com">` opens
+  `https://example.com` in a new tab.
 
 ## Out of scope
 

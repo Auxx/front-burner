@@ -197,41 +197,46 @@ PNG, JPEG, GIF, WebP, AVIF and SVG images are shown.
 
 ## Acceptance criteria
 
-1. In `docs/guide.md`, `![Diagram](img/flow.png)` shows `docs/img/flow.png`,
-   `![](../logo.svg)` shows the root's `logo.svg`, and `![](/images/cover.png)`
-   shows `images/cover.png` at the root.
-2. `<img src="img/flow.png" width="200">` in the same file shows the same image
-   200 px wide.
-3. An image that was added to the working copy but not committed is shown.
-4. In the browser's network log, repository images are requested from the API
-   with the `Authorization` header; the page shows them through `blob:` URLs,
-   and no image address contains a token.
-5. `![](my%20photo.png)` shows `my photo.png`. `![](img.png?v=2)` shows
-   `img.png`.
-6. `![](../../../../etc/passwd)`, `![](.git/config)` and an image path through a
-   symbolic link show "Can't show this image", and the image endpoint refuses
-   them.
-7. A missing image shows "Image not found: img/missing.png" with its alt text. A
-   12 MB PNG shows "This image is too large to preview". A `.tiff` shows "This
-   image format isn't supported".
-8. A file with 200 images loads only those near the visible part, at most 4 at a
-   time. Typing elsewhere in the file reloads none of them. Switching to another
-   file and back shows them without loading them again.
-9. Replacing an image file on disk (for example by a pull) shows the new image
-   in the open preview without a reload.
-10. `<picture>` with a dark-mode `<source>` shows the dark image in the dark
-    colour scheme and the light one in the light scheme, and switches when the
-    scheme changes. Only the shown image is requested.
-11. A file with a remote badge shows "Remote image from img.shields.io", and the
-    browser makes no request to that host. **Show remote images** loads it with
-    no referrer; reopening the file shows the placeholder again.
-12. `![](http://example.com/a.png)` shows "Insecure image (http) isn't shown"
-    even after **Show remote images**.
-13. An SVG with an embedded `<script>` is shown as an image and runs nothing.
-14. A linked image whose file is missing keeps its link around the placeholder.
-15. A screen reader reads a placeholder as its alt text and the reason.
-16. A request to the image endpoint for another user's repository gets the same
-    response as for a repository that does not exist.
+- **AC-EDIT-003.1** In `docs/guide.md`, `![Diagram](img/flow.png)` shows
+  `docs/img/flow.png`, `![](../logo.svg)` shows the root's `logo.svg`, and
+  `![](/images/cover.png)` shows `images/cover.png` at the root.
+- **AC-EDIT-003.2** `<img src="img/flow.png" width="200">` in the same file
+  shows the same image 200 px wide.
+- **AC-EDIT-003.3** An image that was added to the working copy but not
+  committed is shown.
+- **AC-EDIT-003.4** In the browser's network log, repository images are
+  requested from the API with the `Authorization` header; the page shows them
+  through `blob:` URLs, and no image address contains a token.
+- **AC-EDIT-003.5** `![](my%20photo.png)` shows `my photo.png`.
+  `![](img.png?v=2)` shows `img.png`.
+- **AC-EDIT-003.6** `![](../../../../etc/passwd)`, `![](.git/config)` and an
+  image path through a symbolic link show "Can't show this image", and the image
+  endpoint refuses them.
+- **AC-EDIT-003.7** A missing image shows "Image not found: img/missing.png"
+  with its alt text. A 12 MB PNG shows "This image is too large to preview". A
+  `.tiff` shows "This image format isn't supported".
+- **AC-EDIT-003.8** A file with 200 images loads only those near the visible
+  part, at most 4 at a time. Typing elsewhere in the file reloads none of them.
+  Switching to another file and back shows them without loading them again.
+- **AC-EDIT-003.9** Replacing an image file on disk (for example by a pull)
+  shows the new image in the open preview without a reload.
+- **AC-EDIT-003.10** `<picture>` with a dark-mode `<source>` shows the dark
+  image in the dark colour scheme and the light one in the light scheme, and
+  switches when the scheme changes. Only the shown image is requested.
+- **AC-EDIT-003.11** A file with a remote badge shows "Remote image from
+  img.shields.io", and the browser makes no request to that host. **Show remote
+  images** loads it with no referrer; reopening the file shows the placeholder
+  again.
+- **AC-EDIT-003.12** `![](http://example.com/a.png)` shows "Insecure image
+  (http) isn't shown" even after **Show remote images**.
+- **AC-EDIT-003.13** An SVG with an embedded `<script>` is shown as an image and
+  runs nothing.
+- **AC-EDIT-003.14** A linked image whose file is missing keeps its link around
+  the placeholder.
+- **AC-EDIT-003.15** A screen reader reads a placeholder as its alt text and the
+  reason.
+- **AC-EDIT-003.16** A request to the image endpoint for another user's
+  repository gets the same response as for a repository that does not exist.
 
 ## Out of scope
 

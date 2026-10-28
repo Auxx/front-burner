@@ -104,7 +104,7 @@ export class AddRepositoryService {
 
     const now = new Date();
     const { row, jobId } = this.database.db.transaction(tx => {
-      // Checked again inside the transaction: another submit may have taken the name meanwhile (AR criterion 2).
+      // Checked again inside the transaction: another submit may have taken the name meanwhile (AC-REPO-001.2).
       this.assertNameFree(tx, user.id, request.name);
       const credentialId = this.saveNewCredentials(tx, user.id, request.credentials) ?? credentials.savedId ?? null;
       let inserted;

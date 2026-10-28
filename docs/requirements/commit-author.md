@@ -154,35 +154,38 @@ level's automatic commits. Commits are not signed.
 
 ## Acceptance criteria
 
-1. A new password user's default commit author is their display name and email.
-   A new OIDC user's is the `name` claim and email from the ID token; without a
-   `name` claim, it is `preferred_username`, then the part of the email before
-   `@`.
-2. The user's first commit asks them to confirm "Commit as _Name &lt;email&gt;_"
-   or **Change** it; cancelling makes no commit. The second commit, in any
-   repository, does not ask.
-3. A commit records the confirmed name and email as both author and committer,
-   as `git log --format='%an <%ae> / %cn <%ce>'` shows.
-4. A working copy whose `.git/config` sets `user.name` and `user.email` to other
-   values still records the user's commit author.
-5. Setting an override for repository A makes commits in A use it, while commits
-   in repository B keep using the default. **Use my default** in A brings back
-   the default.
-6. The commit screen shows "Committing as _Name &lt;email&gt;_" for the author
-   that will be used. **Change** updates it, as the default or for that
-   repository.
-7. `12345+user@users.noreply.github.com` and `me@nas` are accepted. A name with
-   `<`, an email without `@`, and an email with a space are refused with a
-   reason next to the field, by the web client and by the API.
-8. Changing the default commit author does not change commits already made.
-9. A merge commit made by a pull and the commit that finishes a conflict
-   resolution use the same commit author as other commits in that repository.
-10. The API refuses a commit from a user who has not confirmed their commit
-    author, and the web client asks as in criterion 2.
-11. No other user, administrator or not, can read or change a user's commit
-    author through the API.
-12. Editing the default commit author on the Preferences page before the first
-    commit counts as confirming it: the first commit does not ask.
+- **AC-GIT-001.1** A new password user's default commit author is their display
+  name and email. A new OIDC user's is the `name` claim and email from the ID
+  token; without a `name` claim, it is `preferred_username`, then the part of
+  the email before `@`.
+- **AC-GIT-001.2** The user's first commit asks them to confirm "Commit as _Name
+  &lt;email&gt;_" or **Change** it; cancelling makes no commit. The second
+  commit, in any repository, does not ask.
+- **AC-GIT-001.3** A commit records the confirmed name and email as both author
+  and committer, as `git log --format='%an <%ae> / %cn <%ce>'` shows.
+- **AC-GIT-001.4** A working copy whose `.git/config` sets `user.name` and
+  `user.email` to other values still records the user's commit author.
+- **AC-GIT-001.5** Setting an override for repository A makes commits in A use
+  it, while commits in repository B keep using the default. **Use my default**
+  in A brings back the default.
+- **AC-GIT-001.6** The commit screen shows "Committing as _Name &lt;email&gt;_"
+  for the author that will be used. **Change** updates it, as the default or for
+  that repository.
+- **AC-GIT-001.7** `12345+user@users.noreply.github.com` and `me@nas` are
+  accepted. A name with `<`, an email without `@`, and an email with a space are
+  refused with a reason next to the field, by the web client and by the API.
+- **AC-GIT-001.8** Changing the default commit author does not change commits
+  already made.
+- **AC-GIT-001.9** A merge commit made by a pull and the commit that finishes a
+  conflict resolution use the same commit author as other commits in that
+  repository.
+- **AC-GIT-001.10** The API refuses a commit from a user who has not confirmed
+  their commit author, and the web client asks as in AC-GIT-001.2.
+- **AC-GIT-001.11** No other user, administrator or not, can read or change a
+  user's commit author through the API.
+- **AC-GIT-001.12** Editing the default commit author on the Preferences page
+  before the first commit counts as confirming it: the first commit does not
+  ask.
 
 ## Out of scope
 

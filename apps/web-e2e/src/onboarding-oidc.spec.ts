@@ -54,7 +54,7 @@ test.describe('administrator onboarding with OIDC', () => {
 
   const save = (page: Page) => page.getByRole('button', { name: 'Save and continue to login' }).click();
 
-  test('criterion 6: from the setup token to the dashboard', async ({ page, provider }) => {
+  test('AC-AUTH-001.6: from the setup token to the dashboard', async ({ page, provider }) => {
     await reachOidcStep(page);
     await expect(page.getByLabel('Redirect URI')).toHaveValue(/\/api\/v1\/auth\/oidc\/callback$/);
     await fillOidcStep(page, provider);
@@ -69,7 +69,7 @@ test.describe('administrator onboarding with OIDC', () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
-  test('criterion 7: a failed login comes back to the pre-filled form with the reason', async ({ page, provider }) => {
+  test('AC-AUTH-001.7: a failed login comes back to the pre-filled form with the reason', async ({ page, provider }) => {
     await reachOidcStep(page);
     await fillOidcStep(page, provider);
     await save(page);
