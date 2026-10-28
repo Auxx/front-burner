@@ -92,6 +92,25 @@ describe('EntrySummaries', () => {
     expect(await refusal(summaries.summary(root, '.git'))).toBe('inside-git');
   });
 
+  it('refuses a path inside a submodule and counts nothing for the submodule itself', async () => {
+    write(join(root, 'vendor', 'lib', 'docs', 'a.md'));
+    const sha = git(root, 'rev-parse', 'HEAD').trim();
+    git(root, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
+
+    expect(await summaries.summary(root, 'vendor/lib')).toEqual({ files: 0, nonMarkdown: 0, uncommitted: 0 });
+    expect(await refusal(summaries.summary(root, 'vendor/lib/docs'))).toBe('not-found');
+    expect(await refusal(summaries.summary(root, 'vendor/lib/docs/a.md'))).toBe('not-found');
+    expect(await refusal(summaries.ignored(root, 'vendor/lib/docs/b.md', 'file'))).toBe('not-found');
+    expect(await refusal(summaries.ignored(root, 'vendor/lib/b.md', 'file'))).toBe('not-found');
+  });
+
+  it('agrees with git on a nested repository', async () => {
+    write(join(root, 'notes', 'old', 'a.md'));
+    git(join(root, 'notes', 'old'), 'init', '-q');
+
+    expect(await summaries.summary(root, 'notes')).toEqual({ files: 0, nonMarkdown: 0, uncommitted: 0 });
+  });
+
   it('refuses a missing entry', async () => {
     expect(await refusal(summaries.summary(root, 'docs/gone.md'))).toBe('not-found');
   });

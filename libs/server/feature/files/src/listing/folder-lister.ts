@@ -103,18 +103,16 @@ export class FolderLister {
     }
     const folder = await openInWorkingCopy(root, resolved);
     try {
-      const slash = path.lastIndexOf('/');
-      const [ parent, name ] = slash === -1 ? [ '', path ] : [ path.slice(0, slash), path.slice(slash + 1) ];
-      const [ dirents, gitlinks, folderIgnored, isSubmodule ] = await Promise.all([
+      const [ dirents, gitlinks, submodule ] = await Promise.all([
         readdir(folder.path, { withFileTypes: true }),
         this.git.gitlinksIn(root, path),
-        path !== '' && this.git.ignoredAmong(root, [ path ]).then(ignored => ignored.has(path)),
-        path !== '' && this.git.gitlinksIn(root, parent).then(names => names.has(name))
+        this.git.submoduleOn(root, path)
       ]);
-      // A submodule is not a folder of this repository, and cannot be expanded (FB-23).
-      if (isSubmodule) {
+      // A submodule, and anything inside one, is not a folder of this repository (FB-23).
+      if (submodule !== null) {
         throw new PathRefusedError('not-found');
       }
+      const folderIgnored = path !== '' && (await this.git.ignoredAmong(root, [ path ])).has(path);
       const all = dirents
         .filter(dirent => !isGit(dirent.name))
         .map(dirent => ({ name: dirent.name, kind: kindOf(dirent, gitlinks) }))

@@ -216,6 +216,15 @@ describe('FolderLister', () => {
     expect(await refusal('vendor/lib')).toBe('not-found');
   });
 
+  it('refuses to list a folder inside a submodule', async () => {
+    git(root, [ 'commit', '-q', '--allow-empty', '-m', 'base' ]);
+    const sha = git(root, [ 'rev-parse', 'HEAD' ]).trim();
+    git(root, [ 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib` ]);
+    mkdirSync(join(root, 'vendor', 'lib', 'docs'), { recursive: true });
+
+    expect(await refusal('vendor/lib/docs')).toBe('not-found');
+  });
+
   it('refuses a file, a missing folder and malformed paths', async () => {
     write(join(root, 'a.md'));
 

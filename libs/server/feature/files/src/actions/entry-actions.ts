@@ -93,38 +93,43 @@ export class EntryActions {
       throw notRenamable();
     }
     const [ parent, oldName ] = splitPath(request.path);
+    let folder = false;
     const name = await this.guard.change(repositoryId, root, async () => {
       const entry = await resolveInWorkingCopy(root, request.path, { symlinkLeaf: true });
-      const renamable = entry.type === 'folder'
-        ? !(await this.git.gitlinksIn(root, parent)).has(oldName)
-        : entry.type === 'file' && isMarkdownName(oldName);
+      const submodule = await this.git.submoduleOn(root, request.path);
+      if (submodule !== null && submodule !== request.path) {
+        throw new PathRefusedError('not-found');
+      }
+      const renamable = entry.type === 'folder' ? submodule === null : entry.type === 'file' && isMarkdownName(oldName);
       if (!renamable) {
         throw notRenamable();
       }
       const name = finalName(request.name, entry.type === 'folder' ? 'folder' : 'file');
+      folder = entry.type === 'folder';
       if (name === oldName) {
         return name;
       }
-      const folder = await this.openFolder(root, parent);
+      const opened = await this.openFolder(root, parent);
       try {
         // Its own name in another case or form is not a clash (FB-27).
-        await this.assertFree(folder.path, name, oldName);
+        await this.assertFree(opened.path, name, oldName);
         // The lock keeps other changes of this instance out between the check and the rename.
-        await rename(join(folder.path, oldName), join(folder.path, name));
+        await rename(join(opened.path, oldName), join(opened.path, name));
       } finally {
-        await folder.handle.close();
+        await opened.handle.close();
       }
       return name;
     }).catch(toFilesError);
     if (name !== oldName) {
-      this.publish(userId, repositoryId, parent);
+      this.publish(userId, repositoryId, parent, ...(folder ? [ request.path ] : []));
     }
     return { path: joinPath(parent, name) };
   }
 
   /**
    * Opens a folder of the working copy to change its entries through the
-   * descriptor. A submodule is not a folder of this repository (FB-23).
+   * descriptor. A submodule, and anything inside one, is not a folder of this
+   * repository (FB-23).
    *
    * @throws PathRefusedError
    */
@@ -133,11 +138,8 @@ export class EntryActions {
     if (resolved.type !== 'folder') {
       throw new PathRefusedError('not-found');
     }
-    if (path !== '') {
-      const [ parent, name ] = splitPath(path);
-      if ((await this.git.gitlinksIn(root, parent)).has(name)) {
-        throw new PathRefusedError('not-found');
-      }
+    if ((await this.git.submoduleOn(root, path)) !== null) {
+      throw new PathRefusedError('not-found');
     }
     return openInWorkingCopy(root, resolved);
   }
@@ -150,7 +152,8 @@ export class EntryActions {
     }
   }
 
-  private publish(userId: number, repositoryId: number, folder: string): void {
-    this.events.publish(userId, { type: 'files.changed', repositoryId, folders: [ folder ] });
+  /** A renamed folder's old path is named too, so that clients drop what they listed under it (FB-41). */
+  private publish(userId: number, repositoryId: number, ...folders: string[]): void {
+    this.events.publish(userId, { type: 'files.changed', repositoryId, folders });
   }
 }

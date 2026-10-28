@@ -235,13 +235,30 @@ describe('EntryActions', () => {
       .toEqual({ status: 400, code: 'path-refused', params: { reason: 'inside-git' } });
   });
 
-  it('publishes files.changed with the parent folder', async () => {
+  it('refuses changes inside a submodule', async () => {
+    mkdirSync(join(root, 'vendor', 'lib', 'docs'), { recursive: true });
+    writeFileSync(join(root, 'vendor', 'lib', 'README.md'), 'lib\n');
+    const sha = git(root, 'rev-parse', 'HEAD').trim();
+    git(root, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
+
+    const missing = { status: 404, code: 'entry-not-found', params: {} };
+    expect(await refusal(create({ folder: 'vendor/lib/docs', name: 'a', kind: 'file' }))).toEqual(missing);
+    expect(await refusal(create({ folder: 'vendor/lib', name: 'a', kind: 'folder' }))).toEqual(missing);
+    expect(await refusal(rename({ path: 'vendor/lib/README.md', name: 'b' }))).toEqual(missing);
+    expect(await refusal(rename({ path: 'vendor/lib/docs', name: 'b' }))).toEqual(missing);
+    expect(readdirSync(join(root, 'vendor', 'lib')).sort()).toEqual([ 'README.md', 'docs' ]);
+    expect(readdirSync(join(root, 'vendor', 'lib', 'docs'))).toEqual([]);
+  });
+
+  it('publishes files.changed with the parent folder, and a renamed folder\'s old path', async () => {
     await create({ folder: 'docs', name: 'notes', kind: 'file' });
+    await rename({ path: 'docs/notes.md', name: 'ideas' });
     await rename({ path: 'docs', name: 'manual' });
 
     expect(publish.mock.calls).toEqual([
       [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ 'docs' ] } ],
-      [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ '' ] } ]
+      [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ 'docs' ] } ],
+      [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ '', 'docs' ] } ]
     ]);
   });
 });

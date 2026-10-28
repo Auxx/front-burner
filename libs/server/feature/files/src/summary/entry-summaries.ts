@@ -77,6 +77,14 @@ export class EntrySummaries {
   /** @throws PathRefusedError */
   async summary(root: string, path: string): Promise<EntrySummary> {
     const entry = await resolveInWorkingCopy(root, path, { symlinkLeaf: true });
+    const submodule = await this.git.submoduleOn(root, path);
+    if (submodule !== null) {
+      // A submodule counts as nothing; what is inside one is not part of this repository (FB-23).
+      if (submodule !== path) {
+        throw new PathRefusedError('not-found');
+      }
+      return { files: 0, nonMarkdown: 0, uncommitted: 0 };
+    }
     if (entry.type !== 'folder') {
       const markdown = entry.type === 'file' && isMarkdownName(path.slice(path.lastIndexOf('/') + 1));
       const uncommitted = await this.git.uncommittedUnder(root, path);
@@ -100,6 +108,9 @@ export class EntrySummaries {
       throw new PathRefusedError('malformed');
     }
     await resolveInWorkingCopy(root, path, { mayBeMissing: true, symlinkLeaf: true });
+    if ((await this.git.submoduleOn(root, path)) !== null) {
+      throw new PathRefusedError('not-found');
+    }
     // A trailing `/` makes folder rules such as `build/` match a folder that does not exist yet.
     const asked = kind === 'folder' ? `${path}/` : path;
     return (await this.git.ignoredAmong(root, [ asked ])).has(asked);
