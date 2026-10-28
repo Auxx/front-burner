@@ -1,3 +1,52 @@
-<ng-container *transloco="let t; prefix: 'webFeatureRepositoryScreen.RepositoryScreenPage'">
-<p>rs-repository-screen works!</p>
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.RepositoryScreenPage'">
+  @switch (session.state()) {
+    @case ('loading') {
+      <ui-spinner class="loading" [label]="t('loading')" />
+    }
+    @case ('missing') {
+      <ui-app-shell [skipLinkLabel]="t('skipToContent')">
+        @if (user(); as user) {
+          <shell-app-header uiAppShellHeader [user]="user" />
+        }
+        <shell-page-not-found />
+      </ui-app-shell>
+    }
+    @case ('failed') {
+      <ui-app-shell [skipLinkLabel]="t('skipToContent')">
+        @if (user(); as user) {
+          <shell-app-header uiAppShellHeader [user]="user" />
+        }
+        <div class="failed">
+          <ui-inline-banner status="danger" announce>
+            {{ t('openFailed') }}
+            @if (session.error(); as error) {
+              {{ error.text }}
+              @if (error.reference) {
+                <span class="reference">{{ t('reference') }} <code>{{ error.reference }}</code></span>
+              }
+            }
+            <div uiBannerActions>
+              <button uiButton size="small" (click)="session.retry()">{{ t('retry') }}</button>
+            </div>
+          </ui-inline-banner>
+        </div>
+      </ui-app-shell>
+    }
+    @case ('not-openable') {
+      <ui-app-shell [skipLinkLabel]="t('skipToContent')">
+        @if (user(); as user) {
+          <shell-app-header uiAppShellHeader [user]="user" />
+        }
+        <rs-not-openable [repository]="session.repository()!" />
+      </ui-app-shell>
+    }
+    @case ('ready') {
+      <ui-app-shell [skipLinkLabel]="t('skipToContent')">
+        @if (user(); as user) {
+          <shell-app-header uiAppShellHeader [user]="user" />
+        }
+      </ui-app-shell>
+    }
+  }
 </ng-container>
+<shell-route-announcer />

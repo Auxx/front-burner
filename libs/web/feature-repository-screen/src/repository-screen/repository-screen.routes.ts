@@ -4,5 +4,6 @@ import { RepositoryScreenPage } from './pages/repository-screen/repository-scree
 import { repositoryScreenMatcher } from './utils/repository-screen-matcher/repository-screen-matcher';
 
 export const routes: Route[] = [
-  { matcher: repositoryScreenMatcher, component: RepositoryScreenPage }
+  // The page titles itself with the repository's name (NV-13).
+  { matcher: repositoryScreenMatcher, component: RepositoryScreenPage, data: { ownTitle: true } }
 ];

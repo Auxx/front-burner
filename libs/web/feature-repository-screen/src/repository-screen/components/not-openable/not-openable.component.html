@@ -1,0 +1,9 @@
+<ui-empty-state
+  *transloco="let t; prefix: 'web-feature-repository-screen.NotOpenableComponent'"
+  [icon]="reason() === 'cloning' ? 'sync' : 'warning'"
+>
+  <p>{{ t(reason()) }}</p>
+  <div uiEmptyStateActions>
+    <a [routerLink]="['/repositories', repository().id, 'settings']">{{ t('settings') }}</a>
+  </div>
+</ui-empty-state>

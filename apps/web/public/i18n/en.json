@@ -322,5 +322,15 @@
   "web-feature-repositories.TrustHostDialog.fingerprint": "Fingerprint",
   "web-feature-repositories.TrustHostDialog.trust": "Trust",
   "web-feature-repositories.TrustHostDialog.cancel": "Cancel",
-  "web-feature-repositories.errors.credentials.passphrase.passphrase-required": "Enter the passphrase of this key to unlock it for this session."
+  "web-feature-repositories.errors.credentials.passphrase.passphrase-required": "Enter the passphrase of this key to unlock it for this session.",
+  "web-feature-repository-screen.RepositoryScreenPage.skipToContent": "Skip to content",
+  "web-feature-repository-screen.RepositoryScreenPage.loading": "Opening the repository",
+  "web-feature-repository-screen.RepositoryScreenPage.openFailed": "This repository could not be opened.",
+  "web-feature-repository-screen.RepositoryScreenPage.reference": "Reference:",
+  "web-feature-repository-screen.RepositoryScreenPage.retry": "Try again",
+  "web-feature-repository-screen.NotOpenableComponent.cloning": "This repository is still being cloned.",
+  "web-feature-repository-screen.NotOpenableComponent.cloneFailed": "This repository's clone failed.",
+  "web-feature-repository-screen.NotOpenableComponent.workingCopyMissing": "This repository's working copy is missing.",
+  "web-feature-repository-screen.NotOpenableComponent.needsConfirmation": "This repository needs your confirmation.",
+  "web-feature-repository-screen.NotOpenableComponent.settings": "Repository settings"
 }
