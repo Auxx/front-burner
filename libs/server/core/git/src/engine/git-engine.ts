@@ -193,10 +193,13 @@ export class GitEngine implements BeforeApplicationShutdown {
   /**
    * The number of untracked and ignored files at or under `path` (`''` is the
    * root), counted one by one inside untracked and ignored folders. Modified
-   * tracked files do not count: their committed version can be brought back (FB-38).
+   * tracked files do not count: their committed version can be brought back
+   * (FB-38), and neither does a nested repository. Never writes the index, so
+   * it can run outside the working-tree lock.
    */
   async uncommittedUnder(workingCopy: string, path: string): Promise<number> {
     const result = await this.runLocal(workingCopy, [
+      '--no-optional-locks',
       'status',
       '--porcelain=v1',
       '-z',
@@ -208,18 +211,56 @@ export class GitEngine implements BeforeApplicationShutdown {
     if (result.exitCode !== 0) {
       throw new Error(`git status failed: ${result.stderr.trim()}`);
     }
-    // -z: "XY <path>\0" per record; a rename or copy is followed by its source path.
+    // -z: "XY <path>\0" per record; a rename or copy, in either column, is followed by its source path.
     const records = result.stdout.split('\0');
     let count = 0;
     for (let index = 0; index < records.length; index++) {
-      const status = records[index]?.slice(0, 2);
+      const record = records[index] ?? '';
+      const status = record.slice(0, 2);
       if (status === '??' || status === '!!') {
-        count++;
-      } else if (status?.startsWith('R') || status?.startsWith('C')) {
+        // With --untracked-files=all, only a nested repository is still a folder.
+        count += record.endsWith('/') ? 0 : 1;
+      } else if (/[RC]/.test(status)) {
         index++;
       }
     }
     return count;
+  }
+
+  /**
+   * The submodule (gitlink) that `path` is or lies inside, or `null`. Asks git
+   * once, for the entries directly inside each folder on the path.
+   */
+  async submoduleOn(workingCopy: string, path: string): Promise<string | null> {
+    if (path === '') {
+      return null;
+    }
+    const segments = path.split('/');
+    const folders = segments.map((_, index) => segments.slice(0, index).join('/'));
+    const result = await this.runLocal(workingCopy, [
+      'ls-files',
+      '--stage',
+      '-z',
+      '--',
+      ...folders.map(folder => `:(glob)${escapeGlob(folder === '' ? '' : `${folder}/`)}*`)
+    ]);
+    if (result.exitCode !== 0) {
+      throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
+    }
+    const gitlinks = new Set<string>();
+    for (const line of result.stdout.split('\0')) {
+      const tab = line.indexOf('\t');
+      if (tab > 0 && line.startsWith(`${GITLINK_MODE} `)) {
+        gitlinks.add(line.slice(tab + 1));
+      }
+    }
+    for (let index = 1; index <= segments.length; index++) {
+      const prefix = segments.slice(0, index).join('/');
+      if (gitlinks.has(prefix)) {
+        return prefix;
+      }
+    }
+    return null;
   }
 
   /** True while a merge or rebase is in progress in the working copy (FB-26). */
