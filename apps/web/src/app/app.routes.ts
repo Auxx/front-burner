@@ -16,7 +16,7 @@ export const appRoutes: Route[] = [
       {
         // The repository screen has its own bar in place of the app header (NV-9).
         path: 'repositories/:id',
-        canMatch: [ (_route: Route, segments: UrlSegment[]) => /^\d+$/.test(segments[1]?.path ?? '') ],
+        canMatch: [ (_route: Route, segments: UrlSegment[]) => isRepositoryId(segments[1]?.path ?? '') ],
         canActivate: [ authGuard ],
         loadChildren: () => import('@front-burner/web-feature-repository-screen').then(m => m.repositoryScreenRoutes)
       },
@@ -49,3 +49,12 @@ export const appRoutes: Route[] = [
     ]
   }
 ];
+
+/**
+ * An ID the backend can have given a repository: a positive safe integer,
+ * written without leading zeros, so that each repository has one URL. Anything
+ * else is Page not found, like a repository that does not exist (FB-2).
+ */
+function isRepositoryId(segment: string): boolean {
+  return /^[1-9]\d*$/.test(segment) && Number.isSafeInteger(Number(segment));
+}

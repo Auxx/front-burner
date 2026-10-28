@@ -166,6 +166,16 @@ describe('appRoutes', () => {
       expect(screen(harness)).toBeNull();
     });
 
+    it.each([ '/repositories/0', '/repositories/007', '/repositories/9007199254740993' ])(
+      'shows Page not found for an ID that no repository can have: %s',
+      async url => {
+        const { harness, heading } = await open(url, { loggedIn: true });
+
+        expect(heading()).toBe('This page doesn\'t exist.');
+        expect(screen(harness)).toBeNull();
+      }
+    );
+
     it('sends a visitor who is not logged in to the login page', async () => {
       const { harness, heading } = await open('/repositories/12/files/docs/guide.md');
 
