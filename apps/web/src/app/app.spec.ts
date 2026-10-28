@@ -120,6 +120,58 @@ describe('appRoutes', () => {
     expect(heading()).toBe('Log in');
   });
 
+  describe('the repository screen', () => {
+    const screen = (harness: RouterTestingHarness) => harness.fixture.nativeElement.querySelector('rs-repository-screen');
+
+    it.each([ '/repositories/12', '/repositories/12/files/a/b.md' ])(
+      'routes /repositories/12 and /repositories/12/files/a/b.md to the repository screen: %s',
+      async url => {
+        localStorage.setItem('front-burner.auth', JSON.stringify(session));
+        TestBed.configureTestingModule({
+          providers: [ provideCore(), provideHttpClientTesting(), provideRouter(appRoutes) ]
+        });
+        const harness = await RouterTestingHarness.create();
+        const navigation = harness.navigateByUrl(url);
+        const http = TestBed.inject(HttpTestingController);
+        await vi.waitFor(() => {
+          http.match('/api/v1/onboarding').forEach(request => request.flush(null, { status: 404, statusText: 'Not Found' }));
+          http.match('/api/v1/me').forEach(request => request.flush(ada));
+          http.match('i18n/en.json').forEach(request => request.flush(en));
+          harness.detectChanges();
+          expect(screen(harness)).not.toBeNull();
+        }, { timeout: 4000 });
+        await navigation;
+
+        expect(TestBed.inject(Router).url).toBe(url);
+        // The screen has its own bar instead of the app header (NV-9).
+        expect(harness.fixture.nativeElement.querySelector('shell-layout')).toBeNull();
+      }
+    );
+
+    it('leaves /repositories/new to the Add repository page', async () => {
+      const { harness, heading } = await open('/repositories/new', { loggedIn: true });
+
+      expect(heading()).toBe('Add repository');
+      expect(screen(harness)).toBeNull();
+    });
+
+    it('leaves /repositories/12/settings to Page not found', async () => {
+      const { harness, heading } = await open('/repositories/12/settings', { loggedIn: true });
+
+      expect(TestBed.inject(Router).url).toBe('/repositories/12/settings');
+      expect(heading()).toBe('This page doesn\'t exist.');
+      expect(screen(harness)).toBeNull();
+    });
+
+    it('sends a visitor who is not logged in to the login page', async () => {
+      const { harness, heading } = await open('/repositories/12/files/docs/guide.md');
+
+      expect(TestBed.inject(Router).url).toBe('/login?returnUrl=%2Frepositories%2F12%2Ffiles%2Fdocs%2Fguide.md');
+      expect(heading()).toBe('Log in');
+      expect(screen(harness)).toBeNull();
+    });
+  });
+
   it.each([ '/', '/login', '/nowhere/at/all' ])('sends %s to the onboarding page while it is required', async url => {
     const { heading } = await open(url, { state: required });
 
