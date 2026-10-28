@@ -187,7 +187,7 @@ describe('folder listing (REQ-FILE-001)', () => {
     expect(summary).toEqual({ status: 200, body: { files: 2, nonMarkdown: 0, uncommitted: 2 } });
   });
 
-  it('refuses a name taken in another case as a field error', async () => {
+  it('AC-FILE-001.14: refuses a name taken in another case as a field error', async () => {
     const { status, body } = await createEntry({ folder: '', name: 'readme.MD', kind: 'file' });
 
     expect(status).toBe(400);
@@ -202,6 +202,24 @@ describe('folder listing (REQ-FILE-001)', () => {
     const asFolder = await createEntry({ folder: '.git', name: 'hooks', kind: 'folder' });
     expect(asFolder.status).toBe(400);
     expect(asFolder.body).toMatchObject({ code: 'path-refused', params: { reason: 'inside-git' } });
+  });
+
+  it('answers a path inside a submodule like a missing entry', async () => {
+    const root = join(server.dataDir, 'repos', String(alice.userId), String(handbook));
+    mkdirSync(join(root, 'vendor', 'lib', 'docs'), { recursive: true });
+    const sha = execFileSync('git', [ 'hash-object', '-w', 'README.md' ], { cwd: root, encoding: 'utf8' }).trim();
+    execFileSync('git', [ 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib` ], { cwd: root });
+
+    for (
+      const answer of [
+        await folder('vendor/lib/docs'),
+        await createEntry({ folder: 'vendor/lib/docs', name: 'a', kind: 'file' }),
+        await call('GET', `/repositories/${handbook}/entries/ignored?path=vendor/lib/a.md&kind=file`, alice.token)
+      ]
+    ) {
+      expect(answer.status).toBe(404);
+      expect(answer.body['code']).toBe('entry-not-found');
+    }
   });
 
   it('refuses to rename a symbolic link', async () => {
