@@ -14,7 +14,7 @@
   <div uiSplitPaneStart class="side">
     <ng-content select="[uiAppShellSide]" />
   </div>
-  <main #main uiSplitPaneEnd tabindex="-1" [id]="mainId">
+  <main #main uiSplitPaneEnd tabindex="-1" [id]="mainId" [attr.aria-label]="mainLabel() ?? null">
     <ng-content />
   </main>
 </ui-split-pane>

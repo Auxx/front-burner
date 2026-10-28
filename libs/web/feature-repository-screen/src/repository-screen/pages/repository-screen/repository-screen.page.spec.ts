@@ -1,3 +1,4 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -42,6 +43,7 @@ describe('RepositoryScreenPage', () => {
   let answers: Observable<RepositorySummary>[];
   let open: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
+  let narrow: boolean;
 
   const page = () => harness.fixture.nativeElement as HTMLElement;
   const button = (text: string) =>
@@ -54,7 +56,11 @@ describe('RepositoryScreenPage', () => {
         provideRouter([ { path: 'repositories/:id', children: routes } ]),
         { provide: RepositoriesApi, useValue: { open } },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
-        { provide: AuthSessionService, useValue: { loggedIn: signal(true), logout: vi.fn() } }
+        { provide: AuthSessionService, useValue: { loggedIn: signal(true), logout: vi.fn() } },
+        {
+          provide: BreakpointObserver,
+          useValue: { observe: () => of({ matches: narrow, breakpoints: {} }), isMatched: () => narrow }
+        }
       ]
     });
     harness = await RouterTestingHarness.create();
@@ -68,6 +74,8 @@ describe('RepositoryScreenPage', () => {
 
   beforeEach(() => {
     answers = [];
+    narrow = false;
+    localStorage.clear();
     open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
     document.title = '';
   });
@@ -136,5 +144,84 @@ describe('RepositoryScreenPage', () => {
     // The title stays when only the open file changes.
     await go('/repositories/12/files/README.md');
     expect(document.title).toBe('handbook · Front Burner');
+  });
+
+  describe('when the repository has opened', () => {
+    const files = () => button('web-feature-repository-screen.RepositoryBarComponent.files') as HTMLButtonElement;
+    const tree = () => page().querySelector('section[aria-label]') as HTMLElement;
+    const shown = (element: Element) => !element.closest('[hidden]');
+
+    afterEach(() => localStorage.clear());
+
+    it('labels the regions', async () => {
+      await visit('/repositories/12');
+
+      expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
+      expect(tree().getAttribute('aria-label')).toBe(`${KEY}.files`);
+      expect(page().querySelector('[role="separator"]')?.getAttribute('aria-label')).toBe(`${KEY}.resizeFiles`);
+      expect(page().querySelector('main')?.getAttribute('aria-label')).toBe(`${KEY}.editor`);
+      expect(page().querySelector('main rs-editor-area')).not.toBeNull();
+    });
+
+    it('shows the empty state', async () => {
+      await visit('/repositories/12');
+
+      expect(page().querySelector('main ui-empty-state')?.textContent).toContain(
+        'web-feature-repository-screen.EditorAreaComponent.empty'
+      );
+    });
+
+    it('collapses and expands the tree with Files, and remembers it', async () => {
+      await visit('/repositories/12');
+      expect(shown(tree())).toBe(true);
+      expect(files().getAttribute('aria-expanded')).toBe('true');
+
+      files().click();
+      await settle(harness.fixture);
+
+      expect(shown(tree())).toBe(false);
+      expect(files().getAttribute('aria-expanded')).toBe('false');
+      expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('false');
+
+      files().click();
+      await settle(harness.fixture);
+      expect(shown(tree())).toBe(true);
+    });
+
+    it('remembers the size of the tree', async () => {
+      await visit('/repositories/12');
+      const separator = page().querySelector('[role="separator"]') as HTMLElement;
+
+      separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      await settle(harness.fixture);
+
+      expect(separator.getAttribute('aria-valuenow')).toBe('25');
+      expect(localStorage.getItem('fb.4.repositoryScreen.sideSize')).toBe('25');
+    });
+
+    it('opens the tree as a drawer with Files on narrow screens', async () => {
+      narrow = true;
+      await visit('/repositories/12');
+      expect(shown(tree())).toBe(false);
+      expect(shown(page().querySelector('main') as HTMLElement)).toBe(true);
+      expect(files().getAttribute('aria-expanded')).toBe('false');
+
+      files().click();
+      await settle(harness.fixture);
+
+      expect(shown(tree())).toBe(true);
+      expect(files().getAttribute('aria-expanded')).toBe('true');
+      // The drawer does not collapse the tree of wide screens.
+      expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('true');
+    });
+
+    it('shows the bar without Files for a repository that cannot be opened', async () => {
+      answers.push(of({ ...handbook, status: 'cloning' }));
+      await visit('/repositories/12');
+
+      expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
+      expect(files()).toBeUndefined();
+      expect(page().querySelector('section[aria-label]')).toBeNull();
+    });
   });
 });

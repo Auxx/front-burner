@@ -34,17 +34,29 @@
     }
     @case ('not-openable') {
       <ui-app-shell [skipLinkLabel]="t('skipToContent')">
-        @if (user(); as user) {
-          <shell-app-header uiAppShellHeader [user]="user" />
-        }
+        <rs-repository-bar uiAppShellHeader [repository]="session.repository()!" [user]="user()" [withFiles]="false" />
         <rs-not-openable [repository]="session.repository()!" />
       </ui-app-shell>
     }
     @case ('ready') {
-      <ui-app-shell [skipLinkLabel]="t('skipToContent')">
-        @if (user(); as user) {
-          <shell-app-header uiAppShellHeader [user]="user" />
-        }
+      <ui-app-shell
+        #shell
+        [skipLinkLabel]="t('skipToContent')"
+        [mainLabel]="t('editor')"
+        [(sideOpen)]="panes.sideOpen"
+        [(sideSize)]="panes.sideSize"
+        [(drawerOpen)]="drawerOpen"
+      >
+        <rs-repository-bar
+          uiAppShellHeader
+          [repository]="session.repository()!"
+          [user]="user()"
+          [narrow]="shell.narrow()"
+          [filesOpen]="shell.narrow() ? drawerOpen() : panes.sideOpen()"
+          (toggleFiles)="toggleFiles(shell.narrow())"
+        />
+        <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')" [attr.aria-label]="t('files')"></section>
+        <rs-editor-area />
       </ui-app-shell>
     }
   }

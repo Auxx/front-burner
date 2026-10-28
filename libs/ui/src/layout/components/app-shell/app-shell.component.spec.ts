@@ -13,7 +13,7 @@ import { AppShellComponent } from './app-shell.component';
   template: `
     <button type="button" class="outside">Outside</button>
     <button type="button" class="other">Other</button>
-    <ui-app-shell skipLinkLabel="Skip to content" [(sideOpen)]="sideOpen" [(drawerOpen)]="drawerOpen" [(sideSize)]="sideSize">
+    <ui-app-shell skipLinkLabel="Skip to content" [(sideOpen)]="sideOpen" [(drawerOpen)]="drawerOpen" [(sideSize)]="sideSize" [mainLabel]="mainLabel()">
       <span uiAppShellHeader>Front Burner</span>
       @if (withSide()) {
         <div uiAppShellSide resizeLabel="Resize side panel">
@@ -29,6 +29,7 @@ class HostComponent {
   readonly drawerOpen = signal(false);
   readonly sideSize = signal(20);
   readonly withSide = signal(true);
+  readonly mainLabel = signal<string | undefined>(undefined);
 }
 
 describe('AppShellComponent', () => {
@@ -78,6 +79,14 @@ describe('AppShellComponent', () => {
 
     skip.click();
     expect(document.activeElement).toBe(main());
+  });
+
+  it('labels main only when given a label', async () => {
+    expect(main().hasAttribute('aria-label')).toBe(false);
+
+    await set(() => host.mainLabel.set('Editor'));
+
+    expect(main().getAttribute('aria-label')).toBe('Editor');
   });
 
   it('points the skip link at main, so that checkers count it as a skip link', () => {
