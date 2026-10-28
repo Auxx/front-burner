@@ -1,6 +1,5 @@
-import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { Title } from '@angular/platform-browser';
 import { ActivatedRoute } from '@angular/router';
 import {
   AppShellComponent,
@@ -9,7 +8,7 @@ import {
   InlineBannerComponent,
   SpinnerComponent
 } from '@front-burner/ui';
-import { CurrentUserService } from '@front-burner/web-core';
+import { CurrentUserService, PageTitleService } from '@front-burner/web-core';
 import { AppHeaderComponent, PageNotFoundPage, RouteAnnouncerComponent } from '@front-burner/web-shell';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { map, take } from 'rxjs';
@@ -19,9 +18,6 @@ import { NotOpenableComponent } from '../../components/not-openable/not-openable
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
 import { PaneMemoryService } from '../../services/pane-memory/pane-memory.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
-
-/** The product name is not translated. */
-const PRODUCT_NAME = 'Front Burner';
 
 /**
  * The repository screen (REQ-FILE-001) at `/repositories/<id>` and
@@ -85,20 +81,34 @@ export class RepositoryScreenPage {
     }
   }
 
-  /** `<repository name> · Front Burner` (NV-13); the route leaves the title to the page. */
+  /**
+   * `<repository name> · Front Burner` (NV-13), published again for each file
+   * so that it is announced (NV-18). Until the repository has opened, the
+   * product name alone, so that no other page's title stays.
+   */
   private updateTitle(): void {
-    const title = inject(Title);
+    const pageTitle = inject(PageTitleService);
     const transloco = inject(TranslocoService);
     effect(onCleanup => {
+      const state = this.session.state();
       const repository = this.session.repository();
-      if (this.session.state() === 'missing') {
-        const pending = transloco.selectTranslate('web-shell.PageNotFoundPage.title').pipe(take(1)).subscribe(text => {
-          title.setTitle(`${text} · ${PRODUCT_NAME}`);
-        });
-        onCleanup(() => pending.unsubscribe());
-      } else if (repository) {
-        title.setTitle(`${repository.name} · ${PRODUCT_NAME}`);
-      }
+      this.path();
+      untracked(() => {
+        if (state === 'loading') {
+          pageTitle.setPending();
+        } else if (state === 'missing') {
+          const pending = transloco.selectTranslate('web-shell.PageNotFoundPage.title').pipe(take(1)).subscribe(
+            text => {
+              pageTitle.publish(text);
+            }
+          );
+          onCleanup(() => pending.unsubscribe());
+        } else if (repository) {
+          pageTitle.publish(repository.name);
+        } else {
+          pageTitle.publish();
+        }
+      });
     });
   }
 }

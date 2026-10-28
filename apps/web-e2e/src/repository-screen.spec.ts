@@ -51,6 +51,10 @@ test.describe('repository screen', () => {
     await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}$`));
     await expect(page.getByRole('banner').getByRole('heading', { name: 'handbook' })).toBeVisible();
     await expect(page).toHaveTitle('handbook · Front Burner');
+    // Announced once the repository has opened, not the dashboard's title (NV-18).
+    await expect(page.locator('rs-repository-screen shell-route-announcer [aria-live]')).toHaveText(
+      'handbook · Front Burner'
+    );
     await expect(editor(page).getByText('Choose a file from the tree, or create one')).toBeVisible();
     await expect(filesButton(page)).toBeVisible();
 

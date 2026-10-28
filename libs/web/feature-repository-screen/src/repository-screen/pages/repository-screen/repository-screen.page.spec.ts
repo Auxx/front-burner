@@ -6,7 +6,7 @@ import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { CurrentUser, RepositorySummary } from '@front-burner/shared-contracts';
 import { RepositoriesApi } from '@front-burner/web-api-client';
-import { AuthSessionService, CurrentUserService } from '@front-burner/web-core';
+import { AuthSessionService, CurrentUserService, PageTitleService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { settle } from '../../../testing/settle';
@@ -139,6 +139,38 @@ describe('RepositoryScreenPage', () => {
 
     expect(open).toHaveBeenCalledTimes(2);
     expect(page().textContent).not.toContain(`${KEY}.openFailed`);
+  });
+
+  it('shows no other page\'s title while opening or after a failure', async () => {
+    document.title = 'Dashboard · Front Burner';
+    const answer = new Subject<RepositorySummary>();
+    answers.push(answer);
+    await visit('/repositories/12');
+    expect(document.title).toBe('Front Burner');
+
+    answer.error(new HttpErrorResponse({ status: 500 }));
+    await settle(harness.fixture);
+    expect(document.title).toBe('Front Burner');
+  });
+
+  it('drops the previous repository\'s title when moving to another', async () => {
+    await visit('/repositories/12');
+    expect(document.title).toBe('handbook · Front Burner');
+
+    answers.push(new Subject());
+    await go('/repositories/13');
+
+    expect(document.title).toBe('Front Burner');
+  });
+
+  it('publishes its title for the route announcer, again for each file', async () => {
+    const published: string[] = [];
+    await visit('/repositories/12');
+    TestBed.inject(PageTitleService).changes.subscribe(title => published.push(title));
+
+    await go('/repositories/12/files/README.md');
+
+    expect(published).toEqual([ 'handbook · Front Burner' ]);
   });
 
   it('titles the page with the repository name', async () => {
