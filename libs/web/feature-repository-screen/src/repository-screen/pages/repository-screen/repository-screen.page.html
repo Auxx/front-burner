@@ -55,8 +55,10 @@
           [filesOpen]="shell.narrow() ? drawerOpen() : panes.sideOpen()"
           (toggleFiles)="toggleFiles(shell.narrow())"
         />
-        <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')" [attr.aria-label]="t('files')"></section>
-        <rs-editor-area />
+        <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')" [attr.aria-label]="t('files')">
+          <rs-file-tree [selected]="selectedPath()" (selectPath)="openEntryAt($event)" (retry)="retry($event)" />
+        </section>
+        <rs-editor-area [path]="openPath()" [entry]="openEntry()" />
       </ui-app-shell>
     }
   }

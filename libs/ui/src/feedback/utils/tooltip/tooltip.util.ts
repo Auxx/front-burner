@@ -32,6 +32,8 @@ export interface TooltipOptions {
   readonly describes: boolean;
   /** Whether a click or tap shows it; always so for an `aria-disabled` host. */
   readonly showOnClick: Signal<boolean>;
+  /** Shows it for as long as it is true, whatever the pointer and the focus do. */
+  readonly shown?: Signal<boolean>;
 }
 
 /**
@@ -51,6 +53,7 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
   let timer: ReturnType<typeof setTimeout> | undefined;
   let shownByClick = false;
   let shownByFocus = false;
+  let shownByInput = false;
   let description: TooltipDescription | undefined;
 
   const show = (): void => {
@@ -91,6 +94,7 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
     clearTimeout(timer);
     shownByClick = false;
     shownByFocus = false;
+    shownByInput = false;
     if (panel) {
       overlayRef?.detach();
       panel = undefined;
@@ -146,7 +150,10 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
 
   const listeners: [ string, (event: never) => void ][] = [
     [ 'pointerenter', (event: PointerEvent) => !isTouch(event) && (panel ? clearTimeout(timer) : scheduleShow()) ],
-    [ 'pointerleave', (event: PointerEvent) => !isTouch(event) && !shownByClick && !shownByFocus && scheduleHide() ],
+    [
+      'pointerleave',
+      (event: PointerEvent) => !isTouch(event) && !shownByClick && !shownByFocus && !shownByInput && scheduleHide()
+    ],
     [ 'focusin', () => {
       if (focusVisible()) {
         show();
@@ -189,6 +196,18 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
       description = undefined;
     }
   }
+
+  effect(() => {
+    const shown = options.shown?.() ?? false;
+    untracked(() => {
+      if (shown) {
+        show();
+        shownByInput = true;
+      } else if (shownByInput) {
+        hide();
+      }
+    });
+  });
 
   inject(DestroyRef).onDestroy(() => {
     hide();

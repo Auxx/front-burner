@@ -30,7 +30,7 @@
     </span>
     @if (nodeTemplate(); as content) {
       <ng-container
-        *ngTemplateOutlet="content.template; context: { $implicit: row.node, level: row.level, expanded: row.expanded }"
+        *ngTemplateOutlet="content.template; context: { $implicit: row.node, level: row.level, expanded: row.expanded, active: index === keyboardIndex() }"
       />
     } @else {
       <span class="label">{{ row.node.label }}</span>

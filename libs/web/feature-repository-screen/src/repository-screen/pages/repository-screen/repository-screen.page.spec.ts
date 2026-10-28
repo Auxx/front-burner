@@ -2,15 +2,17 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import type { CurrentUser, RepositorySummary } from '@front-burner/shared-contracts';
-import { RepositoriesApi } from '@front-burner/web-api-client';
+import type { CurrentUser, FolderListing, RepositorySummary } from '@front-burner/shared-contracts';
+import { FilesApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { AuthSessionService, CurrentUserService, PageTitleService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
+import { entry, folder, listing } from '../../../testing/listings';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
 import { routes } from '../../repository-screen.routes';
 
 const KEY = 'web-feature-repository-screen.RepositoryScreenPage';
@@ -41,6 +43,10 @@ function failure(status: number, code: string): Observable<never> {
 
 describe('RepositoryScreenPage', () => {
   let answers: Observable<RepositorySummary>[];
+  /** The working copy, by folder path. */
+  let folders: Record<string, FolderListing>;
+  /** Folders whose next listing fails with a server error. */
+  let failOnce: Set<string>;
   let open: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
@@ -55,6 +61,17 @@ describe('RepositoryScreenPage', () => {
       providers: [
         provideRouter([ { path: 'repositories/:id', children: routes } ]),
         { provide: RepositoriesApi, useValue: { open } },
+        {
+          provide: FilesApi,
+          useValue: {
+            listFolder: (_id: number, query: { path: string; }) =>
+              failOnce.delete(query.path)
+                ? failure(500, 'internal')
+                : folders[query.path]
+                ? of(folders[query.path])
+                : failure(404, 'not-found')
+          }
+        },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         { provide: AuthSessionService, useValue: { loggedIn: signal(true), logout: vi.fn() } },
         {
@@ -70,10 +87,25 @@ describe('RepositoryScreenPage', () => {
   async function go(url: string): Promise<void> {
     await harness.navigateByUrl(url);
     await settle(harness.fixture);
+    await settle(harness.fixture);
   }
+
+  beforeAll(stubViewportLayout);
+  afterAll(restoreLayout);
 
   beforeEach(() => {
     answers = [];
+    failOnce = new Set();
+    folders = {
+      '': listing('', [
+        folder('docs'),
+        entry('latest', { kind: 'symlink', size: null }),
+        entry('logo.png'),
+        entry('README.md'),
+        entry('vendor', { kind: 'submodule', size: null })
+      ]),
+      docs: listing('docs', [ entry('guide.md') ])
+    };
     narrow = false;
     localStorage.clear();
     open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
@@ -155,7 +187,7 @@ describe('RepositoryScreenPage', () => {
 
   it('drops the previous repository\'s title when moving to another', async () => {
     await visit('/repositories/12');
-    expect(document.title).toBe('handbook · Front Burner');
+    expect(document.title).toBe('README.md · handbook · Front Burner');
 
     answers.push(new Subject());
     await go('/repositories/13');
@@ -165,21 +197,25 @@ describe('RepositoryScreenPage', () => {
 
   it('publishes its title for the route announcer, again for each file', async () => {
     const published: string[] = [];
-    await visit('/repositories/12');
+    await visit('/repositories/12/files/README.md');
     TestBed.inject(PageTitleService).changes.subscribe(title => published.push(title));
 
-    await go('/repositories/12/files/README.md');
+    await go('/repositories/12/files/docs/guide.md');
 
-    expect(published).toEqual([ 'handbook · Front Burner' ]);
+    expect(published).toEqual([ 'guide.md · handbook · Front Burner' ]);
   });
 
-  it('titles the page with the repository name', async () => {
+  it('titles the page with the repository name without a file', async () => {
+    folders[''] = listing('', [ entry('notes.md') ]);
     await visit('/repositories/12');
-    expect(document.title).toBe('handbook · Front Burner');
 
-    // The title stays when only the open file changes.
-    await go('/repositories/12/files/README.md');
     expect(document.title).toBe('handbook · Front Burner');
+  });
+
+  it('titles the page with the file name', async () => {
+    await visit('/repositories/12/files/docs/guide.md');
+
+    expect(document.title).toBe('guide.md · handbook · Front Burner');
   });
 
   describe('when the repository has opened', () => {
@@ -199,12 +235,161 @@ describe('RepositoryScreenPage', () => {
       expect(page().querySelector('main rs-editor-area')).not.toBeNull();
     });
 
-    it('shows the empty state', async () => {
+    const row = (name: string) =>
+      [ ...page().querySelectorAll<HTMLElement>('[role="treeitem"]') ].find(item =>
+        item.getAttribute('aria-label')?.startsWith(`${name},`)
+      ) as HTMLElement;
+    const url = () => TestBed.inject(Router).url;
+    const editor = () => page().querySelector('main') as HTMLElement;
+    const LATER = 'web-feature-repository-screen.EditorAreaComponent.later';
+    const MESSAGE = 'web-feature-repository-screen.EntryMessageComponent';
+
+    it('opens the README the first time', async () => {
       await visit('/repositories/12');
 
+      expect(url()).toBe('/repositories/12/files/README.md');
+      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('README.md');
+      expect(editor().textContent).toContain(LATER);
+      expect(row('README.md').getAttribute('aria-selected')).toBe('true');
+      expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBe('README.md');
+    });
+
+    it('opens the last file on the same device', async () => {
+      localStorage.setItem('fb.4.repo.12.lastFile', 'docs/guide.md');
+
+      await visit('/repositories/12');
+
+      expect(url()).toBe('/repositories/12/files/docs/guide.md');
+      expect(row('docs').getAttribute('aria-expanded')).toBe('true');
+      expect(row('guide.md').getAttribute('aria-selected')).toBe('true');
+      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
+    });
+
+    it('falls back to the README when the last file is gone', async () => {
+      localStorage.setItem('fb.4.repo.12.lastFile', 'docs/gone.md');
+
+      await visit('/repositories/12');
+
+      expect(url()).toBe('/repositories/12/files/README.md');
+      expect(editor().textContent).not.toContain(`${MESSAGE}.missing`);
+    });
+
+    it('shows the empty state without a README', async () => {
+      folders[''] = listing('', [ entry('notes.md'), entry('README.txt') ]);
+
+      await visit('/repositories/12');
+
+      expect(url()).toBe('/repositories/12');
       expect(page().querySelector('main ui-empty-state')?.textContent).toContain(
         'web-feature-repository-screen.EditorAreaComponent.empty'
       );
+    });
+
+    it('shows a missing path\'s message', async () => {
+      await visit('/repositories/12/files/nope/x.md');
+
+      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('x.md');
+      expect(editor().textContent).toContain(`${MESSAGE}.missing`);
+      // The tree is shown as usual (FB-13).
+      expect(row('README.md')).toBeDefined();
+      expect(page().querySelector('ui-spinner')).toBeNull();
+    });
+
+    it.each([
+      [ 'logo.png', 'nonMarkdown' ],
+      [ 'latest', 'symlink' ],
+      [ 'vendor', 'submodule' ]
+    ])('AC-FILE-001.9: shows %s\'s message', async (name, key) => {
+      await visit(`/repositories/12/files/${name}`);
+
+      expect(editor().querySelector('h2')?.textContent?.trim()).toBe(name);
+      expect(editor().textContent).toContain(`${MESSAGE}.${key}`);
+      expect(editor().textContent).not.toContain(LATER);
+      expect(row(name).getAttribute('aria-selected')).toBe('true');
+      // Only Markdown files are remembered as the last file.
+      expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBeNull();
+    });
+
+    const tryAgain = () =>
+      page().querySelector<HTMLElement>(
+        '[role="treeitem"][aria-label^="web-feature-repository-screen.FileTreeStoreService.loadFailed"]'
+      ) as HTMLElement;
+
+    it('shows the file once its folder loads on Try again', async () => {
+      failOnce.add('docs');
+      await visit('/repositories/12/files/docs/guide.md');
+
+      // Not "doesn't exist": the folder could not be listed.
+      expect(editor().textContent).not.toContain(`${MESSAGE}.missing`);
+      expect(editor().querySelector('h2')).toBeNull();
+
+      tryAgain().click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
+      expect(row('guide.md').getAttribute('aria-selected')).toBe('true');
+    });
+
+    it('opens the first file once the root loads on Try again', async () => {
+      localStorage.setItem('fb.4.repo.12.lastFile', 'docs/guide.md');
+      failOnce.add('');
+      await visit('/repositories/12');
+
+      expect(url()).toBe('/repositories/12');
+      expect(page().querySelector('main ui-empty-state')).toBeNull();
+
+      tryAgain().click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(url()).toBe('/repositories/12/files/docs/guide.md');
+    });
+
+    it('closes the drawer when the open file is selected again', async () => {
+      narrow = true;
+      await visit('/repositories/12/files/README.md');
+      files().click();
+      await settle(harness.fixture);
+
+      row('README.md').click();
+      await settle(harness.fixture);
+
+      expect(shown(tree())).toBe(false);
+      expect(url()).toBe('/repositories/12/files/README.md');
+    });
+
+    it('opens the selected file', async () => {
+      await visit('/repositories/12');
+
+      row('docs').click();
+      await settle(harness.fixture);
+      row('guide.md').click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(url()).toBe('/repositories/12/files/docs/guide.md');
+      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
+    });
+
+    it('closes the drawer when a file is selected', async () => {
+      narrow = true;
+      await visit('/repositories/12');
+      files().click();
+      await settle(harness.fixture);
+      expect(shown(tree())).toBe(true);
+
+      row('docs').click();
+      await settle(harness.fixture);
+      // A folder only expands.
+      expect(shown(tree())).toBe(true);
+
+      row('guide.md').click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(url()).toBe('/repositories/12/files/docs/guide.md');
+      expect(shown(tree())).toBe(false);
     });
 
     it('collapses and expands the tree with Files, and remembers it', async () => {

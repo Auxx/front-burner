@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { IconComponent } from '../../../content/components/icon/icon.component';
@@ -15,9 +15,12 @@ import { TooltipDirective } from './tooltip.directive';
       <ui-icon name="diff-ignored" />
     </button>
     <button>Elsewhere</button>
+    <span uiTooltip="Shown from outside" [uiTooltipShown]="shown()">Row</span>
   `
 })
-class HostComponent {}
+class HostComponent {
+  readonly shown = signal(false);
+}
 
 describe('TooltipDirective', () => {
   let fixture: ComponentFixture<HostComponent>;
@@ -47,6 +50,24 @@ describe('TooltipDirective', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('shows while uiTooltipShown is true, whatever the pointer does', () => {
+    const host = fixture.componentInstance;
+    const span = fixture.nativeElement.querySelector('span[uitooltip]') as HTMLElement;
+
+    host.shown.set(true);
+    fixture.detectChanges();
+    expect(shown()).toEqual([ 'Shown from outside' ]);
+
+    pointer(span, 'pointerenter');
+    pointer(span, 'pointerleave');
+    vi.advanceTimersByTime(TOOLTIP_HIDE_DELAY_MS);
+    expect(shown()).toEqual([ 'Shown from outside' ]);
+
+    host.shown.set(false);
+    fixture.detectChanges();
+    expect(shown()).toEqual([]);
   });
 
   it('describes its host before it is ever shown', () => {

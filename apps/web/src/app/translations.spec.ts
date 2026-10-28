@@ -5,6 +5,7 @@ import en from '../../public/i18n/en.json';
 const texts: Record<string, string> = en;
 const AUTH = 'web-feature-auth';
 const REPOS = 'web-feature-repositories';
+const SCREEN = 'web-feature-repository-screen';
 
 describe('i18n/en.json', () => {
   it.each([ ...ERROR_CODES, 'network' ])('has the text errors.%s', code => {
@@ -89,7 +90,24 @@ describe('i18n/en.json', () => {
     [ `${REPOS}.errors.branch.no-branches`, 'This repository has no branches' ],
     [ `${REPOS}.CloneSectionComponent.noBranches`, 'This repository has no branches' ],
     [ `${REPOS}.errors.form.remote-failed`, 'Something went wrong while contacting the remote.' ],
-    [ `${REPOS}.errors.form.rate-limited`, 'Too many attempts. Try again in a minute.' ]
+    [ `${REPOS}.errors.form.rate-limited`, 'Too many attempts. Try again in a minute.' ],
+    [ `${SCREEN}.FileTreeComponent.ignoredFile`, 'Ignored by .gitignore. Git won\'t commit this file.' ],
+    [
+      `${SCREEN}.FileTreeComponent.ignoredFolder`,
+      'Ignored by .gitignore. Git won\'t commit anything in this folder.'
+    ],
+    [
+      `${SCREEN}.FileTreeStoreService.emptyNote`,
+      'Empty folders aren\'t saved in git. Add a file to keep this folder.'
+    ],
+    [ `${SCREEN}.FileTreeStoreService.more`, '{count, plural, one {# more item} other {# more items}} not shown' ],
+    [ `${SCREEN}.FileTreeStoreService.loadFailed`, 'This folder could not be loaded' ],
+    [ `${SCREEN}.FileTreeComponent.retry`, 'Try again' ],
+    [ `${SCREEN}.EditorAreaComponent.later`, 'The editor comes in a later version.' ],
+    [ `${SCREEN}.EntryMessageComponent.missing`, 'This file doesn\'t exist.' ],
+    [ `${SCREEN}.EntryMessageComponent.nonMarkdown`, 'Only Markdown files can be opened in Front Burner.' ],
+    [ `${SCREEN}.EntryMessageComponent.symlink`, 'Symbolic links can\'t be opened.' ],
+    [ `${SCREEN}.EntryMessageComponent.submodule`, 'Submodules aren\'t supported.' ]
   ])('has the fixed text %s', (key, text) => {
     expect(texts[key]).toBe(text);
   });
