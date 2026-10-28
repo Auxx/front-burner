@@ -30,7 +30,8 @@ const MESSAGES: Record<ErrorCode, string> = {
   'host-key-unknown': 'The server\'s host key is not known yet.',
   'path-refused': 'This path can\'t be used.',
   'entry-not-found': 'This file or folder doesn\'t exist.',
-  'repository-not-openable': 'This repository can\'t be opened yet.'
+  'repository-not-openable': 'This repository can\'t be opened yet.',
+  'merge-in-progress': 'A merge is in progress. Finish or abort it first.'
 };
 
 interface ZodIssueLike {

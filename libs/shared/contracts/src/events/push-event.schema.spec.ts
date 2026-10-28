@@ -12,6 +12,14 @@ describe('PushEventSchema', () => {
     }
   });
 
+  it('parses a files.changed event with folders and with all', () => {
+    for (const folders of [ [ '', 'docs' ], 'all' ]) {
+      const event = { type: 'files.changed', repositoryId: 3, folders };
+      expect(PushEventSchema.parse(event)).toEqual(event);
+    }
+    expect(PushEventSchema.safeParse({ type: 'files.changed', repositoryId: 3, folders: 'some' }).success).toBe(false);
+  });
+
   it('refuses an unknown event type', () => {
     expect(PushEventSchema.safeParse({ type: 'repository.deleted', repositoryId: 1 }).success).toBe(false);
   });

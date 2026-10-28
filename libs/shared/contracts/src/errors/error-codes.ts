@@ -27,7 +27,9 @@ export const ERROR_CODES = [
   /** 404; no file or folder at a path of a working copy. */
   'entry-not-found',
   /** 409; the repository is not `ready`; params `{ status }` (FB-3). */
-  'repository-not-openable'
+  'repository-not-openable',
+  /** 409; a merge or rebase is in progress, so the working tree can't be changed (FB-26). */
+  'merge-in-progress'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
