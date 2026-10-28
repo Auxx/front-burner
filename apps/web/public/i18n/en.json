@@ -349,5 +349,9 @@
   "web-feature-repository-screen.FileTreeStoreService.loadFailed": "This folder could not be loaded",
   "web-feature-repository-screen.FileTreeStoreService.retry": "Try again",
   "web-feature-repository-screen.FileTreeStoreService.more": "{count, plural, one {# more item} other {# more items}} not shown",
-  "web-feature-repository-screen.FileTreeStoreService.emptyNote": "Empty folders aren't saved in git. Add a file to keep this folder."
+  "web-feature-repository-screen.FileTreeStoreService.emptyNote": "Empty folders aren't saved in git. Add a file to keep this folder.",
+  "web-feature-repository-screen.FileTreeComponent.label": "Files",
+  "web-feature-repository-screen.FileTreeComponent.ignoredFile": "Ignored by .gitignore. Git won't commit this file.",
+  "web-feature-repository-screen.FileTreeComponent.ignoredFolder": "Ignored by .gitignore. Git won't commit anything in this folder.",
+  "web-feature-repository-screen.FileTreeComponent.retry": "Try again"
 }

@@ -1,0 +1,45 @@
+:host {
+  display: block;
+  block-size: 100%;
+}
+
+.kind {
+  flex: none;
+  color: var(--ui-icon-muted);
+}
+
+.name {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Ignored entries, as code editors show them; the icon says it too (FB-20a, NF-13.7).
+.ignored {
+  color: var(--ui-git-ignored);
+}
+
+.note {
+  color: var(--ui-text-subtle);
+  font-style: italic;
+}
+
+.danger {
+  flex: none;
+  color: var(--ui-danger-icon);
+}
+
+.retry {
+  flex: none;
+  color: var(--ui-text-link);
+  text-decoration: underline;
+}
+
+// At least 24 × 24 px, as every target (NF-13.5).
+.ignored-icon {
+  flex: none;
+  min-inline-size: 1.5rem;
+  min-block-size: 1.5rem;
+  color: var(--ui-git-ignored);
+}

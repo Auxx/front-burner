@@ -54,8 +54,11 @@ const NODES: readonly TreeNode[] = [
       [(expanded)]="expanded"
       (loadChildren)="requested.push($event)"
     >
-      <ng-template uiTreeNode let-node>
+      <ng-template uiTreeNode let-node let-active="active">
         <span>{{ node.label }}</span>
+        @if (active) {
+          <i class="keyboard-active"></i>
+        }
         <button uiTreeItemMenu [uiMenuTrigger]="menu.aria" aria-label="Actions for {{ node.label }}"></button>
       </ng-template>
     </ui-tree>
@@ -298,6 +301,25 @@ describe('TreeComponent', () => {
     );
     await stable();
     expect(host.requested).toEqual([ 'src', 'src/app' ]);
+  });
+
+  it('tells a row template whether its row is the keyboard\'s active row', async () => {
+    const marked = () => [ ...root().querySelectorAll('.keyboard-active') ].map(mark => mark.closest('[role="treeitem"]'));
+    await create();
+
+    await activate('src');
+    expect(marked()).toEqual([ row('src') ]);
+
+    row('README.md').click();
+    await stable();
+    expect(marked()).toEqual([]);
+
+    await press('ArrowUp');
+    expect(marked()).toEqual([ row('src') ]);
+
+    outside().focus();
+    await stable();
+    expect(marked()).toEqual([]);
   });
 
   it('opens a file with a click', async () => {

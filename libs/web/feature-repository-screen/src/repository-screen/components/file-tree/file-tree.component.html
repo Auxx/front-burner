@@ -1,0 +1,51 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.FileTreeComponent'">
+  <ui-tree
+    [label]="t('label')"
+    [nodes]="store.nodes()"
+    [selected]="selected()"
+    (selectedChange)="onSelected($event)"
+    [(expanded)]="store.expanded"
+    (loadChildren)="store.load($event)"
+  >
+    <ng-template uiTreeNode let-node let-active="active">
+      @let item = row(node);
+      @switch (item.kind) {
+        @case ('loading') {
+          <ui-spinner />
+          <span class="name note">{{ item.label }}</span>
+        }
+        @case ('error') {
+          <ui-icon class="danger" name="error" />
+          <span class="name">{{ item.label }}</span>
+          <span class="retry">{{ t('retry') }}</span>
+        }
+        @case ('more') {
+          <span class="name note">{{ item.label }}</span>
+        }
+        @case ('empty-note') {
+          <span class="name note">{{ item.label }}</span>
+        }
+        @default {
+          <ui-icon class="kind" [name]="icon(item)" />
+          <span class="name" [class.ignored]="item.entry?.ignored">{{ item.label }}</span>
+          @if (item.entry?.ignored) {
+            <!-- The row's accessible name says "ignored"; the button only explains it. -->
+            <button
+              uiIconButton
+              class="ignored-icon"
+              tabindex="-1"
+              aria-hidden="true"
+              [label]="t(item.kind === 'folder' ? 'ignoredFolder' : 'ignoredFile')"
+              [uiTooltip]="t(item.kind === 'folder' ? 'ignoredFolder' : 'ignoredFile')"
+              uiTooltipShowOnClick
+              [uiTooltipShown]="active"
+              (click)="$event.stopPropagation()"
+            >
+              <ui-icon name="diff-ignored" />
+            </button>
+          }
+        }
+      }
+    </ng-template>
+  </ui-tree>
+</ng-container>

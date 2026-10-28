@@ -149,6 +149,11 @@ export class TreeComponent {
     return Math.min(active.index, this.rows().length - 1);
   });
 
+  /** Whether the keyboard, not a click or a tap, moved to the active row while the tree has the focus. */
+  private readonly keyboard = signal(false);
+  /** The active row's index while `keyboard`, else -1. */
+  protected readonly keyboardIndex = computed(() => (this.keyboard() ? this.activeIndex() : -1));
+
   private readonly renderedRange = signal<ListRange>({ start: 0, end: 0 });
 
   /** Only a rendered row can be referenced. */
@@ -250,9 +255,13 @@ export class TreeComponent {
    * a tap neither moves nor scrolls: the click makes its own row active.
    */
   private onTreeFocus(origin: FocusOrigin): void {
+    if (origin === null || origin === 'mouse' || origin === 'touch') {
+      this.keyboard.set(false);
+    }
     if (origin === null || origin === 'mouse' || origin === 'touch' || this.focusingTree) {
       return;
     }
+    this.keyboard.set(true);
     const last = this.active();
     const lastIndex = last ? this.rowIndex().get(last.value) ?? -1 : -1;
     const index = this.selectedIndex() !== -1 ? this.selectedIndex() : lastIndex !== -1 ? lastIndex : 0;
@@ -268,6 +277,7 @@ export class TreeComponent {
       return;
     }
     this.focusTree();
+    this.keyboard.set(false);
     this.setActive(index);
     this.activate(index);
   }
@@ -278,6 +288,7 @@ export class TreeComponent {
     }
     if (this.handleKey(event)) {
       event.preventDefault();
+      this.keyboard.set(true);
     }
   }
 

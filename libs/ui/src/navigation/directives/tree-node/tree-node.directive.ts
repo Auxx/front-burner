@@ -7,11 +7,17 @@ export interface TreeNodeContext {
   readonly $implicit: TreeNode;
   readonly level: number;
   readonly expanded: boolean;
+  /**
+   * Whether the row is the active row and the keyboard moved there, while the
+   * tree has the focus: the row can then show what hover would show, since
+   * the focus stays on the tree (FB-20a).
+   */
+  readonly active: boolean;
 }
 
 /**
  * The content of each row of a `ui-tree`, after its chevron:
- * `<ng-template uiTreeNode let-node let-level="level">`. Without it, a row
+ * `<ng-template uiTreeNode let-node let-level="level" let-active="active">`. Without it, a row
  * shows the node's label.
  */
 @Directive({
