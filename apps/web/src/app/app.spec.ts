@@ -121,7 +121,8 @@ describe('appRoutes', () => {
   });
 
   describe('the repository screen', () => {
-    const screen = (harness: RouterTestingHarness) => harness.fixture.nativeElement.querySelector('rs-repository-screen');
+    const screen = (harness: RouterTestingHarness) =>
+      harness.fixture.nativeElement.querySelector('rs-repository-screen');
 
     it.each([ '/repositories/12', '/repositories/12/files/a/b.md' ])(
       'routes /repositories/12 and /repositories/12/files/a/b.md to the repository screen: %s',
@@ -134,7 +135,9 @@ describe('appRoutes', () => {
         const navigation = harness.navigateByUrl(url);
         const http = TestBed.inject(HttpTestingController);
         await vi.waitFor(() => {
-          http.match('/api/v1/onboarding').forEach(request => request.flush(null, { status: 404, statusText: 'Not Found' }));
+          http.match('/api/v1/onboarding').forEach(request =>
+            request.flush(null, { status: 404, statusText: 'Not Found' })
+          );
           http.match('/api/v1/me').forEach(request => request.flush(ada));
           http.match('i18n/en.json').forEach(request => request.flush(en));
           harness.detectChanges();

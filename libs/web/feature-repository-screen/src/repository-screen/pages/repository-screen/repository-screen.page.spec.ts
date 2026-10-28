@@ -104,10 +104,14 @@ describe('RepositoryScreenPage', () => {
     expect(page().querySelector('ui-app-shell')).toBeNull();
     expect(page().querySelector('ui-spinner')).not.toBeNull();
 
-    answer.error(new HttpErrorResponse({ status: 404, error: { code: 'not-found', params: {}, requestId: '', message: '' } }));
+    answer.error(
+      new HttpErrorResponse({ status: 404, error: { code: 'not-found', params: {}, requestId: '', message: '' } })
+    );
     await settle(harness.fixture);
 
-    expect(page().querySelector('shell-page-not-found h1')?.textContent?.trim()).toBe('web-shell.PageNotFoundPage.heading');
+    expect(page().querySelector('shell-page-not-found h1')?.textContent?.trim()).toBe(
+      'web-shell.PageNotFoundPage.heading'
+    );
     expect(page().querySelector('shell-app-header')).not.toBeNull();
     expect(page().querySelector('rs-not-openable')).toBeNull();
     expect(document.title).toBe('web-shell.PageNotFoundPage.title · Front Burner');

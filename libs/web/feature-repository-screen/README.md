@@ -6,9 +6,9 @@ replaces the app header (NV-9).
 
 - `repositoryScreenMatcher`: one route for both URLs, so that the page stays
   when only the file changes (FB-1, FB-11).
-- `RepositoryScreenPage`: opens the repository once per visit and shows Page
-  not found for a missing one, the status for one that cannot be opened (FB-3),
-  or the bar, the file tree pane and the editor area. It sets its own title,
+- `RepositoryScreenPage`: opens the repository once per visit and shows Page not
+  found for a missing one, the status for one that cannot be opened (FB-3), or
+  the bar, the file tree pane and the editor area. It sets its own title,
   `<name> · Front Burner` (NV-13).
 - `RepositorySessionService`: the open repository, provided by the page.
 - `PaneMemoryService`: the tree's size and whether it is collapsed, per device

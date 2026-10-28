@@ -18,8 +18,7 @@ export const appRoutes: Route[] = [
         path: 'repositories/:id',
         canMatch: [ (_route: Route, segments: UrlSegment[]) => /^\d+$/.test(segments[1]?.path ?? '') ],
         canActivate: [ authGuard ],
-        loadChildren: () =>
-          import('@front-burner/web-feature-repository-screen').then(m => m.repositoryScreenRoutes)
+        loadChildren: () => import('@front-burner/web-feature-repository-screen').then(m => m.repositoryScreenRoutes)
       },
       {
         // The app header and the page in `main`, loaded with the first page that needs them (NF-2.9).
