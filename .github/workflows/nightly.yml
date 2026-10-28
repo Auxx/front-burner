@@ -4,8 +4,8 @@ name: Nightly
 # project in Chromium, Firefox and WebKit, on desktop and mobile (NF-12.2).
 # Scheduled runs start only from the default branch.
 on:
-  schedule:
-    - cron: "0 3 * * *"
+#  schedule:
+#    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
