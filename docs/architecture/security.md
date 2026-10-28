@@ -59,6 +59,14 @@ top of the security rules in the requirements and NF-11. See
   - **never follows symbolic links**: a symbolic link appears in the file tree
     but cannot be opened, edited, renamed onto, or served. Without this rule a
     malicious remote could make the backend read files outside the working copy.
+  - **The check holds only until the entry is opened.** Listing and reading run
+    outside the working-tree lock (A-5.3), so a merge can replace a folder with
+    a symbolic link between the check and the open. Code that reads a resolved
+    entry therefore opens it with `O_NOFOLLOW` (and `O_DIRECTORY` for a folder),
+    checks that the descriptor's real path (`/proc/self/fd/<fd>`) is still
+    inside the working copy, and reads through that descriptor, never through
+    the path again. Changes need no such step: they run inside the lock, where
+    no merge can run at the same time. _(My call.)_
 
 ## A-7: Outbound connections
 

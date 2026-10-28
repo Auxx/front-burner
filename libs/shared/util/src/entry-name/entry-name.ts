@@ -9,11 +9,14 @@ export type EntryNameProblem = typeof ENTRY_NAME_PROBLEMS[number];
 /** FB-27, in UTF-8 bytes of the NFC form (FB-28). */
 const MAX_NAME_BYTES = 255;
 
-// U+0000 to U+001F and U+007F.
+// The C0 controls, DEL and the C1 controls (U+0000 to U+001F, U+007F to U+009F).
 // eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u001f\u007f]/;
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'accent' });
+const encoder = new TextEncoder();
+
+// A fixed locale, so that the backend and every browser sort the same way.
+const collator = new Intl.Collator('en', { numeric: true, sensitivity: 'accent' });
 
 export function isMarkdownName(name: string): boolean {
   const lower = name.toLowerCase();
@@ -46,7 +49,7 @@ export function entryNameProblem(name: string): EntryNameProblem | null {
   if (nfc.toLowerCase() === '.git') {
     return 'git';
   }
-  if (new TextEncoder().encode(nfc).length > MAX_NAME_BYTES) {
+  if (encoder.encode(nfc).length > MAX_NAME_BYTES) {
     return 'too-long';
   }
   return null;

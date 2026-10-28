@@ -32,6 +32,9 @@ describe('entry names', () => {
       [ 'a\u0000b', 'control' ],
       [ 'a\u001fb', 'control' ],
       [ 'a\u007fb', 'control' ],
+      [ 'a\u0085b', 'control' ],
+      [ 'a\u009bb', 'control' ],
+      [ 'a\u00a0b', null ],
       [ ' a', 'edge-space' ],
       [ 'a ', 'edge-space' ],
       [ '.git', 'git' ],
@@ -59,6 +62,10 @@ describe('entry names', () => {
     expect([ '10-deploy.md', '2-setup.md', 'B.md', 'a.md' ].sort(compareEntryNames)).toEqual(
       [ '2-setup.md', '10-deploy.md', 'a.md', 'B.md' ]
     );
+  });
+
+  it('sorts the same way in every locale', () => {
+    expect([ 'z.md', 'ä.md', 'a.md' ].sort(compareEntryNames)).toEqual([ 'a.md', 'ä.md', 'z.md' ]);
   });
 
   it('breaks ties so the order is total', () => {

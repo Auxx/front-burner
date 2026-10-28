@@ -30,7 +30,7 @@ libs/
       events/             push channel hub (A-3.10)
       git/                git engine (A-5), egress proxy, credential broker
       storage/            data layout (NF-5); path resolution for files
-                          (A-7.6); disk monitor
+                          (A-7.6); disk monitor (NF-9.7)
       mail/               SMTP sending and templates
       observability/      logging, request IDs, metrics, health (NF-10)
       security/           headers, CSP nonce, rate limits, shared HTTP client (A-7.8)
