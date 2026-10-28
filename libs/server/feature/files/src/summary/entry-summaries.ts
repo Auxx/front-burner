@@ -8,14 +8,9 @@ import {
 import type { EntrySummary, NewEntryKind } from '@front-burner/shared-contracts';
 import { isMarkdownName } from '@front-burner/shared-util';
 import { Injectable } from '@nestjs/common';
-import { constants } from 'node:fs';
 import { open, opendir } from 'node:fs/promises';
 import { join } from 'node:path';
-
-/** Never counted, in any case (FB-5, FB-19). */
-const isGit = (name: string) => name.toLowerCase() === '.git';
-
-const SUBFOLDER_FLAGS = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
+import { isGitName, splitPath, SUBFOLDER_FLAGS } from '../paths/entry-paths';
 
 interface Counts {
   files: number;
@@ -34,7 +29,7 @@ async function walk(folder: string, counts: Counts, top: boolean): Promise<void>
   let nonMarkdown = 0;
   let nested = false;
   for await (const entry of await opendir(folder)) {
-    if (isGit(entry.name)) {
+    if (isGitName(entry.name)) {
       nested = true;
     } else if (entry.isDirectory()) {
       subfolders.push(entry.name);
@@ -86,7 +81,7 @@ export class EntrySummaries {
       return { files: 0, nonMarkdown: 0, uncommitted: 0 };
     }
     if (entry.type !== 'folder') {
-      const markdown = entry.type === 'file' && isMarkdownName(path.slice(path.lastIndexOf('/') + 1));
+      const markdown = entry.type === 'file' && isMarkdownName(splitPath(path)[1]);
       const uncommitted = await this.git.uncommittedUnder(root, path);
       return { files: 1, nonMarkdown: markdown ? 0 : 1, uncommitted: Math.min(uncommitted, 1) };
     }

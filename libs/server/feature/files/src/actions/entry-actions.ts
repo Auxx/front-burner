@@ -13,6 +13,7 @@ import { Injectable } from '@nestjs/common';
 import { mkdir, open, readdir, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { toFilesError } from '../files/files-errors';
+import { joinPath, splitPath } from '../paths/entry-paths';
 import { OpenableRepository } from '../repository/openable-repository';
 import { WorkingTreeGuard } from './working-tree-guard';
 
@@ -23,14 +24,6 @@ const nameError = (code: string, params: Record<string, unknown> = {}) =>
 const notRenamable = () => new ApiErrorException(400, 'entry-not-renamable', {}, 'This can\'t be renamed.');
 
 const nameTaken = (name: string) => nameError('name-taken', { name });
-
-/** `[ parent, name ]` of a non-root path. */
-const splitPath = (path: string): [ string, string ] => {
-  const slash = path.lastIndexOf('/');
-  return slash === -1 ? [ '', path ] : [ path.slice(0, slash), path.slice(slash + 1) ];
-};
-
-const joinPath = (folder: string, name: string) => folder === '' ? name : `${folder}/${name}`;
 
 /**
  * The name to store (FB-28, FB-29): NFC, and for a file always with a Markdown
