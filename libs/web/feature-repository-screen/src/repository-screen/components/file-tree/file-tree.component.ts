@@ -5,8 +5,8 @@ import {
   type IconName,
   SpinnerComponent,
   TooltipDirective,
-  type TreeNode,
   TreeComponent,
+  type TreeNode,
   TreeNodeDirective
 } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';

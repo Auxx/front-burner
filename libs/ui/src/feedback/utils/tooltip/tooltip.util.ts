@@ -150,7 +150,10 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
 
   const listeners: [ string, (event: never) => void ][] = [
     [ 'pointerenter', (event: PointerEvent) => !isTouch(event) && (panel ? clearTimeout(timer) : scheduleShow()) ],
-    [ 'pointerleave', (event: PointerEvent) => !isTouch(event) && !shownByClick && !shownByFocus && !shownByInput && scheduleHide() ],
+    [
+      'pointerleave',
+      (event: PointerEvent) => !isTouch(event) && !shownByClick && !shownByFocus && !shownByInput && scheduleHide()
+    ],
     [ 'focusin', () => {
       if (focusVisible()) {
         show();

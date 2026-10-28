@@ -25,7 +25,8 @@ const ada: CurrentUser = {
 
 @Component({
   imports: [ FileTreeComponent ],
-  template: `<rs-file-tree [selected]="selected()" (selectPath)="selects.push($event)" (retry)="retries.push($event)" />`
+  template:
+    `<rs-file-tree [selected]="selected()" (selectPath)="selects.push($event)" (retry)="retries.push($event)" />`
 })
 class HostComponent {
   readonly selected = signal<string | null>(null);
@@ -82,7 +83,8 @@ describe('FileTreeComponent', () => {
         {
           provide: FilesApi,
           useValue: {
-            listFolder: (_id: number, query: { path: string; }) => answers[query.path]?.shift() ?? of(folders[query.path])
+            listFolder: (_id: number, query: { path: string; }) =>
+              answers[query.path]?.shift() ?? of(folders[query.path])
           }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } }

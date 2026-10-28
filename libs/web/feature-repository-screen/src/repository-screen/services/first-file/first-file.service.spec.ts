@@ -66,11 +66,14 @@ describe('FirstFileService', () => {
     expect(await pick()).toBe('README.md');
   });
 
-  it.each([ 'readme.markdown', 'ReadMe.MDX', 'README.md' ])('picks %s, whatever its case and Markdown extension', async name => {
-    withRoot(entry('a.md'), entry('README.txt'), folder('readme.md'), entry(name));
+  it.each([ 'readme.markdown', 'ReadMe.MDX', 'README.md' ])(
+    'picks %s, whatever its case and Markdown extension',
+    async name => {
+      withRoot(entry('a.md'), entry('README.txt'), folder('readme.md'), entry(name));
 
-    expect(await pick()).toBe(name);
-  });
+      expect(await pick()).toBe(name);
+    }
+  );
 
   it('picks nothing without a README', async () => {
     withRoot(entry('README.txt'), entry('notes.md'));
@@ -86,11 +89,14 @@ describe('FirstFileService', () => {
     expect(await pick()).toBe('docs/guide.md');
   });
 
-  it.each([ 'docs/gone.md', 'docs/logo.png', 'docs' ])('falls back to the README when the last file %j cannot be opened', async last => {
-    localStorage.setItem(LAST_FILE, last);
+  it.each([ 'docs/gone.md', 'docs/logo.png', 'docs' ])(
+    'falls back to the README when the last file %j cannot be opened',
+    async last => {
+      localStorage.setItem(LAST_FILE, last);
 
-    expect(await pick()).toBe('README.md');
-  });
+      expect(await pick()).toBe('README.md');
+    }
+  );
 
   it('works without localStorage', async () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {

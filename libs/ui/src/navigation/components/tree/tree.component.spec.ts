@@ -304,7 +304,8 @@ describe('TreeComponent', () => {
   });
 
   it('tells a row template whether its row is the keyboard\'s active row', async () => {
-    const marked = () => [ ...root().querySelectorAll('.keyboard-active') ].map(mark => mark.closest('[role="treeitem"]'));
+    const marked = () =>
+      [ ...root().querySelectorAll('.keyboard-active') ].map(mark => mark.closest('[role="treeitem"]'));
     await create();
 
     await activate('src');

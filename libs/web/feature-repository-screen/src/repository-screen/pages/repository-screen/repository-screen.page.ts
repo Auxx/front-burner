@@ -141,7 +141,9 @@ export class RepositoryScreenPage {
       if (first === null) {
         this.openPath.set(null);
       } else {
-        void this.router.navigate([ '/repositories', repositoryId, 'files', ...first.split('/') ], { replaceUrl: true });
+        void this.router.navigate([ '/repositories', repositoryId, 'files', ...first.split('/') ], {
+          replaceUrl: true
+        });
       }
       return;
     }

@@ -7,6 +7,8 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { createWorkingCopy, type WorkingCopyFixture } from './working-copy';
+
 const READY_TIMEOUT_MS = 15_000;
 
 /** A setup token for tests: 32 characters. */
@@ -189,13 +191,15 @@ export interface SeedRepository {
   status?: 'cloning' | 'ready' | 'error';
   errorCode?: 'clone-failed' | 'clone-timed-out' | 'working-copy-missing';
   lastAccessedAt?: Date;
+  /** The working copy of a ready repository; `empty` by default. */
+  workingCopy?: WorkingCopyFixture;
 }
 
 /**
  * Inserts users and repositories into a running instance's database, which the
  * server has migrated (WAL lets both write). Every seeded user is a password
- * user with `TEST_ADMIN`'s password, so the instance must be onboarded. Returns
- * the new IDs.
+ * user with `TEST_ADMIN`'s password, so the instance must be onboarded. A ready
+ * repository gets a working copy (see `WorkingCopyFixture`). Returns the new IDs.
  */
 export function seed(
   dataDir: string,
@@ -219,7 +223,7 @@ export function seed(
     );
     const repositoryIds = (rows.repositories ?? []).map(repository => {
       const at = (repository.lastAccessedAt ?? new Date()).getTime();
-      return Number(
+      const id = Number(
         insertRepository.run(
           repository.userId,
           repository.name,
@@ -230,6 +234,13 @@ export function seed(
           at
         ).lastInsertRowid
       );
+      if ((repository.status ?? 'ready') === 'ready') {
+        createWorkingCopy(
+          join(dataDir, 'repos', String(repository.userId), String(id)),
+          repository.workingCopy ?? 'empty'
+        );
+      }
+      return id;
     });
     return { userIds, repositoryIds };
   } finally {

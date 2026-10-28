@@ -280,7 +280,11 @@ export class FileTreeStoreService {
     if (state.status === 'error') {
       const label = this.text('loadFailed');
       // Selecting it means **Try again** (FB-44).
-      return [ { ...this.added('error', folder, label), accessibleName: `${label}, ${this.text('retry')}`, selectable: true } ];
+      return [ {
+        ...this.added('error', folder, label),
+        accessibleName: `${label}, ${this.text('retry')}`,
+        selectable: true
+      } ];
     }
     const { entries, more } = state.listing;
     const rows = entries.map(entry => this.entryRow(folder, entry, folders));

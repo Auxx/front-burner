@@ -3,8 +3,8 @@ import type { Entry } from '@front-burner/shared-contracts';
 import { EmptyStateComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import { EntryMessageComponent } from '../entry-message/entry-message.component';
 import { fileName } from '../../utils/file-name/file-name';
+import { EntryMessageComponent } from '../entry-message/entry-message.component';
 
 /**
  * The editor area of the repository screen, inside its `main` region labelled
