@@ -102,7 +102,12 @@ describe('i18n/en.json', () => {
     ],
     [ `${SCREEN}.FileTreeStoreService.more`, '{count, plural, one {# more item} other {# more items}} not shown' ],
     [ `${SCREEN}.FileTreeStoreService.loadFailed`, 'This folder could not be loaded' ],
-    [ `${SCREEN}.FileTreeComponent.retry`, 'Try again' ]
+    [ `${SCREEN}.FileTreeComponent.retry`, 'Try again' ],
+    [ `${SCREEN}.EditorAreaComponent.later`, 'The editor comes in a later version.' ],
+    [ `${SCREEN}.EntryMessageComponent.missing`, 'This file doesn\'t exist.' ],
+    [ `${SCREEN}.EntryMessageComponent.nonMarkdown`, 'Only Markdown files can be opened in Front Burner.' ],
+    [ `${SCREEN}.EntryMessageComponent.symlink`, 'Symbolic links can\'t be opened.' ],
+    [ `${SCREEN}.EntryMessageComponent.submodule`, 'Submodules aren\'t supported.' ]
   ])('has the fixed text %s', (key, text) => {
     expect(texts[key]).toBe(text);
   });

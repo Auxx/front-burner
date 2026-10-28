@@ -233,7 +233,7 @@ describe('FileTreeStoreService', () => {
     store.init(12);
     await flush();
 
-    expect(store.nodes().at(-1)).toEqual(
+    expect(store.nodes()[store.nodes().length - 1]).toEqual(
       expect.objectContaining({
         value: '\u0000more:',
         kind: 'more',
@@ -322,6 +322,14 @@ describe('FileTreeStoreService', () => {
     await store.resolve('docs/api/index.md');
 
     expect(listed()).toEqual([ '', 'docs', 'docs/api' ]);
+  });
+
+  it('gives a folder\'s entries once it is listed, or null when it cannot be', async () => {
+    store.init(12);
+
+    expect(await store.entries('')).toEqual(folders[''].entries);
+    expect(await store.entries('nope')).toBeNull();
+    expect(listed()).toEqual([ '', 'nope' ]);
   });
 
   it('starts over for another repository', async () => {

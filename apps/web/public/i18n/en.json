@@ -353,5 +353,10 @@
   "web-feature-repository-screen.FileTreeComponent.label": "Files",
   "web-feature-repository-screen.FileTreeComponent.ignoredFile": "Ignored by .gitignore. Git won't commit this file.",
   "web-feature-repository-screen.FileTreeComponent.ignoredFolder": "Ignored by .gitignore. Git won't commit anything in this folder.",
-  "web-feature-repository-screen.FileTreeComponent.retry": "Try again"
+  "web-feature-repository-screen.FileTreeComponent.retry": "Try again",
+  "web-feature-repository-screen.EditorAreaComponent.later": "The editor comes in a later version.",
+  "web-feature-repository-screen.EntryMessageComponent.missing": "This file doesn't exist.",
+  "web-feature-repository-screen.EntryMessageComponent.nonMarkdown": "Only Markdown files can be opened in Front Burner.",
+  "web-feature-repository-screen.EntryMessageComponent.symlink": "Symbolic links can't be opened.",
+  "web-feature-repository-screen.EntryMessageComponent.submodule": "Submodules aren't supported."
 }

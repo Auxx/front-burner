@@ -1,3 +1,13 @@
-<ui-empty-state *transloco="let t; prefix: 'web-feature-repository-screen.EditorAreaComponent'" icon="markdown">
-  {{ t('empty') }}
-</ui-empty-state>
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.EditorAreaComponent'">
+  @if (path(); as path) {
+    @if (entry() !== undefined) {
+      @if (markdown()) {
+        <ui-empty-state icon="markdown" [heading]="name()">{{ t('later') }}</ui-empty-state>
+      } @else {
+        <rs-entry-message [entry]="entry() ?? null" [path]="path" />
+      }
+    }
+  } @else if (path() === null) {
+    <ui-empty-state icon="markdown">{{ t('empty') }}</ui-empty-state>
+  }
+</ng-container>

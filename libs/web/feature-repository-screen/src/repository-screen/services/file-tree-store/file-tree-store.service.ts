@@ -107,6 +107,12 @@ export class FileTreeStoreService {
     void this.fetch(folder);
   }
 
+  /** The entries of `folder`, listing it if needed; `null` when it cannot be listed. */
+  async entries(folder: string): Promise<readonly Entry[] | null> {
+    const listing = await this.listingOf(folder);
+    return typeof listing === 'string' ? null : listing.entries;
+  }
+
   /** The entry at `path`, if its folder is loaded. */
   entry(path: string): Entry | undefined {
     const { parent, name } = split(path);
