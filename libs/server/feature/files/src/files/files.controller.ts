@@ -9,8 +9,8 @@ import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { FolderLister } from '../listing/folder-lister';
 import { OpenableRepository } from '../repository/openable-repository';
-import { FolderListingDto, FolderQueryDto } from './files.dto';
 import { toFilesError } from './files-errors';
+import { FolderListingDto, FolderQueryDto } from './files.dto';
 
 /** The logged-in user and session; the global auth guard has checked `req.auth`. */
 function authOf(req: Request): RequestAuth {

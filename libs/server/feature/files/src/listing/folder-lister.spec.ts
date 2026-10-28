@@ -38,8 +38,10 @@ describe('FolderLister', () => {
 
   const names = async (path = '') => (await lister.list(root, path)).entries.map(entry => entry.name);
   const refusal = (path: string) =>
-    lister.list(root, path).then(() => undefined, (error: unknown) =>
-      error instanceof PathRefusedError ? error.reason : error);
+    lister.list(root, path).then(
+      () => undefined,
+      (error: unknown) => error instanceof PathRefusedError ? error.reason : error
+    );
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'fb-lister-spec-'));
@@ -111,7 +113,13 @@ describe('FolderLister', () => {
 
     const ignored = Object.fromEntries((await lister.list(root, '')).entries.map(e => [ e.name, e.ignored ]));
 
-    expect(ignored).toEqual({ build: true, '.gitignore': false, 'keep.log': false, 'notes.md': false, 'out.log': true });
+    expect(ignored).toEqual({
+      build: true,
+      '.gitignore': false,
+      'keep.log': false,
+      'notes.md': false,
+      'out.log': true
+    });
   });
 
   it('marks everything inside an ignored folder as ignored', async () => {
@@ -141,7 +149,10 @@ describe('FolderLister', () => {
 
     const listing = await lister.list(root, 'build');
 
-    expect(listing.entries.map(entry => [ entry.name, entry.ignored ])).toEqual([ [ 'keep.js', false ], [ 'out.js', true ] ]);
+    expect(listing.entries.map(entry => [ entry.name, entry.ignored ])).toEqual([ [ 'keep.js', false ], [
+      'out.js',
+      true
+    ] ]);
     expect((await lister.list(root, 'dist')).entries.map(entry => entry.ignored)).toEqual([ true ]);
   });
 
