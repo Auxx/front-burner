@@ -37,6 +37,18 @@ export class FilesApi {
       data
     );
   }
+  deleteEntry(
+    id: number,
+    query: {
+      /** @maxLength 4096 */
+      path: string;
+    }
+  ): Observable<void> {
+    return this.http.delete<void>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/entries`,
+      { params: query }
+    );
+  }
   renameEntry(id: number, data: RenameEntryRequest): Observable<EntryPath> {
     return this.http.post<EntryPath>(
       `/api/v1/repositories/${encodeURIComponent(id)}/entries/rename`,

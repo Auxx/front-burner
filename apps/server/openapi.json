@@ -603,6 +603,39 @@
         "tags": [
           "files"
         ]
+      },
+      "delete": {
+        "operationId": "deleteEntry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "files"
+        ]
       }
     },
     "/api/v1/repositories/{id}/entries/rename": {

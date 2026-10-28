@@ -1,27 +1,20 @@
 import { EventsHub } from '@front-burner/server-core-events';
 import { GitEngine } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import {
-  OpenedEntry,
-  openInWorkingCopy,
-  PathRefusedError,
-  resolveInWorkingCopy
-} from '@front-burner/server-core-storage';
 import type { CreateEntryRequest, EntryPath, RenameEntryRequest } from '@front-burner/shared-contracts';
 import { entryNameProblem, isMarkdownName, sameEntryName, withMarkdownExtension } from '@front-burner/shared-util';
 import { Injectable } from '@nestjs/common';
 import { mkdir, open, readdir, rename } from 'node:fs/promises';
 import { join } from 'node:path';
-import { toFilesError } from '../files/files-errors';
+import { entryNotRenamable, toFilesError } from '../files/files-errors';
 import { joinPath, splitPath } from '../paths/entry-paths';
+import { openFolder, resolveEntry } from '../paths/existing-entry';
 import { OpenableRepository } from '../repository/openable-repository';
 import { WorkingTreeGuard } from './working-tree-guard';
 
 /** A field error on the request's `name`, answered like Zod's (A-3.9). */
 const nameError = (code: string, params: Record<string, unknown> = {}) =>
   ApiErrorException.forFields([ { path: 'name', code, params } ]);
-
-const notRenamable = () => new ApiErrorException(400, 'entry-not-renamable', {}, 'This can\'t be renamed.');
 
 const nameTaken = (name: string) => nameError('name-taken', { name });
 
@@ -57,7 +50,7 @@ export class EntryActions {
     const root = this.repositories.root(userId, repositoryId);
     const name = finalName(request.name, request.kind);
     await this.guard.change(repositoryId, root, async () => {
-      const folder = await this.openFolder(root, request.folder);
+      const folder = await openFolder(this.git, root, request.folder);
       try {
         await this.assertFree(folder.path, name);
         const path = join(folder.path, name);
@@ -83,26 +76,22 @@ export class EntryActions {
   async rename(userId: number, repositoryId: number, request: RenameEntryRequest): Promise<EntryPath> {
     const root = this.repositories.root(userId, repositoryId);
     if (request.path === '') {
-      throw notRenamable();
+      throw entryNotRenamable();
     }
     const [ parent, oldName ] = splitPath(request.path);
     let folder = false;
     const name = await this.guard.change(repositoryId, root, async () => {
-      const entry = await resolveInWorkingCopy(root, request.path, { symlinkLeaf: true });
-      const submodule = await this.git.submoduleOn(root, request.path);
-      if (submodule !== null && submodule !== request.path) {
-        throw new PathRefusedError('not-found');
-      }
-      const renamable = entry.type === 'folder' ? submodule === null : entry.type === 'file' && isMarkdownName(oldName);
+      const { entry, submodule } = await resolveEntry(this.git, root, request.path);
+      const renamable = entry.type === 'folder' ? !submodule : entry.type === 'file' && isMarkdownName(oldName);
       if (!renamable) {
-        throw notRenamable();
+        throw entryNotRenamable();
       }
       const name = finalName(request.name, entry.type === 'folder' ? 'folder' : 'file');
       folder = entry.type === 'folder';
       if (name === oldName) {
         return name;
       }
-      const opened = await this.openFolder(root, parent);
+      const opened = await openFolder(this.git, root, parent);
       try {
         // Its own name in another case or form is not a clash (FB-27).
         await this.assertFree(opened.path, name, oldName);
@@ -117,24 +106,6 @@ export class EntryActions {
       this.publish(userId, repositoryId, parent, ...(folder ? [ request.path ] : []));
     }
     return { path: joinPath(parent, name) };
-  }
-
-  /**
-   * Opens a folder of the working copy to change its entries through the
-   * descriptor. A submodule, and anything inside one, is not a folder of this
-   * repository (FB-23).
-   *
-   * @throws PathRefusedError
-   */
-  private async openFolder(root: string, path: string): Promise<OpenedEntry> {
-    const resolved = await resolveInWorkingCopy(root, path);
-    if (resolved.type !== 'folder') {
-      throw new PathRefusedError('not-found');
-    }
-    if ((await this.git.submoduleOn(root, path)) !== null) {
-      throw new PathRefusedError('not-found');
-    }
-    return openInWorkingCopy(root, resolved);
   }
 
   /** Refuses a name that clashes with another entry of the folder (FB-27). */

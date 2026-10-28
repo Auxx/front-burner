@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -50,7 +50,12 @@ describe('folder listing (REQ-FILE-001)', () => {
     await server?.stop();
   });
 
-  async function call(method: 'GET' | 'POST', path: string, token?: string, body?: unknown): Promise<Answer> {
+  async function call(
+    method: 'GET' | 'POST' | 'DELETE',
+    path: string,
+    token?: string,
+    body?: unknown
+  ): Promise<Answer> {
     const headers: Record<string, string> = token === undefined ? {} : { authorization: `Bearer ${token}` };
     if (body !== undefined) {
       headers['content-type'] = 'application/json';
@@ -60,7 +65,9 @@ describe('folder listing (REQ-FILE-001)', () => {
       headers,
       body: body === undefined ? undefined : JSON.stringify(body)
     });
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+    // 204 has no body.
+    const text = await response.text();
+    return { status: response.status, body: (text === '' ? {} : JSON.parse(text)) as Record<string, unknown> };
   }
 
   const folder = (path: string, token = alice.token) =>
@@ -69,6 +76,8 @@ describe('folder listing (REQ-FILE-001)', () => {
     call('POST', `/repositories/${handbook}/entries`, token, body);
   const renameEntry = (body: unknown, token = alice.token) =>
     call('POST', `/repositories/${handbook}/entries/rename`, token, body);
+  const deleteEntry = (path: string, token = alice.token) =>
+    call('DELETE', `/repositories/${handbook}/entries?path=${encodeURIComponent(path)}`, token);
   const names = async (path: string) =>
     ((await folder(path)).body['entries'] as { name: string; }[]).map(entry => entry.name);
 
@@ -269,5 +278,58 @@ describe('folder listing (REQ-FILE-001)', () => {
     expect((await createEntry({ folder: '', name: 'drafts', kind: 'folder' })).status).toBe(201);
 
     expect(await event).toEqual({ type: 'files.changed', repositoryId: handbook, folders: [ '' ] });
+  });
+
+  it('AC-FILE-001.26: deletes a folder of 20,000 files in under 2 seconds and frees it in the background', async () => {
+    const root = join(server.dataDir, 'repos', String(alice.userId), String(handbook));
+    const tmp = join(server.dataDir, 'tmp');
+    for (let group = 0; group < 20; group++) {
+      const dir = join(root, 'archive', `group-${group}`);
+      mkdirSync(dir, { recursive: true });
+      for (let index = 0; index < 1000; index++) {
+        writeFileSync(join(dir, `note-${index}.md`), `# Note ${index}\n`);
+      }
+    }
+
+    const started = Date.now();
+    const answer = await deleteEntry('archive');
+    const elapsed = Date.now() - started;
+
+    expect(answer).toEqual({ status: 204, body: {} });
+    expect(elapsed).toBeLessThan(2000);
+    expect(existsSync(join(root, 'archive'))).toBe(false);
+    expect(await names('')).not.toContain('archive');
+    const deadline = Date.now() + 60_000;
+    while (readdirSync(tmp).length > 0 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    expect(readdirSync(tmp)).toEqual([]);
+  }, 120_000);
+
+  it('refuses .git and paths inside it', async () => {
+    const root = join(server.dataDir, 'repos', String(alice.userId), String(handbook));
+    for (const path of [ '.git', '.git/config', '.GIT', 'docs/.git' ]) {
+      const { status, body } = await deleteEntry(path);
+      expect(status, path).toBe(400);
+      expect(body).toMatchObject({ code: 'path-refused', params: { reason: 'inside-git' } });
+    }
+    expect(existsSync(join(root, '.git', 'config'))).toBe(true);
+
+    const rootFolder = await deleteEntry('');
+    expect(rootFolder.status).toBe(400);
+    expect(rootFolder.body).toMatchObject({ code: 'entry-not-deletable' });
+  });
+
+  it('answers another user\'s repository like a missing one', async () => {
+    const strip = ({ status, body }: Answer) => ({ status, body: { ...body, requestId: undefined } });
+    const suffix = '/entries?path=README.md';
+
+    expect((await call('DELETE', `/repositories/${handbook}${suffix}`)).status).toBe(401);
+    const other = await call('DELETE', `/repositories/${handbook}${suffix}`, bob.token);
+    const missing = await call('DELETE', `/repositories/${handbook + 1000}${suffix}`, bob.token);
+    expect(other.status).toBe(404);
+    expect(other.body['code']).toBe('not-found');
+    expect(strip(other)).toEqual(strip(missing));
+    expect(await names('')).toContain('README.md');
   });
 });
