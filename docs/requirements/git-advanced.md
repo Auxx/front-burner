@@ -287,60 +287,66 @@ handled by [REQ-REPO-002](repo-credentials.md).
 
 ## Acceptance criteria
 
-1. The header shows the current branch, "2 to push, 3 to pull" after a fetch,
-   and **Fetch**, **Pull** and **Push**. On a phone the counts stay visible and
-   the buttons are in a menu.
-2. Editing two Markdown files and deleting an image lists three entries in
-   **Changes** — two **Modified** (M) and one **Deleted** (D) — and the tab says
-   "Changes (3)". An ignored file is not listed.
-3. Selecting a changed Markdown file shows a unified diff with changed words
-   highlighted, and **Open in editor** opens it. A changed PNG shows "Binary
-   file changed" with both sizes.
-4. Unticking one of three files and committing with a message commits the two
-   ticked files only; the third stays in **Changes**. The commit's author and
-   committer are the user's commit author.
-5. Typing in a file and committing at once includes the last edit in the commit.
-6. A message whose first line is longer than 72 characters shows a hint and
-   still commits. A message with a line starting with `#` keeps it.
-7. **Amend last commit** is offered after a local commit and not after it is
-   pushed. Amending with no ticked files changes only the message.
-8. **Discard** on a modified file restores it; on an added file deletes it; on a
-   deleted file restores it. Each asks for confirmation. Discarding the open
-   file while a save is waiting does not bring the change back.
-9. **Pull** with uncommitted changes says "Commit or discard your changes before
-   pulling." With a clean working copy, it fast-forwards or makes a merge
-   commit, and says how many commits it pulled.
-10. **Push** on an unpublished branch publishes it under the same name and sets
-    its upstream; the header then shows no counts.
-11. A push rejected because the remote has new commits says "The remote has new
-    commits. Pull first." and offers **Pull**. No push is ever forced.
-12. A push rejected by a server hook shows the remote's `remote:` lines as plain
-    text.
-13. While the repository is viewed, a commit pushed to the upstream from
-    elsewhere shows "1 new commit on origin/main" within about 2 minutes, with
-    "This file changed too." when it changes the open file. The user's files do
-    not change until they pull.
-14. A failed background fetch shows "Couldn't check for remote changes" in the
-    header and opens no dialog.
-15. The branch list shows local and remote branches and filters them by name.
-    Selecting `origin/feature` creates and switches to a local `feature` that
-    tracks it.
-16. **New branch** creates a branch from the current commit and switches to it.
-    The names `bad..name` and the name of an existing local branch are refused.
-17. Switching branches with uncommitted changes is refused with the list of
-    changed files. Without changes, the switch updates the tree and the open
-    file.
-18. In a single-branch clone, the branch list shows the single-branch note.
-19. In a repository cloned from an empty remote, the first commit creates
-    `main`, and **Push** publishes it.
-20. While a merge is in progress, commit, discard, pull, push and branch
-    switching are not offered, and the API refuses them.
-21. Every action can be done by touch alone and with the keyboard alone, and
-    axe-core reports no violations in the header, **Changes** and the diff.
-22. A text file whose diff is larger than 1 MB shows "This diff is too large to
-    show"; a file whose only change is its line endings says so.
-23. Unticking a file, reloading the page and coming back keeps it unticked on
-    that device; a file that becomes changed later appears ticked.
+- **AC-GIT-002.1** The header shows the current branch, "2 to push, 3 to pull"
+  after a fetch, and **Fetch**, **Pull** and **Push**. On a phone the counts
+  stay visible and the buttons are in a menu.
+- **AC-GIT-002.2** Editing two Markdown files and deleting an image lists three
+  entries in **Changes** — two **Modified** (M) and one **Deleted** (D) — and
+  the tab says "Changes (3)". An ignored file is not listed.
+- **AC-GIT-002.3** Selecting a changed Markdown file shows a unified diff with
+  changed words highlighted, and **Open in editor** opens it. A changed PNG
+  shows "Binary file changed" with both sizes.
+- **AC-GIT-002.4** Unticking one of three files and committing with a message
+  commits the two ticked files only; the third stays in **Changes**. The
+  commit's author and committer are the user's commit author.
+- **AC-GIT-002.5** Typing in a file and committing at once includes the last
+  edit in the commit.
+- **AC-GIT-002.6** A message whose first line is longer than 72 characters shows
+  a hint and still commits. A message with a line starting with `#` keeps it.
+- **AC-GIT-002.7** **Amend last commit** is offered after a local commit and not
+  after it is pushed. Amending with no ticked files changes only the message.
+- **AC-GIT-002.8** **Discard** on a modified file restores it; on an added file
+  deletes it; on a deleted file restores it. Each asks for confirmation.
+  Discarding the open file while a save is waiting does not bring the change
+  back.
+- **AC-GIT-002.9** **Pull** with uncommitted changes says "Commit or discard
+  your changes before pulling." With a clean working copy, it fast-forwards or
+  makes a merge commit, and says how many commits it pulled.
+- **AC-GIT-002.10** **Push** on an unpublished branch publishes it under the
+  same name and sets its upstream; the header then shows no counts.
+- **AC-GIT-002.11** A push rejected because the remote has new commits says "The
+  remote has new commits. Pull first." and offers **Pull**. No push is ever
+  forced.
+- **AC-GIT-002.12** A push rejected by a server hook shows the remote's
+  `remote:` lines as plain text.
+- **AC-GIT-002.13** While the repository is viewed, a commit pushed to the
+  upstream from elsewhere shows "1 new commit on origin/main" within about 2
+  minutes, with "This file changed too." when it changes the open file. The
+  user's files do not change until they pull.
+- **AC-GIT-002.14** A failed background fetch shows "Couldn't check for remote
+  changes" in the header and opens no dialog.
+- **AC-GIT-002.15** The branch list shows local and remote branches and filters
+  them by name. Selecting `origin/feature` creates and switches to a local
+  `feature` that tracks it.
+- **AC-GIT-002.16** **New branch** creates a branch from the current commit and
+  switches to it. The names `bad..name` and the name of an existing local branch
+  are refused.
+- **AC-GIT-002.17** Switching branches with uncommitted changes is refused with
+  the list of changed files. Without changes, the switch updates the tree and
+  the open file.
+- **AC-GIT-002.18** In a single-branch clone, the branch list shows the
+  single-branch note.
+- **AC-GIT-002.19** In a repository cloned from an empty remote, the first
+  commit creates `main`, and **Push** publishes it.
+- **AC-GIT-002.20** While a merge is in progress, commit, discard, pull, push
+  and branch switching are not offered, and the API refuses them.
+- **AC-GIT-002.21** Every action can be done by touch alone and with the
+  keyboard alone, and axe-core reports no violations in the header, **Changes**
+  and the diff.
+- **AC-GIT-002.22** A text file whose diff is larger than 1 MB shows "This diff
+  is too large to show"; a file whose only change is its line endings says so.
+- **AC-GIT-002.23** Unticking a file, reloading the page and coming back keeps
+  it unticked on that device; a file that becomes changed later appears ticked.
 
 ## Out of scope
 

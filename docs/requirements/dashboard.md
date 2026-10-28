@@ -193,44 +193,47 @@ that a repository is in an error status and a short label for the error.
 
 ## Acceptance criteria
 
-1. After logging in without a return target, both an administrator and a user
-   land on the dashboard.
-2. A user with no repositories sees the full guide with its three steps and an
-   **Add repository** button, and no recent repositories section.
-3. A user with one or more repositories sees the compact guide above the recent
-   repositories list. **How it works** shows and hides the full guide text in
-   place.
-4. **Add repository** starts the add-repository flow, from both the full and the
-   compact guide.
-5. A user with 12 repositories sees exactly 10, ordered by last access time,
-   most recent first, and an **All repositories** link to the repository
-   management page. A user with 3 repositories sees all 3 and the same link.
-6. Opening a repository in the editor moves it to the top of the list the next
-   time the dashboard is shown. Opening the dashboard or the repository
-   management page does not change the order.
-7. A newly added repository appears at the top of the list, with a last access
-   time of when it was added, before it was ever opened.
-8. Two users with working copies of the same remote each have their own last
-   access time: one user opening it does not change the other user's order.
-9. An administrator's dashboard lists only the administrator's own repositories,
-   not those of other users. The API refuses to return another user's
-   repositories for the dashboard.
-10. Each entry shows the name, the remote as host and path (for example
-    `github.com/acme/handbook`), and "Last accessed" with a relative time. An
-    HTTPS remote stored with a user name or token in it is shown without them.
-11. Clicking an openable repository opens it in the editor.
-12. A repository added by an administrator on the user's behalf appears in the
-    user's list marked **Needs your confirmation**, and clicking it starts the
-    confirmation flow.
-13. A repository that is cloning, or whose clone failed, shows its status, does
-    not open the editor when clicked, and offers a link to that repository's
-    settings page.
-14. When a cloning repository finishes cloning while the dashboard is open, its
-    entry becomes openable without a page reload.
-15. When the API cannot return the list, the dashboard shows the error with
-    **Try again**, and **Add repository** still works.
-16. The dashboard is fully usable on a phone-sized screen: the compact guide's
-    button goes below its text and nothing scrolls sideways.
+- **AC-DASH-001.1** After logging in without a return target, both an
+  administrator and a user land on the dashboard.
+- **AC-DASH-001.2** A user with no repositories sees the full guide with its
+  three steps and an **Add repository** button, and no recent repositories
+  section.
+- **AC-DASH-001.3** A user with one or more repositories sees the compact guide
+  above the recent repositories list. **How it works** shows and hides the full
+  guide text in place.
+- **AC-DASH-001.4** **Add repository** starts the add-repository flow, from both
+  the full and the compact guide.
+- **AC-DASH-001.5** A user with 12 repositories sees exactly 10, ordered by last
+  access time, most recent first, and an **All repositories** link to the
+  repository management page. A user with 3 repositories sees all 3 and the same
+  link.
+- **AC-DASH-001.6** Opening a repository in the editor moves it to the top of
+  the list the next time the dashboard is shown. Opening the dashboard or the
+  repository management page does not change the order.
+- **AC-DASH-001.7** A newly added repository appears at the top of the list,
+  with a last access time of when it was added, before it was ever opened.
+- **AC-DASH-001.8** Two users with working copies of the same remote each have
+  their own last access time: one user opening it does not change the other
+  user's order.
+- **AC-DASH-001.9** An administrator's dashboard lists only the administrator's
+  own repositories, not those of other users. The API refuses to return another
+  user's repositories for the dashboard.
+- **AC-DASH-001.10** Each entry shows the name, the remote as host and path (for
+  example `github.com/acme/handbook`), and "Last accessed" with a relative time.
+  An HTTPS remote stored with a user name or token in it is shown without them.
+- **AC-DASH-001.11** Clicking an openable repository opens it in the editor.
+- **AC-DASH-001.12** A repository added by an administrator on the user's behalf
+  appears in the user's list marked **Needs your confirmation**, and clicking it
+  starts the confirmation flow.
+- **AC-DASH-001.13** A repository that is cloning, or whose clone failed, shows
+  its status, does not open the editor when clicked, and offers a link to that
+  repository's settings page.
+- **AC-DASH-001.14** When a cloning repository finishes cloning while the
+  dashboard is open, its entry becomes openable without a page reload.
+- **AC-DASH-001.15** When the API cannot return the list, the dashboard shows
+  the error with **Try again**, and **Add repository** still works.
+- **AC-DASH-001.16** The dashboard is fully usable on a phone-sized screen: the
+  compact guide's button goes below its text and nothing scrolls sideways.
 
 ## Out of scope
 

@@ -33,7 +33,7 @@ function fitsWidth(page: Page): Promise<boolean> {
 }
 
 test.describe('dashboard', () => {
-  test('criterion 1: an administrator and a user land on the dashboard', async ({ page, instance }) => {
+  test('AC-DASH-001.1: an administrator and a user land on the dashboard', async ({ page, instance }) => {
     seed(instance.dataDir, { users: [ { email: 'user@example.com' } ] });
 
     await openDashboard(page);
@@ -46,7 +46,7 @@ test.describe('dashboard', () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
-  test('criterion 2: without repositories, the full guide and no list', async ({ page }) => {
+  test('AC-DASH-001.2: without repositories, the full guide and no list', async ({ page }) => {
     await openDashboard(page);
 
     await expect(heading(page, 'Add your first repository')).toBeVisible();
@@ -55,7 +55,7 @@ test.describe('dashboard', () => {
     await expect(heading(page, 'Recent repositories')).toHaveCount(0);
   });
 
-  test('criteria 3 and 10: the compact guide above the list, How it works in place', async ({ page, instance }) => {
+  test('AC-DASH-001.3 and AC-DASH-001.10: the compact guide above the list, How it works in place', async ({ page, instance }) => {
     seedRepositories(instance.dataDir, [
       { name: 'handbook', remoteUrl: 'https://u:t@github.com/acme/handbook.git', lastAccessedAt: minutesAgo(180) }
     ]);
@@ -83,7 +83,7 @@ test.describe('dashboard', () => {
     await expect(page.getByText('Copy the remote URL')).toHaveCount(0);
   });
 
-  test('criterion 4: Add repository starts the add-repository flow from both guides', async ({ page, instance }) => {
+  test('AC-DASH-001.4: Add repository starts the add-repository flow from both guides', async ({ page, instance }) => {
     await openDashboard(page);
     await addRepository(page).click();
     await expect(page).toHaveURL(/\/repositories\/new$/);
@@ -97,7 +97,7 @@ test.describe('dashboard', () => {
     await expect(page).toHaveURL(/\/repositories\/new$/);
   });
 
-  test('criterion 5: 10 of 12, most recent first, and All repositories', async ({ page, instance }) => {
+  test('AC-DASH-001.5: 10 of 12, most recent first, and All repositories', async ({ page, instance }) => {
     seedRepositories(
       instance.dataDir,
       Array.from({ length: 12 }, (_, i) => ({ name: `repo-${i}`, lastAccessedAt: minutesAgo(100 - i) }))
@@ -109,7 +109,7 @@ test.describe('dashboard', () => {
     await expect(page.getByRole('link', { name: 'All repositories' })).toHaveAttribute('href', '/repositories');
   });
 
-  test('criterion 13: cloning and failed repositories show their status and link to their settings', async ({ page, instance }) => {
+  test('AC-DASH-001.13: cloning and failed repositories show their status and link to their settings', async ({ page, instance }) => {
     const [ cloning, failed ] = seedRepositories(instance.dataDir, [
       { name: 'cloning-one', status: 'cloning', lastAccessedAt: minutesAgo(1) },
       { name: 'failed-one', status: 'error', errorCode: 'clone-failed', lastAccessedAt: minutesAgo(2) }
@@ -132,7 +132,7 @@ test.describe('dashboard', () => {
     );
   });
 
-  test('criterion 15: a failed load shows Try again, and Add repository still works', async ({ page, instance, monitor }) => {
+  test('AC-DASH-001.15: a failed load shows Try again, and Add repository still works', async ({ page, instance, monitor }) => {
     seedRepositories(instance.dataDir, [ { name: 'handbook' } ]);
     // Fails until Try again, also for the reload after the push channel connects (A-3.11).
     let failing = true;
@@ -163,12 +163,12 @@ test.describe('dashboard', () => {
     return { buttonBelow: (button?.y ?? 0) >= (text?.y ?? 0) + (text?.height ?? 0), fits: await fitsWidth(page) };
   }
 
-  test('criterion 16: on a phone, the compact guide\'s button is below its text and nothing scrolls sideways', async ({ page, instance, isMobile }) => {
+  test('AC-DASH-001.16: on a phone, the compact guide\'s button is below its text and nothing scrolls sideways', async ({ page, instance, isMobile }) => {
     test.skip(!isMobile, 'the phone projects run it');
     expect(await compactGuideLayout(page, instance.dataDir)).toEqual({ buttonBelow: true, fits: true });
   });
 
-  test('criterion 16: at 320 px, the compact guide\'s button is below its text and nothing scrolls sideways', async ({ page, instance }) => {
+  test('AC-DASH-001.16: at 320 px, the compact guide\'s button is below its text and nothing scrolls sideways', async ({ page, instance }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     expect(await compactGuideLayout(page, instance.dataDir)).toEqual({ buttonBelow: true, fits: true });
   });

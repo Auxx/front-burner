@@ -79,159 +79,137 @@ and in a mobile browser:
 
 ## In scope
 
-### 1. Authentication and onboarding (written)
+Each section has a table with one row per requirement (per area for the
+non-functional requirements). **Status** is the status of the requirement
+document. Every point and acceptance criterion of the requirement is in exactly
+one of three columns:
 
-| Requirement                                             | Status   | MVP notes                                                         |
-| ------------------------------------------------------- | -------- | ----------------------------------------------------------------- |
-| [REQ-AUTH-001](../requirements/auth-onboarding.md)      | Accepted | As written.                                                       |
-| [REQ-AUTH-002](../requirements/auth-password-policy.md) | Accepted | As written.                                                       |
-| [REQ-AUTH-003](../requirements/auth-login.md)           | Accepted | As written. Password reset stays hidden, because SMTP is missing. |
+- **In MVP**: part of the MVP as written.
+- **Limited in MVP**: only part of it is in the MVP, or it is in the MVP but
+  nothing in the MVP can trigger it. The list under the table says how.
+- **Not in MVP**: deferred.
 
-### 2. Dashboard and adding repositories (written)
+### 1. Authentication and onboarding
 
-| Requirement                                  | Status   | MVP notes                                                                      |
-| -------------------------------------------- | -------- | ------------------------------------------------------------------------------ |
-| [REQ-DASH-001](../requirements/dashboard.md) | Accepted | As written. The **Needs your confirmation** status never occurs.               |
-| [REQ-REPO-001](../requirements/repo-add.md)  | Accepted | As written. Only Advanced is allowed, so the level dropdown is hidden (AR-40). |
+| Requirement                                             | Status   | In MVP                                                                                                                                                               | Limited in MVP                                               | Not in MVP                                                                     | MVP notes                                                                 |
+| ------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| [REQ-AUTH-001](../requirements/auth-onboarding.md)      | Accepted | AO-1 to AO-39; AC-AUTH-001.1 to AC-AUTH-001.14                                                                                                                       | —                                                            | —                                                                              | As written.                                                               |
+| [REQ-AUTH-002](../requirements/auth-password-policy.md) | Accepted | PP-1 to PP-15; AC-AUTH-002.1 to AC-AUTH-002.14                                                                                                                       | —                                                            | —                                                                              | As written. The onboarding form is the only form that sets a password.    |
+| [REQ-AUTH-003](../requirements/auth-login.md)           | Accepted | LG-2, LG-4 to LG-23, LG-27 to LG-36, LG-38 to LG-47, LG-61 to LG-64, LG-66, LG-68; AC-AUTH-003.2 to AC-AUTH-003.15, AC-AUTH-003.17, AC-AUTH-003.23 to AC-AUTH-003.26 | LG-1, LG-3, LG-24, LG-37, LG-48, LG-65, LG-67; AC-AUTH-003.1 | LG-25, LG-26, LG-49 to LG-60; AC-AUTH-003.16, AC-AUTH-003.18 to AC-AUTH-003.22 | No password reset, because SMTP is missing, and no way to disable a user. |
 
-### 3. Repository management (written)
+Limited in MVP:
 
-Written up as [REQ-REPO-003](../requirements/repo-manage.md). A minimal
-**repository management page**, which the dashboard already links to, with a
-settings page per repository:
+- **LG-1**, **LG-3**, **AC-AUTH-003.1**: only the login page. The Forgot
+  password and Confirm password reset pages are not built.
+- **LG-24**: the check is built, but nothing in the MVP disables a user.
+- **LG-37**: a session is revoked on logout and on refresh token reuse.
+  Disabling a user and resetting a password do not exist.
+- **LG-48**: the **Forgot password?** link is hidden. The Forgot password page
+  that says reset is not available is not built.
+- **LG-65**: rate limits on login, refresh and the OIDC callback. The forgot
+  password and confirm password reset endpoints do not exist.
+- **LG-67**: every event except the three password reset events.
 
-- list every repository of the user, with its status, error or warning;
-- retry a failed clone, or clone again when the working copy is missing;
-- replace a repository's credentials, including adding credentials to a
-  repository that was added without them, so that it can be pushed;
-- set the repository's commit author override;
-- remove a repository, which deletes its working copy after a confirmation that
-  lists commits that were not pushed and changes that were not committed, and
-  then asks for the repository name before removing it.
+### 2. Dashboard and adding repositories
 
-Left for later: renaming a repository, changing its clone mode, changing its
-remote, and managing saved credentials and known hosts as lists of their own.
+| Requirement                                  | Status   | In MVP                                                                                                         | Limited in MVP | Not in MVP            | MVP notes                                                                              |
+| -------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- | -------------- | --------------------- | -------------------------------------------------------------------------------------- |
+| [REQ-DASH-001](../requirements/dashboard.md) | Accepted | DS-1 to DS-6, DS-8 to DS-20, DS-22 to DS-26; AC-DASH-001.1 to AC-DASH-001.11, AC-DASH-001.13 to AC-DASH-001.16 | DS-7           | DS-21; AC-DASH-001.12 | No repositories added on a user's behalf, so **Needs your confirmation** never occurs. |
+| [REQ-REPO-001](../requirements/repo-add.md)  | Accepted | AR-1 to AR-37, AR-39 to AR-57; AC-REPO-001.1 to AC-REPO-001.26                                                 | AR-38          | —                     | Only Advanced is allowed, so the level dropdown is hidden (AR-40).                     |
 
-### 4. Push credentials and key unlock (written)
+Limited in MVP:
 
-Written up as [REQ-REPO-002](../requirements/repo-credentials.md).
+- **DS-7**: set when the user adds or opens a repository. Administrators do not
+  add repositories on a user's behalf.
+- **AR-38**: the dropdown is built, but it is never shown, because the only
+  allowed level is Advanced (AR-40).
 
-- Pushing uses the repository credentials. A push that the remote refuses shows
-  a clear error, with a way to add or replace the credentials, or to update an
-  expired saved token in place for every repository that uses it.
-- A changed SSH host key can be reviewed and trusted, behind a strong warning.
-- When a git operation needs a passphrase-protected key that is not unlocked
-  (for example after a restart or in a new session), the web client asks for the
-  passphrase on the page where the operation was started, then carries on with
-  the operation.
+### 3. Repository management
 
-### 5. Commit author ([REQ-GIT-001](../requirements/commit-author.md))
+| Requirement                                    | Status   | In MVP                                         | Limited in MVP | Not in MVP | MVP notes                                                                                                                                   |
+| ---------------------------------------------- | -------- | ---------------------------------------------- | -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [REQ-REPO-003](../requirements/repo-manage.md) | Accepted | RM-1 to RM-21; AC-REPO-003.1 to AC-REPO-003.14 | —              | —          | As written. Renaming a repository, changing its clone mode or remote, and managing saved credentials and known hosts as lists are deferred. |
 
-- The author name and email of the user's commits, as a default in the user
-  preferences (taken at first from the account) and an optional override per
-  repository. The user confirms it once, before their first commit. Commits are
-  not signed.
-- A minimal **Preferences** page (`/preferences`), reached from the user menu,
-  for the default commit author.
+### 4. Push credentials and key unlock
 
-### 6. File browser (written)
+| Requirement                                         | Status   | In MVP                                         | Limited in MVP | Not in MVP | MVP notes   |
+| --------------------------------------------------- | -------- | ---------------------------------------------- | -------------- | ---------- | ----------- |
+| [REQ-REPO-002](../requirements/repo-credentials.md) | Accepted | RC-1 to RC-25; AC-REPO-002.1 to AC-REPO-002.15 | —              | —          | As written. |
 
-- A file tree of the current branch of the working copy, which loads folders
-  lazily so that large code repositories stay fast.
-- Markdown files (`.md`, `.markdown`, `.mdx`) and non-Markdown files are both
-  shown, and files ignored by `.gitignore` are marked. Only Markdown files can
-  be opened.
-- Creating Markdown files and (empty) folders, renaming Markdown files and
-  folders in place, and deleting files of any kind and folders.
-- Opening a repository sets its last access time (DS-7, DS-8).
-- Works with the tree on a phone (for example, as a drawer).
+### 5. Commit author
 
-Written up as [REQ-FILE-001](../requirements/file-browser.md).
+| Requirement                                     | Status   | In MVP                                       | Limited in MVP | Not in MVP | MVP notes                                                                                                                   |
+| ----------------------------------------------- | -------- | -------------------------------------------- | -------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [REQ-GIT-001](../requirements/commit-author.md) | Accepted | CA-1 to CA-15; AC-GIT-001.1 to AC-GIT-001.12 | —              | —          | As written. Includes a minimal **Preferences** page (`/preferences`) for the default commit author. Commits are not signed. |
 
-Left for later: moving files to another folder, uploading files, the "hide
-non-Markdown files" preference, and search.
+### 6. File browser
 
-### 7. Markdown editor, saving and live preview (written)
+| Requirement                                     | Status   | In MVP                                                         | Limited in MVP | Not in MVP | MVP notes                                                                                                                      |
+| ----------------------------------------------- | -------- | -------------------------------------------------------------- | -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| [REQ-FILE-001](../requirements/file-browser.md) | Accepted | FB-1 to FB-46, FB-20a, FB-20b; AC-FILE-001.1 to AC-FILE-001.26 | —              | —          | As written. Moving files to another folder, uploading files, the "hide non-Markdown files" preference and search are deferred. |
 
-Builds on decisions D-1 and D-7:
+### 7. Markdown editor, saving and live preview
 
-- a CodeMirror 6 editor with Markdown and front matter highlighting;
-- automatic saving to the working copy after the user stops typing (D-1.1 to
-  D-1.3: no commit, last save wins), with a visible saved / saving / failed
-  state and a warning when leaving with an unsaved change;
-- plain Markdown editing, one file at a time (a formatting toolbar and tabs come
-  later);
-- a live preview beside the editor on wide screens, scrolling together with it,
-  and Edit and Preview tabs on narrow screens;
-- the rendering pipeline and what it shows (D-7.3 to D-7.6);
-- **safe HTML**: the GitHub-compatible whitelist of HTML tags and attributes
-  that the preview renders, with a notice when HTML was removed;
-- **images**: repository images, resolved from the Markdown file's folder or,
-  for paths that start with `/`, from the repository root, loaded through the
-  API with the user's auth token; remote images only when the user asks for the
-  open file.
+| Requirement                                       | Status   | In MVP                                         | Limited in MVP | Not in MVP | MVP notes                                                                      |
+| ------------------------------------------------- | -------- | ---------------------------------------------- | -------------- | ---------- | ------------------------------------------------------------------------------ |
+| [REQ-EDIT-001](../requirements/editor.md)         | Accepted | ED-1 to ED-39; AC-EDIT-001.1 to AC-EDIT-001.24 | —              | —          | As written. Builds on D-1 and D-7. A formatting toolbar and tabs are deferred. |
+| [REQ-EDIT-002](../requirements/preview-html.md)   | Accepted | SH-1 to SH-23; AC-EDIT-002.1 to AC-EDIT-002.17 | —              | —          | As written.                                                                    |
+| [REQ-EDIT-003](../requirements/preview-images.md) | Accepted | IM-1 to IM-26; AC-EDIT-003.1 to AC-EDIT-003.16 | —              | —          | As written. Blog-engine image folders are deferred.                            |
 
-The editor and preview are written up as
-[REQ-EDIT-001](../requirements/editor.md), safe HTML as
-[REQ-EDIT-002](../requirements/preview-html.md) and images as
-[REQ-EDIT-003](../requirements/preview-images.md).
+### 8. Git at the Advanced level
 
-### 8. Git at the Advanced level (written)
+| Requirement                                     | Status   | In MVP                                       | Limited in MVP | Not in MVP | MVP notes                                                                                                                                                                     |
+| ----------------------------------------------- | -------- | -------------------------------------------- | -------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [REQ-GIT-002](../requirements/git-advanced.md)  | Accepted | GA-1 to GA-43; AC-GIT-002.1 to AC-GIT-002.23 | —              | —          | As written. Builds on D-4, D-5 and D-6. The backend exposes one set of git operations for every level; the MVP builds only the Advanced level's UI. Pull only merges (D-5.2). |
+| [REQ-GIT-003](../requirements/git-conflicts.md) | Accepted | GC-1 to GC-28; AC-GIT-003.1 to AC-GIT-003.16 | —              | —          | As written. The other resolution methods are deferred.                                                                                                                        |
 
-Written up as [REQ-GIT-002](../requirements/git-advanced.md) (changes, commits,
-pull, push, branches, fetch) and [REQ-GIT-003](../requirements/git-conflicts.md)
-(conflict resolution).
+### 9. Navigation
 
-Builds on decisions D-4, D-5 and D-6. The backend exposes one set of git
-operations for every level. The MVP builds only the Advanced level's UI for
-them.
+| Requirement                                  | Status   | In MVP                                       | Limited in MVP | Not in MVP | MVP notes   |
+| -------------------------------------------- | -------- | -------------------------------------------- | -------------- | ---------- | ----------- |
+| [REQ-APP-001](../requirements/navigation.md) | Accepted | NV-2 to NV-19; AC-APP-001.1 to AC-APP-001.13 | NV-1           | —          | As written. |
 
-- **Status**: the current branch, how far it is ahead of and behind its
-  upstream, and a **Changes** tab next to **Files** listing the changed files
-  (added, modified, deleted).
-- **Diff**: the diff of each changed file against the last commit.
-- **Discard**: discarding the changes to selected files, with a confirmation.
-- **Commit**: committing the ticked files (there is no staging area) with a
-  message, and amending the last commit while it has not been pushed.
-- **Push**: pushing the current branch, and setting its upstream on the first
-  push.
-- **Pull**: fetching and merging the upstream into the current branch. If there
-  are uncommitted changes, the user is asked to commit or discard them first
-  (D-4.3). The MVP only merges; rebase comes later (see D-5.2).
-- **Branches**: listing local and remote branches, creating a branch from the
-  current one, and switching branches. Switching is refused while there are
-  uncommitted changes _(my call)_. In a single-branch clone, only the cloned
-  branch and branches created locally from it are listed.
-- **Fetch and remote-change notices** (D-4.2): fetching when a file is opened
-  and periodically while the user is editing, telling the user when the upstream
-  has new commits and whether the open file is among them.
-- **Conflict resolution** (D-4.4 to D-4.6, D-6): a pull that conflicts locks the
-  repository to the resolution screen, which offers:
-  - **Edit conflict markers**, in the normal editor (D-6.4), in the plain marker
-    style, with **Accept mine** / **Accept theirs** / **Accept both** buttons on
-    each conflict;
-  - **Use my version** / **Use their version**, the only methods for
-    non-Markdown files (D-6.2);
-  - **Abort**, which puts the branch and working copy back exactly as they were
-    (D-4.5).
+Limited in MVP:
 
-  Finishing commits the merge. The user then pushes it like any other commit, or
-  undoes the merge while it has not been pushed.
+- **NV-1**: every route except the password reset pages, which are not built
+  (LG-1).
 
-### 9. Navigation (written)
+### 10. Deployment guide
 
-Written up as [REQ-APP-001](../requirements/navigation.md): the app header with
-the user menu (Preferences, Log out), one combined bar with a repository
-switcher on the repository screen, the list of routes, page titles, breadcrumbs,
-"Page not found", global banners and shared accessibility rules.
+| Document                                  | Status | In MVP | Limited in MVP | Not in MVP | MVP notes                                                                                                                                                              |
+| ----------------------------------------- | ------ | ------ | -------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Deployment guide](../wiki/deployment.md) | Draft  | —      | —              | —          | Has no numbered points. Completed once the MVP runs locally, before the release (order of work, step 6), with the operator-facing parts listed in `docs/wiki/todo.md`. |
 
-### 10. Deployment guide (to write)
+### 11. Non-functional requirements
 
-The operator-facing deployment guide in `docs/wiki/deployment.md`, as listed in
-`docs/wiki/todo.md`: the image, volumes, container UID, environment variables,
-encryption key, backup and restore, upgrades, and a hardened compose example. It
-is written once the MVP runs locally in a development environment, before the
-release (order of work, step 6).
+All in [non-functional.md](../architecture/non-functional.md), whose status is
+**Draft**.
+
+| Area                              | In MVP                               | Limited in MVP   | Not in MVP | MVP notes                                   |
+| --------------------------------- | ------------------------------------ | ---------------- | ---------- | ------------------------------------------- |
+| NF-1: Scale                       | NF-1.1 to NF-1.5, NF-1.7             | —                | NF-1.6     | No uploads.                                 |
+| NF-2: Performance                 | NF-2.1 to NF-2.10                    | —                | —          |                                             |
+| NF-3: Unsaved edits               | NF-3.1 to NF-3.6                     | —                | —          |                                             |
+| NF-4: Database                    | NF-4.1 to NF-4.3                     | —                | —          |                                             |
+| NF-5: Data layout                 | NF-5.1 to NF-5.6                     | —                | —          |                                             |
+| NF-6: Backup and restore          | NF-6.1 to NF-6.6                     | —                | —          |                                             |
+| NF-7: Upgrades                    | NF-7.1 to NF-7.7                     | —                | —          |                                             |
+| NF-8: Secrets                     | NF-8.1 to NF-8.3, NF-8.5, NF-8.6     | —                | NF-8.4     | Key rotation comes after the first release. |
+| NF-9: Availability and resilience | NF-9.1 to NF-9.4, NF-9.8, NF-9.9     | NF-9.5 to NF-9.7 | —          |                                             |
+| NF-10: Observability              | NF-10.1 to NF-10.11                  | —                | —          |                                             |
+| NF-11: Security baseline          | NF-11.1 to NF-11.13                  | —                | —          |                                             |
+| NF-12: Browser and device support | NF-12.1 to NF-12.6                   | —                | —          |                                             |
+| NF-13: Accessibility              | NF-13.1, NF-13.3, NF-13.5 to NF-13.8 | NF-13.2          | NF-13.4    | Only the MVP's resolution methods.          |
+| NF-14: Localisation               | NF-14.1 to NF-14.4                   | —                | —          |                                             |
+
+Limited in MVP:
+
+- **NF-9.5**: interrupted clones, pulls, pushes, merges waiting for resolution
+  and fetches. The Simple level and conflict reminder emails do not exist.
+- **NF-9.6**: key unlocks are lost on restart. The Simple level does not exist.
+- **NF-9.7**: new clones are refused on low space. Uploads do not exist.
+- **NF-13.2**: **Edit conflict markers** is offered. The three-way merge editor
+  does not exist.
 
 ## Out of scope (deferred)
 
@@ -264,9 +242,62 @@ someone:
    and key unlock.
 4. Pull, fetch notices, branches and conflict resolution.
 5. The repository management page.
-6. The deployment guide, the security review and the release checks (NF-11.12,
-   and the hand checks on real phones in
-   [non-functional.md](../architecture/non-functional.md)).
+6. The deployment guide, the security review and the release checks: every
+   non-functional requirement in the MVP (section 11 of
+   [In scope](#11-non-functional-requirements)), including NF-11.12 and the hand
+   checks on real phones in
+   [non-functional.md](../architecture/non-functional.md).
+
+## Implementation status
+
+How far the code is. [In scope](#in-scope) says which points and acceptance
+criteria the MVP needs; this table says which of those are built and tested.
+Points and criteria that are not in the MVP are left out. The pull request that
+builds a part updates its row.
+
+- **Not started**: none of its MVP points are built.
+- **In progress**: some of its MVP points are built.
+- **Built**: every MVP point is built, but some MVP criteria have no test yet.
+- **Done**: every MVP point is built, and every MVP criterion has a test.
+
+A criterion has a test when a test title starts with its ID, for example
+`it('AC-REPO-001.2: two quick submits create one repository', …)`. `node
+tools/ai-tools/src/bin/doc-ids.mjs criteria` lists the MVP criteria that no test
+names, in the form of the last column.
+
+The non-functional requirements are not tracked here. They are checked with the
+release checks (order of work, step 6).
+
+**Keeping it up to date.** An agent that implements any part of the MVP updates
+this section in the same change, without being asked:
+
+- it starts the title of every test that covers an MVP criterion with the
+  criterion's ID;
+- for every requirement its change touches, it updates **State**, **Built in**
+  (the pull request number, or the branch name until the pull request has a
+  number) and **MVP points not built**;
+- it runs `doc-ids.mjs criteria` and copies the result into **MVP criteria
+  without a test**;
+- it checks that every **State** still matches its definition above.
+
+| Requirement                                             | Step | State       | Built in           | MVP points not built                                                                                           | MVP criteria without a test   |
+| ------------------------------------------------------- | ---- | ----------- | ------------------ | -------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| [REQ-AUTH-001](../requirements/auth-onboarding.md)      | 1    | Done        | #18, #28, #29      | —                                                                                                              | —                             |
+| [REQ-AUTH-002](../requirements/auth-password-policy.md) | 1    | Done        | #18                | —                                                                                                              | —                             |
+| [REQ-AUTH-003](../requirements/auth-login.md)           | 1    | Done        | #25, #26, #28, #33 | —                                                                                                              | —                             |
+| [REQ-APP-001](../requirements/navigation.md)            | 1    | In progress | #26, #30, #36      | NV-1 (the routes of pages not built yet), NV-7 (Preferences and the version line), NV-9 to NV-12, NV-15, NV-16 | All                           |
+| [REQ-DASH-001](../requirements/dashboard.md)            | 1    | In progress | #30, #35, #36      | DS-7 (on opening), DS-8, DS-20                                                                                 | AC-DASH-001.6, AC-DASH-001.11 |
+| [REQ-REPO-001](../requirements/repo-add.md)             | 1    | Done        | #27, #31 to #36    | —                                                                                                              | —                             |
+| [REQ-FILE-001](../requirements/file-browser.md)         | 2    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-EDIT-001](../requirements/editor.md)               | 2    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-EDIT-002](../requirements/preview-html.md)         | 2    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-EDIT-003](../requirements/preview-images.md)       | 2    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-GIT-001](../requirements/commit-author.md)         | 3    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-REPO-002](../requirements/repo-credentials.md)     | 3    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-GIT-002](../requirements/git-advanced.md)          | 3, 4 | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-GIT-003](../requirements/git-conflicts.md)         | 4    | Not started | —                  | All                                                                                                            | All                           |
+| [REQ-REPO-003](../requirements/repo-manage.md)          | 5    | In progress | #30, #35           | All except the RM-6 and RM-8 labels on the dashboard                                                           | All                           |
+| [Deployment guide](../wiki/deployment.md)               | 6    | In progress | —                  | The operator-facing parts listed in `docs/wiki/todo.md`                                                        | —                             |
 
 ## Risks
 

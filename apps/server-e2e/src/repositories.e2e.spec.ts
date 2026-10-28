@@ -47,7 +47,7 @@ describe('recent repositories (REQ-DASH-001)', () => {
     return ((await response.json()) as { repositories: Summary[]; }).repositories;
   }
 
-  it('criterion 5: of 12 repositories, the 10 most recently accessed, most recent first', async () => {
+  it('AC-DASH-001.5: of 12 repositories, the 10 most recently accessed, most recent first', async () => {
     const userId = newUser();
     seed(server.dataDir, {
       repositories: Array.from({ length: 12 }, (_, i) => ({ userId, name: `repo-${i}`, lastAccessedAt: at(i) }))
@@ -58,7 +58,7 @@ describe('recent repositories (REQ-DASH-001)', () => {
     expect(names).toEqual([ 11, 10, 9, 8, 7, 6, 5, 4, 3, 2 ].map(i => `repo-${i}`));
   });
 
-  it('criterion 5: all 3 of 3 repositories', async () => {
+  it('AC-DASH-001.5: all 3 of 3 repositories', async () => {
     const userId = newUser();
     seed(server.dataDir, {
       repositories: [ 'a', 'b', 'c' ].map((name, i) => ({ userId, name, lastAccessedAt: at(i) }))
@@ -67,7 +67,7 @@ describe('recent repositories (REQ-DASH-001)', () => {
     expect(await recent(`user${users}@example.com`)).toHaveLength(3);
   });
 
-  it('criterion 7: the repository with the newest last access time is first', async () => {
+  it('AC-DASH-001.7: the repository with the newest last access time is first', async () => {
     const userId = newUser();
     seed(server.dataDir, {
       repositories: [
@@ -82,7 +82,7 @@ describe('recent repositories (REQ-DASH-001)', () => {
     expect(first).toMatchObject({ name: 'added', status: 'cloning', lastAccessedAt: at(30).toISOString() });
   });
 
-  it('criterion 8: two users of one remote each have their own last access time', async () => {
+  it('AC-DASH-001.8: two users of one remote each have their own last access time', async () => {
     const alice = newUser();
     const aliceEmail = `user${users}@example.com`;
     const bob = newUser();
@@ -105,7 +105,7 @@ describe('recent repositories (REQ-DASH-001)', () => {
     expect(aliceList[0]?.id).not.toBe(bobList[1]?.id);
   });
 
-  it('criterion 9: the administrator and another user see only their own repositories', async () => {
+  it('AC-DASH-001.9: the administrator and another user see only their own repositories', async () => {
     const userId = newUser();
     const email = `user${users}@example.com`;
     seed(server.dataDir, {
@@ -119,7 +119,7 @@ describe('recent repositories (REQ-DASH-001)', () => {
     expect((await recent(email)).map(repository => repository.name)).toEqual([ 'user-notes' ]);
   });
 
-  it('criterion 10: the remote as host and path, never with credentials', async () => {
+  it('AC-DASH-001.10: the remote as host and path, never with credentials', async () => {
     const userId = newUser();
     seed(server.dataDir, {
       repositories: [

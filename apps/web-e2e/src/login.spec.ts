@@ -17,7 +17,7 @@ async function refreshCookie(context: BrowserContext) {
 }
 
 test.describe('login page', () => {
-  test('opens without a login', async ({ page }) => {
+  test('AC-AUTH-003.1: opens without a login', async ({ page }) => {
     await page.goto('/login');
     await expect(loginHeading(page)).toBeVisible();
     await expect(page).toHaveTitle('Log in · Front Burner');
@@ -147,7 +147,7 @@ test.describe('login page', () => {
 test.describe('expiring auth tokens', () => {
   test.use({ instanceOptions: SHORT_TOKENS });
 
-  test('sends the user to the login page when the refresh fails', async ({ page, context, request, monitor }) => {
+  test('AC-AUTH-003.14: sends the user to the login page when the refresh fails', async ({ page, context, request, monitor }) => {
     await page.goto('/login');
     await logIn(page);
     await expect(dashboardHeading(page)).toBeVisible();
@@ -171,7 +171,7 @@ test.describe('expiring auth tokens', () => {
     drainFailedRequests(monitor, '/api/v1/events');
   });
 
-  test('two tabs share one refresh', async ({ page, context, monitor }) => {
+  test('AC-AUTH-003.11: two tabs share one refresh', async ({ page, context, monitor }) => {
     await page.goto('/login');
     await logIn(page);
     const other = await context.newPage();

@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
+import { createHash, createPublicKey, generateKeyPairSync, KeyObject, randomBytes } from 'node:crypto';
 import { ParsedKey, utils } from 'ssh2';
 import { UnlockedKey } from './unlocked-key';
-import { WireReader } from './wire';
+import { sshString, uint32, WireReader } from './wire';
 
 /** AR-26. */
 const MAX_KEY_BYTES = 16 * 1024;
@@ -170,10 +170,48 @@ export function unlockPrivateKey(text: string, passphrase?: string): UnlockedKey
   return new UnlockedKey(parsePrivateKey(text, passphrase).key);
 }
 
-/** A new Ed25519 key pair in OpenSSH format, without a passphrase (AR-29). */
-export function generateEd25519Key(comment: string): { privateKey: string; publicKey: string; } {
-  const pair = utils.generateKeyPairSync('ed25519', { comment });
-  return { privateKey: pair.private, publicKey: pair.public.trim() };
+/**
+ * A new Ed25519 key pair in OpenSSH format, without a passphrase (AR-29).
+ * `privateKey` is the key to write, for tests; a new one by default.
+ *
+ * The OpenSSH format is written here rather than by ssh2's
+ * `utils.generateKeyPairSync`, which drops the leading zero bytes of a public
+ * key that starts with one (about one key in 256), so that the key it writes
+ * cannot be read back.
+ */
+export function generateEd25519Key(
+  comment: string,
+  privateKey: KeyObject = generateKeyPairSync('ed25519').privateKey
+): { privateKey: string; publicKey: string; } {
+  const jwk = privateKey.export({ format: 'jwk' });
+  const seed = Buffer.from(jwk.d ?? '', 'base64url');
+  const pub = Buffer.from(createPublicKey(privateKey).export({ format: 'jwk' }).x ?? '', 'base64url');
+  const blob = Buffer.concat([ sshString('ssh-ed25519'), sshString(pub) ]);
+  const check = randomBytes(4);
+  const keys = Buffer.concat([
+    check,
+    check,
+    sshString('ssh-ed25519'),
+    sshString(pub),
+    sshString(Buffer.concat([ seed, pub ])),
+    sshString(comment)
+  ]);
+  // The private section is padded with 1, 2, 3, … to the cipher block size, 8 without a cipher.
+  const padding = Buffer.from(Array.from({ length: (8 - (keys.length % 8)) % 8 }, (_, i) => i + 1));
+  const body = Buffer.concat([
+    Buffer.from(OPENSSH_MAGIC),
+    sshString('none'),
+    sshString('none'),
+    sshString(''),
+    uint32(1),
+    sshString(blob),
+    sshString(Buffer.concat([ keys, padding ]))
+  ]);
+  const lines = body.toString('base64').match(/.{1,70}/g) ?? [];
+  return {
+    privateKey: [ '-----BEGIN OPENSSH PRIVATE KEY-----', ...lines, '-----END OPENSSH PRIVATE KEY-----', '' ].join('\n'),
+    publicKey: `ssh-ed25519 ${blob.toString('base64')} ${comment}`
+  };
 }
 
 /** The SHA256 fingerprint of an `authorized_keys` line, as `ssh-keygen -l` prints it. */

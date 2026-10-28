@@ -202,6 +202,7 @@ Checks and renumbers the IDs of requirements and architecture rules: `REQ-…`,
 | `find <id>`                             | Where an ID and its sub-IDs are defined and referenced             |
 | `renumber <family> --from <n> --by <k>` | Shifts every ID of the family numbered `n` or more by `k`          |
 | `rename <id> <new-id>`                  | Renames one ID and its sub-IDs                                     |
+| `criteria`                              | MVP acceptance criteria that no test names, per requirement        |
 
 `renumber` and `rename` print every change and write only with `--write`. They
 refuse when a new ID is already in use. The family is the ID without its last
@@ -215,6 +216,7 @@ doc-ids.mjs find A-10.38
 doc-ids.mjs renumber A-10 --from 21 --by 1            # room for a new A-10.21
 doc-ids.mjs renumber A-10 --from 21 --by 1 --write
 doc-ids.mjs rename A-10.42 A-10.50                    # refused if A-10.50 is used
+doc-ids.mjs criteria                                  # MVP criteria without a test
 ```
 
 What counts as a definition:
@@ -240,7 +242,17 @@ What is scanned, by default: `docs`, `libs`, `apps`, `tools`, `CLAUDE.md` and
 `--path <path>` (repeatable) scans other files or folders inside the workspace
 instead.
 
+`criteria` reads the MVP criteria from the **In MVP** and **Limited in MVP**
+columns of the In scope tables in `docs/product/mvp.md`, and the test titles in
+the spec files under `apps` and `libs`. A criterion has a test when a test title
+starts with its ID: `it('AC-REPO-001.2: …')`, or several IDs joined by `, ` and
+`and`. IDs in comments or later in a title do not count. Consecutive IDs are
+printed as ranges, ready for the **MVP criteria without a test** column of the
+implementation status table.
+
 - Run `check` after editing docs, and before committing a docs change.
+- Run `criteria` after adding or renaming tests that cover MVP criteria, and
+  copy its result into the implementation status table of `docs/product/mvp.md`.
 - Prefer `renumber` to editing numbers by hand; read the printed changes before
   `--write`. After writing, run `check` and format the docs.
 - Uppercase words joined by hyphens and numbers look like IDs (`UTF-8`). They

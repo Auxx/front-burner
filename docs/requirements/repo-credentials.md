@@ -199,43 +199,47 @@ screen:
 
 ## Acceptance criteria
 
-1. Pushing a public repository added without credentials says "This repository
-   has no credentials. Add credentials to push." **Add credentials** opens the
-   dialog with the HTTPS choices; after saving credentials that pass the access
-   check, the push runs again on its own.
-2. Fetching and pulling that repository work without credentials.
-3. Pushing with a read-only token says "Your credentials can read this
-   repository but not push to it." **Use other credentials** fixes it.
-4. With an expired saved token used by four repositories, a push says "The
-   remote refused your credentials." **Fix credentials** offers **Update the
-   token of "GitHub work"** with "Used by 4 of your repositories". After
-   updating, pushes from all four repositories use the new token.
-5. An update whose access check fails shows the error and changes nothing.
-6. Replacing a repository's credentials with others keeps the old saved
-   credentials in the profile, and other repositories that use them keep
-   working.
-7. The dialog for an SSH repository offers only SSH choices; a refused key shows
-   the hint to check the key on the git server.
-8. After a backend restart, opening a repository with a passphrase-protected key
-   shows the locked-key banner, and no background fetch runs. Unlocking from the
-   banner makes fetches resume and removes the banner from every repository that
-   uses the key.
-9. Starting a push with a locked key opens the passphrase dialog; after
-   unlocking, the push carries on without being started again. Cancelling
-   cancels the push.
-10. A sixth wrong passphrase within a minute gets "Too many attempts. Try again
-    in a minute."
-11. A push that is running finishes even if the user logs out meanwhile.
-12. A changed host key shows both fingerprints and, for GitHub, a link to the
-    published fingerprints. **Trust the new key** is disabled until the checkbox
-    is ticked; afterwards the failed operation runs again, and the backend log
-    records the change.
-13. A background fetch that meets any credential problem shows it only in the
-    header's quiet status and opens no dialog.
-14. No API response contains a password, token, private key or passphrase, and
-    none appears in the logs.
-15. A key unlocked on a desktop still shows the locked-key banner on a phone
-    logged in to another session, until it is unlocked there too.
+- **AC-REPO-002.1** Pushing a public repository added without credentials says
+  "This repository has no credentials. Add credentials to push." **Add
+  credentials** opens the dialog with the HTTPS choices; after saving
+  credentials that pass the access check, the push runs again on its own.
+- **AC-REPO-002.2** Fetching and pulling that repository work without
+  credentials.
+- **AC-REPO-002.3** Pushing with a read-only token says "Your credentials can
+  read this repository but not push to it." **Use other credentials** fixes it.
+- **AC-REPO-002.4** With an expired saved token used by four repositories, a
+  push says "The remote refused your credentials." **Fix credentials** offers
+  **Update the token of "GitHub work"** with "Used by 4 of your repositories".
+  After updating, pushes from all four repositories use the new token.
+- **AC-REPO-002.5** An update whose access check fails shows the error and
+  changes nothing.
+- **AC-REPO-002.6** Replacing a repository's credentials with others keeps the
+  old saved credentials in the profile, and other repositories that use them
+  keep working.
+- **AC-REPO-002.7** The dialog for an SSH repository offers only SSH choices; a
+  refused key shows the hint to check the key on the git server.
+- **AC-REPO-002.8** After a backend restart, opening a repository with a
+  passphrase-protected key shows the locked-key banner, and no background fetch
+  runs. Unlocking from the banner makes fetches resume and removes the banner
+  from every repository that uses the key.
+- **AC-REPO-002.9** Starting a push with a locked key opens the passphrase
+  dialog; after unlocking, the push carries on without being started again.
+  Cancelling cancels the push.
+- **AC-REPO-002.10** A sixth wrong passphrase within a minute gets "Too many
+  attempts. Try again in a minute."
+- **AC-REPO-002.11** A push that is running finishes even if the user logs out
+  meanwhile.
+- **AC-REPO-002.12** A changed host key shows both fingerprints and, for GitHub,
+  a link to the published fingerprints. **Trust the new key** is disabled until
+  the checkbox is ticked; afterwards the failed operation runs again, and the
+  backend log records the change.
+- **AC-REPO-002.13** A background fetch that meets any credential problem shows
+  it only in the header's quiet status and opens no dialog.
+- **AC-REPO-002.14** No API response contains a password, token, private key or
+  passphrase, and none appears in the logs.
+- **AC-REPO-002.15** A key unlocked on a desktop still shows the locked-key
+  banner on a phone logged in to another session, until it is unlocked there
+  too.
 
 ## Out of scope
 

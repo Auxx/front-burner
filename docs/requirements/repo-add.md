@@ -436,74 +436,80 @@ separate requirement.
 
 ## Acceptance criteria
 
-1. A logged-in user opens the Add repository page from **Add repository** on the
-   dashboard. A visitor who is not logged in is sent to the login page.
-2. **Add repository** is disabled while the form is empty or invalid, and while
-   a submit is in progress. Submitting twice quickly creates only one
-   repository.
-3. `http://`, `git://` and `file://` URLs, local paths, and an HTTPS URL with a
-   token in it are rejected with the messages of AR-9 and AR-10.
-4. Entering `https://github.com/acme/handbook.git` fills the name with
-   `handbook` and shows the HTTPS options. Changing it to
-   `git@github.com:acme/handbook.git` shows the SSH options. After the user
-   edits the name, changing the URL no longer changes it.
-5. A name that the user already uses, in any letter case, is rejected. A remote
-   that the user already has shows the duplicate warning, and the form can still
-   be submitted with a new name.
-6. A user with no saved HTTPS credentials sees **Add new credentials** and **No
-   credentials (public repository)** only; after adding a repository with them,
-   the next visit offers **Use saved credentials** with them preselected.
-7. A public HTTPS repository can be added with **No credentials**, and nothing
-   is saved to the user's profile. Choosing **No credentials** for a private
-   repository reports "This repository needs credentials."
-8. A user with no saved SSH keys sees **Paste a key** and **Generate a key**
-   only. A user with saved keys also sees **Use a saved key**, with
-   passphrase-protected keys marked.
-9. Choosing a passphrase-protected saved key shows a passphrase field. A wrong
-   passphrase is reported on that field. After a correct one, choosing the same
-   key again in the same session shows "Unlocked for this session".
-10. After logout and login, the same key asks for its passphrase again. The
-    passphrase and decrypted key cannot be found in the database or logs.
-11. A pasted encrypted key without a passphrase, a DSA key, or text that is not
-    a key are rejected on the right field.
-12. **Generate a key** shows the public key with **Copy** and the instructions;
-    **Add repository** stays disabled until "I have added this key to my git
-    server" is ticked. If the key has not been added on the provider, submit
-    reports that the credentials can't access the repository. The generated key
-    stays in the user's saved keys even if they cancel.
-13. Adding an SSH remote on a host other than GitHub or Bitbucket for the first
-    time shows the host fingerprint dialog. **Trust** continues; **Cancel**
-    leaves the form as it was. A later attempt with a changed host key fails
-    with the warning of AR-32.
-14. Choosing **Single branch** shows the branch dropdown, filled from the remote
-    with the default branch preselected, the warning, and the "I understand"
-    checkbox, which must be ticked to submit.
-15. The git control level defaults to the highest level the user is allowed.
-    With only one allowed level, the dropdown is hidden. A request for a level
-    the user is not allowed is refused by the API.
-16. Wrong credentials, a repository that does not exist, and an unreachable host
-    are each reported on the form within 30 seconds, and nothing is saved: no
-    repository, no new credentials.
-17. Read-only credentials are accepted.
-18. A successful submit lands on the dashboard with the "Cloning" message, the
-    repository at the top as **Cloning**, and it becomes openable without a
-    reload when the clone ends.
-19. A clone that fails or exceeds the clone timeout leaves the repository in
-    **Error** with a short label, and no partial working copy.
-20. **Cancel** after changing a field asks for confirmation; **Cancel** on an
-    untouched form leaves at once.
-21. No password, token, private key or passphrase appears in API responses,
-    logs, stored remote URLs or git process arguments.
-22. A user cannot use, list or see another user's saved credentials or known
-    hosts through the API.
-23. More than 30 access checks in a minute by one user are refused.
-24. A remote URL whose host is or resolves to `169.254.169.254` is refused with
-    "Can't reach _&lt;host&gt;_". A git server on `192.168.x.x` or `localhost`
-    can be added by default, and is refused once the operator blocks private
-    network addresses.
-25. A clone that uses a passphrase-protected key finishes even if the user logs
-    out while it is queued or running.
-26. The page is fully usable on a phone-sized screen.
+- **AC-REPO-001.1** A logged-in user opens the Add repository page from **Add
+  repository** on the dashboard. A visitor who is not logged in is sent to the
+  login page.
+- **AC-REPO-001.2** **Add repository** is disabled while the form is empty or
+  invalid, and while a submit is in progress. Submitting twice quickly creates
+  only one repository.
+- **AC-REPO-001.3** `http://`, `git://` and `file://` URLs, local paths, and an
+  HTTPS URL with a token in it are rejected with the messages of AR-9 and AR-10.
+- **AC-REPO-001.4** Entering `https://github.com/acme/handbook.git` fills the
+  name with `handbook` and shows the HTTPS options. Changing it to
+  `git@github.com:acme/handbook.git` shows the SSH options. After the user edits
+  the name, changing the URL no longer changes it.
+- **AC-REPO-001.5** A name that the user already uses, in any letter case, is
+  rejected. A remote that the user already has shows the duplicate warning, and
+  the form can still be submitted with a new name.
+- **AC-REPO-001.6** A user with no saved HTTPS credentials sees **Add new
+  credentials** and **No credentials (public repository)** only; after adding a
+  repository with them, the next visit offers **Use saved credentials** with
+  them preselected.
+- **AC-REPO-001.7** A public HTTPS repository can be added with **No
+  credentials**, and nothing is saved to the user's profile. Choosing **No
+  credentials** for a private repository reports "This repository needs
+  credentials."
+- **AC-REPO-001.8** A user with no saved SSH keys sees **Paste a key** and
+  **Generate a key** only. A user with saved keys also sees **Use a saved key**,
+  with passphrase-protected keys marked.
+- **AC-REPO-001.9** Choosing a passphrase-protected saved key shows a passphrase
+  field. A wrong passphrase is reported on that field. After a correct one,
+  choosing the same key again in the same session shows "Unlocked for this
+  session".
+- **AC-REPO-001.10** After logout and login, the same key asks for its
+  passphrase again. The passphrase and decrypted key cannot be found in the
+  database or logs.
+- **AC-REPO-001.11** A pasted encrypted key without a passphrase, a DSA key, or
+  text that is not a key are rejected on the right field.
+- **AC-REPO-001.12** **Generate a key** shows the public key with **Copy** and
+  the instructions; **Add repository** stays disabled until "I have added this
+  key to my git server" is ticked. If the key has not been added on the
+  provider, submit reports that the credentials can't access the repository. The
+  generated key stays in the user's saved keys even if they cancel.
+- **AC-REPO-001.13** Adding an SSH remote on a host other than GitHub or
+  Bitbucket for the first time shows the host fingerprint dialog. **Trust**
+  continues; **Cancel** leaves the form as it was. A later attempt with a
+  changed host key fails with the warning of AR-32.
+- **AC-REPO-001.14** Choosing **Single branch** shows the branch dropdown,
+  filled from the remote with the default branch preselected, the warning, and
+  the "I understand" checkbox, which must be ticked to submit.
+- **AC-REPO-001.15** The git control level defaults to the highest level the
+  user is allowed. With only one allowed level, the dropdown is hidden. A
+  request for a level the user is not allowed is refused by the API.
+- **AC-REPO-001.16** Wrong credentials, a repository that does not exist, and an
+  unreachable host are each reported on the form within 30 seconds, and nothing
+  is saved: no repository, no new credentials.
+- **AC-REPO-001.17** Read-only credentials are accepted.
+- **AC-REPO-001.18** A successful submit lands on the dashboard with the
+  "Cloning" message, the repository at the top as **Cloning**, and it becomes
+  openable without a reload when the clone ends.
+- **AC-REPO-001.19** A clone that fails or exceeds the clone timeout leaves the
+  repository in **Error** with a short label, and no partial working copy.
+- **AC-REPO-001.20** **Cancel** after changing a field asks for confirmation;
+  **Cancel** on an untouched form leaves at once.
+- **AC-REPO-001.21** No password, token, private key or passphrase appears in
+  API responses, logs, stored remote URLs or git process arguments.
+- **AC-REPO-001.22** A user cannot use, list or see another user's saved
+  credentials or known hosts through the API.
+- **AC-REPO-001.23** More than 30 access checks in a minute by one user are
+  refused.
+- **AC-REPO-001.24** A remote URL whose host is or resolves to `169.254.169.254`
+  is refused with "Can't reach _&lt;host&gt;_". A git server on `192.168.x.x` or
+  `localhost` can be added by default, and is refused once the operator blocks
+  private network addresses.
+- **AC-REPO-001.25** A clone that uses a passphrase-protected key finishes even
+  if the user logs out while it is queued or running.
+- **AC-REPO-001.26** The page is fully usable on a phone-sized screen.
 
 ## Out of scope
 

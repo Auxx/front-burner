@@ -202,7 +202,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       await server?.stop();
     });
 
-    it('criterion 2: two quick submits create one repository', async () => {
+    it('AC-REPO-001.2: two quick submits create one repository', async () => {
       const body = { remoteUrl: publicUrl(), name: 'Twice' };
 
       const answers = await Promise.all([ admin.add(body), admin.add(body) ]);
@@ -214,7 +214,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect((await admin.recent()).filter(summary => summary.name === 'Twice')).toHaveLength(1);
     });
 
-    it('criterion 3: refuses http, git, file and local URLs, and a token in the URL', async () => {
+    it('AC-REPO-001.3: refuses http, git, file and local URLs, and a token in the URL', async () => {
       for (
         const [ remoteUrl, code ] of [
           [ 'http://github.com/acme/handbook.git', 'unsupported' ],
@@ -231,7 +231,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       }
     });
 
-    it('criterion 5: refuses a taken name in any case and accepts the same remote under a new name', async () => {
+    it('AC-REPO-001.5: refuses a taken name in any case and accepts the same remote under a new name', async () => {
       expect((await admin.add({ remoteUrl: publicUrl(), name: 'Manual' })).status).toBe(201);
 
       const taken = await admin.add({ remoteUrl: publicUrl(), name: 'MANUAL' });
@@ -242,7 +242,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect(index.map(entry => entry.name)).toEqual(expect.arrayContaining([ 'Manual', 'Manual copy' ]));
     });
 
-    it('criterion 7: adds a public repository without credentials; a private one needs some', async () => {
+    it('AC-REPO-001.7: adds a public repository without credentials; a private one needs some', async () => {
       const before = (await admin.get('/api/v1/credentials')).body;
 
       expect((await admin.add({ remoteUrl: publicUrl(), name: 'Public' })).status).toBe(201);
@@ -263,7 +263,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       await server?.stop();
     });
 
-    it('criterion 9: reports a wrong passphrase on its field and keeps a correct one for the session', async () => {
+    it('AC-REPO-001.9: reports a wrong passphrase on its field and keeps a correct one for the session', async () => {
       const remoteUrl = sshUrl();
       const pasted = { mode: 'new-ssh-key', name: 'Passphrase key', privateKey: PROTECTED_KEY };
       await admin.trust(remoteUrl, { ...pasted, passphrase: FIXTURE_PASSPHRASE });
@@ -282,7 +282,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect((await admin.settled(added.body['id'] as number)).status).toBe('ready');
     });
 
-    it('criterion 11: refuses an encrypted key without its passphrase, a DSA key and text that is not a key', async () => {
+    it('AC-REPO-001.11: refuses an encrypted key without its passphrase, a DSA key and text that is not a key', async () => {
       for (
         const [ privateKey, field ] of [
           [ PROTECTED_KEY, { path: 'credentials.passphrase', code: 'passphrase-required' } ],
@@ -299,7 +299,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       }
     });
 
-    it('criterion 12: a generated key is refused until it is on the server, and kept either way', async () => {
+    it('AC-REPO-001.12: a generated key is refused until it is on the server, and kept either way', async () => {
       const generated = await admin.post('/api/v1/credentials/ssh-keys/generate', { name: 'Generated' });
       expect(generated.status).toBe(201);
       const { key, publicKey } = generated.body as { key: { id: number; }; publicKey: string; };
@@ -328,7 +328,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       }
     });
 
-    it('criterion 13: asks to trust an unknown host and refuses a changed one', async () => {
+    it('AC-REPO-001.13: asks to trust an unknown host and refuses a changed one', async () => {
       const credentials = {
         mode: 'new-ssh-key',
         name: 'Host check key',
@@ -379,7 +379,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       await server?.stop();
     });
 
-    it('criterion 14: lists the branches and the default branch', async () => {
+    it('AC-REPO-001.14: lists the branches and the default branch', async () => {
       const answer = await admin.post(ACCESS_CHECK, { remoteUrl: publicUrl(), credentials: { mode: 'none' } });
       expect(answer).toEqual({ status: 200, body: { branches: [ 'draft', 'main' ], defaultBranch: 'main' } });
 
@@ -387,7 +387,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect(fieldsOf(single)).toEqual([ { path: 'branch', code: 'required' } ]);
     });
 
-    it('criterion 15: uses the highest allowed level and refuses another', async () => {
+    it('AC-REPO-001.15: uses the highest allowed level and refuses another', async () => {
       const me = await admin.get('/api/v1/me');
       expect(me.body['allowedGitLevels']).toEqual([ 'advanced' ]);
 
@@ -404,7 +404,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       }
     });
 
-    it('criterion 16: reports wrong credentials, a missing repository and an unreachable host, and saves nothing', async () => {
+    it('AC-REPO-001.16: reports wrong credentials, a missing repository and an unreachable host, and saves nothing', async () => {
       const credentialsBefore = (await admin.get('/api/v1/credentials')).body;
       const repositoriesBefore = (await admin.recent()).map(summary => summary.id);
       const started = Date.now();
@@ -427,14 +427,14 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect((await admin.recent()).map(summary => summary.id)).toEqual(repositoriesBefore);
     });
 
-    it('criterion 17: accepts credentials that can only read', async () => {
+    it('AC-REPO-001.17: accepts credentials that can only read', async () => {
       // The test servers serve fetches only, so every credential here is read-only.
       const added = await admin.add({ remoteUrl: privateUrl(), name: 'Read only', credentials: newHttps('Read only') });
       expect(added.status).toBe(201);
       expect((await admin.settled(added.body['id'] as number)).status).toBe('ready');
     });
 
-    it('criterion 18: the new repository is first as Cloning, and the push channel says when it is ready', async () => {
+    it('AC-REPO-001.18: the new repository is first as Cloning, and the push channel says when it is ready', async () => {
       const proxy = await proxyTo(Number(new URL(publicGit.url).port));
       const remoteUrl = `https://127.0.0.1:${proxy.port}/handbook.git`;
       const events = await fetch(`${server.url}/api/v1/events`, {
@@ -460,7 +460,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect((await admin.recent())[0]).toMatchObject({ id, status: 'ready', error: null });
     });
 
-    it('criterion 21: no secret reaches responses, logs, stored URLs or git processes', async () => {
+    it('AC-REPO-001.21: no secret reaches responses, logs, stored URLs or git processes', async () => {
       const proxy = await proxyTo(Number(new URL(privateGit.url).port));
       const remoteUrl = `https://127.0.0.1:${proxy.port}/handbook.git`;
       const credentials = newHttps('Secret check');
@@ -491,7 +491,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       }
     });
 
-    it('criterion 22: another user\'s saved credentials cannot be used', async () => {
+    it('AC-REPO-001.22: another user\'s saved credentials cannot be used', async () => {
       const { userIds: [ bobId ] } = seed(server.dataDir, { users: [ { email: 'bob-add@example.com' } ] });
       const bob = new Client(
         server,
@@ -507,7 +507,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect((await bob.get('/api/v1/credentials')).body).toEqual({ https: [], sshKeys: [] });
     });
 
-    it('criterion 24: refuses the metadata address like an unreachable host', async () => {
+    it('AC-REPO-001.24: refuses the metadata address like an unreachable host', async () => {
       for (const host of [ '169.254.169.254', '[::ffff:169.254.169.254]' ]) {
         const answer = await admin.post(ACCESS_CHECK, {
           remoteUrl: `https://${host}/x.git`,
@@ -517,7 +517,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       }
     });
 
-    it('criterion 25: a clone with a protected key finishes after logout', async () => {
+    it('AC-REPO-001.25: a clone with a protected key finishes after logout', async () => {
       const proxy = await proxyTo(ssh.port);
       const remoteUrl = sshUrl(proxy);
       const { authToken, refreshToken } = await login(server, 'body');
@@ -551,7 +551,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       }
     });
 
-    it('criterion 19: a clone over the timeout leaves Error and no working copy', async () => {
+    it('AC-REPO-001.19: a clone over the timeout leaves Error and no working copy', async () => {
       const own = await onboardedServer({ FRONT_BURNER_CLONE_TIMEOUT: '2s' });
       cleanups.push(() => own.server.stop());
       const proxy = await proxyTo(Number(new URL(publicGit.url).port));
@@ -571,7 +571,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect(readdirSync(join(own.server.dataDir, 'tmp'))).toEqual([]);
     });
 
-    it('criterion 19 after a restart: an interrupted clone fails cleanly', async () => {
+    it('AC-REPO-001.19 after a restart: an interrupted clone fails cleanly', async () => {
       const dataDir = mkdtempSync(join(tmpdir(), 'front-burner-e2e-restart-'));
       cleanups.push(async () => rmSync(dataDir, { recursive: true, force: true }));
       const env = { FRONT_BURNER_DATA_DIR: dataDir };
@@ -595,7 +595,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect(existsSync(join(dataDir, 'repos', '1', String(id)))).toBe(false);
     });
 
-    it('criterion 23: refuses the 31st access check in a minute', async () => {
+    it('AC-REPO-001.23: refuses the 31st access check in a minute', async () => {
       const own = await onboardedServer();
       cleanups.push(() => own.server.stop());
       for (let i = 0; i < 15; i++) {
@@ -609,7 +609,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect(limited.body['code']).toBe('rate-limited');
     });
 
-    it('criterion 24: a loopback git server is refused once private networks are blocked', async () => {
+    it('AC-REPO-001.24: a loopback git server is refused once private networks are blocked', async () => {
       const own = await onboardedServer({ FRONT_BURNER_BLOCK_PRIVATE_NETWORKS: 'true' });
       cleanups.push(() => own.server.stop());
 

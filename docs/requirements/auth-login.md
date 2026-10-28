@@ -430,72 +430,77 @@ Onboarding of invited users is covered by a separate requirement.
 
 ## Acceptance criteria
 
-1. The login page, Forgot password page and Confirm password reset page can be
-   opened without being logged in.
-2. On an instance without OIDC, the login page shows only the username +
-   password form. With OIDC configured, it also shows **Log in with OIDC**.
-3. Logging in with a correct email and password returns an auth token in the
-   response body and sets the refresh token in an `HttpOnly`, `Secure`,
-   `SameSite=Strict` cookie. The refresh token does not appear in the response
-   body, and the user reaches the page they first asked for.
-4. Logging in with an email in a different letter case works.
-5. Logging in with a wrong password, an unknown email, the email of an OIDC
-   user, the email of an invited user who has not set a password, or the email
-   and correct password of a disabled user returns exactly the same `401`
-   response with "Wrong username or password". Each attempt is in the login
-   audit log with its own reason code.
-6. A login request that asks for **body** delivery gets the refresh token in the
-   response body and no cookie.
-7. A successful OIDC login returns tokens the same way as a password login, and
-   no token appears in any URL.
-8. An OIDC login that is cancelled at the provider, one for a disabled user, and
-   one refused because automatic registration is disabled all show the same
-   "OIDC login failed" message. The login audit log and the backend log show the
-   different reasons, including the provider's error code.
-9. With automatic registration disabled, an OIDC login with an email that no
-   administrator added is refused and creates no account. With it enabled, the
-   same login creates an OIDC user.
-10. An auth token is refused after `FRONT_BURNER_AUTH_TOKEN_TTL`. With the
-    variable unset, it is refused after 15 minutes.
-11. When the auth token expires, the web client refreshes it and the failed
-    request succeeds without the user noticing. When two tabs need a refresh at
-    the same time, only one refresh request is sent and the session is not
-    revoked.
-12. Using a refresh token a second time after it was rotated revokes the
-    session: both the newest auth token and refresh token stop working, and the
-    reuse is in the login audit log.
-13. A refresh request with the cookie but without the custom header (LG-33), or
-    from another origin, is refused.
-14. When the refresh fails, the user is sent to the login page with "Your
-    session has expired. Please log in again".
-15. After logout, the old auth token and refresh token are refused and the
-    cookie is cleared, even if the auth token had already expired.
-16. When an administrator disables a logged-in user, all of that user's sessions
-    are revoked at once: their next API request fails, the refresh fails, and
-    they are sent to the login page.
-17. The backend does not start without `FRONT_BURNER_JWT_SECRET`, or with one
-    shorter than 32 characters.
-18. Submitting the Forgot password form with an unknown email, the email of a
-    disabled user, and the email of an active password user gives the same
-    response, and only the active password user receives an email.
-19. The reset code has 6 characters from `A`–`Z` and `0`–`9`, and is accepted in
-    lowercase.
-20. A reset code is refused after 15 minutes, after it was used, after a new
-    code was sent, after 5 wrong attempts, and after the user was disabled.
-21. Resetting the password with a valid code and a password that meets
-    REQ-AUTH-002 sends the user to the login page with a success message. The
-    old password stops working, the new one works, and every existing session of
-    that user is revoked.
-22. A new password that does not meet REQ-AUTH-002 is refused with the errors
-    from PP-10, and the code can still be used.
-23. Without SMTP configured, the login page has no **Forgot password?** link.
-24. Too many login attempts get `429 Too Many Requests`, for known and unknown
-    emails alike.
-25. Login audit log entries older than `FRONT_BURNER_LOGIN_AUDIT_RETENTION` are
-    deleted, and no entry contains a password, token or code.
-26. Opening the login page over plain HTTP from an address other than
-    `localhost` shows the HTTPS warning. Opening it over HTTPS or on `localhost`
-    does not.
+- **AC-AUTH-003.1** The login page, Forgot password page and Confirm password
+  reset page can be opened without being logged in.
+- **AC-AUTH-003.2** On an instance without OIDC, the login page shows only the
+  username + password form. With OIDC configured, it also shows **Log in with
+  OIDC**.
+- **AC-AUTH-003.3** Logging in with a correct email and password returns an auth
+  token in the response body and sets the refresh token in an `HttpOnly`,
+  `Secure`, `SameSite=Strict` cookie. The refresh token does not appear in the
+  response body, and the user reaches the page they first asked for.
+- **AC-AUTH-003.4** Logging in with an email in a different letter case works.
+- **AC-AUTH-003.5** Logging in with a wrong password, an unknown email, the
+  email of an OIDC user, the email of an invited user who has not set a
+  password, or the email and correct password of a disabled user returns exactly
+  the same `401` response with "Wrong username or password". Each attempt is in
+  the login audit log with its own reason code.
+- **AC-AUTH-003.6** A login request that asks for **body** delivery gets the
+  refresh token in the response body and no cookie.
+- **AC-AUTH-003.7** A successful OIDC login returns tokens the same way as a
+  password login, and no token appears in any URL.
+- **AC-AUTH-003.8** An OIDC login that is cancelled at the provider, one for a
+  disabled user, and one refused because automatic registration is disabled all
+  show the same "OIDC login failed" message. The login audit log and the backend
+  log show the different reasons, including the provider's error code.
+- **AC-AUTH-003.9** With automatic registration disabled, an OIDC login with an
+  email that no administrator added is refused and creates no account. With it
+  enabled, the same login creates an OIDC user.
+- **AC-AUTH-003.10** An auth token is refused after
+  `FRONT_BURNER_AUTH_TOKEN_TTL`. With the variable unset, it is refused after 15
+  minutes.
+- **AC-AUTH-003.11** When the auth token expires, the web client refreshes it
+  and the failed request succeeds without the user noticing. When two tabs need
+  a refresh at the same time, only one refresh request is sent and the session
+  is not revoked.
+- **AC-AUTH-003.12** Using a refresh token a second time after it was rotated
+  revokes the session: both the newest auth token and refresh token stop
+  working, and the reuse is in the login audit log.
+- **AC-AUTH-003.13** A refresh request with the cookie but without the custom
+  header (LG-33), or from another origin, is refused.
+- **AC-AUTH-003.14** When the refresh fails, the user is sent to the login page
+  with "Your session has expired. Please log in again".
+- **AC-AUTH-003.15** After logout, the old auth token and refresh token are
+  refused and the cookie is cleared, even if the auth token had already expired.
+- **AC-AUTH-003.16** When an administrator disables a logged-in user, all of
+  that user's sessions are revoked at once: their next API request fails, the
+  refresh fails, and they are sent to the login page.
+- **AC-AUTH-003.17** The backend does not start without
+  `FRONT_BURNER_JWT_SECRET`, or with one shorter than 32 characters.
+- **AC-AUTH-003.18** Submitting the Forgot password form with an unknown email,
+  the email of a disabled user, and the email of an active password user gives
+  the same response, and only the active password user receives an email.
+- **AC-AUTH-003.19** The reset code has 6 characters from `A`–`Z` and `0`–`9`,
+  and is accepted in lowercase.
+- **AC-AUTH-003.20** A reset code is refused after 15 minutes, after it was
+  used, after a new code was sent, after 5 wrong attempts, and after the user
+  was disabled.
+- **AC-AUTH-003.21** Resetting the password with a valid code and a password
+  that meets REQ-AUTH-002 sends the user to the login page with a success
+  message. The old password stops working, the new one works, and every existing
+  session of that user is revoked.
+- **AC-AUTH-003.22** A new password that does not meet REQ-AUTH-002 is refused
+  with the errors from PP-10, and the code can still be used.
+- **AC-AUTH-003.23** Without SMTP configured, the login page has no **Forgot
+  password?** link.
+- **AC-AUTH-003.24** Too many login attempts get `429 Too Many Requests`, for
+  known and unknown emails alike.
+- **AC-AUTH-003.25** Login audit log entries older than
+  `FRONT_BURNER_LOGIN_AUDIT_RETENTION` are deleted, and no entry contains a
+  password, token or code.
+- **AC-AUTH-003.26** Opening the login page over plain HTTP from an address
+  other than `localhost` shows the HTTPS warning. Opening it over HTTPS or on
+  `localhost` does not.
 
 ## Out of scope
 

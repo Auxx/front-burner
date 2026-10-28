@@ -233,7 +233,7 @@ describe('LoginPage', () => {
     expect(page().querySelector('ui-inline-banner[status="info"]')).toBeNull();
   });
 
-  it('warns on plain HTTP away from localhost', async () => {
+  it('AC-AUTH-003.26: warns on plain HTTP away from localhost', async () => {
     await open('/login', { location: { protocol: 'http:', hostname: 'fb.example' } });
 
     const banner = page().querySelector('ui-inline-banner[status="warning"]');
@@ -243,15 +243,22 @@ describe('LoginPage', () => {
     );
   });
 
-  it.each([ 'localhost', '127.0.0.1', '[::1]' ])('does not warn on %s', async hostname => {
+  it.each([ 'localhost', '127.0.0.1', '[::1]' ])('AC-AUTH-003.26: does not warn on %s', async hostname => {
     await open('/login', { location: { protocol: 'http:', hostname } });
 
     expect(page().querySelector('ui-inline-banner[status="warning"]')).toBeNull();
   });
 
-  it('does not warn over HTTPS', async () => {
+  it('AC-AUTH-003.26: does not warn over HTTPS', async () => {
     await open();
 
     expect(page().querySelector('ui-inline-banner[status="warning"]')).toBeNull();
+  });
+
+  it('AC-AUTH-003.23: has no Forgot password? link without SMTP', async () => {
+    await open();
+
+    const links = [ ...page().querySelectorAll('a') ].map(link => `${link.getAttribute('href')} ${link.textContent}`);
+    expect(links.filter(link => /forgot|reset/i.test(link))).toEqual([]);
   });
 });

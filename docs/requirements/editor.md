@@ -255,61 +255,67 @@ images ([REQ-EDIT-003](preview-images.md)).
 
 ## Acceptance criteria
 
-1. Selecting a `.md` file in the tree opens it in the editor with Markdown and
-   front matter highlighted, and the preview beside it on a desktop browser.
-2. A 100 KB file is ready to edit within the NF-2.2 targets on desktop broadband
-   and on slow 4G.
-3. Typing and stopping for 1.5 seconds saves the file: the status shows
-   "Saving…" then "Saved", and the file on disk has the new content. No commit
-   is made.
-4. Typing and opening another file within 1.5 seconds still saves the first
-   file.
-5. With the network off, typing shows "Not saved — offline, retrying". Turning
-   the network back on saves the content without the user doing anything.
-6. Reloading the tab during an offline edit, then opening the file again, offers
-   "You have unsaved changes from …" with **Restore** and **Discard**.
-   **Restore** brings the edit back and saves it.
-7. Logging out deletes every browser draft.
-8. Closing a tab with unsaved edits makes the browser ask for confirmation.
-9. A file with `\r\n` line endings, a byte order mark, tabs and no final newline
-   is saved after an edit with all four kept. Opening and saving a file without
-   edits leaves it byte for byte unchanged.
-10. A file grown past 1 MB shows "Not saved — the file is larger than 1 MB", and
-    saves again once it is smaller.
-11. A file deleted from another device shows "This file was deleted or renamed
-    elsewhere." on the next save. **Recreate it** creates it again with the
-    editor's content.
-12. A pull that changes the open file while it has no unsaved edits updates the
-    editor and shows "This file was updated." With unsaved edits it asks
-    **Reload** or **Keep mine**, and each does what it says. The user's own
-    saves never show either notice.
-13. While a merge with conflicts is in progress, the conflicting files can be
-    edited and saved, a version opened with **Show mine** is read-only with a
-    banner, and the API refuses saves to any file that is not conflicting.
-14. The preview renders headings, lists, tables, task lists, strikethrough,
-    autolinks, footnotes and fenced code with highlighting. Front matter is not
-    shown. A `mermaid` block is shown as a code block.
-15. `<script>` and event-handler attributes in a file never run; the preview
-    shows no trace of them.
-16. A 200 KB file's preview updates within 300 ms after typing stops, and typing
-    in a 1 MB file shows each keystroke within 50 ms on a mid-range phone
-    (NF-2.4, NF-2.5).
-17. In an `.mdx` file, `import` lines are shown as text.
-18. A relative link to `../guide.md` opens that file; `#install` scrolls to the
-    heading; `https://example.com` opens in a new tab.
-19. An Arabic paragraph is shown right to left in the editor and the preview.
-20. In **Split** mode, scrolling the editor scrolls the preview to the same
-    block, and the other way round. **Edit** and **Preview** modes show one pane
-    only.
-21. On a phone, the editor and preview are **Edit** and **Preview** tabs.
-    Switching keeps the place in the file. The cursor stays visible above the
-    on-screen keyboard.
-22. Find and replace works from a button and from `Ctrl+F` / `Cmd+F`. `Esc` then
-    `Tab` moves focus out of the editor.
-23. Undo after switching to another file and back undoes the last edit of the
-    first file.
-24. axe-core reports no violations in the editor, the preview or the view mode
-    controls, and the save status is announced by a screen reader.
+- **AC-EDIT-001.1** Selecting a `.md` file in the tree opens it in the editor
+  with Markdown and front matter highlighted, and the preview beside it on a
+  desktop browser.
+- **AC-EDIT-001.2** A 100 KB file is ready to edit within the NF-2.2 targets on
+  desktop broadband and on slow 4G.
+- **AC-EDIT-001.3** Typing and stopping for 1.5 seconds saves the file: the
+  status shows "Saving…" then "Saved", and the file on disk has the new content.
+  No commit is made.
+- **AC-EDIT-001.4** Typing and opening another file within 1.5 seconds still
+  saves the first file.
+- **AC-EDIT-001.5** With the network off, typing shows "Not saved — offline,
+  retrying". Turning the network back on saves the content without the user
+  doing anything.
+- **AC-EDIT-001.6** Reloading the tab during an offline edit, then opening the
+  file again, offers "You have unsaved changes from …" with **Restore** and
+  **Discard**. **Restore** brings the edit back and saves it.
+- **AC-EDIT-001.7** Logging out deletes every browser draft.
+- **AC-EDIT-001.8** Closing a tab with unsaved edits makes the browser ask for
+  confirmation.
+- **AC-EDIT-001.9** A file with `\r\n` line endings, a byte order mark, tabs and
+  no final newline is saved after an edit with all four kept. Opening and saving
+  a file without edits leaves it byte for byte unchanged.
+- **AC-EDIT-001.10** A file grown past 1 MB shows "Not saved — the file is
+  larger than 1 MB", and saves again once it is smaller.
+- **AC-EDIT-001.11** A file deleted from another device shows "This file was
+  deleted or renamed elsewhere." on the next save. **Recreate it** creates it
+  again with the editor's content.
+- **AC-EDIT-001.12** A pull that changes the open file while it has no unsaved
+  edits updates the editor and shows "This file was updated." With unsaved edits
+  it asks **Reload** or **Keep mine**, and each does what it says. The user's
+  own saves never show either notice.
+- **AC-EDIT-001.13** While a merge with conflicts is in progress, the
+  conflicting files can be edited and saved, a version opened with **Show mine**
+  is read-only with a banner, and the API refuses saves to any file that is not
+  conflicting.
+- **AC-EDIT-001.14** The preview renders headings, lists, tables, task lists,
+  strikethrough, autolinks, footnotes and fenced code with highlighting. Front
+  matter is not shown. A `mermaid` block is shown as a code block.
+- **AC-EDIT-001.15** `<script>` and event-handler attributes in a file never
+  run; the preview shows no trace of them.
+- **AC-EDIT-001.16** A 200 KB file's preview updates within 300 ms after typing
+  stops, and typing in a 1 MB file shows each keystroke within 50 ms on a
+  mid-range phone (NF-2.4, NF-2.5).
+- **AC-EDIT-001.17** In an `.mdx` file, `import` lines are shown as text.
+- **AC-EDIT-001.18** A relative link to `../guide.md` opens that file;
+  `#install` scrolls to the heading; `https://example.com` opens in a new tab.
+- **AC-EDIT-001.19** An Arabic paragraph is shown right to left in the editor
+  and the preview.
+- **AC-EDIT-001.20** In **Split** mode, scrolling the editor scrolls the preview
+  to the same block, and the other way round. **Edit** and **Preview** modes
+  show one pane only.
+- **AC-EDIT-001.21** On a phone, the editor and preview are **Edit** and
+  **Preview** tabs. Switching keeps the place in the file. The cursor stays
+  visible above the on-screen keyboard.
+- **AC-EDIT-001.22** Find and replace works from a button and from `Ctrl+F` /
+  `Cmd+F`. `Esc` then `Tab` moves focus out of the editor.
+- **AC-EDIT-001.23** Undo after switching to another file and back undoes the
+  last edit of the first file.
+- **AC-EDIT-001.24** axe-core reports no violations in the editor, the preview
+  or the view mode controls, and the save status is announced by a screen
+  reader.
 
 ## Out of scope
 

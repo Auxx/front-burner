@@ -48,7 +48,7 @@ async function choose(page: Page, name: string): Promise<void> {
 }
 const cancel = (page: Page) => page.getByRole('button', { name: 'Cancel' });
 
-/** Logs in and opens the Add repository page from the dashboard (criterion 1). */
+/** Logs in and opens the Add repository page from the dashboard (AC-REPO-001.1). */
 async function openAddRepository(page: Page): Promise<void> {
   await page.goto('/');
   await logIn(page);
@@ -76,7 +76,7 @@ async function axeViolations(page: Page) {
 }
 
 test.describe('Add repository, against a git server', () => {
-  test('criteria 1, 4 and 15: the page, the name from the URL, the protocols and no level dropdown', async ({ page }) => {
+  test('AC-REPO-001.1, AC-REPO-001.4 and AC-REPO-001.15: the page, the name from the URL, the protocols and no level dropdown', async ({ page }) => {
     await openAddRepository(page);
     await expect(page).toHaveURL(/\/repositories\/new$/);
     await expect(page).toHaveTitle('Add repository · Front Burner');
@@ -98,17 +98,17 @@ test.describe('Add repository, against a git server', () => {
     await enterUrl(page, 'git@github.com:acme/wiki.git');
     await expect(repositoryName(page)).toHaveValue('Team handbook');
 
-    // The administrator is allowed Advanced only (criterion 15).
+    // The administrator is allowed Advanced only (AC-REPO-001.15).
     await expect(page.getByRole('combobox', { name: 'Git control level' })).toHaveCount(0);
   });
 
-  test('criterion 1: a visitor who is not logged in is sent to the login page', async ({ page }) => {
+  test('AC-REPO-001.1: a visitor who is not logged in is sent to the login page', async ({ page }) => {
     await page.goto('/repositories/new');
 
     await expect(page).toHaveURL(/\/login\?returnUrl=%2Frepositories%2Fnew$/);
   });
 
-  test('criteria 2, 7 and 18: a public repository, submitted twice, lands on the dashboard as Cloning', async ({ page }) => {
+  test('AC-REPO-001.2, AC-REPO-001.7, AC-REPO-001.18 and AC-DASH-001.14: a public repository, submitted twice, lands on the dashboard as Cloning', async ({ page }) => {
     await openAddRepository(page);
     await enterUrl(page, publicUrl());
     await choose(page, 'No credentials (public repository)');
@@ -122,7 +122,7 @@ test.describe('Add repository, against a git server', () => {
     ).toBeVisible();
     const entries = page.locator('dash-repository-entry');
     await expect(entries).toHaveCount(1);
-    // Openable once the clone ends, without a reload (DS criterion 14).
+    // Openable once the clone ends, without a reload (AC-DASH-001.14).
     await expect(entries.getByRole('link', { name: 'handbook' })).toBeVisible({ timeout: 30_000 });
 
     // The message shows once: not again on reload.
@@ -130,13 +130,13 @@ test.describe('Add repository, against a git server', () => {
     await expect(entries.getByRole('link', { name: 'handbook' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Notifications' }).getByText(/^Cloning handbook/)).toHaveCount(0);
 
-    // Nothing was saved to the profile (criterion 7).
+    // Nothing was saved to the profile (AC-REPO-001.7).
     await revisit(page);
     await enterUrl(page, publicUrl());
     await expect(radio(page, 'Use saved credentials')).toHaveCount(0);
   });
 
-  test('criterion 7: no credentials for a private repository is refused on the credentials', async ({ page, monitor }) => {
+  test('AC-REPO-001.7: no credentials for a private repository is refused on the credentials', async ({ page, monitor }) => {
     await openAddRepository(page);
     await enterUrl(page, privateUrl());
     await choose(page, 'No credentials (public repository)');
@@ -148,7 +148,7 @@ test.describe('Add repository, against a git server', () => {
     drainFailedRequests(monitor, '/api/v1/repositories');
   });
 
-  test('criterion 6: new credentials are offered, preselected, on the next visit', async ({ page }) => {
+  test('AC-REPO-001.6: new credentials are offered, preselected, on the next visit', async ({ page }) => {
     await openAddRepository(page);
     await enterUrl(page, privateUrl());
     await expect(radio(page, 'Use saved credentials')).toHaveCount(0);
@@ -165,7 +165,7 @@ test.describe('Add repository, against a git server', () => {
     await expect(page.getByRole('combobox', { name: 'Saved credentials' })).toHaveText(/Local git \(alice\)/);
   });
 
-  test('criterion 14: a single branch lists the branches with the default preselected', async ({ page }) => {
+  test('AC-REPO-001.14: a single branch lists the branches with the default preselected', async ({ page }) => {
     await openAddRepository(page);
     await enterUrl(page, publicUrl());
     await choose(page, 'No credentials (public repository)');
@@ -180,7 +180,7 @@ test.describe('Add repository, against a git server', () => {
     expect(await axeViolations(page)).toEqual([]);
   });
 
-  test('criterion 20: Cancel asks after a change and leaves an untouched form at once', async ({ page }) => {
+  test('AC-REPO-001.20: Cancel asks after a change and leaves an untouched form at once', async ({ page }) => {
     await openAddRepository(page);
     await cancel(page).click();
     await expect(page).toHaveURL(/\/$/);
@@ -199,7 +199,7 @@ test.describe('Add repository, against a git server', () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
-  test('criterion 20: Back asks first, and Keep editing keeps the way back', async ({ page }) => {
+  test('AC-REPO-001.20: Back asks first, and Keep editing keeps the way back', async ({ page }) => {
     await openAddRepository(page);
     await repositoryName(page).fill('handbook');
 
@@ -215,7 +215,7 @@ test.describe('Add repository, against a git server', () => {
     await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
   });
 
-  test('criterion 26: usable at 320 px, with no axe violations', async ({ page }) => {
+  test('AC-REPO-001.26: usable at 320 px, with no axe violations', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await openAddRepository(page);
     expect(await fitsWidth(page)).toBe(true);
@@ -273,7 +273,7 @@ const apiError = (code: string, params: Record<string, unknown> = {}, fields?: u
 });
 
 test.describe('Add repository over SSH, with the API stubbed', () => {
-  test('criteria 8 and 9: saved keys, a protected one marked, its passphrase, then unlocked', async ({ page }) => {
+  test('AC-REPO-001.8 and AC-REPO-001.9: saved keys, a protected one marked, its passphrase, then unlocked', async ({ page }) => {
     await page.route('**/api/v1/credentials', route => json(route, 200, { https: [], sshKeys: [ lockedKey ] }));
     await page.route('**/api/v1/credentials/ssh-keys/3/unlock', route => route.fulfill({ status: 204 }));
     await openAddRepository(page);
@@ -295,7 +295,7 @@ test.describe('Add repository over SSH, with the API stubbed', () => {
     await expect(page.getByLabel('Passphrase', { exact: true })).toHaveCount(0);
   });
 
-  test('criterion 8: without saved keys, paste or generate', async ({ page }) => {
+  test('AC-REPO-001.8: without saved keys, paste or generate', async ({ page }) => {
     await openAddRepository(page);
 
     await enterUrl(page, 'git@git.example.com:acme/handbook.git');
@@ -305,7 +305,7 @@ test.describe('Add repository over SSH, with the API stubbed', () => {
     await expect(page.getByLabel('Private key')).toBeVisible();
   });
 
-  test('criterion 12: a generated key, Copy, the checkbox gate and AR-42\'s hint', async ({ page, monitor }) => {
+  test('AC-REPO-001.12: a generated key, Copy, the checkbox gate and AR-42\'s hint', async ({ page, monitor }) => {
     // Clipboard permissions differ between browsers: record what is copied instead.
     await page.addInitScript(() => {
       const copied: string[] = [];
@@ -354,7 +354,7 @@ test.describe('Add repository over SSH, with the API stubbed', () => {
     drainFailedRequests(monitor, '/api/v1/repositories');
   });
 
-  test('criterion 13: an unknown host asks to be trusted; Trust repeats the request', async ({ page, monitor }) => {
+  test('AC-REPO-001.13: an unknown host asks to be trusted; Trust repeats the request', async ({ page, monitor }) => {
     let adds = 0;
     let trusted: unknown;
     await page.route('**/api/v1/repositories', route => {
@@ -396,7 +396,7 @@ test.describe('Add repository over SSH, with the API stubbed', () => {
     drainFailedRequests(monitor, '/api/v1/repositories');
   });
 
-  test('criterion 13: Cancel leaves the form as it was', async ({ page, monitor }) => {
+  test('AC-REPO-001.13: Cancel leaves the form as it was', async ({ page, monitor }) => {
     await page.route(
       '**/api/v1/repositories',
       route =>

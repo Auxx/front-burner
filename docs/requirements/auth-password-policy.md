@@ -105,31 +105,36 @@ Control characters (Unicode category `Cc`) are not allowed at all (PP-6).
 
 ## Acceptance criteria
 
-1. `abcdefghij` (10 characters, one class) is refused with `too-few-classes`
-   only.
-2. `abcdefghi1` (10 characters, two classes) is accepted.
-3. `Abcdefgh1` (9 characters, three classes) is refused with `too-short`.
-4. `пароль пароль` (13 characters, lowercase and other) is accepted.
-5. `密码密码密码密码密码` (10 characters, letters with no case only) is refused
-   with `too-few-classes`. `密码密码密码密码12` (10 characters, letters with no
-   case and digits) is accepted.
-6. A password of 256 characters that meets every other rule is accepted. The
-   same password with one more character is refused with `too-long`.
-7. A password containing a tab character is refused with `control-character`.
-8. For a user with the email `Alice@Example.com`, the password
-   `alice@example.com` is refused with `equals-email`.
-9. `abc` is refused with both `too-short` and `too-few-classes` in the same
-   error.
-10. `café crème` sent in NFD form (12 code points, `e` + combining accent) is
-    accepted as 10 characters. The user can then log in with the same password
-    sent in NFC form, and the other way round.
-11. `  abcdefghi1  ` (with leading and trailing spaces) is accepted. Logging in
-    with `abcdefghi1` (without the spaces) fails.
-12. A stored password hash is an Argon2id hash.
-13. Every form where a password is set shows the policy and a strength meter
-    that updates as the user types.
-14. A user whose stored password does not meet the policy (for example, one set
-    up directly in the database for the test) can still log in with it.
+- **AC-AUTH-002.1** `abcdefghij` (10 characters, one class) is refused with
+  `too-few-classes` only.
+- **AC-AUTH-002.2** `abcdefghi1` (10 characters, two classes) is accepted.
+- **AC-AUTH-002.3** `Abcdefgh1` (9 characters, three classes) is refused with
+  `too-short`.
+- **AC-AUTH-002.4** `пароль пароль` (13 characters, lowercase and other) is
+  accepted.
+- **AC-AUTH-002.5** `密码密码密码密码密码` (10 characters, letters with no case
+  only) is refused with `too-few-classes`. `密码密码密码密码12` (10 characters,
+  letters with no case and digits) is accepted.
+- **AC-AUTH-002.6** A password of 256 characters that meets every other rule is
+  accepted. The same password with one more character is refused with
+  `too-long`.
+- **AC-AUTH-002.7** A password containing a tab character is refused with
+  `control-character`.
+- **AC-AUTH-002.8** For a user with the email `Alice@Example.com`, the password
+  `alice@example.com` is refused with `equals-email`.
+- **AC-AUTH-002.9** `abc` is refused with both `too-short` and `too-few-classes`
+  in the same error.
+- **AC-AUTH-002.10** `café crème` sent in NFD form (12 code points, `e` +
+  combining accent) is accepted as 10 characters. The user can then log in with
+  the same password sent in NFC form, and the other way round.
+- **AC-AUTH-002.11** `  abcdefghi1  ` (with leading and trailing spaces) is
+  accepted. Logging in with `abcdefghi1` (without the spaces) fails.
+- **AC-AUTH-002.12** A stored password hash is an Argon2id hash.
+- **AC-AUTH-002.13** Every form where a password is set shows the policy and a
+  strength meter that updates as the user types.
+- **AC-AUTH-002.14** A user whose stored password does not meet the policy (for
+  example, one set up directly in the database for the test) can still log in
+  with it.
 
 ## Out of scope
 
