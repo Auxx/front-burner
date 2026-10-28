@@ -18,6 +18,16 @@ Requirements files deferred until after the MVP:
   example indent style and size, line endings, final newline and trimming
   trailing spaces), applied while typing and on save. Until then the editor
   changes nothing on its own (ED-9, ED-12).
+- Editor: two user preferences for highlighting large files on narrow screens
+  (ED-9a):
+  - **Highlight large files**: `false` by default. When it is on, every file is
+    highlighted whatever its size.
+  - **Size limit for highlighting**: 100 KB by default, the limit chosen with
+    the typing check (spike 3). Users with faster phones can raise it to keep
+    highlighting in larger files without highlighting every file.
+
+  Until then the limit is fixed at 100 KB, and **Turn on highlighting** lasts
+  only until the file is closed.
 
 Deployment guide (`docs/wiki/deployment.md`), postponed until the MVP runs
 locally in a development environment, so that it describes what was actually

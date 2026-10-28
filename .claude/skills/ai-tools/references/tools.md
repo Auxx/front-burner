@@ -5,14 +5,15 @@ tools/ai-tools/src/bin/<tool>.mjs <command>`. `--help` gives the full options of
 each command; this file says what each tool is for, how it works and what to
 watch out for. The rules shared by all tools are in [SKILL.md](../SKILL.md).
 
-| Tool                  | For                                                                |
-| --------------------- | ------------------------------------------------------------------ |
-| [`colour`](#colour)   | Converting colours, WCAG contrast, finding a lightness that passes |
-| [`tokens`](#tokens)   | The ui library's colour tokens and contrast pairs, without a build |
-| [`story`](#story)     | Screenshots of stories and values read from their pages            |
-| [`icons`](#icons)     | Finding Codicons and building the sprite of `ui-icon`              |
-| [`doc-ids`](#doc-ids) | Checking and renumbering IDs such as A-10.38 or REQ-EDIT-002       |
-| [`nx-tags`](#nx-tags) | Checking that every Nx project has a scope and a type tag          |
+| Tool                          | For                                                                |
+| ----------------------------- | ------------------------------------------------------------------ |
+| [`colour`](#colour)           | Converting colours, WCAG contrast, finding a lightness that passes |
+| [`tokens`](#tokens)           | The ui library's colour tokens and contrast pairs, without a build |
+| [`story`](#story)             | Screenshots of stories and values read from their pages            |
+| [`icons`](#icons)             | Finding Codicons and building the sprite of `ui-icon`              |
+| [`doc-ids`](#doc-ids)         | Checking and renumbering IDs such as A-10.38 or REQ-EDIT-002       |
+| [`nx-tags`](#nx-tags)         | Checking that every Nx project has a scope and a type tag          |
+| [`typing-test`](#typing-test) | The page for checking typing speed on a real phone (NF-2.4)        |
 
 ## `colour`
 
@@ -277,3 +278,48 @@ both that list and the constraints in `eslint.config.mjs`.
 ```shell
 nx-tags.mjs check
 ```
+
+## `typing-test`
+
+Builds and serves a page for checking typing speed on a real phone (NF-2.4,
+A-8.11), for the person at the phone: the steps and the report are in
+[docs/wiki/typing-test.md](../../../../docs/wiki/typing-test.md). The page is
+CodeMirror 6 set up as A-8.11 plans for the editor (no `basicSetup`, Markdown
+with YAML front matter, soft wrap, spell check), with five generated test files
+(`2kb.md`, `100kb.md`, `200kb.md`, `500kb.md`, `1mb.md`, seeded so every build
+is the same) and two meters. The address names the file and the parts of the
+setup to switch off, `?file=1mb.md&off=frontmatter,wrap` (`SWITCHES`:
+`frontmatter`, `language`, `wrap`, `spellcheck`, `direction`); the page refuses
+unknown switches rather than measure the wrong setup, and its menus offer the
+setups of `SETUPS`.
+
+| Command                                          | Does                                                                  |
+| ------------------------------------------------ | --------------------------------------------------------------------- |
+| `build [--out tmp/typing-test] [--json]`         | Bundles the page with esbuild and writes the test files; prints sizes |
+| `serve [--out …] [--host 0.0.0.0] [--port 8080]` | Builds, then serves the page to the local network until Ctrl+C        |
+
+```shell
+typing-test.mjs serve
+```
+
+- **How the meters measure.** The page's own meter starts a keystroke at the
+  `timeStamp` of its `keydown` (keys that edit text only) or `beforeinput`
+  event, whichever comes first, and ends it just after the main thread has made
+  the first frame after the editor's text changed (a task queued from
+  `requestAnimationFrame`): before the frame is on screen, so it reads low. Keys
+  that change no text within 1 s are dropped. Where the browser has the Event
+  Timing API (Chromium, not Safari), `keystrokeTimings` joins the key and input
+  events of 16 ms or more whose frames end within 8 ms of each other into one
+  keystroke, timed from its first event to the frame on screen: the measure of
+  record for NF-2.4. `2kb.md` is the baseline of what the phone, browser and
+  keyboard cost without editor work.
+- The page's buttons never take the focus (`mousedown` is cancelled): on
+  Android, focus moved away from the editor and back within one tap leaves the
+  keyboard open but typing nowhere.
+- The server serves only the four files of the site; anything else is 404.
+- Over plain `http` on the LAN the clipboard API is not available, so **Copy
+  results** falls back to selecting the text; `adb reverse tcp:8080 tcp:8080`
+  makes `http://localhost:8080/` work on an Android phone, which is a secure
+  context.
+- Check it in emulation first (Chromium, Pixel 7, CPU slowed 4×): the 1 MB file
+  measured a median of 30 ms and a maximum of 43 ms on 2026-10-28.

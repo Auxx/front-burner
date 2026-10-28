@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+    <title>Typing test</title>
+    <style>
+      :root { color-scheme: light dark; font: 14px/1.4 system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body { display: flex; flex-direction: column; height: 100dvh; }
+      header { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid #8884; }
+      button, select { font: inherit; min-height: 36px; padding: 0 10px; }
+      #status { font-weight: 600; }
+      #status.loading { color: #b45309; }
+      #status.ready { color: #15803d; }
+      #stats { font-variant-numeric: tabular-nums; width: 100%; }
+      #stats.over { color: #b91c1c; font-weight: 600; }
+      #results { width: 100%; height: 0; padding: 0; border: 0; font: 12px/1.3 ui-monospace, monospace; }
+      #results:not(:placeholder-shown) { height: 8.5em; padding: 4px; border: 1px solid #8886; }
+      #editor { flex: 1; min-height: 0; }
+      #editor .cm-editor { height: 100%; }
+      #editor .cm-scroller { font: 14px/1.5 ui-monospace, monospace; }
+    </style>
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <header>
+      <select id="file" aria-label="Test file"></select>
+      <select id="setup" aria-label="Editor setup"></select>
+      <span id="status" role="status">Loading…</span>
+      <button id="start" type="button">Start</button>
+      <button id="middle" type="button">Middle</button>
+      <button id="end" type="button">End</button>
+      <button id="reset" type="button">Reset</button>
+      <button id="copy" type="button">Copy results</button>
+      <span id="stats" aria-live="off">No keystrokes yet</span>
+      <textarea id="results" readonly placeholder=" " aria-label="Results"></textarea>
+    </header>
+    <main id="editor"></main>
+  </body>
+</html>
