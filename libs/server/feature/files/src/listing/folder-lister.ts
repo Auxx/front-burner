@@ -14,6 +14,9 @@ export const MAX_LISTED_ENTRIES = 5000;
 /** Never listed, in any case (FB-5, FB-19). */
 const isGit = (name: string) => name.toLowerCase() === '.git';
 
+/** Entries described at once: each may hold two descriptors, and the process has a limit (often 1,024). */
+const DESCRIBE_CONCURRENCY = 64;
+
 const SUBFOLDER_FLAGS = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
 
 interface Listed {
@@ -32,6 +35,20 @@ const kindOf = (dirent: Dirent, gitlinks: Set<string>): EntryKind => {
   // file; reading one is refused by `openInWorkingCopy`.
   return 'file';
 };
+
+/** `items.map(fn)`, with at most `limit` calls running at once; keeps the order. */
+async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index] as T);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
 
 const byGroupAndName = (a: Listed, b: Listed) =>
   Number(b.kind === 'folder') - Number(a.kind === 'folder') || compareEntryNames(a.name, b.name);
@@ -97,7 +114,7 @@ export class FolderLister {
       const listed = all.slice(0, MAX_LISTED_ENTRIES);
       const [ ignored, entries ] = await Promise.all([
         this.ignoredNames(root, path, listed),
-        Promise.all(listed.map(entry => this.describe(folder.path, entry)))
+        mapLimited(listed, DESCRIBE_CONCURRENCY, entry => this.describe(folder.path, entry))
       ]);
       return {
         path,

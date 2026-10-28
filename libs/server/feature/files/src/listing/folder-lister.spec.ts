@@ -1,7 +1,7 @@
 import { GitEngine, GitOptions, GitRunner } from '@front-burner/server-core-git';
 import { PathRefusedError } from '@front-burner/server-core-storage';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FolderLister } from './folder-lister';
@@ -215,6 +215,29 @@ describe('FolderLister', () => {
     expect(listing.entries[0]?.name).toBe('f0.md');
     expect(listing.entries[4999]?.name).toBe('f4999.md');
   });
+
+  it('keeps few descriptors open while it checks 5,000 sub-folders', async () => {
+    for (let i = 0; i < 5000; i++) {
+      mkdirSync(join(root, `d${i}`));
+    }
+    let peak = 0;
+    let sampling = true;
+    const sampler = (async () => {
+      while (sampling) {
+        peak = Math.max(peak, readdirSync('/proc/self/fd').length);
+        await new Promise(resolve => setImmediate(resolve));
+      }
+    })();
+
+    const listing = await lister.list(root, '').finally(() => {
+      sampling = false;
+    });
+    await sampler;
+
+    expect(listing.entries.filter(entry => entry.empty)).toHaveLength(5000);
+    // A container's default limit can be 1,024 descriptors.
+    expect(peak).toBeLessThan(400);
+  }, 60_000);
 
   describe('in a repository of 100,000 files', () => {
     let big: string;
