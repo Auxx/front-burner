@@ -38,6 +38,18 @@ export interface CloneRequest {
   knownHosts?: string[];
 }
 
+/** Commands that read only the working copy and its index. */
+const LOCAL_TIMEOUT_MS = 10_000;
+
+/** Enough for the names of a folder of a few hundred thousand entries; output past it would be lost. */
+const LOCAL_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
+
+/** Index entries of submodules (`git ls-files --stage`). */
+const GITLINK_MODE = '160000';
+
+/** Escapes the characters a `:(glob)` pathspec treats as wildcards. */
+const escapeGlob = (path: string) => path.replace(/[*?[\\]/g, '\\$&');
+
 /** What git leaves in `.git` while a merge or rebase waits for the user. */
 const IN_PROGRESS_MARKERS = [ 'MERGE_HEAD', 'rebase-merge', 'rebase-apply' ];
 
@@ -118,6 +130,50 @@ export class GitEngine implements BeforeApplicationShutdown {
     }
   }
 
+  /**
+   * The paths among `paths` that `.gitignore` rules ignore (`git check-ignore`).
+   * Tracked paths are never reported, even when a rule matches them (FB-20b).
+   */
+  async ignoredAmong(workingCopy: string, paths: string[]): Promise<Set<string>> {
+    if (paths.length === 0) {
+      return new Set();
+    }
+    const result = await this.runLocal(workingCopy, [ 'check-ignore', '--stdin', '-z' ], paths.join('\0') + '\0');
+    // 1: none of the paths is ignored.
+    if (result.exitCode !== 0 && result.exitCode !== 1) {
+      throw new Error(`git check-ignore failed: ${result.stderr.trim()}`);
+    }
+    return new Set(result.stdout.split('\0').filter(path => path !== ''));
+  }
+
+  /**
+   * The names of the submodules (gitlinks) of the index directly inside
+   * `folder` (`''` is the root). Lists only that folder's index entries: the
+   * glob's `*` does not cross `/` (FB-15).
+   */
+  async gitlinksIn(workingCopy: string, folder: string): Promise<Set<string>> {
+    const prefix = folder === '' ? '' : `${folder}/`;
+    const result = await this.runLocal(workingCopy, [
+      'ls-files',
+      '--stage',
+      '-z',
+      '--',
+      `:(glob)${escapeGlob(prefix)}*`
+    ]);
+    if (result.exitCode !== 0) {
+      throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
+    }
+    const names = new Set<string>();
+    // -z: "<mode> <object> <stage>\t<path>\0" per entry.
+    for (const line of result.stdout.split('\0')) {
+      const tab = line.indexOf('\t');
+      if (tab > 0 && line.startsWith(`${GITLINK_MODE} `)) {
+        names.add(line.slice(tab + 1 + prefix.length));
+      }
+    }
+    return names;
+  }
+
   /** True while a merge or rebase is in progress in the working copy (FB-26). */
   async mergeInProgress(workingCopy: string): Promise<boolean> {
     const found = await Promise.all(
@@ -139,6 +195,10 @@ export class GitEngine implements BeforeApplicationShutdown {
       }
       throw error;
     }
+  }
+
+  private runLocal(cwd: string, args: string[], stdin?: string): Promise<GitResult> {
+    return this.runner.run(args, { cwd, timeoutMs: LOCAL_TIMEOUT_MS, stdin, maxOutputBytes: LOCAL_MAX_OUTPUT_BYTES });
   }
 
   private async runNetwork(

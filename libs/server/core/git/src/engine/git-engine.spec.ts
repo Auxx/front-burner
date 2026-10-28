@@ -263,6 +263,63 @@ describe('GitEngine', () => {
     });
   });
 
+  describe('folder queries', () => {
+    let work: string;
+
+    beforeEach(() => {
+      work = join(root, 'folders');
+      mkdirSync(join(work, 'build'), { recursive: true });
+      git(work, 'init', '-q', '-b', 'main');
+      writeFileSync(join(work, '.gitignore'), 'build/\n*.log\n');
+      writeFileSync(join(work, 'keep.log'), 'kept\n');
+      git(work, 'add', '-f', '.gitignore', 'keep.log');
+      git(work, 'commit', '-q', '-m', 'base');
+      writeFileSync(join(work, 'out.log'), 'out\n');
+      writeFileSync(join(work, 'build', 'app.js'), '\n');
+      writeFileSync(join(work, 'notes.md'), '\n');
+      const sha = git(work, 'rev-parse', 'HEAD').trim();
+      git(work, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
+    });
+
+    it('reports ignored untracked paths', async () => {
+      const ignored = await engine().ignoredAmong(work, [ 'out.log', 'build', 'notes.md', '.gitignore' ]);
+      expect([ ...ignored ].sort()).toEqual([ 'build', 'out.log' ]);
+    });
+
+    it('does not report tracked files', async () => {
+      expect(await engine().ignoredAmong(work, [ 'keep.log' ])).toEqual(new Set());
+    });
+
+    it('returns an empty set for no paths', async () => {
+      expect(await engine().ignoredAmong(join(root, 'missing'), [])).toEqual(new Set());
+    });
+
+    it('handles names with newlines and quotes', async () => {
+      const names = [ 'a\nb.log', 'say "hi".log', 'café\t.log', 'plain.md' ];
+      for (const name of names) {
+        writeFileSync(join(work, name), '\n');
+      }
+      const ignored = await engine().ignoredAmong(work, names);
+      expect([ ...ignored ].sort()).toEqual([ 'a\nb.log', 'café\t.log', 'say "hi".log' ]);
+    });
+
+    it('throws when git fails', async () => {
+      await expect(engine().ignoredAmong(work, [ '../outside' ])).rejects.toThrow();
+    });
+
+    it('lists gitlinks directly inside a folder', async () => {
+      expect(await engine().gitlinksIn(work, 'vendor')).toEqual(new Set([ 'lib' ]));
+      expect(await engine().gitlinksIn(work, '')).toEqual(new Set());
+    });
+
+    it('treats glob characters in the folder name literally', async () => {
+      const sha = git(work, 'rev-parse', 'HEAD').trim();
+      git(work, 'update-index', '--add', '--cacheinfo', `160000,${sha},v[e]ndor*/mod`);
+      expect(await engine().gitlinksIn(work, 'v[e]ndor*')).toEqual(new Set([ 'mod' ]));
+      expect(await engine().gitlinksIn(work, 'vendor')).toEqual(new Set([ 'lib' ]));
+    });
+  });
+
   describe('clone', () => {
     const clone = (overrides: Partial<Parameters<GitEngine['clone']>[0]> = {}, gitOptions?: Partial<GitOptions>) =>
       engine(gitOptions).clone({
