@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { Client, Server, utils } from 'ssh2';
 import { openSshAgent, SshAgent } from './ssh-agent';
-import { unlockPrivateKey } from './ssh-keys';
+import { generateEd25519Key, unlockPrivateKey } from './ssh-keys';
 import type { UnlockedKey } from './unlocked-key';
 import { sshString, uint32 } from './wire';
 
@@ -79,7 +79,7 @@ function loginData(key: UnlockedKey, user: string, method = 'publickey'): Buffer
 
 /** An ssh2 server that accepts `authorized` by checking its signature; resolves with the signature's hash. */
 async function loginThroughAgent(socketPath: string, authorized: string): Promise<string | undefined> {
-  const hostKey = utils.generateKeyPairSync('ed25519').private;
+  const hostKey = generateEd25519Key('host').privateKey;
   const allowed = utils.parseKey(authorized);
   if (allowed instanceof Error || Array.isArray(allowed)) {
     throw new Error('bad key');

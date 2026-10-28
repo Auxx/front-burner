@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { ParsedKey, Server, utils } from 'ssh2';
+import { generateEd25519Key } from '../ssh/ssh-keys';
 
 export interface GitSshServer {
   host: string;
@@ -40,7 +41,7 @@ const UPLOAD_PACK = /^git-upload-pack '\/?([^']+)'$/;
  * keys and serves `git-upload-pack` by spawning it.
  */
 export async function startGitSshServer(options: GitSshServerOptions): Promise<GitSshServer> {
-  const hostKey = options.hostKey ?? utils.generateKeyPairSync('ed25519').private;
+  const hostKey = options.hostKey ?? generateEd25519Key('host').privateKey;
   const authorized = options.authorizedKeys.map(parsed);
   const state = { refusedLogins: 0 };
 

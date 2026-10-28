@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createPrivateKey } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -210,6 +211,26 @@ describe('generateEd25519Key', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('keeps a public key that starts with a zero byte whole', () => {
+    // This seed's public key is 00 00 1f 8b …, which ssh2's generator cut short.
+    const seed = Buffer.alloc(32);
+    seed[31] = 0x24;
+    const key = createPrivateKey({
+      key: Buffer.concat([ Buffer.from('302e020100300506032b657004220420', 'hex'), seed ]),
+      format: 'der',
+      type: 'pkcs8'
+    });
+
+    const { privateKey, publicKey } = generateEd25519Key('front-burner@example.com', key);
+    const blob = Buffer.from(publicKey.split(' ')[1] ?? '', 'base64');
+
+    expect(blob.subarray(-32).toString('hex')).toBe('00001f8bea42b3c74c50aa3589b1aa065f196857db97a75e4a54953f093e6772');
+    expect(inspectPrivateKey(privateKey)).toMatchObject({
+      type: 'ed25519',
+      publicKey: publicKey.split(' ').slice(0, 2).join(' ')
+    });
   });
 });
 
