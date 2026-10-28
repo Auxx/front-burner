@@ -85,7 +85,7 @@ describe('FileTreeStoreService', () => {
         return answer;
       }
       const found = folders[query.path];
-      return found ? of(found) : failure(404, 'not-found');
+      return found ? of(found) : failure(404, 'entry-not-found');
     });
     TestBed.configureTestingModule({
       imports: [ translocoTesting(texts) ],

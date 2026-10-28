@@ -59,7 +59,7 @@ describe('FirstFileService', () => {
                 : folders[query.path]
                 ? of(folders[query.path])
                 : throwError(() =>
-                  new HttpErrorResponse({ status: 404, error: { code: 'not-found', params: {}, requestId: '' } })
+                  new HttpErrorResponse({ status: 404, error: { code: 'entry-not-found', params: {}, requestId: '' } })
                 )
           }
         },
