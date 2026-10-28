@@ -110,6 +110,22 @@ images ([REQ-EDIT-003](preview-images.md)).
 - **ED-9** The editor highlights Markdown syntax and YAML front matter. It does
   not change the text on its own: no automatic formatting, no autocompletion of
   brackets or list markers. _(My call: plain Markdown editing for the MVP.)_
+- **ED-9a** On narrow screens (those with the **Edit** and **Preview** tabs,
+  ED-34), a file larger than **100 KB** when it is opened opens without syntax
+  highlighting, so that typing stays within NF-2.4. A quiet note above the
+  editor says "Highlighting is off for large files on small screens, to keep
+  typing fast." with **Turn on highlighting**, which turns it on for the open
+  file and hides the note. The choice lasts until the file is closed; it is not
+  remembered. A file keeps its highlighting state while it is open, even if it
+  grows past or shrinks below the limit, or the screen changes width. On wide
+  screens, files of every size are highlighted. _(My call: spike 3 measured
+  highlighting as the part of the editor that makes typing in large files too
+  slow on a real phone. 100 KB is a cautious limit: up to 200 KB typing stayed
+  within NF-2.4 by the editor's own work, but was borderline once the time to
+  show the frame was counted, and the check could not tell 100 KB from 200 KB
+  apart. A file just over the limit costs one tap. Remembered preferences for
+  the limit and for highlighting large files come after the MVP,
+  `docs/wiki/todo.md`.)_
 - **ED-10** Long lines wrap softly; the file is not changed by wrapping. The
   browser's spell check and, on phones, autocorrect are on. _(My call.)_
 - **ED-11** The editor offers find and replace within the open file, from a
@@ -316,6 +332,10 @@ images ([REQ-EDIT-003](preview-images.md)).
 - **AC-EDIT-001.24** axe-core reports no violations in the editor, the preview
   or the view mode controls, and the save status is announced by a screen
   reader.
+- **AC-EDIT-001.25** On a phone, a 150 KB file opens without highlighting and
+  with the note; **Turn on highlighting** highlights it and hides the note, and
+  opening the file again shows the note again. A 50 KB file, and the 150 KB file
+  on a desktop browser, open highlighted with no note.
 
 ## Out of scope
 

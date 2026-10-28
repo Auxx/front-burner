@@ -127,6 +127,84 @@ they are built. See [overview.md](overview.md) for the numbering conventions.
     limit; with the preview visible, 10–17 of 48 keystrokes went over 50 ms
     (worst 88 ms), hence no visible preview while typing on phones. This needs
     checking on a real mid-range phone.
+  - **NF-2.4 on a real phone:** the spike's branch was lost, so the check uses
+    the `typing-test` page of `tools/ai-tools`, the editor alone as A-8.11 plans
+    it (steps in `docs/wiki/typing-test.md`). Round 1, on 2026-10-28, on a Pixel
+    6 with Android 16, Chrome 156 and Gboard, by the page's own meter (median /
+    maximum, keystrokes over 50 ms) and the browser's Event Timing (maximum,
+    events, not keystrokes, over 50 ms): 200 KB in the middle 13 / 49 ms, 0 of
+    67; 72 ms, 4 of 133 events. 1 MB at the start 13 / 34 ms, 0 of 86; 56 ms, 6
+    of 172. 1 MB in the middle 17 / 43 ms, 0 of 60; 72 ms, 28 of 120. 1 MB at
+    the end with Enter 18 / 54 ms, 4 of 62; 80 ms, 32 of 144. Typing felt smooth
+    throughout. Inconclusive: the page's own meter stops before the frame is on
+    screen and reads low, Event Timing was counted per event rather than per
+    keystroke, and there was no baseline.
+  - **Round 2**, the same day and phone, with Event Timing per keystroke and a 2
+    KB baseline. Per run: the page's own meter (median / maximum, keystrokes
+    over 50 ms), then Event Timing (maximum, share of keystrokes over 50 ms):
+
+    | Run                     | Own meter            | Event Timing         |
+    | ----------------------- | -------------------- | -------------------- |
+    | 2 KB, middle (baseline) | 12 / 28 ms, 0 of 132 | 56 ms, 2 of 132, 2%  |
+    | 200 KB, middle          | 13 / 40 ms, 0 of 143 | 72 ms, 8 of 143, 6%  |
+    | 1 MB, start             | 14 / 37 ms, 0 of 68  | 64 ms, 4 of 68, 6%   |
+    | 1 MB, middle            | 14 / 49 ms, 0 of 67  | 72 ms, 10 of 67, 15% |
+    | 1 MB, end with Enter    | 17 / 62 ms, 3 of 85  | 88 ms, 14 of 85, 16% |
+    | 1 MB, after scrolling   | 14 / 55 ms, 2 of 59  | 80 ms, 7 of 59, 12%  |
+
+    Every keystroke took at least 16 ms by Event Timing, even in the baseline,
+    so the per-keystroke counts match the keystrokes typed. **Result: the 1 MB
+    file fails NF-2.4** on this phone: up to 16% of keystrokes over 50 ms
+    against 2% in the baseline, the page's own meter over 50 ms at the end and
+    after scrolling, and the further into the file, the slower. 200 KB is
+    borderline (6% against 2%, with counts too small to tell from noise). A
+    Pixel 6 is at the fast end of today's mid-range, so a slower phone would do
+    worse. Next: find which editor extension costs the time, then choose a
+    design change (`docs/wiki/typing-test.md`, "What happens next").
+  - **Round 3**, the same day and phone, switching off one part of the setup at
+    a time (`docs/wiki/typing-test.md`, "Round 3"). The 1 MB runs typed at the
+    end with Enter. The viewport was 760×856 CSS pixels, against 411×463 in
+    round 2, so compare these runs with each other, not with round 2:
+
+    | Run                          | Own meter           | Event Timing          |
+    | ---------------------------- | ------------------- | --------------------- |
+    | 2 KB, middle (baseline)      | 13 / 28 ms, 0 of 62 | 56 ms, 1 of 62, 2%    |
+    | 1 MB, everything on          | 18 / 62 ms, 2 of 62 | 80 ms, 11 of 62, 18%  |
+    | 1 MB, without front matter   | 18 / 75 ms, 5 of 63 | 105 ms, 14 of 62, 23% |
+    | 1 MB, without highlighting   | 14 / 31 ms, 0 of 62 | 56 ms, 2 of 62, 3%    |
+    | 1 MB, without soft wrap      | 22 / 78 ms, 4 of 62 | 104 ms, 15 of 62, 24% |
+    | 1 MB, without spell check    | 18 / 50 ms, 0 of 64 | 72 ms, 13 of 64, 20%  |
+    | 1 MB, without text direction | 23 / 69 ms, 4 of 62 | 96 ms, 18 of 62, 29%  |
+    | 1 MB, all four off           | 15 / 39 ms, 0 of 62 | 50 ms, 2 of 62, 3%    |
+
+    **Result: Markdown highlighting costs the time.** Without it, the 1 MB file
+    is at the baseline (3% against 2%); switching off front matter highlighting,
+    soft wrap, spell check or text direction changes nothing beyond noise, and
+    all four off is no better than highlighting off alone. Emulation had pointed
+    at front matter highlighting (a median of 31 ms falling to 21 ms); the phone
+    did not confirm it. That the cost grows towards the end of the file points
+    at the parser's work after each edit rather than at styling, but the test
+    does not separate the two.
+  - **Round 4**, the same day and phone, everything on, to set ED-9a's size
+    limit (`docs/wiki/typing-test.md`, "Round 4"). Typed at the end with Enter
+    except the baseline; the viewport was again 760×856, not portrait as asked:
+
+    | Run                     | Speed     | Own meter           | Event Timing         |
+    | ----------------------- | --------- | ------------------- | -------------------- |
+    | 2 KB, middle (baseline) | 1.6 key/s | 17 / 44 ms, 0 of 60 | 72 ms, 8 of 60, 13%  |
+    | 100 KB                  | 2.4 key/s | 15 / 47 ms, 0 of 67 | 64 ms, 13 of 67, 19% |
+    | 200 KB                  | 2.2 key/s | 16 / 38 ms, 0 of 62 | 56 ms, 9 of 62, 15%  |
+    | 500 KB                  | 2.2 key/s | 17 / 55 ms, 3 of 65 | 80 ms, 6 of 65, 9%   |
+
+    **Result: inconclusive for the limit.** The baseline's share over 50 ms rose
+    from 2% in rounds 2 and 3 to 13%, and the shares do not follow the file size
+    (500 KB lowest), so at about 60 keystrokes a run Event Timing cannot tell
+    these sizes apart. The page's own meter, which measures only the main
+    thread's work and is steadier, has no keystroke over 50 ms up to 200 KB in
+    rounds 2 and 4, and fails at 500 KB and 1 MB. **Decision:** ED-9a keeps the
+    cautious 100 KB limit rather than measuring with runs of several hundred
+    keystrokes; a file over it costs one tap, and preferences for the limit come
+    after the MVP (`docs/wiki/todo.md`). The check is finished.
   - **NF-2.9:** the initial JavaScript was 65.5 KB gzipped. The editor's lazy
     chunk was 224 KB and the worker 164 KB (A-8.11, A-8.13).
 

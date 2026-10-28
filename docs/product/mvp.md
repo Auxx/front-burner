@@ -150,11 +150,11 @@ Limited in MVP:
 
 ### 7. Markdown editor, saving and live preview
 
-| Requirement                                       | Status   | In MVP                                         | Limited in MVP | Not in MVP | MVP notes                                                                      |
-| ------------------------------------------------- | -------- | ---------------------------------------------- | -------------- | ---------- | ------------------------------------------------------------------------------ |
-| [REQ-EDIT-001](../requirements/editor.md)         | Accepted | ED-1 to ED-39; AC-EDIT-001.1 to AC-EDIT-001.24 | —              | —          | As written. Builds on D-1 and D-7. A formatting toolbar and tabs are deferred. |
-| [REQ-EDIT-002](../requirements/preview-html.md)   | Accepted | SH-1 to SH-23; AC-EDIT-002.1 to AC-EDIT-002.17 | —              | —          | As written.                                                                    |
-| [REQ-EDIT-003](../requirements/preview-images.md) | Accepted | IM-1 to IM-26; AC-EDIT-003.1 to AC-EDIT-003.16 | —              | —          | As written. Blog-engine image folders are deferred.                            |
+| Requirement                                       | Status   | In MVP                                                | Limited in MVP | Not in MVP | MVP notes                                                                      |
+| ------------------------------------------------- | -------- | ----------------------------------------------------- | -------------- | ---------- | ------------------------------------------------------------------------------ |
+| [REQ-EDIT-001](../requirements/editor.md)         | Accepted | ED-1 to ED-39, ED-9a; AC-EDIT-001.1 to AC-EDIT-001.25 | —              | —          | As written. Builds on D-1 and D-7. A formatting toolbar and tabs are deferred. |
+| [REQ-EDIT-002](../requirements/preview-html.md)   | Accepted | SH-1 to SH-23; AC-EDIT-002.1 to AC-EDIT-002.17        | —              | —          | As written.                                                                    |
+| [REQ-EDIT-003](../requirements/preview-images.md) | Accepted | IM-1 to IM-26; AC-EDIT-003.1 to AC-EDIT-003.16        | —              | —          | As written. Blog-engine image folders are deferred.                            |
 
 ### 8. Git at the Advanced level
 
@@ -306,10 +306,10 @@ this section in the same change, without being asked:
   instance where every administrator is lost to a separate requirement, as an
   operator task. The MVP needs at least a documented recovery procedure in the
   deployment guide.
-- **Typing speed on phones.** Spike 3 measured typing in a 1 MB file at the
-  limit of NF-2.4 in emulation (A-8.11). The check on a real mid-range phone is
-  still to do, and must happen before the editor is built (order of work, step
-  2), so that a slow result can still change its design.
+- **Typing speed on phones.** _Resolved._ The check on a real phone (spike 3,
+  `docs/wiki/typing-test.md`) found typing in large files too slow for NF-2.4,
+  because of syntax highlighting. Files over 100 KB therefore open without
+  highlighting on narrow screens, with a button that turns it on (ED-9a).
 - **Large repositories.** Spike 4 (git at 100,000 files, A-5.14) is still to do.
   The file browser's lazy loading and the status call are the parts most at
   risk.

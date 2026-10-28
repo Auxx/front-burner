@@ -70,6 +70,12 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     CSS and JavaScript languages that `@codemirror/lang-markdown` always pulls
     in for embedded HTML. NF-2.2 on slow 4G needs it trimmed: no `basicSetup`,
     only the extensions used.
+  - On a real phone (spike 3, rounds 2 and 3), typing in a 1 MB file was too
+    slow with highlighting and as fast as in a 2 KB file without it; soft wrap,
+    spell check and per-line text direction made no difference. So on narrow
+    screens a file over 100 KB opens without the Markdown language (ED-9a), and
+    **Turn on highlighting** adds it through a `Compartment`, without recreating
+    the editor or losing its undo history (ED-8).
 - **A-8.12** `web/markdown` holds the preview pipeline (D-7.3 to D-7.5) and the
   one component that writes sanitised HTML to the page (D-7.6). It is loaded
   lazily with the editor. Confirmed by spike 3 (spikes.md).
