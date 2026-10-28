@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { DeleteFolderJob } from './delete-folder.job';
 import { DELETE_FOLDER_JOB_TYPE, DeleteFolderJobPayload } from './entry-delete';
 
-const TRASH = 'delete-0b6f4f3c-6d1e-4f7a-9c2b-1d2e3f4a5b6c';
+const TRASH = 'delete-7-0b6f4f3c-6d1e-4f7a-9c2b-1d2e3f4a5b6c';
 
 describe('DeleteFolderJob', () => {
   let dataDir: string;
@@ -55,7 +55,18 @@ describe('DeleteFolderJob', () => {
   it('refuses a payload name that is not a trash name', async () => {
     mkdirSync(join(dataDir, 'repos', '3', '7'), { recursive: true });
 
-    for (const name of [ '', '..', '../repos', 'clone-1', `${TRASH}/deep`, `${TRASH}/..`, 'delete-x' ]) {
+    for (
+      const name of [
+        '',
+        '..',
+        '../repos',
+        'clone-1',
+        `${TRASH}/deep`,
+        `${TRASH}/..`,
+        'delete-x',
+        'delete-0b6f4f3c-6d1e-4f7a-9c2b-1d2e3f4a5b6c'
+      ]
+    ) {
       await expect(run(name)).rejects.toThrow();
     }
     expect(readdirSync(layout.tmpDir)).toEqual([ TRASH ]);

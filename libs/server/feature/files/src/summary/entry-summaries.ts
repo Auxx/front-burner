@@ -11,6 +11,7 @@ import { Injectable } from '@nestjs/common';
 import { open, opendir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isGitName, splitPath, SUBFOLDER_FLAGS } from '../paths/entry-paths';
+import { resolveEntry } from '../paths/existing-entry';
 
 interface Counts {
   files: number;
@@ -71,13 +72,9 @@ export class EntrySummaries {
 
   /** @throws PathRefusedError */
   async summary(root: string, path: string): Promise<EntrySummary> {
-    const entry = await resolveInWorkingCopy(root, path, { symlinkLeaf: true });
-    const submodule = await this.git.submoduleOn(root, path);
-    if (submodule !== null) {
-      // A submodule counts as nothing; what is inside one is not part of this repository (FB-23).
-      if (submodule !== path) {
-        throw new PathRefusedError('not-found');
-      }
+    const { entry, submodule } = await resolveEntry(this.git, root, path);
+    if (submodule) {
+      // A submodule counts as nothing (FB-23).
       return { files: 0, nonMarkdown: 0, uncommitted: 0 };
     }
     if (entry.type !== 'folder') {

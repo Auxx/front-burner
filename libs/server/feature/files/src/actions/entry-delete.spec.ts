@@ -3,6 +3,7 @@ import { GitEngine, GitOptions, GitRunner, WorkingTreeLock } from '@front-burner
 import type { JobRunner } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { DataLayout } from '@front-burner/server-core-storage';
+import { Logger } from '@nestjs/common';
 import { execFileSync } from 'node:child_process';
 import {
   existsSync,
@@ -10,6 +11,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync
@@ -69,6 +71,7 @@ describe('EntryDelete', () => {
   let outside: string;
   let publish: ReturnType<typeof vi.fn>;
   let enqueue: ReturnType<typeof vi.fn>;
+  let engine: GitEngine;
   let entries: EntryDelete;
 
   const remove = (path: string) => entries.delete(USER, REPO, path);
@@ -89,7 +92,7 @@ describe('EntryDelete', () => {
     writeFileSync(join(root, 'docs', 'deep', 'a.md'), 'a\n');
     git(root, 'add', '.');
     git(root, 'commit', '-q', '-m', 'base');
-    const engine = new GitEngine(options, new GitRunner());
+    engine = new GitEngine(options, new GitRunner());
     const repositories = { root: vi.fn().mockReturnValue(root) } as unknown as OpenableRepository;
     publish = vi.fn();
     enqueue = vi.fn().mockReturnValue(1);
@@ -105,7 +108,19 @@ describe('EntryDelete', () => {
 
   afterEach(() => {
     rmSync(dataDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
   });
+
+  /** Swaps `docs` for a link to `outside` after the path was checked, as a process outside the lock could. */
+  const swapDocsAfterCheck = () => {
+    const submoduleOn = engine.submoduleOn.bind(engine);
+    vi.spyOn(engine, 'submoduleOn').mockImplementation(async (workingCopy, path) => {
+      const answer = await submoduleOn(workingCopy, path);
+      renameSync(join(root, 'docs'), join(root, 'docs-moved'));
+      symlinkSync(outside, join(root, 'docs'));
+      return answer;
+    });
+  };
 
   it('deletes a committed file and an untracked file', async () => {
     writeFileSync(join(root, 'docs', 'notes.txt'), 'notes\n');
@@ -141,7 +156,7 @@ describe('EntryDelete', () => {
     const trashed = readdirSync(layout.tmpDir);
     expect(trashed).toHaveLength(1);
     const name = trashed[0] ?? '';
-    expect(name).toMatch(/^delete-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(name).toMatch(/^delete-7-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(readFileSync(join(layout.tmpDir, name, 'deep', 'a.md'), 'utf8')).toBe('a\n');
     expect(enqueue).toHaveBeenCalledExactlyOnceWith({
       type: DELETE_FOLDER_JOB_TYPE,
@@ -160,6 +175,58 @@ describe('EntryDelete', () => {
     expect(await refusal(remove('vendor/lib/README.md'))).toEqual(missing);
     expect(readdirSync(join(root, 'vendor', 'lib'))).toEqual([ 'README.md' ]);
     expect(readdirSync(layout.tmpDir)).toEqual([]);
+  });
+
+  it('refuses a folder that holds a submodule', async () => {
+    mkdirSync(join(root, 'vendor', 'lib'), { recursive: true });
+    writeFileSync(join(root, 'vendor', 'lib', 'README.md'), 'lib\n');
+    const sha = git(root, 'rev-parse', 'HEAD').trim();
+    git(root, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
+
+    expect(await refusal(remove('vendor'))).toEqual(notDeletable);
+    expect(readdirSync(join(root, 'vendor', 'lib'))).toEqual([ 'README.md' ]);
+    expect(readdirSync(layout.tmpDir)).toEqual([]);
+  });
+
+  it('never acts outside the working copy when a parent is swapped for a link after the check', async () => {
+    mkdirSync(join(outside, 'deep'));
+    writeFileSync(join(outside, 'deep', 'a.md'), 'outside\n');
+    writeFileSync(join(outside, 'readme.md'), 'outside\n');
+    swapDocsAfterCheck();
+
+    const symlink = { status: 400, code: 'path-refused', params: { reason: 'symlink' } };
+    expect(await refusal(remove('docs/deep'))).toEqual(symlink);
+    expect(readdirSync(outside).sort()).toEqual([ 'deep', 'readme.md', 'secret.txt' ]);
+    expect(readdirSync(join(outside, 'deep'))).toEqual([ 'a.md' ]);
+    expect(readdirSync(layout.tmpDir)).toEqual([]);
+  });
+
+  it('never unlinks outside the working copy when a parent is swapped for a link after the check', async () => {
+    writeFileSync(join(outside, 'readme.md'), 'outside\n');
+    swapDocsAfterCheck();
+
+    expect(await refusal(remove('docs/readme.md')))
+      .toEqual({ status: 400, code: 'path-refused', params: { reason: 'symlink' } });
+    expect(readFileSync(join(outside, 'readme.md'), 'utf8')).toBe('outside\n');
+  });
+
+  it('keeps a folder\'s delete when its job cannot be queued', async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    enqueue.mockImplementation(() => {
+      throw new Error('database is locked');
+    });
+
+    await expect(remove('docs')).resolves.toBeUndefined();
+
+    expect(names()).toEqual([]);
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      `Could not queue the removal of a deleted folder of repository ${REPO}; tmp/ is emptied on the next start`
+    );
+    expect(publish).toHaveBeenCalledExactlyOnceWith(USER, {
+      type: 'files.changed',
+      repositoryId: REPO,
+      folders: [ '', 'docs' ]
+    });
   });
 
   it('refuses the root folder', async () => {

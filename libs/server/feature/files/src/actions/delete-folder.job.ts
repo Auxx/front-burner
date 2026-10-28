@@ -1,12 +1,9 @@
 import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
-import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
+import { DATA_LAYOUT, DataLayout, isTrashName } from '@front-burner/server-core-storage';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DELETE_FOLDER_JOB_TYPE, DeleteFolderJobPayload } from './entry-delete';
-
-/** The only names `EntryDelete` gives a trashed folder. */
-const TRASH_NAME = /^delete-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
  * The **Delete folder** job of A-6 (FB-40): removes a folder that a delete
@@ -33,7 +30,7 @@ export class DeleteFolderJob implements OnModuleInit {
   }
 
   private async remove(job: RunningJob<DeleteFolderJobPayload>): Promise<void> {
-    if (!TRASH_NAME.test(job.payload.name)) {
+    if (!isTrashName(job.payload.name)) {
       // Never touch the disk for a name this feature did not make.
       throw new Error('Not a trashed folder\'s name');
     }

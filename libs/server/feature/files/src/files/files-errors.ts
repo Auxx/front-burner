@@ -15,3 +15,9 @@ export function toFilesError(error: unknown): never {
   }
   throw error;
 }
+
+/** The entry exists but this action is not allowed on it (FB-23, FB-35). */
+export const entryNotRenamable = () => new ApiErrorException(400, 'entry-not-renamable', {}, 'This can\'t be renamed.');
+
+/** The root folder or a submodule, or a folder that holds one (FB-23, FB-37). */
+export const entryNotDeletable = () => new ApiErrorException(400, 'entry-not-deletable', {}, 'This can\'t be deleted.');
