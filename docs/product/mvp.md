@@ -112,10 +112,10 @@ Limited in MVP:
 
 ### 2. Dashboard and adding repositories
 
-| Requirement                                  | Status   | In MVP                                                                                                         | Limited in MVP                     | Not in MVP | MVP notes                                                                              |
-| -------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ---------- | -------------------------------------------------------------------------------------- |
-| [REQ-DASH-001](../requirements/dashboard.md) | Accepted | DS-1 to DS-6, DS-8 to DS-20, DS-22 to DS-26; AC-DASH-001.1 to AC-DASH-001.11, AC-DASH-001.13 to AC-DASH-001.16 | #30, #35, #36, `repository-screen` | DS-20      | No repositories added on a user's behalf, so **Needs your confirmation** never occurs. |
-| [REQ-REPO-001](../requirements/repo-add.md)  | Accepted | AR-1 to AR-37, AR-39 to AR-57; AC-REPO-001.1 to AC-REPO-001.26                                                 | AR-38                              | —          | Only Advanced is allowed, so the level dropdown is hidden (AR-40).                     |
+| Requirement                                  | Status   | In MVP                                                                                                         | Limited in MVP | Not in MVP            | MVP notes                                                                              |
+| -------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- | -------------- | --------------------- | -------------------------------------------------------------------------------------- |
+| [REQ-DASH-001](../requirements/dashboard.md) | Accepted | DS-1 to DS-6, DS-8 to DS-20, DS-22 to DS-26; AC-DASH-001.1 to AC-DASH-001.11, AC-DASH-001.13 to AC-DASH-001.16 | DS-7           | DS-21; AC-DASH-001.12 | No repositories added on a user's behalf, so **Needs your confirmation** never occurs. |
+| [REQ-REPO-001](../requirements/repo-add.md)  | Accepted | AR-1 to AR-37, AR-39 to AR-57; AC-REPO-001.1 to AC-REPO-001.26                                                 | AR-38          | —                     | Only Advanced is allowed, so the level dropdown is hidden (AR-40).                     |
 
 Limited in MVP:
 
@@ -144,9 +144,9 @@ Limited in MVP:
 
 ### 6. File browser
 
-| Requirement                                     | Status   | In MVP                                                         | Limited in MVP           | Not in MVP                                                                                                          | MVP notes                                                                                                                           |
-| ----------------------------------------------- | -------- | -------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| [REQ-FILE-001](../requirements/file-browser.md) | Accepted | FB-1 to FB-46, FB-20a, FB-20b; AC-FILE-001.1 to AC-FILE-001.26 | #41, `repository-screen` | FB-9 (closing the drawer when a file opens), FB-12 to FB-14, FB-20, FB-20a and FB-20b (the display), FB-21 to FB-46 | AC-FILE-001.5 to AC-FILE-001.6, AC-FILE-001.9 to AC-FILE-001.10, AC-FILE-001.12 to AC-FILE-001.23, AC-FILE-001.25 to AC-FILE-001.26 |
+| Requirement                                     | Status   | In MVP                                                         | Limited in MVP | Not in MVP | MVP notes                                                                                                                      |
+| ----------------------------------------------- | -------- | -------------------------------------------------------------- | -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| [REQ-FILE-001](../requirements/file-browser.md) | Accepted | FB-1 to FB-46, FB-20a, FB-20b; AC-FILE-001.1 to AC-FILE-001.26 | —              | —          | As written. Moving files to another folder, uploading files, the "hide non-Markdown files" preference and search are deferred. |
 
 ### 7. Markdown editor, saving and live preview
 
@@ -165,9 +165,9 @@ Limited in MVP:
 
 ### 9. Navigation
 
-| Requirement                                  | Status   | In MVP                                       | Limited in MVP                     | Not in MVP                                                                                                                                                             | MVP notes                                                   |
-| -------------------------------------------- | -------- | -------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [REQ-APP-001](../requirements/navigation.md) | Accepted | NV-2 to NV-19; AC-APP-001.1 to AC-APP-001.13 | #26, #30, #36, `repository-screen` | NV-1 (the routes of pages not built yet), NV-7 (Preferences and the version line), NV-9 (the branch, the git status and the save status), NV-10 to NV-12, NV-15, NV-16 | AC-APP-001.1 to AC-APP-001.6, AC-APP-001.8 to AC-APP-001.13 |
+| Requirement                                  | Status   | In MVP                                       | Limited in MVP | Not in MVP | MVP notes   |
+| -------------------------------------------- | -------- | -------------------------------------------- | -------------- | ---------- | ----------- |
+| [REQ-APP-001](../requirements/navigation.md) | Accepted | NV-2 to NV-19; AC-APP-001.1 to AC-APP-001.13 | NV-1           | —          | As written. |
 
 Limited in MVP:
 
