@@ -190,6 +190,38 @@ export class GitEngine implements BeforeApplicationShutdown {
     return new Set([ ...entries ].filter(([ , mode ]) => mode === GITLINK_MODE).map(([ name ]) => name));
   }
 
+  /**
+   * The number of untracked and ignored files at or under `path` (`''` is the
+   * root), counted one by one inside untracked and ignored folders. Modified
+   * tracked files do not count: their committed version can be brought back (FB-38).
+   */
+  async uncommittedUnder(workingCopy: string, path: string): Promise<number> {
+    const result = await this.runLocal(workingCopy, [
+      'status',
+      '--porcelain=v1',
+      '-z',
+      '--untracked-files=all',
+      '--ignored=traditional',
+      '--',
+      path === '' ? '.' : `:(literal)${path}`
+    ]);
+    if (result.exitCode !== 0) {
+      throw new Error(`git status failed: ${result.stderr.trim()}`);
+    }
+    // -z: "XY <path>\0" per record; a rename or copy is followed by its source path.
+    const records = result.stdout.split('\0');
+    let count = 0;
+    for (let index = 0; index < records.length; index++) {
+      const status = records[index]?.slice(0, 2);
+      if (status === '??' || status === '!!') {
+        count++;
+      } else if (status?.startsWith('R') || status?.startsWith('C')) {
+        index++;
+      }
+    }
+    return count;
+  }
+
   /** True while a merge or rebase is in progress in the working copy (FB-26). */
   async mergeInProgress(workingCopy: string): Promise<boolean> {
     const found = await Promise.all(
