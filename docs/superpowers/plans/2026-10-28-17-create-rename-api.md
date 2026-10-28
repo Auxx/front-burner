@@ -11,12 +11,14 @@ in place, says what a folder holds before it is renamed or deleted, says whether
 a new name would be ignored, and tells every open tab which folders changed.
 
 **Architecture:** All in `server/feature/files`. Each change runs inside
-`WorkingTreeLock.run` after the merge check (FB-26), then publishes
-`files.changed` for the folders whose entries changed (A-3.11, FB-41). Names are
-checked with plan 13's rules on both sides: the request schema refines with
-`entryNameProblem`, and the service adds the sibling clash, which needs the
-disk. The entry summary walks one folder's subtree without following links and
-asks git once for its uncommitted files.
+`WorkingTreeGuard.change`, which takes the lock and then refuses during a merge,
+so that a merge queued ahead of the change cannot slip in between the check and
+the change (FB-26, A-5.3). It then publishes `files.changed` for the folders
+whose entries changed (A-3.11, FB-41). Names are checked with plan 13's rules on
+both sides: the request schema refines with `entryNameProblem`, and the service
+adds the sibling clash, which needs the disk. The entry summary walks one
+folder's subtree without following links and asks git once for its uncommitted
+files.
 
 **Tech Stack:** as before. No new packages.
 

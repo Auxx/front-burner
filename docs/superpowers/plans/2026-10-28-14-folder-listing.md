@@ -29,6 +29,13 @@ A-3.8; `security.md` A-7.6.
 
 - The shared constraints of [the step 2 index](2026-10-28-00-roadmap-step-2.md)
   apply.
+- **A folder is read through a descriptor** (A-7.6): opened with `O_RDONLY |
+  O_DIRECTORY | O_NOFOLLOW`, its real path (`/proc/self/fd/<fd>`) checked to be
+  inside the working copy, then read through that descriptor, because a merge
+  may replace it with a symbolic link after `resolveInWorkingCopy` returns. This
+  is the first plan that reads, so it adds the helper to `server/core/storage`
+  next to `resolveInWorkingCopy`, with a test that swaps a folder for a link
+  between resolving and reading; plans 23 and 32 reuse it.
 - A listing returns at most **5,000** entries; `more` counts the rest (FB-18).
 - Order: folders first, then every other kind, each group by `compareEntryNames`
   (plan 13), sorted by the backend (FB-17).

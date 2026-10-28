@@ -42,7 +42,9 @@ IM-23, IM-25, IM-26; the API halves of criteria 3, 6, 7, 13 and 16);
   `X-Content-Type-Options: nosniff`; `ETag: "<size>-<mtimeMs>"`; `Cache-Control:
   private, no-cache`. A matching `If-None-Match` gets `304` with no body.
 - Files are served from the working copy as on disk: uncommitted and ignored
-  files too (IM-7). No lock is taken (A-5.3).
+  files too (IM-7). No lock is taken (A-5.3), so the file is opened through plan
+  14's descriptor helper (`O_NOFOLLOW`, real path checked) and streamed from
+  that descriptor, never reopened by path (A-7.6).
 - Missing: `404 entry-not-found`; a path outside the working copy, in `.git` or
   through a symbolic link: `400 path-refused` (IM-4); another user's repository:
   `404 not-found`, as for one that does not exist (IM-25).

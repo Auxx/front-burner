@@ -34,7 +34,9 @@ D-1; `api.md` A-3.11; `non-functional.md` NF-1.5, NF-5.3, NF-11.5.
   for saving (ED-2, ED-19, NF-1.5).
 - Only Markdown files (`isMarkdownName`) can be read, saved or recreated;
   symbolic links never (they are refused by `resolveInWorkingCopy`'s rules,
-  A-7.6).
+  A-7.6). A read opens the file through plan 14's descriptor helper
+  (`O_NOFOLLOW`, real path checked), never by path, since reads take no lock;
+  saves and recreates run inside the lock and need not.
 - **Line endings** (ED-12): the file's line ending is `crlf` when it has more
   `\r\n` than lone `\n`, else `lf` (a tie, or no line break, is `lf`). The
   editor gets the text with every `\r\n` turned into `\n`; a save turns every

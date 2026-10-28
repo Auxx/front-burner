@@ -76,13 +76,14 @@ to FB-29); `docs/architecture/security.md` A-7.6;
   - `entryNameProblem(name: string): EntryNameProblem | null` — checks the NFC
     form against FB-27's rules except the sibling clash, in the order of the
     list (`''` → `empty`; `.`/`..` → `dot`; `/` or `\` → `separator`; U+0000 to
-    U+001F or U+007F → `control`; leading or trailing space → `edge-space`;
-    `.git` ignoring case → `git`; more than 255 UTF-8 bytes → `too-long`).
+    U+001F or U+007F to U+009F → `control`; leading or trailing space →
+    `edge-space`; `.git` ignoring case → `git`; more than 255 UTF-8 bytes →
+    `too-long`).
   - `sameEntryName(a: string, b: string): boolean` — equal after NFC and
     lower-casing (FB-27's clash rule).
   - `compareEntryNames(a: string, b: string): number` — FB-17's order within a
-    group: an `Intl.Collator(undefined, { numeric: true, sensitivity: 'accent'
-    })`, ties broken by plain code-unit order so the order is total and stable.
+    group: an `Intl.Collator('en', { numeric: true, sensitivity: 'accent' })`,
+    ties broken by plain code-unit order so the order is total and stable.
 
 - [ ] **Step 1: Write the failing tests**: `recognises Markdown extensions in
       any case` (`A.MD`, `b.Markdown`, `c.mdx` yes; `d.txt`, `md`, `.md.bak`

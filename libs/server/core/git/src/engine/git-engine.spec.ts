@@ -1,6 +1,15 @@
 import { startHttpsTestServer, TEST_CERTIFICATE_FILES } from '@front-burner/server-core-security/testing';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs';
 import { AddressInfo, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -228,6 +237,29 @@ describe('GitEngine', () => {
       const error = await failureOf(engine().accessCheck('file:///etc', NONE));
 
       expect(error.code).toBe('failed');
+    });
+  });
+
+  describe('mergeInProgress', () => {
+    it('reports a merge in progress', async () => {
+      const work = join(root, 'merging');
+      mkdirSync(work);
+      git(work, 'init', '-q', '-b', 'main');
+      writeFileSync(join(work, 'notes.md'), 'base\n');
+      git(work, 'add', 'notes.md');
+      git(work, 'commit', '-q', '-m', 'base');
+      git(work, 'checkout', '-q', '-b', 'other');
+      writeFileSync(join(work, 'notes.md'), 'theirs\n');
+      git(work, 'commit', '-q', '-am', 'theirs');
+      git(work, 'checkout', '-q', 'main');
+      writeFileSync(join(work, 'notes.md'), 'ours\n');
+      git(work, 'commit', '-q', '-am', 'ours');
+
+      expect(await engine().mergeInProgress(work)).toBe(false);
+      expect(() => git(work, 'merge', '-q', 'other')).toThrow();
+      expect(await engine().mergeInProgress(work)).toBe(true);
+      git(work, 'merge', '--abort');
+      expect(await engine().mergeInProgress(work)).toBe(false);
     });
   });
 
