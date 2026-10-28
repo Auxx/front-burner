@@ -50,7 +50,10 @@ describe('entry actions', () => {
   });
 
   it('parses a rename request', () => {
-    expect(RenameEntryRequestSchema.parse({ path: 'docs/a.md', name: 'b.md' })).toEqual({ path: 'docs/a.md', name: 'b.md' });
+    expect(RenameEntryRequestSchema.parse({ path: 'docs/a.md', name: 'b.md' })).toEqual({
+      path: 'docs/a.md',
+      name: 'b.md'
+    });
     expect(RenameEntryRequestSchema.safeParse({ path: 'docs/a.md', name: '' }).success).toBe(false);
   });
 });

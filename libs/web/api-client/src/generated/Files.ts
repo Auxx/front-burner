@@ -2,7 +2,7 @@
 
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import type { FolderListing } from '@front-burner/shared-contracts';
+import type { CreateEntryRequest, EntryPath, FolderListing, RenameEntryRequest } from '@front-burner/shared-contracts';
 import type { Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -22,6 +22,18 @@ export class FilesApi {
     return this.http.get<FolderListing>(
       `/api/v1/repositories/${encodeURIComponent(id)}/folder`,
       { params: query }
+    );
+  }
+  createEntry(id: number, data: CreateEntryRequest): Observable<EntryPath> {
+    return this.http.post<EntryPath>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/entries`,
+      data
+    );
+  }
+  renameEntry(id: number, data: RenameEntryRequest): Observable<EntryPath> {
+    return this.http.post<EntryPath>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/entries/rename`,
+      data
     );
   }
 }
