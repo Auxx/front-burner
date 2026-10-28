@@ -337,5 +337,17 @@
   "web-feature-repository-screen.NotOpenableComponent.cloneFailed": "This repository's clone failed.",
   "web-feature-repository-screen.NotOpenableComponent.workingCopyMissing": "This repository's working copy is missing.",
   "web-feature-repository-screen.NotOpenableComponent.needsConfirmation": "This repository needs your confirmation.",
-  "web-feature-repository-screen.NotOpenableComponent.settings": "Repository settings"
+  "web-feature-repository-screen.NotOpenableComponent.settings": "Repository settings",
+  "web-feature-repository-screen.FileTreeStoreService.folder": "folder",
+  "web-feature-repository-screen.FileTreeStoreService.file": "file",
+  "web-feature-repository-screen.FileTreeStoreService.symlink": "symbolic link",
+  "web-feature-repository-screen.FileTreeStoreService.submodule": "submodule",
+  "web-feature-repository-screen.FileTreeStoreService.markdown": "Markdown",
+  "web-feature-repository-screen.FileTreeStoreService.ignored": "ignored",
+  "web-feature-repository-screen.FileTreeStoreService.empty": "empty",
+  "web-feature-repository-screen.FileTreeStoreService.loading": "Loading…",
+  "web-feature-repository-screen.FileTreeStoreService.loadFailed": "This folder could not be loaded",
+  "web-feature-repository-screen.FileTreeStoreService.retry": "Try again",
+  "web-feature-repository-screen.FileTreeStoreService.more": "{count, plural, one {# more item} other {# more items}} not shown",
+  "web-feature-repository-screen.FileTreeStoreService.emptyNote": "Empty folders aren't saved in git. Add a file to keep this folder."
 }
