@@ -61,6 +61,30 @@ A-8.15; `non-functional.md` NF-2.2, NF-2.3, NF-3.1, NF-3.2.
 - **Title** (NV-13): `• ` in front while the open file has unsaved edits.
 - `injectNarrowViewport` is exported from `ui` (it exists in
   `libs/ui/src/layout/utils/narrow-viewport/`).
+- **From plan 24's review.** `web/code-editor`'s helpers take no state:
+  `setHighlighting(on)`, `setReadOnly(on)` and `setLabel(name)`, each a
+  `TransactionSpec` to dispatch or apply with `state.update`. There is no
+  `nonce` option: `CodeEditorComponent` gives CodeMirror the page's `CSP_NONCE`
+  itself. Points for this plan to settle:
+  - **Never hand the editor an older state.** `CodeEditorComponent` shows any
+    `state` that is not the view's own with `view.setState`, so an input that
+    lags behind the view (a store updated later or debounced) drops the
+    keystrokes typed since. Write each `stateChange` back into the `OpenFile`
+    synchronously, and pass a different state only when another file is opened
+    or one is reloaded.
+  - **Renaming the open file** calls `setLabel` with the new name on its state
+    when it calls `rekey`, so that the editor's name follows (ED-37) and the
+    undo history stays (ED-8).
+  - **The cursor and the on-screen keyboard (ED-15).** The component scrolls the
+    cursor into view on every `visualViewport` `resize` while it has the focus,
+    and each one emits a `stateChange` without document changes. On iOS Safari
+    the layout viewport does not shrink when the keyboard opens, so this may not
+    be enough there; if the end-to-end check on a phone shows the cursor behind
+    the keyboard, size the editor pane to `visualViewport.height` instead.
+  - For plans 30 and 31: `topLine()` mixes a fresh `getBoundingClientRect()`
+    with `view.documentTop` from CodeMirror's last measure, so right after a
+    scroll it can be off by the distance scrolled. Scroll sync should read it
+    inside `view.requestMeasure`, or change it to use `scrollDOM.scrollTop`.
 
 ## Review Focus
 

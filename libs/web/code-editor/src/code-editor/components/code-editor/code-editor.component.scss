@@ -1,0 +1,91 @@
+// The syntax classes of `classHighlighter` and the library's Markdown highlighter on the
+// syntax tokens (A-10.14). Where a span has several classes, the later rule wins: a
+// heading's `#` is both a mark and a heading.
+ce-code-editor {
+  display: block;
+  height: 100%;
+  min-height: 0;
+
+  .tok-punctuation {
+    color: var(--ui-syntax-punctuation);
+  }
+
+  .tok-comment {
+    color: var(--ui-syntax-comment);
+  }
+
+  .tok-mark {
+    color: var(--ui-syntax-list-marker);
+  }
+
+  .tok-monospace {
+    color: var(--ui-syntax-code);
+  }
+
+  .tok-quote {
+    color: var(--ui-syntax-quote);
+  }
+
+  .tok-link {
+    color: var(--ui-syntax-link);
+  }
+
+  .tok-url {
+    color: var(--ui-syntax-url);
+  }
+
+  .tok-tagName {
+    color: var(--ui-syntax-html-tag);
+  }
+
+  .tok-attributeName {
+    color: var(--ui-syntax-html-attribute);
+  }
+
+  .tok-meta,
+  .tok-propertyName,
+  .tok-labelName {
+    color: var(--ui-syntax-meta);
+  }
+
+  .tok-keyword {
+    color: var(--ui-syntax-keyword);
+  }
+
+  .tok-string,
+  .tok-string2 {
+    color: var(--ui-syntax-string);
+  }
+
+  .tok-number,
+  .tok-bool,
+  .tok-atom {
+    color: var(--ui-syntax-number);
+  }
+
+  .tok-typeName,
+  .tok-className {
+    color: var(--ui-syntax-type);
+  }
+
+  .tok-variableName.tok-definition,
+  .tok-macroName {
+    color: var(--ui-syntax-function);
+  }
+
+  .tok-strong {
+    color: var(--ui-syntax-strong);
+    font-weight: var(--ui-font-weight-semibold);
+  }
+
+  .tok-emphasis {
+    color: var(--ui-syntax-emphasis);
+    font-style: italic;
+  }
+
+  // Last, so that everything in a heading has its colour, also bold and italic text.
+  .tok-heading {
+    color: var(--ui-syntax-heading);
+    font-weight: var(--ui-font-weight-semibold);
+  }
+}
