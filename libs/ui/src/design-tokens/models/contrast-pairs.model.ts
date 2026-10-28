@@ -137,7 +137,8 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   ...syntax.flatMap(token => [
     text(`syntax-${token}`, 'editor-background'),
     text(`syntax-${token}`, 'editor-background', 'editor-active-line'),
-    text(`syntax-${token}`, 'editor-background', 'editor-selection')
+    text(`syntax-${token}`, 'editor-background', 'editor-selection'),
+    text(`syntax-${token}`, 'editor-background', 'editor-match')
   ]),
   text('text-default', 'editor-background', 'editor-match')
 ];

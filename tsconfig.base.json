@@ -95,6 +95,9 @@
       ],
       "@front-burner/server-feature-files": [
         "./libs/server/feature/files/src/index.ts"
+      ],
+      "@front-burner/web-code-editor": [
+        "./libs/web/code-editor/src/index.ts"
       ]
     }
   },
