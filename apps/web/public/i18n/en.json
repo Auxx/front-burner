@@ -149,6 +149,7 @@
   "web-feature-auth.PasswordPolicyComponent.met": "(met)",
   "web-feature-auth.PasswordPolicyComponent.notMet": "(not met)",
   "web-shell.ShellLayoutComponent.skipToContent": "Skip to content",
+  "web-shell.BrandLinkComponent.dashboard": "Dashboard",
   "web-shell.AppHeaderComponent.navigation": "Main",
   "web-shell.AppHeaderComponent.dashboard": "Dashboard",
   "web-shell.AppHeaderComponent.repositories": "Repositories",

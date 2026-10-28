@@ -1,15 +1,6 @@
 <ng-container *transloco="let t; prefix: 'web-shell.AppHeaderComponent'">
   <nav [attr.aria-label]="t('navigation')">
-    <a
-      class="brand"
-      routerLink="/"
-      routerLinkActive="active"
-      ariaCurrentWhenActive="page"
-      [routerLinkActiveOptions]="{ exact: true }"
-    >
-      <ui-icon name="flame" />
-      <span class="brand-name">Front Burner</span>
-    </a>
+    <shell-brand-link />
     <a class="link wide" routerLink="/repositories" routerLinkActive="active" ariaCurrentWhenActive="page">
       {{ t('repositories') }}
     </a>

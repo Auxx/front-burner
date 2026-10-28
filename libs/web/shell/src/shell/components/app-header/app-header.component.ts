@@ -10,6 +10,7 @@ import {
 } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
+import { BrandLinkComponent } from '../brand-link/brand-link.component';
 import { UserMenuComponent } from '../user-menu/user-menu.component';
 
 /**
@@ -28,6 +29,7 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
     MenuComponent,
     MenuItemComponent,
     MenuTriggerDirective,
+    BrandLinkComponent,
     UserMenuComponent
   ],
   templateUrl: './app-header.component.html',

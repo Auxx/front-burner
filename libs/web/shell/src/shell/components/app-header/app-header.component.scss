@@ -17,7 +17,6 @@ nav {
   min-inline-size: 0;
 }
 
-.brand,
 .link {
   display: inline-flex;
   align-items: center;
@@ -32,11 +31,6 @@ nav {
   }
 }
 
-.brand {
-  font-weight: var(--ui-font-weight-semibold);
-  white-space: nowrap;
-}
-
 .link.active {
   text-decoration: underline;
   text-underline-offset: 0.3em;
@@ -49,21 +43,6 @@ nav {
 @media #{$narrow} {
   nav {
     gap: var(--ui-space-2);
-  }
-
-  .brand {
-    justify-content: center;
-    min-inline-size: var(--ui-control-height);
-  }
-
-  // Still the link's name for screen readers.
-  .brand-name {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   .wide {
