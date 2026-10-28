@@ -50,16 +50,53 @@ describe('folder listing (REQ-FILE-001)', () => {
     await server?.stop();
   });
 
-  async function call(method: 'GET' | 'POST', path: string, token?: string): Promise<Answer> {
+  async function call(method: 'GET' | 'POST', path: string, token?: string, body?: unknown): Promise<Answer> {
+    const headers: Record<string, string> = token === undefined ? {} : { authorization: `Bearer ${token}` };
+    if (body !== undefined) {
+      headers['content-type'] = 'application/json';
+    }
     const response = await fetch(`${server.url}/api/v1${path}`, {
       method,
-      headers: token === undefined ? {} : { authorization: `Bearer ${token}` }
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body)
     });
     return { status: response.status, body: (await response.json()) as Record<string, unknown> };
   }
 
   const folder = (path: string, token = alice.token) =>
     call('GET', `/repositories/${handbook}/folder?path=${encodeURIComponent(path)}`, token);
+  const createEntry = (body: unknown, token = alice.token) =>
+    call('POST', `/repositories/${handbook}/entries`, token, body);
+  const renameEntry = (body: unknown, token = alice.token) =>
+    call('POST', `/repositories/${handbook}/entries/rename`, token, body);
+  const names = async (path: string) =>
+    ((await folder(path)).body['entries'] as { name: string; }[]).map(entry => entry.name);
+
+  /** The first `event:` block of a stream that is not a comment, within `ms`. */
+  async function nextEvent(response: Response, ms: number): Promise<unknown> {
+    const reader = response.body?.pipeThrough(new TextDecoderStream()).getReader();
+    if (reader === undefined) {
+      throw new Error('The response has no body');
+    }
+    const timeout = setTimeout(() => void reader.cancel(), ms);
+    let text = '';
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          return undefined;
+        }
+        text += value;
+        const data = /^data: (.*)$/m.exec(text);
+        if (data !== null) {
+          return JSON.parse(data[1] as string);
+        }
+      }
+    } finally {
+      clearTimeout(timeout);
+      await reader.cancel().catch(() => undefined);
+    }
+  }
 
   it('lists the root folder', async () => {
     const { status, body } = await folder('');
@@ -136,5 +173,101 @@ describe('folder listing (REQ-FILE-001)', () => {
 
     expect(status).toBe(200);
     expect(Date.parse(body['lastAccessedAt'] as string)).toBeGreaterThanOrEqual(before - 1000);
+  });
+
+  it('creates, renames and lists a file over the API', async () => {
+    const created = await createEntry({ folder: 'docs', name: 'notes', kind: 'file' });
+    expect(created).toEqual({ status: 201, body: { path: 'docs/notes.md' } });
+
+    const renamed = await renameEntry({ path: 'docs/notes.md', name: 'ideas.txt' });
+    expect(renamed).toEqual({ status: 200, body: { path: 'docs/ideas.txt.md' } });
+
+    expect(await names('docs')).toEqual([ 'guide.md', 'ideas.txt.md' ]);
+    const summary = await call('GET', `/repositories/${handbook}/entries/summary?path=docs`, alice.token);
+    expect(summary).toEqual({ status: 200, body: { files: 2, nonMarkdown: 0, uncommitted: 2 } });
+  });
+
+  it('AC-FILE-001.14: refuses a name taken in another case as a field error', async () => {
+    const { status, body } = await createEntry({ folder: '', name: 'readme.MD', kind: 'file' });
+
+    expect(status).toBe(400);
+    expect(body).toMatchObject({ code: 'validation-failed', fields: [ { path: 'name', code: 'name-taken' } ] });
+  });
+
+  it('refuses .git as a name and as a folder', async () => {
+    const asName = await createEntry({ folder: '', name: '.Git', kind: 'folder' });
+    expect(asName.status).toBe(400);
+    expect(asName.body).toMatchObject({ code: 'validation-failed', fields: [ { path: 'name', code: 'git' } ] });
+
+    const asFolder = await createEntry({ folder: '.git', name: 'hooks', kind: 'folder' });
+    expect(asFolder.status).toBe(400);
+    expect(asFolder.body).toMatchObject({ code: 'path-refused', params: { reason: 'inside-git' } });
+  });
+
+  it('answers a path inside a submodule like a missing entry', async () => {
+    const root = join(server.dataDir, 'repos', String(alice.userId), String(handbook));
+    mkdirSync(join(root, 'vendor', 'lib', 'docs'), { recursive: true });
+    const sha = execFileSync('git', [ 'hash-object', '-w', 'README.md' ], { cwd: root, encoding: 'utf8' }).trim();
+    execFileSync('git', [ 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib` ], { cwd: root });
+
+    for (
+      const answer of [
+        await folder('vendor/lib/docs'),
+        await createEntry({ folder: 'vendor/lib/docs', name: 'a', kind: 'file' }),
+        await call('GET', `/repositories/${handbook}/entries/ignored?path=vendor/lib/a.md&kind=file`, alice.token)
+      ]
+    ) {
+      expect(answer.status).toBe(404);
+      expect(answer.body['code']).toBe('entry-not-found');
+    }
+  });
+
+  it('refuses to rename a symbolic link', async () => {
+    const { status, body } = await renameEntry({ path: 'etc', name: 'other' });
+
+    expect(status).toBe(400);
+    expect(body).toMatchObject({ code: 'entry-not-renamable' });
+  });
+
+  it('says whether a new entry would be ignored', async () => {
+    const root = join(server.dataDir, 'repos', String(alice.userId), String(handbook));
+    writeFileSync(join(root, '.gitignore'), 'build/\n');
+    const ignored = (path: string, kind: string) =>
+      call(
+        'GET',
+        `/repositories/${handbook}/entries/ignored?path=${encodeURIComponent(path)}&kind=${kind}`,
+        alice.token
+      );
+
+    expect(await ignored('docs/build', 'folder')).toEqual({ status: 200, body: { ignored: true } });
+    expect(await ignored('docs/build.md', 'file')).toEqual({ status: 200, body: { ignored: false } });
+  });
+
+  it('refuses another user\'s repository like a missing one for every new endpoint', async () => {
+    const strip = ({ status, body }: Answer) => ({ status, body: { ...body, requestId: undefined } });
+    const endpoints = [
+      [ 'POST', '/entries', { folder: '', name: 'a', kind: 'file' } ],
+      [ 'POST', '/entries/rename', { path: 'README.md', name: 'b' } ],
+      [ 'GET', '/entries/summary?path=README.md', undefined ],
+      [ 'GET', '/entries/ignored?path=a.md&kind=file', undefined ]
+    ] as const;
+    for (const [ method, suffix, body ] of endpoints) {
+      expect((await call(method, `/repositories/${handbook}${suffix}`, undefined, body)).status, suffix).toBe(401);
+      const other = await call(method, `/repositories/${handbook}${suffix}`, bob.token, body);
+      const missing = await call(method, `/repositories/${handbook + 1000}${suffix}`, bob.token, body);
+      expect(other.status, suffix).toBe(404);
+      expect(other.body['code']).toBe('not-found');
+      expect(strip(other)).toEqual(strip(missing));
+    }
+  });
+
+  it('sends files.changed on the event stream after a create', async () => {
+    const stream = await fetch(`${server.url}/api/v1/events`, { headers: { authorization: `Bearer ${alice.token}` } });
+    expect(stream.status).toBe(200);
+    const event = nextEvent(stream, 5000);
+
+    expect((await createEntry({ folder: '', name: 'drafts', kind: 'folder' })).status).toBe(201);
+
+    expect(await event).toEqual({ type: 'files.changed', repositoryId: handbook, folders: [ '' ] });
   });
 });

@@ -22,6 +22,12 @@ export const PushEventSchema = z.discriminatedUnion('type', [
     type: z.literal('job.finished'),
     jobId: z.number().int(),
     outcome: z.enum([ 'done', 'failed', 'cancelled' ])
+  }),
+  /** The folders whose entries changed (`''` is the root), or `all` after a change to many (FB-41). */
+  z.object({
+    type: z.literal('files.changed'),
+    repositoryId: z.number().int(),
+    folders: z.union([ z.array(z.string()), z.literal('all') ])
   })
 ]);
 

@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs';
 import { AddressInfo, createServer } from 'node:net';
@@ -346,6 +347,75 @@ describe('GitEngine', () => {
       git(work, 'update-index', '--add', '--cacheinfo', `160000,${sha},v[e]ndor*/mod`);
       expect(await engine().gitlinksIn(work, 'v[e]ndor*')).toEqual(new Set([ 'mod' ]));
       expect(await engine().gitlinksIn(work, 'vendor')).toEqual(new Set([ 'lib' ]));
+    });
+
+    it('counts untracked and ignored files but not modified tracked ones', async () => {
+      writeFileSync(join(work, 'keep.log'), 'changed\n');
+      // out.log and build/app.js are ignored, notes.md untracked.
+      expect(await engine().uncommittedUnder(work, '')).toBe(3);
+      expect(await engine().uncommittedUnder(work, 'build')).toBe(1);
+      expect(await engine().uncommittedUnder(work, 'keep.log')).toBe(0);
+      expect(await engine().uncommittedUnder(work, 'notes.md')).toBe(1);
+    });
+
+    it('counts files in untracked folders one by one', async () => {
+      mkdirSync(join(work, 'drafts', 'deep'), { recursive: true });
+      writeFileSync(join(work, 'drafts', 'a.md'), '\n');
+      writeFileSync(join(work, 'drafts', 'deep', 'b.md'), '\n');
+      writeFileSync(join(work, 'build', 'other.js'), '\n');
+      expect(await engine().uncommittedUnder(work, 'drafts')).toBe(2);
+      expect(await engine().uncommittedUnder(work, 'build')).toBe(2);
+    });
+
+    it('takes a path that looks like pathspec magic literally', async () => {
+      mkdirSync(join(work, ':(glob)*'));
+      writeFileSync(join(work, ':(glob)*', 'a.md'), '\n');
+      expect(await engine().uncommittedUnder(work, ':(glob)*')).toBe(1);
+    });
+
+    it('does not write the index while counting', async () => {
+      // A changed modification time makes git refresh the index, and write it when it may take the lock.
+      utimesSync(join(work, 'keep.log'), new Date(2000, 0, 1), new Date(2000, 0, 1));
+      const before = readFileSync(join(work, '.git', 'index'));
+
+      await engine().uncommittedUnder(work, '');
+
+      expect(readFileSync(join(work, '.git', 'index')).equals(before)).toBe(true);
+    });
+
+    it('counts nothing in a nested repository', async () => {
+      mkdirSync(join(work, 'drafts', 'old'), { recursive: true });
+      git(join(work, 'drafts', 'old'), 'init', '-q');
+      writeFileSync(join(work, 'drafts', 'old', 'a.md'), '\n');
+      writeFileSync(join(work, 'drafts', 'b.md'), '\n');
+      expect(await engine().uncommittedUnder(work, 'drafts')).toBe(1);
+    });
+
+    it('skips the source path of a rename in the working tree', async () => {
+      writeFileSync(join(work, '?? old.md'), 'old\n');
+      git(work, 'add', '?? old.md');
+      git(work, 'commit', '-q', '-m', 'old');
+      git(work, 'mv', '?? old.md', 'new.md');
+      git(work, 'reset', '-q');
+      git(work, 'add', '-N', 'new.md');
+      expect(git(work, 'status', '--porcelain=v1', '--', 'new.md', '?? old.md')).toMatch(/^ R /);
+
+      // out.log, build/app.js and notes.md, as before.
+      expect(await engine().uncommittedUnder(work, '')).toBe(3);
+    });
+
+    it('finds the submodule on a path', async () => {
+      expect(await engine().submoduleOn(work, 'vendor/lib/docs/a.md')).toBe('vendor/lib');
+      expect(await engine().submoduleOn(work, 'vendor/lib')).toBe('vendor/lib');
+      expect(await engine().submoduleOn(work, 'vendor')).toBeNull();
+      expect(await engine().submoduleOn(work, 'vendor/library/a.md')).toBeNull();
+      expect(await engine().submoduleOn(work, 'build/app.js')).toBeNull();
+      expect(await engine().submoduleOn(work, '')).toBeNull();
+    });
+
+    it('checks a folder path that does not exist yet against a folder rule', async () => {
+      const ignored = await engine().ignoredAmong(work, [ 'sub/build/', 'sub/build' ]);
+      expect([ ...ignored ]).toEqual([ 'sub/build/' ]);
     });
   });
 

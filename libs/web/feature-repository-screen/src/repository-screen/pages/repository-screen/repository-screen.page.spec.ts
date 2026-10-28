@@ -69,7 +69,7 @@ describe('RepositoryScreenPage', () => {
                 ? failure(500, 'internal')
                 : folders[query.path]
                 ? of(folders[query.path])
-                : failure(404, 'not-found')
+                : failure(404, 'entry-not-found')
           }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },

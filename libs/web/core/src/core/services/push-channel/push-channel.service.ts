@@ -20,7 +20,8 @@ export const STABLE_CONNECTION_MS = 60_000;
 const EVENT_TYPES: Record<PushEvent['type'], true> = {
   'repository.status': true,
   'job.progress': true,
-  'job.finished': true
+  'job.finished': true,
+  'files.changed': true
 };
 
 function toPushEvent(type: string, data: string): PushEvent | undefined {

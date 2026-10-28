@@ -249,7 +249,7 @@ export class FileTreeStoreService {
     const subscription = this.api.listFolder(repositoryId, { path: folder }).subscribe({
       next: listing => finish({ status: 'loaded', listing }, listing),
       error: (error: unknown) =>
-        finish({ status: 'error' }, toApiError(error).code === 'not-found' ? 'missing' : 'failed')
+        finish({ status: 'error' }, toApiError(error).code === 'entry-not-found' ? 'missing' : 'failed')
     });
     if (this.requests.get(folder) === request) {
       this.subscriptions.set(folder, subscription);
