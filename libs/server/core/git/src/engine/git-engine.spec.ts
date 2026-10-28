@@ -413,6 +413,18 @@ describe('GitEngine', () => {
       expect(await engine().submoduleOn(work, '')).toBeNull();
     });
 
+    it('finds whether a folder holds a submodule', async () => {
+      const sha = git(work, 'rev-parse', 'HEAD').trim();
+      git(work, 'update-index', '--add', '--cacheinfo', `160000,${sha},d[o]cs*/deep/mod`);
+
+      expect(await engine().holdsSubmodule(work, 'vendor')).toBe(true);
+      expect(await engine().holdsSubmodule(work, 'd[o]cs*')).toBe(true);
+      expect(await engine().holdsSubmodule(work, 'docs')).toBe(false);
+      expect(await engine().holdsSubmodule(work, 'vend')).toBe(false);
+      expect(await engine().holdsSubmodule(work, 'build')).toBe(false);
+      expect(await engine().holdsSubmodule(work, 'vendor/lib')).toBe(false);
+    });
+
     it('checks a folder path that does not exist yet against a folder rule', async () => {
       const ignored = await engine().ignoredAmong(work, [ 'sub/build/', 'sub/build' ]);
       expect([ ...ignored ]).toEqual([ 'sub/build/' ]);

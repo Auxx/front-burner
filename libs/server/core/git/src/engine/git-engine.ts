@@ -263,6 +263,18 @@ export class GitEngine implements BeforeApplicationShutdown {
     return null;
   }
 
+  /** True when a submodule (gitlink) of the index lies anywhere inside `folder`, not `''`. */
+  async holdsSubmodule(workingCopy: string, folder: string): Promise<boolean> {
+    const result = await this.runLocal(workingCopy, [ 'ls-files', '--stage', '-z', '--', `:(literal)${folder}/` ]);
+    if (result.exitCode !== 0) {
+      throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
+    }
+    // The pathspec also matches a gitlink at `folder` itself: only those strictly inside count.
+    return result.stdout.split('\0').some(line =>
+      line.startsWith(`${GITLINK_MODE} `) && line.slice(line.indexOf('\t') + 1).startsWith(`${folder}/`)
+    );
+  }
+
   /** True while a merge or rebase is in progress in the working copy (FB-26). */
   async mergeInProgress(workingCopy: string): Promise<boolean> {
     const found = await Promise.all(
