@@ -1,8 +1,12 @@
 import {
   CreateEntryRequestSchema,
   EntryPathSchema,
+  EntryQuerySchema,
+  EntrySummarySchema,
   FolderListingSchema,
   FolderQuerySchema,
+  IgnoreQuerySchema,
+  IgnoreResultSchema,
   RenameEntryRequestSchema
 } from '@front-burner/shared-contracts';
 import { ApiSchema } from '@nestjs/swagger';
@@ -25,3 +29,15 @@ export class RenameEntryRequestDto extends createZodDto(z.object(RenameEntryRequ
 
 @ApiSchema({ name: 'EntryPath' })
 export class EntryPathDto extends createZodDto(z.object(EntryPathSchema.shape)) {}
+
+@ApiSchema({ name: 'EntryQuery' })
+export class EntryQueryDto extends createZodDto(z.object(EntryQuerySchema.shape)) {}
+
+@ApiSchema({ name: 'EntrySummary' })
+export class EntrySummaryDto extends createZodDto(z.object(EntrySummarySchema.shape)) {}
+
+@ApiSchema({ name: 'IgnoreQuery' })
+export class IgnoreQueryDto extends createZodDto(z.object(IgnoreQuerySchema.shape)) {}
+
+@ApiSchema({ name: 'IgnoreResult' })
+export class IgnoreResultDto extends createZodDto(z.object(IgnoreResultSchema.shape)) {}

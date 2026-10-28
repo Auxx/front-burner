@@ -2,7 +2,7 @@
 import '@front-burner/server-core-security';
 import type { RequestAuth } from '@front-burner/server-core-security';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
-import type { EntryPath, FolderListing } from '@front-burner/shared-contracts';
+import type { EntryPath, EntrySummary, FolderListing, IgnoreResult } from '@front-burner/shared-contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
@@ -10,12 +10,17 @@ import { ZodSerializerDto } from 'nestjs-zod';
 import { EntryActions } from '../actions/entry-actions';
 import { FolderLister } from '../listing/folder-lister';
 import { OpenableRepository } from '../repository/openable-repository';
+import { EntrySummaries } from '../summary/entry-summaries';
 import { toFilesError } from './files-errors';
 import {
   CreateEntryRequestDto,
   EntryPathDto,
+  EntryQueryDto,
+  EntrySummaryDto,
   FolderListingDto,
   FolderQueryDto,
+  IgnoreQueryDto,
+  IgnoreResultDto,
   RenameEntryRequestDto
 } from './files.dto';
 
@@ -34,7 +39,8 @@ export class FilesController {
   constructor(
     private readonly repositories: OpenableRepository,
     private readonly lister: FolderLister,
-    private readonly actions: EntryActions
+    private readonly actions: EntryActions,
+    private readonly summaries: EntrySummaries
   ) {}
 
   /** One folder of the working copy (FB-15 to FB-20b). */
@@ -73,5 +79,31 @@ export class FilesController {
     @Body() body: RenameEntryRequestDto
   ): Promise<EntryPath> {
     return this.actions.rename(authOf(req).userId, params.id, body);
+  }
+
+  /** What an entry holds, for the rename and delete confirmations (FB-35, FB-38). */
+  @Get('entries/summary')
+  @ApiOkResponse({ type: EntrySummaryDto })
+  @ZodSerializerDto(EntrySummaryDto)
+  entrySummary(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Query() query: EntryQueryDto
+  ): Promise<EntrySummary> {
+    const root = this.repositories.root(authOf(req).userId, params.id);
+    return this.summaries.summary(root, query.path).catch(toFilesError);
+  }
+
+  /** Whether a new entry would be ignored by `.gitignore` (FB-31, FB-34). */
+  @Get('entries/ignored')
+  @ApiOkResponse({ type: IgnoreResultDto })
+  @ZodSerializerDto(IgnoreResultDto)
+  async isIgnored(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Query() query: IgnoreQueryDto
+  ): Promise<IgnoreResult> {
+    const root = this.repositories.root(authOf(req).userId, params.id);
+    return { ignored: await this.summaries.ignored(root, query.path, query.kind).catch(toFilesError) };
   }
 }
