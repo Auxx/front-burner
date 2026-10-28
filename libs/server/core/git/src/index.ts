@@ -5,6 +5,7 @@ export * from './engine/git-engine';
 export * from './engine/git-errors';
 export * from './git.module';
 export * from './git.options';
+export * from './lock/working-tree-lock';
 export * from './runner/git-runner';
 export * from './runner/git-version';
 export * from './runner/redact';

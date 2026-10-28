@@ -1,7 +1,7 @@
 import type { CloneMode } from '@front-burner/shared-contracts';
 import { ParsedRemote, parseRemoteUrl } from '@front-burner/shared-util';
 import { BeforeApplicationShutdown, Inject, Injectable, Logger } from '@nestjs/common';
-import { mkdtemp, rename, rm } from 'node:fs/promises';
+import { access, mkdtemp, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Broker, GitCredentials, openBroker } from '../broker/broker';
 import { assertSafeRepositoryConfig, UnsafeRepositoryConfigError } from '../config/repository-config';
@@ -37,6 +37,9 @@ export interface CloneRequest {
   /** For SSH: the user's accepted hosts as `known_hosts` lines; the instance's are always added. */
   knownHosts?: string[];
 }
+
+/** What git leaves in `.git` while a merge or rebase waits for the user. */
+const IN_PROGRESS_MARKERS = [ 'MERGE_HEAD', 'rebase-merge', 'rebase-apply' ];
 
 /** `git ls-remote --symref` output: `ref: <target>\t<name>` and `<oid>\t<name>` lines. */
 function parseLsRemote(stdout: string): AccessCheckResult {
@@ -113,6 +116,14 @@ export class GitEngine implements BeforeApplicationShutdown {
       await rm(dir, { recursive: true, force: true });
       throw error;
     }
+  }
+
+  /** True while a merge or rebase is in progress in the working copy (FB-26). */
+  async mergeInProgress(workingCopy: string): Promise<boolean> {
+    const found = await Promise.all(
+      IN_PROGRESS_MARKERS.map(marker => access(join(workingCopy, '.git', marker)).then(() => true, () => false))
+    );
+    return found.includes(true);
   }
 
   async beforeApplicationShutdown(): Promise<void> {
