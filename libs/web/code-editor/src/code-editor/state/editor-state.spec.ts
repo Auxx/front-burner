@@ -2,7 +2,14 @@ import { undo } from '@codemirror/commands';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorSelection, type EditorState, type Transaction } from '@codemirror/state';
 import { EditorView, runScopeHandlers } from '@codemirror/view';
-import { contentOf, createEditorState, type EditorStateOptions, isHighlighting, setHighlighting, setReadOnly } from './editor-state';
+import {
+  contentOf,
+  createEditorState,
+  type EditorStateOptions,
+  isHighlighting,
+  setHighlighting,
+  setReadOnly
+} from './editor-state';
 
 const FILE = '---\ntitle: Notes\n---\n\n# Heading\n\nSome text.\n';
 
@@ -56,7 +63,8 @@ describe('createEditorState', () => {
     const view = new EditorView({ state: create({ content: '' }) });
     const type = (text: string) => {
       const { from, to } = view.state.selection.main;
-      const insert = () => view.state.update({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+      const insert = () =>
+        view.state.update({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
       if (!view.state.facet(EditorView.inputHandler).some(handler => handler(view, from, to, text, insert))) {
         view.dispatch(insert());
       }

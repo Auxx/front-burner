@@ -76,6 +76,10 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     screens a file over 100 KB opens without the Markdown language (ED-9a), and
     **Turn on highlighting** adds it through a `Compartment`, without recreating
     the editor or losing its undo history (ED-8).
+  - Syntax colours are CSS classes, never inline styles: `classHighlighter` plus
+    a small highlighter for the Markdown tags it has no class for (quote, inline
+    code, marks, HTML tags and attributes), styled on the `--ui-syntax-*` tokens
+    (A-10.14). Both run in the same pass over the syntax tree.
 - **A-8.12** `web/markdown` holds the preview pipeline (D-7.3 to D-7.5) and the
   one component that writes sanitised HTML to the page (D-7.6). It is loaded
   lazily with the editor. Confirmed by spike 3 (spikes.md).
