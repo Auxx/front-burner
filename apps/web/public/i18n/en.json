@@ -23,6 +23,7 @@
   "errors.entry-not-found": "This file or folder doesn't exist.",
   "errors.repository-not-openable": "This repository can't be opened yet.",
   "errors.merge-in-progress": "A merge is in progress. Finish or abort it first.",
+  "errors.entry-not-deletable": "This can't be deleted.",
   "errors.network": "Could not reach the server. Check your connection.",
   "web-feature-auth.LoginPage.title": "Log in",
   "web-feature-auth.LoginPage.messages.logged-out": "You have been logged out",

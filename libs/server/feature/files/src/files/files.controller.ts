@@ -3,11 +3,12 @@ import '@front-burner/server-core-security';
 import type { RequestAuth } from '@front-burner/server-core-security';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
 import type { EntryPath, EntrySummary, FolderListing, IgnoreResult } from '@front-burner/shared-contracts';
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
-import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
+import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { EntryActions } from '../actions/entry-actions';
+import { EntryDelete } from '../actions/entry-delete';
 import { FolderLister } from '../listing/folder-lister';
 import { OpenableRepository } from '../repository/openable-repository';
 import { EntrySummaries } from '../summary/entry-summaries';
@@ -40,6 +41,7 @@ export class FilesController {
     private readonly repositories: OpenableRepository,
     private readonly lister: FolderLister,
     private readonly actions: EntryActions,
+    private readonly deletes: EntryDelete,
     private readonly summaries: EntrySummaries
   ) {}
 
@@ -79,6 +81,18 @@ export class FilesController {
     @Body() body: RenameEntryRequestDto
   ): Promise<EntryPath> {
     return this.actions.rename(authOf(req).userId, params.id, body);
+  }
+
+  /** **Delete** a file, a symbolic link or a folder (FB-37, FB-40). */
+  @Delete('entries')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  deleteEntry(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Query() query: EntryQueryDto
+  ): Promise<void> {
+    return this.deletes.delete(authOf(req).userId, params.id, query.path);
   }
 
   /** What an entry holds, for the rename and delete confirmations (FB-35, FB-38). */

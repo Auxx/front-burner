@@ -1,6 +1,7 @@
 import { RepositoriesModule } from '@front-burner/server-feature-repositories';
 import { Module } from '@nestjs/common';
 import { EntryActions } from './actions/entry-actions';
+import { EntryDelete } from './actions/entry-delete';
 import { WorkingTreeGuard } from './actions/working-tree-guard';
 import { FilesController } from './files/files.controller';
 import { FolderLister } from './listing/folder-lister';
@@ -14,7 +15,7 @@ import { EntrySummaries } from './summary/entry-summaries';
 @Module({
   imports: [ RepositoriesModule ],
   controllers: [ FilesController ],
-  providers: [ OpenableRepository, FolderLister, WorkingTreeGuard, EntryActions, EntrySummaries ],
+  providers: [ OpenableRepository, FolderLister, WorkingTreeGuard, EntryActions, EntryDelete, EntrySummaries ],
   exports: [ OpenableRepository, WorkingTreeGuard ]
 })
 export class FilesModule {}

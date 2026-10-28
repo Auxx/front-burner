@@ -1,4 +1,5 @@
 export * from './actions/entry-actions';
+export * from './actions/entry-delete';
 export * from './actions/working-tree-guard';
 export * from './files.module';
 export * from './files/files-errors';
