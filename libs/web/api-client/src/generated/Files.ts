@@ -6,9 +6,12 @@ import type {
   CreateEntryRequest,
   EntryPath,
   EntrySummary,
+  FileContent,
+  FileState,
   FolderListing,
   IgnoreResult,
-  RenameEntryRequest
+  RenameEntryRequest,
+  SaveFileRequest
 } from '@front-burner/shared-contracts';
 import type { Observable } from 'rxjs';
 
@@ -78,6 +81,42 @@ export class FilesApi {
     return this.http.get<IgnoreResult>(
       `/api/v1/repositories/${encodeURIComponent(id)}/entries/ignored`,
       { params: query }
+    );
+  }
+  readFile(
+    id: number,
+    query: {
+      /** @maxLength 4096 */
+      path: string;
+    }
+  ): Observable<FileContent> {
+    return this.http.get<FileContent>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/file`,
+      { params: query }
+    );
+  }
+  saveFile(id: number, data: SaveFileRequest): Observable<FileState> {
+    return this.http.put<FileState>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/file`,
+      data
+    );
+  }
+  fileState(
+    id: number,
+    query: {
+      /** @maxLength 4096 */
+      path: string;
+    }
+  ): Observable<FileState> {
+    return this.http.get<FileState>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/file/state`,
+      { params: query }
+    );
+  }
+  recreateFile(id: number, data: SaveFileRequest): Observable<FileState> {
+    return this.http.post<FileState>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/file/recreate`,
+      data
     );
   }
 }

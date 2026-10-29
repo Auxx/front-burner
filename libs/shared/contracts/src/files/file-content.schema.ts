@@ -8,6 +8,9 @@ export const LINE_ENDINGS = [ 'lf', 'crlf' ] as const;
 
 export type LineEnding = (typeof LINE_ENDINGS)[number];
 
+/** The largest file the editor reads or saves, in bytes as stored: 1 MB (ED-2, ED-19, NF-1.5). */
+export const EDITABLE_FILE_LIMIT = 1_048_576;
+
 /** SHA-256 of the file's bytes on disk, lower-case hex (ED-6, ED-24). */
 const HashSchema = z.string().regex(/^[0-9a-f]{64}$/);
 

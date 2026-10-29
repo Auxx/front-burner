@@ -3,11 +3,15 @@ import {
   EntryPathSchema,
   EntryQuerySchema,
   EntrySummarySchema,
+  FileContentSchema,
+  FileQuerySchema,
+  FileStateSchema,
   FolderListingSchema,
   FolderQuerySchema,
   IgnoreQuerySchema,
   IgnoreResultSchema,
-  RenameEntryRequestSchema
+  RenameEntryRequestSchema,
+  SaveFileRequestSchema
 } from '@front-burner/shared-contracts';
 import { ApiSchema } from '@nestjs/swagger';
 import { createZodDto } from 'nestjs-zod';
@@ -41,3 +45,15 @@ export class IgnoreQueryDto extends createZodDto(z.object(IgnoreQuerySchema.shap
 
 @ApiSchema({ name: 'IgnoreResult' })
 export class IgnoreResultDto extends createZodDto(z.object(IgnoreResultSchema.shape)) {}
+
+@ApiSchema({ name: 'FileQuery' })
+export class FileQueryDto extends createZodDto(z.object(FileQuerySchema.shape)) {}
+
+@ApiSchema({ name: 'FileContent' })
+export class FileContentDto extends createZodDto(z.object(FileContentSchema.shape)) {}
+
+@ApiSchema({ name: 'SaveFileRequest' })
+export class SaveFileRequestDto extends createZodDto(z.object(SaveFileRequestSchema.shape)) {}
+
+@ApiSchema({ name: 'FileState' })
+export class FileStateDto extends createZodDto(z.object(FileStateSchema.shape)) {}
