@@ -60,6 +60,8 @@ export interface RenameEntryData {
    * `false` keeps the dialog as it is.
    */
   readonly confirm?: () => Promise<boolean>;
+  /** Told when the rename is sent (`true`), and when it then failed (`false`). */
+  readonly sending?: (sending: boolean) => void;
 }
 
 export type EntryNameData = NewEntryData | RenameEntryData;
@@ -179,6 +181,9 @@ export class EntryNameDialog {
         this.ref.close(await firstValueFrom(request));
       }
     } catch (error) {
+      if (this.data.mode === 'rename') {
+        this.data.sending?.(false);
+      }
       const failure = entryRequestFailure(error, this.errorText);
       if ('field' in failure) {
         this.refused.set({ name, code: failure.field });
@@ -201,6 +206,7 @@ export class EntryNameDialog {
     if (data.confirm && !(await data.confirm())) {
       return null;
     }
+    data.sending?.(true);
     return this.api.renameEntry(data.repositoryId, { path: data.path, name });
   }
 

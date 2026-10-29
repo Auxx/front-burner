@@ -4,9 +4,9 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import type { CurrentUser, FolderListing, RepositorySummary } from '@front-burner/shared-contracts';
+import type { CurrentUser, FolderListing, PushEvent, RepositorySummary } from '@front-burner/shared-contracts';
 import { FilesApi, RepositoriesApi } from '@front-burner/web-api-client';
-import { AuthSessionService, CurrentUserService, PageTitleService } from '@front-burner/web-core';
+import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { entry, folder, listing } from '../../../testing/listings';
@@ -14,6 +14,7 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
 import { routes } from '../../repository-screen.routes';
+import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 
 const KEY = 'web-feature-repository-screen.RepositoryScreenPage';
 
@@ -51,6 +52,9 @@ describe('RepositoryScreenPage', () => {
   let createEntry: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
+  let events: Subject<PushEvent>;
+  /** The folders listed, in order. */
+  let listings: string[];
 
   const page = () => harness.fixture.nativeElement as HTMLElement;
   const button = (text: string) =>
@@ -66,7 +70,7 @@ describe('RepositoryScreenPage', () => {
           provide: FilesApi,
           useValue: {
             listFolder: (_id: number, query: { path: string; }) =>
-              failOnce.delete(query.path)
+              listings.push(query.path) && failOnce.delete(query.path)
                 ? failure(500, 'internal')
                 : folders[query.path]
                 ? of(folders[query.path])
@@ -77,6 +81,7 @@ describe('RepositoryScreenPage', () => {
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         { provide: AuthSessionService, useValue: { loggedIn: signal(true), logout: vi.fn() } },
+        { provide: PushChannelService, useValue: { events, reconnected: new Subject<void>() } },
         {
           provide: BreakpointObserver,
           useValue: { observe: () => of({ matches: narrow, breakpoints: {} }), isMatched: () => narrow }
@@ -110,6 +115,8 @@ describe('RepositoryScreenPage', () => {
       docs: listing('docs', [ entry('guide.md') ])
     };
     narrow = false;
+    events = new Subject();
+    listings = [];
     localStorage.clear();
     open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
     createEntry = vi.fn((_id: number, request: { name: string; }) => of({ path: `${request.name}.md` }));
@@ -160,6 +167,51 @@ describe('RepositoryScreenPage', () => {
     const notOpenable = page().querySelector('rs-not-openable') as HTMLElement;
     expect(notOpenable.textContent).toContain('web-feature-repository-screen.NotOpenableComponent.cloning');
     expect(notOpenable.querySelector('a')?.getAttribute('href')).toBe('/repositories/12/settings');
+  });
+
+  it('opens a repository when its clone finishes', async () => {
+    answers.push(of({ ...handbook, status: 'cloning' }));
+    await visit('/repositories/12');
+
+    events.next({ type: 'repository.status', repositoryId: 12, status: 'ready', error: null });
+    await settle(harness.fixture);
+    await settle(harness.fixture);
+
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(page().querySelector('rs-not-openable')).toBeNull();
+    expect(page().querySelector('rs-file-tree')).not.toBeNull();
+    expect(TestBed.inject(Router).url).toBe('/repositories/12/files/README.md');
+  });
+
+  it('lists the tree afresh when the repository is ready again after an error', async () => {
+    await visit('/repositories/12/files/README.md');
+    folders[''] = listing('', [ entry('README.md'), entry('fresh.md') ]);
+
+    events.next({ type: 'repository.status', repositoryId: 12, status: 'error', error: 'working-copy-missing' });
+    await settle(harness.fixture);
+    expect(page().querySelector('rs-not-openable')).not.toBeNull();
+    events.next({ type: 'repository.status', repositoryId: 12, status: 'ready', error: null });
+    await settle(harness.fixture);
+    await settle(harness.fixture);
+
+    expect(page().querySelector('rs-not-openable')).toBeNull();
+    expect(page().querySelector('[role="treeitem"][aria-label^="fresh.md,"]')).not.toBeNull();
+  });
+
+  it('keeps the tree while the repository opens again', async () => {
+    await visit('/repositories/12/files/README.md');
+    listings = [];
+    const answer = new Subject<RepositorySummary>();
+    answers.push(answer);
+
+    harness.routeDebugElement?.injector.get(RepositorySessionService).retry();
+    await settle(harness.fixture);
+    answer.next(handbook);
+    await settle(harness.fixture);
+    await settle(harness.fixture);
+
+    expect(listings).toEqual([]);
+    expect(page().querySelector('[role="treeitem"]')).not.toBeNull();
   });
 
   it('offers Try again when opening fails', async () => {
@@ -287,6 +339,24 @@ describe('RepositoryScreenPage', () => {
       expect(page().querySelector('main ui-empty-state')?.textContent).toContain(
         'web-feature-repository-screen.EditorAreaComponent.empty'
       );
+    });
+
+    it('says the open file was deleted elsewhere, until another file is opened (FB-42)', async () => {
+      await visit('/repositories/12/files/docs/guide.md');
+      const GONE = 'web-feature-repository-screen.EditorAreaComponent.goneElsewhere';
+
+      folders['docs'] = listing('docs', [ entry('other.md') ]);
+      events.next({ type: 'files.changed', repositoryId: 12, folders: [ 'docs' ] });
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(url()).toBe('/repositories/12/files/docs/guide.md');
+      expect(editor().textContent).toContain(GONE);
+      expect(row('other.md')).toBeDefined();
+
+      await go('/repositories/12/files/docs/other.md');
+
+      expect(editor().textContent).not.toContain(GONE);
     });
 
     it('shows the empty state, not the README, when the open file was closed (FB-39)', async () => {

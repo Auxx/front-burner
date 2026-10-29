@@ -6,7 +6,8 @@ export default defineConfig({
   cacheDir: '../../../../node_modules/.vite/libs/server/feature/files',
   // Nest's dependency injection needs emitDecoratorMetadata, which the default
   // transform does not emit.
-  plugins: [ swc.vite() ],
+  // SWC does not know tsconfig's es2025 target yet; Node runs the latest syntax as it is.
+  plugins: [ swc.vite({ jsc: { target: 'esnext' } }) ],
   // Vite 8 resolves the aliases of tsconfig.base.json natively.
   resolve: { tsconfigPaths: true },
   test: {

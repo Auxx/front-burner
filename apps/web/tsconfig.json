@@ -7,7 +7,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "isolatedModules": true,
-    "target": "es2022",
+    "target": "es2025",
     "emitDecoratorMetadata": false,
     "module": "preserve"
   },

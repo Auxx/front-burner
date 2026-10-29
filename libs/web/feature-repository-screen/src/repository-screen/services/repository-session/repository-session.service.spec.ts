@@ -26,14 +26,19 @@ function failure(status: number, code: string): Observable<never> {
 describe('RepositorySessionService', () => {
   let answers: Observable<RepositorySummary>[];
   let open: ReturnType<typeof vi.fn>;
+  /** Answers to `get`, which reads the status without opening; the open repository after them. */
+  let reads: Observable<RepositorySummary>[];
+  let get: ReturnType<typeof vi.fn>;
   let session: RepositorySessionService;
 
   beforeEach(() => {
     answers = [];
     open = vi.fn(() => answers.shift() ?? of(handbook));
+    reads = [];
+    get = vi.fn(() => reads.shift() ?? of(handbook));
     TestBed.configureTestingModule({
       imports: [ translocoTesting({ 'errors.internal': 'Something went wrong.' }) ],
-      providers: [ RepositorySessionService, { provide: RepositoriesApi, useValue: { open } } ]
+      providers: [ RepositorySessionService, { provide: RepositoriesApi, useValue: { open, get } } ]
     });
     session = TestBed.inject(RepositorySessionService);
   });
@@ -108,5 +113,93 @@ describe('RepositorySessionService', () => {
     late.next(handbook);
 
     expect(session.repository()?.name).toBe('guides');
+  });
+
+  it('opens a repository when its clone finishes', () => {
+    answers.push(of({ ...handbook, status: 'cloning' }));
+    session.start(12);
+    expect(session.state()).toBe('not-openable');
+
+    session.statusChanged('ready', null);
+    // A second event while it opens does not open it again (FB-11).
+    session.statusChanged('ready', null);
+
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(session.state()).toBe('ready');
+    expect(session.repository()?.status).toBe('ready');
+  });
+
+  it('follows the status of a repository that cannot be opened yet', () => {
+    answers.push(of({ ...handbook, status: 'cloning' }));
+    session.start(12);
+
+    session.statusChanged('error', 'clone-failed');
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(session.state()).toBe('not-openable');
+    expect(session.repository()).toMatchObject({ status: 'error', error: 'clone-failed' });
+  });
+
+  it('shows the not-openable state when the working copy goes missing', () => {
+    session.start(12);
+
+    session.statusChanged('error', 'working-copy-missing');
+
+    expect(session.state()).toBe('not-openable');
+    expect(session.repository()).toMatchObject({ status: 'error', error: 'working-copy-missing' });
+  });
+
+  it('ignores a status that leaves an open repository openable', () => {
+    session.start(12);
+
+    session.statusChanged('ready', null);
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(session.state()).toBe('ready');
+  });
+
+  it('shows the not-openable state when the repository is cloned again', () => {
+    session.start(12);
+
+    session.statusChanged('cloning', null);
+
+    expect(session.state()).toBe('not-openable');
+    expect(session.repository()?.status).toBe('cloning');
+  });
+
+  it('asks again for a status that changed while the repository opened', () => {
+    const answer = new Subject<RepositorySummary>();
+    answers.push(answer);
+    session.start(12);
+
+    // The clone ends while the answer, read before, is on its way.
+    session.statusChanged('ready', null);
+    answer.next({ ...handbook, status: 'cloning' });
+
+    expect(get).toHaveBeenCalledWith(12);
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(session.state()).toBe('ready');
+  });
+
+  it('reads the status again without opening the repository', () => {
+    session.start(12);
+    reads.push(of({ ...handbook, status: 'error', error: 'working-copy-missing' }));
+
+    session.refresh();
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(session.state()).toBe('not-openable');
+    expect(session.repository()?.error).toBe('working-copy-missing');
+  });
+
+  it('opens a repository once per visit, also when it is ready again after an error', () => {
+    session.start(12);
+
+    session.statusChanged('error', 'working-copy-missing');
+    session.statusChanged('ready', null);
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(session.state()).toBe('ready');
+    expect(session.repository()).toMatchObject({ status: 'ready', error: null });
   });
 });

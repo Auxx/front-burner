@@ -368,6 +368,7 @@
   "web-feature-repository-screen.FileTreeComponent.actions.new-folder": "New folder",
   "web-feature-repository-screen.FileTreeComponent.actions.rename": "Rename",
   "web-feature-repository-screen.EditorAreaComponent.newFile": "New file",
+  "web-feature-repository-screen.EditorAreaComponent.goneElsewhere": "This file was deleted or renamed elsewhere.",
   "web-feature-repository-screen.EntryNameDialog.heading.new-file": "New file",
   "web-feature-repository-screen.EntryNameDialog.heading.new-folder": "New folder",
   "web-feature-repository-screen.EntryNameDialog.heading.rename": "Rename",

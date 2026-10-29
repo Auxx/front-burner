@@ -59,6 +59,15 @@ describe('EditorAreaComponent', () => {
     expect(area().textContent).not.toContain(`${K}.later`);
   });
 
+  it('says the open file was deleted or renamed elsewhere', async () => {
+    fixture.componentRef.setInput('goneElsewhere', true);
+    await show('docs/guide.md', entry('guide.md'));
+
+    expect(area().querySelector('ui-empty-state h2')?.textContent?.trim()).toBe('guide.md');
+    expect(area().textContent).toContain(`${K}.goneElsewhere`);
+    expect(area().textContent).not.toContain(`${K}.later`);
+  });
+
   it('passes on the actions of the entry message', async () => {
     const emitted: unknown[] = [];
     fixture.componentInstance.action.subscribe(action => emitted.push(action));

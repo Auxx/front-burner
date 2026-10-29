@@ -23,6 +23,7 @@ import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-s
 import { FirstFileService } from '../../services/first-file/first-file.service';
 import { PaneMemoryService } from '../../services/pane-memory/pane-memory.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
+import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
 import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 import { fileName } from '../../utils/file-name/file-name';
 
@@ -42,6 +43,9 @@ import { fileName } from '../../utils/file-name/file-name';
  * deleted: the editor area then shows the empty state (FB-39). Selecting an entry in the tree goes
  * to its path and closes the drawer (FB-9). The tree's actions, and **New
  * file** of the empty editor area, run through `EntryCommandsService` (FB-24).
+ * `TreeSyncService` keeps the tree up to date with changes made elsewhere,
+ * and says when the open file is gone because of one (FB-41, FB-42); the
+ * route stays, so a reload then says it does not exist (FB-13).
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -65,7 +69,8 @@ import { fileName } from '../../utils/file-name/file-name';
     PaneMemoryService,
     FileTreeStoreService,
     FirstFileService,
-    EntryCommandsService
+    EntryCommandsService,
+    TreeSyncService
   ],
   templateUrl: './repository-screen.page.html',
   styleUrl: './repository-screen.page.scss',
@@ -79,6 +84,7 @@ export class RepositoryScreenPage {
   private readonly firstFile = inject(FirstFileService);
   protected readonly tree = inject(FileTreeStoreService);
   private readonly commands = inject(EntryCommandsService);
+  private readonly sync = inject(TreeSyncService);
 
   protected readonly user = this.currentUser.user;
   /** The file tree's size and whether it is collapsed, as this device last left them (FB-8). */
@@ -105,6 +111,11 @@ export class RepositoryScreenPage {
   protected readonly openPath = signal<string | null>('');
   /** The entry at `openPath`: `null` when there is none, `undefined` while it is being found. */
   protected readonly openEntry = signal<Entry | null | undefined>(undefined);
+  /** Whether the open file was deleted or renamed elsewhere (FB-42). */
+  protected readonly goneElsewhere = computed(() => {
+    const gone = this.sync.goneElsewhere();
+    return gone !== null && gone === this.openPath();
+  });
 
   /** Counts the paths shown, so that only the latest one's answer counts. */
   private showing = 0;
@@ -113,15 +124,22 @@ export class RepositoryScreenPage {
 
   constructor() {
     effect(() => {
-      const repository = this.session.state() === 'ready' ? this.session.repository() : null;
+      const state = this.session.state();
+      const repository = state === 'ready' ? this.session.repository() : null;
       const { path, closed } = this.target();
       if (repository) {
         untracked(() => void this.show(repository.id, path, closed));
+      } else if (state !== 'loading') {
+        // Listed afresh once the repository can be opened again; not while it only opens.
+        untracked(() => this.tree.reset());
       }
     });
     this.route.paramMap
       .pipe(map(params => Number(params.get('id'))), takeUntilDestroyed())
-      .subscribe(id => this.session.start(id));
+      .subscribe(id => {
+        this.session.start(id);
+        this.sync.start(id);
+      });
     // The app header's loader is not on this screen (NV-9).
     this.currentUser.load().catch(() => undefined);
     this.updateTitle();
@@ -176,6 +194,7 @@ export class RepositoryScreenPage {
     const showing = ++this.showing;
     this.failed = false;
     this.tree.init(repositoryId);
+    this.sync.clear();
     this.openEntry.set(undefined);
     if (path === '' && closed) {
       this.openPath.set(null);

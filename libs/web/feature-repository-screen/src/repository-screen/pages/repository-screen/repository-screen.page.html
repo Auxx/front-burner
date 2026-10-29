@@ -66,6 +66,7 @@
         <rs-editor-area
           [path]="openPath()"
           [entry]="openEntry()"
+          [goneElsewhere]="goneElsewhere()"
           (newFile)="runAction('new-file', '')"
           (action)="runAction($event, openPath() ?? '')"
         />
