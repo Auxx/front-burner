@@ -127,6 +127,29 @@ async function confirmDialog(page: Page, label: string, isMobile: boolean): Prom
   await press(page, dialog(page).last().getByRole('button', { name: label, exact: true }), isMobile);
 }
 
+/** The repository name in the bar, which opens the repository switcher (NV-10). */
+const switcherButton = (page: Page) => page.getByRole('banner').getByRole('heading').getByRole('button');
+const switcher = (page: Page) =>
+  page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'All repositories' }) });
+
+/** Opens the repository switcher and waits for its list (NV-10). */
+async function openSwitcher(page: Page, isMobile: boolean): Promise<void> {
+  const loaded = page.waitForResponse(response => response.url().includes('/api/v1/repositories/recent?exclude='));
+  await press(page, switcherButton(page), isMobile);
+  await loaded;
+  await expect(switcher(page)).toBeVisible();
+  await expect(switcher(page).getByText('Loading your repositories')).toHaveCount(0);
+}
+
+/** Rests on `target`: a long press on a phone, a hover otherwise, which shows its tooltip (NV-11). */
+async function pointAt(target: Locator, isMobile: boolean): Promise<void> {
+  if (isMobile) {
+    await target.dispatchEvent('pointerdown', { pointerType: 'touch', bubbles: true });
+  } else {
+    await target.hover();
+  }
+}
+
 function fitsWidth(page: Page): Promise<boolean> {
   return page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 }
@@ -952,5 +975,95 @@ test.describe('repository screen, kept up to date', () => {
       // Opened once more when it turned ready, which is the visit's one opening (FB-11).
       expect(opens).toHaveLength(before + 1);
     });
+  });
+
+  test('AC-APP-001.6: opens the switcher with recent repositories, All repositories and Repository settings, and switches to another repository', async ({ page, instance, isMobile }) => {
+    // Eleven others: the switcher shows the ten most recent of them.
+    const others = Array.from({ length: 11 }, (_, i) => ({
+      name: `notes-${String(i).padStart(2, '0')}`,
+      lastAccessedAt: minutesAgo(10 + i)
+    }));
+    const [ handbook, ...otherIds ] = seedRepositories(instance.dataDir, [
+      { name: 'handbook', lastAccessedAt: minutesAgo(60) },
+      ...others
+    ]);
+    await openScreen(page, `/repositories/${handbook}`);
+    await expect(switcherButton(page)).toHaveAttribute('aria-haspopup', 'menu');
+
+    await openSwitcher(page, isMobile);
+
+    const items = switcher(page).getByRole('menuitem');
+    await expect(items).toHaveText([
+      ...others.slice(0, 10).map(other => other.name),
+      // On narrow screens the product's icon is not a way to the dashboard (NV-11).
+      ...isMobile ? [ 'Dashboard' ] : [],
+      'All repositories',
+      'Repository settings'
+    ]);
+    await expect(items.getByText('handbook', { exact: true })).toHaveCount(0);
+    await expect(switcher(page).getByRole('menuitem', { name: 'notes-03' })).toHaveAttribute(
+      'href',
+      `/repositories/${otherIds[3]}`
+    );
+    await expect(switcher(page).getByRole('menuitem', { name: 'All repositories' })).toHaveAttribute(
+      'href',
+      '/repositories'
+    );
+    await expect(switcher(page).getByRole('menuitem', { name: 'Repository settings' })).toHaveAttribute(
+      'href',
+      `/repositories/${handbook}/settings`
+    );
+
+    const opened = page.waitForResponse(`**/api/v1/repositories/${otherIds[3]}/open`);
+    await press(page, switcher(page).getByRole('menuitem', { name: 'notes-03' }), isMobile);
+    await opened;
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${otherIds[3]}$`));
+    await expect(heading(page, 'notes-03')).toBeVisible();
+    await expect(switcher(page)).toBeHidden();
+
+    // The repository opened from the switcher is now the most recent (DS-16).
+    const reloaded = page.waitForResponse('**/api/v1/repositories/recent');
+    await page.goto('/');
+    await reloaded;
+    await expect(page.getByRole('list').getByRole('link').first()).toHaveText('notes-03');
+  });
+
+  test('shortens a long name on a phone', async ({ page, instance, isMobile }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    const name = 'a-repository-with-a-rather-long-name-for-a-phone';
+    const [ id ] = seedRepositories(instance.dataDir, [ { name } ]);
+    await openScreen(page, `/repositories/${id}`);
+
+    const account = page.getByRole('banner').getByRole('button', { name: /^Account menu for / });
+    await expect(account).toBeInViewport({ ratio: 1 });
+    await expect(filesButton(page)).toBeInViewport({ ratio: 1 });
+    expect(await fitsWidth(page)).toBe(true);
+    expect(await switcherButton(page).evaluate(button => button.scrollWidth > button.clientWidth)).toBe(true);
+    await expect(heading(page, name)).toBeVisible();
+
+    // The full name, on a long press on a phone and on hover otherwise (NV-11).
+    await pointAt(switcherButton(page), isMobile);
+    await expect(tooltip(page)).toHaveText(name);
+    await expect(switcher(page)).toBeHidden();
+  });
+
+  test('has no axe violations with the switcher open', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [
+      { name: 'handbook', lastAccessedAt: minutesAgo(60) },
+      { name: 'guides', lastAccessedAt: minutesAgo(5) },
+      { name: 'cloning-one', status: 'cloning', lastAccessedAt: minutesAgo(1) }
+    ]);
+    await openScreen(page, `/repositories/${handbook}`);
+
+    await openSwitcher(page, isMobile);
+    await expect(switcher(page).getByRole('menuitem', { name: /^cloning-one/ })).toBeVisible();
+
+    expect((await axe(page, isMobile).exclude('.cdk-overlay-container').analyze()).violations).toEqual([]);
+    // A pop-up menu is in the overlay, outside the landmarks, by design: the
+    // best-practice `region` rule does not apply to it.
+    expect(
+      (await new AxeBuilder({ page }).include('.cdk-overlay-container').disableRules('region').analyze()).violations
+    ).toEqual([]);
   });
 });

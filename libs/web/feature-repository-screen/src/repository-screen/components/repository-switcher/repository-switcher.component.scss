@@ -47,9 +47,13 @@
   overflow-wrap: anywhere;
 }
 
-.failed {
+.status {
   margin: 0;
   padding: var(--ui-space-1) var(--ui-space-2);
-  color: var(--ui-danger-text);
+  color: var(--ui-text-muted);
   font-size: var(--ui-font-size-sm);
+}
+
+.failed {
+  color: var(--ui-danger-text);
 }

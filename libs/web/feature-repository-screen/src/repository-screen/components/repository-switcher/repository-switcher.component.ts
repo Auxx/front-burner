@@ -105,11 +105,15 @@ export class RepositorySwitcherComponent {
 
   private show(others: OtherRepositories): void {
     this.others.set(others);
-    // The loading row had the focus when the menu opened on it; it goes to
-    // the first item instead of being lost with the row.
+    // While loading, the menu opened on its first link. Unless the user has
+    // moved on, the focus goes to the first item now above it.
     afterNextRender(() => {
       const menu = this.menuElement()?.nativeElement;
-      if (this.menu()?.aria.visible() && menu && !menu.contains(this.document.activeElement)) {
+      const focused = this.document.activeElement;
+      if (
+        this.menu()?.aria.visible() && menu
+        && (!menu.contains(focused) || focused === menu.querySelector('.link'))
+      ) {
         this.trigger()?.open();
       }
     }, { injector: this.injector });

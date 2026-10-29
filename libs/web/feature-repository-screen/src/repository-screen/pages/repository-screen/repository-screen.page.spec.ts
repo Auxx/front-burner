@@ -286,7 +286,9 @@ describe('RepositoryScreenPage', () => {
 
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
       expect(tree().getAttribute('aria-label')).toBe(`${KEY}.files`);
-      expect(page().querySelector('ui-split-pane [role="separator"]')?.getAttribute('aria-label')).toBe(`${KEY}.resizeFiles`);
+      expect(page().querySelector('ui-split-pane [role="separator"]')?.getAttribute('aria-label')).toBe(
+        `${KEY}.resizeFiles`
+      );
       expect(page().querySelector('main')?.getAttribute('aria-label')).toBe(`${KEY}.editor`);
       expect(page().querySelector('main rs-editor-area')).not.toBeNull();
     });
