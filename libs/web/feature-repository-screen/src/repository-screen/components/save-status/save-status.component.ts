@@ -36,7 +36,7 @@ export class SaveStatusComponent {
       case 'refused':
         return {
           key: REFUSALS[status.code] ?? 'refused',
-          reason: this.errorText.describe({ code: status.code, params: {}, requestId: '', message: status.code }).text
+          reason: this.errorText.describe(status.error).text
         };
       default:
         return { key: status.kind, reason: '' };

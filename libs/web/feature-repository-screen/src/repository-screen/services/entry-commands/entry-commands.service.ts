@@ -175,6 +175,12 @@ export class EntryCommandsService {
     // Sent at once; the rename is sent only once they are done (FB-36).
     void this.openFiles.flushAll();
     const own = this.ownChangeWhile(path);
+    // While the rename is sent, no save goes to an old path, such as a retry of one that failed.
+    let release: (() => void) | undefined;
+    const held = (holding: boolean) => {
+      release?.();
+      release = holding ? this.openFiles.hold() : undefined;
+    };
     const renamed = await this.ask({
       mode: 'rename',
       repositoryId,
@@ -183,15 +189,27 @@ export class EntryCommandsService {
       siblings: (await this.store.entries(parent))?.map(item => item.name) ?? [],
       confirm: async () => {
         await this.openFiles.flushAll();
-        return entry.kind !== 'folder' || this.confirmFolderRename(repositoryId, path);
+        held(true);
+        const confirmed = entry.kind !== 'folder' || await this.confirmFolderRename(repositoryId, path);
+        if (!confirmed) {
+          held(false);
+        }
+        return confirmed;
       },
-      sending: own.sending
+      sending: sending => {
+        own.sending(sending);
+        if (!sending) {
+          held(false);
+        }
+      }
     });
     own.answered();
     if (!renamed) {
+      held(false);
       return;
     }
     this.openFiles.rekey(path, renamed.path);
+    held(false);
     this.store.renamed(path, renamed.path);
     this.store.known(renamed.path, { ...entry, name: fileName(renamed.path) });
     this.firstFile.renamed(repositoryId, path, renamed.path);

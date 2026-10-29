@@ -8,6 +8,9 @@ import type { SaveResult, SaveStatus } from './save-status.model';
 /** How long after the last edit a save is sent (A-8.9, ED-16). */
 export const SAVE_DELAY_MS = 1500;
 
+/** The `4xx` answers that are passing, retried as a save that did not reach the backend. */
+const RETRIED_STATUSES = new Set([ 408, 429 ]);
+
 /** The waits before each retry of a save that did not reach the backend; the last one repeats (NF-3.2). */
 export const SAVE_RETRY_DELAYS_MS = [ 1000, 2000, 4000, 8000, 16_000, 30_000 ] as const;
 
@@ -27,9 +30,10 @@ export interface FileSaverOptions {
  * A save is sent {@link SAVE_DELAY_MS} after the last edit, one at a time;
  * while one is in flight, only the newest content waits behind it. Nothing is
  * sent when the content equals the last saved content. A save that does not
- * reach the backend, or that it answers with a `5xx`, is retried with
- * backoff, with the newest content; one it refuses with a `4xx` is not
- * retried until the next edit (ED-19).
+ * reach the backend, or that it answers with a `5xx`, `408` or `429`, is
+ * retried with backoff, with the newest content; one it refuses with another
+ * `4xx` is not retried until the next edit (ED-19). Nothing is sent while the
+ * saver is held, such as while its file is renamed.
  */
 export class FileSaver {
   private readonly send: (content: string) => Promise<SaveResult>;
@@ -56,6 +60,10 @@ export class FileSaver {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private failures = 0;
+  /** How many holders keep the saver from sending. */
+  private holds = 0;
+  /** Counts the discards, so that a save in flight when one happens is forgotten. */
+  private generation = 0;
 
   constructor(options: FileSaverOptions) {
     this.send = options.send;
@@ -103,8 +111,29 @@ export class FileSaver {
     }
   }
 
-  /** Drops the waiting save and stops the retries, such as when the file is deleted (FB-39). */
+  /**
+   * Keeps the saver from sending until the returned function is called, such
+   * as while its file is renamed (FB-36); a save that came due meanwhile is
+   * sent then.
+   */
+  hold(): () => void {
+    this.holds++;
+    let released = false;
+    return () => {
+      if (!released) {
+        released = true;
+        this.holds--;
+        this.next();
+      }
+    };
+  }
+
+  /**
+   * Drops the waiting save and stops the retries, such as when the file is
+   * deleted (FB-39); the answer to a save in flight is ignored.
+   */
   discard(): void {
+    this.generation++;
     this.clearTimers();
     this.pending = null;
     this.due = false;
@@ -116,7 +145,7 @@ export class FileSaver {
 
   /** Sends the waiting content when it is due and no save is in flight. */
   private next(): void {
-    if (this.inFlight !== null || !this.due || this.pending === null) {
+    if (this.inFlight !== null || this.holds > 0 || !this.due || this.pending === null) {
       return;
     }
     const content = this.pending();
@@ -127,9 +156,20 @@ export class FileSaver {
       this.currentStatus.set({ kind: 'saved' });
       return;
     }
+    const generation = this.generation;
     this.inFlight = this.send(content).then(
-      result => this.succeeded(content, result),
-      (error: unknown) => this.failed(content, error)
+      result => {
+        if (generation === this.generation) {
+          this.succeeded(content, result);
+        }
+      },
+      (error: unknown) => {
+        if (generation === this.generation) {
+          this.failed(content, error);
+        } else if (this.pending === null) {
+          this.currentStatus.set({ kind: 'saved' });
+        }
+      }
     ).finally(() => {
       this.inFlight = null;
       this.next();
@@ -147,18 +187,23 @@ export class FileSaver {
   }
 
   private failed(content: string, error: unknown): void {
-    if (error instanceof HttpErrorResponse && error.status >= 400 && error.status < 500) {
+    if (
+      error instanceof HttpErrorResponse && error.status >= 400 && error.status < 500
+      && !RETRIED_STATUSES.has(error.status)
+    ) {
       this.failures = 0;
       if (this.pending === null) {
-        this.currentStatus.set({ kind: 'refused', code: toApiError(error).code });
+        const apiError = toApiError(error);
+        this.currentStatus.set({ kind: 'refused', code: apiError.code, error: apiError });
       }
       return;
     }
-    // Typed meanwhile: the newest content is retried instead.
+    // Typed meanwhile: the newest content is retried instead, after the backoff.
     this.pending ??= () => content;
     this.currentStatus.set({ kind: 'offline' });
     clearTimeout(this.timer);
     this.timer = undefined;
+    this.due = false;
     const delay = this.retryDelaysMs[Math.min(this.failures, this.retryDelaysMs.length - 1)];
     this.failures++;
     this.retryTimer = setTimeout(() => {

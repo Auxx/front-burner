@@ -108,6 +108,12 @@ export class OpenFilesService {
     await Promise.all(this.all().map(file => file.saver.flush()));
   }
 
+  /** Keeps every file's saver from sending until the returned function is called, such as during a rename. */
+  hold(): () => void {
+    const releases = this.all().map(file => file.saver.hold());
+    return () => releases.forEach(release => release());
+  }
+
   /** Makes the file shown in the editor none, such as when the route names another kind of entry. */
   clearCurrent(): void {
     this.opening++;

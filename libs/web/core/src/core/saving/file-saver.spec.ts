@@ -142,7 +142,11 @@ describe('FileSaver', () => {
     await vi.advanceTimersByTimeAsync(1500);
     sent[0].reject(httpError(413, 'file-too-large'));
     await settle();
-    expect(saver.status()).toEqual({ kind: 'refused', code: 'file-too-large' });
+    expect(saver.status()).toMatchObject({
+      kind: 'refused',
+      code: 'file-too-large',
+      error: { code: 'file-too-large' }
+    });
     expect(saver.unsaved()).toBe(true);
 
     await vi.advanceTimersByTimeAsync(120_000);
@@ -156,6 +160,56 @@ describe('FileSaver', () => {
     sent[1].resolve({ hash: 'h1' });
     await settle();
     expect(saver.status()).toEqual({ kind: 'saved' });
+  });
+
+  it('backs off after a failed save during which the delay ended, then saves edits 1.5 s after them', async () => {
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    type('ab');
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(sent).toHaveLength(1);
+
+    sent[0].reject(httpError(0));
+    await settle();
+    // Not at once: after the first retry delay.
+    expect(sent).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sent.map(item => item.content)).toEqual([ 'a', 'ab' ]);
+
+    sent[1].resolve({ hash: 'h1' });
+    await settle();
+    type('abc');
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(sent.map(item => item.content)).toEqual([ 'a', 'ab', 'abc' ]);
+  });
+
+  it.each([ 408, 429 ])('retries a save answered with %i', async status => {
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    sent[0].reject(httpError(status, 'internal'));
+    await settle();
+    expect(saver.status()).toEqual({ kind: 'offline' });
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sent).toHaveLength(2);
+  });
+
+  it('sends nothing while held, and the waiting save once released', async () => {
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    sent[0].reject(httpError(0));
+    await settle();
+
+    const release = saver.hold();
+    type('ab');
+    await vi.advanceTimersByTimeAsync(60_000);
+    await saver.flush();
+    expect(sent).toHaveLength(1);
+
+    release();
+    release();
+    await settle();
+    expect(sent.map(item => item.content)).toEqual([ 'a', 'ab' ]);
   });
 
   it('flush sends at once and waits', async () => {
@@ -214,6 +268,19 @@ describe('FileSaver', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(sent).toHaveLength(0);
     expect(saver.unsaved()).toBe(false);
+  });
+
+  it('does not retry a save in flight that was discarded', async () => {
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    saver.discard();
+    sent[0].reject(httpError(503, 'internal'));
+    await settle();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(sent).toHaveLength(1);
+    expect(saver.unsaved()).toBe(false);
+    expect(saver.status()).toEqual({ kind: 'saved' });
   });
 
   it('discard stops the retries', async () => {

@@ -1,4 +1,5 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
+import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
@@ -308,6 +309,39 @@ describe('EntryCommandsService', () => {
     expect(openFiles.get('docs/intro.md')).toBe(file);
     expect(file.path()).toBe('docs/intro.md');
     expect(openFiles.get('docs/guide.md')).toBeUndefined();
+  });
+
+  it('sends no save to the old path while the rename is sent', async () => {
+    openPath = 'docs/guide.md';
+    const file = await openFiles.open('docs/guide.md');
+    file.saver.edit(() => 'typed offline');
+    saveAnswer = () => throwError(() => new HttpErrorResponse({ status: 0 }));
+    const rename = new Subject<EntryPath>();
+    renameAnswer = () => rename;
+
+    const done = commands.run('rename', 'docs/guide.md');
+    await settleDialog();
+    type(nameInput(), 'intro.md');
+    dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
+    await settleDialog();
+    expect(requests).toEqual([ 'save docs/guide.md', 'save docs/guide.md', 'rename docs/guide.md' ]);
+    // Past the retry's delay (2 s after the second failure), with the rename still in flight.
+    await new Promise(resolve => setTimeout(resolve, 2100));
+    expect(requests).toHaveLength(3);
+
+    saveAnswer = () => of({ hash: 'b'.repeat(64), size: 13 });
+    rename.next({ path: 'docs/intro.md' });
+    rename.complete();
+    await done;
+    await settleDialog();
+
+    expect(requests).toEqual([
+      'save docs/guide.md',
+      'save docs/guide.md',
+      'rename docs/guide.md',
+      'save docs/intro.md'
+    ]);
+    expect(file.saver.status()).toEqual({ kind: 'saved' });
   });
 
   it('moves the open files under a renamed folder', async () => {
