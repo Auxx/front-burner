@@ -8,6 +8,11 @@
       }
     }
   } @else if (path() === null) {
-    <ui-empty-state icon="markdown">{{ t('empty') }}</ui-empty-state>
+    <ui-empty-state icon="markdown">
+      {{ t('empty') }}
+      <div uiEmptyStateActions>
+        <button uiButton variant="primary" (click)="newFile.emit()">{{ t('newFile') }}</button>
+      </div>
+    </ui-empty-state>
   }
 </ng-container>

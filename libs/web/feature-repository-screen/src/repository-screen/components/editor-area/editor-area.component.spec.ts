@@ -26,7 +26,17 @@ describe('EditorAreaComponent', () => {
   });
 
   it('shows the empty state', () => {
-    expect(area().querySelector('ui-empty-state')?.textContent?.trim()).toBe(`${K}.empty`);
+    expect(area().querySelector('ui-empty-state .message')?.textContent?.trim()).toBe(`${K}.empty`);
+  });
+
+  it('offers New file in the empty state', () => {
+    const emitted: unknown[] = [];
+    fixture.componentInstance.newFile.subscribe(() => emitted.push(true));
+
+    (area().querySelector('[uiEmptyStateActions] button') as HTMLButtonElement).click();
+
+    expect(area().querySelector('[uiEmptyStateActions] button')?.textContent?.trim()).toBe(`${K}.newFile`);
+    expect(emitted).toEqual([ true ]);
   });
 
   it('shows nothing while the entry is being found', async () => {

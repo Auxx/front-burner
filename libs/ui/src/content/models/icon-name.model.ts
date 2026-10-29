@@ -23,6 +23,8 @@ export const ICON_NAMES = [
   'lock',
   'markdown',
   'menu',
+  'new-file',
+  'new-folder',
   'pass',
   'repo',
   'repo-fetch',

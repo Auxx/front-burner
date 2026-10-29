@@ -1,5 +1,14 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.FileTreeComponent'">
+  <div class="toolbar">
+    <button uiIconButton size="small" [label]="t('newFile')" (click)="action.emit({ action: 'new-file', path: '' })">
+      <ui-icon name="new-file" />
+    </button>
+    <button uiIconButton size="small" [label]="t('newFolder')" (click)="action.emit({ action: 'new-folder', path: '' })">
+      <ui-icon name="new-folder" />
+    </button>
+  </div>
   <ui-tree
+    class="tree"
     [label]="t('label')"
     [nodes]="store.nodes()"
     [selected]="selected()"
@@ -48,8 +57,28 @@
               <ui-icon name="diff-ignored" />
             </button>
           }
+          @if (actions(item).length > 0) {
+            <!-- Not a tab stop: Shift+F10 or the ContextMenu key on the row opens it (FB-24). -->
+            <button
+              uiIconButton
+              uiTreeItemMenu
+              class="actions"
+              size="small"
+              [uiMenuTrigger]="menu.aria"
+              [label]="t('actionsFor', { name: item.label })"
+              (pointerdown)="menuRow.set(item)"
+              (click)="menuRow.set(item)"
+            >
+              <ui-icon name="ellipsis" />
+            </button>
+          }
         }
       }
     </ng-template>
   </ui-tree>
+  <ui-menu #menu="uiMenu" (itemSelected)="onMenuItem($event)">
+    @for (item of menuActions(); track item) {
+      <button [uiMenuItem]="item">{{ t('actions.' + item) }}</button>
+    }
+  </ui-menu>
 </ng-container>

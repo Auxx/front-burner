@@ -360,5 +360,12 @@
   "web-feature-repository-screen.EntryMessageComponent.missing": "This file doesn't exist.",
   "web-feature-repository-screen.EntryMessageComponent.nonMarkdown": "Only Markdown files can be opened in Front Burner.",
   "web-feature-repository-screen.EntryMessageComponent.symlink": "Symbolic links can't be opened.",
-  "web-feature-repository-screen.EntryMessageComponent.submodule": "Submodules aren't supported."
+  "web-feature-repository-screen.EntryMessageComponent.submodule": "Submodules aren't supported.",
+  "web-feature-repository-screen.FileTreeComponent.newFile": "New file",
+  "web-feature-repository-screen.FileTreeComponent.newFolder": "New folder",
+  "web-feature-repository-screen.FileTreeComponent.actionsFor": "Actions for {{ name }}",
+  "web-feature-repository-screen.FileTreeComponent.actions.new-file": "New file",
+  "web-feature-repository-screen.FileTreeComponent.actions.new-folder": "New folder",
+  "web-feature-repository-screen.FileTreeComponent.actions.rename": "Rename",
+  "web-feature-repository-screen.EditorAreaComponent.newFile": "New file"
 }

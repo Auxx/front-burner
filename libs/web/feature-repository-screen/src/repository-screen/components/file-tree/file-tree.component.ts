@@ -1,11 +1,15 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import {
   IconButtonComponent,
   IconComponent,
   type IconName,
+  MenuComponent,
+  MenuItemComponent,
+  MenuTriggerDirective,
   SpinnerComponent,
   TooltipDirective,
   TreeComponent,
+  TreeItemMenuDirective,
   type TreeNode,
   TreeNodeDirective
 } from '@front-burner/ui';
@@ -13,6 +17,13 @@ import { TranslocoDirective } from '@jsverse/transloco';
 
 import type { TreeEntry } from '../../models/tree-entry.model';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
+import { type EntryAction, entryActions } from '../../utils/entry-actions/entry-actions';
+
+/** An action chosen for an entry; `path` is `''` for the root folder (FB-25). */
+export interface EntryActionRequest {
+  readonly action: EntryAction;
+  readonly path: string;
+}
 
 /**
  * The file tree of the repository screen (REQ-FILE-001): the rows of the
@@ -25,6 +36,12 @@ import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-s
  * also when it is the open one;
  * folders expand and collapse (FB-22). Selecting a folder's error row emits the
  * folder as `retry` (FB-44) and leaves the selection as it was.
+ *
+ * **New file** and **New folder** above the tree create in the root folder
+ * (FB-25). Each entry with actions has an actions button, which also opens
+ * from the keyboard on its row (Shift+F10, the ContextMenu key); all rows
+ * share one menu, filled with the actions of the row that opened it (FB-24).
+ * A chosen action is emitted as `action`.
  */
 @Component({
   selector: 'rs-file-tree',
@@ -32,9 +49,13 @@ import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-s
     TranslocoDirective,
     IconButtonComponent,
     IconComponent,
+    MenuComponent,
+    MenuItemComponent,
+    MenuTriggerDirective,
     SpinnerComponent,
     TooltipDirective,
     TreeComponent,
+    TreeItemMenuDirective,
     TreeNodeDirective
   ],
   templateUrl: './file-tree.component.html',
@@ -47,9 +68,17 @@ export class FileTreeComponent {
 
   readonly selectPath = output<string>();
   readonly retry = output<string>();
+  readonly action = output<EntryActionRequest>();
 
   protected readonly store = inject(FileTreeStoreService);
   private readonly tree = viewChild.required(TreeComponent);
+
+  /** The row whose actions button opened the shared menu last. */
+  protected readonly menuRow = signal<TreeEntry | null>(null);
+  protected readonly menuActions = computed(() => {
+    const entry = this.menuRow()?.entry;
+    return entry ? entryActions(entry) : [];
+  });
 
   /** The rows are the store's; `ui-tree` hands them back as plain nodes. */
   protected row(node: TreeNode): TreeEntry {
@@ -81,6 +110,17 @@ export class FileTreeComponent {
       this.retry.emit(row.path);
     } else {
       this.selectPath.emit(row.path);
+    }
+  }
+
+  protected actions(row: TreeEntry): EntryAction[] {
+    return row.entry ? entryActions(row.entry) : [];
+  }
+
+  protected onMenuItem(action: EntryAction): void {
+    const row = this.menuRow();
+    if (row) {
+      this.action.emit({ action, path: row.path });
     }
   }
 
