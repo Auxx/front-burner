@@ -40,6 +40,17 @@ describe('RepositoryQueries', () => {
     );
   });
 
+  it('leaves out the excluded repository and still returns the limit', () => {
+    const ids = Array.from(
+      { length: 11 },
+      (_, i) => insertRepository(database, alice, { name: `repo-${i}`, lastAccessedAt: new Date(i * 1000) })
+    );
+
+    expect(queries.recent(alice, 10, ids[10]).map(row => row.name)).toEqual(
+      [ 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 ].map(i => `repo-${i}`)
+    );
+  });
+
   it('orders ties by name ignoring case', () => {
     const at = new Date(5000);
     for (const name of [ 'beta', 'Charlie', 'alpha', 'Bravo' ]) {

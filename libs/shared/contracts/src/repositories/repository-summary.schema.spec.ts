@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { RecentRepositoriesSchema, RepositoryParamsSchema, RepositorySummarySchema } from './repository-summary.schema';
+import {
+  RecentQuerySchema,
+  RecentRepositoriesSchema,
+  RepositoryParamsSchema,
+  RepositorySummarySchema
+} from './repository-summary.schema';
 
 const summary = {
   id: 1,
@@ -36,7 +41,8 @@ describe('registry', () => {
   it.each(
     [
       [ RepositorySummarySchema, 'RepositorySummary' ],
-      [ RecentRepositoriesSchema, 'RecentRepositories' ]
+      [ RecentRepositoriesSchema, 'RecentRepositories' ],
+      [ RecentQuerySchema, 'RecentQuery' ]
     ] as const
   )('registers %#', (schema, id) => {
     expect(z.globalRegistry.get(schema as z.ZodType)?.id).toBe(id);
@@ -55,5 +61,20 @@ describe('RepositoryParamsSchema', () => {
 
   it('registers the schema for OpenAPI', () => {
     expect(z.globalRegistry.get(RepositoryParamsSchema)?.id).toBe('RepositoryParams');
+  });
+});
+
+describe('RecentQuerySchema', () => {
+  it('has no exclude by default', () => {
+    expect(RecentQuerySchema.parse({})).toEqual({});
+  });
+
+  it('coerces exclude', () => {
+    expect(RecentQuerySchema.parse({ exclude: '7' })).toEqual({ exclude: 7 });
+  });
+
+  it('refuses an exclude that is not a positive integer', () => {
+    expect(RecentQuerySchema.safeParse({ exclude: '0' }).success).toBe(false);
+    expect(RecentQuerySchema.safeParse({ exclude: 'abc' }).success).toBe(false);
   });
 });

@@ -42,8 +42,14 @@ export const RecentRepositoriesSchema = z
   .object({ repositories: z.array(RepositorySummarySchema).max(10) })
   .meta({ id: 'RecentRepositories' });
 
+/** Leaves one repository out of the recent list, such as the current one (NV-10). */
+export const RecentQuerySchema = z
+  .object({ exclude: z.coerce.number().int().positive().optional() })
+  .meta({ id: 'RecentQuery' });
+
 export type RepositorySummary = z.infer<typeof RepositorySummarySchema>;
 export type RecentRepositories = z.infer<typeof RecentRepositoriesSchema>;
+export type RecentQuery = z.infer<typeof RecentQuerySchema>;
 
 /** The `:id` of every `/repositories/:id` route. */
 export const RepositoryParamsSchema = z
