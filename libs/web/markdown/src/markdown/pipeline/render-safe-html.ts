@@ -7,10 +7,9 @@ import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { unified } from 'unified';
 import { SAFE_HTML } from '../whitelist/safe-html';
+import { collectRemovals, type RemovalReport } from './collect-removals';
 import { pipelineMarks } from './pipeline-marks';
 import { rehypeSafeHtml } from './rehype-safe-html';
-
-export type RemovalReport = ReadonlyMap<string, number>;
 
 /** The preview's HTML of a Markdown file, and what was removed from it. */
 export interface SafeHtml {
@@ -42,6 +41,7 @@ export function markdownToHast(markdown: string): Root {
 /** Renders Markdown as HTML that holds only what the safe HTML whitelist allows (REQ-EDIT-002). */
 export function renderSafeHtml(markdown: string): SafeHtml {
   const tree = markdownToHast(markdown);
+  const removals = collectRemovals(tree);
   const safe = toSafeHtml.runSync(tree);
-  return { html: toSafeHtml.stringify(safe), removals: new Map() };
+  return { html: toSafeHtml.stringify(safe), removals };
 }
