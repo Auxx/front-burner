@@ -5,6 +5,7 @@ import { EditorView, runScopeHandlers } from '@codemirror/view';
 import {
   contentOf,
   createEditorState,
+  cursorOf,
   type EditorStateOptions,
   isHighlighting,
   replaceContent,
@@ -170,5 +171,18 @@ describe('createEditorState', () => {
     const state = create({ content: 'one\r\ntwo\r\n' }).update({ selection: EditorSelection.cursor(0) }).state;
 
     expect(contentOf(state)).toBe('one\ntwo\n');
+  });
+
+  it('reports the cursor by line and column', () => {
+    const state = create({ content: 'one\ntwo\n' }).update({ selection: EditorSelection.cursor(6) }).state;
+
+    expect(cursorOf(state)).toEqual({ line: 2, column: 3 });
+  });
+
+  it('starts the cursor at a line and column, as close as the text allows', () => {
+    expect(cursorOf(create({ content: 'one\ntwo', cursor: { line: 2, column: 2 } }))).toEqual({ line: 2, column: 2 });
+    expect(cursorOf(create({ content: 'one\nt', cursor: { line: 2, column: 9 } }))).toEqual({ line: 2, column: 2 });
+    expect(cursorOf(create({ content: 'one', cursor: { line: 5, column: 2 } }))).toEqual({ line: 1, column: 2 });
+    expect(cursorOf(create({ content: 'one' }))).toEqual({ line: 1, column: 1 });
   });
 });

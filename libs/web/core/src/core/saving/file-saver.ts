@@ -60,7 +60,7 @@ export class FileSaver {
    */
   readonly upToDate: Observable<void> = this.upToDateSubject.asObservable();
 
-  private last: { content: string; hash: string | null; };
+  private last: { content: string | null; hash: string | null; };
   /** Reads the content waiting to be sent, read only when it is sent. */
   private pending: (() => string) | null = null;
   /** Whether the waiting content is to be sent as soon as no save is in flight. */
@@ -81,9 +81,35 @@ export class FileSaver {
     this.last = { content: options.lastSaved, hash: null };
   }
 
-  /** The content last confirmed by the backend, or loaded, and its hash once a save confirmed it. */
-  lastSaved(): { content: string; hash: string | null; } {
+  /**
+   * The content last confirmed by the backend, or loaded, and its hash once a
+   * save confirmed it; the content is `null` when it is not known, after a
+   * `rebase` without it.
+   */
+  lastSaved(): { content: string | null; hash: string | null; } {
     return this.last;
+  }
+
+  /**
+   * Takes `content` and `hash` as what is on disk from now on, such as after
+   * the file changed elsewhere (ED-24); without the content, the next edit is
+   * sent whatever it holds. The waiting save, if any, stays.
+   */
+  rebase(content: string | null, hash: string | null): void {
+    this.last = { content, hash };
+  }
+
+  /**
+   * Resolves once no save is in flight, without sending a waiting one; `true`
+   * when it waited for one.
+   */
+  async settled(): Promise<boolean> {
+    let waited = false;
+    while (this.inFlight !== null) {
+      waited = true;
+      await this.inFlight;
+    }
+    return waited;
   }
 
   /** The content waiting to be sent, read now, or `null` when none waits; not the content of a save in flight. */

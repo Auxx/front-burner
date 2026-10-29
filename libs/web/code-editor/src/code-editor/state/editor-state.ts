@@ -3,7 +3,15 @@ import { markdown } from '@codemirror/lang-markdown';
 import { yamlFrontmatter } from '@codemirror/lang-yaml';
 import { syntaxHighlighting } from '@codemirror/language';
 import { search, searchKeymap } from '@codemirror/search';
-import { Compartment, EditorState, type Extension, type StateCommand, type TransactionSpec } from '@codemirror/state';
+import {
+  Compartment,
+  EditorSelection,
+  EditorState,
+  type Extension,
+  type StateCommand,
+  Text,
+  type TransactionSpec
+} from '@codemirror/state';
 import { drawSelection, EditorView, keymap } from '@codemirror/view';
 import { classHighlighter, tagHighlighter, tags } from '@lezer/highlight';
 import { editorTheme } from '../theme/editor-theme';
@@ -15,6 +23,18 @@ export interface EditorStateOptions {
   readOnly?: boolean;
   /** The editor's accessible name: the open file's name (ED-37). */
   label: string;
+  /**
+   * Where the cursor starts, as close to this line and column (1-based) as
+   * the text allows, such as after the file was reloaded (ED-24); at the start
+   * without it.
+   */
+  cursor?: CursorPosition;
+}
+
+/** A position in the text by line and column, both 1-based. */
+export interface CursorPosition {
+  line: number;
+  column: number;
 }
 
 // The Markdown language, without languages for fenced code and without its keymap, which
@@ -65,8 +85,10 @@ function labelExtension(text: string): Extension {
  * extension means measuring again with the `typing-test` tool.
  */
 export function createEditorState(options: EditorStateOptions): EditorState {
+  const doc = Text.of(options.content.split(/\r\n?|\n/));
   return EditorState.create({
-    doc: options.content,
+    doc,
+    selection: options.cursor ? EditorSelection.cursor(offsetOf(doc, options.cursor)) : undefined,
     extensions: [
       history(),
       drawSelection(),
@@ -115,4 +137,17 @@ export function setLabel(text: string): TransactionSpec {
 /** The text with `\n` line breaks; the file's own line ending is added back on save. */
 export function contentOf(state: EditorState): string {
   return state.doc.toString();
+}
+
+/** The line and column (1-based) of the cursor, the head of the main selection. */
+export function cursorOf(state: EditorState): CursorPosition {
+  const head = state.selection.main.head;
+  const line = state.doc.lineAt(head);
+  return { line: line.number, column: head - line.from + 1 };
+}
+
+/** The offset of `position` in `doc`, on its last line or at the end of its line when they are shorter. */
+function offsetOf(doc: Text, position: CursorPosition): number {
+  const line = doc.line(Math.min(Math.max(1, Math.round(position.line)), doc.lines));
+  return line.from + Math.min(Math.max(0, Math.round(position.column) - 1), line.length);
 }

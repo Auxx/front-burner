@@ -374,4 +374,45 @@ describe('FileSaver', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(sent).toHaveLength(1);
   });
+
+  it('settled waits for the save in flight without sending the waiting one', async () => {
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    type('ab');
+    const release = saver.hold();
+    const settled = vi.fn();
+    void saver.settled().then(settled);
+    await settle();
+    expect(settled).not.toHaveBeenCalled();
+
+    sent[0].resolve({ hash: 'h1' });
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(settled).toHaveBeenCalledWith(true);
+    expect(sent).toHaveLength(1);
+    release();
+    expect(sent.map(item => item.content)).toEqual([ 'a', 'ab' ]);
+  });
+
+  it('settled with nothing in flight resolves at once', async () => {
+    await expect(saver.settled()).resolves.toBe(false);
+  });
+
+  it('after a rebase without content, sends the next edit whatever it holds', async () => {
+    saver.rebase(null, 'h9');
+    type('start');
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(sent.map(item => item.content)).toEqual([ 'start' ]);
+    expect(saver.lastSaved()).toEqual({ content: null, hash: 'h9' });
+  });
+
+  it('after a rebase, compares edits with the new content', async () => {
+    saver.rebase('theirs', 'h2');
+    type('theirs');
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(sent).toHaveLength(0);
+    expect(saver.unsaved()).toBe(false);
+  });
 });
