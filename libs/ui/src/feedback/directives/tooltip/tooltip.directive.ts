@@ -8,7 +8,9 @@ import { attachTooltip } from '../../utils/tooltip/tooltip.util';
  * It shows on hover, on keyboard focus and, for an `aria-disabled` element or
  * with `uiTooltipShowOnClick`, on click or tap (FB-20a, GA-8). `uiTooltipShown`
  * shows it for as long as it is true, such as on the keyboard's active row of
- * a tree, whose focus stays on the tree.
+ * a tree, whose focus stays on the tree. `uiTooltipLongPress` also shows it on
+ * a long press, for a host whose tap does something else, such as a menu
+ * trigger (NV-11); the click that ends the press is then not the host's.
  */
 @Directive({
   selector: '[uiTooltip]'
@@ -17,12 +19,14 @@ export class TooltipDirective {
   readonly text = input.required<string>({ alias: 'uiTooltip' });
   readonly showOnClick = input(false, { alias: 'uiTooltipShowOnClick', transform: booleanAttribute });
   readonly shown = input(false, { alias: 'uiTooltipShown' });
+  readonly longPress = input(false, { alias: 'uiTooltipLongPress', transform: booleanAttribute });
 
   constructor() {
     attachTooltip(inject<ElementRef<HTMLElement>>(ElementRef).nativeElement, this.text, {
       describes: true,
       showOnClick: this.showOnClick,
-      shown: this.shown
+      shown: this.shown,
+      longPress: this.longPress
     });
   }
 }

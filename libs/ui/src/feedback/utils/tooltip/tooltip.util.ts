@@ -26,8 +26,13 @@ import {
 export const TOOLTIP_SHOW_DELAY_MS = 500;
 /** How long a tooltip stays after the pointer leaves, to let it reach the tooltip. */
 export const TOOLTIP_HIDE_DELAY_MS = 100;
-/** How long a finger rests on a host before its tooltip shows, as hover does for a mouse. */
+/**
+ * How long a finger rests on a host before its tooltip shows, as hover does for
+ * a mouse. A platform whose own long press comes first shows it then.
+ */
 export const TOOLTIP_LONG_PRESS_MS = 500;
+/** How long after a long press's finger lifts its click may still come, to be swallowed. */
+export const TOOLTIP_LONG_PRESS_CLICK_MS = 300;
 
 export interface TooltipOptions {
   /** Whether `text` is the host's accessible description; false when it is already its name. */
@@ -36,14 +41,20 @@ export interface TooltipOptions {
   readonly showOnClick: Signal<boolean>;
   /** Shows it for as long as it is true, whatever the pointer and the focus do. */
   readonly shown?: Signal<boolean>;
+  /**
+   * Whether a long press shows it, and the click that ends the press is not
+   * the host's (NV-11). Only for hosts whose tap does something else, such as
+   * opening a menu, and that have no other way to show it by touch.
+   */
+  readonly longPress?: Signal<boolean>;
 }
 
 /**
  * Shows `text` next to `host` on hover (after a delay), on keyboard focus (at
- * once), on a long press, whose ending click is swallowed (NV-11), and, when
- * `showOnClick` or the host is aria-disabled, on click or tap (A-10.45). The pointer can move onto the tooltip, and Escape hides it
- * without moving the focus (WCAG 1.4.13). Must be called in an injection
- * context; cleans up on destroy.
+ * once), when `longPress` on a long press, and, when `showOnClick` or the host
+ * is aria-disabled, on click or tap (A-10.45). The pointer can move onto the
+ * tooltip, and Escape hides it without moving the focus (WCAG 1.4.13). Must
+ * be called in an injection context; cleans up on destroy.
  */
 export function attachTooltip(host: HTMLElement, text: Signal<string>, options: TooltipOptions): void {
   const injector = inject(Injector);
@@ -57,8 +68,11 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
   let shownByFocus = false;
   let shownByInput = false;
   let longPress: ReturnType<typeof setTimeout> | undefined;
-  /** Whether the current touch was a long press, so its click is not the host's. */
+  /** Whether a finger is on the host and may become a long press. */
+  let pressing = false;
+  /** Whether a long press just showed the tooltip, so the click that ends it is not the host's. */
   let pressedLong = false;
+  let pressedLongEnd: ReturnType<typeof setTimeout> | undefined;
   let description: TooltipDescription | undefined;
 
   const show = (): void => {
@@ -119,6 +133,25 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
 
   const isTouch = (event: Event): boolean => (event as PointerEvent).pointerType === 'touch';
 
+  /** Forgets the current or last long press. */
+  const endPress = (): void => {
+    pressing = false;
+    pressedLong = false;
+    clearTimeout(longPress);
+    clearTimeout(pressedLongEnd);
+  };
+
+  const pressedLongEnough = (): void => {
+    // With nothing to show, the press stays an ordinary tap.
+    if (!text()) {
+      return;
+    }
+    pressedLong = true;
+    show();
+    // Until a click elsewhere, as for a tap.
+    shownByClick = true;
+  };
+
   const focusVisible = (): boolean => {
     try {
       return host.matches(':focus-visible');
@@ -171,23 +204,33 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
     } ],
     [ 'focusout', () => hide() ],
     [ 'pointerdown', (event: PointerEvent) => {
-      // A new press, by any pointer: an earlier long press may have ended without a click.
-      pressedLong = false;
-      clearTimeout(longPress);
-      if (!isTouch(event)) {
-        return;
+      endPress();
+      if (options.longPress?.() && isTouch(event)) {
+        pressing = true;
+        longPress = setTimeout(pressedLongEnough, TOOLTIP_LONG_PRESS_MS);
       }
-      longPress = setTimeout(() => {
-        pressedLong = true;
-        show();
-        // Until a click elsewhere, as for a tap.
-        shownByClick = true;
-      }, TOOLTIP_LONG_PRESS_MS);
     } ],
-    [ 'pointerup', () => clearTimeout(longPress) ],
-    [ 'pointercancel', () => clearTimeout(longPress) ],
-    // A long press opens no context menu or text selection over the tooltip.
-    [ 'contextmenu', (event: MouseEvent) => pressedLong && event.preventDefault() ]
+    [ 'pointerup', () => {
+      pressing = false;
+      clearTimeout(longPress);
+      // The click comes right after the finger lifts, or never, such as when
+      // the finger slid off the host: a later click is the host's again.
+      if (pressedLong) {
+        pressedLongEnd = setTimeout(() => (pressedLong = false), TOOLTIP_LONG_PRESS_CLICK_MS);
+      }
+    } ],
+    [ 'pointercancel', () => endPress() ],
+    // The platform's own long press, which can come before ours: it shows the
+    // tooltip instead of a context menu.
+    [ 'contextmenu', (event: MouseEvent) => {
+      if (pressing || pressedLong) {
+        event.preventDefault();
+      }
+      if (pressing && !pressedLong) {
+        clearTimeout(longPress);
+        pressedLongEnough();
+      }
+    } ]
   ];
   for (const [ type, listener ] of listeners) {
     host.addEventListener(type, listener as EventListener);
@@ -237,7 +280,7 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
   });
 
   inject(DestroyRef).onDestroy(() => {
-    clearTimeout(longPress);
+    endPress();
     hide();
     overlayRef?.dispose();
     for (const [ type, listener ] of listeners) {

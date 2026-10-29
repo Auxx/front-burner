@@ -15,13 +15,17 @@ import { TooltipDirective } from './tooltip.directive';
       <ui-icon name="diff-ignored" />
     </button>
     <button>Elsewhere</button>
-    <button uiTooltip="handbook-with-a-long-name" (click)="clicks.set(clicks() + 1)">handbook…</button>
+    <button uiTooltip="handbook-with-a-long-name" uiTooltipLongPress (click)="clicks.set(clicks() + 1)">handbook…</button>
+    <button [uiTooltip]="fullName()" uiTooltipLongPress (click)="clicks.set(clicks() + 1)">notes</button>
+    <button uiTooltip="Fetch from the remote" (click)="clicks.set(clicks() + 1)">Fetch</button>
     <span uiTooltip="Shown from outside" [uiTooltipShown]="shown()">Row</span>
   `
 })
 class HostComponent {
   readonly shown = signal(false);
   readonly clicks = signal(0);
+  /** Empty while the name is shown in full. */
+  readonly fullName = signal('');
 }
 
 describe('TooltipDirective', () => {
@@ -42,6 +46,12 @@ describe('TooltipDirective', () => {
   // jsdom has no PointerEvent; the tooltip reads only `pointerType`.
   const touch = (element: Element, type: 'pointerdown' | 'pointerup' | 'pointercancel') =>
     element.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true }), { pointerType: 'touch' }));
+  /** Long-presses `element` and lifts the finger, without the click that may follow. */
+  const longPress = (element: Element) => {
+    touch(element, 'pointerdown');
+    vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS);
+    touch(element, 'pointerup');
+  };
 
   beforeEach(async () => {
     vi.useFakeTimers();
@@ -165,6 +175,52 @@ describe('TooltipDirective', () => {
     name.click();
 
     expect(fixture.componentInstance.clicks()).toBe(1);
+  });
+
+  it('ignores a long press unless asked to', () => {
+    const fetch = button('Fetch');
+
+    longPress(fetch);
+    fetch.click();
+
+    expect(shown()).toEqual([]);
+    expect(fixture.componentInstance.clicks()).toBe(1);
+  });
+
+  it('swallows no click when there is nothing to show', () => {
+    const notes = button('notes');
+
+    longPress(notes);
+    notes.click();
+
+    expect(shown()).toEqual([]);
+    expect(fixture.componentInstance.clicks()).toBe(1);
+  });
+
+  it('swallows no later click when the finger slid off before lifting', () => {
+    const name = button('handbook…');
+    longPress(name);
+    vi.advanceTimersByTime(1000);
+
+    // Enter on a focused button, with no pointer at all.
+    name.click();
+
+    expect(fixture.componentInstance.clicks()).toBe(1);
+  });
+
+  it('shows at once and keeps the platform\'s menu away when that long press comes first', () => {
+    const name = button('handbook…');
+    touch(name, 'pointerdown');
+    vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS - 100);
+
+    const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    name.dispatchEvent(menu);
+
+    expect(menu.defaultPrevented).toBe(true);
+    expect(shown()).toEqual([ 'handbook-with-a-long-name' ]);
+    touch(name, 'pointerup');
+    name.click();
+    expect(fixture.componentInstance.clicks()).toBe(0);
   });
 
   it('leaves a short tap alone', () => {
