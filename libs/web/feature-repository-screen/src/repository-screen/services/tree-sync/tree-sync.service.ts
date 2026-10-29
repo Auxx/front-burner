@@ -5,6 +5,7 @@ import { PushChannelService } from '@front-burner/web-core';
 import { filter, Subscription } from 'rxjs';
 
 import { parentPath } from '../../utils/file-name/file-name';
+import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { EntryCommandsService } from '../entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
@@ -25,7 +26,14 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
  *
  * When the open file, which was listed, is gone from the listings that come
  * back, and this tab is not the one that deleted or renamed it
- * (`EntryCommandsService.ownChange`), `goneElsewhere` names it (FB-42).
+ * (`EntryCommandsService.ownChange`), `goneElsewhere` names it (FB-42); a
+ * Markdown file open in the editor is left to `DiskChangesService`, which
+ * keeps its unsaved edits (ED-21).
+ *
+ * The open Markdown file is also checked for changes on disk (ED-23): when an
+ * event names it, its folder or `all`, and after a (re)connect. A file that
+ * **Recreate it** created lists its folders again, since the event of that
+ * looks like the tab's own save.
  */
 @Injectable()
 export class TreeSyncService {
@@ -35,6 +43,7 @@ export class TreeSyncService {
   private readonly session = inject(RepositorySessionService);
   private readonly openFiles = inject(OpenFilesService);
   private readonly route = inject(ActivatedRoute);
+  private readonly diskChanges = inject(DiskChangesService);
 
   private readonly gone = signal<string | null>(null);
   /** The path of the open file once it was deleted or renamed elsewhere (FB-42). */
@@ -68,6 +77,7 @@ export class TreeSyncService {
         this.session.refresh();
       }
       void this.sync('all');
+      this.checkOpenFile('all');
     }));
     subscription.add(
       this.push.events
@@ -77,12 +87,36 @@ export class TreeSyncService {
             if (!this.ownSave(event)) {
               void this.sync(event.folders);
             }
+            this.checkOpenFile(event.folders, event.files);
           } else if (event.type === 'repository.status') {
             this.session.statusChanged(event.status, event.error);
           }
         })
     );
+    subscription.add(this.openFiles.recreated.subscribe(path => {
+      if (this.gone() === path) {
+        this.gone.set(null);
+      }
+      void this.sync(ancestors(path));
+    }));
     this.subscription = subscription;
+  }
+
+  /** Has `DiskChangesService` check the open Markdown file when `folders` or `files` may concern it. */
+  private checkOpenFile(
+    folders: readonly string[] | 'all',
+    files: readonly { path: string; hash: string; }[] = []
+  ): void {
+    const path = this.openFiles.current()?.path();
+    if (path === undefined || this.session.state() !== 'ready') {
+      return;
+    }
+    const named = files.find(file => file.path === path);
+    if (named) {
+      this.diskChanges.notice(path, named.hash);
+    } else if (folders === 'all' || folders.includes(parentPath(path))) {
+      this.diskChanges.notice(path);
+    }
   }
 
   /** Whether `event` tells only of saves this tab made, as ED-24 tells them apart. */
@@ -118,7 +152,17 @@ export class TreeSyncService {
       listed && path === (this.route.snapshot.paramMap.get('path') ?? '') && !this.commands.isOwnChange(path)
       && this.store.gone(path)
     ) {
-      this.gone.set(path);
+      if (this.openFiles.get(path)) {
+        this.diskChanges.notice(path);
+      } else {
+        this.gone.set(path);
+      }
     }
   }
+}
+
+/** The folders that lead to `path`, from the root: `''`, `docs` and `docs/api` for `docs/api/index.md`. */
+function ancestors(path: string): string[] {
+  const parts = path.split('/').slice(0, -1);
+  return [ '', ...parts.map((_, index) => parts.slice(0, index + 1).join('/')) ];
 }

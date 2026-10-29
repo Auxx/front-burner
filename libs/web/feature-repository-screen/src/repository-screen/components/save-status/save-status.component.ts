@@ -5,7 +5,9 @@ import { TranslocoDirective } from '@jsverse/transloco';
 /** The refusals with their own text (ED-18, ED-19). */
 const REFUSALS: Record<string, string> = {
   'file-too-large': 'tooLarge',
-  'merge-in-progress': 'mergeInProgress'
+  'merge-in-progress': 'mergeInProgress',
+  // While the file waits for the user's choice after a change on disk (ED-21, ED-24).
+  'changed-on-disk': 'notSaved'
 };
 
 /**

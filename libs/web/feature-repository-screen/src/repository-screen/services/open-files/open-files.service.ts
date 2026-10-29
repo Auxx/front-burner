@@ -1,5 +1,5 @@
 import { computed, DestroyRef, inject, Injectable, type Signal, signal, type WritableSignal } from '@angular/core';
-import type { FileContent } from '@front-burner/shared-contracts';
+import type { ApiError, FileContent, FileState } from '@front-burner/shared-contracts';
 import { injectNarrowViewport } from '@front-burner/ui';
 import { FilesApi } from '@front-burner/web-api-client';
 import {
@@ -8,9 +8,10 @@ import {
   type DraftKey,
   DraftStore,
   FileSaver,
+  type SaveStatus,
   toApiError
 } from '@front-burner/web-core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, type Observable, Subject } from 'rxjs';
 
 import { isWithin, movedPath } from '../../utils/file-name/file-name';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
@@ -26,8 +27,10 @@ export const LARGE_FILE_ON_NARROW = 102_400;
 export interface OpenFile {
   /** Its path now; it follows a rename (FB-36). */
   path: WritableSignal<string>;
-  /** The file as it was loaded. */
+  /** The file as it was last loaded; a reload replaces it (ED-24). */
   file: FileContent;
+  /** Counts the reloads of `file`; the editor pane builds a new state for each (ED-24). */
+  revision: WritableSignal<number>;
   /** The content hash of its last load or save (ED-6, ED-24). */
   hash: WritableSignal<string>;
   /**
@@ -47,7 +50,28 @@ export interface OpenFile {
    * restores or discards it; meanwhile the editor is read-only (ED-7).
    */
   draft: WritableSignal<Draft | null>;
+  /**
+   * The content hash of a change on disk made while it had unsaved edits,
+   * until the user chooses **Reload** or **Keep mine** (ED-24); meanwhile
+   * nothing is saved.
+   */
+  changed: WritableSignal<string | null>;
+  /**
+   * Whether it was deleted or renamed elsewhere (ED-21, FB-42). With unsaved
+   * edits it stays open, read-only, until **Recreate it**; meanwhile nothing
+   * is saved.
+   */
+  gone: WritableSignal<boolean>;
+  /** Why the last **Recreate it** failed, such as `entry-exists`. */
+  recreateError: WritableSignal<ApiError | null>;
 }
+
+/** The save status of a file that waits for the user's choice after a change on disk. */
+const NOT_SAVED: SaveStatus = {
+  kind: 'refused',
+  code: 'changed-on-disk',
+  error: { code: 'changed-on-disk', params: {}, requestId: '', message: 'changed-on-disk' }
+};
 
 /**
  * The files opened on the repository screen, one {@link OpenFile} per
@@ -66,6 +90,12 @@ export interface OpenFile {
  * being saved there, is neither offered nor deleted (D-1.3). Deleting from this tab's file tree deletes the drafts
  * (FB-39), and renaming moves them (FB-36); a file that is gone for any other
  * reason keeps its draft (FB-42, ED-21).
+ *
+ * A change on disk made elsewhere, found by `DiskChangesService`, is followed
+ * here (ED-24): `reload` loads the new content, `changedOnDisk` waits for
+ * **Reload** or **Keep mine**, and `markGone` for **Recreate it** (ED-21).
+ * While a file waits for the user, its saver is held and its unsaved
+ * content kept as its browser draft.
  */
 @Injectable()
 export class OpenFilesService {
@@ -84,6 +114,10 @@ export class OpenFilesService {
   private opening = 0;
   /** Releases each entry's claim on its draft. */
   private readonly claims = new Map<OpenFile, () => void>();
+  /** Releases the saver of each entry that waits for the user's choice after a change on disk. */
+  private readonly waits = new Map<OpenFile, () => void>();
+  private readonly missingSubject = new Subject<string>();
+  private readonly recreatedSubject = new Subject<string>();
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.claims.forEach(release => release()));
@@ -93,18 +127,27 @@ export class OpenFilesService {
   readonly current: Signal<OpenFile | null> = this.currentFile.asReadonly();
   /** Whether any file has edits the backend has not confirmed. */
   readonly anyUnsaved = computed(() => this.all().some(file => file.saver.unsaved()));
+  /** The path of each file whose save the backend refused because the file does not exist (ED-21). */
+  readonly missing: Observable<string> = this.missingSubject.asObservable();
+  /** The path of each file that **Recreate it** created again (ED-21). */
+  readonly recreated: Observable<string> = this.recreatedSubject.asObservable();
 
   /**
    * Opens the file at `path` of the open repository and makes it the current
    * file, reusing the entry kept from an earlier opening (ED-8). Rejects with
    * the `ApiError` when it cannot be read, such as `file-too-large` (FB-21).
    * Each opening starts a large file on a narrow screen without highlighting
-   * again (ED-9a).
+   * again (ED-9a). The entry of a file gone elsewhere without unsaved edits
+   * is not reused: the file is read again.
    */
   async open(path: string): Promise<OpenFile> {
     const opening = ++this.opening;
     const repositoryId = this.repositoryId();
     let file = this.get(path);
+    if (file?.gone() && !file.saver.unsaved()) {
+      this.forget(file, repositoryId);
+      file = undefined;
+    }
     if (!file) {
       this.currentFile.set(null);
       let content: FileContent;
@@ -190,6 +233,137 @@ export class OpenFilesService {
     }
   }
 
+  /**
+   * The save status shown for `file` (ED-18): "Not saved" while it waits for
+   * the user's choice after a change on disk (ED-21, ED-24).
+   */
+  statusOf(file: OpenFile): SaveStatus {
+    return (file.gone() || file.changed() !== null) && file.saver.unsaved()
+      ? NOT_SAVED
+      : file.saver.status();
+  }
+
+  /**
+   * Loads the file at `path` again from disk (ED-24): the editor pane shows
+   * the new content, the undo history starts again, and the unsaved edits and
+   * their browser draft are dropped. Without `discard`, nothing changes when
+   * the file has unsaved edits once it is read, such as when the user typed
+   * meanwhile, and it resolves `false`. A file not found is marked gone.
+   * Rejects with the `ApiError` of any other failure.
+   */
+  async reload(path: string, options: { discard: boolean; }): Promise<boolean> {
+    const file = this.get(path);
+    if (!file) {
+      return false;
+    }
+    const repositoryId = this.repositoryId();
+    let content: FileContent;
+    try {
+      content = await firstValueFrom(this.api.readFile(repositoryId, { path: file.path() }));
+    } catch (error) {
+      const apiError = toApiError(error);
+      if (apiError.code === 'entry-not-found') {
+        this.markGone(file.path());
+        return false;
+      }
+      throw apiError;
+    }
+    if (!options.discard && file.saver.unsaved()) {
+      return false;
+    }
+    file.saver.discard();
+    file.saver.rebase(content.content, content.hash);
+    file.file = content;
+    file.size = content.size;
+    this.settle(file, repositoryId, content);
+    file.revision.update(revision => revision + 1);
+    return true;
+  }
+
+  /**
+   * The file at `path`, which has unsaved edits, changed on disk to content
+   * with `hash` (ED-24): its saver waits until **Reload** or **Keep mine**.
+   */
+  changedOnDisk(path: string, hash: string): void {
+    const file = this.get(path);
+    if (file) {
+      file.gone.set(false);
+      file.changed.set(hash);
+      this.wait(file);
+    }
+  }
+
+  /**
+   * **Keep mine** (ED-24, D-1.3): the content `content` reads is saved at
+   * once over the change on disk. Its browser draft is kept until the save is
+   * confirmed.
+   */
+  keepMine(path: string, content: () => string): void {
+    const file = this.get(path);
+    const hash = file?.changed();
+    if (!file || hash === null || hash === undefined) {
+      return;
+    }
+    file.changed.set(null);
+    file.hash.set(hash);
+    // Whatever the editor holds now differs from the disk.
+    file.saver.rebase(null, hash);
+    this.endWait(file);
+    file.saver.edit(content);
+    void file.saver.flush();
+  }
+
+  /**
+   * The file at `path` was deleted or renamed elsewhere (ED-21, FB-42). With
+   * unsaved edits, its saver waits for **Recreate it** and its content is kept
+   * as its browser draft.
+   */
+  markGone(path: string): void {
+    const file = this.get(path);
+    if (!file) {
+      return;
+    }
+    file.changed.set(null);
+    file.gone.set(true);
+    if (file.saver.unsaved()) {
+      this.wait(file);
+    }
+  }
+
+  /**
+   * **Recreate it** (ED-21): creates the file gone elsewhere at its path again
+   * with the content `content` reads. Once that is confirmed, the file is
+   * saved as usual again and its browser draft is deleted; when it fails, such
+   * as with `entry-exists` because the file came back meanwhile,
+   * `recreateError` says why and the content and the draft stay.
+   */
+  async recreate(path: string, content: () => string): Promise<void> {
+    const file = this.get(path);
+    if (!file?.gone()) {
+      return;
+    }
+    const repositoryId = this.repositoryId();
+    const text = content();
+    file.recreateError.set(null);
+    let state: FileState;
+    try {
+      state = await firstValueFrom(this.api.recreateFile(repositoryId, {
+        path: file.path(),
+        content: text,
+        lineEnding: file.file.lineEnding,
+        bom: file.file.bom
+      }));
+    } catch (error) {
+      file.recreateError.set(toApiError(error));
+      return;
+    }
+    file.saver.discard();
+    file.saver.rebase(text, state.hash);
+    file.size = state.size;
+    this.settle(file, repositoryId, state);
+    this.recreatedSubject.next(file.path());
+  }
+
   /** Keeps every file's saver from sending until the returned function is called, such as during a rename. */
   hold(): () => void {
     const releases = this.all().map(file => file.saver.hold());
@@ -248,13 +422,48 @@ export class OpenFilesService {
       } else {
         void file.saver.flush();
       }
-      files.delete(key);
-      this.claims.get(file)?.();
-      this.claims.delete(file);
-      this.all.update(all => all.filter(item => item !== file));
+      this.forget(file, repositoryId);
       if (this.currentFile() === file) {
         this.clearCurrent();
       }
+    }
+  }
+
+  /** Removes the entry of `file`, releasing its claim on its draft. */
+  private forget(file: OpenFile, repositoryId: number): void {
+    this.byPath(repositoryId).delete(file.path());
+    this.claims.get(file)?.();
+    this.claims.delete(file);
+    this.endWait(file);
+    this.all.update(all => all.filter(item => item !== file));
+  }
+
+  /** Holds the saver of `file` until the user chooses, keeping its waiting content as its browser draft. */
+  private wait(file: OpenFile): void {
+    if (!this.waits.has(file)) {
+      this.waits.set(file, file.saver.hold());
+    }
+    const waiting = file.saver.waiting();
+    if (waiting !== null) {
+      this.putDraft(file, this.repositoryId(), waiting);
+    }
+  }
+
+  private endWait(file: OpenFile): void {
+    this.waits.get(file)?.();
+    this.waits.delete(file);
+  }
+
+  /** After a reload or a recreate: the disk holds `state`, and nothing waits for the user any more. */
+  private settle(file: OpenFile, repositoryId: number, state: FileState): void {
+    file.hash.set(state.hash);
+    file.changed.set(null);
+    file.gone.set(false);
+    file.recreateError.set(null);
+    this.endWait(file);
+    const key = this.keyAt(repositoryId, file.path());
+    if (key) {
+      void this.drafts.delete(key);
     }
   }
 
@@ -265,15 +474,24 @@ export class OpenFilesService {
       file: content,
       hash: signal(content.hash),
       editorState: null,
+      revision: signal(0),
       saver: new FileSaver({
         lastSaved: content.content,
         send: async text => {
-          const state = await firstValueFrom(this.api.saveFile(repositoryId, {
-            path: path(),
-            content: text,
-            lineEnding: content.lineEnding,
-            bom: content.bom
-          }));
+          let state: FileState;
+          try {
+            state = await firstValueFrom(this.api.saveFile(repositoryId, {
+              path: path(),
+              content: text,
+              lineEnding: file.file.lineEnding,
+              bom: file.file.bom
+            }));
+          } catch (error) {
+            if (toApiError(error).code === 'entry-not-found') {
+              this.missingSubject.next(path());
+            }
+            throw error;
+          }
           file.hash.set(state.hash);
           file.size = state.size;
           return { hash: state.hash };
@@ -282,7 +500,10 @@ export class OpenFilesService {
       highlight: signal(true),
       largeOnNarrow: false,
       size: content.size,
-      draft: signal(draft)
+      draft: signal(draft),
+      changed: signal(null),
+      gone: signal(false),
+      recreateError: signal(null)
     };
     file.saver.sending.subscribe(text => this.putDraft(file, repositoryId, text));
     file.saver.upToDate.subscribe(() => {

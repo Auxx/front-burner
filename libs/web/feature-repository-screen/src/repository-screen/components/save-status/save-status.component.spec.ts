@@ -41,7 +41,8 @@ describe('SaveStatusComponent', () => {
     [ { kind: 'saving' }, `${K}.saving` ],
     [ { kind: 'offline' }, `${K}.offline` ],
     [ refused('file-too-large'), `${K}.tooLarge` ],
-    [ refused('merge-in-progress'), `${K}.mergeInProgress` ]
+    [ refused('merge-in-progress'), `${K}.mergeInProgress` ],
+    [ refused('changed-on-disk'), `${K}.notSaved` ]
   ])('shows each status\'s text: %o', async (status, text) => {
     await show(status);
 

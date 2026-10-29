@@ -53,7 +53,7 @@
           [user]="user()"
           [narrow]="shell.narrow()"
           [filesOpen]="shell.narrow() ? drawerOpen() : panes.sideOpen()"
-          [saveStatus]="openFiles.current()?.saver?.status() ?? null"
+          [saveStatus]="saveStatus()"
           (toggleFiles)="toggleFiles(shell.narrow())"
         />
         <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')" [attr.aria-label]="t('files')">

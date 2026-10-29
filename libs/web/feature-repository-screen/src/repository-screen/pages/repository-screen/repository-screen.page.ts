@@ -28,6 +28,7 @@ import { EditorAreaComponent } from '../../components/editor-area/editor-area.co
 import { FileTreeComponent } from '../../components/file-tree/file-tree.component';
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
+import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { EntryCommandsService } from '../../services/entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../../services/first-file/first-file.service';
@@ -60,7 +61,9 @@ import { fileName } from '../../utils/file-name/file-name';
  * and says when the open file is gone because of one (FB-41, FB-42); the
  * route stays, so a reload then says it does not exist (FB-13). Unsaved
  * edits are kept as browser drafts and offered when the file is opened
- * again (ED-7, ED-20).
+ * again (ED-7, ED-20). `DiskChangesService` follows changes to the open file
+ * on disk (ED-21, ED-24); a file opened again from its kept entry is checked
+ * for them, since events about it were not followed while another was open.
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -86,7 +89,8 @@ import { fileName } from '../../utils/file-name/file-name';
     FirstFileService,
     EntryCommandsService,
     TreeSyncService,
-    OpenFilesService
+    OpenFilesService,
+    DiskChangesService
   ],
   templateUrl: './repository-screen.page.html',
   styleUrl: './repository-screen.page.scss',
@@ -102,6 +106,7 @@ export class RepositoryScreenPage {
   private readonly commands = inject(EntryCommandsService);
   private readonly sync = inject(TreeSyncService);
   protected readonly openFiles = inject(OpenFilesService);
+  private readonly diskChanges = inject(DiskChangesService);
 
   protected readonly user = this.currentUser.user;
   /** The file tree's size and whether it is collapsed, as this device last left them (FB-8). */
@@ -130,10 +135,19 @@ export class RepositoryScreenPage {
   protected readonly openEntry = signal<Entry | null | undefined>(undefined);
   /** Why the Markdown file at `openPath` could not be opened. */
   protected readonly openError = signal<ApiError | null>(null);
-  /** Whether the open file was deleted or renamed elsewhere (FB-42). */
+  /**
+   * Whether the open file was deleted or renamed elsewhere and is shown as
+   * such (FB-42); one with unsaved edits stays in the editor (ED-21).
+   */
   protected readonly goneElsewhere = computed(() => {
     const gone = this.sync.goneElsewhere();
-    return gone !== null && gone === this.openPath();
+    const file = this.openFiles.current();
+    return (gone !== null && gone === this.openPath()) || (file?.gone() === true && !file.saver.unsaved());
+  });
+  /** The open file's save status (ED-18). */
+  protected readonly saveStatus = computed(() => {
+    const file = this.openFiles.current();
+    return file ? this.openFiles.statusOf(file) : null;
   });
 
   /** Whether the open file has unsaved edits (NV-13). */
@@ -276,8 +290,12 @@ export class RepositoryScreenPage {
 
   /** Opens the Markdown file at `path` in the editor (FB-21, ED-5); only the latest path shown counts. */
   private async openFile(path: string, showing: number): Promise<void> {
+    const kept = this.openFiles.get(path) !== undefined;
     try {
       await this.openFiles.open(path);
+      if (kept && showing === this.showing) {
+        this.diskChanges.notice(path);
+      }
     } catch (error) {
       if (showing === this.showing) {
         this.openError.set(error as ApiError);

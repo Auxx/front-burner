@@ -11,6 +11,7 @@ import { Observable, of, Subject, throwError } from 'rxjs';
 import { entry, folder, listing } from '../../../testing/listings';
 import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { EntryCommandsService } from '../entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../first-file/first-file.service';
@@ -50,6 +51,7 @@ describe('TreeSyncService', () => {
   };
   let store: FileTreeStoreService;
   let sync: TreeSyncService;
+  let notice: ReturnType<typeof vi.fn>;
 
   const listed = () => listFolder.mock.calls.map(([ , query ]) => (query as { path: string; }).path);
   const changed = (folders: string[] | 'all', repositoryId = 12) =>
@@ -98,6 +100,7 @@ describe('TreeSyncService', () => {
       return events.subscribe(subscriber);
     });
     session = { state: signal('ready'), statusChanged: vi.fn(), retry: vi.fn(), refresh: vi.fn() };
+    notice = vi.fn();
     TestBed.configureTestingModule({
       imports: [ translocoTesting() ],
       providers: [
@@ -119,9 +122,14 @@ describe('TreeSyncService', () => {
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         {
           provide: FilesApi,
-          useValue: { listFolder, readFile: (_id: number, query: { path: string; }) => of(fileContent(query.path)) }
+          useValue: {
+            listFolder,
+            readFile: (_id: number, query: { path: string; }) => of(fileContent(query.path)),
+            recreateFile: () => of({ hash: 'd'.repeat(64), size: 4 })
+          }
         },
         OpenFilesService,
+        { provide: DiskChangesService, useValue: { notice } },
         {
           provide: BreakpointObserver,
           useValue: { observe: () => of({ matches: false, breakpoints: {} }), isMatched: () => false }
@@ -179,6 +187,76 @@ describe('TreeSyncService', () => {
       await flush();
 
       expect(listed().sort()).toEqual([ '', 'docs' ]);
+    });
+  });
+
+  describe('the open file', () => {
+    beforeEach(async () => {
+      await start([ 'docs' ]);
+      await TestBed.inject(OpenFilesService).open('docs/guide.md');
+    });
+
+    it('is checked with the hash an event names', async () => {
+      events.next({
+        type: 'files.changed',
+        repositoryId: 12,
+        folders: [ 'docs' ],
+        files: [ { path: 'docs/guide.md', hash: 'c'.repeat(64) } ]
+      });
+      await flush();
+
+      expect(notice).toHaveBeenCalledWith('docs/guide.md', 'c'.repeat(64));
+    });
+
+    it('checks the hash on all', async () => {
+      changed('all');
+      await flush();
+
+      expect(notice).toHaveBeenCalledWith('docs/guide.md');
+    });
+
+    it('checks the hash when only the folder is named', async () => {
+      changed([ 'docs' ]);
+      await flush();
+
+      expect(notice).toHaveBeenCalledWith('docs/guide.md');
+    });
+
+    it('checks the hash after a reconnect', async () => {
+      reconnected.next();
+      await flush();
+
+      expect(notice).toHaveBeenCalledWith('docs/guide.md');
+    });
+
+    it('is not checked for a change to another folder', async () => {
+      changed([ 'notes' ]);
+      await flush();
+
+      expect(notice).not.toHaveBeenCalled();
+    });
+
+    it('is left to the change check when it is gone from the listing', async () => {
+      openPath = 'docs/guide.md';
+      folders['docs'] = listing('docs', [ folder('api') ]);
+
+      changed([ 'docs' ]);
+      await flush();
+
+      expect(sync.goneElsewhere()).toBeNull();
+      expect(notice).toHaveBeenCalledWith('docs/guide.md');
+    });
+
+    it('lists the folders of a recreated file again, and forgets it was gone', async () => {
+      openPath = 'docs/guide.md';
+      const openFiles = TestBed.inject(OpenFilesService);
+      openFiles.markGone('docs/guide.md');
+
+      await openFiles.recreate('docs/guide.md', () => 'text');
+      await flush();
+
+      expect(listed().sort()).toEqual([ '', 'docs' ]);
+      expect(sync.goneElsewhere()).toBeNull();
     });
   });
 

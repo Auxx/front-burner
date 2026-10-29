@@ -27,12 +27,16 @@ export function openFile(
   return {
     path: signal(path),
     file,
+    revision: signal(0),
     hash: signal(file.hash),
     editorState: null,
     saver: new FileSaver({ lastSaved: file.content, send }),
     highlight: signal(true),
     largeOnNarrow: false,
     size: file.size,
-    draft: signal(null)
+    draft: signal(null),
+    changed: signal(null),
+    gone: signal(false),
+    recreateError: signal(null)
   };
 }
