@@ -50,6 +50,8 @@ export class DiskChangesService {
 
   /** The changes being found and followed, one after the other. */
   private queue: Promise<void> = Promise.resolve();
+  /** The `notice` calls queued and not started yet, so that the same one is not queued twice. */
+  private readonly waiting = new Set<string>();
 
   constructor() {
     const subscription = this.openFiles.missing.subscribe(path =>
@@ -60,10 +62,17 @@ export class DiskChangesService {
 
   /**
    * Finds out whether the open file at `path` changed on disk and follows the
-   * change, with `known`, the hash an event names, when there is one.
+   * change, with `known`, the hash an event names, when there is one. A
+   * call like one that waits to start, such as for an event and the listing
+   * it led to, is dropped.
    */
   notice(path: string, known?: string): void {
-    this.follow(path, () => this.check(path, known));
+    const key = JSON.stringify([ path, known ?? null ]);
+    if (this.waiting.has(key)) {
+      return;
+    }
+    this.waiting.add(key);
+    this.follow(path, () => this.check(path, known), () => this.waiting.delete(key));
   }
 
   /**
@@ -100,9 +109,13 @@ export class DiskChangesService {
     }
   }
 
-  /** Finds the change with `find`, after the ones before it, and follows it, holding the file's saver meanwhile. */
-  private follow(path: string, find: () => Promise<DiskChange | null>): void {
+  /**
+   * Finds the change with `find`, after the ones before it, and follows it,
+   * holding the file's saver meanwhile; `started` is called when its turn comes.
+   */
+  private follow(path: string, find: () => Promise<DiskChange | null>, started?: () => void): void {
     this.queue = this.queue.then(async () => {
+      started?.();
       const file = this.openFiles.get(path);
       if (!file) {
         return;

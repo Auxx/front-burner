@@ -234,6 +234,7 @@ describe('DiskChangesService', () => {
     const first = new Subject<FileState>();
     fileState.mockReturnValueOnce(first);
     service.notice('docs/guide.md');
+    await flush();
     service.notice('docs/guide.md');
     await flush();
     expect(fileState).toHaveBeenCalledTimes(1);
@@ -252,5 +253,34 @@ describe('DiskChangesService', () => {
 
     expect(await service.check('docs/guide.md', OLD)).toBeNull();
     expect(isOwnSave).toHaveBeenCalledWith(file, OLD);
+  });
+
+  it('drops a notice like one that waits to start', async () => {
+    const first = new Subject<FileState>();
+    fileState.mockReturnValueOnce(first);
+    service.notice('docs/guide.md');
+    await flush();
+    service.notice('docs/guide.md');
+    service.notice('docs/guide.md');
+
+    first.next({ hash: OLD, size: 10 });
+    first.complete();
+    await flush();
+    expect(fileState).toHaveBeenCalledTimes(2);
+
+    service.notice('docs/guide.md');
+    await flush();
+    expect(fileState).toHaveBeenCalledTimes(3);
+  });
+
+  it('queues a notice again once one for a file that is not open has had its turn', async () => {
+    service.notice('other.md');
+    await flush();
+    file.path.set('other.md');
+
+    service.notice('other.md');
+    await flush();
+
+    expect(fileState).toHaveBeenCalledTimes(1);
   });
 });

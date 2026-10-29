@@ -35,6 +35,8 @@ const entry = (page: Page, name: string) =>
     name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},`)
   });
 const dialog = (page: Page) => page.getByRole('dialog');
+/** The toasts, without the live region that announces them. */
+const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
 
 /** Seeds `handbook` and the files of `extra` in its working copy; returns its ID and its working copy. */
 function seedHandbook(
@@ -165,6 +167,8 @@ async function select(page: Page, name: string, isMobile: boolean): Promise<void
 /** The console errors of saves and pushes that failed while offline or were refused, which the test expects. */
 function drainSaves(monitor: Monitor, repositoryId: number): void {
   drainFailedRequests(monitor, `/api/v1/repositories/${repositoryId}/file`);
+  // Checking a file deleted elsewhere (ED-21).
+  drainFailedRequests(monitor, `/api/v1/repositories/${repositoryId}/file/state`);
   drainFailedRequests(monitor, '/api/v1/events');
 }
 
@@ -490,7 +494,7 @@ test.describe('editor', () => {
         // No unsaved edits: the editor follows.
         await typeAtEnd(other.page, 'README.md', 'Theirs.');
         await expect(status(other.page)).toHaveText(SAVED);
-        await expect(page.getByText(UPDATED)).toBeVisible();
+        await expect(toasts(page).getByText(UPDATED)).toBeVisible();
         await expect(editor(page, 'README.md')).toContainText('Theirs.');
 
         // Unsaved edits, then Keep mine.
@@ -542,7 +546,7 @@ test.describe('editor', () => {
       }
 
       // A notice would still be shown: the toast stays for 6 s, the question until answered.
-      await expect(page.getByText(UPDATED)).toHaveCount(0);
+      await expect(toasts(page).getByText(UPDATED)).toHaveCount(0);
       await expect(main(page).getByText(CHANGED)).toHaveCount(0);
       expect(onDisk(dir, 'README.md')).toBe(
         `# Handbook\n${[ 0, 1, 2, 3, 4, 5, 6, 7 ].map(word => ` word${word}`).join('')}`
