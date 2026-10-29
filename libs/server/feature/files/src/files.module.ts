@@ -4,6 +4,7 @@ import { DeleteFolderJob } from './actions/delete-folder.job';
 import { EntryActions } from './actions/entry-actions';
 import { EntryDelete } from './actions/entry-delete';
 import { WorkingTreeGuard } from './actions/working-tree-guard';
+import { FileContents } from './content/file-contents';
 import { FilesController } from './files/files.controller';
 import { FolderLister } from './listing/folder-lister';
 import { OpenableRepository } from './repository/openable-repository';
@@ -23,7 +24,8 @@ import { EntrySummaries } from './summary/entry-summaries';
     EntryActions,
     EntryDelete,
     DeleteFolderJob,
-    EntrySummaries
+    EntrySummaries,
+    FileContents
   ],
   exports: [ OpenableRepository, WorkingTreeGuard ]
 })

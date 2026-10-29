@@ -14,9 +14,21 @@ concurrency:
   # Pull requests drop superseded runs; pushes to master always finish.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  # Nx keeps its cache in ~/.nx by default; inside the workspace, the setup
+  # action can save it between runs.
+  NX_CACHE_DIRECTORY: ${{ github.workspace }}/.nx/cache
+  NX_WORKSPACE_DATA_DIRECTORY: ${{ github.workspace }}/.nx/workspace-data
+  # Each job saves its own cache; the limit keeps them within the repository's
+  # cache storage.
+  NX_MAX_CACHE_SIZE: 1GB
+
+# The checks run as parallel jobs, each with its own Nx cache (see
+# .github/actions/setup).
 # Actions are pinned to commit SHAs (tags can be moved); Dependabot updates them.
 jobs:
-  checks:
+  lint:
+    name: Format, type check, lint
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,16 +40,9 @@ jobs:
           # nx affected compares against an earlier commit.
           fetch-depth: 0
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: ./.github/actions/setup
         with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - run: npm ci
-
-      - uses: nrwl/nx-set-shas@e602fada7ad5987b0f7b1905e7a99ea1c661514c # v5.1.0
-        with:
-          main-branch-name: master
+          nx-cache: lint
 
       - name: Format
         run: npm run format:check
@@ -45,43 +50,47 @@ jobs:
       - name: Project tags
         run: npm run check:tags
 
-      # Storybook stories run as browser tests (A-10.38) and web-e2e runs as
-      # end-to-end tests; Chromium is installed only when one of those is
-      # affected. Here both run in Chromium alone, as its headless shell;
-      # nightly.yml runs every browser (NF-12.2).
-      - name: Find affected browser tests
-        id: browsers
-        run: |
-          storybook=$(npx nx show projects --affected -t test-storybook --json)
-          e2e=$(npx nx show projects --affected -t e2e --json)
-          echo "Affected by test-storybook: $storybook"
-          echo "Affected by e2e: $e2e"
-          needed=false
-          if [ "$storybook" != "[]" ] || [ "$e2e" != "[]" ]; then needed=true; fi
-          echo "needed=$needed" >> "$GITHUB_OUTPUT"
-          echo "version=$(npx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+      - name: Type check, lint
+        run: npx nx affected -t typecheck lint --parallel=3
 
-      - name: Cache Playwright browsers
-        if: steps.browsers.outputs.needed == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.browsers.outputs.version }}-chromium-shell
+          fetch-depth: 0
 
-      # Rebuilding the man-page index after every package slows apt down a lot.
-      - name: Disable man-db triggers
-        if: steps.browsers.outputs.needed == 'true'
-        run: sudo rm -f /var/lib/man-db/auto-update
+      - uses: ./.github/actions/setup
+        with:
+          nx-cache: test
 
-      # On a cache hit this only installs the system packages.
-      - name: Install Playwright browsers
-        if: steps.browsers.outputs.needed == 'true'
-        run: npx playwright install --with-deps --only-shell chromium
+      # One project at a time: each runs its own pool of workers, and with
+      # several at once the timing tests (AC-FILE-001.7) miss their limits on
+      # the runner's four cores. The job still ends well before the build job.
+      - name: Test
+        run: npx nx affected -t test --parallel=1
 
-      - name: Type check, lint, test, build
-        run: npx nx affected -t typecheck lint test build size-check test-storybook e2e --parallel=3
-        env:
-          E2E_BROWSERS: chromium
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          nx-cache: build
+
+      - name: Build
+        run: npx nx affected -t build size-check --parallel=3
 
       # The OpenAPI document and the web client generated from it are
       # committed; regenerating must change nothing (A-3.7).
@@ -96,6 +105,85 @@ jobs:
             git diff -- $paths
             exit 1
           fi
+
+  # End-to-end tests build what they test themselves, from the job's Nx cache
+  # when it has the builds; the browser tests (web-e2e) are split into shards.
+  server-e2e:
+    name: API end-to-end tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          nx-cache: server-e2e
+
+      - name: API end-to-end tests
+        run: npx nx affected -t e2e --exclude=web-e2e --parallel=3
+
+  web-e2e:
+    name: Browser end-to-end tests (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      # Every shard reports its own failures.
+      fail-fast: false
+      matrix:
+        shard: [ 1, 2, 3 ]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          nx-cache: web-e2e-${{ matrix.shard }}
+
+      # Here end-to-end tests run in Chromium alone, as its headless shell;
+      # nightly.yml runs every browser (NF-12.2).
+      - id: playwright
+        uses: ./.github/actions/playwright
+        with:
+          targets: e2e
+          projects: web-e2e
+
+      # The shard is part of the task's cache key, so each shard has its own
+      # cache entry.
+      - name: Browser end-to-end tests
+        if: steps.playwright.outputs.needed == 'true'
+        run: npx nx run web-e2e:e2e --shard=${{ matrix.shard }}/3
+        env:
+          E2E_BROWSERS: chromium
+
+  # Storybook stories run as browser tests (A-10.38), in Chromium alone.
+  storybook:
+    name: Storybook tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          nx-cache: storybook
+
+      - uses: ./.github/actions/playwright
+        with:
+          targets: test-storybook
+
+      - name: Storybook tests
+        run: npx nx affected -t test-storybook --parallel=3
 
   trivy:
     runs-on: ubuntu-latest

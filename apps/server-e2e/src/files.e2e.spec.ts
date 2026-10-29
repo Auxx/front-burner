@@ -1,5 +1,14 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -51,7 +60,7 @@ describe('folder listing (REQ-FILE-001)', () => {
   });
 
   async function call(
-    method: 'GET' | 'POST' | 'DELETE',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     token?: string,
     body?: unknown
@@ -78,6 +87,11 @@ describe('folder listing (REQ-FILE-001)', () => {
     call('POST', `/repositories/${handbook}/entries/rename`, token, body);
   const deleteEntry = (path: string, token = alice.token) =>
     call('DELETE', `/repositories/${handbook}/entries?path=${encodeURIComponent(path)}`, token);
+  const saveFile = (body: unknown, token = alice.token) => call('PUT', `/repositories/${handbook}/file`, token, body);
+  const recreateFile = (body: unknown, token = alice.token) =>
+    call('POST', `/repositories/${handbook}/file/recreate`, token, body);
+  const readFile = (path: string, token = alice.token) =>
+    call('GET', `/repositories/${handbook}/file?path=${encodeURIComponent(path)}`, token);
   const names = async (path: string) =>
     ((await folder(path)).body['entries'] as { name: string; }[]).map(entry => entry.name);
 
@@ -331,5 +345,117 @@ describe('folder listing (REQ-FILE-001)', () => {
     expect(other.body['code']).toBe('not-found');
     expect(strip(other)).toEqual(strip(missing));
     expect(await names('')).toContain('README.md');
+  });
+
+  describe('reading and saving (REQ-EDIT-001)', () => {
+    /** 1 MB as stored (ED-2, ED-19). */
+    const LIMIT = 1_048_576;
+    const rootDir = () => join(server.dataDir, 'repos', String(alice.userId), String(handbook));
+
+    it('saves a 1 MB file within the 2 MB body limit', async () => {
+      writeFileSync(join(rootDir(), 'docs', 'big.md'), '# Big\r\n');
+      // 62 characters and CRLF: 64 bytes a line, 16,384 lines.
+      const content = `${'a'.repeat(62)}\n`.repeat(LIMIT / 64);
+
+      const saved = await saveFile({ path: 'docs/big.md', content, lineEnding: 'crlf', bom: false });
+
+      expect(saved.status).toBe(200);
+      expect(saved.body).toMatchObject({ size: LIMIT });
+      expect(statSync(join(rootDir(), 'docs', 'big.md')).size).toBe(LIMIT);
+      const read = await readFile('docs/big.md');
+      expect(read.status).toBe(200);
+      expect(read.body).toMatchObject({ lineEnding: 'crlf', bom: false, size: LIMIT, hash: saved.body['hash'] });
+      expect(read.body['content']).toBe(content);
+    });
+
+    it('AC-EDIT-001.10: refuses a save over 1 MB and accepts it once smaller', async () => {
+      writeFileSync(join(rootDir(), 'docs', 'growing.md'), '# Growing\n');
+
+      const tooLarge = await saveFile({
+        path: 'docs/growing.md',
+        content: 'a'.repeat(LIMIT + 1),
+        lineEnding: 'lf',
+        bom: false
+      });
+      expect(tooLarge.status).toBe(413);
+      expect(tooLarge.body).toMatchObject({ code: 'file-too-large', params: { limit: LIMIT } });
+      expect(readFileSync(join(rootDir(), 'docs', 'growing.md'), 'utf8')).toBe('# Growing\n');
+
+      const smaller = await saveFile({
+        path: 'docs/growing.md',
+        content: 'a'.repeat(LIMIT),
+        lineEnding: 'lf',
+        bom: false
+      });
+      expect(smaller.status).toBe(200);
+      expect(statSync(join(rootDir(), 'docs', 'growing.md')).size).toBe(LIMIT);
+    });
+
+    it('AC-EDIT-001.11: refuses a save after the file was deleted and recreates it', async () => {
+      writeFileSync(join(rootDir(), 'docs', 'gone.md'), '# Gone\n');
+      expect((await deleteEntry('docs/gone.md')).status).toBe(204);
+      const request = { path: 'docs/gone.md', content: '# Back\n', lineEnding: 'lf', bom: false };
+
+      const refused = await saveFile(request);
+      expect(refused.status).toBe(404);
+      expect(refused.body).toMatchObject({ code: 'entry-not-found' });
+      expect(existsSync(join(rootDir(), 'docs', 'gone.md'))).toBe(false);
+
+      const recreated = await recreateFile(request);
+      expect(recreated.status).toBe(201);
+      expect(recreated.body).toEqual({ hash: expect.stringMatching(/^[0-9a-f]{64}$/), size: 7 });
+      expect(readFileSync(join(rootDir(), 'docs', 'gone.md'), 'utf8')).toBe('# Back\n');
+
+      const again = await recreateFile(request);
+      expect(again.status).toBe(409);
+      expect(again.body).toMatchObject({ code: 'entry-exists' });
+    });
+
+    it('AC-EDIT-001.11: recreates a file whose folder was renamed elsewhere at its old path', async () => {
+      mkdirSync(join(rootDir(), 'manual', 'part'), { recursive: true });
+      writeFileSync(join(rootDir(), 'manual', 'part', 'intro.md'), '# Intro\n');
+      expect((await renameEntry({ path: 'manual', name: 'guidebook' })).status).toBe(200);
+      const request = { path: 'manual/part/intro.md', content: '# Intro, edited\n', lineEnding: 'lf', bom: false };
+
+      expect((await saveFile(request)).status).toBe(404);
+      expect((await recreateFile(request)).status).toBe(201);
+
+      expect(readFileSync(join(rootDir(), 'manual', 'part', 'intro.md'), 'utf8')).toBe('# Intro, edited\n');
+      expect(readFileSync(join(rootDir(), 'guidebook', 'part', 'intro.md'), 'utf8')).toBe('# Intro\n');
+    });
+
+    it('AC-EDIT-001.13: refuses saves while a merge is in progress', async () => {
+      // What git leaves behind while a merge waits for its conflicts to be resolved.
+      const marker = join(rootDir(), '.git', 'MERGE_HEAD');
+      writeFileSync(marker, `${'0'.repeat(40)}\n`);
+      try {
+        const refused = await saveFile({ path: 'README.md', content: '# Changed\n', lineEnding: 'lf', bom: false });
+        expect(refused.status).toBe(409);
+        expect(refused.body).toMatchObject({ code: 'merge-in-progress' });
+        expect(readFileSync(join(rootDir(), 'README.md'), 'utf8')).toBe('# Handbook\n');
+      } finally {
+        rmSync(marker);
+      }
+    });
+
+    it('answers another user\'s repository like a missing one for every new endpoint', async () => {
+      const strip = ({ status, body }: Answer) => ({ status, body: { ...body, requestId: undefined } });
+      const save = { path: 'README.md', content: 'x', lineEnding: 'lf', bom: false };
+      const endpoints = [
+        [ 'GET', '/file?path=README.md', undefined ],
+        [ 'GET', '/file/state?path=README.md', undefined ],
+        [ 'PUT', '/file', save ],
+        [ 'POST', '/file/recreate', save ]
+      ] as const;
+      for (const [ method, suffix, body ] of endpoints) {
+        expect((await call(method, `/repositories/${handbook}${suffix}`, undefined, body)).status, suffix).toBe(401);
+        const other = await call(method, `/repositories/${handbook}${suffix}`, bob.token, body);
+        const missing = await call(method, `/repositories/${handbook + 1000}${suffix}`, bob.token, body);
+        expect(other.status, suffix).toBe(404);
+        expect(other.body['code']).toBe('not-found');
+        expect(strip(other)).toEqual(strip(missing));
+      }
+      expect(readFileSync(join(rootDir(), 'README.md'), 'utf8')).toBe('# Handbook\n');
+    });
   });
 });

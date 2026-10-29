@@ -86,6 +86,13 @@ A-8.15; `non-functional.md` NF-2.2, NF-2.3, NF-3.1, NF-3.2.
     scroll it can be off by the distance scrolled. Scroll sync should read it
     inside `view.requestMeasure`, or change it to use `scrollDOM.scrollTop`.
 
+- **Own saves and the tree** _(from plan 23's review)_: every save publishes
+  `files.changed` naming the file's parent folder, so that the tree would
+  re-list that folder on every autosave of every open tab. The tree skips a
+  `files.changed` whose `folders` is only the parent of the files in its `files`
+  when each of those files is the open file and its hash matches its last save,
+  as for ED-24; a file listing's size is not shown, so nothing is lost.
+
 ## Review Focus
 
 - **Typing during a save that is in flight** must send exactly one more save

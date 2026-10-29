@@ -29,7 +29,15 @@ export const ERROR_CODES = [
   /** 409; the repository is not `ready`; params `{ status }` (FB-3). */
   'repository-not-openable',
   /** 409; a merge or rebase is in progress, so the working tree can't be changed (FB-26). */
-  'merge-in-progress'
+  'merge-in-progress',
+  /** 413; a file to read or save is over the editor's limit; params `{ limit }` in bytes (ED-2, ED-19). */
+  'file-too-large',
+  /** 422; a file to read is not valid UTF-8 (ED-2, FB-21). */
+  'file-not-utf8',
+  /** 400; only Markdown files can be read or saved through the editor's API (ED-2, FB-21). */
+  'entry-not-editable',
+  /** 409; **Recreate it** found a file at the path (ED-21). */
+  'entry-exists'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

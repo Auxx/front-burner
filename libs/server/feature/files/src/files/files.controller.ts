@@ -2,13 +2,21 @@
 import '@front-burner/server-core-security';
 import type { RequestAuth } from '@front-burner/server-core-security';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
-import type { EntryPath, EntrySummary, FolderListing, IgnoreResult } from '@front-burner/shared-contracts';
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
+import type {
+  EntryPath,
+  EntrySummary,
+  FileContent,
+  FileState,
+  FolderListing,
+  IgnoreResult
+} from '@front-burner/shared-contracts';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { EntryActions } from '../actions/entry-actions';
 import { EntryDelete } from '../actions/entry-delete';
+import { FileContents } from '../content/file-contents';
 import { FolderLister } from '../listing/folder-lister';
 import { OpenableRepository } from '../repository/openable-repository';
 import { EntrySummaries } from '../summary/entry-summaries';
@@ -18,11 +26,15 @@ import {
   EntryPathDto,
   EntryQueryDto,
   EntrySummaryDto,
+  FileContentDto,
+  FileQueryDto,
+  FileStateDto,
   FolderListingDto,
   FolderQueryDto,
   IgnoreQueryDto,
   IgnoreResultDto,
-  RenameEntryRequestDto
+  RenameEntryRequestDto,
+  SaveFileRequestDto
 } from './files.dto';
 
 /** The logged-in user and session; the global auth guard has checked `req.auth`. */
@@ -42,7 +54,8 @@ export class FilesController {
     private readonly lister: FolderLister,
     private readonly actions: EntryActions,
     private readonly deletes: EntryDelete,
-    private readonly summaries: EntrySummaries
+    private readonly summaries: EntrySummaries,
+    private readonly contents: FileContents
   ) {}
 
   /** One folder of the working copy (FB-15 to FB-20b). */
@@ -119,5 +132,55 @@ export class FilesController {
   ): Promise<IgnoreResult> {
     const root = this.repositories.root(authOf(req).userId, params.id);
     return { ignored: await this.summaries.ignored(root, query.path, query.kind).catch(toFilesError) };
+  }
+
+  /** A Markdown file opened in the editor (ED-2, ED-6, FB-21). */
+  @Get('file')
+  @ApiOkResponse({ type: FileContentDto })
+  @ZodSerializerDto(FileContentDto)
+  readFile(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Query() query: FileQueryDto
+  ): Promise<FileContent> {
+    const root = this.repositories.root(authOf(req).userId, params.id);
+    return this.contents.read(root, query.path).catch(toFilesError);
+  }
+
+  /** The hash and size of a Markdown file as it is on disk now (ED-24). */
+  @Get('file/state')
+  @ApiOkResponse({ type: FileStateDto })
+  @ZodSerializerDto(FileStateDto)
+  fileState(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Query() query: FileQueryDto
+  ): Promise<FileState> {
+    const root = this.repositories.root(authOf(req).userId, params.id);
+    return this.contents.state(root, query.path).catch(toFilesError);
+  }
+
+  /** Saves an existing Markdown file (ED-12, ED-19, ED-21). */
+  @Put('file')
+  @ApiOkResponse({ type: FileStateDto })
+  @ZodSerializerDto(FileStateDto)
+  saveFile(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Body() body: SaveFileRequestDto
+  ): Promise<FileState> {
+    return this.contents.save(authOf(req).userId, params.id, body);
+  }
+
+  /** **Recreate it**: creates a file deleted or renamed elsewhere (ED-21). */
+  @Post('file/recreate')
+  @ApiCreatedResponse({ type: FileStateDto })
+  @ZodSerializerDto(FileStateDto)
+  recreateFile(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Body() body: SaveFileRequestDto
+  ): Promise<FileState> {
+    return this.contents.recreate(authOf(req).userId, params.id, body);
   }
 }

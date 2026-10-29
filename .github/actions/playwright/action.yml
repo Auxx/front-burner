@@ -1,0 +1,52 @@
+name: Install Playwright browsers
+description: >
+  Installs Chromium, as its headless shell, when a project is affected by one
+  of the given targets.
+
+inputs:
+  targets:
+    description: Comma-separated Nx targets that run in a browser.
+    required: true
+  projects:
+    description: Comma-separated Nx projects to look at; all when empty.
+    default: ''
+
+outputs:
+  needed:
+    description: Whether a project is affected, as 'true' or 'false'.
+    value: ${{ steps.browsers.outputs.needed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Find affected browser tests
+      id: browsers
+      shell: bash
+      run: |
+        filter=()
+        if [ -n "${{ inputs.projects }}" ]; then filter=(-p "${{ inputs.projects }}"); fi
+        affected=$(npx nx show projects --affected -t ${{ inputs.targets }} "${filter[@]}" --json)
+        echo "Affected by ${{ inputs.targets }}: $affected"
+        needed=false
+        if [ "$affected" != "[]" ]; then needed=true; fi
+        echo "needed=$needed" >> "$GITHUB_OUTPUT"
+        echo "version=$(npx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Playwright browsers
+      if: steps.browsers.outputs.needed == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.browsers.outputs.version }}-chromium-shell
+
+    # Rebuilding the man-page index after every package slows apt down a lot.
+    - name: Disable man-db triggers
+      if: steps.browsers.outputs.needed == 'true'
+      shell: bash
+      run: sudo rm -f /var/lib/man-db/auto-update
+
+    # On a cache hit this only installs the system packages.
+    - name: Install Playwright browsers
+      if: steps.browsers.outputs.needed == 'true'
+      shell: bash
+      run: npx playwright install --with-deps --only-shell chromium

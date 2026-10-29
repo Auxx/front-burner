@@ -20,6 +20,14 @@ describe('PushEventSchema', () => {
     expect(PushEventSchema.safeParse({ type: 'files.changed', repositoryId: 3, folders: 'some' }).success).toBe(false);
   });
 
+  it('parses files.changed with and without files', () => {
+    const plain = { type: 'files.changed', repositoryId: 3, folders: [ 'docs' ] };
+    const saved = { ...plain, files: [ { path: 'docs/a.md', hash: 'ab'.repeat(32) } ] };
+    expect(PushEventSchema.parse(plain)).toEqual(plain);
+    expect(PushEventSchema.parse(saved)).toEqual(saved);
+    expect(PushEventSchema.safeParse({ ...plain, files: [ { path: 'docs/a.md' } ] }).success).toBe(false);
+  });
+
   it('refuses an unknown event type', () => {
     expect(PushEventSchema.safeParse({ type: 'repository.deleted', repositoryId: 1 }).success).toBe(false);
   });

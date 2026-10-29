@@ -176,9 +176,10 @@ images ([REQ-EDIT-003](preview-images.md)).
   renamed elsewhere (another tab, another device, or a git operation), the save
   is refused and the editor says "This file was deleted or renamed elsewhere."
   with **Recreate it**, which creates the file at its old path with the editor's
-  content. The content stays in the browser draft until then. _(My call.)_ A
-  delete or rename made from this tab's own file tree follows FB-36 and FB-39
-  instead.
+  content, and the folders on that path that are gone too, as if created with
+  **New folder** (FB-27, FB-32). The content stays in the browser draft until
+  then. _(My call.)_ A delete or rename made from this tab's own file tree
+  follows FB-36 and FB-39 instead.
 - **ED-22** Closing or reloading the tab with unsaved edits makes the browser
   ask the user to confirm (NF-3.5). Navigating inside the web client does not
   ask, since the waiting save is sent at once (ED-17) and the browser draft is

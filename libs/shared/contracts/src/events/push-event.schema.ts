@@ -23,11 +23,17 @@ export const PushEventSchema = z.discriminatedUnion('type', [
     jobId: z.number().int(),
     outcome: z.enum([ 'done', 'failed', 'cancelled' ])
   }),
-  /** The folders whose entries changed (`''` is the root), or `all` after a change to many (FB-41). */
+  /**
+   * The folders whose entries changed (`''` is the root), or `all` after a
+   * change to many (FB-41). After a save or a recreate, `files` names the
+   * files whose new content hash is known, so that a client can tell its own
+   * saves from changes made elsewhere (A-3.11, ED-24).
+   */
   z.object({
     type: z.literal('files.changed'),
     repositoryId: z.number().int(),
-    folders: z.union([ z.array(z.string()), z.literal('all') ])
+    folders: z.union([ z.array(z.string()), z.literal('all') ]),
+    files: z.array(z.object({ path: z.string(), hash: z.string() })).optional()
   })
 ]);
 
