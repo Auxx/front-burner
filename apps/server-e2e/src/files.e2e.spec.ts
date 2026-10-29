@@ -411,6 +411,19 @@ describe('folder listing (REQ-FILE-001)', () => {
       expect(again.body).toMatchObject({ code: 'entry-exists' });
     });
 
+    it('AC-EDIT-001.11: recreates a file whose folder was renamed elsewhere at its old path', async () => {
+      mkdirSync(join(rootDir(), 'manual', 'part'), { recursive: true });
+      writeFileSync(join(rootDir(), 'manual', 'part', 'intro.md'), '# Intro\n');
+      expect((await renameEntry({ path: 'manual', name: 'guidebook' })).status).toBe(200);
+      const request = { path: 'manual/part/intro.md', content: '# Intro, edited\n', lineEnding: 'lf', bom: false };
+
+      expect((await saveFile(request)).status).toBe(404);
+      expect((await recreateFile(request)).status).toBe(201);
+
+      expect(readFileSync(join(rootDir(), 'manual', 'part', 'intro.md'), 'utf8')).toBe('# Intro, edited\n');
+      expect(readFileSync(join(rootDir(), 'guidebook', 'part', 'intro.md'), 'utf8')).toBe('# Intro\n');
+    });
+
     it('AC-EDIT-001.13: refuses saves while a merge is in progress', async () => {
       // What git leaves behind while a merge waits for its conflicts to be resolved.
       const marker = join(rootDir(), '.git', 'MERGE_HEAD');

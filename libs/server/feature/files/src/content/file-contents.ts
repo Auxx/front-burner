@@ -9,14 +9,14 @@ import {
 } from '@front-burner/server-core-storage';
 import { EDITABLE_FILE_LIMIT } from '@front-burner/shared-contracts';
 import type { FileContent, FileState, SaveFileRequest } from '@front-burner/shared-contracts';
-import { isMarkdownName, sameEntryName } from '@front-burner/shared-util';
+import { entryNameProblem, isMarkdownName, sameEntryName } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { link, lstat, open, readdir, rename, rm } from 'node:fs/promises';
+import { link, lstat, mkdir, open, readdir, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { WorkingTreeGuard } from '../actions/working-tree-guard';
 import { entryExists, entryNotEditable, fileNotUtf8, fileTooLarge, toFilesError } from '../files/files-errors';
-import { splitPath } from '../paths/entry-paths';
+import { joinPath, splitPath } from '../paths/entry-paths';
 import { openFolder, resolveEntry } from '../paths/existing-entry';
 import { OpenableRepository } from '../repository/openable-repository';
 import { decodeMarkdown, encodeMarkdown, hashBytes } from './markdown-codec';
@@ -105,15 +105,20 @@ export class FileContents {
         await folder.handle.close();
       }
     }).catch(toFilesError);
-    return this.saved(userId, repositoryId, request.path, parent, bytes);
+    return this.saved(userId, repositoryId, request.path, [ parent ], bytes);
   }
 
-  /** **Recreate it**: creates a file deleted or renamed elsewhere with the editor's content (ED-21). */
+  /**
+   * **Recreate it**: creates a file deleted or renamed elsewhere with the
+   * editor's content, at its old path, with the folders on the path that are
+   * gone too (ED-21).
+   */
   async recreate(userId: number, repositoryId: number, request: SaveFileRequest): Promise<FileState> {
     const root = this.repositories.root(userId, repositoryId);
     const [ parent, name ] = markdownPath(request.path);
     const bytes = this.encode(request);
-    await this.guard.change(repositoryId, root, async () => {
+    const created = await this.guard.change(repositoryId, root, async () => {
+      const created = await this.restoreFolders(root, parent);
       const folder = await openFolder(this.git, root, parent);
       try {
         const entry = await resolveInWorkingCopy(folder.path, name, { mayBeMissing: true, symlinkLeaf: true });
@@ -134,8 +139,52 @@ export class FileContents {
       } finally {
         await folder.handle.close();
       }
+      return created;
     }).catch(toFilesError);
-    return this.saved(userId, repositoryId, request.path, parent, bytes);
+    // Each restored folder appeared in the one before it; the first in a folder that was there.
+    const folders = created.length === 0 ? [ parent ] : [ splitPath(created[0] as string)[0], ...created ];
+    return this.saved(userId, repositoryId, request.path, folders, bytes);
+  }
+
+  /**
+   * Creates the folders of `path` that are missing, one at a time through
+   * their parent's descriptor (A-7.6), and returns their paths. A restored
+   * folder follows the rules of a new one: a valid name that clashes with no
+   * other in its parent (FB-27, FB-32), and never where a submodule is (FB-23).
+   *
+   * @throws PathRefusedError
+   * @throws ApiErrorException
+   */
+  private async restoreFolders(root: string, path: string): Promise<string[]> {
+    const created: string[] = [];
+    let current = '';
+    for (const name of path === '' ? [] : path.split('/')) {
+      const next = joinPath(current, name);
+      const entry = await resolveInWorkingCopy(root, next, { mayBeMissing: true });
+      if (entry.type === 'missing') {
+        if (entryNameProblem(name) !== null) {
+          throw new PathRefusedError('malformed');
+        }
+        if ((await this.git.submoduleOn(root, next)) !== null) {
+          throw new PathRefusedError('not-found');
+        }
+        const parent = await openFolder(this.git, root, current);
+        try {
+          if ((await readdir(parent.path)).some(other => sameEntryName(other, name))) {
+            throw entryExists();
+          }
+          await mkdir(join(parent.path, name));
+          await parent.handle.sync();
+        } finally {
+          await parent.handle.close();
+        }
+        created.push(next);
+      } else if (entry.type !== 'folder') {
+        throw new PathRefusedError('not-found');
+      }
+      current = next;
+    }
+    return created;
   }
 
   /** The bytes of a Markdown file, refused when they are over the limit (ED-2). */
@@ -204,12 +253,12 @@ export class FileContents {
   }
 
   /** Tells the user's clients the new hash, so that each can tell its own saves from changes elsewhere (A-3.11). */
-  private saved(userId: number, repositoryId: number, path: string, parent: string, bytes: Buffer): FileState {
+  private saved(userId: number, repositoryId: number, path: string, folders: string[], bytes: Buffer): FileState {
     const hash = hashBytes(bytes);
     this.events.publish(userId, {
       type: 'files.changed',
       repositoryId,
-      folders: [ parent ],
+      folders,
       files: [ { path, hash } ]
     });
     return { hash, size: bytes.length };

@@ -46,7 +46,10 @@ D-1; `api.md` A-3.11; `non-functional.md` NF-1.5, NF-5.3, NF-11.5.
 - **Hash**: SHA-256 of the bytes on disk, lower-case hex.
 - A save **never creates** a file: a missing file is `404 entry-not-found`
   (ED-21). **Recreate** creates the file and is refused with `409 entry-exists`
-  when it exists.
+  when it exists, or another entry has its name in another case or form. It also
+  creates the folders on the path that are gone, each checked as **New folder**
+  checks a name (FB-27, FB-32) and never where a submodule is _(plan's call,
+  after review)_.
 - While a merge is in progress every save is refused with `409
   merge-in-progress` (ED-19). The exception for the merge's conflicting files
   (GC-12) comes with step 4.
@@ -161,7 +164,8 @@ D-1; `api.md` A-3.11; `non-functional.md` NF-1.5, NF-5.3, NF-11.5.
     Promise<FileState>`, `.recreate(userId, repositoryId, request):
     Promise<FileState>`. A write goes to `tmp/save-<uuid>`, gets the old file's
     mode, and is renamed onto the path; save and recreate publish
-    `files.changed` with the parent folder and `files: [{ path, hash }]`.
+    `files.changed` with the parent folder (and each restored folder and its
+    parent) and `files: [{ path, hash }]`.
   - `GET /api/v1/repositories/:id/file?path=` (`readFile`) → `FileContent`; `GET
     …/file/state?path=` (`fileState`) → `FileState`; `PUT …/file` (`saveFile`) →
     `FileState`; `POST …/file/recreate` (`recreateFile`, `201`) → `FileState`.

@@ -262,12 +262,56 @@ describe('FileContents', () => {
     expect(await refusal(recreate({ ...request, content: 'again\n' })))
       .toEqual({ status: 409, code: 'entry-exists', params: {} });
     expect(bytesOf('docs/readme.md')).toEqual(bytes);
-    expect(await refusal(recreate({ ...request, path: 'gone/a.md' }))).toEqual(missing);
     expect(await refusal(recreate({ ...request, path: 'docs/a.txt' }))).toEqual(notEditable);
     expect(await refusal(recreate({ ...request, path: 'docs/README.md' })))
       .toEqual({ status: 409, code: 'entry-exists', params: {} });
     expect(readdirSync(join(root, 'docs'))).toEqual([ 'readme.md' ]);
     expect(readdirSync(layout.tmpDir)).toEqual([]);
+  });
+
+  it('AC-EDIT-001.11: recreates the folders on its path that are gone', async () => {
+    rmSync(join(root, 'docs'), { recursive: true });
+    const request: SaveFileRequest = { path: 'docs/deep/er/a.md', content: 'back\n', lineEnding: 'lf', bom: false };
+
+    await recreate(request);
+
+    expect(readFileSync(join(root, 'docs', 'deep', 'er', 'a.md'), 'utf8')).toBe('back\n');
+    expect(publish).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({
+        folders: [ '', 'docs', 'docs/deep', 'docs/deep/er' ]
+      })
+    );
+  });
+
+  it('refuses to recreate folders through a link, onto a file, inside .git or with a clashing name', async () => {
+    const outside = join(dataDir, 'outside');
+    mkdirSync(outside);
+    symlinkSync(outside, join(root, 'linked'));
+    mkdirSync(join(root, 'Notes'));
+    const request = (path: string): SaveFileRequest => ({ path, content: 'x', lineEnding: 'lf', bom: false });
+
+    expect(await refusal(recreate(request('linked/new/a.md')))).toEqual(symlinkRefused);
+    expect(await refusal(recreate(request('docs/readme.md/a.md')))).toEqual(missing);
+    expect(await refusal(recreate(request('.git/new/a.md'))))
+      .toEqual({ status: 400, code: 'path-refused', params: { reason: 'inside-git' } });
+    expect(await refusal(recreate(request('notes/a.md'))))
+      .toEqual({ status: 409, code: 'entry-exists', params: {} });
+    expect(await refusal(recreate(request(' edge/a.md'))))
+      .toEqual({ status: 400, code: 'path-refused', params: { reason: 'malformed' } });
+    expect(readdirSync(outside)).toEqual([]);
+    expect(readdirSync(root).sort()).toEqual([ '.git', 'Notes', 'docs', 'linked' ]);
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('refuses to recreate a folder where a submodule is', async () => {
+    const sha = git(root, 'rev-parse', 'HEAD').trim();
+    git(root, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
+    mkdirSync(join(root, 'vendor'));
+
+    expect(await refusal(recreate({ path: 'vendor/lib/a.md', content: 'x', lineEnding: 'lf', bom: false })))
+      .toEqual(missing);
+    expect(readdirSync(join(root, 'vendor'))).toEqual([]);
   });
 
   it('publishes files.changed with the saved hash', async () => {
