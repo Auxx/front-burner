@@ -1,12 +1,17 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import type { Entry } from '@front-burner/shared-contracts';
+import type { ApiError, Entry } from '@front-burner/shared-contracts';
 
 import { entry } from '../../../testing/listings';
+import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { EditorAreaComponent } from './editor-area.component';
 
 const K = 'web-feature-repository-screen.EditorAreaComponent';
+
+function failure(code: string): ApiError {
+  return { code, params: {}, requestId: 'abcdef0123456789', message: code };
+}
 
 describe('EditorAreaComponent', () => {
   let fixture: ComponentFixture<EditorAreaComponent>;
@@ -45,18 +50,48 @@ describe('EditorAreaComponent', () => {
     expect(area().textContent?.trim()).toBe('');
   });
 
-  it('shows a Markdown file\'s name until the editor exists', async () => {
+  it('ED-5: shows a loading state while a Markdown file opens', async () => {
     await show('docs/guide.md', entry('guide.md'));
 
-    expect(area().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
-    expect(area().textContent).toContain(`${K}.later`);
+    expect(area().querySelector('ui-spinner')?.getAttribute('aria-label')).toBe(`${K}.opening`);
+    expect(area().querySelector('rs-editor-pane')).toBeNull();
+  });
+
+  it('shows the open file in the editor', async () => {
+    fixture.componentRef.setInput('file', openFile('docs/guide.md'));
+    await show('docs/guide.md', entry('guide.md'));
+    await settle(fixture);
+
+    expect(area().querySelector('rs-editor-pane .cm-content')?.textContent).toContain('# docs/guide.md');
+    expect(area().querySelector('ui-spinner')).toBeNull();
+  });
+
+  it('AC-FILE-001.10: shows why a Markdown file could not be opened in the message panel', async () => {
+    fixture.componentRef.setInput('openError', failure('file-too-large'));
+    await show('docs/big.md', entry('big.md'));
+
+    expect(area().querySelector('rs-entry-message')?.textContent).toContain(
+      'web-feature-repository-screen.EntryMessageComponent.tooLarge'
+    );
+    expect(area().querySelector('rs-editor-pane')).toBeNull();
+  });
+
+  it('says opening failed otherwise, with Try again', async () => {
+    const retried: unknown[] = [];
+    fixture.componentInstance.retryOpen.subscribe(() => retried.push(true));
+    fixture.componentRef.setInput('openError', failure('internal'));
+    await show('docs/guide.md', entry('guide.md'));
+
+    expect(area().textContent).toContain(`${K}.openFailed`);
+    (area().querySelector('[uiEmptyStateActions] button') as HTMLButtonElement).click();
+
+    expect(retried).toEqual([ true ]);
   });
 
   it('says why another entry cannot be opened', async () => {
     await show('logo.png', entry('logo.png'));
 
     expect(area().querySelector('rs-entry-message')).not.toBeNull();
-    expect(area().textContent).not.toContain(`${K}.later`);
   });
 
   it('says the open file was deleted or renamed elsewhere', async () => {
@@ -65,7 +100,6 @@ describe('EditorAreaComponent', () => {
 
     expect(area().querySelector('ui-empty-state h2')?.textContent?.trim()).toBe('guide.md');
     expect(area().textContent).toContain(`${K}.goneElsewhere`);
-    expect(area().textContent).not.toContain(`${K}.later`);
   });
 
   it('passes on the actions of the entry message', async () => {

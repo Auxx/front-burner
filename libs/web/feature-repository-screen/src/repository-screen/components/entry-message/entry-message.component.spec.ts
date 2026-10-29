@@ -11,11 +11,17 @@ const K = 'web-feature-repository-screen.EntryMessageComponent';
 
 @Component({
   imports: [ EntryMessageComponent ],
-  template: `<rs-entry-message [entry]="entry()" [path]="path()" (action)="actions.push($event)" />`
+  template: `<rs-entry-message
+    [entry]="entry()"
+    [path]="path()"
+    [openError]="openError()"
+    (action)="actions.push($event)"
+  />`
 })
 class HostComponent {
   readonly entry = signal<Entry | null>(null);
   readonly path = signal('docs/nope.md');
+  readonly openError = signal<string | null>(null);
   readonly actions: string[] = [];
 }
 
@@ -54,6 +60,18 @@ describe('EntryMessageComponent', () => {
 
     expect(heading()).toBe(path.slice(path.lastIndexOf('/') + 1));
     expect(message()).toBe(`${K}.${key}`);
+  });
+
+  it.each([
+    [ 'file-too-large', 'tooLarge' ],
+    [ 'file-not-utf8', 'notUtf8' ]
+  ])('AC-FILE-001.10: says why a Markdown file could not be opened (%s)', async (code, key) => {
+    fixture.componentInstance.openError.set(code);
+    await show('docs/big.md', entry('big.md'));
+
+    expect(heading()).toBe('big.md');
+    expect(message()).toBe(`${K}.${key}`);
+    expect((fixture.nativeElement as HTMLElement).querySelector('button')?.textContent?.trim()).toBe(`${K}.delete`);
   });
 
   it('offers Delete in the message panel', async () => {

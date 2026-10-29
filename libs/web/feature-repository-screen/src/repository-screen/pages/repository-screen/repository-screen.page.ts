@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
-import type { Entry } from '@front-burner/shared-contracts';
+import type { ApiError, Entry } from '@front-burner/shared-contracts';
 import {
   AppShellComponent,
   AppShellSideDirective,
@@ -21,6 +21,7 @@ import { RepositoryBarComponent } from '../../components/repository-bar/reposito
 import { EntryCommandsService } from '../../services/entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../../services/first-file/first-file.service';
+import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { PaneMemoryService } from '../../services/pane-memory/pane-memory.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
@@ -40,7 +41,9 @@ import { fileName } from '../../utils/file-name/file-name';
  * as this device's last file. Without a path, the screen goes to the first
  * file to open, if there is one (FB-12), except after a navigation with
  * `state: { closed: true }`, which closed the open file because it was
- * deleted: the editor area then shows the empty state (FB-39). Selecting an entry in the tree goes
+ * deleted: the editor area then shows the empty state (FB-39). A Markdown
+ * file is opened in the editor through `OpenFilesService` (FB-21, ED-3).
+ * Selecting an entry in the tree goes
  * to its path and closes the drawer (FB-9). The tree's actions, and **New
  * file** of the empty editor area, run through `EntryCommandsService` (FB-24).
  * `TreeSyncService` keeps the tree up to date with changes made elsewhere,
@@ -70,7 +73,8 @@ import { fileName } from '../../utils/file-name/file-name';
     FileTreeStoreService,
     FirstFileService,
     EntryCommandsService,
-    TreeSyncService
+    TreeSyncService,
+    OpenFilesService
   ],
   templateUrl: './repository-screen.page.html',
   styleUrl: './repository-screen.page.scss',
@@ -85,6 +89,7 @@ export class RepositoryScreenPage {
   protected readonly tree = inject(FileTreeStoreService);
   private readonly commands = inject(EntryCommandsService);
   private readonly sync = inject(TreeSyncService);
+  protected readonly openFiles = inject(OpenFilesService);
 
   protected readonly user = this.currentUser.user;
   /** The file tree's size and whether it is collapsed, as this device last left them (FB-8). */
@@ -111,6 +116,8 @@ export class RepositoryScreenPage {
   protected readonly openPath = signal<string | null>('');
   /** The entry at `openPath`: `null` when there is none, `undefined` while it is being found. */
   protected readonly openEntry = signal<Entry | null | undefined>(undefined);
+  /** Why the Markdown file at `openPath` could not be opened. */
+  protected readonly openError = signal<ApiError | null>(null);
   /** Whether the open file was deleted or renamed elsewhere (FB-42). */
   protected readonly goneElsewhere = computed(() => {
     const gone = this.sync.goneElsewhere();
@@ -196,6 +203,8 @@ export class RepositoryScreenPage {
     this.tree.init(repositoryId);
     this.sync.clear();
     this.openEntry.set(undefined);
+    this.openError.set(null);
+    this.openFiles.clearCurrent();
     if (path === '' && closed) {
       this.openPath.set(null);
       return;
@@ -229,6 +238,27 @@ export class RepositoryScreenPage {
     this.openEntry.set(found);
     if (found?.kind === 'file' && found.markdown) {
       this.firstFile.remember(repositoryId, path);
+      await this.openFile(path, showing);
+    }
+  }
+
+  /** **Try again** after the Markdown file at the route's path could not be opened. */
+  protected retryOpen(): void {
+    const path = this.openPath();
+    if (path) {
+      this.openError.set(null);
+      void this.openFile(path, this.showing);
+    }
+  }
+
+  /** Opens the Markdown file at `path` in the editor (FB-21, ED-5); only the latest path shown counts. */
+  private async openFile(path: string, showing: number): Promise<void> {
+    try {
+      await this.openFiles.open(path);
+    } catch (error) {
+      if (showing === this.showing) {
+        this.openError.set(error as ApiError);
+      }
     }
   }
 

@@ -103,7 +103,13 @@ describe('i18n/en.json', () => {
     [ `${SCREEN}.FileTreeStoreService.more`, '{count, plural, one {# more item} other {# more items}} not shown' ],
     [ `${SCREEN}.FileTreeStoreService.loadFailed`, 'This folder could not be loaded' ],
     [ `${SCREEN}.FileTreeComponent.retry`, 'Try again' ],
-    [ `${SCREEN}.EditorAreaComponent.later`, 'The editor comes in a later version.' ],
+    [ `${SCREEN}.EntryMessageComponent.tooLarge`, 'This file is too large to edit (the limit is 1 MB).' ],
+    [ `${SCREEN}.EntryMessageComponent.notUtf8`, 'This file isn\'t UTF-8 text, so it can\'t be edited safely.' ],
+    [
+      `${SCREEN}.LargeFileNoteComponent.message`,
+      'Highlighting is off for large files on small screens, to keep typing fast.'
+    ],
+    [ `${SCREEN}.LargeFileNoteComponent.turnOn`, 'Turn on highlighting' ],
     [ `${SCREEN}.EntryMessageComponent.missing`, 'This file doesn\'t exist.' ],
     [ `${SCREEN}.EntryMessageComponent.nonMarkdown`, 'Only Markdown files can be opened in Front Burner.' ],
     [ `${SCREEN}.EntryMessageComponent.symlink`, 'Symbolic links can\'t be opened.' ],

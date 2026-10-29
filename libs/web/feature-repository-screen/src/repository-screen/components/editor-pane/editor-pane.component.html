@@ -1,0 +1,9 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.EditorPaneComponent'">
+  @if (noteShown()) {
+    <rs-large-file-note (turnOn)="file().highlight.set(true)" />
+  }
+  <div class="toolbar">
+    <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+  </div>
+  <ce-code-editor class="editor" [state]="state()" (stateChange)="changed($event)" />
+</ng-container>

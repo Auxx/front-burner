@@ -4,3 +4,9 @@
   block-size: 100%;
   padding: var(--ui-space-4);
 }
+
+// The editor fills the area; the messages stay centred.
+:host(.editing) {
+  display: block;
+  padding: var(--ui-space-2);
+}

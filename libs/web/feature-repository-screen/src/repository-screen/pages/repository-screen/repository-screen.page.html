@@ -66,9 +66,12 @@
         <rs-editor-area
           [path]="openPath()"
           [entry]="openEntry()"
+          [file]="openFiles.current()"
+          [openError]="openError()"
           [goneElsewhere]="goneElsewhere()"
           (newFile)="runAction('new-file', '')"
           (action)="runAction($event, openPath() ?? '')"
+          (retryOpen)="retryOpen()"
         />
       </ui-app-shell>
     }

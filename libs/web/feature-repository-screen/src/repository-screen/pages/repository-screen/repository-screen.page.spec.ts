@@ -4,12 +4,19 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import type { CurrentUser, FolderListing, PushEvent, RepositorySummary } from '@front-burner/shared-contracts';
+import type {
+  CurrentUser,
+  FileContent,
+  FolderListing,
+  PushEvent,
+  RepositorySummary
+} from '@front-burner/shared-contracts';
 import { FilesApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { entry, folder, listing } from '../../../testing/listings';
+import { fileContent } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
@@ -50,6 +57,8 @@ describe('RepositoryScreenPage', () => {
   let failOnce: Set<string>;
   let open: ReturnType<typeof vi.fn>;
   let createEntry: ReturnType<typeof vi.fn>;
+  let readFile: ReturnType<typeof vi.fn<(path: string) => Observable<FileContent>>>;
+  let saveFile: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
   let events: Subject<PushEvent>;
@@ -76,7 +85,9 @@ describe('RepositoryScreenPage', () => {
                 ? of(folders[query.path])
                 : failure(404, 'entry-not-found'),
             createEntry,
-            isIgnored: () => of({ ignored: false })
+            isIgnored: () => of({ ignored: false }),
+            readFile: (_id: number, query: { path: string; }) => readFile(query.path),
+            saveFile
           }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
@@ -120,6 +131,8 @@ describe('RepositoryScreenPage', () => {
     localStorage.clear();
     open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
     createEntry = vi.fn((_id: number, request: { name: string; }) => of({ path: `${request.name}.md` }));
+    readFile = vi.fn((path: string) => of(fileContent(path)));
+    saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
     document.title = '';
   });
 
@@ -299,15 +312,37 @@ describe('RepositoryScreenPage', () => {
       ) as HTMLElement;
     const url = () => TestBed.inject(Router).url;
     const editor = () => page().querySelector('main') as HTMLElement;
-    const LATER = 'web-feature-repository-screen.EditorAreaComponent.later';
+    const editorText = () => editor().querySelector('rs-editor-pane .cm-content')?.textContent ?? '';
     const MESSAGE = 'web-feature-repository-screen.EntryMessageComponent';
+
+    it('AC-EDIT-001.1: opens a Markdown file selected in the tree in the editor', async () => {
+      await visit('/repositories/12/files/docs/guide.md');
+      expect(editorText()).toContain('# docs/guide.md');
+
+      row('README.md').click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(url()).toBe('/repositories/12/files/README.md');
+      expect(readFile).toHaveBeenLastCalledWith('README.md');
+      expect(editorText()).toContain('# README.md');
+      expect(editor().querySelector('.cm-content')?.getAttribute('aria-label')).toBe('README.md');
+    });
+
+    it('AC-FILE-001.10: says why a Markdown file could not be opened', async () => {
+      readFile.mockImplementation(() => failure(422, 'file-not-utf8'));
+
+      await visit('/repositories/12/files/README.md');
+
+      expect(editor().textContent).toContain(`${MESSAGE}.notUtf8`);
+      expect(editor().querySelector('rs-editor-pane')).toBeNull();
+    });
 
     it('opens the README the first time', async () => {
       await visit('/repositories/12');
 
       expect(url()).toBe('/repositories/12/files/README.md');
-      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('README.md');
-      expect(editor().textContent).toContain(LATER);
+      expect(editorText()).toContain('# README.md');
       expect(row('README.md').getAttribute('aria-selected')).toBe('true');
       expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBe('README.md');
     });
@@ -320,7 +355,7 @@ describe('RepositoryScreenPage', () => {
       expect(url()).toBe('/repositories/12/files/docs/guide.md');
       expect(row('docs').getAttribute('aria-expanded')).toBe('true');
       expect(row('guide.md').getAttribute('aria-selected')).toBe('true');
-      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
+      expect(editorText()).toContain('# docs/guide.md');
     });
 
     it('falls back to the README when the last file is gone', async () => {
@@ -417,7 +452,7 @@ describe('RepositoryScreenPage', () => {
 
       expect(editor().querySelector('h2')?.textContent?.trim()).toBe(name);
       expect(editor().textContent).toContain(`${MESSAGE}.${key}`);
-      expect(editor().textContent).not.toContain(LATER);
+      expect(editor().querySelector('rs-editor-pane')).toBeNull();
       expect(row(name).getAttribute('aria-selected')).toBe('true');
       // Only Markdown files are remembered as the last file.
       expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBeNull();
@@ -440,7 +475,7 @@ describe('RepositoryScreenPage', () => {
       await settle(harness.fixture);
       await settle(harness.fixture);
 
-      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
+      expect(editorText()).toContain('# docs/guide.md');
       expect(row('guide.md').getAttribute('aria-selected')).toBe('true');
     });
 
@@ -482,7 +517,7 @@ describe('RepositoryScreenPage', () => {
       await settle(harness.fixture);
 
       expect(url()).toBe('/repositories/12/files/docs/guide.md');
-      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
+      expect(editorText()).toContain('# docs/guide.md');
     });
 
     it('closes the drawer when a file is selected', async () => {
