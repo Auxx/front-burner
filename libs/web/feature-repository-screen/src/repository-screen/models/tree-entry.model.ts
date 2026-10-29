@@ -20,5 +20,7 @@ export interface TreeEntry extends TreeNode {
   readonly entry?: Entry;
   /** An entry's path, or the path of the folder an added row is in. */
   readonly path: string;
+  /** Whether the entry is being deleted (FB-40): it shows "Deleting…" and has no actions. */
+  readonly deleting?: boolean;
   readonly children?: readonly TreeEntry[];
 }

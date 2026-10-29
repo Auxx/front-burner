@@ -11,11 +11,12 @@ const K = 'web-feature-repository-screen.EntryMessageComponent';
 
 @Component({
   imports: [ EntryMessageComponent ],
-  template: `<rs-entry-message [entry]="entry()" [path]="path()" />`
+  template: `<rs-entry-message [entry]="entry()" [path]="path()" (action)="actions.push($event)" />`
 })
 class HostComponent {
   readonly entry = signal<Entry | null>(null);
   readonly path = signal('docs/nope.md');
+  readonly actions: string[] = [];
 }
 
 describe('EntryMessageComponent', () => {
@@ -53,5 +54,24 @@ describe('EntryMessageComponent', () => {
 
     expect(heading()).toBe(path.slice(path.lastIndexOf('/') + 1));
     expect(message()).toBe(`${K}.${key}`);
+  });
+
+  it('offers Delete in the message panel', async () => {
+    const button = () => (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button');
+
+    await show('docs/logo.png', entry('logo.png'));
+    button()?.click();
+
+    expect(button()?.textContent?.trim()).toBe(`${K}.delete`);
+    expect(fixture.componentInstance.actions).toEqual([ 'delete' ]);
+
+    await show('latest', entry('latest', { kind: 'symlink', size: null }));
+    expect(button()).not.toBeNull();
+
+    await show('vendor/lib', entry('lib', { kind: 'submodule', size: null }));
+    expect(button()).toBeNull();
+
+    await show('docs/nope.md', null);
+    expect(button()).toBeNull();
   });
 });

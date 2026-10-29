@@ -4,7 +4,7 @@
       @if (markdown()) {
         <ui-empty-state icon="markdown" [heading]="name()">{{ t('later') }}</ui-empty-state>
       } @else {
-        <rs-entry-message [entry]="entry() ?? null" [path]="path" />
+        <rs-entry-message [entry]="entry() ?? null" [path]="path" (action)="action.emit($event)" />
       }
     }
   } @else if (path() === null) {

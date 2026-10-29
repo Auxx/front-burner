@@ -228,10 +228,23 @@ describe('FileTreeComponent', () => {
 
       expect(actionsButton('docs')?.getAttribute('aria-label')).toBe(`${K}.actionsFor`);
       expect(actionsButton('docs')?.getAttribute('tabindex')).toBe('-1');
-      expect(actionsButton('guide.md')).not.toBeNull();
-      for (const name of [ 'logo.png', 'latest', 'vendor' ]) {
-        expect(actionsButton(name)).toBeNull();
+      for (const name of [ 'guide.md', 'logo.png', 'latest' ]) {
+        expect(actionsButton(name)).not.toBeNull();
       }
+      expect(actionsButton('vendor')).toBeNull();
+    });
+
+    it('shows Deleting… and blocks the row', async () => {
+      await create();
+
+      TestBed.inject(FileTreeStoreService).markDeleting('guide.md', true);
+      await settle(fixture);
+      row('guide.md').click();
+      await settle(fixture);
+
+      expect(row('guide.md').querySelector('.deleting')?.textContent?.trim()).toBe(`${K}.deleting`);
+      expect(actionsButton('guide.md')).toBeNull();
+      expect(host.selects).toEqual([]);
     });
 
     it('emits the root actions from the buttons above the tree', async () => {
@@ -251,7 +264,12 @@ describe('FileTreeComponent', () => {
       await settle(fixture);
       await settle(fixture);
 
-      expect(menuItems()).toEqual([ `${K}.actions.new-file`, `${K}.actions.new-folder`, `${K}.actions.rename` ]);
+      expect(menuItems()).toEqual([
+        `${K}.actions.new-file`,
+        `${K}.actions.new-folder`,
+        `${K}.actions.rename`,
+        `${K}.actions.delete`
+      ]);
       expect(host.selects).toEqual([]);
       expect(row('docs').getAttribute('aria-expanded')).toBe('false');
 
@@ -275,7 +293,7 @@ describe('FileTreeComponent', () => {
       await settle(fixture);
       await settle(fixture);
 
-      expect(menuItems()).toEqual([ `${K}.actions.rename` ]);
+      expect(menuItems()).toEqual([ `${K}.actions.rename`, `${K}.actions.delete` ]);
       (document.activeElement as HTMLElement).dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
       );

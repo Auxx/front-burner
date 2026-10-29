@@ -393,5 +393,9 @@
   "web-feature-repository-screen.EntryCommandsService.renameFolder.heading": "Rename this folder?",
   "web-feature-repository-screen.EntryCommandsService.renameFolder.message": "{count, plural, one {# non-Markdown file moves} other {# non-Markdown files move}} with this folder.",
   "web-feature-repository-screen.EntryCommandsService.renameFolder.confirm": "Rename",
-  "web-feature-repository-screen.EntryCommandsService.renameFolder.cancel": "Cancel"
+  "web-feature-repository-screen.EntryCommandsService.renameFolder.cancel": "Cancel",
+  "web-feature-repository-screen.FileTreeStoreService.deleting": "Deleting…",
+  "web-feature-repository-screen.FileTreeComponent.deleting": "Deleting…",
+  "web-feature-repository-screen.FileTreeComponent.actions.delete": "Delete",
+  "web-feature-repository-screen.EntryMessageComponent.delete": "Delete"
 }

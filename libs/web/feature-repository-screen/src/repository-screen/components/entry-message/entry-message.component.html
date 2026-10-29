@@ -4,4 +4,9 @@
   [heading]="name()"
 >
   {{ t(reason()) }}
+  @if (deletable()) {
+    <div uiEmptyStateActions>
+      <button uiButton (click)="action.emit('delete')">{{ t('delete') }}</button>
+    </div>
+  }
 </ui-empty-state>

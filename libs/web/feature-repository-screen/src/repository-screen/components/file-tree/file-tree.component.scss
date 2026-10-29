@@ -40,6 +40,13 @@
   font-style: italic;
 }
 
+// "Deleting…" in place of the actions (FB-40).
+.deleting {
+  flex: none;
+  color: var(--ui-text-subtle);
+  font-style: italic;
+}
+
 .danger {
   flex: none;
   color: var(--ui-danger-icon);

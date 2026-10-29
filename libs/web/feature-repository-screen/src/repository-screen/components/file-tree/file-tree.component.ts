@@ -52,7 +52,8 @@ export interface EntryActionRequest {
  * (FB-25). Each entry with actions has an actions button, which also opens
  * from the keyboard on its row (Shift+F10, the ContextMenu key); all rows
  * share one menu, filled with the actions of the row that opened it (FB-24).
- * A chosen action is emitted as `action`.
+ * A chosen action is emitted as `action`. An entry being deleted shows
+ * "Deleting…" in place of its actions (FB-40).
  *
  * The store's `focusRequest` focuses its entry's row, if the tree shows it
  * once the request is rendered (FB-32).
@@ -140,7 +141,7 @@ export class FileTreeComponent {
   }
 
   protected actions(row: TreeEntry): EntryAction[] {
-    return row.entry ? entryActions(row.entry) : [];
+    return row.entry && !row.deleting ? entryActions(row.entry) : [];
   }
 
   protected onMenuItem(action: EntryAction): void {
