@@ -263,4 +263,29 @@ describe('TreeSyncService', () => {
 
     expect(session.retry).toHaveBeenCalledTimes(1);
   });
+
+  it('leaves a folder that failed to Try again', async () => {
+    answers['notes'] = [ throwError(() => new HttpErrorResponse({ status: 500, error: { code: 'internal' } })) ];
+    await start([ 'notes' ]);
+
+    changed('all');
+    reconnected.next();
+    await flush();
+
+    expect(listed()).toContain('');
+    expect(listed()).not.toContain('notes');
+  });
+
+  it('does not list again a folder this tab is renaming or deleting', async () => {
+    await start([ 'docs', 'docs/api' ]);
+    const done = TestBed.inject(EntryCommandsService).ownChange('docs');
+
+    changed([ '', 'docs', 'docs/api' ]);
+    reconnected.next();
+    await flush();
+    done();
+
+    expect(listed()).toContain('');
+    expect(listed().filter(folder => folder.startsWith('docs'))).toEqual([]);
+  });
 });

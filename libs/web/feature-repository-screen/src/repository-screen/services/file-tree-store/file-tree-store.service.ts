@@ -141,17 +141,20 @@ export class FileTreeStoreService {
   }
 
   /**
-   * Lists again the folders among `folders` that are shown: the root folder,
-   * and the expanded folders whose parents are shown (FB-41); the others are
-   * ignored. `all` lists every shown folder. A folder already being listed is
+   * Lists again the folders among `folders` that are shown and listed: the
+   * root folder, and the expanded folders whose parents are shown (FB-41);
+   * the others, those that failed and show **Try again** (FB-44), and those
+   * `except` names are ignored. `all` lists every shown folder. A folder already being listed is
    * listed once more after that, however many times it is named meanwhile. A
    * folder that is gone is removed with what it holds, from the tree and the
    * remembered folders, with no error row (FB-42). Resolves once all of them
    * are listed, or could not be.
    */
-  async reload(folders: readonly string[] | 'all'): Promise<void> {
+  async reload(folders: readonly string[] | 'all', except: (folder: string) => boolean = () => false): Promise<void> {
     const generation = this.generation;
-    const shown = [ ...this.folders().keys() ].filter(folder => this.shown(folder));
+    const shown = [ ...this.folders() ]
+      .filter(([ folder, state ]) => state.status !== 'error' && this.shown(folder) && !except(folder))
+      .map(([ folder ]) => folder);
     const named = folders === 'all' ? shown : shown.filter(folder => folders.includes(folder));
     await Promise.all(named.map(folder => this.relist(folder, generation)));
   }

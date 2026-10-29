@@ -72,7 +72,8 @@ export class TreeSyncService {
   private async sync(folders: readonly string[] | 'all'): Promise<void> {
     const path = this.route.snapshot.paramMap.get('path') ?? '';
     const listed = path !== '' && this.store.entry(path) !== undefined;
-    await this.store.reload(folders);
+    // This tab lists the folders it renames or deletes itself; listing them here would find them gone.
+    await this.store.reload(folders, folder => this.commands.isOwnChange(folder));
     if (
       listed && path === (this.route.snapshot.paramMap.get('path') ?? '') && !this.commands.isOwnChange(path)
       && this.store.gone(path)
