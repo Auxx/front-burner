@@ -6,7 +6,8 @@ import { type Draft, type DraftKey, DraftStore } from '@front-burner/web-core';
  * (`<userId>/<repositoryId>/<path>`). A folder's path names the drafts under
  * it, as in the real store.
  */
-export class MemoryDraftStore implements Pick<DraftStore, 'available' | 'put' | 'get' | 'delete' | 'move' | 'clearAll'> {
+export class MemoryDraftStore
+  implements Pick<DraftStore, 'available' | 'put' | 'get' | 'delete' | 'move' | 'clearAll'> {
   readonly drafts = new Map<string, Draft>();
   readonly available = true;
 

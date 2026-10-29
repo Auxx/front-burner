@@ -2,7 +2,14 @@ import { computed, inject, Injectable, type Signal, signal, type WritableSignal 
 import type { FileContent } from '@front-burner/shared-contracts';
 import { injectNarrowViewport } from '@front-burner/ui';
 import { FilesApi } from '@front-burner/web-api-client';
-import { CurrentUserService, type Draft, type DraftKey, DraftStore, FileSaver, toApiError } from '@front-burner/web-core';
+import {
+  CurrentUserService,
+  type Draft,
+  type DraftKey,
+  DraftStore,
+  FileSaver,
+  toApiError
+} from '@front-burner/web-core';
 import { firstValueFrom } from 'rxjs';
 
 import { isWithin, movedPath } from '../../utils/file-name/file-name';

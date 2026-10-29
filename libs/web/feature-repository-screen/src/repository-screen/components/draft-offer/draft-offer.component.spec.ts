@@ -15,7 +15,10 @@ describe('DraftOfferComponent', () => {
 
   beforeEach(async () => {
     TestBed.configureTestingModule({
-      imports: [ DraftOfferComponent, translocoTesting({ [`${K}.message`]: 'You have unsaved changes from {{ time }}' }) ]
+      imports: [
+        DraftOfferComponent,
+        translocoTesting({ [`${K}.message`]: 'You have unsaved changes from {{ time }}' })
+      ]
     });
     fixture = TestBed.createComponent(DraftOfferComponent);
     fixture.componentRef.setInput('draft', { content: '# Draft', savedAt: SAVED_AT });

@@ -288,7 +288,10 @@ describe('EntryCommandsService', () => {
   });
 
   it('moves the draft when the tree renames the file', async () => {
-    await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, { content: '# Unsaved', savedAt: '2026-10-29T10:05:00.000Z' });
+    await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, {
+      content: '# Unsaved',
+      savedAt: '2026-10-29T10:05:00.000Z'
+    });
 
     await run('rename', 'docs', async () => {
       type(nameInput(), 'handbook');
@@ -552,8 +555,14 @@ describe('EntryCommandsService', () => {
     });
 
     it('deletes the draft when the tree deletes the file', async () => {
-      await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, { content: '# Unsaved', savedAt: '2026-10-29T10:05:00.000Z' });
-      await drafts.put({ userId: 4, repositoryId: 12, path: 'README.md' }, { content: '# Unsaved', savedAt: '2026-10-29T10:05:00.000Z' });
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, {
+        content: '# Unsaved',
+        savedAt: '2026-10-29T10:05:00.000Z'
+      });
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'README.md' }, {
+        content: '# Unsaved',
+        savedAt: '2026-10-29T10:05:00.000Z'
+      });
 
       await run('delete', 'docs/guide.md', async () => {
         dialogButton(`${D}.delete`)?.click();

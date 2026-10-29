@@ -147,11 +147,14 @@ describe('DraftStore when the session ends', () => {
   beforeEach(async () => {
     globalThis.indexedDB = new IDBFactory();
     localStorage.clear();
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
-      authToken: 'token',
-      authTokenExpiresAt: '2026-10-29T10:15:00.000Z',
-      refreshTokenExpiresAt: '2026-11-28T10:00:00.000Z'
-    }));
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({
+        authToken: 'token',
+        authTokenExpiresAt: '2026-10-29T10:15:00.000Z',
+        refreshTokenExpiresAt: '2026-11-28T10:00:00.000Z'
+      })
+    );
     logout = vi.fn(() => of(undefined));
     TestBed.configureTestingModule({
       providers: [
