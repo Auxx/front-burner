@@ -1,6 +1,8 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.EditorAreaComponent'">
   @if (path(); as path) {
-    @if (entry() !== undefined) {
+    @if (goneElsewhere()) {
+      <ui-empty-state icon="info" [heading]="name()">{{ t('goneElsewhere') }}</ui-empty-state>
+    } @else if (entry() !== undefined) {
       @if (markdown()) {
         <ui-empty-state icon="markdown" [heading]="name()">{{ t('later') }}</ui-empty-state>
       } @else {

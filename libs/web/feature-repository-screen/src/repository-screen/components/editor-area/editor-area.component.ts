@@ -13,7 +13,8 @@ import { EntryMessageComponent } from '../entry-message/entry-message.component'
  * button that emits `newFile` (FB-12). For a
  * Markdown file it shows the file's name until the editor exists; for any
  * other entry, or a path that does not exist, why it cannot be opened (FB-13,
- * FB-21), with its actions emitted as `action`.
+ * FB-21), with its actions emitted as `action`. A file deleted or renamed
+ * elsewhere says so (`goneElsewhere`, FB-42).
  */
 @Component({
   selector: 'rs-editor-area',
@@ -33,6 +34,8 @@ export class EditorAreaComponent {
   readonly path = input<string | null>(null);
   /** The entry at `path`: `null` when there is none, `undefined` while it is being found. */
   readonly entry = input<Entry | null | undefined>(undefined);
+  /** Whether the file at `path` was deleted or renamed elsewhere since it was opened (FB-42). */
+  readonly goneElsewhere = input(false);
 
   readonly newFile = output<void>();
   /** An action chosen for the entry at `path`, such as **Delete** (FB-21). */

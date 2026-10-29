@@ -16,6 +16,9 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
 
 const KEY = 'web-feature-repository-screen.EntryCommandsService';
 
+/** How long after its answer a rename or delete still counts as this tab's own, for its late events. */
+export const OWN_CHANGE_MS = 5000;
+
 /**
  * Runs the actions of the file tree (FB-24) on the repository open on the
  * repository screen. Provided by the page. One action runs at a time: another
@@ -36,6 +39,11 @@ const KEY = 'web-feature-repository-screen.EntryCommandsService';
  *   the entry as deleting while it runs (FB-40). When the open file is the
  *   entry or lies under it, the screen closes it and shows the empty state,
  *   not the README (FB-39).
+ *
+ * The entries a rename or delete changes are this tab's own changes
+ * (`ownChange`) from when its dialog opens until {@link OWN_CHANGE_MS} after
+ * it closes, so that their `files.changed` events, which can come before the
+ * answer, are not taken for changes made elsewhere (FB-42).
  */
 @Injectable()
 export class EntryCommandsService {
@@ -49,6 +57,8 @@ export class EntryCommandsService {
   private readonly transloco = inject(TranslocoService);
 
   private running = false;
+  /** The paths changed by this tab, one mark per change. */
+  private readonly own = new Set<{ readonly path: string; }>();
 
   /**
    * Runs `action` on the entry at `path`; `''` is the root folder. Resolves to
@@ -76,6 +86,21 @@ export class EntryCommandsService {
     } finally {
       this.running = false;
     }
+  }
+
+  /**
+   * Marks `path` and everything under it as changed by this tab, until the
+   * returned function is called.
+   */
+  ownChange(path: string): () => void {
+    const mark = { path };
+    this.own.add(mark);
+    return () => this.own.delete(mark);
+  }
+
+  /** Whether `path` is, or lies under, an entry this tab is changing or has just changed. */
+  isOwnChange(path: string): boolean {
+    return [ ...this.own ].some(mark => isWithin(path, mark.path));
   }
 
   private async create(repositoryId: number, kind: NewEntryKind, folder: string): Promise<string | null> {
@@ -121,6 +146,7 @@ export class EntryCommandsService {
       return;
     }
     const parent = parentPath(path);
+    const done = this.ownChange(path);
     const renamed = await this.ask({
       mode: 'rename',
       repositoryId,
@@ -129,6 +155,7 @@ export class EntryCommandsService {
       siblings: (await this.store.entries(parent))?.map(item => item.name) ?? [],
       confirm: entry.kind === 'folder' ? () => this.confirmFolderRename(repositoryId, path) : undefined
     });
+    setTimeout(done, renamed ? OWN_CHANGE_MS : 0);
     if (!renamed) {
       return;
     }
@@ -149,10 +176,13 @@ export class EntryCommandsService {
     }
     const parent = parentPath(path);
     const siblings = (await this.store.entries(parent))?.map(item => joinPath(parent, item.name)) ?? [];
+    const done = this.ownChange(path);
     const ref = this.dialogs.open<DeleteEntryDialog, DeleteEntryData, boolean>(DeleteEntryDialog, {
       data: { repositoryId, path, entry, marked: deleting => this.store.markDeleting(path, deleting) }
     });
-    if (!(await firstValueFrom(ref.closed))) {
+    const confirmed = await firstValueFrom(ref.closed);
+    setTimeout(done, confirmed ? OWN_CHANGE_MS : 0);
+    if (!confirmed) {
       return;
     }
     if (isWithin(this.route.snapshot.paramMap.get('path') ?? '', path)) {

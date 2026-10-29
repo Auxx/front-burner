@@ -23,6 +23,12 @@ interface Request {
   supersede(next: Promise<Outcome>): void;
 }
 
+/** A folder being listed again for a change made elsewhere; `again` when another one came meanwhile. */
+interface Reload {
+  again: boolean;
+  readonly done: Promise<void>;
+}
+
 const KEY = 'web-feature-repository-screen.FileTreeStoreService';
 
 /**
@@ -39,6 +45,10 @@ const KEY = 'web-feature-repository-screen.FileTreeStoreService';
  * An entry marked as deleting (`markDeleting`) shows "Deleting…", cannot be
  * selected or expanded, and keeps the mark when its folder is listed again,
  * until it is cleared (FB-40).
+ *
+ * `reload` lists the shown folders again after changes made elsewhere
+ * (FB-41), one request at a time per folder, and removes those that are gone
+ * (FB-42).
  *
  * Each device remembers the expanded folders of each repository under
  * `fb.<userId>.repo.<repositoryId>.expanded` (FB-14). They are restored parents
@@ -77,6 +87,7 @@ export class FileTreeStoreService {
   private generation = 0;
   private readonly requests = new Map<string, Request>();
   private readonly subscriptions = new Map<string, Subscription>();
+  private readonly reloads = new Map<string, Reload>();
 
   constructor() {
     effect(() => {
@@ -127,6 +138,47 @@ export class FileTreeStoreService {
    */
   async load(folder: string): Promise<void> {
     await this.fetch(folder);
+  }
+
+  /**
+   * Lists again the folders among `folders` that are shown: the root folder,
+   * and the expanded folders whose parents are shown (FB-41); the others are
+   * ignored. `all` lists every shown folder. A folder already being listed is
+   * listed once more after that, however many times it is named meanwhile. A
+   * folder that is gone is removed with what it holds, from the tree and the
+   * remembered folders, with no error row (FB-42). Resolves once all of them
+   * are listed, or could not be.
+   */
+  async reload(folders: readonly string[] | 'all'): Promise<void> {
+    const generation = this.generation;
+    const shown = [ ...this.folders().keys() ].filter(folder => this.shown(folder));
+    const named = folders === 'all' ? shown : shown.filter(folder => folders.includes(folder));
+    await Promise.all(named.map(folder => this.relist(folder, generation)));
+  }
+
+  /**
+   * Whether the listings show that the entry at `path`, which was listed,
+   * is gone: a folder on the way, or its own folder, is listed in full
+   * without it, or was removed. `false` while that is not known.
+   */
+  gone(path: string): boolean {
+    const folders = this.folders();
+    let folder = '';
+    for (const name of path.split('/')) {
+      const state = folders.get(folder);
+      if (state === undefined) {
+        return folder !== '';
+      }
+      if (state.status !== 'loaded') {
+        return false;
+      }
+      const listing = this.withExtras(folder, state.listing, this.extras());
+      if (!listing.entries.some(item => item.name === name)) {
+        return listing.more === 0;
+      }
+      folder = joinPath(folder, name);
+    }
+    return false;
   }
 
   /**
@@ -263,6 +315,40 @@ export class FileTreeStoreService {
     });
     this.expanded.update(expanded => expanded.filter(item => !under(item)));
     this.markDeleting(path, false);
+  }
+
+  /** Whether `folder` is shown: the root folder, or expanded with its parent shown. */
+  private shown(folder: string): boolean {
+    return folder === '' || (this.expanded().includes(folder) && this.shown(parentPath(folder)));
+  }
+
+  /** Lists `folder` again for `reload`, after the request already on its way if there is one. */
+  private relist(folder: string, generation: number): Promise<void> {
+    const running = this.reloads.get(folder);
+    if (running) {
+      running.again = true;
+      return running.done;
+    }
+    const pending = this.requests.get(folder);
+    // A request on its way may have been answered before the change: one more follows it.
+    const reload: Reload = {
+      again: pending !== undefined,
+      done: (pending?.done ?? this.fetch(folder)).then(async first => {
+        let outcome = first;
+        while (reload.again && generation === this.generation) {
+          reload.again = false;
+          outcome = await this.fetch(folder);
+        }
+        if (this.reloads.get(folder) === reload) {
+          this.reloads.delete(folder);
+        }
+        if (outcome === 'missing' && folder !== '' && generation === this.generation) {
+          this.deleted(folder);
+        }
+      })
+    };
+    this.reloads.set(folder, reload);
+    return reload.done;
   }
 
   /** Drops the listings of the folders that `gone` names, and their requests on the way. */
@@ -405,6 +491,7 @@ export class FileTreeStoreService {
     }
     this.subscriptions.clear();
     this.requests.clear();
+    this.reloads.clear();
   }
 
   /** A folder's rows; undefined until it is asked for, so that `ui-tree` asks for it. */

@@ -4,9 +4,9 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import type { CurrentUser, FolderListing, RepositorySummary } from '@front-burner/shared-contracts';
+import type { CurrentUser, FolderListing, PushEvent, RepositorySummary } from '@front-burner/shared-contracts';
 import { FilesApi, RepositoriesApi } from '@front-burner/web-api-client';
-import { AuthSessionService, CurrentUserService, PageTitleService } from '@front-burner/web-core';
+import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { entry, folder, listing } from '../../../testing/listings';
@@ -51,6 +51,7 @@ describe('RepositoryScreenPage', () => {
   let createEntry: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
+  let events: Subject<PushEvent>;
 
   const page = () => harness.fixture.nativeElement as HTMLElement;
   const button = (text: string) =>
@@ -77,6 +78,7 @@ describe('RepositoryScreenPage', () => {
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         { provide: AuthSessionService, useValue: { loggedIn: signal(true), logout: vi.fn() } },
+        { provide: PushChannelService, useValue: { events, reconnected: new Subject<void>() } },
         {
           provide: BreakpointObserver,
           useValue: { observe: () => of({ matches: narrow, breakpoints: {} }), isMatched: () => narrow }
@@ -110,6 +112,7 @@ describe('RepositoryScreenPage', () => {
       docs: listing('docs', [ entry('guide.md') ])
     };
     narrow = false;
+    events = new Subject();
     localStorage.clear();
     open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
     createEntry = vi.fn((_id: number, request: { name: string; }) => of({ path: `${request.name}.md` }));
@@ -287,6 +290,24 @@ describe('RepositoryScreenPage', () => {
       expect(page().querySelector('main ui-empty-state')?.textContent).toContain(
         'web-feature-repository-screen.EditorAreaComponent.empty'
       );
+    });
+
+    it('says the open file was deleted elsewhere, until another file is opened (FB-42)', async () => {
+      await visit('/repositories/12/files/docs/guide.md');
+      const GONE = 'web-feature-repository-screen.EditorAreaComponent.goneElsewhere';
+
+      folders['docs'] = listing('docs', [ entry('other.md') ]);
+      events.next({ type: 'files.changed', repositoryId: 12, folders: [ 'docs' ] });
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(url()).toBe('/repositories/12/files/docs/guide.md');
+      expect(editor().textContent).toContain(GONE);
+      expect(row('other.md')).toBeDefined();
+
+      await go('/repositories/12/files/docs/other.md');
+
+      expect(editor().textContent).not.toContain(GONE);
     });
 
     it('shows the empty state, not the README, when the open file was closed (FB-39)', async () => {

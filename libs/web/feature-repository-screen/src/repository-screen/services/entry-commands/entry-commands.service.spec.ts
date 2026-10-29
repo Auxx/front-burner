@@ -20,7 +20,7 @@ import { translocoTesting } from '../../../testing/transloco-testing';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../first-file/first-file.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
-import { EntryCommandsService } from './entry-commands.service';
+import { EntryCommandsService, OWN_CHANGE_MS } from './entry-commands.service';
 
 const P = 'web-feature-repository-screen';
 
@@ -259,6 +259,25 @@ describe('EntryCommandsService', () => {
     expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBe('docs/intro.md');
   });
 
+  /** The function a command set to run {@link OWN_CHANGE_MS} after its answer. */
+  const ownChangeEnd = (timers: { mock: { calls: unknown[][]; }; }) =>
+    timers.mock.calls.findLast(([ , delay ]) => delay === OWN_CHANGE_MS)?.[0] as () => void;
+
+  it('counts a rename as its own change until shortly after its answer', async () => {
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+
+    await run('rename', 'docs', async () => {
+      expect(commands.isOwnChange('docs/guide.md')).toBe(true);
+      type(nameInput(), 'manual');
+      dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
+    });
+
+    expect(commands.isOwnChange('docs/guide.md')).toBe(true);
+    expect(commands.isOwnChange('README.md')).toBe(false);
+    ownChangeEnd(timers)();
+    expect(commands.isOwnChange('docs/guide.md')).toBe(false);
+  });
+
   it('leaves the route alone when another entry is renamed', async () => {
     openPath = 'README.md';
 
@@ -315,6 +334,28 @@ describe('EntryCommandsService', () => {
       expect(deleted).toEqual([ 'docs/guide.md' ]);
       expect(store.entry('docs/guide.md')).toBeUndefined();
       expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('counts a delete as its own change until shortly after its answer', async () => {
+      const timers = vi.spyOn(globalThis, 'setTimeout');
+
+      await run('delete', 'docs/guide.md', async () => {
+        expect(commands.isOwnChange('docs/guide.md')).toBe(true);
+        dialogButton(`${D}.delete`)?.click();
+      });
+
+      expect(commands.isOwnChange('docs/guide.md')).toBe(true);
+      ownChangeEnd(timers)();
+      expect(commands.isOwnChange('docs/guide.md')).toBe(false);
+    });
+
+    it('does not count a cancelled delete as a change', async () => {
+      await run('delete', 'docs/guide.md', async () => {
+        dialogButton(`${D}.cancel`)?.click();
+      });
+      await new Promise(resolve => setTimeout(resolve));
+
+      expect(commands.isOwnChange('docs/guide.md')).toBe(false);
     });
 
     it('does not delete without a summary', async () => {
