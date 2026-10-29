@@ -1,4 +1,6 @@
-import { Injectable } from '@angular/core';
+import { effect, inject, Injectable, untracked } from '@angular/core';
+
+import { AuthSessionService } from '../services/auth-session/auth-session.service';
 
 /** Names a browser draft: one file of one user's repository. */
 export interface DraftKey {
@@ -49,22 +51,41 @@ function committed(transaction: IDBTransaction): Promise<void> {
  * object store `drafts` of the database `front-burner`, keyed by user,
  * repository and path. Uses the native API.
  *
+ * Every draft is deleted whenever the user is not logged in: on logout, when
+ * the session ends and cannot be refreshed, and when another tab logs out
+ * (NF-3.5, NV-8); meanwhile `put` writes nothing, so that a save queue still
+ * running writes no more drafts. `provideCore` creates the store at start-up,
+ * so that a tab that never opened the editor deletes them too.
+ *
  * Where IndexedDB is missing or fails, such as in a private window or with
  * storage turned off, drafts are skipped: every method resolves, never
  * rejects, and `get` finds nothing.
  */
 @Injectable({ providedIn: 'root' })
 export class DraftStore {
+  private readonly session = inject(AuthSessionService);
   private database: Promise<IDBDatabase | null> | undefined;
   private works = true;
+
+  constructor() {
+    effect(() => {
+      if (!this.session.loggedIn()) {
+        untracked(() => void this.clearAll());
+      }
+    });
+  }
 
   /** Whether drafts can be kept; false once IndexedDB is found missing or failing. */
   get available(): boolean {
     return this.works;
   }
 
+  /** Stores the draft at `key`; does nothing while the user is not logged in. */
   async put(key: DraftKey, draft: Draft): Promise<void> {
-    await this.write(store => store.put({ content: draft.content, savedAt: draft.savedAt }, keyOf(key)));
+    if (!this.session.loggedIn()) {
+      return;
+    }
+    await this.write(store => store.put({ content: draft.content, savedAt: draft.savedAt }, keyOf(key)), true);
   }
 
   async get(key: DraftKey): Promise<Draft | null> {
@@ -115,9 +136,10 @@ export class DraftStore {
   }
 
   /** Runs `change` in a read-write transaction and waits for it to commit; does nothing without IndexedDB. */
-  private async write(change: (store: IDBObjectStore) => void): Promise<void> {
+  private async write(change: (store: IDBObjectStore) => void, whileLoggedIn = false): Promise<void> {
     const database = await this.open();
-    if (!database) {
+    // A logout while the database was opened: its clearing may already have run.
+    if (!database || (whileLoggedIn && !this.session.loggedIn())) {
       return;
     }
     try {

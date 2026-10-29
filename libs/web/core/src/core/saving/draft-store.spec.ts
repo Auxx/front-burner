@@ -1,8 +1,13 @@
 import 'fake-indexeddb/auto';
 
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { AuthApi, OidcApi } from '@front-burner/web-api-client';
 import { IDBFactory } from 'fake-indexeddb';
+import { of } from 'rxjs';
 
+import { AUTH_STORAGE_KEY, AuthSessionService } from '../services/auth-session/auth-session.service';
 import { type DraftKey, DraftStore } from './draft-store';
 
 const key = (path: string, repositoryId = 12, userId = 1): DraftKey => ({ userId, repositoryId, path });
@@ -10,11 +15,16 @@ const draft = (content: string) => ({ content, savedAt: '2026-10-29T10:00:00.000
 
 describe('DraftStore', () => {
   let store: DraftStore;
+  let loggedIn: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory();
-    TestBed.configureTestingModule({});
+    loggedIn = signal(true);
+    TestBed.configureTestingModule({
+      providers: [ { provide: AuthSessionService, useValue: { loggedIn } } ]
+    });
     store = TestBed.inject(DraftStore);
+    TestBed.tick();
   });
 
   it('stores, reads and deletes a draft', async () => {
@@ -120,5 +130,85 @@ describe('DraftStore', () => {
       await expect(store.get(key('a.md'))).resolves.toBeNull();
       expect(store.available).toBe(false);
     });
+  });
+});
+
+describe('DraftStore when the session ends', () => {
+  let store: DraftStore;
+  let session: AuthSessionService;
+  let logout: ReturnType<typeof vi.fn>;
+
+  /** Waits for the clearing, which runs on its own: reading waits behind its transaction. */
+  async function settled(): Promise<void> {
+    TestBed.tick();
+    await store.get(key('any.md'));
+  }
+
+  beforeEach(async () => {
+    globalThis.indexedDB = new IDBFactory();
+    localStorage.clear();
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+      authToken: 'token',
+      authTokenExpiresAt: '2026-10-29T10:15:00.000Z',
+      refreshTokenExpiresAt: '2026-11-28T10:00:00.000Z'
+    }));
+    logout = vi.fn(() => of(undefined));
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([ { path: 'login', children: [] } ]),
+        { provide: AuthApi, useValue: { logout } },
+        { provide: OidcApi, useValue: {} }
+      ]
+    });
+    session = TestBed.inject(AuthSessionService);
+    store = TestBed.inject(DraftStore);
+    await settled();
+    await store.put(key('a.md', 12, 1), draft('a'));
+    await store.put(key('b.md', 13, 2), draft('b'));
+  });
+
+  afterEach(() => localStorage.clear());
+
+  it('AC-EDIT-001.7: deletes every draft on logout', async () => {
+    await session.logout();
+    await settled();
+
+    expect(logout).toHaveBeenCalled();
+    expect(await store.get(key('a.md', 12, 1))).toBeNull();
+    expect(await store.get(key('b.md', 13, 2))).toBeNull();
+  });
+
+  it('deletes drafts when the session expires', async () => {
+    await session.expire();
+    await settled();
+
+    expect(await store.get(key('a.md', 12, 1))).toBeNull();
+  });
+
+  it('deletes drafts when another tab logs out', async () => {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.dispatchEvent(new StorageEvent('storage', { key: AUTH_STORAGE_KEY, newValue: null }));
+    await settled();
+
+    expect(await store.get(key('b.md', 13, 2))).toBeNull();
+  });
+
+  it('stops writing drafts once the session ends', async () => {
+    // A put on its way when the session ends is cleared with the rest.
+    const onItsWay = store.put(key('late.md'), draft('late'));
+    await session.expire();
+    await onItsWay;
+    await settled();
+    // A save queue still running after the clearing writes nothing.
+    await store.put(key('after.md'), draft('after'));
+
+    expect(await store.get(key('late.md'))).toBeNull();
+    expect(await store.get(key('after.md'))).toBeNull();
+  });
+
+  it('keeps the drafts while the user stays logged in', async () => {
+    await settled();
+
+    expect(await store.get(key('a.md', 12, 1))).toEqual(draft('a'));
   });
 });
