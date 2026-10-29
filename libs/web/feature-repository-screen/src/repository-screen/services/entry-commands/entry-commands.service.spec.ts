@@ -261,7 +261,7 @@ describe('EntryCommandsService', () => {
 
   /** The function a command set to run {@link OWN_CHANGE_MS} after its answer. */
   const ownChangeEnd = (timers: { mock: { calls: unknown[][]; }; }) =>
-    timers.mock.calls.findLast(([ , delay ]) => delay === OWN_CHANGE_MS)?.[0] as () => void;
+    [ ...timers.mock.calls ].reverse().find(([ , delay ]: unknown[]) => delay === OWN_CHANGE_MS)?.[0] as () => void;
 
   it('counts a rename as its own change until shortly after its answer', async () => {
     const timers = vi.spyOn(globalThis, 'setTimeout');

@@ -43,6 +43,7 @@ describe('TreeSyncService', () => {
     state: ReturnType<typeof signal<string>>;
     statusChanged: ReturnType<typeof vi.fn>;
     retry: ReturnType<typeof vi.fn>;
+    refresh: ReturnType<typeof vi.fn>;
   };
   let store: FileTreeStoreService;
   let sync: TreeSyncService;
