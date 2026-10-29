@@ -171,11 +171,12 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
     } ],
     [ 'focusout', () => hide() ],
     [ 'pointerdown', (event: PointerEvent) => {
+      // A new press, by any pointer: an earlier long press may have ended without a click.
+      pressedLong = false;
+      clearTimeout(longPress);
       if (!isTouch(event)) {
         return;
       }
-      pressedLong = false;
-      clearTimeout(longPress);
       longPress = setTimeout(() => {
         pressedLong = true;
         show();

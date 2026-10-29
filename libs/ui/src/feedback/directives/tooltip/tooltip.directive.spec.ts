@@ -155,6 +155,18 @@ describe('TooltipDirective', () => {
     expect(shown()).toEqual([]);
   });
 
+  it('swallows no later mouse click when a long press ended without one', () => {
+    const name = button('handbook…');
+    touch(name, 'pointerdown');
+    vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS);
+    touch(name, 'pointerup');
+
+    name.dispatchEvent(Object.assign(new MouseEvent('pointerdown', { bubbles: true }), { pointerType: 'mouse' }));
+    name.click();
+
+    expect(fixture.componentInstance.clicks()).toBe(1);
+  });
+
   it('leaves a short tap alone', () => {
     const name = button('handbook…');
 
