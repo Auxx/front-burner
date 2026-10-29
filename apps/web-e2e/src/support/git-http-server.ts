@@ -6,6 +6,7 @@ import { createServer } from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 
 // A copy of the server's test certificate and key (web-e2e cannot import
 // server libraries, A-2.4): self-signed for `localhost`, `127.0.0.1` and
@@ -51,6 +52,12 @@ export interface GitHttpServerOptions {
   repositories: Record<string, string>;
   /** User name → password; when given, every request needs Basic authentication. */
   users?: Record<string, string>;
+  /**
+   * Waited for before each request for objects (a `git-upload-pack` with
+   * `want` lines) is served, so that a clone lasts until a test lets it end.
+   * Listing the references, as an access check does, is not held.
+   */
+  beforeFetch?: () => Promise<void>;
 }
 
 function authorised(request: IncomingMessage, users: Record<string, string> | undefined): boolean {
@@ -67,7 +74,14 @@ function authorised(request: IncomingMessage, users: Record<string, string> | un
 }
 
 /** Runs `git http-backend` as a CGI script for one request. */
-function serveGit(request: IncomingMessage, response: ServerResponse, repository: string, pathInfo: string): void {
+/** `body` is the request's body when it was read already. */
+function serveGit(
+  request: IncomingMessage,
+  response: ServerResponse,
+  repository: string,
+  pathInfo: string,
+  body?: Buffer
+): void {
   const url = new URL(request.url ?? '/', 'https://localhost');
   const env: Record<string, string> = {
     ...gitEnv,
@@ -89,7 +103,11 @@ function serveGit(request: IncomingMessage, response: ServerResponse, repository
     env['HTTP_GIT_PROTOCOL'] = protocol;
   }
   const child = spawn('git', [ 'http-backend' ], { env, stdio: [ 'pipe', 'pipe', 'ignore' ] });
-  request.pipe(child.stdin);
+  if (body === undefined) {
+    request.pipe(child.stdin);
+  } else {
+    child.stdin.end(body);
+  }
   child.stdin.on('error', () => undefined);
 
   let head = Buffer.alloc(0);
@@ -148,7 +166,21 @@ export async function startGitHttpServer(options: GitHttpServerOptions): Promise
       response.end('Not Found');
       return;
     }
-    serveGit(request, response, options.repositories[name] ?? '', path.slice(name.length + 1));
+    const pathInfo = path.slice(name.length + 1);
+    const repository = options.repositories[name] ?? '';
+    const { beforeFetch } = options;
+    if (pathInfo !== '/git-upload-pack' || beforeFetch === undefined) {
+      serveGit(request, response, repository, pathInfo);
+      return;
+    }
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk: Buffer) => chunks.push(chunk));
+    request.on('end', () => {
+      const body = Buffer.concat(chunks);
+      const text = (request.headers['content-encoding'] === 'gzip' ? gunzipSync(body) : body).toString('latin1');
+      const held = /want [0-9a-f]{40}/.test(text) ? beforeFetch() : Promise.resolve();
+      void held.then(() => serveGit(request, response, repository, pathInfo, body));
+    });
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;

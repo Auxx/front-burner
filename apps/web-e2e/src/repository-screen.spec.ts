@@ -1,6 +1,16 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { drainFailedRequests, expect, test } from './support/fixtures';
+import {
+  createHandbookRemote,
+  type GitHttpServer,
+  startGitHttpServer,
+  TEST_CERTIFICATE_FILE
+} from './support/git-http-server';
 import { logIn, seed, type SeedRepository } from './support/instance';
 
 test.use({ instanceOptions: { onboarded: true } });
@@ -844,5 +854,103 @@ test.describe('repository screen', () => {
     await expect(dialog(page).getByText('It holds 1 file, 1 of them non-Markdown.')).toBeVisible();
 
     expect((await new AxeBuilder({ page }).include('.cdk-overlay-container').analyze()).violations).toEqual([]);
+  });
+});
+
+test.describe('repository screen, kept up to date', () => {
+  const GONE_ELSEWHERE = 'This file was deleted or renamed elsewhere.';
+
+  test('AC-FILE-001.21: shows a file created on another device and closes one deleted there', async ({ page, browser, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
+    await expect(editor(page).getByRole('heading', { name: 'guide.md' })).toBeVisible();
+    // The second device: another browser, logged in as the same user, on a desktop.
+    const other = await browser.newContext({ baseURL: instance.url });
+    const second = await other.newPage();
+    try {
+      // With docs expanded, so that guide.md can be deleted there.
+      await openScreen(second, `/repositories/${handbook}/files/docs/guide.md`);
+
+      await createInRoot(second, 'New file', false);
+      await nameField(second).fill('notes');
+      await confirmDialog(second, 'Create', false);
+      await expect(second).toHaveURL(new RegExp(`/repositories/${handbook}/files/notes.md$`));
+
+      await showTree(page);
+      await expect(entry(page, 'notes.md')).toBeVisible();
+
+      await entryAction(second, 'guide.md', 'Delete', false);
+      await confirmDialog(second, 'Delete', false);
+
+      await expect(entry(page, 'guide.md')).toHaveCount(0);
+      await hideTreeOnPhone(page, isMobile);
+      await expect(editor(page).getByText(GONE_ELSEWHERE)).toBeVisible();
+      // The route stays, so a reload says the file does not exist (FB-13).
+      await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/guide.md$`));
+    } finally {
+      await other.close();
+    }
+  });
+
+  test.describe('with a git server', () => {
+    test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
+
+    let root: string;
+    let git: GitHttpServer;
+    /** Whether the clone has asked for objects, which wait for `release`. */
+    let held = false;
+    let release: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+
+    test.beforeAll(async () => {
+      root = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-git-'));
+      git = await startGitHttpServer({
+        repositories: { 'handbook.git': createHandbookRemote(root) },
+        beforeFetch: () => {
+          held = true;
+          return gate;
+        }
+      });
+    });
+
+    test.afterAll(async () => {
+      await git?.close();
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    test('AC-FILE-001.3: opens a repository once its clone finishes', async ({ page }) => {
+      await page.goto('/repositories/new');
+      await logIn(page);
+      await page.getByLabel('Remote URL').fill(`${git.url}/handbook.git`);
+      await page.getByLabel('Remote URL').blur();
+      await page.getByRole('radiogroup').getByText('No credentials (public repository)', { exact: true }).click();
+      const added = page.waitForResponse(response =>
+        response.url().endsWith('/api/v1/repositories') && response.request().method() === 'POST'
+      );
+      await page.getByRole('button', { name: 'Add repository' }).click();
+      const { id } = await (await added).json() as { id: number; };
+      await expect(page).toHaveURL(/\/$/);
+
+      const opens: string[] = [];
+      page.on('request', request => {
+        if (request.url().endsWith(`/api/v1/repositories/${id}/open`)) {
+          opens.push(request.url());
+        }
+      });
+      await page.goto(`/repositories/${id}`);
+      await expect(page.getByText('This repository is still being cloned.')).toBeVisible();
+      await expect(tree(page)).toHaveCount(0);
+
+      await expect.poll(() => held).toBe(true);
+      const before = opens.length;
+      release();
+
+      // The remote holds one empty commit: the screen opens on its empty state.
+      await expect(editor(page).getByText(EMPTY_STATE)).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('This repository is still being cloned.')).toHaveCount(0);
+      await expect(filesButton(page)).toBeVisible();
+      // Opened once more when it turned ready, which is the visit's one opening (FB-11).
+      expect(opens).toHaveLength(before + 1);
+    });
   });
 });
