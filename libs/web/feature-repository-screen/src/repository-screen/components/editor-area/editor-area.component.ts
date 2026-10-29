@@ -16,7 +16,13 @@ import { EntryMessageComponent } from '../entry-message/entry-message.component'
  */
 @Component({
   selector: 'rs-editor-area',
-  imports: [ TranslocoDirective, ButtonComponent, EmptyStateActionsComponent, EmptyStateComponent, EntryMessageComponent ],
+  imports: [
+    TranslocoDirective,
+    ButtonComponent,
+    EmptyStateActionsComponent,
+    EmptyStateComponent,
+    EntryMessageComponent
+  ],
   templateUrl: './editor-area.component.html',
   styleUrl: './editor-area.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush

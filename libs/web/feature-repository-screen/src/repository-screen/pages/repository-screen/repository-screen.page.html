@@ -60,10 +60,10 @@
             [selected]="selectedPath()"
             (selectPath)="openEntryAt($event)"
             (retry)="retry($event)"
-            (action)="commands.run($event.action, $event.path)"
+            (action)="runAction($event.action, $event.path)"
           />
         </section>
-        <rs-editor-area [path]="openPath()" [entry]="openEntry()" (newFile)="commands.run('new-file', '')" />
+        <rs-editor-area [path]="openPath()" [entry]="openEntry()" (newFile)="runAction('new-file', '')" />
       </ui-app-shell>
     }
   }

@@ -25,8 +25,7 @@ const ada: CurrentUser = {
 
 @Component({
   imports: [ FileTreeComponent ],
-  template:
-    `<rs-file-tree
+  template: `<rs-file-tree
       [selected]="selected()"
       (selectPath)="selects.push($event)"
       (retry)="retries.push($event)"
@@ -256,7 +255,7 @@ describe('FileTreeComponent', () => {
       expect(host.selects).toEqual([]);
       expect(row('docs').getAttribute('aria-expanded')).toBe('false');
 
-      (document.querySelectorAll<HTMLElement>('.cdk-overlay-container [role="menuitem"]')[1]).click();
+      document.querySelectorAll<HTMLElement>('.cdk-overlay-container [role="menuitem"]')[1].click();
       await settle(fixture);
 
       expect(host.actions).toEqual([ { action: 'new-folder', path: 'docs' } ]);

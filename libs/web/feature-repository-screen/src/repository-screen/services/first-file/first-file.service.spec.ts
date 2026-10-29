@@ -150,4 +150,3 @@ describe('FirstFileService', () => {
     expect(localStorage.getItem(LAST_FILE)).toBe('guides/intro.md');
   });
 });
-

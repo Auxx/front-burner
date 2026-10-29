@@ -40,25 +40,30 @@ export class EntryCommandsService {
   private readonly route = inject(ActivatedRoute);
   private readonly transloco = inject(TranslocoService);
 
-  /** Runs `action` on the entry at `path`; `''` is the root folder. */
-  async run(action: EntryAction, path: string): Promise<void> {
+  /**
+   * Runs `action` on the entry at `path`; `''` is the root folder. Resolves to
+   * the path of the file it opened, if any, so that the page can close the
+   * drawer of narrow screens as for a file selected in the tree (FB-9).
+   */
+  async run(action: EntryAction, path: string): Promise<string | null> {
     const repositoryId = this.session.repository()?.id;
     if (repositoryId === undefined) {
-      return;
+      return null;
     }
     switch (action) {
       case 'new-file':
       case 'new-folder':
         return this.create(repositoryId, action === 'new-file' ? 'file' : 'folder', path);
       case 'rename':
-        return this.rename(repositoryId, path);
+        await this.rename(repositoryId, path);
+        return null;
       case 'delete':
         // Plan 20.
-        return;
+        return null;
     }
   }
 
-  private async create(repositoryId: number, kind: NewEntryKind, folder: string): Promise<void> {
+  private async create(repositoryId: number, kind: NewEntryKind, folder: string): Promise<string | null> {
     const data: NewEntryData = {
       repositoryId,
       folder,
@@ -69,7 +74,7 @@ export class EntryCommandsService {
     const ref = this.dialogs.open<NewEntryDialog, NewEntryData, EntryPath>(NewEntryDialog, { data });
     const created = await firstValueFrom(ref.closed);
     if (!created) {
-      return;
+      return null;
     }
     this.store.load(folder);
     if (folder !== '') {
@@ -77,10 +82,11 @@ export class EntryCommandsService {
     }
     if (kind === 'file') {
       this.go(repositoryId, created.path, false);
-    } else {
-      this.store.expand(created.path);
-      this.store.focusRequest.set(created.path);
+      return created.path;
     }
+    this.store.expand(created.path);
+    this.store.focusRequest.set(created.path);
+    return null;
   }
 
   private async rename(repositoryId: number, path: string): Promise<void> {

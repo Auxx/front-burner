@@ -97,7 +97,7 @@ describe('NewEntryDialog', () => {
 
   it('shows each problem\'s text', async () => {
     await open();
-    const cases: [string, string][] = [
+    const cases: [ string, string ][] = [
       [ '', 'Enter a name.' ],
       [ '..', `${P}.nameErrors.dot` ],
       [ 'a/b', `${P}.nameErrors.separator` ],

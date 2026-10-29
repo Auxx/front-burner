@@ -23,7 +23,7 @@ describe('entryNameField', () => {
   it('finds each problem', () => {
     const name = signal('');
     const field = entryNameField(name, { kind: 'folder', siblings: () => [] });
-    const cases: [string, string | null][] = [
+    const cases: [ string, string | null ][] = [
       [ '', 'empty' ],
       [ '..', 'dot' ],
       [ 'a/b', 'separator' ],
@@ -53,7 +53,11 @@ describe('entryNameField', () => {
 
   it('allows a case-only rename of the entry itself', () => {
     const name = signal('README.md');
-    const field = entryNameField(name, { kind: 'file', siblings: () => [ 'readme.md', 'guide.md' ], current: 'readme.md' });
+    const field = entryNameField(name, {
+      kind: 'file',
+      siblings: () => [ 'readme.md', 'guide.md' ],
+      current: 'readme.md'
+    });
 
     expect(field.problem()).toBeNull();
     name.set('Guide.md');

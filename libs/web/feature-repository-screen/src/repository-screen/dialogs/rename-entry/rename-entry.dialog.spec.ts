@@ -134,7 +134,12 @@ describe('RenameEntryDialog', () => {
 
   it('asks the confirmation with the dialog open, and keeps it as it was when cancelled', async () => {
     const answers = [ false, true ];
-    await open({ path: 'docs', entry: folder('docs'), siblings: [ 'docs' ], confirm: () => Promise.resolve(answers.shift() ?? true) });
+    await open({
+      path: 'docs',
+      entry: folder('docs'),
+      siblings: [ 'docs' ],
+      confirm: () => Promise.resolve(answers.shift() ?? true)
+    });
     renameAnswer = () => of({ path: 'guides' });
     const result = firstValueFrom(ref.closed);
 

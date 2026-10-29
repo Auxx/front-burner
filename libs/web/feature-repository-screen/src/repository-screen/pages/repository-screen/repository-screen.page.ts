@@ -23,6 +23,7 @@ import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-s
 import { FirstFileService } from '../../services/first-file/first-file.service';
 import { PaneMemoryService } from '../../services/pane-memory/pane-memory.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
+import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 import { fileName } from '../../utils/file-name/file-name';
 
 /**
@@ -75,7 +76,7 @@ export class RepositoryScreenPage {
   private readonly router = inject(Router);
   private readonly firstFile = inject(FirstFileService);
   protected readonly tree = inject(FileTreeStoreService);
-  protected readonly commands = inject(EntryCommandsService);
+  private readonly commands = inject(EntryCommandsService);
 
   protected readonly user = this.currentUser.user;
   /** The file tree's size and whether it is collapsed, as this device last left them (FB-8). */
@@ -132,6 +133,13 @@ export class RepositoryScreenPage {
     }
     this.drawerOpen.set(false);
     void this.router.navigate([ '/repositories', repository.id, 'files', ...path.split('/') ]);
+  }
+
+  /** Runs an action of the tree; a new file it opens closes the drawer, as a selected one does (FB-9). */
+  protected async runAction(action: EntryAction, path: string): Promise<void> {
+    if ((await this.commands.run(action, path)) !== null) {
+      this.drawerOpen.set(false);
+    }
   }
 
   /**

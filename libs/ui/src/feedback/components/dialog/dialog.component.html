@@ -1,10 +1,11 @@
-<header class="header">
+<!-- Not <header> and <footer>: inside a dialog they would be page landmarks, duplicated when dialogs stack. -->
+<div class="header">
   <h2 class="heading" [id]="context.headingId">{{ heading() }}</h2>
   @if (closeLabel(); as label) {
     <button uiIconButton [label]="label" [disabled]="!ref.dismissible()" (click)="ref.close()">
       <ui-icon name="close" />
     </button>
   }
-</header>
+</div>
 <div #body class="body" [attr.tabindex]="scrollableByKeyboard() ? 0 : null"><ng-content /></div>
-<footer class="footer"><ng-content select="[uiDialogFooter]" /></footer>
+<div class="footer"><ng-content select="[uiDialogFooter]" /></div>

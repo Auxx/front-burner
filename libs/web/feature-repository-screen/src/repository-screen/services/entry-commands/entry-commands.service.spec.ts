@@ -44,12 +44,17 @@ describe('EntryCommandsService', () => {
   let store: FileTreeStoreService;
 
   /** Runs a command while the user answers its dialogs with `answer`. */
-  async function run(action: Parameters<EntryCommandsService['run']>[0], path: string, answer: () => Promise<void>) {
+  async function run(
+    action: Parameters<EntryCommandsService['run']>[0],
+    path: string,
+    answer: () => Promise<void>
+  ): Promise<string | null> {
     const done = commands.run(action, path);
     await settleDialog();
     await answer();
-    await done;
+    const opened = await done;
     await settleDialog();
+    return opened;
   }
 
   const confirmation = () => overlay().querySelector('ui-confirm-dialog');
@@ -85,7 +90,11 @@ describe('EntryCommandsService', () => {
         { provide: Router, useValue: { navigate } },
         {
           provide: ActivatedRoute,
-          useValue: { get snapshot() { return { paramMap: convertToParamMap({ path: openPath }) }; } }
+          useValue: {
+            get snapshot() {
+              return { paramMap: convertToParamMap({ path: openPath }) };
+            }
+          }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         {
@@ -95,7 +104,9 @@ describe('EntryCommandsService', () => {
               folders[query.path] ? of(folders[query.path]) : throwError(() => new Error('missing')),
             createEntry: (_id: number, request: CreateEntryRequest) => {
               created.push(request);
-              const name = request.kind === 'file' && !request.name.endsWith('.md') ? `${request.name}.md` : request.name;
+              const name = request.kind === 'file' && !request.name.endsWith('.md')
+                ? `${request.name}.md`
+                : request.name;
               return of({ path: request.folder === '' ? name : `${request.folder}/${name}` });
             },
             renameEntry: (_id: number, request: RenameEntryRequest) => {
@@ -120,13 +131,14 @@ describe('EntryCommandsService', () => {
   });
 
   it('opens a new file after creating it', async () => {
-    await run('new-file', 'docs', async () => {
+    const opened = await run('new-file', 'docs', async () => {
       type(nameInput(), 'notes');
       dialogButton(`${P}.NewEntryDialog.create`)?.click();
     });
 
     expect(created).toEqual([ { folder: 'docs', name: 'notes', kind: 'file' } ]);
     expect(navigate).toHaveBeenCalledWith([ '/repositories', 12, 'files', 'docs', 'notes.md' ], { replaceUrl: false });
+    expect(opened).toBe('docs/notes.md');
   });
 
   it('warns about an ignored folder before creating in it', async () => {
@@ -146,7 +158,7 @@ describe('EntryCommandsService', () => {
     folders['drafts'] = listing('drafts', []);
     const focusRequests: (string | null)[] = [];
 
-    await run('new-folder', '', async () => {
+    const opened = await run('new-folder', '', async () => {
       type(nameInput(), 'drafts');
       dialogButton(`${P}.NewEntryDialog.create`)?.click();
     });
@@ -156,6 +168,7 @@ describe('EntryCommandsService', () => {
     expect(store.expanded()).toContain('drafts');
     expect(focusRequests).toEqual([ 'drafts' ]);
     expect(navigate).not.toHaveBeenCalled();
+    expect(opened).toBeNull();
   });
 
   it('asks a second time before renaming a folder with images', async () => {
