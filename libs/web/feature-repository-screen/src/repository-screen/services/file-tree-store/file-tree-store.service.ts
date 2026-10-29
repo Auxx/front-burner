@@ -142,37 +142,50 @@ export class FileTreeStoreService {
 
   /**
    * Lists again the folders among `folders` that are shown and listed: the
-   * root folder, and the expanded folders whose parents are shown (FB-41);
-   * the others, those that failed and show **Try again** (FB-44), and those
-   * `except` names are ignored. `all` lists every shown folder. A folder already being listed is
-   * listed once more after that, however many times it is named meanwhile. A
-   * folder that is gone is removed with what it holds, from the tree and the
-   * remembered folders, with no error row (FB-42). Resolves once all of them
-   * are listed, or could not be.
+   * root folder, and the expanded folders whose parents are shown (FB-41).
+   * The listings of the others are dropped instead, so that the tree lists
+   * them when they are expanded again. Folders that failed and show **Try
+   * again** (FB-44), and those `except` names, are left as they are. `all`
+   * names every folder. A folder already being listed is listed once more
+   * after that, however many times it is named meanwhile. A folder that is
+   * gone is removed with what it holds, from the tree and the remembered
+   * folders, with no error row (FB-42). Resolves once all of them are listed,
+   * or could not be.
    */
   async reload(folders: readonly string[] | 'all', except: (folder: string) => boolean = () => false): Promise<void> {
     const generation = this.generation;
-    const shown = [ ...this.folders() ]
-      .filter(([ folder, state ]) => state.status !== 'error' && this.shown(folder) && !except(folder))
-      .map(([ folder ]) => folder);
-    const named = folders === 'all' ? shown : shown.filter(folder => folders.includes(folder));
-    await Promise.all(named.map(folder => this.relist(folder, generation)));
+    const named = [ ...this.folders() ].filter(([ folder, state ]) =>
+      (folders === 'all' || folders.includes(folder)) && state.status !== 'error' && !except(folder)
+    );
+    const hidden = new Set(
+      named.filter(([ folder, state ]) => state.status === 'loaded' && !this.shown(folder)).map(([ folder ]) => folder)
+    );
+    this.forget(folder => hidden.has(folder));
+    const shown = named.map(([ folder ]) => folder).filter(folder => this.shown(folder));
+    await Promise.all(shown.map(folder => this.relist(folder, generation)));
+  }
+
+  /** Forgets everything listed, so that the next `init` lists the repository afresh, such as after an error. */
+  reset(): void {
+    ++this.generation;
+    this.repositoryId = undefined;
+    this.cancelAll();
+    this.folders.set(new Map());
+    this.memoryKey.set(null);
   }
 
   /**
    * Whether the listings show that the entry at `path`, which was listed,
    * is gone: a folder on the way, or its own folder, is listed in full
-   * without it, or was removed. `false` while that is not known.
+   * without it. `false` while that is not known, such as for a folder on the
+   * way whose listing was dropped.
    */
   gone(path: string): boolean {
     const folders = this.folders();
     let folder = '';
     for (const name of path.split('/')) {
       const state = folders.get(folder);
-      if (state === undefined) {
-        return folder !== '';
-      }
-      if (state.status !== 'loaded') {
+      if (state?.status !== 'loaded') {
         return false;
       }
       const listing = this.withExtras(folder, state.listing, this.extras());

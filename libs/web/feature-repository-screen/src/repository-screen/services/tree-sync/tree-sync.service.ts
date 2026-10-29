@@ -32,14 +32,23 @@ export class TreeSyncService {
   /** The path of the open file once it was deleted or renamed elsewhere (FB-42). */
   readonly goneElsewhere = this.gone.asReadonly();
 
+  private repositoryId: number | undefined;
   private subscription: Subscription | undefined;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.subscription?.unsubscribe());
   }
 
-  /** Follows the events of the repository `repositoryId` until the page is destroyed. */
+  /**
+   * Follows the events of the repository `repositoryId` until the page is
+   * destroyed. Nothing happens for the repository already followed, so that
+   * a new file in the route keeps the push channel open.
+   */
   start(repositoryId: number): void {
+    if (repositoryId === this.repositoryId) {
+      return;
+    }
+    this.repositoryId = repositoryId;
     this.subscription?.unsubscribe();
     const subscription = new Subscription();
     // `reconnected` first, so that the first connect, which the events start, is seen.
@@ -68,8 +77,15 @@ export class TreeSyncService {
     this.gone.set(null);
   }
 
-  /** Lists `folders` again, then checks whether the open file is still there. */
+  /**
+   * Lists `folders` again, then checks whether the open file is still there.
+   * Nothing is listed while the repository cannot be opened: it is listed
+   * afresh once it can.
+   */
   private async sync(folders: readonly string[] | 'all'): Promise<void> {
+    if (this.session.state() !== 'ready') {
+      return;
+    }
     const path = this.route.snapshot.paramMap.get('path') ?? '';
     const listed = path !== '' && this.store.entry(path) !== undefined;
     // This tab lists the folders it renames or deletes itself; listing them here would find them gone.

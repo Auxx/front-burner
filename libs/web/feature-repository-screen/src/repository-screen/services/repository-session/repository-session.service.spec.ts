@@ -152,4 +152,13 @@ describe('RepositorySessionService', () => {
     expect(open).toHaveBeenCalledTimes(1);
     expect(session.state()).toBe('ready');
   });
+
+  it('shows the not-openable state when the repository is cloned again', () => {
+    session.start(12);
+
+    session.statusChanged('cloning', null);
+
+    expect(session.state()).toBe('not-openable');
+    expect(session.repository()?.status).toBe('cloning');
+  });
 });

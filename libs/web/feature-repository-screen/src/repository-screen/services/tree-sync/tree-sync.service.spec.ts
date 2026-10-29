@@ -5,7 +5,7 @@ import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import type { CurrentUser, FolderListing, PushEvent } from '@front-burner/shared-contracts';
 import { FilesApi } from '@front-burner/web-api-client';
 import { CurrentUserService, PushChannelService } from '@front-burner/web-core';
-import { type Observable, of, Subject, throwError } from 'rxjs';
+import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { entry, folder, listing } from '../../../testing/listings';
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -36,6 +36,8 @@ describe('TreeSyncService', () => {
   let listFolder: ReturnType<typeof vi.fn>;
   let events: Subject<PushEvent>;
   let reconnected: Subject<void>;
+  /** How many times the events were subscribed to: each first one opens the push channel. */
+  let subscribed: number;
   let openPath: string;
   let session: {
     state: ReturnType<typeof signal<string>>;
@@ -86,6 +88,11 @@ describe('TreeSyncService', () => {
     });
     events = new Subject();
     reconnected = new Subject();
+    subscribed = 0;
+    const counted = new Observable<PushEvent>(subscriber => {
+      subscribed++;
+      return events.subscribe(subscriber);
+    });
     session = { state: signal('ready'), statusChanged: vi.fn(), retry: vi.fn() };
     TestBed.configureTestingModule({
       imports: [ translocoTesting() ],
@@ -95,7 +102,7 @@ describe('TreeSyncService', () => {
         FileTreeStoreService,
         FirstFileService,
         { provide: RepositorySessionService, useValue: { ...session, repository: signal({ id: 12 }) } },
-        { provide: PushChannelService, useValue: { events, reconnected } },
+        { provide: PushChannelService, useValue: { events: counted, reconnected } },
         { provide: Router, useValue: { navigate: vi.fn() } },
         {
           provide: ActivatedRoute,
@@ -287,5 +294,49 @@ describe('TreeSyncService', () => {
 
     expect(listed()).toContain('');
     expect(listed().filter(folder => folder.startsWith('docs'))).toEqual([]);
+  });
+
+  it('follows a repository once, however often it is started', async () => {
+    await start();
+
+    sync.start(12);
+    sync.start(12);
+
+    expect(subscribed).toBe(1);
+  });
+
+  it('lists nothing while the repository cannot be opened', async () => {
+    await start([ 'docs' ]);
+    session.state.set('not-openable');
+
+    changed([ 'docs' ]);
+    reconnected.next();
+    await flush();
+
+    expect(listed()).toEqual([]);
+  });
+
+  it('lists a collapsed folder again once it is expanded', async () => {
+    await start([ 'docs' ]);
+    store.expanded.set([]);
+    folders['docs'] = listing('docs', [ folder('api'), entry('guide.md'), entry('new.md') ]);
+
+    changed([ 'docs' ]);
+    await flush();
+
+    expect(listed()).toEqual([]);
+    // Its stale listing is dropped, so that the tree asks for it when it is expanded.
+    expect(store.nodes().find(row => row.path === 'docs')?.children).toBeUndefined();
+  });
+
+  it('keeps the open file in a collapsed folder', async () => {
+    openPath = 'docs/guide.md';
+    await start([ 'docs' ]);
+    store.expanded.set([]);
+
+    changed('all');
+    await flush();
+
+    expect(sync.goneElsewhere()).toBeNull();
   });
 });

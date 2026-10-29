@@ -179,6 +179,21 @@ describe('RepositoryScreenPage', () => {
     expect(TestBed.inject(Router).url).toBe('/repositories/12/files/README.md');
   });
 
+  it('lists the tree afresh when the repository is ready again after an error', async () => {
+    await visit('/repositories/12/files/README.md');
+    folders[''] = listing('', [ entry('README.md'), entry('fresh.md') ]);
+
+    events.next({ type: 'repository.status', repositoryId: 12, status: 'error', error: 'working-copy-missing' });
+    await settle(harness.fixture);
+    expect(page().querySelector('rs-not-openable')).not.toBeNull();
+    events.next({ type: 'repository.status', repositoryId: 12, status: 'ready', error: null });
+    await settle(harness.fixture);
+    await settle(harness.fixture);
+
+    expect(page().querySelector('rs-not-openable')).toBeNull();
+    expect(page().querySelector('[role="treeitem"][aria-label^="fresh.md,"]')).not.toBeNull();
+  });
+
   it('offers Try again when opening fails', async () => {
     answers.push(failure(500, 'internal'));
     await visit('/repositories/12');

@@ -56,8 +56,8 @@ export class RepositorySessionService {
   /**
    * Follows a change of the open repository's status, from the push channel
    * (FB-3): a repository that could not be opened is opened once it is
-   * `ready`, and shows its new status otherwise; an open one that turns to
-   * `error` shows the not-openable state.
+   * `ready`, and shows its new status otherwise; an open one that is no
+   * longer `ready`, such as one in `error`, shows the not-openable state.
    */
   statusChanged(status: RepositoryStatus, error: RepositoryError | null): void {
     const repository = this.current();
@@ -71,7 +71,7 @@ export class RepositorySessionService {
       } else {
         this.current.set({ ...repository, status, error });
       }
-    } else if (state === 'ready' && status === 'error') {
+    } else if (state === 'ready' && status !== 'ready') {
       this.current.set({ ...repository, status, error });
       this.currentState.set('not-openable');
     }

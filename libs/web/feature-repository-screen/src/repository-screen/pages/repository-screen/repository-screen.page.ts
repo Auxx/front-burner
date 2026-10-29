@@ -128,6 +128,9 @@ export class RepositoryScreenPage {
       const { path, closed } = this.target();
       if (repository) {
         untracked(() => void this.show(repository.id, path, closed));
+      } else {
+        // Listed afresh once the repository can be opened again.
+        untracked(() => this.tree.reset());
       }
     });
     this.route.paramMap
