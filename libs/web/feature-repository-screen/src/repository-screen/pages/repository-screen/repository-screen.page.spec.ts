@@ -48,6 +48,7 @@ describe('RepositoryScreenPage', () => {
   /** Folders whose next listing fails with a server error. */
   let failOnce: Set<string>;
   let open: ReturnType<typeof vi.fn>;
+  let createEntry: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
 
@@ -69,7 +70,9 @@ describe('RepositoryScreenPage', () => {
                 ? failure(500, 'internal')
                 : folders[query.path]
                 ? of(folders[query.path])
-                : failure(404, 'entry-not-found')
+                : failure(404, 'entry-not-found'),
+            createEntry,
+            isIgnored: () => of({ ignored: false })
           }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
@@ -109,6 +112,7 @@ describe('RepositoryScreenPage', () => {
     narrow = false;
     localStorage.clear();
     open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
+    createEntry = vi.fn((_id: number, request: { name: string; }) => of({ path: `${request.name}.md` }));
     document.title = '';
   });
 
@@ -283,6 +287,24 @@ describe('RepositoryScreenPage', () => {
       expect(page().querySelector('main ui-empty-state')?.textContent).toContain(
         'web-feature-repository-screen.EditorAreaComponent.empty'
       );
+    });
+
+    it('creates a file from the empty state and opens it', async () => {
+      folders[''] = listing('', [ entry('notes.txt') ]);
+      await visit('/repositories/12');
+
+      (page().querySelector('main [uiEmptyStateActions] button') as HTMLButtonElement).click();
+      await settle(harness.fixture);
+      const input = document.querySelector('.cdk-overlay-container rs-new-entry input') as HTMLInputElement;
+      input.value = 'notes';
+      input.dispatchEvent(new Event('input'));
+      folders[''] = listing('', [ entry('notes.md'), entry('notes.txt') ]);
+      (document.querySelector('.cdk-overlay-container button[type="submit"]') as HTMLButtonElement).click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(createEntry).toHaveBeenCalledWith(12, { folder: '', name: 'notes', kind: 'file' });
+      expect(url()).toBe('/repositories/12/files/notes.md');
     });
 
     it('shows a missing path\'s message', async () => {

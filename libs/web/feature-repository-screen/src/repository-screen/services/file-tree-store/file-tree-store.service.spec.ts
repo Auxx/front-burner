@@ -356,4 +356,59 @@ describe('FileTreeStoreService', () => {
     expect(store.expanded()).toEqual([]);
     expect(labels(store.nodes())).toEqual([ 'other.md' ]);
   });
+
+  describe('renamed', () => {
+    it('keeps a renamed folder and its expanded sub-folders expanded', async () => {
+      localStorage.setItem(MEMORY, JSON.stringify([ 'docs', 'docs/api', 'notes' ]));
+      store.init(12);
+      await flush();
+      folders[''] = listing('', [ folder('guides'), folder('notes'), entry('README.md') ]);
+      folders['guides'] = folders['docs'];
+      folders['guides/api'] = folders['docs/api'];
+      listFolder.mockClear();
+
+      store.renamed('docs', 'guides');
+      store.load('');
+      await flush();
+      TestBed.tick();
+
+      expect(store.expanded()).toEqual([ 'guides', 'notes', 'guides/api' ]);
+      expect(JSON.parse(localStorage.getItem(MEMORY) ?? '[]')).toEqual([ 'guides', 'notes', 'guides/api' ]);
+      expect(labels(node('guides')?.children)).toEqual([ 'api', 'guide.md' ]);
+      expect(node('guides/api/index.md')?.path).toBe('guides/api/index.md');
+      // Only the parent is listed again.
+      expect(listed()).toEqual([ '' ]);
+    });
+
+    it('asks again at the new path for a listing on its way', async () => {
+      const pending = new Subject<FolderListing>();
+      answers['docs'] = [ pending ];
+      store.init(12);
+      await flush();
+      store.load('docs');
+      store.expand('docs');
+      await flush();
+      folders['guides'] = listing('guides', [ entry('guide.md') ]);
+
+      store.renamed('docs', 'guides');
+      pending.next(listing('docs', [ entry('stale.md') ]));
+      await flush();
+
+      expect(listed()).toEqual([ '', 'docs', 'guides' ]);
+      expect(store.expanded()).toEqual([ 'guides' ]);
+      // The old answer is dropped.
+      expect((await store.entries('guides'))?.map(item => item.name)).toEqual([ 'guide.md' ]);
+    });
+
+    it('leaves other paths alone', async () => {
+      localStorage.setItem(MEMORY, JSON.stringify([ 'docs', 'notes' ]));
+      store.init(12);
+      await flush();
+
+      store.renamed('doc', 'paper');
+
+      expect(store.expanded()).toEqual([ 'docs', 'notes' ]);
+    });
+  });
 });
+

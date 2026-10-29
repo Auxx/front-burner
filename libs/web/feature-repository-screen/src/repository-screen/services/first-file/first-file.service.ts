@@ -49,6 +49,24 @@ export class FirstFileService {
       .then(user => write(key(user.id, repositoryId), path))
       .catch(() => undefined);
   }
+
+  /**
+   * Follows a rename of the entry at `from` to `to` (FB-36): the last file
+   * remembered, when it is that entry or lies under it, is remembered at its
+   * new path.
+   */
+  renamed(repositoryId: number, from: string, to: string): void {
+    this.currentUser
+      .load()
+      .then(user => {
+        const storageKey = key(user.id, repositoryId);
+        const last = read(storageKey);
+        if (last === from || last?.startsWith(`${from}/`)) {
+          write(storageKey, `${to}${last.slice(from.length)}`);
+        }
+      })
+      .catch(() => undefined);
+  }
 }
 
 function key(userId: number, repositoryId: number): string {

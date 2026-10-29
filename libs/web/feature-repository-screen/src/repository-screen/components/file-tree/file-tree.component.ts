@@ -1,4 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import {
+  afterRenderEffect,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+  untracked,
+  viewChild
+} from '@angular/core';
 import {
   IconButtonComponent,
   IconComponent,
@@ -42,6 +53,9 @@ export interface EntryActionRequest {
  * from the keyboard on its row (Shift+F10, the ContextMenu key); all rows
  * share one menu, filled with the actions of the row that opened it (FB-24).
  * A chosen action is emitted as `action`.
+ *
+ * The store's `focusRequest` focuses its entry's row as soon as the row is
+ * shown (FB-32).
  */
 @Component({
   selector: 'rs-file-tree',
@@ -79,6 +93,17 @@ export class FileTreeComponent {
     const entry = this.menuRow()?.entry;
     return entry ? entryActions(entry) : [];
   });
+
+  constructor() {
+    // After rendering, so that the tree has the rows the store has now.
+    afterRenderEffect(() => {
+      const path = this.store.focusRequest();
+      this.store.nodes();
+      if (path !== null && untracked(() => this.tree().focusRow(path))) {
+        this.store.focusRequest.set(null);
+      }
+    });
+  }
 
   /** The rows are the store's; `ui-tree` hands them back as plain nodes. */
   protected row(node: TreeNode): TreeEntry {

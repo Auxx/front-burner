@@ -31,6 +31,7 @@ import {
   entryRequestFailure,
   ignoredEntryName
 } from '../../utils/entry-name-field/entry-name-field';
+import { parentPath } from '../../utils/file-name/file-name';
 
 /** The entry to rename, and where it is. */
 export interface RenameEntryData {
@@ -106,7 +107,7 @@ export class RenameEntryDialog {
   );
   protected readonly ignored = ignoredEntryName({
     repositoryId: this.data.repositoryId,
-    folder: parentOf(this.data.path),
+    folder: parentPath(this.data.path),
     kind: this.kind,
     finalName: this.finalName,
     valid: computed(() => this.field.problem() === null && this.finalName() !== this.data.entry.name)
@@ -159,9 +160,4 @@ export class RenameEntryDialog {
       this.ref.dismissible.set(true);
     }
   }
-}
-
-function parentOf(path: string): string {
-  const slash = path.lastIndexOf('/');
-  return slash === -1 ? '' : path.slice(0, slash);
 }

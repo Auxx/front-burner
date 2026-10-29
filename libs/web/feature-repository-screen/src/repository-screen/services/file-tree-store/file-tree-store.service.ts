@@ -50,6 +50,8 @@ export class FileTreeStoreService {
 
   /** The paths of the expanded folders, as `ui-tree` expands them. */
   readonly expanded = signal<readonly string[]>([]);
+  /** The entry whose row the tree is asked to focus once it is shown, such as a new folder (FB-32). */
+  readonly focusRequest = signal<string | null>(null);
   /** The root folder's rows, each folder's rows as its children. */
   readonly nodes = computed(() => {
     this.translations();
@@ -155,6 +157,29 @@ export class FileTreeStoreService {
   }
 
   /**
+   * Follows a rename of the entry at `from` to `to` (FB-36): the loaded
+   * listings and the expanded folders at and under `from` move to `to`, so
+   * that a renamed folder stays as it was shown, and listings on their way
+   * are asked for again at their new paths. The parent is listed again by
+   * the caller.
+   */
+  renamed(from: string, to: string): void {
+    const move = (path: string) =>
+      path === from ? to : path.startsWith(`${from}/`) ? `${to}${path.slice(from.length)}` : path;
+    const moved = [ ...this.folders().keys() ].filter(path => move(path) !== path);
+    this.folders.update(folders => new Map([ ...folders ].map(([ path, state ]) => [ move(path), state ])));
+    this.expanded.update(expanded => expanded.map(move));
+    for (const path of moved) {
+      const request = this.requests.get(path);
+      if (request) {
+        this.requests.delete(path);
+        request.supersede(this.fetch(move(path)));
+        this.subscriptions.delete(path);
+      }
+    }
+  }
+
+  /**
    * Restores the remembered folders, parents before children. A folder is
    * expanded only if its parent is and lists it as a folder; one that turns
    * out to be gone when it is listed is dropped without an error.
@@ -197,7 +222,8 @@ export class FileTreeStoreService {
     }
   }
 
-  private expand(folder: string): void {
+  /** Expands `folder`, which lists it if needed. */
+  expand(folder: string): void {
     if (!this.expanded().includes(folder)) {
       this.expanded.update(expanded => [ ...expanded, folder ]);
     }

@@ -394,5 +394,9 @@
   "web-feature-repository-screen.nameErrors.git": "This name is reserved by git.",
   "web-feature-repository-screen.nameErrors.too-long": "Use a shorter name.",
   "web-feature-repository-screen.nameErrors.name-taken": "There is already a file or folder with this name here.",
-  "web-feature-repository-screen.nameErrors.invalid": "This name can't be used."
+  "web-feature-repository-screen.nameErrors.invalid": "This name can't be used.",
+  "web-feature-repository-screen.EntryCommandsService.renameFolder.heading": "Rename this folder?",
+  "web-feature-repository-screen.EntryCommandsService.renameFolder.message": "{count, plural, one {# non-Markdown file moves} other {# non-Markdown files move}} with this folder.",
+  "web-feature-repository-screen.EntryCommandsService.renameFolder.confirm": "Rename",
+  "web-feature-repository-screen.EntryCommandsService.renameFolder.cancel": "Cancel"
 }
