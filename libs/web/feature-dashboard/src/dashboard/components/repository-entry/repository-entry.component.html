@@ -6,12 +6,7 @@
     } @else {
       <span class="name">{{ repository.name }}</span>
     }
-    @if (statusBadge(); as badge) {
-      <span uiBadge [status]="badge.look">{{ t('status.' + badge.status) }}</span>
-    }
-    @for (warning of repository.warnings; track warning) {
-      <span uiBadge status="warning">{{ t('warning.' + warning) }}</span>
-    }
+    <shell-repository-status [repository]="repository" />
   </div>
   <span class="remote">{{ repository.remote }}</span>
   @if (repository.error) {
