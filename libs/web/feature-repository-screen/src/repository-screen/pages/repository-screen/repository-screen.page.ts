@@ -308,10 +308,13 @@ export class RepositoryScreenPage {
   private updateTitle(): void {
     const pageTitle = inject(PageTitleService);
     const transloco = inject(TranslocoService);
+    /** What the title last announced was for: the mark alone changes it without announcing it again. */
+    let announced: string | undefined;
     effect(onCleanup => {
       const state = this.session.state();
       const repository = this.session.repository();
-      const file = fileName(this.path());
+      const path = this.path();
+      const file = fileName(path);
       const unsaved = this.unsaved();
       untracked(() => {
         if (state === 'loading') {
@@ -325,7 +328,14 @@ export class RepositoryScreenPage {
           onCleanup(() => pending.unsubscribe());
         } else if (repository) {
           const title = file ? `${file} · ${repository.name}` : repository.name;
-          pageTitle.publish(unsaved ? `• ${title}` : title);
+          const marked = unsaved ? `• ${title}` : title;
+          const shown = `${repository.id}:${repository.name}:${path}`;
+          if (shown === announced) {
+            pageTitle.update(marked);
+          } else {
+            announced = shown;
+            pageTitle.publish(marked);
+          }
         } else {
           pageTitle.publish();
         }

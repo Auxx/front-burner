@@ -31,6 +31,11 @@ export class PageTitleService {
     this.published.next(title);
   }
 
+  /** Changes the page's own title without announcing it again, such as for a mark of unsaved edits. */
+  update(page?: string): void {
+    this.title.setTitle(this.format(page));
+  }
+
   /** Sets the product name alone while the page does not know its title yet, such as while it loads. */
   setPending(): void {
     this.title.setTitle(PRODUCT_NAME);

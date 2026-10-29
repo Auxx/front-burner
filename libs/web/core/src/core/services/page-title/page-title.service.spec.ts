@@ -26,6 +26,13 @@ describe('PageTitleService', () => {
     expect(published).toEqual([ 'handbook · Front Burner' ]);
   });
 
+  it('updates a page\'s own title without announcing it', () => {
+    service.update('• handbook');
+
+    expect(document.title).toBe('• handbook · Front Burner');
+    expect(published).toEqual([]);
+  });
+
   it('sets the product name alone while the page does not know its title, without announcing it', () => {
     service.setPending();
 

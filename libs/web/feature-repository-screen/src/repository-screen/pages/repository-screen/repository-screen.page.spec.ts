@@ -685,6 +685,20 @@ describe('RepositoryScreenPage', () => {
       expect(savedPaths()).toEqual([ 'README.md' ]);
     });
 
+    it('does not announce the title again when only the dot changes', async () => {
+      saveFile.mockReturnValue(new Subject());
+      await visit('/repositories/12/files/README.md');
+      const published: string[] = [];
+      const subscription = TestBed.inject(PageTitleService).changes.subscribe(title => published.push(title));
+
+      typeAtEnd('More.\n');
+      await settle(harness.fixture);
+      subscription.unsubscribe();
+
+      expect(document.title).toBe('• README.md · handbook · Front Burner');
+      expect(published).toEqual([]);
+    });
+
     it('AC-APP-001.9: puts a dot in the title while an edit is unsaved', async () => {
       const answer = new Subject<{ hash: string; size: number; }>();
       saveFile.mockReturnValue(answer);
