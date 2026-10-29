@@ -5,14 +5,16 @@ import { filter, Subscription } from 'rxjs';
 
 import { EntryCommandsService } from '../entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
+import { RepositorySessionService } from '../repository-session/repository-session.service';
 
 /**
  * Keeps the repository screen up to date with changes made elsewhere, from
  * the push channel (A-3.11, A-8.5). Provided by the page.
  *
  * - `files.changed` lists the shown folders it names again (FB-41).
+ * - `repository.status` goes to `RepositorySessionService.statusChanged`.
  * - A (re)connect lists every shown folder again, since events are never
- *   replayed.
+ *   replayed, and tries again to open a repository that could not be opened.
  *
  * When the open file, which was listed, is gone from the listings that come
  * back, and this tab is not the one that deleted or renamed it
@@ -23,6 +25,7 @@ export class TreeSyncService {
   private readonly push = inject(PushChannelService);
   private readonly store = inject(FileTreeStoreService);
   private readonly commands = inject(EntryCommandsService);
+  private readonly session = inject(RepositorySessionService);
   private readonly route = inject(ActivatedRoute);
 
   private readonly gone = signal<string | null>(null);
@@ -40,13 +43,20 @@ export class TreeSyncService {
     this.subscription?.unsubscribe();
     const subscription = new Subscription();
     // `reconnected` first, so that the first connect, which the events start, is seen.
-    subscription.add(this.push.reconnected.subscribe(() => void this.sync('all')));
+    subscription.add(this.push.reconnected.subscribe(() => {
+      if (this.session.state() === 'not-openable') {
+        this.session.retry();
+      }
+      void this.sync('all');
+    }));
     subscription.add(
       this.push.events
         .pipe(filter(event => 'repositoryId' in event && event.repositoryId === repositoryId))
         .subscribe(event => {
           if (event.type === 'files.changed') {
             void this.sync(event.folders);
+          } else if (event.type === 'repository.status') {
+            this.session.statusChanged(event.status, event.error);
           }
         })
     );

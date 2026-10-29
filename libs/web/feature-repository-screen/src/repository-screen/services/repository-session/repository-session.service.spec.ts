@@ -109,4 +109,47 @@ describe('RepositorySessionService', () => {
 
     expect(session.repository()?.name).toBe('guides');
   });
+
+  it('opens a repository when its clone finishes', () => {
+    answers.push(of({ ...handbook, status: 'cloning' }));
+    session.start(12);
+    expect(session.state()).toBe('not-openable');
+
+    session.statusChanged('ready', null);
+    // A second event while it opens does not open it again (FB-11).
+    session.statusChanged('ready', null);
+
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(session.state()).toBe('ready');
+    expect(session.repository()?.status).toBe('ready');
+  });
+
+  it('follows the status of a repository that cannot be opened yet', () => {
+    answers.push(of({ ...handbook, status: 'cloning' }));
+    session.start(12);
+
+    session.statusChanged('error', 'clone-failed');
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(session.state()).toBe('not-openable');
+    expect(session.repository()).toMatchObject({ status: 'error', error: 'clone-failed' });
+  });
+
+  it('shows the not-openable state when the working copy goes missing', () => {
+    session.start(12);
+
+    session.statusChanged('error', 'working-copy-missing');
+
+    expect(session.state()).toBe('not-openable');
+    expect(session.repository()).toMatchObject({ status: 'error', error: 'working-copy-missing' });
+  });
+
+  it('ignores a status that leaves an open repository openable', () => {
+    session.start(12);
+
+    session.statusChanged('ready', null);
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(session.state()).toBe('ready');
+  });
 });

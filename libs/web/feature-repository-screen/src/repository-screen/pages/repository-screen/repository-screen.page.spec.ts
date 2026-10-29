@@ -165,6 +165,20 @@ describe('RepositoryScreenPage', () => {
     expect(notOpenable.querySelector('a')?.getAttribute('href')).toBe('/repositories/12/settings');
   });
 
+  it('opens a repository when its clone finishes', async () => {
+    answers.push(of({ ...handbook, status: 'cloning' }));
+    await visit('/repositories/12');
+
+    events.next({ type: 'repository.status', repositoryId: 12, status: 'ready', error: null });
+    await settle(harness.fixture);
+    await settle(harness.fixture);
+
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(page().querySelector('rs-not-openable')).toBeNull();
+    expect(page().querySelector('rs-file-tree')).not.toBeNull();
+    expect(TestBed.inject(Router).url).toBe('/repositories/12/files/README.md');
+  });
+
   it('offers Try again when opening fails', async () => {
     answers.push(failure(500, 'internal'));
     await visit('/repositories/12');

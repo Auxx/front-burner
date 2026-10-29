@@ -246,4 +246,21 @@ describe('TreeSyncService', () => {
 
     expect(sync.goneElsewhere()).toBeNull();
   });
+
+  it('passes on the status of the repository', async () => {
+    await start();
+
+    events.next({ type: 'repository.status', repositoryId: 12, status: 'error', error: 'working-copy-missing' });
+
+    expect(session.statusChanged).toHaveBeenCalledWith('error', 'working-copy-missing');
+  });
+
+  it('opens a repository that could not be opened again after a reconnect', async () => {
+    await start();
+    session.state.set('not-openable');
+
+    reconnected.next();
+
+    expect(session.retry).toHaveBeenCalledTimes(1);
+  });
 });

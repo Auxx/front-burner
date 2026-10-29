@@ -1,5 +1,5 @@
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
-import type { RepositorySummary } from '@front-burner/shared-contracts';
+import type { RepositoryError, RepositoryStatus, RepositorySummary } from '@front-burner/shared-contracts';
 import { RepositoriesApi } from '@front-burner/web-api-client';
 import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
 import type { Subscription } from 'rxjs';
@@ -11,6 +11,9 @@ export type RepositorySessionState = 'loading' | 'missing' | 'not-openable' | 'f
  * each visit has its own. `start` opens the repository through the API, which
  * sets its last access time (DS-8), once per repository: a new file in the
  * route, a reload of the tree or a reconnect does not open it again (FB-11).
+ * The API sets the last access time only for a ready repository, so one that
+ * turns ready while the screen shows it as not openable is opened then
+ * (`statusChanged`), as this visit's one opening.
  */
 @Injectable()
 export class RepositorySessionService {
@@ -47,6 +50,30 @@ export class RepositorySessionService {
   retry(): void {
     if (this.id !== undefined) {
       this.open(this.id);
+    }
+  }
+
+  /**
+   * Follows a change of the open repository's status, from the push channel
+   * (FB-3): a repository that could not be opened is opened once it is
+   * `ready`, and shows its new status otherwise; an open one that turns to
+   * `error` shows the not-openable state.
+   */
+  statusChanged(status: RepositoryStatus, error: RepositoryError | null): void {
+    const repository = this.current();
+    const state = this.currentState();
+    if (repository === null || this.id === undefined) {
+      return;
+    }
+    if (state === 'not-openable') {
+      if (status === 'ready') {
+        this.open(this.id);
+      } else {
+        this.current.set({ ...repository, status, error });
+      }
+    } else if (state === 'ready' && status === 'error') {
+      this.current.set({ ...repository, status, error });
+      this.currentState.set('not-openable');
     }
   }
 
