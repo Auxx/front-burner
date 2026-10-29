@@ -19,6 +19,7 @@ import { CurrentUserService } from '@front-burner/web-core';
 import { type Observable, of, Subject, throwError } from 'rxjs';
 
 import { apiError, dialogButton, nameInput, overlay, settleDialog, type } from '../../../testing/dialog-testing';
+import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { entry, folder, listing } from '../../../testing/listings';
 import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -55,6 +56,7 @@ describe('EntryCommandsService', () => {
   /** The requests that change files, in order. */
   let requests: string[];
   let saveAnswer: () => Observable<FileState>;
+  let drafts: MemoryDraftStore;
 
   /** Runs a command while the user answers its dialogs with `answer`. */
   async function run(
@@ -74,6 +76,7 @@ describe('EntryCommandsService', () => {
 
   beforeEach(async () => {
     localStorage.clear();
+    drafts = new MemoryDraftStore();
     openPath = '';
     created = [];
     renamed = [];
@@ -146,6 +149,7 @@ describe('EntryCommandsService', () => {
           }
         },
         OpenFilesService,
+        provideMemoryDrafts(drafts),
         {
           provide: BreakpointObserver,
           useValue: { observe: () => of({ matches: false, breakpoints: {} }), isMatched: () => false }
@@ -281,6 +285,18 @@ describe('EntryCommandsService', () => {
     expect(renamed).toEqual([ { path: 'docs/guide.md', name: 'intro.md' } ]);
     expect(navigate).toHaveBeenCalledWith([ '/repositories', 12, 'files', 'docs', 'intro.md' ], { replaceUrl: true });
     expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBe('docs/intro.md');
+  });
+
+  it('moves the draft when the tree renames the file', async () => {
+    await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, { content: '# Unsaved', savedAt: '2026-10-29T10:05:00.000Z' });
+
+    await run('rename', 'docs', async () => {
+      type(nameInput(), 'handbook');
+      dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
+    });
+
+    expect(drafts.at('docs/guide.md')).toBeUndefined();
+    expect(drafts.at('handbook/guide.md')?.content).toBe('# Unsaved');
   });
 
   it('flushes before a rename', async () => {
@@ -533,6 +549,18 @@ describe('EntryCommandsService', () => {
       expect(file.saver.unsaved()).toBe(false);
       expect(openFiles.get('docs/guide.md')).toBeUndefined();
       expect(openFiles.anyUnsaved()).toBe(false);
+    });
+
+    it('deletes the draft when the tree deletes the file', async () => {
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, { content: '# Unsaved', savedAt: '2026-10-29T10:05:00.000Z' });
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'README.md' }, { content: '# Unsaved', savedAt: '2026-10-29T10:05:00.000Z' });
+
+      await run('delete', 'docs/guide.md', async () => {
+        dialogButton(`${D}.delete`)?.click();
+      });
+
+      expect(drafts.at('docs/guide.md')).toBeUndefined();
+      expect(drafts.at('README.md')?.content).toBe('# Unsaved');
     });
 
     it('keeps the open file when another entry is deleted', async () => {

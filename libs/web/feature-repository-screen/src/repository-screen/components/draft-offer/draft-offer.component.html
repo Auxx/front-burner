@@ -1,0 +1,7 @@
+<ui-inline-banner *transloco="let t; prefix: 'web-feature-repository-screen.DraftOfferComponent'" status="warning" announce>
+  {{ t('message', { time: time() }) }}
+  <div uiBannerActions>
+    <button uiButton size="small" variant="primary" (click)="restore.emit()">{{ t('restore') }}</button>
+    <button uiButton size="small" (click)="discard.emit()">{{ t('discard') }}</button>
+  </div>
+</ui-inline-banner>

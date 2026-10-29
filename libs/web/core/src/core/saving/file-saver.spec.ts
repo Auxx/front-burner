@@ -95,6 +95,46 @@ describe('FileSaver', () => {
     expect(saver.unsaved()).toBe(false);
   });
 
+  it('tells the content of each save as it is sent', async () => {
+    const sending: string[] = [];
+    saver.sending.subscribe(text => sending.push(text));
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    type('ab');
+    expect(sending).toEqual([ 'a' ]);
+
+    sent[0].reject(new Error('offline'));
+    await settle();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(sending).toEqual([ 'a', 'ab' ]);
+  });
+
+  it('reports a confirmed save once it knows whether newer content waits', async () => {
+    const unsavedWhenSaved: boolean[] = [];
+    saver.saved.subscribe(() => unsavedWhenSaved.push(saver.unsaved()));
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    type('ab');
+    sent[0].resolve({ hash: 'h1' });
+    await settle();
+    await vi.advanceTimersByTimeAsync(1500);
+    sent[1].resolve({ hash: 'h2' });
+    await settle();
+
+    expect(unsavedWhenSaved).toEqual([ true, false ]);
+  });
+
+  it('reads the waiting content without sending it', async () => {
+    expect(saver.waiting()).toBeNull();
+    type('a');
+
+    expect(saver.waiting()).toBe('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    // In flight, no longer waiting.
+    expect(saver.waiting()).toBeNull();
+  });
+
   it('sends nothing when the content equals the last save', async () => {
     type('changed');
     type('start');
