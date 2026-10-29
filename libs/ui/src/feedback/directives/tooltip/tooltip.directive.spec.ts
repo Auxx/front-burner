@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { IconComponent } from '../../../content/components/icon/icon.component';
 import { ButtonComponent } from '../../../controls/components/button/button.component';
 import { IconButtonComponent } from '../../../controls/components/icon-button/icon-button.component';
-import { TOOLTIP_HIDE_DELAY_MS, TOOLTIP_SHOW_DELAY_MS } from '../../utils/tooltip/tooltip.util';
+import { TOOLTIP_HIDE_DELAY_MS, TOOLTIP_LONG_PRESS_MS, TOOLTIP_SHOW_DELAY_MS } from '../../utils/tooltip/tooltip.util';
 import { TooltipDirective } from './tooltip.directive';
 
 @Component({
@@ -15,11 +15,13 @@ import { TooltipDirective } from './tooltip.directive';
       <ui-icon name="diff-ignored" />
     </button>
     <button>Elsewhere</button>
+    <button uiTooltip="handbook-with-a-long-name" (click)="clicks.set(clicks() + 1)">handbook…</button>
     <span uiTooltip="Shown from outside" [uiTooltipShown]="shown()">Row</span>
   `
 })
 class HostComponent {
   readonly shown = signal(false);
+  readonly clicks = signal(0);
 }
 
 describe('TooltipDirective', () => {
@@ -37,6 +39,9 @@ describe('TooltipDirective', () => {
   };
   const pointer = (element: Element, type: 'pointerenter' | 'pointerleave') =>
     element.dispatchEvent(new MouseEvent(type));
+  // jsdom has no PointerEvent; the tooltip reads only `pointerType`.
+  const touch = (element: Element, type: 'pointerdown' | 'pointerup' | 'pointercancel') =>
+    element.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true }), { pointerType: 'touch' }));
 
   beforeEach(async () => {
     vi.useFakeTimers();
@@ -132,5 +137,44 @@ describe('TooltipDirective', () => {
     button('Ignored').click();
 
     expect(shown()).toEqual([ 'Ignored by .gitignore. Git won\'t commit this file.' ]);
+  });
+
+  it('shows on a long press and swallows the click that ends it', () => {
+    const name = button('handbook…');
+
+    touch(name, 'pointerdown');
+    vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS);
+    expect(shown()).toEqual([ 'handbook-with-a-long-name' ]);
+
+    touch(name, 'pointerup');
+    name.click();
+    expect(fixture.componentInstance.clicks()).toBe(0);
+    expect(shown()).toEqual([ 'handbook-with-a-long-name' ]);
+
+    button('Elsewhere').click();
+    expect(shown()).toEqual([]);
+  });
+
+  it('leaves a short tap alone', () => {
+    const name = button('handbook…');
+
+    touch(name, 'pointerdown');
+    vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS - 100);
+    touch(name, 'pointerup');
+    name.click();
+    vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS);
+
+    expect(shown()).toEqual([]);
+    expect(fixture.componentInstance.clicks()).toBe(1);
+  });
+
+  it('does not show when the touch is cancelled, such as by scrolling', () => {
+    const name = button('handbook…');
+
+    touch(name, 'pointerdown');
+    touch(name, 'pointercancel');
+    vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS);
+
+    expect(shown()).toEqual([]);
   });
 });

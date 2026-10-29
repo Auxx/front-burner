@@ -17,6 +17,9 @@ const OPENING_KEYS = new Set([ 'Enter', ' ', 'ArrowDown', 'ArrowUp' ]);
  * row of a tree: the menu opens next to, and returns the focus to, the trigger
  * that opened it. Triggers created while it is open leave it alone, and it
  * closes when the trigger that opened it is destroyed.
+ *
+ * `open()` opens it from code, such as again after an item that retries
+ * loading its content closed it.
  */
 @Directive({
   selector: 'button[uiMenuTrigger]',
@@ -70,6 +73,12 @@ export class MenuTriggerDirective {
     if (OPENING_KEYS.has(event.key)) {
       this.claimMenu();
     }
+  }
+
+  /** Opens the menu next to this trigger, on its first item. */
+  open(): void {
+    this.claimMenu();
+    this.trigger.open();
   }
 
   /** The trigger that opens the menu takes it, closing it for any other. */

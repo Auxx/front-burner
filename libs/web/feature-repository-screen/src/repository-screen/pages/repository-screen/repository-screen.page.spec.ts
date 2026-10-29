@@ -286,7 +286,7 @@ describe('RepositoryScreenPage', () => {
 
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
       expect(tree().getAttribute('aria-label')).toBe(`${KEY}.files`);
-      expect(page().querySelector('[role="separator"]')?.getAttribute('aria-label')).toBe(`${KEY}.resizeFiles`);
+      expect(page().querySelector('ui-split-pane [role="separator"]')?.getAttribute('aria-label')).toBe(`${KEY}.resizeFiles`);
       expect(page().querySelector('main')?.getAttribute('aria-label')).toBe(`${KEY}.editor`);
       expect(page().querySelector('main rs-editor-area')).not.toBeNull();
     });
@@ -522,7 +522,7 @@ describe('RepositoryScreenPage', () => {
 
     it('remembers the size of the tree', async () => {
       await visit('/repositories/12');
-      const separator = page().querySelector('[role="separator"]') as HTMLElement;
+      const separator = page().querySelector('ui-split-pane [role="separator"]') as HTMLElement;
 
       separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
       await settle(harness.fixture);

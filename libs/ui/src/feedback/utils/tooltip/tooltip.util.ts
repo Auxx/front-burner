@@ -26,6 +26,8 @@ import {
 export const TOOLTIP_SHOW_DELAY_MS = 500;
 /** How long a tooltip stays after the pointer leaves, to let it reach the tooltip. */
 export const TOOLTIP_HIDE_DELAY_MS = 100;
+/** How long a finger rests on a host before its tooltip shows, as hover does for a mouse. */
+export const TOOLTIP_LONG_PRESS_MS = 500;
 
 export interface TooltipOptions {
   /** Whether `text` is the host's accessible description; false when it is already its name. */
@@ -38,8 +40,8 @@ export interface TooltipOptions {
 
 /**
  * Shows `text` next to `host` on hover (after a delay), on keyboard focus (at
- * once) and, when `showOnClick` or the host is aria-disabled, on click or tap
- * (A-10.45). The pointer can move onto the tooltip, and Escape hides it
+ * once), on a long press, whose ending click is swallowed (NV-11), and, when
+ * `showOnClick` or the host is aria-disabled, on click or tap (A-10.45). The pointer can move onto the tooltip, and Escape hides it
  * without moving the focus (WCAG 1.4.13). Must be called in an injection
  * context; cleans up on destroy.
  */
@@ -54,6 +56,9 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
   let shownByClick = false;
   let shownByFocus = false;
   let shownByInput = false;
+  let longPress: ReturnType<typeof setTimeout> | undefined;
+  /** Whether the current touch was a long press, so its click is not the host's. */
+  let pressedLong = false;
   let description: TooltipDescription | undefined;
 
   const show = (): void => {
@@ -134,7 +139,11 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
   // its own clicks before any listener on it runs (A-10.46).
   const onDocumentClick = (event: MouseEvent): void => {
     const target = event.target as Node | null;
-    if (target && host.contains(target)) {
+    if (target && host.contains(target) && pressedLong) {
+      pressedLong = false;
+      event.preventDefault();
+      event.stopPropagation();
+    } else if (target && host.contains(target)) {
       if (options.showOnClick() || host.getAttribute('aria-disabled') === 'true') {
         if (shownByClick) {
           hide();
@@ -160,7 +169,24 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
         shownByFocus = true;
       }
     } ],
-    [ 'focusout', () => hide() ]
+    [ 'focusout', () => hide() ],
+    [ 'pointerdown', (event: PointerEvent) => {
+      if (!isTouch(event)) {
+        return;
+      }
+      pressedLong = false;
+      clearTimeout(longPress);
+      longPress = setTimeout(() => {
+        pressedLong = true;
+        show();
+        // Until a click elsewhere, as for a tap.
+        shownByClick = true;
+      }, TOOLTIP_LONG_PRESS_MS);
+    } ],
+    [ 'pointerup', () => clearTimeout(longPress) ],
+    [ 'pointercancel', () => clearTimeout(longPress) ],
+    // A long press opens no context menu or text selection over the tooltip.
+    [ 'contextmenu', (event: MouseEvent) => pressedLong && event.preventDefault() ]
   ];
   for (const [ type, listener ] of listeners) {
     host.addEventListener(type, listener as EventListener);
@@ -210,6 +236,7 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
   });
 
   inject(DestroyRef).onDestroy(() => {
+    clearTimeout(longPress);
     hide();
     overlayRef?.dispose();
     for (const [ type, listener ] of listeners) {

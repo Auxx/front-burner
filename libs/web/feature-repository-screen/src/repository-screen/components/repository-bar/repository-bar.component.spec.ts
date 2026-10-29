@@ -1,7 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import type { CurrentUser, RepositorySummary } from '@front-burner/shared-contracts';
+import { RepositoriesApi } from '@front-burner/web-api-client';
 import { AuthSessionService } from '@front-burner/web-core';
+import { of } from 'rxjs';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -36,7 +38,11 @@ describe('RepositoryBarComponent', () => {
   async function show(inputs: { narrow?: boolean; filesOpen?: boolean; withFiles?: boolean; } = {}): Promise<void> {
     TestBed.configureTestingModule({
       imports: [ RepositoryBarComponent, translocoTesting() ],
-      providers: [ provideRouter([]), { provide: AuthSessionService, useValue: { logout: vi.fn() } } ]
+      providers: [
+        provideRouter([]),
+        { provide: AuthSessionService, useValue: { logout: vi.fn() } },
+        { provide: RepositoriesApi, useValue: { recent: () => of({ repositories: [] }) } }
+      ]
     });
     fixture = TestBed.createComponent(RepositoryBarComponent);
     fixture.componentRef.setInput('repository', handbook);
@@ -56,12 +62,28 @@ describe('RepositoryBarComponent', () => {
     expect(bar().querySelector('shell-brand-link a')?.getAttribute('href')).toBe('/');
   });
 
+  it('opens the repository switcher from the name', async () => {
+    await show();
+
+    const name = bar().querySelector('h1 button') as HTMLButtonElement;
+    expect(name.textContent?.trim()).toBe('handbook');
+    expect(name.getAttribute('aria-haspopup')).toBe('menu');
+
+    name.click();
+    await settle(fixture);
+
+    expect(name.getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelector('.cdk-overlay-container a[href="/repositories/12/settings"]')).not.toBeNull();
+  });
+
   it('makes the brand link compact on narrow screens', async () => {
     await show({ narrow: true });
 
     expect(bar().querySelector('shell-brand-link a')?.getAttribute('aria-label')).toBe(
       'web-shell.BrandLinkComponent.dashboard'
     );
+    // The full name is in the switcher's tooltip, as it may be shortened (NV-11).
+    expect(bar().querySelector('h1 button')?.hasAttribute('aria-describedby')).toBe(true);
   });
 
   it('toggles the file tree and says whether it is shown', async () => {

@@ -6,14 +6,9 @@
   min-inline-size: 0;
 }
 
+// The switcher's trigger shortens the name itself (NV-11).
 .name {
   min-inline-size: 0;
-  margin: 0;
-  overflow: hidden;
-  font-size: var(--ui-font-size-md);
-  font-weight: var(--ui-font-weight-semibold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .files {

@@ -1,0 +1,55 @@
+:host {
+  display: block;
+  min-inline-size: 0;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--ui-font-size-md);
+  font-weight: var(--ui-font-weight-semibold);
+}
+
+// The bar's heading text: shortened with an ellipsis when the bar is short of
+// room (NV-11), with the full name in the tooltip on narrow screens.
+.name {
+  display: block;
+  max-inline-size: 100%;
+  min-block-size: var(--ui-control-height);
+  padding-block: 0;
+  padding-inline: var(--ui-space-2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--ui-radius-control);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    background: var(--ui-surface-hover);
+  }
+}
+
+.switcher {
+  max-inline-size: min(24rem, calc(100vw - 2 * var(--ui-space-2)));
+}
+
+.other {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1) var(--ui-space-2);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.failed {
+  margin: 0;
+  padding: var(--ui-space-1) var(--ui-space-2);
+  color: var(--ui-danger-text);
+  font-size: var(--ui-font-size-sm);
+}

@@ -1,7 +1,7 @@
 import { MenuHarness, MenuItemHarness, type MenuItemHarnessFilters } from '@angular/aria/menu/testing';
 import { HarnessLoader, HarnessPredicate } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { Component, signal } from '@angular/core';
+import { Component, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { MenuGroupDirective } from '../../directives/menu-group/menu-group.directive';
@@ -45,6 +45,7 @@ class UiMenuHarness extends MenuHarness {
   `
 })
 class HostComponent {
+  readonly trigger = viewChild.required(MenuTriggerDirective);
   readonly chosen = signal<unknown>(undefined);
   linkClicks = 0;
   selections = 0;
@@ -201,6 +202,21 @@ describe('MenuComponent', () => {
     expect(host.chosen()).toBe('pull');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('opens again from code after a choice closed it, on its first item', async () => {
+    await open();
+    const menu = await loader.getHarness(UiMenuHarness);
+    const [ , pull ] = await menu.getItems();
+    await pull.click();
+    await fixture.whenStable();
+
+    host.trigger().open();
+    await fixture.whenStable();
+
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(inOverlay()).not.toBeNull();
+    expect(activeText()).toBe('Fetch');
   });
 
   it('follows a link item once with Enter or a click', async () => {
