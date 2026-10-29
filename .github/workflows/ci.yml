@@ -68,8 +68,11 @@ jobs:
         with:
           nx-cache: test
 
+      # One project at a time: each runs its own pool of workers, and with
+      # several at once the timing tests (AC-FILE-001.7) miss their limits on
+      # the runner's four cores. The job still ends well before the build job.
       - name: Test
-        run: npx nx affected -t test --parallel=3
+        run: npx nx affected -t test --parallel=1
 
   # End-to-end tests run against the builds, so they share a job.
   build:
