@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import type { Entry, EntrySummary } from '@front-burner/shared-contracts';
 import { DialogRef, DialogService } from '@front-burner/ui';
 import { FilesApi } from '@front-burner/web-api-client';
-import { firstValueFrom, type Observable, of, throwError } from 'rxjs';
+import { firstValueFrom, type Observable, of, Subject, switchMap, throwError, timer } from 'rxjs';
 
 import { apiError, dialogButton, overlay, settleDialog } from '../../../testing/dialog-testing';
 import { entry, folder } from '../../../testing/listings';
@@ -14,6 +14,7 @@ const K = 'web-feature-repository-screen.DeleteEntryDialog';
 describe('DeleteEntryDialog', () => {
   let ref: DialogRef<boolean>;
   let summary: () => Observable<EntrySummary>;
+  let summaries: number;
   let deleteAnswer: () => Observable<void>;
   let deleted: string[];
   let marks: boolean[];
@@ -31,6 +32,7 @@ describe('DeleteEntryDialog', () => {
 
   beforeEach(() => {
     summary = () => of({ files: 1, nonMarkdown: 0, uncommitted: 0 });
+    summaries = 0;
     deleteAnswer = () => of(undefined);
     deleted = [];
     marks = [];
@@ -46,7 +48,10 @@ describe('DeleteEntryDialog', () => {
         {
           provide: FilesApi,
           useValue: {
-            entrySummary: () => summary(),
+            entrySummary: () => {
+              summaries++;
+              return summary();
+            },
             deleteEntry: (_id: number, query: { path: string; }) => {
               deleted.push(query.path);
               return deleteAnswer();
@@ -91,10 +96,46 @@ describe('DeleteEntryDialog', () => {
     expect(messages()).toEqual([ '2 files, 0 non-Markdown' ]);
   });
 
-  it('says only the link is deleted', async () => {
+  it('says only the link is deleted, without asking for a summary', async () => {
+    summary = () => throwError(() => apiError(500, 'internal'));
+
     await open('latest', entry('latest', { kind: 'symlink', size: null }));
 
     expect(messages()).toEqual([ `${K}.symlink` ]);
+    expect(dialogButton(`${K}.delete`)).toBeDefined();
+    expect(summaries).toBe(0);
+  });
+
+  it('stops asking for the summary when it is closed', async () => {
+    const pending = new Subject<EntrySummary>();
+    summary = () => pending;
+    await open('docs', folder('docs'));
+
+    dialogButton(`${K}.cancel`)?.click();
+    await settleDialog();
+
+    expect(pending.observed).toBe(false);
+  });
+
+  it('closes as deleted when the entry is already gone', async () => {
+    deleteAnswer = () => throwError(() => apiError(404, 'entry-not-found'));
+    await open('docs/notes.md', entry('notes.md'));
+    const closed = firstValueFrom(ref.closed);
+
+    dialogButton(`${K}.delete`)?.click();
+
+    expect(await closed).toBe(true);
+    expect(marks).toEqual([ true ]);
+  });
+
+  it('closes as deleted when the summary finds the entry gone', async () => {
+    // As an HTTP answer comes: after the dialog has opened.
+    summary = () => timer(10).pipe(switchMap(() => throwError(() => apiError(404, 'entry-not-found'))));
+    const opened = open('docs/notes.md', entry('notes.md'));
+    const closed = firstValueFrom(ref.closed);
+    await opened;
+
+    expect(await closed).toBe(true);
   });
 
   it('marks the row, deletes and closes', async () => {

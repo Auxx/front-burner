@@ -8,7 +8,7 @@
         }
       </ui-inline-banner>
     }
-    @if (summary()) {
+    @if (ready()) {
       @for (message of messages(); track message.key) {
         <p class="message">{{ t(message.key, message.params) }}</p>
       }
@@ -19,7 +19,7 @@
       <button uiButton data-autofocus [unavailable]="busy()" (click)="ref.close(false)">{{ t('cancel') }}</button>
       @if (summaryFailure()) {
         <button uiButton variant="primary" (click)="loadSummary()">{{ t('retry') }}</button>
-      } @else if (summary()) {
+      } @else if (ready()) {
         <button uiButton variant="danger" [busy]="busy()" (click)="confirm()">{{ t('delete') }}</button>
       }
     </div>

@@ -90,9 +90,11 @@ export class FileTreeComponent {
 
   /** The row whose actions button opened the shared menu last. */
   protected readonly menuRow = signal<TreeEntry | null>(null);
+  /** The actions of the menu's row as the tree shows it now, such as none once it is being deleted. */
   protected readonly menuActions = computed(() => {
-    const entry = this.menuRow()?.entry;
-    return entry ? entryActions(entry) : [];
+    const row = this.menuRow();
+    const shown = row ? this.find(this.store.nodes(), row.value) : undefined;
+    return shown ? this.actions(shown) : [];
   });
 
   constructor() {

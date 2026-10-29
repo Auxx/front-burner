@@ -37,7 +37,9 @@ import { fileName } from '../../utils/file-name/file-name';
  * The route's path is the open entry: it is found in the file tree, with the
  * folders that lead to it expanded (FB-14), and a Markdown file is remembered
  * as this device's last file. Without a path, the screen goes to the first
- * file to open, if there is one (FB-12). Selecting an entry in the tree goes
+ * file to open, if there is one (FB-12), except after a navigation with
+ * `state: { closed: true }`, which closed the open file because it was
+ * deleted: the editor area then shows the empty state (FB-39). Selecting an entry in the tree goes
  * to its path and closes the drawer (FB-9). The tree's actions, and **New
  * file** of the empty editor area, run through `EntryCommandsService` (FB-24).
  */
@@ -83,10 +85,19 @@ export class RepositoryScreenPage {
   protected readonly panes = inject(PaneMemoryService);
   /** Whether the file tree is open as the drawer of narrow screens (FB-9). */
   protected readonly drawerOpen = signal(false);
+  /**
+   * The route's path, and whether the navigation to it closed the open file
+   * (FB-39), read while that navigation runs.
+   */
+  private readonly target = toSignal(
+    this.route.paramMap.pipe(map(params => ({
+      path: params.get('path') ?? '',
+      closed: this.router.currentNavigation()?.extras.state?.['closed'] === true
+    }))),
+    { requireSync: true }
+  );
   /** The open file's path in the working copy, or `''` (FB-1). */
-  protected readonly path = toSignal(this.route.paramMap.pipe(map(params => params.get('path') ?? '')), {
-    requireSync: true
-  });
+  protected readonly path = computed(() => this.target().path);
 
   /** The entry highlighted in the tree. */
   protected readonly selectedPath = computed(() => this.path() || null);
@@ -103,9 +114,9 @@ export class RepositoryScreenPage {
   constructor() {
     effect(() => {
       const repository = this.session.state() === 'ready' ? this.session.repository() : null;
-      const path = this.path();
+      const { path, closed } = this.target();
       if (repository) {
-        untracked(() => void this.show(repository.id, path));
+        untracked(() => void this.show(repository.id, path, closed));
       }
     });
     this.route.paramMap
@@ -150,7 +161,7 @@ export class RepositoryScreenPage {
     this.tree.load(folder);
     const repository = this.session.repository();
     if (this.failed && repository) {
-      void this.show(repository.id, this.path());
+      void this.show(repository.id, this.path(), false);
     }
   }
 
@@ -159,13 +170,17 @@ export class RepositoryScreenPage {
    * folder it needs cannot be listed, the editor area stays empty: the
    * folder shows **Try again**. Without one,
    * goes to the first file, in place of this URL, so that Back leaves the
-   * screen (FB-12).
+   * screen (FB-12); when the open file was just `closed`, shows no file.
    */
-  private async show(repositoryId: number, path: string): Promise<void> {
+  private async show(repositoryId: number, path: string, closed: boolean): Promise<void> {
     const showing = ++this.showing;
     this.failed = false;
     this.tree.init(repositoryId);
     this.openEntry.set(undefined);
+    if (path === '' && closed) {
+      this.openPath.set(null);
+      return;
+    }
     if (path === '') {
       this.openPath.set('');
       const first = await this.firstFile.pick(repositoryId);

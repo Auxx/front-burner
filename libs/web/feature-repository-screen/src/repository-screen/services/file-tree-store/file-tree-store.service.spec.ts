@@ -519,4 +519,54 @@ describe('FileTreeStoreService', () => {
       expect(node('docs')?.deleting).toBeFalsy();
     });
   });
+
+  describe('listing again', () => {
+    it('keeps a listed folder\'s rows while it is listed again', async () => {
+      localStorage.setItem(MEMORY, JSON.stringify([ 'docs' ]));
+      store.init(12);
+      await flush();
+      const pending = new Subject<FolderListing>();
+      answers['docs'] = [ pending ];
+
+      const listed = store.load('docs');
+
+      expect(labels(node('docs')?.children)).toEqual([ 'api', 'guide.md' ]);
+      expect(store.entry('docs/guide.md')).toBeDefined();
+
+      pending.next(listing('docs', [ entry('guide.md') ]));
+      pending.complete();
+      await listed;
+
+      expect(labels(node('docs')?.children)).toEqual([ 'guide.md' ]);
+    });
+
+    it('resolves a path with the listing on its way', async () => {
+      store.init(12);
+      await flush();
+      const pending = new Subject<FolderListing>();
+      answers[''] = [ pending ];
+      void store.load('');
+
+      const found = store.resolve('notes.md');
+      pending.next(listing('', [ folder('docs'), entry('notes.md') ]));
+      pending.complete();
+
+      expect(await found).toEqual(entry('notes.md'));
+    });
+
+    it('finds an entry once its folder is listed again', async () => {
+      store.init(12);
+      await flush();
+      const pending = new Subject<FolderListing>();
+      answers[''] = [ pending ];
+      void store.load('');
+
+      const found = store.lookup('intro.md');
+      pending.next(listing('', [ folder('docs'), entry('intro.md') ]));
+      pending.complete();
+
+      expect(await found).toEqual(entry('intro.md'));
+      expect(await store.lookup('nope.md')).toBeUndefined();
+    });
+  });
 });

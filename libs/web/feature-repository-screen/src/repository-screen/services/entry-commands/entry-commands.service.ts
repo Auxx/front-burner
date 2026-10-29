@@ -9,7 +9,7 @@ import { firstValueFrom } from 'rxjs';
 import { type DeleteEntryData, DeleteEntryDialog } from '../../dialogs/delete-entry/delete-entry.dialog';
 import { type EntryNameData, EntryNameDialog } from '../../dialogs/entry-name/entry-name.dialog';
 import type { EntryAction } from '../../utils/entry-actions/entry-actions';
-import { fileName, isWithin, movedPath, parentPath } from '../../utils/file-name/file-name';
+import { fileName, isWithin, joinPath, movedPath, parentPath } from '../../utils/file-name/file-name';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../first-file/first-file.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
@@ -116,7 +116,7 @@ export class EntryCommandsService {
   }
 
   private async rename(repositoryId: number, path: string): Promise<void> {
-    const entry = this.store.entry(path);
+    const entry = await this.store.lookup(path);
     if (!entry) {
       return;
     }
@@ -143,24 +143,40 @@ export class EntryCommandsService {
   }
 
   private async delete(repositoryId: number, path: string): Promise<void> {
-    const entry = this.store.entry(path);
+    const entry = await this.store.lookup(path);
     if (!entry) {
       return;
     }
+    const parent = parentPath(path);
+    const siblings = (await this.store.entries(parent))?.map(item => joinPath(parent, item.name)) ?? [];
     const ref = this.dialogs.open<DeleteEntryDialog, DeleteEntryData, boolean>(DeleteEntryDialog, {
       data: { repositoryId, path, entry, marked: deleting => this.store.markDeleting(path, deleting) }
     });
     if (!(await firstValueFrom(ref.closed))) {
       return;
     }
-    const closed = isWithin(this.route.snapshot.paramMap.get('path') ?? '', path);
-    await this.firstFile.deleted(repositoryId, path, closed);
-    if (closed) {
-      void this.router.navigate([ '/repositories', repositoryId ], { replaceUrl: true });
+    if (isWithin(this.route.snapshot.paramMap.get('path') ?? '', path)) {
+      // The page shows the empty state for this navigation, not the README (FB-39).
+      void this.router.navigate([ '/repositories', repositoryId ], { replaceUrl: true, state: { closed: true } });
     }
+    this.firstFile.deleted(repositoryId, path);
     // The row keeps its mark until the listing without it is shown.
-    await this.store.load(parentPath(path));
+    await this.store.load(parent);
     this.store.deleted(path);
+    this.store.focusRequest.set(await this.focusAfterDelete(path, parent, siblings));
+  }
+
+  /**
+   * Where the focus goes once the entry at `path` is gone, as its row and the
+   * button that opened the dialog are: the entry that took its place, else
+   * the one before it, else its folder; `null` for an empty root folder.
+   */
+  private async focusAfterDelete(path: string, parent: string, siblings: readonly string[]): Promise<string | null> {
+    const remaining = new Set((await this.store.entries(parent))?.map(item => joinPath(parent, item.name)) ?? []);
+    const index = siblings.indexOf(path);
+    const next = siblings.slice(index + 1).find(item => remaining.has(item))
+      ?? siblings.slice(0, Math.max(index, 0)).reverse().find(item => remaining.has(item));
+    return next ?? (parent === '' ? null : parent);
   }
 
   private ask(data: EntryNameData): Promise<EntryPath | undefined> {

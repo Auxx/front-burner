@@ -279,6 +279,19 @@ describe('FileTreeComponent', () => {
       expect(host.actions).toEqual([ { action: 'new-folder', path: 'docs' } ]);
     });
 
+    it('lists no actions in the menu for a row being deleted', async () => {
+      await create();
+      actionsButton('guide.md')?.click();
+      await settle(fixture);
+      await settle(fixture);
+      expect(menuItems()).toEqual([ `${K}.actions.rename`, `${K}.actions.delete` ]);
+
+      TestBed.inject(FileTreeStoreService).markDeleting('guide.md', true);
+      await settle(fixture);
+
+      expect(menuItems()).toEqual([]);
+    });
+
     it('opens the actions menu from the keyboard', async () => {
       await create();
       tree().focus();

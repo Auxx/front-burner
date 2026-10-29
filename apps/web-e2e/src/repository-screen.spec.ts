@@ -818,6 +818,9 @@ test.describe('repository screen', () => {
 
     await expect(dialog(page)).toBeHidden();
     await expect(entry(page, 'logo.png')).toHaveCount(0);
+    // The focus is back in the tree, on the entry that took the deleted one's place.
+    await expect(files).toBeFocused();
+    await expect(files).toHaveAttribute('aria-activedescendant', /.+/);
   });
 
   test('AC-FILE-001.23: deletes by touch alone', async ({ page, instance, isMobile }) => {

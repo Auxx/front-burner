@@ -17,21 +17,14 @@ const README = /^readme\.(md|markdown|mdx)$/i;
 export class FirstFileService {
   private readonly store = inject(FileTreeStoreService);
   private readonly currentUser = inject(CurrentUserService);
-  /** Whether the next pick gives no file, after the open file was deleted (FB-39). */
-  private closed = false;
 
   /**
    * The last file opened in the repository on this device, if it still exists
    * and is a Markdown file; else the root folder's README; else `null`.
    * `failed` when a folder it needs cannot be listed, so that the choice is
-   * not made on what could not be seen. Right after the open file was
-   * deleted, `null` (`deleted`).
+   * not made on what could not be seen.
    */
   async pick(repositoryId: number): Promise<string | null | 'failed'> {
-    if (this.closed) {
-      this.closed = false;
-      return null;
-    }
     const user = await this.currentUser.load();
     const last = read(key(user.id, repositoryId));
     if (last) {
@@ -79,22 +72,19 @@ export class FirstFileService {
 
   /**
    * Follows a delete of the entry at `path` (FB-39): the last file
-   * remembered, when it is that entry or lies under it, is forgotten. When
-   * the open file was deleted (`closed`), the next pick gives no file, so that
-   * the screen shows the empty state and not the README.
+   * remembered, when it is that entry or lies under it, is forgotten.
    */
-  async deleted(repositoryId: number, path: string, closed: boolean): Promise<void> {
-    this.closed = closed;
-    try {
-      const user = await this.currentUser.load();
-      const storageKey = key(user.id, repositoryId);
-      const last = read(storageKey);
-      if (last !== null && isWithin(last, path)) {
-        remove(storageKey);
-      }
-    } catch {
-      // Only the memory is kept.
-    }
+  deleted(repositoryId: number, path: string): void {
+    this.currentUser
+      .load()
+      .then(user => {
+        const storageKey = key(user.id, repositoryId);
+        const last = read(storageKey);
+        if (last !== null && isWithin(last, path)) {
+          remove(storageKey);
+        }
+      })
+      .catch(() => undefined);
   }
 }
 

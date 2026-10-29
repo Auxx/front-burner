@@ -360,11 +360,10 @@ describe('EntryCommandsService', () => {
       });
 
       expect(deleted).toEqual([ 'docs' ]);
-      expect(navigate).toHaveBeenCalledWith([ '/repositories', 12 ], { replaceUrl: true });
+      // The page shows the empty state, not the README, for this navigation (FB-39).
+      expect(navigate).toHaveBeenCalledWith([ '/repositories', 12 ], { replaceUrl: true, state: { closed: true } });
       expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBeNull();
       expect(store.expanded()).toEqual([]);
-      // Not the README (FB-39), once; the next visit picks as usual (FB-12).
-      expect(await TestBed.inject(FirstFileService).pick(12)).toBeNull();
       expect(await TestBed.inject(FirstFileService).pick(12)).toBe('README.md');
     });
 
@@ -380,5 +379,81 @@ describe('EntryCommandsService', () => {
       expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBe('README.md');
       expect(await TestBed.inject(FirstFileService).pick(12)).toBe('README.md');
     });
+
+    it('closes the open file before forgetting it', async () => {
+      openPath = 'docs/guide.md';
+      localStorage.setItem('fb.4.repo.12.lastFile', 'docs/guide.md');
+      let remembered: string | null | undefined;
+      navigate.mockImplementation(() => {
+        remembered = localStorage.getItem('fb.4.repo.12.lastFile');
+        return Promise.resolve(true);
+      });
+
+      await run('delete', 'docs/guide.md', async () => {
+        dialogButton(`${D}.delete`)?.click();
+      });
+
+      // Navigated at once, without waiting for the user to load.
+      expect(remembered).toBe('docs/guide.md');
+      expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBeNull();
+    });
+
+    it.each([
+      [ 'docs/guide.md', 'docs/api' ],
+      [ 'docs/api', 'docs/guide.md' ],
+      [ 'docs/api/index.md', 'docs/api' ]
+    ])('moves the focus after deleting %s to %s', async (path, focused) => {
+      const folderPath = path.slice(0, path.lastIndexOf('/'));
+      const name = path.slice(path.lastIndexOf('/') + 1);
+      folders[folderPath] = listing(folderPath, folders[folderPath].entries.filter(item => item.name !== name));
+
+      await run('delete', path, async () => {
+        dialogButton(`${D}.delete`)?.click();
+      });
+
+      expect(store.focusRequest()).toBe(focused);
+    });
+
+    it('deletes an entry whose folder is being listed again', async () => {
+      const pending = new Subject<FolderListing>();
+      const listFolder = TestBed.inject(FilesApi).listFolder as unknown as (
+        id: number,
+        query: { path: string; }
+      ) => Observable<FolderListing>;
+      TestBed.inject(FilesApi).listFolder =
+        ((id: number, query: { path: string; }) => query.path === 'docs' ? pending : listFolder(id, query)) as never;
+      void store.load('docs');
+
+      const done = commands.run('delete', 'docs/intro.md');
+      pending.next(listing('docs', [ folder('api'), entry('guide.md'), entry('intro.md') ]));
+      pending.complete();
+      TestBed.inject(FilesApi).listFolder = listFolder as never;
+      await settleDialog();
+
+      expect(overlay().querySelector('rs-delete-entry h2')?.textContent).toContain(`${D}.heading`);
+      dialogButton(`${D}.cancel`)?.click();
+      await done;
+    });
+  });
+
+  it('renames an entry whose folder is being listed again', async () => {
+    const pending = new Subject<FolderListing>();
+    const listFolder = TestBed.inject(FilesApi).listFolder as unknown as (
+      id: number,
+      query: { path: string; }
+    ) => Observable<FolderListing>;
+    TestBed.inject(FilesApi).listFolder =
+      ((id: number, query: { path: string; }) => query.path === 'docs' ? pending : listFolder(id, query)) as never;
+    void store.load('docs');
+
+    const done = commands.run('rename', 'docs/intro.md');
+    pending.next(listing('docs', [ folder('api'), entry('guide.md'), entry('intro.md') ]));
+    pending.complete();
+    TestBed.inject(FilesApi).listFolder = listFolder as never;
+    await settleDialog();
+
+    expect(nameInput().value).toBe('intro.md');
+    dialogButton(`${P}.EntryNameDialog.cancel`)?.click();
+    await done;
   });
 });
