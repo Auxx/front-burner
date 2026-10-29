@@ -1,0 +1,62 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.RepositorySwitcherComponent'">
+  @let repository = this.repository();
+  <h1 class="heading">
+    <button
+      #nameButton
+      class="name"
+      [uiMenuTrigger]="switcher.aria"
+      [uiTooltip]="shortened() ? repository.name : ''"
+      uiTooltipLongPress
+    >
+      {{ repository.name }}
+    </button>
+  </h1>
+  @let others = this.others();
+  <ui-menu
+    #switcher="uiMenu"
+    class="switcher"
+    [attr.aria-busy]="others.kind === 'loading'"
+    (itemSelected)="selected($event)"
+  >
+    @switch (others.kind) {
+      @case ('loading') {
+        <!-- Not an item: the menu opens on the links below, and moves to the list when it arrives. -->
+        <p class="status" aria-hidden="true">{{ t('loading') }}</p>
+        <div uiMenuSeparator></div>
+      }
+      @case ('failed') {
+        <div uiMenuGroup [label]="t('loadFailed')">
+          <p class="status failed" aria-hidden="true">{{ t('loadFailed') }}</p>
+          <button uiMenuItem="retry">{{ t('retry') }}</button>
+        </div>
+        <div uiMenuSeparator></div>
+      }
+      @case ('loaded') {
+        @for (other of others.repositories; track other.id) {
+          @if (other.status === 'ready') {
+            <a [uiMenuItem]="'repository-' + other.id" [routerLink]="['/repositories', other.id]">
+              <span class="other">{{ other.name }} <shell-repository-status [repository]="other" /></span>
+            </a>
+          } @else if (other.status === 'needs-confirmation') {
+            <!-- The confirmation flow (DS-21) is not built yet, so it links nowhere, as on the dashboard. -->
+            <button [uiMenuItem]="'repository-' + other.id" [disabled]="true">
+              <span class="other">{{ other.name }} <shell-repository-status [repository]="other" /></span>
+            </button>
+          } @else {
+            <a [uiMenuItem]="'repository-' + other.id" [routerLink]="['/repositories', other.id, 'settings']">
+              <span class="other">{{ other.name }} <shell-repository-status [repository]="other" /></span>
+            </a>
+          }
+        }
+        @if (others.repositories.length) {
+          <div uiMenuSeparator></div>
+        }
+      }
+    }
+    @if (narrow()) {
+      <a uiMenuItem="dashboard" routerLink="/">{{ t('dashboard') }}</a>
+    }
+    <a uiMenuItem="all" routerLink="/repositories">{{ t('all') }}</a>
+    <a uiMenuItem="settings" [routerLink]="['/repositories', repository.id, 'settings']">{{ t('settings') }}</a>
+  </ui-menu>
+</ng-container>

@@ -26,6 +26,8 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject } from '@angular
 })
 export class MenuItemComponent<V> {
   private readonly item = inject<MenuItem<V>>(MenuItem);
+  /** Its element, for the menu to tell which item has the focus. */
+  readonly element: HTMLElement = this.item.element;
 
   protected readonly type = this.item.element.tagName === 'BUTTON' ? 'button' : null;
 

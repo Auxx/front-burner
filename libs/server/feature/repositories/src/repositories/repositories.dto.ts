@@ -2,6 +2,7 @@ import {
   AccessCheckRequestSchema,
   AccessCheckResultSchema,
   AddRepositoryRequestSchema,
+  RecentQuerySchema,
   RecentRepositoriesSchema,
   refineAddRepository,
   refineCredentialsProtocol,
@@ -18,6 +19,9 @@ import { z } from 'zod';
 
 @ApiSchema({ name: 'RecentRepositories' })
 export class RecentRepositoriesDto extends createZodDto(z.object(RecentRepositoriesSchema.shape)) {}
+
+@ApiSchema({ name: 'RecentQuery' })
+export class RecentQueryDto extends createZodDto(z.object(RecentQuerySchema.shape)) {}
 
 @ApiSchema({ name: 'RepositorySummary' })
 export class RepositorySummaryDto extends createZodDto(z.object(RepositorySummarySchema.shape)) {}

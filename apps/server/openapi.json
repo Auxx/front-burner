@@ -352,7 +352,19 @@
     "/api/v1/repositories/recent": {
       "get": {
         "operationId": "recent",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "exclude",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",

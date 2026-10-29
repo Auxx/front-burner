@@ -1,4 +1,4 @@
-import { Menu } from '@angular/aria/menu';
+import { Menu, MenuTrigger } from '@angular/aria/menu';
 import {
   createFlexibleConnectedPositionStrategy,
   createOverlayRef,
@@ -7,9 +7,12 @@ import {
 } from '@angular/cdk/overlay';
 import { DomPortal } from '@angular/cdk/portal';
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  contentChildren,
   DestroyRef,
+  DOCUMENT,
   effect,
   ElementRef,
   inject,
@@ -17,12 +20,16 @@ import {
   untracked
 } from '@angular/core';
 
+import { MenuItemComponent } from '../menu-item/menu-item.component';
+
 /**
  * A pop-up menu of `uiMenuItem` actions and links, built on Angular Aria's
  * Menu: arrow keys between the items, Escape or a choice closes it and returns
  * the focus to its trigger, and it closes when the focus leaves it. While it is
  * open, it is moved into an overlay next to its trigger, so that no ancestor
- * clips it.
+ * clips it. Items may come and go while it is open, such as a list that loads:
+ * until the user moves in it, the focus goes to the first item, and so it does
+ * when the focused item goes.
  *
  * ```html
  * <button [uiMenuTrigger]="actions.aria">Git actions</button>
@@ -42,13 +49,20 @@ import {
   styleUrl: './menu.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   exportAs: 'uiMenu',
-  hostDirectives: [ { directive: Menu, outputs: [ 'itemSelected' ] } ]
+  hostDirectives: [ { directive: Menu, outputs: [ 'itemSelected' ] } ],
+  host: {
+    '(keydown)': 'moved = true'
+  }
 })
 export class MenuComponent<V = unknown> {
   readonly aria = inject<Menu<V>>(Menu);
 
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly document = inject(DOCUMENT);
+  private readonly items = contentChildren(MenuItemComponent, { descendants: true });
+  /** Whether the user has moved in the menu since it opened. */
+  protected moved = false;
   private overlayRef?: OverlayRef;
   /** The trigger that the overlay is positioned next to. */
   private origin?: HTMLElement;
@@ -63,6 +77,10 @@ export class MenuComponent<V = unknown> {
       const trigger = this.aria.parent()?.element;
       untracked(() => (visible ? this.attach(trigger) : this.detach()));
     });
+    effect(() => {
+      this.items();
+      untracked(() => afterNextRender(() => this.keepFocus(), { injector: this.injector }));
+    });
     inject(DestroyRef).onDestroy(() => {
       this.overlayRef?.dispose();
       // Disposing a DOM portal puts the host back where it was, even after
@@ -71,10 +89,25 @@ export class MenuComponent<V = unknown> {
     });
   }
 
+  /** After the items changed: the first one, unless the user has moved to one still there. */
+  private keepFocus(): void {
+    const trigger = this.aria.parent();
+    const focused = this.document.activeElement;
+    const first = this.items()[0];
+    if (
+      !this.aria.visible() || !(trigger instanceof MenuTrigger) || !first
+      || (this.moved && this.host.contains(focused)) || focused === first.element
+    ) {
+      return;
+    }
+    trigger.open();
+  }
+
   private attach(trigger: HTMLElement | undefined): void {
     if (!trigger || (this.overlayRef?.hasAttached() && trigger === this.origin)) {
       return;
     }
+    this.moved = false;
 
     this.origin = trigger;
     const positionStrategy = createFlexibleConnectedPositionStrategy(this.injector, trigger)

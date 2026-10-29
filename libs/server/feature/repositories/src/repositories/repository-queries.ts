@@ -2,7 +2,7 @@ import { DATABASE, Database, repositories, Repository } from '@front-burner/serv
 import type { RepositoryIndex, RepositorySummary } from '@front-burner/shared-contracts';
 import { remoteDisplay } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 
 /** Reads a user's repositories; every query is limited to that user (DS-3, A-7.3). */
 @Injectable()
@@ -39,10 +39,15 @@ export class RepositoryQueries {
     return this.find(userId, id);
   }
 
-  /** The dashboard's list: most recently accessed first, ties by name ignoring case (DS-16, DS-17). */
-  recent(userId: number, limit = 10): Repository[] {
+  /**
+   * The dashboard's list: most recently accessed first, ties by name ignoring
+   * case (DS-16, DS-17). `exclude` leaves one out before the limit, so the
+   * switcher still gets ten others (NV-10); another user's ID changes nothing.
+   */
+  recent(userId: number, limit = 10, exclude?: number): Repository[] {
+    const own = eq(repositories.userId, userId);
     return this.database.db.select().from(repositories)
-      .where(eq(repositories.userId, userId))
+      .where(exclude === undefined ? own : and(own, ne(repositories.id, exclude)))
       .orderBy(desc(repositories.lastAccessedAt), asc(sql`lower(${repositories.name})`), asc(repositories.id))
       .limit(limit)
       .all();

@@ -16,8 +16,17 @@ import type { Observable } from 'rxjs';
 export class RepositoriesApi {
   private readonly http = inject(HttpClient);
 
-  recent(): Observable<RecentRepositories> {
-    return this.http.get<RecentRepositories>(`/api/v1/repositories/recent`);
+  recent(query?: {
+    /**
+     * @min 0
+     * @exclusiveMin true
+     * @max 9007199254740991
+     */
+    exclude?: number;
+  }): Observable<RecentRepositories> {
+    return this.http.get<RecentRepositories>(`/api/v1/repositories/recent`, {
+      params: query
+    });
   }
   index(): Observable<RepositoryIndex> {
     return this.http.get<RepositoryIndex>(`/api/v1/repositories/index`);

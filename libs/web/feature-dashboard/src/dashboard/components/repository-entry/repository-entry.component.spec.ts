@@ -7,6 +7,7 @@ import { translocoTesting } from '../../../testing/transloco-testing';
 import { RepositoryEntryComponent } from './repository-entry.component';
 
 const KEY = 'web-feature-dashboard.RepositoryEntryComponent';
+const STATUS = 'web-shell.RepositoryStatusComponent';
 
 const ready: RepositorySummary = {
   id: 7,
@@ -59,14 +60,14 @@ describe('RepositoryEntryComponent', () => {
     await render({ ...ready, status: 'cloning' });
 
     expect(links()).toEqual([ '/repositories/7/settings' ]);
-    expect(badges()).toEqual([ `${KEY}.status.cloning` ]);
+    expect(badges()).toEqual([ `${STATUS}.status.cloning` ]);
   });
 
   it('shows the error label', async () => {
     await render({ ...ready, status: 'error', error: 'clone-timed-out' });
 
     expect(links()).toEqual([ '/repositories/7/settings' ]);
-    expect(badges()).toEqual([ `${KEY}.status.error` ]);
+    expect(badges()).toEqual([ `${STATUS}.status.error` ]);
     expect(host().textContent).toContain(`${KEY}.error.clone-timed-out`);
   });
 
@@ -74,7 +75,7 @@ describe('RepositoryEntryComponent', () => {
     await render({ ...ready, warnings: [ 'credentials-refused', 'key-locked' ] });
 
     expect(links()).toEqual([ '/repositories/7' ]);
-    expect(badges()).toEqual([ `${KEY}.warning.credentials-refused`, `${KEY}.warning.key-locked` ]);
+    expect(badges()).toEqual([ `${STATUS}.warning.credentials-refused`, `${STATUS}.warning.key-locked` ]);
   });
 
   it('highlights a repository that needs confirmation', async () => {
@@ -82,7 +83,7 @@ describe('RepositoryEntryComponent', () => {
 
     expect(links()).toEqual([]);
     const badge = host().querySelector('[uiBadge]');
-    expect(badge?.textContent?.trim()).toBe(`${KEY}.status.needs-confirmation`);
+    expect(badge?.textContent?.trim()).toBe(`${STATUS}.status.needs-confirmation`);
     expect(badge?.getAttribute('data-status')).toBe('info');
   });
 

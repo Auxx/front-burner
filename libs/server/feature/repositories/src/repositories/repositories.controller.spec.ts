@@ -139,6 +139,42 @@ describe('RepositoriesController', () => {
     expect(response.body).toEqual({ repositories: [] });
   });
 
+  it('excludes the current repository and still returns ten', async () => {
+    const alice = insertUser(database, 'alice@example.com');
+    const ids = Array.from(
+      { length: 11 },
+      (_, i) => insertRepository(database, alice, { name: `repo-${i}`, lastAccessedAt: new Date(i * 1000) })
+    );
+    const current = ids[5];
+
+    const response = await http().get(`/api/v1/repositories/recent?exclude=${current}`)
+      .set('x-test-user', String(alice)).expect(200);
+
+    const names = response.body.repositories.map((r: { name: string; }) => r.name);
+    expect(names).toEqual([ 10, 9, 8, 7, 6, 4, 3, 2, 1, 0 ].map(i => `repo-${i}`));
+  });
+
+  it('ignores another user\'s ID in exclude', async () => {
+    const alice = insertUser(database, 'alice@example.com');
+    const bob = insertUser(database, 'bob@example.com');
+    insertRepository(database, alice, { name: 'handbook' });
+    const secret = insertRepository(database, bob, { name: 'secret' });
+
+    const plain = await http().get('/api/v1/repositories/recent').set('x-test-user', String(alice)).expect(200);
+    const other = await http().get(`/api/v1/repositories/recent?exclude=${secret}`)
+      .set('x-test-user', String(alice)).expect(200);
+    const missing = await http().get(`/api/v1/repositories/recent?exclude=${secret + 100}`)
+      .set('x-test-user', String(alice)).expect(200);
+
+    expect(other.body).toEqual(plain.body);
+    expect(missing.body).toEqual(plain.body);
+  });
+
+  it('refuses an exclude that is not a positive integer', async () => {
+    const alice = insertUser(database, 'alice@example.com');
+    await http().get('/api/v1/repositories/recent?exclude=abc').set('x-test-user', String(alice)).expect(400);
+  });
+
   it('requires a login', async () => {
     const response = await http().get('/api/v1/repositories/recent').expect(401);
     expect(response.body.code).toBe('unauthenticated');

@@ -9,7 +9,7 @@ import type {
   RepositoryIndex,
   RepositorySummary
 } from '@front-burner/shared-contracts';
-import { Body, Controller, Get, HttpCode, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
@@ -18,6 +18,7 @@ import {
   AccessCheckRequestDto,
   AccessCheckResultDto,
   AddRepositoryRequestDto,
+  RecentQueryDto,
   RecentRepositoriesDto,
   RepositoryIndexDto,
   RepositoryParamsDto,
@@ -47,12 +48,12 @@ function found(row: Repository | undefined): RepositorySummary {
 export class RepositoriesController {
   constructor(private readonly queries: RepositoryQueries, private readonly adding: AddRepositoryService) {}
 
-  /** The dashboard's recent list (DS-16, DS-17). */
+  /** The dashboard's recent list (DS-16, DS-17); the switcher's without the current repository (NV-10). */
   @Get('recent')
   @ApiOkResponse({ type: RecentRepositoriesDto })
   @ZodSerializerDto(RecentRepositoriesDto)
-  recent(@Req() req: Request): RecentRepositories {
-    return { repositories: this.queries.recent(authOf(req).userId).map(toSummary) };
+  recent(@Req() req: Request, @Query() query: RecentQueryDto): RecentRepositories {
+    return { repositories: this.queries.recent(authOf(req).userId, 10, query.exclude).map(toSummary) };
   }
 
   /** Every repository's name and remote, for the Add repository form (AR-12, AR-15). */

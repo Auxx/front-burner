@@ -1,0 +1,8 @@
+<ng-container *transloco="let t; prefix: 'web-shell.RepositoryStatusComponent'">
+  @if (statusBadge(); as badge) {
+    <span uiBadge [status]="badge.look">{{ t('status.' + badge.status) }}</span>
+  }
+  @for (warning of repository().warnings; track warning) {
+    <span uiBadge status="warning">{{ t('warning.' + warning) }}</span>
+  }
+</ng-container>

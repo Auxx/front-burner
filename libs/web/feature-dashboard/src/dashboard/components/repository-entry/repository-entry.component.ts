@@ -1,16 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { RepositoryStatus, RepositorySummary } from '@front-burner/shared-contracts';
-import { BadgeComponent, type BadgeStatus, TooltipDirective } from '@front-burner/ui';
+import type { RepositorySummary } from '@front-burner/shared-contracts';
+import { TooltipDirective } from '@front-burner/ui';
 import { relativeTime } from '@front-burner/web-core';
+import { RepositoryStatusComponent } from '@front-burner/web-shell';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
-
-/** How each status that is not `ready` stands out; needing the user's action is highlighted (DS-21). */
-const STATUS_BADGES: Record<Exclude<RepositoryStatus, 'ready'>, BadgeStatus> = {
-  'needs-confirmation': 'info',
-  cloning: 'neutral',
-  error: 'danger'
-};
 
 /**
  * One repository of the recent list (DS-18 to DS-22). Only a ready repository
@@ -20,7 +14,7 @@ const STATUS_BADGES: Record<Exclude<RepositoryStatus, 'ready'>, BadgeStatus> = {
  */
 @Component({
   selector: 'dash-repository-entry',
-  imports: [ TranslocoDirective, RouterLink, BadgeComponent, TooltipDirective ],
+  imports: [ TranslocoDirective, RouterLink, TooltipDirective, RepositoryStatusComponent ],
   templateUrl: './repository-entry.component.html',
   styleUrl: './repository-entry.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -34,10 +28,6 @@ export class RepositoryEntryComponent {
   protected readonly hasSettingsLink = computed(() =>
     this.repository().status === 'cloning' || this.repository().status === 'error'
   );
-  protected readonly statusBadge = computed(() => {
-    const status = this.repository().status;
-    return status === 'ready' ? null : { status, look: STATUS_BADGES[status] };
-  });
 
   private readonly accessedAt = computed(() => new Date(this.repository().lastAccessedAt));
   protected readonly relative = computed(() =>
