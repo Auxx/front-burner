@@ -40,4 +40,12 @@ describe('ChangedOnDiskComponent', () => {
 
     expect(emitted).toEqual([ 'reload', 'keepMine' ]);
   });
+
+  it('says when the file exists again after Recreate it', async () => {
+    fixture.componentRef.setInput('existsAgain', true);
+    await settle(fixture);
+
+    expect(banner().querySelector('ui-inline-banner')?.textContent).toContain(`${K}.existsAgain`);
+    expect(buttons()).toHaveLength(2);
+  });
 });

@@ -4,7 +4,7 @@ import type { PushEvent } from '@front-burner/shared-contracts';
 import { PushChannelService } from '@front-burner/web-core';
 import { filter, Subscription } from 'rxjs';
 
-import { parentPath } from '../../utils/file-name/file-name';
+import { ancestors, parentPath } from '../../utils/file-name/file-name';
 import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { EntryCommandsService } from '../entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
@@ -127,7 +127,10 @@ export class TreeSyncService {
     }
     const parents = new Set(files.map(file => parentPath(file.path)));
     return event.folders.every(folder => parents.has(folder))
-      && files.every(file => this.openFiles.get(file.path)?.hash() === file.hash);
+      && files.every(file => {
+        const open = this.openFiles.get(file.path);
+        return open !== undefined && this.openFiles.isOwnSave(open, file.hash);
+      });
   }
 
   /** Forgets the file gone elsewhere, as when another path is shown. */
@@ -159,10 +162,4 @@ export class TreeSyncService {
       }
     }
   }
-}
-
-/** The folders that lead to `path`, from the root: `''`, `docs` and `docs/api` for `docs/api/index.md`. */
-function ancestors(path: string): string[] {
-  const parts = path.split('/').slice(0, -1);
-  return [ '', ...parts.map((_, index) => parts.slice(0, index + 1).join('/')) ];
 }

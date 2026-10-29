@@ -24,6 +24,7 @@ import {
 } from '@front-burner/web-code-editor';
 import { TranslocoDirective } from '@jsverse/transloco';
 
+import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { type OpenFile, OpenFilesService } from '../../services/open-files/open-files.service';
 import { fileName } from '../../utils/file-name/file-name';
 import { ChangedOnDiskComponent } from '../changed-on-disk/changed-on-disk.component';
@@ -42,8 +43,10 @@ const built = new WeakMap<OpenFile, number>();
  * large-file note of ED-9a. While a draft is offered the editor is read-only;
  * **Restore** puts the draft in it as one undoable edit, which is saved at
  * once. Above it too, after a change on disk, the question **Reload** or
- * **Keep mine** (ED-24), or, for a file gone elsewhere, **Recreate it**, while
- * the editor is read-only (ED-21). Loaded with
+ * **Keep mine** (ED-24), or, for a file gone elsewhere, **Recreate it**
+ * (ED-21); meanwhile the editor is read-only too, since nothing is saved
+ * until the user chooses. When **Recreate it** finds the file there again,
+ * the file is checked again, which asks **Reload** or **Keep mine**. Loaded with
  * `@defer`, so that CodeMirror stays out of the screen's first chunk (ED-4).
  *
  * Each new state of the editor is written back into the `OpenFile` at once,
@@ -52,8 +55,8 @@ const built = new WeakMap<OpenFile, number>();
  * the file's highlighting, name, offered draft, gone state or loaded content
  * changes (ED-9a, ED-37), so that it is never handed a state older than its
  * own. A reloaded file gets a new state, without undo history, with the
- * cursor at the same line and column and the same first visible line, as far
- * as the new text allows (ED-24).
+ * cursor at the same line and column as far as the new text allows, and,
+ * when it was the file shown, the same first visible line (ED-24).
  */
 @Component({
   selector: 'rs-editor-pane',
@@ -74,8 +77,13 @@ export class EditorPaneComponent {
   readonly file = input.required<OpenFile>();
 
   private readonly openFiles = inject(OpenFilesService);
+  private readonly diskChanges = inject(DiskChangesService);
   private readonly editor = viewChild.required(CodeEditorComponent);
+  /** The editor, once it is there: not while the pane first renders. */
+  private readonly shownEditor = viewChild(CodeEditorComponent);
   private readonly injector = inject(Injector);
+  /** The file whose state the editor was last given. */
+  private shownFile: OpenFile | null = null;
 
   protected readonly state = linkedSignal(() => {
     const file = this.file();
@@ -83,7 +91,7 @@ export class EditorPaneComponent {
       file,
       file.highlight(),
       fileName(file.path()),
-      file.draft() !== null || file.gone(),
+      file.draft() !== null || file.gone() || file.changed() !== null,
       file.revision()
     );
   });
@@ -130,7 +138,9 @@ export class EditorPaneComponent {
   protected async recreate(): Promise<void> {
     const file = this.file();
     await this.openFiles.recreate(file.path(), () => contentOf(file.editorState as EditorState));
-    if (!file.gone() && this.file() === file) {
+    if (file.recreateError()?.code === 'entry-exists') {
+      this.diskChanges.notice(file.path());
+    } else if (!file.gone() && this.file() === file) {
       this.editor().focus();
     }
   }
@@ -158,10 +168,12 @@ export class EditorPaneComponent {
     const existing = file.editorState as EditorState | null;
     const reloaded = existing !== null && (built.get(file) ?? 0) !== revision;
     built.set(file, revision);
-    if (reloaded) {
-      const top = this.editor().topLine();
+    const view = this.shownEditor();
+    if (reloaded && view && this.shownFile === file) {
+      const top = view.topLine();
       afterNextRender(() => this.editor().scrollToLine(top), { injector: this.injector });
     }
+    this.shownFile = file;
     const state = existing === null || reloaded
       ? createEditorState({
         content: file.file.content,

@@ -15,7 +15,7 @@ import { BehaviorSubject, map, type Observable, of, Subject, throwError } from '
 import { apiError } from '../../../testing/dialog-testing';
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
-import { LARGE_FILE_ON_NARROW, OpenFilesService } from './open-files.service';
+import { LARGE_FILE_ON_NARROW, OpenFilesService, OWN_SAVE_MS } from './open-files.service';
 
 const HASH = 'a'.repeat(64);
 
@@ -601,6 +601,24 @@ describe('OpenFilesService', () => {
       expect(file.recreateError()?.code).toBe('entry-exists');
       expect(file.saver.unsaved()).toBe(true);
       expect(await drafts.get(key)).toMatchObject({ content: 'mine' });
+    });
+
+    it('counts the hashes of its recent saves as its own', async () => {
+      const file = await service.open('README.md');
+      file.saver.edit(() => 'one');
+      await vi.advanceTimersByTimeAsync(1500);
+      await answer(saves, 0, { hash: 'c'.repeat(64), size: 3 });
+      file.saver.edit(() => 'two');
+      await vi.advanceTimersByTimeAsync(1500);
+      await answer(saves, 1, { hash: 'd'.repeat(64), size: 3 });
+
+      expect(service.isOwnSave(file, 'c'.repeat(64))).toBe(true);
+      expect(service.isOwnSave(file, 'd'.repeat(64))).toBe(true);
+      expect(service.isOwnSave(file, THEIRS)).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(OWN_SAVE_MS + 1);
+      expect(service.isOwnSave(file, 'c'.repeat(64))).toBe(false);
+      expect(service.isOwnSave(file, 'd'.repeat(64))).toBe(true);
     });
   });
 });

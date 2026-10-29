@@ -66,6 +66,9 @@ export interface OpenFile {
   recreateError: WritableSignal<ApiError | null>;
 }
 
+/** How long after its answer a save's hash still counts as this tab's own, for its late event (A-3.11). */
+export const OWN_SAVE_MS = 5000;
+
 /** The save status of a file that waits for the user's choice after a change on disk. */
 const NOT_SAVED: SaveStatus = {
   kind: 'refused',
@@ -116,6 +119,8 @@ export class OpenFilesService {
   private readonly claims = new Map<OpenFile, () => void>();
   /** Releases the saver of each entry that waits for the user's choice after a change on disk. */
   private readonly waits = new Map<OpenFile, () => void>();
+  /** The hashes of each entry's saves answered in the last {@link OWN_SAVE_MS}, with when. */
+  private readonly ownSaves = new WeakMap<OpenFile, { hash: string; at: number; }[]>();
   private readonly missingSubject = new Subject<string>();
   private readonly recreatedSubject = new Subject<string>();
 
@@ -234,6 +239,16 @@ export class OpenFilesService {
   }
 
   /**
+   * Whether `hash` is the content of `file` as this tab knows it: its last
+   * load or save, or a save of this tab answered in the last
+   * {@link OWN_SAVE_MS}, whose event can come after a newer save's answer.
+   */
+  isOwnSave(file: OpenFile, hash: string): boolean {
+    const since = Date.now() - OWN_SAVE_MS;
+    return hash === file.hash() || (this.ownSaves.get(file) ?? []).some(save => save.hash === hash && save.at >= since);
+  }
+
+  /**
    * The save status shown for `file` (ED-18): "Not saved" while it waits for
    * the user's choice after a change on disk (ED-21, ED-24).
    */
@@ -305,6 +320,7 @@ export class OpenFilesService {
       return;
     }
     file.changed.set(null);
+    file.recreateError.set(null);
     file.hash.set(hash);
     // Whatever the editor holds now differs from the disk.
     file.saver.rebase(null, hash);
@@ -494,6 +510,11 @@ export class OpenFilesService {
           }
           file.hash.set(state.hash);
           file.size = state.size;
+          const since = Date.now() - OWN_SAVE_MS;
+          this.ownSaves.set(file, [
+            ...(this.ownSaves.get(file) ?? []).filter(save => save.at >= since),
+            { hash: state.hash, at: Date.now() }
+          ]);
           return { hash: state.hash };
         }
       }),

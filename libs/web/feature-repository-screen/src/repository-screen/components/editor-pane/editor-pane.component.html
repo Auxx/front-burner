@@ -5,7 +5,11 @@
   @if (file().gone()) {
     <rs-gone-elsewhere [error]="file().recreateError()" (recreate)="recreate()" />
   } @else if (file().changed() !== null) {
-    <rs-changed-on-disk (reload)="reload()" (keepMine)="keepMine()" />
+    <rs-changed-on-disk
+      [existsAgain]="file().recreateError()?.code === 'entry-exists'"
+      (reload)="reload()"
+      (keepMine)="keepMine()"
+    />
   }
   @if (noteShown()) {
     <rs-large-file-note (turnOn)="file().highlight.set(true)" />

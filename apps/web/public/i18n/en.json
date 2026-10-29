@@ -383,6 +383,7 @@
   "web-feature-repository-screen.DiskChangesService.updated": "This file was updated.",
   "web-feature-repository-screen.DiskChangesService.dismiss": "Dismiss",
   "web-feature-repository-screen.ChangedOnDiskComponent.message": "This file changed while you were editing.",
+  "web-feature-repository-screen.ChangedOnDiskComponent.existsAgain": "A file with this name exists again.",
   "web-feature-repository-screen.ChangedOnDiskComponent.reload": "Reload",
   "web-feature-repository-screen.ChangedOnDiskComponent.keepMine": "Keep mine",
   "web-feature-repository-screen.GoneElsewhereComponent.message": "This file was deleted or renamed elsewhere.",

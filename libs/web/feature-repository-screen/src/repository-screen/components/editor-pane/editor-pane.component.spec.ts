@@ -11,6 +11,7 @@ import {
 import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { type OpenFile, OpenFilesService } from '../../services/open-files/open-files.service';
 import { EditorPaneComponent } from './editor-pane.component';
 
@@ -20,6 +21,7 @@ type EditorState = EditorStateChange['state'];
 
 describe('EditorPaneComponent', () => {
   let fixture: ComponentFixture<EditorPaneComponent>;
+  let notice: ReturnType<typeof vi.fn>;
   let openFiles: {
     restoreDraft: ReturnType<typeof vi.fn>;
     discardDraft: ReturnType<typeof vi.fn>;
@@ -65,9 +67,13 @@ describe('EditorPaneComponent', () => {
       keepMine: vi.fn(() => fixture.componentInstance.file().changed.set(null)),
       recreate: vi.fn(async () => fixture.componentInstance.file().gone.set(false))
     };
+    notice = vi.fn();
     TestBed.configureTestingModule({
       imports: [ EditorPaneComponent, translocoTesting() ],
-      providers: [ { provide: OpenFilesService, useValue: openFiles } ]
+      providers: [
+        { provide: OpenFilesService, useValue: openFiles },
+        { provide: DiskChangesService, useValue: { notice } }
+      ]
     });
     fixture = TestBed.createComponent(EditorPaneComponent);
   });
@@ -296,6 +302,8 @@ describe('EditorPaneComponent', () => {
       expect(pane().querySelector('rs-changed-on-disk')?.textContent).toContain(
         'web-feature-repository-screen.ChangedOnDiskComponent.message'
       );
+      // Nothing is saved until the user chooses, so nothing is typed meanwhile.
+      expect(stateOf(file).readOnly).toBe(true);
       button('web-feature-repository-screen.ChangedOnDiskComponent.reload')?.click();
 
       expect(openFiles.reload).toHaveBeenCalledWith('README.md', { discard: true });
@@ -339,6 +347,47 @@ describe('EditorPaneComponent', () => {
       expect(stateOf(file).readOnly).toBe(false);
       expect(undoDepth(stateOf(file))).toBe(1);
       expect(pane().querySelector('rs-gone-elsewhere')).toBeNull();
+    });
+
+    it('starts a file reloaded while another was shown at the top', async () => {
+      const file = openFile('README.md', { content: MINE });
+      const other = openFile('docs/guide.md');
+      await show(file);
+      await show(other);
+      const scrolled = vi.spyOn(editorComponent(), 'scrollToLine');
+
+      reloadWith(file, 'theirs\n');
+      await show(file);
+
+      expect(contentOf(stateOf(file))).toBe('theirs\n');
+      expect(scrolled).not.toHaveBeenCalled();
+    });
+
+    it('builds a file reloaded while no pane was there', async () => {
+      const file = openFile('README.md', { content: MINE });
+      await show(file);
+      fixture.destroy();
+      reloadWith(file, 'theirs\n');
+      fixture = TestBed.createComponent(EditorPaneComponent);
+
+      await show(file);
+
+      expect(content().textContent).toContain('theirs');
+    });
+
+    it('checks the file again when Recreate it finds it there again', async () => {
+      const file = openFile('README.md', { content: MINE });
+      openFiles.recreate.mockImplementation(async () =>
+        file.recreateError.set({ code: 'entry-exists', params: {}, requestId: 'r1', message: 'entry-exists' })
+      );
+      await show(file);
+      file.gone.set(true);
+      await settle(fixture);
+
+      button('web-feature-repository-screen.GoneElsewhereComponent.recreate')?.click();
+      await settle(fixture);
+
+      expect(notice).toHaveBeenCalledWith('README.md');
     });
   });
 });

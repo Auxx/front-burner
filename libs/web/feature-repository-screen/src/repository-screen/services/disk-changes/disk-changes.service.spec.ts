@@ -42,6 +42,7 @@ describe('DiskChangesService', () => {
   let missing: Subject<string>;
   let openFiles: {
     get: (path: string) => OpenFile | undefined;
+    isOwnSave: (file: OpenFile, hash: string) => boolean;
     missing: Subject<string>;
     markGone: ReturnType<typeof vi.fn>;
     reload: ReturnType<typeof vi.fn>;
@@ -64,6 +65,7 @@ describe('DiskChangesService', () => {
     missing = new Subject();
     openFiles = {
       get: path => (path === file.path() ? file : undefined),
+      isOwnSave: (open, hash) => hash === open.hash(),
       missing,
       markGone: vi.fn(),
       reload: vi.fn(async () => true),
@@ -241,5 +243,14 @@ describe('DiskChangesService', () => {
     await flush();
 
     expect(fileState).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores the late event of an earlier save of its own', async () => {
+    const isOwnSave = vi.fn((_file: OpenFile, hash: string) => hash === OLD);
+    openFiles.isOwnSave = isOwnSave;
+    file.hash.set(NEW);
+
+    expect(await service.check('docs/guide.md', OLD)).toBeNull();
+    expect(isOwnSave).toHaveBeenCalledWith(file, OLD);
   });
 });

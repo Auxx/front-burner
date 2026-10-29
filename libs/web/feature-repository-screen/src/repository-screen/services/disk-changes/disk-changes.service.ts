@@ -25,9 +25,10 @@ export type DiskChange = { kind: 'changed'; hash: string; } | { kind: 'gone'; };
  * found and followed, the file's saver is held, so that no save is sent over
  * a change the user has not seen.
  *
- * - A change whose hash equals the file's last loaded or saved hash is the
- *   file as the editor knows it, which is how the user's own saves are told
- *   apart (A-3.11). A save in flight is waited for first, so that its event,
+ * - A change whose hash equals the file's last loaded or saved hash, or an
+ *   event naming the hash of one of this tab's recent saves, is the file as
+ *   the editor knows it, which is how the user's own saves are told apart
+ *   (A-3.11). A save in flight is waited for first, so that its event,
  *   which can come before its answer, is not taken for a change.
  * - A path this tab is renaming or deleting (`EntryCommandsService
  *   .isOwnChange`) follows FB-36 and FB-39 instead.
@@ -83,8 +84,11 @@ export class DiskChangesService {
         return null;
       }
       const unchanged = (hash: string) => !file.gone() && hash === file.hash();
-      if (known !== undefined && (unchanged(known) || !waited)) {
-        return unchanged(known) ? null : { kind: 'changed', hash: known };
+      if (known !== undefined && !file.gone() && this.openFiles.isOwnSave(file, known)) {
+        return null;
+      }
+      if (known !== undefined && !waited) {
+        return { kind: 'changed', hash: known };
       }
       const state = await this.stateOf(file);
       if (state === null || this.commands.isOwnChange(path)) {
