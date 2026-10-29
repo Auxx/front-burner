@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { CurrentUserService } from '@front-burner/web-core';
 
-import { movedPath } from '../../utils/file-name/file-name';
+import { isWithin, movedPath } from '../../utils/file-name/file-name';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 
 /** A Markdown file named `README`, with any Markdown extension, ignoring case (FB-12). */
@@ -69,6 +69,23 @@ export class FirstFileService {
       })
       .catch(() => undefined);
   }
+
+  /**
+   * Follows a delete of the entry at `path` (FB-39): the last file
+   * remembered, when it is that entry or lies under it, is forgotten.
+   */
+  deleted(repositoryId: number, path: string): void {
+    this.currentUser
+      .load()
+      .then(user => {
+        const storageKey = key(user.id, repositoryId);
+        const last = read(storageKey);
+        if (last !== null && isWithin(last, path)) {
+          remove(storageKey);
+        }
+      })
+      .catch(() => undefined);
+  }
 }
 
 function key(userId: number, repositoryId: number): string {
@@ -88,5 +105,13 @@ function write(storageKey: string, value: string): void {
     localStorage.setItem(storageKey, value);
   } catch {
     // Only the memory is lost.
+  }
+}
+
+function remove(storageKey: string): void {
+  try {
+    localStorage.removeItem(storageKey);
+  } catch {
+    // The memory stays; the file is gone, so it is not opened.
   }
 }

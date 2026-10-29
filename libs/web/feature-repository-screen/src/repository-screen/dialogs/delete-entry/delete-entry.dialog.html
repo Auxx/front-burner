@@ -1,0 +1,27 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.DeleteEntryDialog'">
+  <ui-dialog [heading]="t('heading', { name: data.entry.name })">
+    @if (summaryFailure() ?? failure(); as failure) {
+      <ui-inline-banner status="danger" announce>
+        {{ failure.text }}
+        @if (failure.reference) {
+          <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+        }
+      </ui-inline-banner>
+    }
+    @if (ready()) {
+      @for (message of messages(); track message.key) {
+        <p class="message">{{ t(message.key, message.params) }}</p>
+      }
+    } @else if (!summaryFailure()) {
+      <ui-spinner [label]="t('loading')" />
+    }
+    <div uiDialogFooter>
+      <button uiButton data-autofocus [unavailable]="busy()" (click)="ref.close(false)">{{ t('cancel') }}</button>
+      @if (summaryFailure()) {
+        <button uiButton variant="primary" (click)="loadSummary()">{{ t('retry') }}</button>
+      } @else if (ready()) {
+        <button uiButton variant="danger" [busy]="busy()" (click)="confirm()">{{ t('delete') }}</button>
+      }
+    </div>
+  </ui-dialog>
+</ng-container>

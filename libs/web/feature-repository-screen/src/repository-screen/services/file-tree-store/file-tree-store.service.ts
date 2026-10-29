@@ -7,7 +7,7 @@ import { TranslocoService } from '@jsverse/transloco';
 import type { Subscription } from 'rxjs';
 
 import type { TreeEntry, TreeEntryKind } from '../../models/tree-entry.model';
-import { fileName, joinPath, movedPath, parentPath } from '../../utils/file-name/file-name';
+import { fileName, isWithin, joinPath, movedPath, parentPath } from '../../utils/file-name/file-name';
 
 type FolderState =
   | { readonly status: 'loading'; }
@@ -36,6 +36,10 @@ const KEY = 'web-feature-repository-screen.FileTreeStoreService';
  * this client created or renamed in it that are not among them, after the
  * listed ones, so that they can be found and opened (`known`).
  *
+ * An entry marked as deleting (`markDeleting`) shows "Deleting…", cannot be
+ * selected or expanded, and keeps the mark when its folder is listed again,
+ * until it is cleared (FB-40).
+ *
  * Each device remembers the expanded folders of each repository under
  * `fb.<userId>.repo.<repositoryId>.expanded` (FB-14). They are restored parents
  * first, and only those that still exist; storage that is missing or refuses
@@ -52,6 +56,8 @@ export class FileTreeStoreService {
   private readonly folders = signal<ReadonlyMap<string, FolderState>>(new Map());
   /** The entries made by this client, by folder, for folders that do not list them (FB-18). */
   private readonly extras = signal<ReadonlyMap<string, readonly Entry[]>>(new Map());
+  /** The paths of the entries being deleted (FB-40). */
+  private readonly deleting = signal<ReadonlySet<string>>(new Set());
   /** Where the expanded folders are remembered, once they have been restored. */
   private readonly memoryKey = signal<string | null>(null);
 
@@ -62,6 +68,7 @@ export class FileTreeStoreService {
   /** The root folder's rows, each folder's rows as its children. */
   readonly nodes = computed(() => {
     this.translations();
+    this.deleting();
     return this.rows('', this.folders()) ?? [];
   });
 
@@ -96,6 +103,7 @@ export class FileTreeStoreService {
     this.cancelAll();
     this.folders.set(new Map());
     this.extras.set(new Map());
+    this.deleting.set(new Set());
     this.expanded.set([]);
     this.memoryKey.set(null);
 
@@ -114,7 +122,8 @@ export class FileTreeStoreService {
 
   /**
    * Lists `folder` again and replaces its rows; the rest of the tree stays as
-   * it is. Resolves once the folder is listed, or could not be.
+   * it is. A listed folder keeps its rows meanwhile. Resolves once the folder
+   * is listed, or could not be.
    */
   async load(folder: string): Promise<void> {
     await this.fetch(folder);
@@ -132,6 +141,15 @@ export class FileTreeStoreService {
   /** The entries of `folder`, as `listing` gives them; `null` when it cannot be listed. */
   async entries(folder: string): Promise<readonly Entry[] | null> {
     return (await this.listing(folder))?.entries ?? null;
+  }
+
+  /**
+   * The entry at `path`, listing its folder if needed and waiting for a
+   * listing on its way, such as after a rename; `undefined` when there is none.
+   */
+  async lookup(path: string): Promise<Entry | undefined> {
+    const name = fileName(path);
+    return (await this.entries(parentPath(path)))?.find(item => item.name === name);
   }
 
   /** The entry at `path`, if its folder is loaded. */
@@ -201,16 +219,7 @@ export class FileTreeStoreService {
    * The parent is listed again by the caller.
    */
   renamed(from: string, to: string): void {
-    const gone = [ ...this.folders().keys() ].filter(path => movedPath(path, from, to) !== null);
-    for (const path of gone) {
-      const request = this.requests.get(path);
-      if (request) {
-        this.requests.delete(path);
-        request.supersede(Promise.resolve('missing'));
-        this.subscriptions.delete(path);
-      }
-      this.setFolder(path, undefined);
-    }
+    this.forget(path => movedPath(path, from, to) !== null);
     this.extras.update(extras => {
       const next = new Map<string, readonly Entry[]>();
       for (const [ folder, entries ] of extras) {
@@ -220,6 +229,53 @@ export class FileTreeStoreService {
       return next;
     });
     this.expanded.update(expanded => expanded.map(path => movedPath(path, from, to) ?? path));
+  }
+
+  /** Marks the entry at `path` as being deleted, or clears the mark (FB-40). */
+  markDeleting(path: string, deleting: boolean): void {
+    this.deleting.update(paths => {
+      const next = new Set(paths);
+      if (deleting) {
+        next.add(path);
+      } else {
+        next.delete(path);
+      }
+      return next;
+    });
+  }
+
+  /**
+   * Forgets the deleted entry at `path` and everything under it: the listings
+   * and expanded folders, the entries this client made there, and the
+   * deleting mark. The parent is listed again by the caller.
+   */
+  deleted(path: string): void {
+    const under = (item: string) => isWithin(item, path);
+    this.forget(under);
+    this.extras.update(extras => {
+      const next = new Map<string, readonly Entry[]>();
+      for (const [ folder, entries ] of extras) {
+        if (!under(folder)) {
+          next.set(folder, entries.filter(item => joinPath(folder, item.name) !== path));
+        }
+      }
+      return next;
+    });
+    this.expanded.update(expanded => expanded.filter(item => !under(item)));
+    this.markDeleting(path, false);
+  }
+
+  /** Drops the listings of the folders that `gone` names, and their requests on the way. */
+  private forget(gone: (folder: string) => boolean): void {
+    for (const folder of [ ...this.folders().keys() ].filter(gone)) {
+      const request = this.requests.get(folder);
+      if (request) {
+        this.requests.delete(folder);
+        request.supersede(Promise.resolve('missing'));
+        this.subscriptions.delete(folder);
+      }
+      this.setFolder(folder, undefined);
+    }
   }
 
   /**
@@ -274,19 +330,20 @@ export class FileTreeStoreService {
   }
 
   /**
-   * The folder's listing: the loaded one, the one on its way, or a new
-   * request. A folder that failed stays failed until **Try again** (`load`).
+   * The folder's listing: the one on its way, which is newer than the one
+   * shown, the loaded one, or a new request. A folder that failed stays
+   * failed until **Try again** (`load`).
    */
   private listingOf(folder: string): Promise<Outcome> {
+    const request = this.requests.get(folder);
+    if (request) {
+      return request.done;
+    }
     const state = this.folders().get(folder);
     if (state?.status === 'loaded') {
       return Promise.resolve(state.listing);
     }
-    if (state?.status === 'error') {
-      return Promise.resolve('failed');
-    }
-    const request = this.requests.get(folder);
-    return state?.status === 'loading' && request ? request.done : this.fetch(folder);
+    return state?.status === 'error' ? Promise.resolve('failed') : this.fetch(folder);
   }
 
   /** Lists `folder`; only the latest request for a folder counts. */
@@ -305,7 +362,10 @@ export class FileTreeStoreService {
     };
     this.requests.get(folder)?.supersede(request.done);
     this.requests.set(folder, request);
-    this.setFolder(folder, { status: 'loading' });
+    // A listed folder keeps its rows until the new listing replaces them.
+    if (this.folders().get(folder)?.status !== 'loaded') {
+      this.setFolder(folder, { status: 'loading' });
+    }
 
     const finish = (state: FolderState | undefined, outcome: Outcome) => {
       if (this.requests.get(folder) !== request) {
@@ -398,14 +458,17 @@ export class FileTreeStoreService {
 
   private entryRow(folder: string, entry: Entry, folders: ReadonlyMap<string, FolderState>): TreeEntry {
     const path = joinPath(folder, entry.name);
-    const isFolder = entry.kind === 'folder';
+    const deleting = this.deleting().has(path);
+    // A folder being deleted shows nothing inside it, so that nothing there is acted on.
+    const isFolder = entry.kind === 'folder' && !deleting;
     // `<name>, <kind>[, Markdown][, ignored][, empty]`, starting with the visible name (FB-46).
     const accessibleName = [
       entry.name,
       this.text(entry.kind),
       ...(entry.markdown ? [ this.text('markdown') ] : []),
       ...(entry.ignored ? [ this.text('ignored') ] : []),
-      ...(isFolder && entry.empty ? [ this.text('empty') ] : [])
+      ...(isFolder && entry.empty ? [ this.text('empty') ] : []),
+      ...(deleting ? [ this.text('deleting') ] : [])
     ].join(', ');
     return {
       value: path,
@@ -414,9 +477,10 @@ export class FileTreeStoreService {
       kind: entry.kind,
       entry,
       path,
+      deleting,
       // A submodule cannot be expanded (FB-23); it can be selected to say why.
       expandable: isFolder,
-      selectable: !isFolder,
+      selectable: !isFolder && !deleting,
       children: isFolder ? this.rows(path, folders) : undefined
     };
   }

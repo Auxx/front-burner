@@ -56,6 +56,13 @@ async function explainIgnored(page: Page, name: string, isMobile: boolean): Prom
   }
 }
 
+/** Closes the drawer of a phone, which stays open after an action, over the editor area. */
+async function hideTreeOnPhone(page: Page, isMobile: boolean): Promise<void> {
+  if (isMobile && await filesButton(page).getAttribute('aria-expanded') === 'true') {
+    await filesButton(page).tap();
+  }
+}
+
 /** On a phone, opening a file closes the drawer (FB-9). */
 async function drawerClosedOnPhone(page: Page, isMobile: boolean): Promise<void> {
   if (isMobile) {
@@ -82,6 +89,8 @@ const nameField = (page: Page) => dialog(page).getByRole('textbox', { name: 'Nam
 const IGNORED_NEW_FILE = 'This file matches a .gitignore rule, so git won\'t commit it.';
 const EMPTY_FOLDER = 'Empty folders aren\'t saved in git. Add a file to keep this folder.';
 const NAME_TAKEN = 'There is already a file or folder with this name here.';
+const EMPTY_STATE = 'Choose a file from the tree, or create one';
+const UNCOMMITTED_FILE = 'This file isn\'t committed, so it can\'t be recovered.';
 
 /** Clicks, or taps on a phone. */
 async function press(page: Page, target: Locator, isMobile: boolean): Promise<void> {
@@ -557,7 +566,10 @@ test.describe('repository screen', () => {
     await confirmDialog(page, 'Rename', isMobile);
     await expect(entry(page, 'guide.txt.md')).toBeVisible();
 
-    await expect(entry(page, 'logo.png').getByRole('button', { name: /^Actions for/ })).toHaveCount(0);
+    await press(page, entry(page, 'logo.png').getByRole('button', { name: 'Actions for logo.png' }), isMobile);
+    await expect(page.getByRole('menuitem', { name: 'Delete', exact: true })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     await entryAction(page, 'media', 'Rename', isMobile);
     await nameField(page).fill('pictures');
@@ -626,7 +638,6 @@ test.describe('repository screen', () => {
     await page.keyboard.type('intro');
     await expectActive(page, 'intro.md');
     await page.keyboard.press('Shift+F10');
-    await page.keyboard.press('ArrowUp');
     await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeFocused();
     await page.keyboard.press('Enter');
     // The name without its extension is selected, so typing keeps `.md`.
@@ -678,5 +689,160 @@ test.describe('repository screen', () => {
     await confirmDialog(page, 'Rename', isMobile);
     await expect(page.getByText('2 non-Markdown files move with this folder.')).toBeVisible();
     await check();
+  });
+
+  test('AC-FILE-001.18: confirms deletes with the counts and the recovery warning', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+
+    await entryAction(page, 'debug.log', 'Delete', isMobile);
+    await expect(heading(page, 'Delete debug.log?')).toBeVisible();
+    await expect(dialog(page).getByText(UNCOMMITTED_FILE)).toBeVisible();
+    await confirmDialog(page, 'Cancel', isMobile);
+    await expect(dialog(page)).toBeHidden();
+
+    await entryAction(page, 'media', 'Delete', isMobile);
+    await expect(dialog(page).getByText('It holds 3 files, 2 of them non-Markdown.')).toBeVisible();
+    await expect(dialog(page).getByText(/can't be recovered/)).toHaveCount(0);
+    await confirmDialog(page, 'Cancel', isMobile);
+
+    await entryAction(page, 'build', 'Delete', isMobile);
+    await expect(dialog(page).getByText('It holds 1 file, 1 of them non-Markdown.')).toBeVisible();
+    await expect(dialog(page).getByText('1 file isn\'t committed, so it can\'t be recovered.')).toBeVisible();
+    await confirmDialog(page, 'Cancel', isMobile);
+
+    await entryAction(page, '2-setup.md', 'Delete', isMobile);
+    await expect(heading(page, 'Delete 2-setup.md?')).toBeVisible();
+    await expect(dialog(page).getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
+    await expect(dialog(page).getByText(UNCOMMITTED_FILE)).toHaveCount(0);
+    await confirmDialog(page, 'Delete', isMobile);
+
+    await expect(dialog(page)).toBeHidden();
+    await expect(entry(page, '2-setup.md')).toHaveCount(0);
+    await expect(entry(page, 'README.md')).toBeVisible();
+  });
+
+  test('AC-FILE-001.19: closes the open file when it is deleted', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
+
+    await entryAction(page, 'guide.md', 'Delete', isMobile);
+    await confirmDialog(page, 'Delete', isMobile);
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}$`));
+    await expect(entry(page, 'guide.md')).toHaveCount(0);
+    // The empty state, not the README (FB-39).
+    await hideTreeOnPhone(page, isMobile);
+    await expect(editor(page).getByText(EMPTY_STATE)).toBeVisible();
+
+    // The folder that holds the open file closes it too.
+    await page.goto(`/repositories/${handbook}/files/media/cover.md`);
+    await expect(editor(page).getByRole('heading', { name: 'cover.md' })).toBeVisible();
+    await entryAction(page, 'media', 'Delete', isMobile);
+    await confirmDialog(page, 'Delete', isMobile);
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}$`));
+    await expect(entry(page, 'media')).toHaveCount(0);
+    await hideTreeOnPhone(page, isMobile);
+    await expect(editor(page).getByText(EMPTY_STATE)).toBeVisible();
+  });
+
+  test('AC-FILE-001.11: deletes a symbolic link from the tree', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/latest`);
+    await expect(editor(page).getByText('Symbolic links can\'t be opened.')).toBeVisible();
+
+    // From the editor area's message panel (FB-21).
+    await press(page, editor(page).getByRole('button', { name: 'Delete', exact: true }), isMobile);
+    await expect(dialog(page).getByText('Only the link is deleted, not what it points to.')).toBeVisible();
+    await confirmDialog(page, 'Delete', isMobile);
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}$`));
+    await showTree(page);
+    await expect(entry(page, 'latest')).toHaveCount(0);
+    await expect(entry(page, 'README.md')).toBeVisible();
+  });
+
+  test('AC-FILE-001.26: shows Deleting… while a folder is deleted', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    let release!: () => void;
+    const released = new Promise<void>(resolve => (release = resolve));
+    await page.route(
+      url => url.pathname.endsWith('/entries') && url.searchParams.get('path') === 'media',
+      async route => {
+        if (route.request().method() === 'DELETE') {
+          await released;
+        }
+        await route.continue();
+      }
+    );
+
+    await entryAction(page, 'media', 'Delete', isMobile);
+    await confirmDialog(page, 'Delete', isMobile);
+
+    // Behind the dialog, which waits for the answer: the row says so, the rest of the tree stays.
+    const row = page.locator('[role="treeitem"]', { hasText: 'media' });
+    await expect(row).toContainText('Deleting…');
+    await expect(row).toHaveAttribute('aria-label', 'media, folder, Deleting…');
+    await expect(row.getByRole('button', { name: 'Actions for media' })).toHaveCount(0);
+    await expect(page.locator('[role="treeitem"]', { hasText: 'README.md' })).toBeVisible();
+
+    release();
+    await expect(dialog(page)).toBeHidden();
+    await expect(entry(page, 'media')).toHaveCount(0);
+    // The tree is usable again at once.
+    await press(page, entry(page, 'docs'), isMobile);
+    await expect(entry(page, 'guide.md')).toBeVisible();
+  });
+
+  test('AC-FILE-001.23: deletes with the keyboard alone', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'phones are used by touch');
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    const files = page.getByRole('tree', { name: 'Files' });
+    await expect(entry(page, 'README.md')).toHaveAttribute('aria-selected', 'true');
+    await files.focus();
+
+    await page.keyboard.type('logo');
+    await expectActive(page, 'logo.png');
+    await page.keyboard.press('Shift+F10');
+    await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    // Cancel, the safe choice, has the focus; Delete comes once the summary is there.
+    await expect(dialog(page).getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await expect(dialog(page).getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expect(dialog(page).getByRole('button', { name: 'Delete', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect(dialog(page)).toBeHidden();
+    await expect(entry(page, 'logo.png')).toHaveCount(0);
+    // The focus is back in the tree, on the entry that took the deleted one's place.
+    await expect(files).toBeFocused();
+    await expect(files).toHaveAttribute('aria-activedescendant', /.+/);
+  });
+
+  test('AC-FILE-001.23: deletes by touch alone', async ({ page, instance, isMobile }) => {
+    test.skip(!isMobile, 'touch is for phones');
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+
+    await entryAction(page, 'logo.png', 'Delete', true);
+    await confirmDialog(page, 'Delete', true);
+
+    await expect(dialog(page)).toBeHidden();
+    await expect(entry(page, 'logo.png')).toHaveCount(0);
+  });
+
+  test('has no axe violations with the delete dialog open', async ({ page, instance, isMobile }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+
+    await entryAction(page, 'build', 'Delete', isMobile);
+    await expect(dialog(page).getByText('It holds 1 file, 1 of them non-Markdown.')).toBeVisible();
+
+    expect((await new AxeBuilder({ page }).include('.cdk-overlay-container').analyze()).violations).toEqual([]);
   });
 });

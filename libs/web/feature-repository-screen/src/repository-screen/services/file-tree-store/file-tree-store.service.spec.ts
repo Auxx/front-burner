@@ -34,6 +34,7 @@ const texts = {
   [`${K}.retry`]: 'Try again',
   // The application formats the ICU message; the spec checks the count reaches it.
   [`${K}.more`]: '{{ count }} more items not shown',
+  [`${K}.deleting`]: 'Deleting…',
   [`${K}.emptyNote`]: 'Empty folders aren\'t saved in git. Add a file to keep this folder.'
 };
 
@@ -460,6 +461,112 @@ describe('FileTreeStoreService', () => {
 
       expect(store.entry('papers/zzz.md')).toEqual(entry('zzz.md'));
       expect(store.entry('old')).toBeUndefined();
+    });
+  });
+
+  describe('deleting', () => {
+    it('shows Deleting… and blocks the row', async () => {
+      localStorage.setItem(MEMORY, JSON.stringify([ 'docs' ]));
+      store.init(12);
+      await flush();
+
+      store.markDeleting('docs', true);
+      store.markDeleting('README.md', true);
+
+      expect(node('docs')).toMatchObject({ deleting: true, selectable: false, expandable: false, children: undefined });
+      expect(node('docs')?.accessibleName).toBe('docs, folder, Deleting…');
+      expect(node('README.md')).toMatchObject({ deleting: true, selectable: false });
+      expect(node('docs/guide.md')).toBeUndefined();
+
+      store.markDeleting('docs', false);
+
+      expect(node('docs')).toMatchObject({ selectable: false, expandable: true });
+      expect(node('docs')?.deleting).toBeFalsy();
+      expect(node('docs/guide.md')).toBeDefined();
+    });
+
+    it('keeps the deleting mark across a reload', async () => {
+      const pending = new Subject<FolderListing>();
+      store.init(12);
+      await flush();
+      answers['docs'] = [ pending ];
+      void store.load('docs');
+      store.expand('docs');
+
+      store.markDeleting('docs/guide.md', true);
+      pending.next(listing('docs', [ folder('api'), entry('guide.md') ]));
+      pending.complete();
+      await flush();
+      await store.load('docs');
+
+      expect(node('docs/guide.md')?.deleting).toBe(true);
+    });
+
+    it('forgets a deleted folder\'s listings, expanded folders and known entries', async () => {
+      folders['notes'] = listing('notes', [ entry('a.md') ], { more: 3 });
+      localStorage.setItem(MEMORY, JSON.stringify([ 'docs', 'docs/api', 'notes' ]));
+      store.init(12);
+      await flush();
+      store.known('notes/zzz.md', entry('zzz.md'));
+      store.markDeleting('docs', true);
+
+      store.deleted('docs');
+      store.deleted('notes/zzz.md');
+
+      expect(store.expanded()).toEqual([ 'notes' ]);
+      expect(store.entry('docs/api/index.md')).toBeUndefined();
+      expect(store.entry('notes/zzz.md')).toBeUndefined();
+      expect(node('docs')?.deleting).toBeFalsy();
+    });
+  });
+
+  describe('listing again', () => {
+    it('keeps a listed folder\'s rows while it is listed again', async () => {
+      localStorage.setItem(MEMORY, JSON.stringify([ 'docs' ]));
+      store.init(12);
+      await flush();
+      const pending = new Subject<FolderListing>();
+      answers['docs'] = [ pending ];
+
+      const listed = store.load('docs');
+
+      expect(labels(node('docs')?.children)).toEqual([ 'api', 'guide.md' ]);
+      expect(store.entry('docs/guide.md')).toBeDefined();
+
+      pending.next(listing('docs', [ entry('guide.md') ]));
+      pending.complete();
+      await listed;
+
+      expect(labels(node('docs')?.children)).toEqual([ 'guide.md' ]);
+    });
+
+    it('resolves a path with the listing on its way', async () => {
+      store.init(12);
+      await flush();
+      const pending = new Subject<FolderListing>();
+      answers[''] = [ pending ];
+      void store.load('');
+
+      const found = store.resolve('notes.md');
+      pending.next(listing('', [ folder('docs'), entry('notes.md') ]));
+      pending.complete();
+
+      expect(await found).toEqual(entry('notes.md'));
+    });
+
+    it('finds an entry once its folder is listed again', async () => {
+      store.init(12);
+      await flush();
+      const pending = new Subject<FolderListing>();
+      answers[''] = [ pending ];
+      void store.load('');
+
+      const found = store.lookup('intro.md');
+      pending.next(listing('', [ folder('docs'), entry('intro.md') ]));
+      pending.complete();
+
+      expect(await found).toEqual(entry('intro.md'));
+      expect(await store.lookup('nope.md')).toBeUndefined();
     });
   });
 });

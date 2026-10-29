@@ -58,4 +58,14 @@ describe('EditorAreaComponent', () => {
     expect(area().querySelector('rs-entry-message')).not.toBeNull();
     expect(area().textContent).not.toContain(`${K}.later`);
   });
+
+  it('passes on the actions of the entry message', async () => {
+    const emitted: unknown[] = [];
+    fixture.componentInstance.action.subscribe(action => emitted.push(action));
+
+    await show('docs/logo.png', entry('logo.png'));
+    (area().querySelector('rs-entry-message button') as HTMLButtonElement).click();
+
+    expect(emitted).toEqual([ 'delete' ]);
+  });
 });

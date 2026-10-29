@@ -63,7 +63,12 @@
             (action)="runAction($event.action, $event.path)"
           />
         </section>
-        <rs-editor-area [path]="openPath()" [entry]="openEntry()" (newFile)="runAction('new-file', '')" />
+        <rs-editor-area
+          [path]="openPath()"
+          [entry]="openEntry()"
+          (newFile)="runAction('new-file', '')"
+          (action)="runAction($event, openPath() ?? '')"
+        />
       </ui-app-shell>
     }
   }

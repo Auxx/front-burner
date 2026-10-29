@@ -289,6 +289,25 @@ describe('RepositoryScreenPage', () => {
       );
     });
 
+    it('shows the empty state, not the README, when the open file was closed (FB-39)', async () => {
+      await visit('/repositories/12/files/logo.png');
+
+      await TestBed.inject(Router).navigate([ '/repositories', 12 ], { replaceUrl: true, state: { closed: true } });
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(url()).toBe('/repositories/12');
+      expect(page().querySelector('main ui-empty-state')?.textContent).toContain(
+        'web-feature-repository-screen.EditorAreaComponent.empty'
+      );
+
+      // Any other way to the screen without a file opens the README (FB-12).
+      await go('/repositories/12/files/logo.png');
+      await go('/repositories/12');
+
+      expect(url()).toBe('/repositories/12/files/README.md');
+    });
+
     it('creates a file from the empty state and opens it', async () => {
       folders[''] = listing('', [ entry('notes.txt') ]);
       await visit('/repositories/12');

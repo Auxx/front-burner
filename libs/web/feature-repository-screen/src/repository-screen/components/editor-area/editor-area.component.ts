@@ -3,6 +3,7 @@ import type { Entry } from '@front-burner/shared-contracts';
 import { ButtonComponent, EmptyStateActionsComponent, EmptyStateComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
+import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 import { fileName } from '../../utils/file-name/file-name';
 import { EntryMessageComponent } from '../entry-message/entry-message.component';
 
@@ -12,7 +13,7 @@ import { EntryMessageComponent } from '../entry-message/entry-message.component'
  * button that emits `newFile` (FB-12). For a
  * Markdown file it shows the file's name until the editor exists; for any
  * other entry, or a path that does not exist, why it cannot be opened (FB-13,
- * FB-21).
+ * FB-21), with its actions emitted as `action`.
  */
 @Component({
   selector: 'rs-editor-area',
@@ -34,6 +35,8 @@ export class EditorAreaComponent {
   readonly entry = input<Entry | null | undefined>(undefined);
 
   readonly newFile = output<void>();
+  /** An action chosen for the entry at `path`, such as **Delete** (FB-21). */
+  readonly action = output<EntryAction>();
 
   protected readonly name = computed(() => fileName(this.path() ?? ''));
   protected readonly markdown = computed(() => this.entry()?.kind === 'file' && this.entry()?.markdown === true);

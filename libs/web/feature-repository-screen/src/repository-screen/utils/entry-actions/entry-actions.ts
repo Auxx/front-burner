@@ -4,16 +4,18 @@ import type { Entry } from '@front-burner/shared-contracts';
 export type EntryAction = 'new-file' | 'new-folder' | 'rename' | 'delete';
 
 /**
- * The actions allowed for `entry`, in menu order (FB-24, FB-25, FB-35): a
- * folder creates inside itself and can be renamed, a Markdown file can be
- * renamed, and nothing else has actions yet. **Delete** comes with plan 20.
+ * The actions allowed for `entry`, in menu order (FB-24, FB-25, FB-35,
+ * FB-37): a folder creates inside itself, a Markdown file and a folder can be
+ * renamed, and everything but a submodule can be deleted.
  */
 export function entryActions(entry: Entry): EntryAction[] {
   switch (entry.kind) {
     case 'folder':
-      return [ 'new-file', 'new-folder', 'rename' ];
+      return [ 'new-file', 'new-folder', 'rename', 'delete' ];
     case 'file':
-      return entry.markdown ? [ 'rename' ] : [];
+      return entry.markdown ? [ 'rename', 'delete' ] : [ 'delete' ];
+    case 'symlink':
+      return [ 'delete' ];
     default:
       return [];
   }

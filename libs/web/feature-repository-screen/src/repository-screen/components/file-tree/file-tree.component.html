@@ -57,7 +57,10 @@
               <ui-icon name="diff-ignored" />
             </button>
           }
-          @if (actions(item).length > 0) {
+          @if (item.deleting) {
+            <ui-spinner />
+            <span class="deleting">{{ t('deleting') }}</span>
+          } @else if (actions(item).length > 0) {
             <!-- Not a tab stop: Shift+F10 or the ContextMenu key on the row opens it (FB-24). -->
             <button
               uiIconButton

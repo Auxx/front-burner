@@ -12,9 +12,9 @@ import type {
 import { DialogService } from '@front-burner/ui';
 import { FilesApi } from '@front-burner/web-api-client';
 import { CurrentUserService } from '@front-burner/web-core';
-import { type Observable, of, throwError } from 'rxjs';
+import { type Observable, of, Subject, throwError } from 'rxjs';
 
-import { dialogButton, nameInput, overlay, settleDialog, type } from '../../../testing/dialog-testing';
+import { apiError, dialogButton, nameInput, overlay, settleDialog, type } from '../../../testing/dialog-testing';
 import { entry, folder, listing } from '../../../testing/listings';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
@@ -38,6 +38,9 @@ describe('EntryCommandsService', () => {
   let renamed: RenameEntryRequest[];
   let renameAnswer: (request: RenameEntryRequest) => Observable<EntryPath>;
   let summary: EntrySummary;
+  let summaryAnswer: () => Observable<EntrySummary>;
+  let deleted: string[];
+  let deleteAnswer: () => Observable<void>;
   let openPath: string;
   let navigate: ReturnType<typeof vi.fn>;
   let commands: EntryCommandsService;
@@ -65,6 +68,9 @@ describe('EntryCommandsService', () => {
     created = [];
     renamed = [];
     summary = { files: 3, nonMarkdown: 0, uncommitted: 0 };
+    summaryAnswer = () => of(summary);
+    deleted = [];
+    deleteAnswer = () => of(undefined);
     renameAnswer = request => {
       const slash = request.path.lastIndexOf('/');
       return of({ path: slash === -1 ? request.name : `${request.path.slice(0, slash)}/${request.name}` });
@@ -113,7 +119,11 @@ describe('EntryCommandsService', () => {
               renamed.push(request);
               return renameAnswer(request);
             },
-            entrySummary: () => of(summary),
+            entrySummary: () => summaryAnswer(),
+            deleteEntry: (_id: number, query: { path: string; }) => {
+              deleted.push(query.path);
+              return deleteAnswer();
+            },
             isIgnored: () => of({ ignored: false })
           }
         }
@@ -290,5 +300,160 @@ describe('EntryCommandsService', () => {
     });
 
     expect(await store.resolve('docs/zzz.md')).toMatchObject({ name: 'zzz.md', kind: 'file', markdown: true });
+  });
+
+  describe('delete', () => {
+    const D = `${P}.DeleteEntryDialog`;
+
+    it('deletes an entry and lists its folder again', async () => {
+      folders['docs'] = listing('docs', [ folder('api') ]);
+
+      await run('delete', 'docs/guide.md', async () => {
+        dialogButton(`${D}.delete`)?.click();
+      });
+
+      expect(deleted).toEqual([ 'docs/guide.md' ]);
+      expect(store.entry('docs/guide.md')).toBeUndefined();
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('does not delete without a summary', async () => {
+      summaryAnswer = () => throwError(() => apiError(500, 'internal'));
+
+      await run('delete', 'docs/guide.md', async () => {
+        expect(dialogButton(`${D}.delete`)).toBeUndefined();
+        expect(dialogButton(`${D}.retry`)).toBeDefined();
+        dialogButton(`${D}.cancel`)?.click();
+      });
+
+      expect(deleted).toEqual([]);
+    });
+
+    it('restores the row when the delete fails', async () => {
+      const answer = new Subject<void>();
+      deleteAnswer = () => answer;
+      const done = commands.run('delete', 'docs/guide.md');
+      await settleDialog();
+
+      dialogButton(`${D}.delete`)?.click();
+      await settleDialog();
+      const row = () =>
+        store.nodes().find(item => item.path === 'docs')?.children?.find(item => item.label === 'guide.md');
+      expect(row()?.deleting).toBe(true);
+
+      answer.error(apiError(409, 'merge-in-progress'));
+      await settleDialog();
+
+      expect(row()?.deleting).toBe(false);
+      expect(overlay().querySelector('rs-delete-entry')).not.toBeNull();
+      dialogButton(`${D}.cancel`)?.click();
+      await done;
+    });
+
+    it('shows the empty state after deleting the open file\'s folder', async () => {
+      openPath = 'docs/api/index.md';
+      localStorage.setItem('fb.4.repo.12.lastFile', 'docs/api/index.md');
+      folders[''] = listing('', [ folder('build', { ignored: true }), entry('README.md') ]);
+
+      await run('delete', 'docs', async () => {
+        dialogButton(`${D}.delete`)?.click();
+      });
+
+      expect(deleted).toEqual([ 'docs' ]);
+      // The page shows the empty state, not the README, for this navigation (FB-39).
+      expect(navigate).toHaveBeenCalledWith([ '/repositories', 12 ], { replaceUrl: true, state: { closed: true } });
+      expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBeNull();
+      expect(store.expanded()).toEqual([]);
+      expect(await TestBed.inject(FirstFileService).pick(12)).toBe('README.md');
+    });
+
+    it('keeps the open file when another entry is deleted', async () => {
+      openPath = 'README.md';
+      localStorage.setItem('fb.4.repo.12.lastFile', 'README.md');
+
+      await run('delete', 'docs', async () => {
+        dialogButton(`${D}.delete`)?.click();
+      });
+
+      expect(navigate).not.toHaveBeenCalled();
+      expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBe('README.md');
+      expect(await TestBed.inject(FirstFileService).pick(12)).toBe('README.md');
+    });
+
+    it('closes the open file before forgetting it', async () => {
+      openPath = 'docs/guide.md';
+      localStorage.setItem('fb.4.repo.12.lastFile', 'docs/guide.md');
+      let remembered: string | null | undefined;
+      navigate.mockImplementation(() => {
+        remembered = localStorage.getItem('fb.4.repo.12.lastFile');
+        return Promise.resolve(true);
+      });
+
+      await run('delete', 'docs/guide.md', async () => {
+        dialogButton(`${D}.delete`)?.click();
+      });
+
+      // Navigated at once, without waiting for the user to load.
+      expect(remembered).toBe('docs/guide.md');
+      expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBeNull();
+    });
+
+    it.each([
+      [ 'docs/guide.md', 'docs/api' ],
+      [ 'docs/api', 'docs/guide.md' ],
+      [ 'docs/api/index.md', 'docs/api' ]
+    ])('moves the focus after deleting %s to %s', async (path, focused) => {
+      const folderPath = path.slice(0, path.lastIndexOf('/'));
+      const name = path.slice(path.lastIndexOf('/') + 1);
+      folders[folderPath] = listing(folderPath, folders[folderPath].entries.filter(item => item.name !== name));
+
+      await run('delete', path, async () => {
+        dialogButton(`${D}.delete`)?.click();
+      });
+
+      expect(store.focusRequest()).toBe(focused);
+    });
+
+    it('deletes an entry whose folder is being listed again', async () => {
+      const pending = new Subject<FolderListing>();
+      const listFolder = TestBed.inject(FilesApi).listFolder as unknown as (
+        id: number,
+        query: { path: string; }
+      ) => Observable<FolderListing>;
+      TestBed.inject(FilesApi).listFolder =
+        ((id: number, query: { path: string; }) => query.path === 'docs' ? pending : listFolder(id, query)) as never;
+      void store.load('docs');
+
+      const done = commands.run('delete', 'docs/intro.md');
+      pending.next(listing('docs', [ folder('api'), entry('guide.md'), entry('intro.md') ]));
+      pending.complete();
+      TestBed.inject(FilesApi).listFolder = listFolder as never;
+      await settleDialog();
+
+      expect(overlay().querySelector('rs-delete-entry h2')?.textContent).toContain(`${D}.heading`);
+      dialogButton(`${D}.cancel`)?.click();
+      await done;
+    });
+  });
+
+  it('renames an entry whose folder is being listed again', async () => {
+    const pending = new Subject<FolderListing>();
+    const listFolder = TestBed.inject(FilesApi).listFolder as unknown as (
+      id: number,
+      query: { path: string; }
+    ) => Observable<FolderListing>;
+    TestBed.inject(FilesApi).listFolder =
+      ((id: number, query: { path: string; }) => query.path === 'docs' ? pending : listFolder(id, query)) as never;
+    void store.load('docs');
+
+    const done = commands.run('rename', 'docs/intro.md');
+    pending.next(listing('docs', [ folder('api'), entry('guide.md'), entry('intro.md') ]));
+    pending.complete();
+    TestBed.inject(FilesApi).listFolder = listFolder as never;
+    await settleDialog();
+
+    expect(nameInput().value).toBe('intro.md');
+    dialogButton(`${P}.EntryNameDialog.cancel`)?.click();
+    await done;
   });
 });
