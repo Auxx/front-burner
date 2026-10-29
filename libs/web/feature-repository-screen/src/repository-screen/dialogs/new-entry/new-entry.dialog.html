@@ -1,0 +1,33 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen'">
+  <ui-dialog [heading]="t('NewEntryDialog.heading.' + data.kind)">
+    <form novalidate [id]="formId" (submit)="create($event)">
+      @if (failure(); as failure) {
+        <ui-inline-banner status="danger" announce>
+          {{ failure.text }}
+          @if (failure.reference) {
+            <span class="reference">{{ t('NewEntryDialog.reference') }} <code>{{ failure.reference }}</code></span>
+          }
+        </ui-inline-banner>
+      }
+      <ui-field
+        [label]="t('NewEntryDialog.name')"
+        [hint]="showFinalName() ? t('NewEntryDialog.finalName', { name: finalName() }) : undefined"
+        [error]="error() ? t('nameErrors.' + error()) : undefined"
+      >
+        <input uiInput #name autocomplete="off" spellcheck="false" [formField]="model.name" />
+      </ui-field>
+      @if (ignored()) {
+        <ui-inline-banner status="warning">{{ t('NewEntryDialog.ignored.' + data.kind) }}</ui-inline-banner>
+      }
+      @if (data.kind === 'folder') {
+        <ui-inline-banner status="info">{{ t('NewEntryDialog.emptyFolder') }}</ui-inline-banner>
+      }
+    </form>
+    <div uiDialogFooter>
+      <button uiButton [unavailable]="busy()" (click)="ref.close()">{{ t('NewEntryDialog.cancel') }}</button>
+      <button uiButton variant="primary" type="submit" [attr.form]="formId" [busy]="busy()">
+        {{ t('NewEntryDialog.create') }}
+      </button>
+    </div>
+  </ui-dialog>
+</ng-container>
