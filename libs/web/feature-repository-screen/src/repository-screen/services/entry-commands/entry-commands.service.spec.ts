@@ -267,7 +267,8 @@ describe('EntryCommandsService', () => {
     const timers = vi.spyOn(globalThis, 'setTimeout');
 
     await run('rename', 'docs', async () => {
-      expect(commands.isOwnChange('docs/guide.md')).toBe(true);
+      // Not while the dialog is open: changes made elsewhere meanwhile are followed.
+      expect(commands.isOwnChange('docs/guide.md')).toBe(false);
       type(nameInput(), 'manual');
       dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
     });
@@ -275,6 +276,20 @@ describe('EntryCommandsService', () => {
     expect(commands.isOwnChange('docs/guide.md')).toBe(true);
     expect(commands.isOwnChange('README.md')).toBe(false);
     ownChangeEnd(timers)();
+    expect(commands.isOwnChange('docs/guide.md')).toBe(false);
+  });
+
+  it('does not count a rename that failed as a change', async () => {
+    renameAnswer = () => throwError(() => apiError(500, 'internal'));
+
+    await run('rename', 'docs/guide.md', async () => {
+      type(nameInput(), 'intro.md');
+      dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
+      await settleDialog();
+      expect(commands.isOwnChange('docs/guide.md')).toBe(false);
+      dialogButton(`${P}.EntryNameDialog.cancel`)?.click();
+    });
+
     expect(commands.isOwnChange('docs/guide.md')).toBe(false);
   });
 
@@ -340,7 +355,7 @@ describe('EntryCommandsService', () => {
       const timers = vi.spyOn(globalThis, 'setTimeout');
 
       await run('delete', 'docs/guide.md', async () => {
-        expect(commands.isOwnChange('docs/guide.md')).toBe(true);
+        expect(commands.isOwnChange('docs/guide.md')).toBe(false);
         dialogButton(`${D}.delete`)?.click();
       });
 

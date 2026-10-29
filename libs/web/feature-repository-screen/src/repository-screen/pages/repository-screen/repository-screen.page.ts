@@ -124,12 +124,13 @@ export class RepositoryScreenPage {
 
   constructor() {
     effect(() => {
-      const repository = this.session.state() === 'ready' ? this.session.repository() : null;
+      const state = this.session.state();
+      const repository = state === 'ready' ? this.session.repository() : null;
       const { path, closed } = this.target();
       if (repository) {
         untracked(() => void this.show(repository.id, path, closed));
-      } else {
-        // Listed afresh once the repository can be opened again.
+      } else if (state !== 'loading') {
+        // Listed afresh once the repository can be opened again; not while it only opens.
         untracked(() => this.tree.reset());
       }
     });

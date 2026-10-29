@@ -41,9 +41,11 @@ export const OWN_CHANGE_MS = 5000;
  *   not the README (FB-39).
  *
  * The entries a rename or delete changes are this tab's own changes
- * (`ownChange`) from when its dialog opens until {@link OWN_CHANGE_MS} after
- * it closes, so that their `files.changed` events, which can come before the
- * answer, are not taken for changes made elsewhere (FB-42).
+ * (`ownChange`) from when its request is sent until {@link OWN_CHANGE_MS}
+ * after its answer, or at once when it fails, so that their `files.changed`
+ * events, which can come before the answer, are not taken for changes made
+ * elsewhere (FB-42). While the dialog only waits, changes made elsewhere are
+ * followed as usual.
  */
 @Injectable()
 export class EntryCommandsService {
@@ -98,6 +100,26 @@ export class EntryCommandsService {
     return () => this.own.delete(mark);
   }
 
+  /**
+   * The own change at `path` of a dialog's request: marked while it is sent
+   * (`sending(true)`), cleared when it failed (`sending(false)`), and kept
+   * {@link OWN_CHANGE_MS} longer once the dialog closed (`answered`).
+   */
+  private ownChangeWhile(path: string): { sending(sending: boolean): void; answered(): void; } {
+    let done: (() => void) | undefined;
+    return {
+      sending: sending => {
+        done?.();
+        done = sending ? this.ownChange(path) : undefined;
+      },
+      answered: () => {
+        if (done) {
+          setTimeout(done, OWN_CHANGE_MS);
+        }
+      }
+    };
+  }
+
   /** Whether `path` is, or lies under, an entry this tab is changing or has just changed. */
   isOwnChange(path: string): boolean {
     return [ ...this.own ].some(mark => isWithin(path, mark.path));
@@ -146,16 +168,17 @@ export class EntryCommandsService {
       return;
     }
     const parent = parentPath(path);
-    const done = this.ownChange(path);
+    const own = this.ownChangeWhile(path);
     const renamed = await this.ask({
       mode: 'rename',
       repositoryId,
       path,
       entry,
       siblings: (await this.store.entries(parent))?.map(item => item.name) ?? [],
-      confirm: entry.kind === 'folder' ? () => this.confirmFolderRename(repositoryId, path) : undefined
+      confirm: entry.kind === 'folder' ? () => this.confirmFolderRename(repositoryId, path) : undefined,
+      sending: own.sending
     });
-    setTimeout(done, renamed ? OWN_CHANGE_MS : 0);
+    own.answered();
     if (!renamed) {
       return;
     }
@@ -176,12 +199,20 @@ export class EntryCommandsService {
     }
     const parent = parentPath(path);
     const siblings = (await this.store.entries(parent))?.map(item => joinPath(parent, item.name)) ?? [];
-    const done = this.ownChange(path);
+    const own = this.ownChangeWhile(path);
     const ref = this.dialogs.open<DeleteEntryDialog, DeleteEntryData, boolean>(DeleteEntryDialog, {
-      data: { repositoryId, path, entry, marked: deleting => this.store.markDeleting(path, deleting) }
+      data: {
+        repositoryId,
+        path,
+        entry,
+        marked: deleting => {
+          own.sending(deleting);
+          this.store.markDeleting(path, deleting);
+        }
+      }
     });
     const confirmed = await firstValueFrom(ref.closed);
-    setTimeout(done, confirmed ? OWN_CHANGE_MS : 0);
+    own.answered();
     if (!confirmed) {
       return;
     }

@@ -14,6 +14,7 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
 import { routes } from '../../repository-screen.routes';
+import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 
 const KEY = 'web-feature-repository-screen.RepositoryScreenPage';
 
@@ -52,6 +53,8 @@ describe('RepositoryScreenPage', () => {
   let harness: RouterTestingHarness;
   let narrow: boolean;
   let events: Subject<PushEvent>;
+  /** The folders listed, in order. */
+  let listings: string[];
 
   const page = () => harness.fixture.nativeElement as HTMLElement;
   const button = (text: string) =>
@@ -67,7 +70,7 @@ describe('RepositoryScreenPage', () => {
           provide: FilesApi,
           useValue: {
             listFolder: (_id: number, query: { path: string; }) =>
-              failOnce.delete(query.path)
+              listings.push(query.path) && failOnce.delete(query.path)
                 ? failure(500, 'internal')
                 : folders[query.path]
                 ? of(folders[query.path])
@@ -113,6 +116,7 @@ describe('RepositoryScreenPage', () => {
     };
     narrow = false;
     events = new Subject();
+    listings = [];
     localStorage.clear();
     open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
     createEntry = vi.fn((_id: number, request: { name: string; }) => of({ path: `${request.name}.md` }));
@@ -192,6 +196,22 @@ describe('RepositoryScreenPage', () => {
 
     expect(page().querySelector('rs-not-openable')).toBeNull();
     expect(page().querySelector('[role="treeitem"][aria-label^="fresh.md,"]')).not.toBeNull();
+  });
+
+  it('keeps the tree while the repository opens again', async () => {
+    await visit('/repositories/12/files/README.md');
+    listings = [];
+    const answer = new Subject<RepositorySummary>();
+    answers.push(answer);
+
+    harness.routeDebugElement?.injector.get(RepositorySessionService).retry();
+    await settle(harness.fixture);
+    answer.next(handbook);
+    await settle(harness.fixture);
+    await settle(harness.fixture);
+
+    expect(listings).toEqual([]);
+    expect(page().querySelector('[role="treeitem"]')).not.toBeNull();
   });
 
   it('offers Try again when opening fails', async () => {

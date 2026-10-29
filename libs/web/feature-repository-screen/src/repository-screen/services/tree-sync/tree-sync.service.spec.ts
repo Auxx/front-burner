@@ -93,7 +93,7 @@ describe('TreeSyncService', () => {
       subscribed++;
       return events.subscribe(subscriber);
     });
-    session = { state: signal('ready'), statusChanged: vi.fn(), retry: vi.fn() };
+    session = { state: signal('ready'), statusChanged: vi.fn(), retry: vi.fn(), refresh: vi.fn() };
     TestBed.configureTestingModule({
       imports: [ translocoTesting() ],
       providers: [
@@ -262,12 +262,15 @@ describe('TreeSyncService', () => {
     expect(session.statusChanged).toHaveBeenCalledWith('error', 'working-copy-missing');
   });
 
-  it('opens a repository that could not be opened again after a reconnect', async () => {
+  it('reads the repository\'s status again after a reconnect', async () => {
     await start();
-    session.state.set('not-openable');
 
-    reconnected.next();
+    for (const state of [ 'ready', 'not-openable', 'failed', 'loading' ]) {
+      session.state.set(state);
+      reconnected.next();
+    }
 
+    expect(session.refresh).toHaveBeenCalledTimes(2);
     expect(session.retry).toHaveBeenCalledTimes(1);
   });
 
@@ -338,5 +341,30 @@ describe('TreeSyncService', () => {
     await flush();
 
     expect(sync.goneElsewhere()).toBeNull();
+  });
+
+  it('answers the listings on their way when the tree is reset', async () => {
+    await start([ 'docs' ]);
+    answers['docs'] = [ new Subject<FolderListing>() ];
+    void store.load('docs');
+    const found = store.lookup('docs/guide.md');
+
+    store.reset();
+
+    await expect(found).resolves.toBeUndefined();
+  });
+
+  it('keeps a folder whose listing was dropped while it was listed again', async () => {
+    await start([ 'docs', 'docs/api' ]);
+    answers['docs'] = [ new Subject<FolderListing>() ];
+    changed([ 'docs' ]);
+    await flush();
+
+    // Collapsed while it is listed again: the next event drops its listing.
+    store.expanded.set([ 'docs/api' ]);
+    changed([ 'docs' ]);
+    await flush();
+
+    expect(store.expanded()).toEqual([ 'docs/api' ]);
   });
 });

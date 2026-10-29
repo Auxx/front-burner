@@ -358,7 +358,9 @@ export class FileTreeStoreService {
         if (this.reloads.get(folder) === reload) {
           this.reloads.delete(folder);
         }
-        if (outcome === 'missing' && folder !== '' && generation === this.generation) {
+        // Only a folder that answered `entry-not-found` is gone: one whose listing was dropped meanwhile is not.
+        const answered = this.folders().get(folder)?.status === 'error';
+        if (outcome === 'missing' && answered && folder !== '' && generation === this.generation) {
           this.deleted(folder);
         }
       })
@@ -501,12 +503,17 @@ export class FileTreeStoreService {
     });
   }
 
+  /** Drops every request on its way, answering whoever waits for it as if it had failed. */
   private cancelAll(): void {
+    const requests = [ ...this.requests.values() ];
+    this.requests.clear();
+    for (const request of requests) {
+      request.supersede(Promise.resolve('failed'));
+    }
     for (const subscription of this.subscriptions.values()) {
       subscription.unsubscribe();
     }
     this.subscriptions.clear();
-    this.requests.clear();
     this.reloads.clear();
   }
 

@@ -26,14 +26,19 @@ function failure(status: number, code: string): Observable<never> {
 describe('RepositorySessionService', () => {
   let answers: Observable<RepositorySummary>[];
   let open: ReturnType<typeof vi.fn>;
+  /** Answers to `get`, which reads the status without opening; the open repository after them. */
+  let reads: Observable<RepositorySummary>[];
+  let get: ReturnType<typeof vi.fn>;
   let session: RepositorySessionService;
 
   beforeEach(() => {
     answers = [];
     open = vi.fn(() => answers.shift() ?? of(handbook));
+    reads = [];
+    get = vi.fn(() => reads.shift() ?? of(handbook));
     TestBed.configureTestingModule({
       imports: [ translocoTesting({ 'errors.internal': 'Something went wrong.' }) ],
-      providers: [ RepositorySessionService, { provide: RepositoriesApi, useValue: { open } } ]
+      providers: [ RepositorySessionService, { provide: RepositoriesApi, useValue: { open, get } } ]
     });
     session = TestBed.inject(RepositorySessionService);
   });
@@ -160,5 +165,41 @@ describe('RepositorySessionService', () => {
 
     expect(session.state()).toBe('not-openable');
     expect(session.repository()?.status).toBe('cloning');
+  });
+
+  it('asks again for a status that changed while the repository opened', () => {
+    const answer = new Subject<RepositorySummary>();
+    answers.push(answer);
+    session.start(12);
+
+    // The clone ends while the answer, read before, is on its way.
+    session.statusChanged('ready', null);
+    answer.next({ ...handbook, status: 'cloning' });
+
+    expect(get).toHaveBeenCalledWith(12);
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(session.state()).toBe('ready');
+  });
+
+  it('reads the status again without opening the repository', () => {
+    session.start(12);
+    reads.push(of({ ...handbook, status: 'error', error: 'working-copy-missing' }));
+
+    session.refresh();
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(session.state()).toBe('not-openable');
+    expect(session.repository()?.error).toBe('working-copy-missing');
+  });
+
+  it('opens a repository once per visit, also when it is ready again after an error', () => {
+    session.start(12);
+
+    session.statusChanged('error', 'working-copy-missing');
+    session.statusChanged('ready', null);
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(session.state()).toBe('ready');
+    expect(session.repository()).toMatchObject({ status: 'ready', error: null });
   });
 });

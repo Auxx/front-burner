@@ -14,7 +14,8 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
  * - `files.changed` lists the shown folders it names again (FB-41).
  * - `repository.status` goes to `RepositorySessionService.statusChanged`.
  * - A (re)connect lists every shown folder again, since events are never
- *   replayed, and tries again to open a repository that could not be opened.
+ *   replayed, reads the repository's status again, and tries again to open
+ *   it when that failed.
  *
  * When the open file, which was listed, is gone from the listings that come
  * back, and this tab is not the one that deleted or renamed it
@@ -53,8 +54,11 @@ export class TreeSyncService {
     const subscription = new Subscription();
     // `reconnected` first, so that the first connect, which the events start, is seen.
     subscription.add(this.push.reconnected.subscribe(() => {
-      if (this.session.state() === 'not-openable') {
+      const state = this.session.state();
+      if (state === 'failed') {
         this.session.retry();
+      } else if (state === 'ready' || state === 'not-openable') {
+        this.session.refresh();
       }
       void this.sync('all');
     }));
