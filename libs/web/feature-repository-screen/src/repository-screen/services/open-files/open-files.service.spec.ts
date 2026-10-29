@@ -273,7 +273,7 @@ describe('OpenFilesService', () => {
       await drafts.put({ userId: 4, repositoryId: 12, path: 'README.md' }, DRAFT);
       const file = await service.open('README.md');
 
-      service.restoreDraft('README.md', () => DRAFT.content);
+      service.restoreDraft('README.md', content => () => content);
       await vi.advanceTimersByTimeAsync(0);
 
       expect(file.draft()).toBeNull();
@@ -286,12 +286,70 @@ describe('OpenFilesService', () => {
       await drafts.put({ userId: 4, repositoryId: 12, path: 'README.md' }, DRAFT);
       const file = await service.open('README.md');
 
-      service.restoreDraft('README.md', () => DRAFT.content);
+      service.restoreDraft('README.md', content => () => content);
       await vi.advanceTimersByTimeAsync(0);
       await answer(0);
 
       expect(file.saver.status()).toEqual({ kind: 'offline' });
       expect(drafts.at('README.md')?.content).toBe(DRAFT.content);
+    });
+
+    it('does not apply a draft that is no longer offered', async () => {
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'README.md' }, DRAFT);
+      await service.open('README.md');
+      service.discardDraft('README.md');
+      const apply = vi.fn(() => () => DRAFT.content);
+
+      service.restoreDraft('README.md', apply);
+      service.restoreDraft('missing.md', apply);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(apply).not.toHaveBeenCalled();
+      expect(saves).toHaveLength(0);
+    });
+
+    it('deletes the draft when the edits are undone back to the file', async () => {
+      const file = await service.open('README.md');
+      file.saver.edit(() => '# Edited');
+      await vi.advanceTimersByTimeAsync(1500);
+      await answer(0);
+      expect(drafts.at('README.md')?.content).toBe('# Edited');
+
+      file.saver.edit(() => '# README.md');
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(saves).toHaveLength(1);
+      expect(drafts.at('README.md')).toBeUndefined();
+    });
+
+    it('neither offers nor deletes the draft of a file another tab has open', async () => {
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'README.md' }, DRAFT);
+      drafts.elsewhere.add('4/12/README.md');
+
+      const file = await service.open('README.md');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(file.draft()).toBeNull();
+      expect(drafts.at('README.md')).toEqual(DRAFT);
+    });
+
+    it('claims each open file, follows renames and releases it when closed', async () => {
+      await service.open('docs/guide.md');
+      expect([ ...drafts.claimed ]).toEqual([ '4/12/docs/guide.md' ]);
+
+      service.rekey('docs', 'handbook');
+      expect([ ...drafts.claimed ]).toEqual([ '4/12/handbook/guide.md' ]);
+
+      service.close('handbook', { dropPending: true });
+      expect(drafts.claimed.size).toBe(0);
+    });
+
+    it('releases its claims when the page is left', async () => {
+      await service.open('README.md');
+
+      TestBed.resetTestingModule();
+
+      expect(drafts.claimed.size).toBe(0);
     });
 
     it('discards a draft', async () => {

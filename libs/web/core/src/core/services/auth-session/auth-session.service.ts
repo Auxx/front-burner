@@ -1,9 +1,10 @@
 import { DOCUMENT } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import type { SessionTokens } from '@front-burner/shared-contracts';
 import { AuthApi, OidcApi } from '@front-burner/web-api-client';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, type Observable, Subject } from 'rxjs';
 
 import type { LoginMessage } from '../../models/login-message.model';
 
@@ -17,6 +18,18 @@ const LOGIN = '/login';
 
 /** How long a tab that waited for the refresh lock waits for the other tab's new token. */
 const OTHER_TAB_WAIT_MS = 250;
+
+/**
+ * Why this tab ended the session: the user logged out, the backend refused
+ * the session, or a refresh could not reach the backend, after which the user
+ * can log back in. Not emitted for a logout in another tab, which reports it.
+ */
+export type SessionEnd = 'logged-out' | 'refused' | 'unreachable';
+
+/** Whether a refresh failed without an answer from the backend, as the save queue tells it (NF-3.2). */
+function unreachable(error: unknown): boolean {
+  return error instanceof HttpErrorResponse && (error.status === 0 || error.status >= 500);
+}
 
 /** What is stored: never the refresh token, which stays in its cookie (LG-40). */
 interface StoredSession {
@@ -63,8 +76,11 @@ export class AuthSessionService {
   private localLock: Promise<unknown> = Promise.resolve();
   /** Whether the session could be stored; without storage it lives in this tab only. */
   private storageWorks = true;
+  private readonly endedSubject = new Subject<SessionEnd>();
 
   readonly loggedIn = computed(() => this.session() !== undefined);
+  /** Each session this tab ended, once `loggedIn` is false. */
+  readonly ended: Observable<SessionEnd> = this.endedSubject.asObservable();
 
   constructor() {
     const listener = (event: StorageEvent) => this.followOtherTab(event);
@@ -114,7 +130,7 @@ export class AuthSessionService {
       try {
         tokens = await firstValueFrom(this.api.refresh({}));
       } catch (error) {
-        await this.expire(this.router.url);
+        await this.expire(this.router.url, unreachable(error) ? 'unreachable' : 'refused');
         throw error;
       }
       this.store(tokens);
@@ -130,12 +146,18 @@ export class AuthSessionService {
       // The auth token is removed all the same.
     }
     this.clear();
+    this.endedSubject.next('logged-out');
     await this.showLogin('logged-out');
   }
 
-  /** Ends a session the backend no longer accepts and remembers where the user was (LG-4, LG-40). */
-  async expire(returnUrl?: string): Promise<void> {
+  /**
+   * Ends a session the backend no longer accepts, or could not refresh
+   * because it could not be reached (`unreachable`), and remembers where the
+   * user was (LG-4, LG-40).
+   */
+  async expire(returnUrl?: string, cause: 'refused' | 'unreachable' = 'refused'): Promise<void> {
     this.clear();
+    this.endedSubject.next(cause);
     await this.showLogin('session-expired', returnUrl);
   }
 

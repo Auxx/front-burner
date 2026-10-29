@@ -691,7 +691,10 @@ describe('RepositoryScreenPage', () => {
 
     it('asks before the tab closes with unsaved edits', async () => {
       saveFile.mockReturnValue(new Subject());
+      const listens = vi.spyOn(window, 'addEventListener');
       await visit('/repositories/12/files/README.md');
+      // Not listening otherwise keeps the page in the back/forward cache.
+      expect(listens.mock.calls.map(([ type ]) => type)).not.toContain('beforeunload');
       const unload = () => {
         const event = new Event('beforeunload', { cancelable: true });
         window.dispatchEvent(event);

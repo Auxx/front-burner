@@ -234,6 +234,35 @@ describe('AuthSessionService', () => {
     });
   });
 
+  it.each([
+    [ 'refused', new HttpErrorResponse({ status: 401, error: { code: 'refresh-refused' } }) ],
+    [ 'unreachable', new HttpErrorResponse({ status: 0 }) ],
+    [ 'unreachable', new HttpErrorResponse({ status: 502 }) ]
+  ])('reports the session as ended %s when the refresh fails', async (cause, failure) => {
+    localStorage.setItem(AUTH_STORAGE_KEY, stored('old'));
+    api.refresh.mockReturnValue(throwError(() => failure));
+    const { service } = create();
+    const ended: string[] = [];
+    service.ended.subscribe(end => ended.push(end));
+
+    await expect(service.refresh('old')).rejects.toBe(failure);
+
+    expect(ended).toEqual([ cause ]);
+  });
+
+  it('reports a logout and an expired session as ended', async () => {
+    localStorage.setItem(AUTH_STORAGE_KEY, stored('kept'));
+    api.logout.mockReturnValue(of(undefined));
+    const { service } = create();
+    const ended: string[] = [];
+    service.ended.subscribe(end => ended.push(end));
+
+    await service.logout();
+    await service.expire();
+
+    expect(ended).toEqual([ 'logged-out', 'refused' ]);
+  });
+
   it('logs out', async () => {
     localStorage.setItem(AUTH_STORAGE_KEY, stored('kept'));
     api.logout.mockReturnValue(of(undefined));

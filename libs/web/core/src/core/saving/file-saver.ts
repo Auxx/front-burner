@@ -44,6 +44,7 @@ export class FileSaver {
   private readonly dirty = signal(false);
   private readonly savedSubject = new Subject<SaveResult>();
   private readonly sendingSubject = new Subject<string>();
+  private readonly upToDateSubject = new Subject<void>();
 
   /** The status of the open file's saves (ED-18). */
   readonly status: Signal<SaveStatus> = this.currentStatus.asReadonly();
@@ -53,6 +54,11 @@ export class FileSaver {
   readonly saved: Observable<SaveResult> = this.savedSubject.asObservable();
   /** The content of each save as it is sent, such as to keep it as a browser draft (ED-20). */
   readonly sending: Observable<string> = this.sendingSubject.asObservable();
+  /**
+   * Each time no edits are left unsaved: a save confirmed the newest content,
+   * or the edits were undone back to the last saved content. Not on `discard`.
+   */
+  readonly upToDate: Observable<void> = this.upToDateSubject.asObservable();
 
   private last: { content: string; hash: string | null; };
   /** Reads the content waiting to be sent, read only when it is sent. */
@@ -160,8 +166,7 @@ export class FileSaver {
     this.pending = null;
     this.due = false;
     if (content === this.last.content) {
-      this.dirty.set(false);
-      this.currentStatus.set({ kind: 'saved' });
+      this.caughtUp();
       return;
     }
     const generation = this.generation;
@@ -188,11 +193,21 @@ export class FileSaver {
   private succeeded(content: string, result: SaveResult): void {
     this.last = { content, hash: result.hash };
     this.failures = 0;
-    if (this.pending === null) {
+    const newest = this.pending === null;
+    if (newest) {
       this.dirty.set(false);
       this.currentStatus.set({ kind: 'saved' });
     }
     this.savedSubject.next(result);
+    if (newest) {
+      this.upToDateSubject.next();
+    }
+  }
+
+  private caughtUp(): void {
+    this.dirty.set(false);
+    this.currentStatus.set({ kind: 'saved' });
+    this.upToDateSubject.next();
   }
 
   private failed(content: string, error: unknown): void {

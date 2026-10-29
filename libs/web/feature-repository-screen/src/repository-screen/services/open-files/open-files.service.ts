@@ -1,4 +1,4 @@
-import { computed, inject, Injectable, type Signal, signal, type WritableSignal } from '@angular/core';
+import { computed, DestroyRef, inject, Injectable, type Signal, signal, type WritableSignal } from '@angular/core';
 import type { FileContent } from '@front-burner/shared-contracts';
 import { injectNarrowViewport } from '@front-burner/ui';
 import { FilesApi } from '@front-burner/web-api-client';
@@ -59,9 +59,11 @@ export interface OpenFile {
  *
  * Unsaved content is kept as a browser draft (ED-20, A-8.10): written each
  * time a saver sends it, and by `writeDrafts` when the page is hidden for
- * good; deleted when a save confirms the newest content. Opening a file looks
- * for its draft and offers it (ED-7); one equal to the file is deleted
- * without asking. Deleting from this tab's file tree deletes the drafts
+ * good; deleted once the backend holds the newest content, whether a save
+ * confirmed it or the edits were undone back to it. Opening a file looks for
+ * its draft and offers it (ED-7); one equal to the file is deleted without
+ * asking. A file another tab has open is claimed by it, and its draft, still
+ * being saved there, is neither offered nor deleted (D-1.3). Deleting from this tab's file tree deletes the drafts
  * (FB-39), and renaming moves them (FB-36); a file that is gone for any other
  * reason keeps its draft (FB-42, ED-21).
  */
@@ -80,6 +82,12 @@ export class OpenFilesService {
   private readonly currentFile = signal<OpenFile | null>(null);
   /** Counts the files opened, so that only the latest one becomes the current one. */
   private opening = 0;
+  /** Releases each entry's claim on its draft. */
+  private readonly claims = new Map<OpenFile, () => void>();
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.claims.forEach(release => release()));
+  }
 
   /** The file shown in the editor, once it has opened. */
   readonly current: Signal<OpenFile | null> = this.currentFile.asReadonly();
@@ -109,7 +117,7 @@ export class OpenFilesService {
         throw toApiError(error);
       }
       const key = await this.draftKey(repositoryId, content.path);
-      let draft = key ? await this.drafts.get(key) : null;
+      let draft = key && !(await this.drafts.claimedElsewhere(key)) ? await this.drafts.get(key) : null;
       if (key && draft?.content === content.content) {
         void this.drafts.delete(key);
         draft = null;
@@ -145,26 +153,27 @@ export class OpenFilesService {
     for (const [ repositoryId, files ] of this.files) {
       for (const file of files.values()) {
         const waiting = file.saver.waiting();
-        const key = this.draftKeyNow(file, repositoryId);
-        if (waiting !== null && key) {
-          void this.drafts.put(key, { content: waiting, savedAt: new Date().toISOString() });
+        if (waiting !== null) {
+          this.putDraft(file, repositoryId, waiting);
         }
       }
     }
   }
 
   /**
-   * Restores the file's offered draft (ED-7): the editor has put it in its
-   * content, which `content` reads; it is saved at once. The draft is kept
+   * Restores the file's offered draft (ED-7): `apply` puts the draft's content
+   * in the editor and returns what reads the editor's content, which is saved
+   * at once. `apply` is not called when no draft is offered. The draft is kept
    * until that save is confirmed.
    */
-  restoreDraft(path: string, content: () => string): void {
+  restoreDraft(path: string, apply: (content: string) => () => string): void {
     const file = this.get(path);
-    if (!file || file.draft() === null) {
+    const draft = file?.draft();
+    if (!file || !draft) {
       return;
     }
     file.draft.set(null);
-    file.saver.edit(content);
+    file.saver.edit(apply(draft.content));
     void file.saver.flush();
   }
 
@@ -175,7 +184,7 @@ export class OpenFilesService {
       return;
     }
     file.draft.set(null);
-    const key = this.draftKeyNow(file, this.repositoryId());
+    const key = this.keyAt(this.repositoryId(), file.path());
     if (key) {
       void this.drafts.delete(key);
     }
@@ -200,9 +209,10 @@ export class OpenFilesService {
    */
   rekey(from: string, to: string): void {
     const repositoryId = this.repositoryId();
-    const userId = this.currentUser.user()?.id;
-    if (userId !== undefined) {
-      void this.drafts.move({ userId, repositoryId, path: from }, { userId, repositoryId, path: to });
+    const fromKey = this.keyAt(repositoryId, from);
+    const toKey = this.keyAt(repositoryId, to);
+    if (fromKey && toKey) {
+      void this.drafts.move(fromKey, toKey);
     }
     const files = this.byPath(repositoryId);
     for (const [ path, file ] of [ ...files ]) {
@@ -211,6 +221,7 @@ export class OpenFilesService {
         files.delete(path);
         files.set(moved, file);
         file.path.set(moved);
+        this.claim(file, repositoryId);
       }
     }
   }
@@ -223,9 +234,9 @@ export class OpenFilesService {
    */
   close(path: string, options: { dropPending: boolean; }): void {
     const repositoryId = this.repositoryId();
-    const userId = this.currentUser.user()?.id;
-    if (options.dropPending && userId !== undefined) {
-      void this.drafts.delete({ userId, repositoryId, path });
+    const draftKey = this.keyAt(repositoryId, path);
+    if (options.dropPending && draftKey) {
+      void this.drafts.delete(draftKey);
     }
     const files = this.byPath(repositoryId);
     for (const [ key, file ] of [ ...files ]) {
@@ -238,6 +249,8 @@ export class OpenFilesService {
         void file.saver.flush();
       }
       files.delete(key);
+      this.claims.get(file)?.();
+      this.claims.delete(file);
       this.all.update(all => all.filter(item => item !== file));
       if (this.currentFile() === file) {
         this.clearCurrent();
@@ -271,19 +284,14 @@ export class OpenFilesService {
       size: content.size,
       draft: signal(draft)
     };
-    file.saver.sending.subscribe(text => {
-      const key = this.draftKeyNow(file, repositoryId);
+    file.saver.sending.subscribe(text => this.putDraft(file, repositoryId, text));
+    file.saver.upToDate.subscribe(() => {
+      const key = this.keyAt(repositoryId, file.path());
       if (key) {
-        void this.drafts.put(key, { content: text, savedAt: new Date().toISOString() });
-      }
-    });
-    file.saver.saved.subscribe(() => {
-      const key = this.draftKeyNow(file, repositoryId);
-      // Not when newer content waits: its draft is the only copy of it.
-      if (key && !file.saver.unsaved()) {
         void this.drafts.delete(key);
       }
     });
+    this.claim(file, repositoryId);
     this.byPath(repositoryId).set(content.path, file);
     this.all.update(all => [ ...all, file ]);
     return file;
@@ -299,10 +307,24 @@ export class OpenFilesService {
     }
   }
 
-  /** The draft key of `file` at its current path, once the user is known. */
-  private draftKeyNow(file: OpenFile, repositoryId: number): DraftKey | null {
+  /** The draft key of the file at `path`, once the user is known. */
+  private keyAt(repositoryId: number, path: string): DraftKey | null {
     const userId = this.currentUser.user()?.id;
-    return userId === undefined ? null : { userId, repositoryId, path: file.path() };
+    return userId === undefined ? null : { userId, repositoryId, path };
+  }
+
+  private putDraft(file: OpenFile, repositoryId: number, content: string): void {
+    const key = this.keyAt(repositoryId, file.path());
+    if (key) {
+      void this.drafts.put(key, { content, savedAt: new Date().toISOString() });
+    }
+  }
+
+  /** Claims the draft of `file` at its current path, releasing its claim on an earlier one. */
+  private claim(file: OpenFile, repositoryId: number): void {
+    this.claims.get(file)?.();
+    const key = this.keyAt(repositoryId, file.path());
+    this.claims.set(file, key ? this.drafts.claim(key) : () => undefined);
   }
 
   private byPath(repositoryId: number): Map<string, OpenFile> {

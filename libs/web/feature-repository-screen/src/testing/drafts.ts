@@ -4,12 +4,14 @@ import { type Draft, type DraftKey, DraftStore } from '@front-burner/web-core';
 /**
  * The browser drafts in memory, for specs, under the keys of the real store
  * (`<userId>/<repositoryId>/<path>`). A folder's path names the drafts under
- * it, as in the real store.
+ * it, as in the real store. `claimed` holds the keys this tab claims, and
+ * `elsewhere` those another tab claims.
  */
 export class MemoryDraftStore
-  implements Pick<DraftStore, 'available' | 'put' | 'get' | 'delete' | 'move' | 'clearAll'> {
+  implements Pick<DraftStore, 'put' | 'get' | 'delete' | 'move' | 'clearAll' | 'claim' | 'claimedElsewhere'> {
   readonly drafts = new Map<string, Draft>();
-  readonly available = true;
+  readonly claimed = new Set<string>();
+  readonly elsewhere = new Set<string>();
 
   /** The draft of user 4's file at `path` in repository 12, as the specs' fakes name them. */
   at(path: string, repositoryId = 12, userId = 4): Draft | undefined {
@@ -45,6 +47,15 @@ export class MemoryDraftStore
 
   async clearAll(): Promise<void> {
     this.drafts.clear();
+  }
+
+  claim(key: DraftKey): () => void {
+    this.claimed.add(keyOf(key));
+    return () => this.claimed.delete(keyOf(key));
+  }
+
+  async claimedElsewhere(key: DraftKey): Promise<boolean> {
+    return this.elsewhere.has(keyOf(key));
   }
 }
 

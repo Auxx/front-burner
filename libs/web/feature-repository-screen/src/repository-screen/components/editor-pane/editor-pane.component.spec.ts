@@ -40,10 +40,13 @@ describe('EditorPaneComponent', () => {
   beforeEach(() => {
     // As OpenFilesService does: the offer ends, and a restored draft is saved.
     openFiles = {
-      restoreDraft: vi.fn((_path: string, read: () => string) => {
+      restoreDraft: vi.fn((_path: string, apply: (content: string) => () => string) => {
         const file = fixture.componentInstance.file();
-        file.draft.set(null);
-        file.saver.edit(read);
+        const draft = file.draft();
+        if (draft) {
+          file.draft.set(null);
+          file.saver.edit(apply(draft.content));
+        }
       }),
       discardDraft: vi.fn(() => fixture.componentInstance.file().draft.set(null))
     };

@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TranslocoService } from '@jsverse/transloco';
+import { NEVER } from 'rxjs';
 
 import { DraftStore } from '../saving/draft-store';
 import { AuthSessionService } from '../services/auth-session/auth-session.service';
@@ -25,7 +26,7 @@ describe('provideCore', () => {
         provideCore(),
         provideHttpClientTesting(),
         provideRouter([]),
-        { provide: AuthSessionService, useValue: { authToken: () => 'token' } }
+        { provide: AuthSessionService, useValue: { authToken: () => 'token', ended: NEVER } }
       ]
     });
     TestBed.inject(HttpClient).get('/api/v1/me').subscribe();

@@ -1,4 +1,5 @@
-import { effect, inject, Injectable, untracked } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { AuthSessionService } from '../services/auth-session/auth-session.service';
 
@@ -19,9 +20,15 @@ export interface Draft {
 
 const DATABASE = 'front-burner';
 const STORE = 'drafts';
+/** The Web Lock a tab holds, shared, while it has a file open. */
+const LOCK = 'front-burner.draft';
 
 function keyOf({ userId, repositoryId, path }: DraftKey): string {
   return `${userId}/${repositoryId}/${path}`;
+}
+
+function lockOf(key: DraftKey): string {
+  return `${LOCK}:${keyOf(key)}`;
 }
 
 /** Whether `key` names the draft at `prefix` or one under the folder at `prefix`. */
@@ -51,11 +58,18 @@ function committed(transaction: IDBTransaction): Promise<void> {
  * object store `drafts` of the database `front-burner`, keyed by user,
  * repository and path. Uses the native API.
  *
- * Every draft is deleted whenever the user is not logged in: on logout, when
- * the session ends and cannot be refreshed, and when another tab logs out
- * (NF-3.5, NV-8); meanwhile `put` writes nothing, so that a save queue still
- * running writes no more drafts. `provideCore` creates the store at start-up,
- * so that a tab that never opened the editor deletes them too.
+ * Every draft is deleted when this tab ends the session: on logout, and when
+ * the backend refuses it, so that the user must log in again (NF-3.5). A
+ * session that ended because a refresh could not reach the backend keeps
+ * them, since the drafts are there to survive a lost connection (NF-3.3) and
+ * the user can log back in. A logout in another tab is deleted by that tab
+ * (NV-8). While the user is not logged in `put` writes nothing, so that a save
+ * queue still running writes no more drafts. `provideCore` creates the store
+ * at start-up, so that a tab that never opened the editor deletes them too.
+ *
+ * A tab `claim`s each file it has open, so that another tab does not offer
+ * that file's draft, which is still being saved (D-1.3). Where the browser has
+ * no Web Locks, every draft is offered.
  *
  * Where IndexedDB is missing or fails, such as in a private window or with
  * storage turned off, drafts are skipped: every method resolves, never
@@ -65,19 +79,13 @@ function committed(transaction: IDBTransaction): Promise<void> {
 export class DraftStore {
   private readonly session = inject(AuthSessionService);
   private database: Promise<IDBDatabase | null> | undefined;
-  private works = true;
 
   constructor() {
-    effect(() => {
-      if (!this.session.loggedIn()) {
-        untracked(() => void this.clearAll());
+    this.session.ended.pipe(takeUntilDestroyed()).subscribe(end => {
+      if (end !== 'unreachable') {
+        void this.clearAll();
       }
     });
-  }
-
-  /** Whether drafts can be kept; false once IndexedDB is found missing or failing. */
-  get available(): boolean {
-    return this.works;
   }
 
   /** Stores the draft at `key`; does nothing while the user is not logged in. */
@@ -99,7 +107,9 @@ export class DraftStore {
         return null;
       }
       const { content, savedAt } = value as Record<string, unknown>;
-      return typeof content === 'string' && typeof savedAt === 'string' ? { content, savedAt } : null;
+      return typeof content === 'string' && typeof savedAt === 'string' && !Number.isNaN(Date.parse(savedAt))
+        ? { content, savedAt }
+        : null;
     } catch {
       return null;
     }
@@ -133,6 +143,31 @@ export class DraftStore {
   /** Deletes every draft of every user (NF-3.5). */
   async clearAll(): Promise<void> {
     await this.write(store => store.clear());
+  }
+
+  /**
+   * Marks the file at `key` as open in this tab until the returned function is
+   * called; does nothing without Web Locks.
+   */
+  claim(key: DraftKey): () => void {
+    const locks = globalThis.navigator?.locks as LockManager | undefined;
+    let release = (): void => undefined;
+    if (locks) {
+      const held = new Promise<void>(resolve => (release = resolve));
+      locks.request(lockOf(key), { mode: 'shared' }, () => held).catch(() => undefined);
+    }
+    return release;
+  }
+
+  /** Whether another tab has claimed the file at `key`; asked before this tab claims it. */
+  async claimedElsewhere(key: DraftKey): Promise<boolean> {
+    const locks = globalThis.navigator?.locks as LockManager | undefined;
+    try {
+      const { held = [] } = (await locks?.query()) ?? {};
+      return held.some(lock => lock.name === lockOf(key));
+    } catch {
+      return false;
+    }
   }
 
   /** Runs `change` in a read-write transaction and waits for it to commit; does nothing without IndexedDB. */
@@ -170,23 +205,29 @@ export class DraftStore {
     };
   }
 
-  /** The database, opened once; `null` without IndexedDB. */
+  /**
+   * The database, opened once, and again after the browser closed it, such as
+   * when the site's data is cleared; `null` without IndexedDB.
+   */
   private open(): Promise<IDBDatabase | null> {
-    this.database ??= this.connect().catch(() => {
-      this.works = false;
-      return null;
-    });
+    this.database ??= this.connect().catch(() => null);
     return this.database;
   }
 
   private async connect(): Promise<IDBDatabase | null> {
     const factory = globalThis.indexedDB as IDBFactory | undefined;
     if (!factory) {
-      this.works = false;
       return null;
     }
     const request = factory.open(DATABASE, 1);
     request.onupgradeneeded = () => request.result.createObjectStore(STORE);
-    return result(request);
+    const database = await result(request);
+    database.onclose = () => (this.database = undefined);
+    // Another tab upgrades the database: this connection must not block it.
+    database.onversionchange = () => {
+      database.close();
+      this.database = undefined;
+    };
+    return database;
   }
 }

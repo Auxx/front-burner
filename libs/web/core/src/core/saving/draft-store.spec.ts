@@ -5,9 +5,9 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { AuthApi, OidcApi } from '@front-burner/web-api-client';
 import { IDBFactory } from 'fake-indexeddb';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
-import { AUTH_STORAGE_KEY, AuthSessionService } from '../services/auth-session/auth-session.service';
+import { AUTH_STORAGE_KEY, AuthSessionService, type SessionEnd } from '../services/auth-session/auth-session.service';
 import { type DraftKey, DraftStore } from './draft-store';
 
 const key = (path: string, repositoryId = 12, userId = 1): DraftKey => ({ userId, repositoryId, path });
@@ -21,7 +21,7 @@ describe('DraftStore', () => {
     globalThis.indexedDB = new IDBFactory();
     loggedIn = signal(true);
     TestBed.configureTestingModule({
-      providers: [ { provide: AuthSessionService, useValue: { loggedIn } } ]
+      providers: [ { provide: AuthSessionService, useValue: { loggedIn, ended: new Subject<SessionEnd>() } } ]
     });
     store = TestBed.inject(DraftStore);
     TestBed.tick();
@@ -32,7 +32,6 @@ describe('DraftStore', () => {
 
     await store.put(key('README.md'), draft('# Edited'));
     expect(await store.get(key('README.md'))).toEqual(draft('# Edited'));
-    expect(store.available).toBe(true);
 
     await store.delete(key('README.md'));
     expect(await store.get(key('README.md'))).toBeNull();
@@ -105,7 +104,6 @@ describe('DraftStore', () => {
       await expect(store.move(key('a.md'), key('b.md'))).resolves.toBeUndefined();
       await expect(store.delete(key('a.md'))).resolves.toBeUndefined();
       await expect(store.clearAll()).resolves.toBeUndefined();
-      expect(store.available).toBe(false);
     });
 
     it('when opening it throws', async () => {
@@ -116,7 +114,6 @@ describe('DraftStore', () => {
       await expect(store.put(key('a.md'), draft('a'))).resolves.toBeUndefined();
       await expect(store.get(key('a.md'))).resolves.toBeNull();
       await expect(store.clearAll()).resolves.toBeUndefined();
-      expect(store.available).toBe(false);
     });
 
     it('when opening it fails', async () => {
@@ -128,10 +125,82 @@ describe('DraftStore', () => {
 
       await expect(store.put(key('a.md'), draft('a'))).resolves.toBeUndefined();
       await expect(store.get(key('a.md'))).resolves.toBeNull();
-      expect(store.available).toBe(false);
+    });
+  });
+
+  it('finds no draft whose time is not a date', async () => {
+    await store.put(key('a.md'), { content: 'a', savedAt: 'yesterday-ish' });
+
+    expect(await store.get(key('a.md'))).toBeNull();
+  });
+
+  it('opens the database again after the browser closed it', async () => {
+    const open = vi.spyOn(globalThis.indexedDB, 'open');
+    await store.put(key('a.md'), draft('a'));
+    const database = open.mock.results[0].value.result as IDBDatabase;
+
+    database.close();
+    database.onclose?.(new Event('close'));
+    await store.put(key('b.md'), draft('b'));
+
+    expect(await store.get(key('b.md'))).toEqual(draft('b'));
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not block another tab upgrading the database', async () => {
+    await store.put(key('a.md'), draft('a'));
+
+    const upgrade = globalThis.indexedDB.open('front-burner', 2);
+    const outcome = await new Promise<string>(resolve => {
+      upgrade.onblocked = () => resolve('blocked');
+      upgrade.onsuccess = () => resolve('upgraded');
+    });
+
+    expect(outcome).toBe('upgraded');
+    upgrade.result.close();
+  });
+
+  describe('claims', () => {
+    afterEach(() => Reflect.deleteProperty(navigator, 'locks'));
+
+    it('tells whether another tab has the file open', async () => {
+      Object.defineProperty(navigator, 'locks', { value: fakeLocks(), configurable: true });
+
+      const release = store.claim(key('a.md'));
+      await Promise.resolve();
+
+      expect(await store.claimedElsewhere(key('a.md'))).toBe(true);
+      expect(await store.claimedElsewhere(key('b.md'))).toBe(false);
+
+      release();
+      await new Promise(resolve => setTimeout(resolve));
+      expect(await store.claimedElsewhere(key('a.md'))).toBe(false);
+    });
+
+    it('claims nothing without Web Locks', async () => {
+      const release = store.claim(key('a.md'));
+
+      expect(await store.claimedElsewhere(key('a.md'))).toBe(false);
+      expect(() => release()).not.toThrow();
     });
   });
 });
+
+/** Web Locks within one page: enough to tell held lock names. */
+function fakeLocks(): Pick<LockManager, 'request' | 'query'> {
+  const held: string[] = [];
+  return {
+    request: (async (name: string, _options: LockOptions, callback: () => Promise<void>) => {
+      held.push(name);
+      try {
+        await callback();
+      } finally {
+        held.splice(held.indexOf(name), 1);
+      }
+    }) as LockManager['request'],
+    query: async () => ({ held: held.map(name => ({ name, mode: 'shared' as const })), pending: [] })
+  };
+}
 
 describe('DraftStore when the session ends', () => {
   let store: DraftStore;
@@ -188,12 +257,23 @@ describe('DraftStore when the session ends', () => {
     expect(await store.get(key('a.md', 12, 1))).toBeNull();
   });
 
-  it('deletes drafts when another tab logs out', async () => {
+  it('keeps drafts when a refresh could not reach the backend', async () => {
+    await session.expire('/', 'unreachable');
+    await settled();
+
+    expect(await store.get(key('a.md', 12, 1))).toEqual(draft('a'));
+  });
+
+  it('leaves the drafts to the tab that logged out', async () => {
     localStorage.removeItem(AUTH_STORAGE_KEY);
     window.dispatchEvent(new StorageEvent('storage', { key: AUTH_STORAGE_KEY, newValue: null }));
     await settled();
 
-    expect(await store.get(key('b.md', 13, 2))).toBeNull();
+    expect(session.loggedIn()).toBe(false);
+    expect(await store.get(key('b.md', 13, 2))).toEqual(draft('b'));
+    // Nor does this tab write any more of them.
+    await store.put(key('c.md'), draft('c'));
+    expect(await store.get(key('c.md'))).toBeNull();
   });
 
   it('stops writing drafts once the session ends', async () => {

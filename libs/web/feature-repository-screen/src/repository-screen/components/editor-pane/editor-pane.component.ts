@@ -63,13 +63,11 @@ export class EditorPaneComponent {
   /** **Restore**: the draft replaces the text as one undoable edit and is saved at once (ED-7). */
   protected restore(): void {
     const file = this.file();
-    const draft = file.draft();
-    if (draft === null) {
-      return;
-    }
-    const current = file.editorState as EditorState;
-    file.editorState = current.update(replaceContent(current, draft.content)).state;
-    this.openFiles.restoreDraft(file.path(), () => contentOf(file.editorState as EditorState));
+    this.openFiles.restoreDraft(file.path(), content => {
+      const current = file.editorState as EditorState;
+      file.editorState = current.update(replaceContent(current, content)).state;
+      return () => contentOf(file.editorState as EditorState);
+    });
     this.editor().focus();
   }
 

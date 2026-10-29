@@ -301,19 +301,23 @@ export class RepositoryScreenPage {
     };
     const pageHidden = () => this.openFiles.writeDrafts();
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (this.openFiles.anyUnsaved()) {
-        event.preventDefault();
-        // Browsers that ask only when it is set.
-        event.returnValue = '';
-      }
+      event.preventDefault();
+      // Browsers that ask only when it is set.
+      event.returnValue = '';
     };
     document.addEventListener('visibilitychange', hidden);
     window?.addEventListener('pagehide', pageHidden);
-    window?.addEventListener('beforeunload', beforeUnload);
+    // Only while there are unsaved edits: the listener keeps the page out of
+    // the back/forward cache in some browsers.
+    effect(onCleanup => {
+      if (this.openFiles.anyUnsaved()) {
+        window?.addEventListener('beforeunload', beforeUnload);
+        onCleanup(() => window?.removeEventListener('beforeunload', beforeUnload));
+      }
+    });
     inject(DestroyRef).onDestroy(() => {
       document.removeEventListener('visibilitychange', hidden);
       window?.removeEventListener('pagehide', pageHidden);
-      window?.removeEventListener('beforeunload', beforeUnload);
       void this.openFiles.flushAll();
     });
   }
