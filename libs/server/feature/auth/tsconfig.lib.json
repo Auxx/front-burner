@@ -6,7 +6,7 @@
     "types": [
       "node"
     ],
-    "target": "es2021",
+    "target": "es2025",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strictNullChecks": true,
