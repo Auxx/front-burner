@@ -356,4 +356,110 @@ describe('FileTreeStoreService', () => {
     expect(store.expanded()).toEqual([]);
     expect(labels(store.nodes())).toEqual([ 'other.md' ]);
   });
+
+  describe('renamed', () => {
+    it('keeps a renamed folder and its expanded sub-folders expanded, listing them again', async () => {
+      localStorage.setItem(MEMORY, JSON.stringify([ 'docs', 'docs/api', 'notes' ]));
+      store.init(12);
+      await flush();
+      folders[''] = listing('', [ folder('build', { ignored: true }), folder('notes'), entry('README.md') ]);
+      folders['build'] = listing('build', [ folder('api', { ignored: true }), entry('guide.md', { ignored: true }) ], {
+        ignored: true
+      });
+      folders['build/api'] = listing('build/api', [ entry('index.md', { ignored: true }) ], { ignored: true });
+      listFolder.mockClear();
+
+      store.renamed('docs', 'build');
+      await store.load('');
+      // As the tree asks for the expanded folders it shows.
+      await store.load('build');
+      await store.load('build/api');
+      TestBed.tick();
+
+      expect(store.expanded()).toEqual([ 'build', 'notes', 'build/api' ]);
+      expect(JSON.parse(localStorage.getItem(MEMORY) ?? '[]')).toEqual([ 'build', 'notes', 'build/api' ]);
+      // Listed again at the new path: git now ignores them (FB-31).
+      expect(node('build/api/index.md')?.entry?.ignored).toBe(true);
+      expect(store.entry('build/api')?.ignored).toBe(true);
+      expect(listed()).toEqual([ '', 'build', 'build/api' ]);
+    });
+
+    it('drops a listing on its way for the old path', async () => {
+      const pending = new Subject<FolderListing>();
+      answers['docs'] = [ pending ];
+      store.init(12);
+      await flush();
+      void store.load('docs');
+      store.expand('docs');
+      await flush();
+
+      store.renamed('docs', 'guides');
+      pending.next(listing('docs', [ entry('stale.md') ]));
+      await flush();
+
+      expect(store.expanded()).toEqual([ 'guides' ]);
+      expect(store.entry('docs/stale.md')).toBeUndefined();
+      expect(store.entry('guides/stale.md')).toBeUndefined();
+    });
+
+    it('leaves other paths alone', async () => {
+      localStorage.setItem(MEMORY, JSON.stringify([ 'docs', 'notes' ]));
+      store.init(12);
+      await flush();
+
+      store.renamed('doc', 'paper');
+
+      expect(store.expanded()).toEqual([ 'docs', 'notes' ]);
+      expect(store.entry('docs/guide.md')).toBeDefined();
+    });
+  });
+
+  describe('known', () => {
+    beforeEach(() => {
+      folders['notes'] = listing('notes', [ entry('a.md'), entry('b.md') ], { more: 3 });
+    });
+
+    it('shows and finds an entry made beyond a long folder\'s listed entries (FB-18)', async () => {
+      store.init(12);
+      await flush();
+
+      store.known('notes/zzz.md', entry('zzz.md'));
+      await store.load('notes');
+
+      expect(labels(node('notes')?.children)).toEqual([ 'a.md', 'b.md', 'zzz.md', '2 more items not shown' ]);
+      expect(await store.resolve('notes/zzz.md')).toEqual(entry('zzz.md'));
+      expect(store.entry('notes/zzz.md')).toEqual(entry('zzz.md'));
+      expect((await store.entries('notes'))?.map(item => item.name)).toEqual([ 'a.md', 'b.md', 'zzz.md' ]);
+    });
+
+    it('adds nothing to a listing that has the entry or lists everything', async () => {
+      store.init(12);
+      await flush();
+
+      store.known('notes/b.md', entry('b.md'));
+      store.known('docs/new.md', entry('new.md'));
+      await store.load('notes');
+      await store.load('docs');
+
+      expect(labels(node('notes')?.children)).toEqual([ 'a.md', 'b.md', '3 more items not shown' ]);
+      expect(store.entry('docs/new.md')).toBeUndefined();
+    });
+
+    it('moves known entries with a renamed folder and forgets the renamed one', async () => {
+      folders[''] = listing('', [ folder('docs'), folder('notes'), entry('README.md') ], { more: 1 });
+      store.init(12);
+      await flush();
+      store.known('notes/zzz.md', entry('zzz.md'));
+      store.known('old', folder('old'));
+
+      store.renamed('notes', 'papers');
+      store.renamed('old', 'new');
+      folders['papers'] = listing('papers', [ entry('a.md'), entry('b.md') ], { more: 3 });
+      await store.load('papers');
+      await store.load('');
+
+      expect(store.entry('papers/zzz.md')).toEqual(entry('zzz.md'));
+      expect(store.entry('old')).toBeUndefined();
+    });
+  });
 });

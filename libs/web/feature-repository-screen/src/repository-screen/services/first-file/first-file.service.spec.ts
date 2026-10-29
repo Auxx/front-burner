@@ -134,4 +134,19 @@ describe('FirstFileService', () => {
     first.remember(12, 'docs/guide.md');
     expect(await pick()).toBe('README.md');
   });
+
+  it('follows the last file into a renamed folder', async () => {
+    localStorage.setItem(LAST_FILE, 'docs/guide.md');
+
+    first.renamed(12, 'doc', 'paper');
+    first.renamed(12, 'docs', 'guides');
+    await new Promise(resolve => setTimeout(resolve));
+
+    expect(localStorage.getItem(LAST_FILE)).toBe('guides/guide.md');
+
+    first.renamed(12, 'guides/guide.md', 'guides/intro.md');
+    await new Promise(resolve => setTimeout(resolve));
+
+    expect(localStorage.getItem(LAST_FILE)).toBe('guides/intro.md');
+  });
 });

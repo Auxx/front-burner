@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { drainFailedRequests, expect, test } from './support/fixtures';
 import { logIn, seed, type SeedRepository } from './support/instance';
 
@@ -75,6 +75,37 @@ async function expectActive(page: Page, name: string): Promise<void> {
 function axe(page: Page, isMobile: boolean): AxeBuilder {
   const builder = new AxeBuilder({ page }).exclude('ui-split-pane > .divider');
   return isMobile ? builder.disableRules('landmark-one-main') : builder;
+}
+
+const dialog = (page: Page) => page.getByRole('dialog');
+const nameField = (page: Page) => dialog(page).getByRole('textbox', { name: 'Name' });
+const IGNORED_NEW_FILE = 'This file matches a .gitignore rule, so git won\'t commit it.';
+const EMPTY_FOLDER = 'Empty folders aren\'t saved in git. Add a file to keep this folder.';
+const NAME_TAKEN = 'There is already a file or folder with this name here.';
+
+/** Clicks, or taps on a phone. */
+async function press(page: Page, target: Locator, isMobile: boolean): Promise<void> {
+  await (isMobile ? target.tap() : target.click());
+}
+
+/** **New file** or **New folder** above the tree, in the root folder (FB-25). */
+async function createInRoot(page: Page, kind: 'New file' | 'New folder', isMobile: boolean): Promise<void> {
+  await showTree(page);
+  await press(page, tree(page).getByRole('button', { name: kind, exact: true }), isMobile);
+  await expect(dialog(page)).toBeVisible();
+}
+
+/** Chooses `action` in the actions menu of the entry `name` (FB-24). */
+async function entryAction(page: Page, name: string, action: string, isMobile: boolean): Promise<void> {
+  await showTree(page);
+  await press(page, entry(page, name).getByRole('button', { name: `Actions for ${name}` }), isMobile);
+  await press(page, page.getByRole('menuitem', { name: action, exact: true }), isMobile);
+  await expect(dialog(page)).toBeVisible();
+}
+
+/** Confirms the open dialog with its `label` button. */
+async function confirmDialog(page: Page, label: string, isMobile: boolean): Promise<void> {
+  await press(page, dialog(page).last().getByRole('button', { name: label, exact: true }), isMobile);
 }
 
 function fitsWidth(page: Page): Promise<boolean> {
@@ -453,5 +484,199 @@ test.describe('repository screen', () => {
     await expect(tooltip(page)).toBeVisible();
 
     expect((await axe(page, isMobile).analyze()).violations).toEqual([]);
+  });
+
+  test('AC-FILE-001.13: creates notes.md and opens it, warning inside an ignored folder', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+
+    await createInRoot(page, 'New file', isMobile);
+    await expect(nameField(page)).toHaveValue('untitled.md');
+    await nameField(page).fill('notes');
+    await expect(dialog(page).getByText('Will be created as notes.md')).toBeVisible();
+    await confirmDialog(page, 'Create', isMobile);
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/notes.md$`));
+    await expect(editor(page).getByRole('heading', { name: 'notes.md' })).toBeVisible();
+    await expect(editor(page).getByText(LATER)).toBeVisible();
+
+    await entryAction(page, 'build', 'New file', isMobile);
+    await expect(dialog(page).getByText(IGNORED_NEW_FILE)).toBeVisible();
+    await confirmDialog(page, 'Create', isMobile);
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/build/untitled.md$`));
+  });
+
+  test('AC-FILE-001.14: refuses readme.md next to README.md and renames README.md to readme.md', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
+
+    await createInRoot(page, 'New file', isMobile);
+    await nameField(page).fill('readme.md');
+    await expect(dialog(page).getByText(NAME_TAKEN)).toBeVisible();
+    await confirmDialog(page, 'Create', isMobile);
+    await expect(dialog(page)).toBeVisible();
+    await confirmDialog(page, 'Cancel', isMobile);
+    await expect(dialog(page)).toBeHidden();
+
+    await entryAction(page, 'README.md', 'Rename', isMobile);
+    await nameField(page).fill('readme.md');
+    await expect(dialog(page).getByText(NAME_TAKEN)).toBeHidden();
+    await confirmDialog(page, 'Rename', isMobile);
+
+    await expect(dialog(page)).toBeHidden();
+    await expect(entry(page, 'readme.md')).toBeVisible();
+    await expect(entry(page, 'README.md')).toHaveCount(0);
+  });
+
+  test('AC-FILE-001.15: creates an empty folder with the note', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+
+    await createInRoot(page, 'New folder', isMobile);
+    await expect(dialog(page).getByText(EMPTY_FOLDER)).toBeVisible();
+    await nameField(page).fill('drafts');
+    await confirmDialog(page, 'Create', isMobile);
+
+    await expect(dialog(page)).toBeHidden();
+    await expect(entry(page, 'drafts')).toHaveAttribute('aria-label', 'drafts, folder, empty');
+    await expect(entry(page, 'drafts')).toHaveAttribute('aria-expanded', 'true');
+    await expect(tree(page).getByText(EMPTY_FOLDER)).toBeVisible();
+    await expectActive(page, 'drafts');
+  });
+
+  test('AC-FILE-001.16: renames guide.md to guide.txt.md, offers no Rename for a .png, and confirms twice for a folder with images', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    await showTree(page);
+    await press(page, entry(page, 'docs'), isMobile);
+
+    await entryAction(page, 'guide.md', 'Rename', isMobile);
+    await nameField(page).fill('guide.txt');
+    await expect(dialog(page).getByText('Will be renamed to guide.txt.md')).toBeVisible();
+    await confirmDialog(page, 'Rename', isMobile);
+    await expect(entry(page, 'guide.txt.md')).toBeVisible();
+
+    await expect(entry(page, 'logo.png').getByRole('button', { name: /^Actions for/ })).toHaveCount(0);
+
+    await entryAction(page, 'media', 'Rename', isMobile);
+    await nameField(page).fill('pictures');
+    await confirmDialog(page, 'Rename', isMobile);
+    await expect(page.getByText('2 non-Markdown files move with this folder.')).toBeVisible();
+    await confirmDialog(page, 'Cancel', isMobile);
+    // The rename dialog stays as it was.
+    await expect(nameField(page)).toHaveValue('pictures');
+    await confirmDialog(page, 'Rename', isMobile);
+    await expect(page.getByText('2 non-Markdown files move with this folder.')).toBeVisible();
+    await confirmDialog(page, 'Rename', isMobile);
+
+    await expect(dialog(page)).toBeHidden();
+    await expect(entry(page, 'pictures')).toBeVisible();
+    await expect(entry(page, 'media')).toHaveCount(0);
+  });
+
+  test('AC-FILE-001.17: keeps a renamed open file open', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
+
+    await entryAction(page, 'docs', 'Rename', isMobile);
+    await nameField(page).fill('guides');
+    await confirmDialog(page, 'Rename', isMobile);
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/guides/guide.md$`));
+    await expect(entry(page, 'guides')).toHaveAttribute('aria-expanded', 'true');
+    await expect(entry(page, 'guide.md')).toHaveAttribute('aria-selected', 'true');
+
+    await entryAction(page, 'guide.md', 'Rename', isMobile);
+    await nameField(page).fill('intro');
+    await confirmDialog(page, 'Rename', isMobile);
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/guides/intro.md$`));
+    // On a phone the drawer stays open after a rename, over the editor area.
+    await expect(entry(page, 'intro.md')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('main h2')).toHaveText('intro.md');
+  });
+
+  test('AC-FILE-001.23: creates and renames with the keyboard alone', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'phones are used by touch');
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    const files = page.getByRole('tree', { name: 'Files' });
+    await expect(entry(page, 'README.md')).toHaveAttribute('aria-selected', 'true');
+    await files.focus();
+
+    // .claude, .github, build, docs.
+    await page.keyboard.press('Home');
+    for (let row = 0; row < 3; row++) {
+      await page.keyboard.press('ArrowDown');
+    }
+    await expectActive(page, 'docs');
+    await page.keyboard.press('Shift+F10');
+    await expect(page.getByRole('menuitem', { name: 'New file' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(nameField(page)).toBeFocused();
+    await page.keyboard.type('intro');
+    await page.keyboard.press('Enter');
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/intro.md$`));
+
+    // Back in the tree, typing finds the new file's row.
+    await expect(entry(page, 'intro.md')).toHaveAttribute('aria-selected', 'true');
+    await files.focus();
+    await page.keyboard.type('intro');
+    await expectActive(page, 'intro.md');
+    await page.keyboard.press('Shift+F10');
+    await page.keyboard.press('ArrowUp');
+    await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    // The name without its extension is selected, so typing keeps `.md`.
+    await expect(nameField(page)).toBeFocused();
+    await page.keyboard.type('overview');
+    await page.keyboard.press('Enter');
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/overview.md$`));
+  });
+
+  test('AC-FILE-001.23: creates and renames by touch alone', async ({ page, instance, isMobile }) => {
+    test.skip(!isMobile, 'touch is for phones');
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+
+    await entryAction(page, 'docs', 'New file', true);
+    await nameField(page).fill('intro');
+    await confirmDialog(page, 'Create', true);
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/intro.md$`));
+
+    await entryAction(page, 'intro.md', 'Rename', true);
+    await nameField(page).fill('overview');
+    await confirmDialog(page, 'Rename', true);
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/overview.md$`));
+  });
+
+  test('has no axe violations with each dialog open', async ({ page, instance, isMobile }) => {
+    // Without the dialogs' opening animation, which axe would see half-transparent.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    const check = async () =>
+      expect((await new AxeBuilder({ page }).include('.cdk-overlay-container').analyze()).violations)
+        .toEqual([]);
+
+    await createInRoot(page, 'New file', isMobile);
+    await nameField(page).fill('readme.md');
+    await expect(dialog(page).getByText(NAME_TAKEN)).toBeVisible();
+    await check();
+    await confirmDialog(page, 'Cancel', isMobile);
+
+    await createInRoot(page, 'New folder', isMobile);
+    await check();
+    await confirmDialog(page, 'Cancel', isMobile);
+
+    await entryAction(page, 'media', 'Rename', isMobile);
+    await nameField(page).fill('pictures');
+    await check();
+    await confirmDialog(page, 'Rename', isMobile);
+    await expect(page.getByText('2 non-Markdown files move with this folder.')).toBeVisible();
+    await check();
   });
 });

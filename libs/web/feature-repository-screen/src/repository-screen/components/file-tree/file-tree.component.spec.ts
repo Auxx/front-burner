@@ -11,7 +11,7 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
-import { FileTreeComponent } from './file-tree.component';
+import { type EntryActionRequest, FileTreeComponent } from './file-tree.component';
 
 const K = 'web-feature-repository-screen.FileTreeComponent';
 
@@ -25,13 +25,18 @@ const ada: CurrentUser = {
 
 @Component({
   imports: [ FileTreeComponent ],
-  template:
-    `<rs-file-tree [selected]="selected()" (selectPath)="selects.push($event)" (retry)="retries.push($event)" />`
+  template: `<rs-file-tree
+      [selected]="selected()"
+      (selectPath)="selects.push($event)"
+      (retry)="retries.push($event)"
+      (action)="actions.push($event)"
+    />`
 })
 class HostComponent {
   readonly selected = signal<string | null>(null);
   readonly selects: string[] = [];
   readonly retries: string[] = [];
+  readonly actions: EntryActionRequest[] = [];
 }
 
 describe('FileTreeComponent', () => {
@@ -45,8 +50,17 @@ describe('FileTreeComponent', () => {
     [ ...root().querySelectorAll<HTMLElement>('[role="treeitem"]') ].find(item =>
       item.getAttribute('aria-label')?.startsWith(name)
     ) as HTMLElement;
+  /** The icons of a row, without its actions button's. */
   const icons = (item: HTMLElement) =>
-    [ ...item.querySelectorAll('use') ].map(use => use.getAttribute('href')?.split('#')[1]);
+    [ ...item.querySelectorAll('use') ].filter(use => !use.closest('.actions')).map(use =>
+      use.getAttribute('href')?.split('#')[1]
+    );
+  const actionsButton = (name: string) => row(name).querySelector<HTMLButtonElement>('button.actions');
+  const menuItems = () =>
+    [ ...document.querySelectorAll('.cdk-overlay-container [role="menuitem"]') ].map(item => item.textContent?.trim());
+  const tree = () => root().querySelector('[role="tree"]') as HTMLElement;
+  const press = (key: string, init: KeyboardEventInit = {}) =>
+    tree().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
   const tooltips = () => [ ...document.querySelectorAll('ui-tooltip') ].map(element => element.textContent?.trim());
 
   async function create(): Promise<void> {
@@ -206,5 +220,99 @@ describe('FileTreeComponent', () => {
 
     expect(row('vendor').hasAttribute('aria-expanded')).toBe(false);
     expect(host.selects).toEqual([ 'vendor' ]);
+  });
+
+  describe('actions', () => {
+    it('shows an actions button only on entries with actions', async () => {
+      await create();
+
+      expect(actionsButton('docs')?.getAttribute('aria-label')).toBe(`${K}.actionsFor`);
+      expect(actionsButton('docs')?.getAttribute('tabindex')).toBe('-1');
+      expect(actionsButton('guide.md')).not.toBeNull();
+      for (const name of [ 'logo.png', 'latest', 'vendor' ]) {
+        expect(actionsButton(name)).toBeNull();
+      }
+    });
+
+    it('emits the root actions from the buttons above the tree', async () => {
+      await create();
+      const toolbar = [ ...root().querySelectorAll<HTMLButtonElement>('.toolbar button') ];
+
+      expect(toolbar.map(button => button.getAttribute('aria-label'))).toEqual([ `${K}.newFile`, `${K}.newFolder` ]);
+      toolbar.forEach(button => button.click());
+
+      expect(host.actions).toEqual([ { action: 'new-file', path: '' }, { action: 'new-folder', path: '' } ]);
+    });
+
+    it('lists the actions of the row that opened the menu', async () => {
+      await create();
+
+      actionsButton('docs')?.click();
+      await settle(fixture);
+      await settle(fixture);
+
+      expect(menuItems()).toEqual([ `${K}.actions.new-file`, `${K}.actions.new-folder`, `${K}.actions.rename` ]);
+      expect(host.selects).toEqual([]);
+      expect(row('docs').getAttribute('aria-expanded')).toBe('false');
+
+      document.querySelectorAll<HTMLElement>('.cdk-overlay-container [role="menuitem"]')[1].click();
+      await settle(fixture);
+
+      expect(host.actions).toEqual([ { action: 'new-folder', path: 'docs' } ]);
+    });
+
+    it('opens the actions menu from the keyboard', async () => {
+      await create();
+      tree().focus();
+      await settle(fixture);
+      // From `build` to `guide.md`: docs, debug.log, guide.md.
+      press('ArrowDown');
+      press('ArrowDown');
+      press('ArrowDown');
+      await settle(fixture);
+
+      press('F10', { shiftKey: true });
+      await settle(fixture);
+      await settle(fixture);
+
+      expect(menuItems()).toEqual([ `${K}.actions.rename` ]);
+      (document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+      );
+      await settle(fixture);
+
+      expect(host.actions).toEqual([ { action: 'rename', path: 'guide.md' } ]);
+    });
+  });
+
+  describe('focus requests', () => {
+    it('focuses the requested row', async () => {
+      await create();
+
+      TestBed.inject(FileTreeStoreService).focusRequest.set('docs');
+      await settle(fixture);
+
+      expect(document.activeElement).toBe(tree());
+      expect(tree().getAttribute('aria-activedescendant')).toBe(row('docs').id);
+      expect(TestBed.inject(FileTreeStoreService).focusRequest()).toBeNull();
+    });
+
+    it('drops a request for a row that is not shown', async () => {
+      await create();
+      const store = TestBed.inject(FileTreeStoreService);
+
+      store.focusRequest.set('docs/intro.md');
+      await settle(fixture);
+
+      expect(store.focusRequest()).toBeNull();
+      expect(document.activeElement).not.toBe(tree());
+
+      // Shown later, it does not take the focus.
+      row('docs').click();
+      (document.activeElement as HTMLElement | null)?.blur();
+      await settle(fixture);
+      expect(row('intro.md')).toBeDefined();
+      expect(document.activeElement).not.toBe(tree());
+    });
   });
 });

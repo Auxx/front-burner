@@ -18,10 +18,12 @@ import { EditorAreaComponent } from '../../components/editor-area/editor-area.co
 import { FileTreeComponent } from '../../components/file-tree/file-tree.component';
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
+import { EntryCommandsService } from '../../services/entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../../services/first-file/first-file.service';
 import { PaneMemoryService } from '../../services/pane-memory/pane-memory.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
+import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 import { fileName } from '../../utils/file-name/file-name';
 
 /**
@@ -36,7 +38,8 @@ import { fileName } from '../../utils/file-name/file-name';
  * folders that lead to it expanded (FB-14), and a Markdown file is remembered
  * as this device's last file. Without a path, the screen goes to the first
  * file to open, if there is one (FB-12). Selecting an entry in the tree goes
- * to its path and closes the drawer (FB-9).
+ * to its path and closes the drawer (FB-9). The tree's actions, and **New
+ * file** of the empty editor area, run through `EntryCommandsService` (FB-24).
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -55,7 +58,13 @@ import { fileName } from '../../utils/file-name/file-name';
     NotOpenableComponent,
     RepositoryBarComponent
   ],
-  providers: [ RepositorySessionService, PaneMemoryService, FileTreeStoreService, FirstFileService ],
+  providers: [
+    RepositorySessionService,
+    PaneMemoryService,
+    FileTreeStoreService,
+    FirstFileService,
+    EntryCommandsService
+  ],
   templateUrl: './repository-screen.page.html',
   styleUrl: './repository-screen.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -67,6 +76,7 @@ export class RepositoryScreenPage {
   private readonly router = inject(Router);
   private readonly firstFile = inject(FirstFileService);
   protected readonly tree = inject(FileTreeStoreService);
+  private readonly commands = inject(EntryCommandsService);
 
   protected readonly user = this.currentUser.user;
   /** The file tree's size and whether it is collapsed, as this device last left them (FB-8). */
@@ -123,6 +133,13 @@ export class RepositoryScreenPage {
     }
     this.drawerOpen.set(false);
     void this.router.navigate([ '/repositories', repository.id, 'files', ...path.split('/') ]);
+  }
+
+  /** Runs an action of the tree; a new file it opens closes the drawer, as a selected one does (FB-9). */
+  protected async runAction(action: EntryAction, path: string): Promise<void> {
+    if ((await this.commands.run(action, path)) !== null) {
+      this.drawerOpen.set(false);
+    }
   }
 
   /**

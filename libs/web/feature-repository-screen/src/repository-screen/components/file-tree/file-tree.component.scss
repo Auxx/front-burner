@@ -1,6 +1,21 @@
 :host {
-  display: block;
+  display: flex;
+  flex-direction: column;
   block-size: 100%;
+}
+
+// **New file** and **New folder** in the root folder (FB-25).
+.toolbar {
+  display: flex;
+  flex: none;
+  gap: var(--ui-space-1);
+  justify-content: flex-end;
+  padding: var(--ui-space-1) var(--ui-space-2);
+}
+
+.tree {
+  flex: 1;
+  min-block-size: 0;
 }
 
 .kind {
@@ -42,4 +57,12 @@
   min-inline-size: 1.5rem;
   min-block-size: 1.5rem;
   color: var(--ui-git-ignored);
+}
+
+// At least 24 × 24 px, as every target (NF-13.5).
+.actions {
+  flex: none;
+  min-inline-size: 1.5rem;
+  min-block-size: 1.5rem;
+  color: var(--ui-icon-muted);
 }

@@ -230,6 +230,22 @@ export class TreeComponent {
     destroyRef.onDestroy(() => clearTimeout(this.typeaheadTimer));
   }
 
+  /**
+   * Makes the visible row of `value` the active row, scrolled into view, and
+   * gives the tree the focus, such as for a folder just created (FB-32).
+   * Returns `false`, changing nothing, when no visible row has that value.
+   */
+  focusRow(value: string): boolean {
+    const index = this.rowIndex().get(value);
+    if (index === undefined) {
+      return false;
+    }
+    this.setActive(index);
+    this.focusTree();
+    this.keyboard.set(true);
+    return true;
+  }
+
   protected rowId(index: number): string {
     return `${this.id}-row-${index}`;
   }

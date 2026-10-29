@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { CurrentUserService } from '@front-burner/web-core';
 
+import { movedPath } from '../../utils/file-name/file-name';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 
 /** A Markdown file named `README`, with any Markdown extension, ignoring case (FB-12). */
@@ -47,6 +48,25 @@ export class FirstFileService {
     this.currentUser
       .load()
       .then(user => write(key(user.id, repositoryId), path))
+      .catch(() => undefined);
+  }
+
+  /**
+   * Follows a rename of the entry at `from` to `to` (FB-36): the last file
+   * remembered, when it is that entry or lies under it, is remembered at its
+   * new path.
+   */
+  renamed(repositoryId: number, from: string, to: string): void {
+    this.currentUser
+      .load()
+      .then(user => {
+        const storageKey = key(user.id, repositoryId);
+        const last = read(storageKey);
+        const moved = last === null ? null : movedPath(last, from, to);
+        if (moved !== null) {
+          write(storageKey, moved);
+        }
+      })
       .catch(() => undefined);
   }
 }

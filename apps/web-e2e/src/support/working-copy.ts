@@ -10,7 +10,8 @@ import { dirname, join } from 'node:path';
  *   (natural order), `.github/` and `.claude/`, a `.gitignore` with `build/` and
  *   `*.log` and an untracked `build/` and `debug.log` it ignores, a tracked
  *   `keep.log` that matches it, a symbolic link `latest` to `README.md`, a
- *   submodule `vendor` (not cloned, AR-50) and an image `logo.png`.
+ *   submodule `vendor` (not cloned, AR-50), an image `logo.png`, and a folder
+ *   `media` with `cover.md` and two images.
  */
 export type WorkingCopyFixture = 'empty' | 'handbook';
 
@@ -40,7 +41,10 @@ const HANDBOOK_FILES: Record<string, string | Buffer> = {
   '.claude/skills/review.md': '# Review\n',
   '.gitignore': 'build/\n*.log\n',
   'keep.log': 'Tracked, although *.log matches it.\n',
-  'logo.png': PNG
+  'logo.png': PNG,
+  'media/cover.md': '# Cover\n',
+  'media/diagram.png': PNG,
+  'media/photo.png': PNG
 };
 
 /** Creates the working copy of a seeded repository at `dir`, as a clone would have left it. */

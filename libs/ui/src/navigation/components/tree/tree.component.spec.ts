@@ -4,6 +4,7 @@ import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 
 import { MenuTriggerDirective } from '../../directives/menu-trigger/menu-trigger.directive';
 import { TreeItemMenuDirective } from '../../directives/tree-item-menu/tree-item-menu.directive';
@@ -465,6 +466,19 @@ describe('TreeComponent', () => {
     await press('ContextMenu');
     expect(await menu.isOpen()).toBe(true);
     expect(menuButton('CHANGELOG.md').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('focuses a row on request, without selecting it', async () => {
+    await create(restore);
+    const component = fixture.debugElement.query(By.directive(TreeComponent)).componentInstance as TreeComponent;
+
+    expect(component.focusRow('nope')).toBe(false);
+    expect(component.focusRow('docs/guides')).toBe(true);
+    await stable();
+
+    expect(document.activeElement).toBe(tree());
+    expect(active()).toBe(row('guides').id);
+    expect(host.selected()).toBe('docs/guides/setup.md');
   });
 
   it('does not select or toggle a row when its menu button is clicked', async () => {

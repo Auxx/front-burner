@@ -56,9 +56,14 @@
           (toggleFiles)="toggleFiles(shell.narrow())"
         />
         <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')" [attr.aria-label]="t('files')">
-          <rs-file-tree [selected]="selectedPath()" (selectPath)="openEntryAt($event)" (retry)="retry($event)" />
+          <rs-file-tree
+            [selected]="selectedPath()"
+            (selectPath)="openEntryAt($event)"
+            (retry)="retry($event)"
+            (action)="runAction($event.action, $event.path)"
+          />
         </section>
-        <rs-editor-area [path]="openPath()" [entry]="openEntry()" />
+        <rs-editor-area [path]="openPath()" [entry]="openEntry()" (newFile)="runAction('new-file', '')" />
       </ui-app-shell>
     }
   }
