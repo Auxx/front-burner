@@ -124,15 +124,47 @@ describe('RepositorySwitcherComponent', () => {
     ]);
   });
 
-  it('shows the full name in a tooltip only on narrow screens', async () => {
-    await show();
-    expect(trigger().hasAttribute('aria-describedby')).toBe(false);
+  it('shows the full name in a tooltip only while it is shortened', async () => {
+    // jsdom has neither layout nor ResizeObserver: the widths are stubbed, and
+    // the observer's callback is run by hand.
+    let callback: ResizeObserverCallback | undefined;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(observed: ResizeObserverCallback) {
+          callback = observed;
+        }
+        observe(): void {
+          // Run by `resize()`.
+        }
+        disconnect(): void {
+          // Nothing to release.
+        }
+      }
+    );
+    let scrollWidth = 80;
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(() => scrollWidth);
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(80);
+    const resize = async (width: number) => {
+      scrollWidth = width;
+      callback?.([], {} as ResizeObserver);
+      await settle(fixture);
+    };
+    const description = () => document.getElementById(trigger().getAttribute('aria-describedby') ?? '');
 
-    fixture.componentRef.setInput('narrow', true);
-    await settle(fixture);
+    try {
+      await show();
+      expect(trigger().hasAttribute('aria-describedby')).toBe(false);
 
-    const description = document.getElementById(trigger().getAttribute('aria-describedby') ?? '');
-    expect(description?.textContent).toBe('handbook');
+      await resize(200);
+      expect(description()?.textContent).toBe('handbook');
+
+      await resize(80);
+      expect(trigger().hasAttribute('aria-describedby')).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
   });
 
   it('shows a loading row until the list arrives, every time it opens', async () => {

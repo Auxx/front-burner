@@ -10,7 +10,8 @@
 }
 
 // The bar's heading text: shortened with an ellipsis when the bar is short of
-// room (NV-11), with the full name in the tooltip on narrow screens.
+// room, with the full name in the tooltip (NV-11). A long press shows the
+// tooltip, not the platform's text selection or callout.
 .name {
   display: block;
   max-inline-size: 100%;
@@ -27,6 +28,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+  -webkit-touch-callout: none;
+  user-select: none;
 
   &:hover,
   &[aria-expanded='true'] {

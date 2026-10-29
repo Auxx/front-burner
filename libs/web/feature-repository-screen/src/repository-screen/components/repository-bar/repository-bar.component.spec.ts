@@ -82,8 +82,6 @@ describe('RepositoryBarComponent', () => {
     expect(bar().querySelector('shell-brand-link a')?.getAttribute('aria-label')).toBe(
       'web-shell.BrandLinkComponent.dashboard'
     );
-    // The full name is in the switcher's tooltip, as it may be shortened (NV-11).
-    expect(bar().querySelector('h1 button')?.hasAttribute('aria-describedby')).toBe(true);
   });
 
   it('toggles the file tree and says whether it is shown', async () => {

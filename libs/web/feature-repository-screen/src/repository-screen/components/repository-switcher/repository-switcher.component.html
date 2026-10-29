@@ -1,7 +1,13 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.RepositorySwitcherComponent'">
   @let repository = this.repository();
   <h1 class="heading">
-    <button class="name" [uiMenuTrigger]="switcher.aria" [uiTooltip]="narrow() ? repository.name : ''">
+    <button
+      #nameButton
+      class="name"
+      [uiMenuTrigger]="switcher.aria"
+      [uiTooltip]="shortened() ? repository.name : ''"
+      uiTooltipLongPress
+    >
       {{ repository.name }}
     </button>
   </h1>
@@ -14,7 +20,7 @@
   >
     @switch (others.kind) {
       @case ('loading') {
-        <!-- Not an item: the focus stays on the links below while the list loads. -->
+        <!-- Not an item: the menu opens on the links below, and moves to the list when it arrives. -->
         <p class="status" aria-hidden="true">{{ t('loading') }}</p>
         <div uiMenuSeparator></div>
       }
@@ -48,9 +54,9 @@
       }
     }
     @if (narrow()) {
-      <a uiMenuItem="dashboard" class="link" routerLink="/">{{ t('dashboard') }}</a>
+      <a uiMenuItem="dashboard" routerLink="/">{{ t('dashboard') }}</a>
     }
-    <a uiMenuItem="all" class="link" routerLink="/repositories">{{ t('all') }}</a>
+    <a uiMenuItem="all" routerLink="/repositories">{{ t('all') }}</a>
     <a uiMenuItem="settings" [routerLink]="['/repositories', repository.id, 'settings']">{{ t('settings') }}</a>
   </ui-menu>
 </ng-container>

@@ -3,7 +3,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
-  DOCUMENT,
   effect,
   ElementRef,
   inject,
@@ -41,8 +40,8 @@ type OtherRepositories =
  * dashboard's API call and is loaded each time the menu opens; when it fails,
  * the links stay and **Try again** loads it again. A ready repository opens in
  * the editor, a cloning or failed one opens its settings, as on the dashboard
- * (DS-22). On narrow screens the name is shortened and its full name is in a
- * tooltip (NV-11).
+ * (DS-22). A name too long for the bar is shortened with an ellipsis, and
+ * its full name is in a tooltip, also shown by a long press (NV-11).
  */
 @Component({
   selector: 'rs-repository-switcher',
@@ -70,17 +69,33 @@ export class RepositorySwitcherComponent {
   // In the translated view, which renders once the texts have loaded.
   private readonly menu = viewChild(MenuComponent);
   private readonly trigger = viewChild(MenuTriggerDirective);
-  private readonly menuElement = viewChild(MenuComponent, { read: ElementRef<HTMLElement> });
+  private readonly nameButton = viewChild<ElementRef<HTMLButtonElement>>('nameButton');
   private readonly injector = inject(Injector);
-  private readonly document = inject(DOCUMENT);
   private loading?: Subscription;
 
   protected readonly others = signal<OtherRepositories>({ kind: 'loading' });
+  /** Whether the name is shortened, so that its full name is in the tooltip. */
+  protected readonly shortened = signal(false);
 
   constructor() {
     effect(() => {
       if (this.menu()?.aria.visible()) {
         untracked(() => this.load());
+      }
+    });
+    effect(onCleanup => {
+      const button = this.nameButton()?.nativeElement;
+      // Measured again for another repository's name, and as the bar resizes.
+      this.repository();
+      if (!button) {
+        return;
+      }
+      const measure = () => this.shortened.set(button.scrollWidth > button.clientWidth);
+      afterNextRender(measure, { injector: this.injector });
+      if (typeof ResizeObserver === 'function') {
+        const observer = new ResizeObserver(measure);
+        observer.observe(button);
+        onCleanup(() => observer.disconnect());
       }
     });
     inject(DestroyRef).onDestroy(() => this.loading?.unsubscribe());
@@ -98,24 +113,8 @@ export class RepositorySwitcherComponent {
     this.loading?.unsubscribe();
     this.others.set({ kind: 'loading' });
     this.loading = this.api.recent({ exclude: this.repository().id }).subscribe({
-      next: ({ repositories }) => this.show({ kind: 'loaded', repositories }),
-      error: () => this.show({ kind: 'failed' })
+      next: ({ repositories }) => this.others.set({ kind: 'loaded', repositories }),
+      error: () => this.others.set({ kind: 'failed' })
     });
-  }
-
-  private show(others: OtherRepositories): void {
-    this.others.set(others);
-    // While loading, the menu opened on its first link. Unless the user has
-    // moved on, the focus goes to the first item now above it.
-    afterNextRender(() => {
-      const menu = this.menuElement()?.nativeElement;
-      const focused = this.document.activeElement;
-      if (
-        this.menu()?.aria.visible() && menu
-        && (!menu.contains(focused) || focused === menu.querySelector('.link'))
-      ) {
-        this.trigger()?.open();
-      }
-    }, { injector: this.injector });
   }
 }
