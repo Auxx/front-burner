@@ -5,6 +5,8 @@ export { TranslocoHttpLoader } from './core/i18n/transloco-http.loader';
 export type { LoginMessage } from './core/models/login-message.model';
 export { provideCore } from './core/providers/provide-core';
 export { PageTitleStrategy } from './core/routing/page-title.strategy';
+export { FileSaver, type FileSaverOptions, SAVE_DELAY_MS, SAVE_RETRY_DELAYS_MS } from './core/saving/file-saver';
+export type { SaveResult, SaveStatus } from './core/saving/save-status.model';
 export { ApiErrorTextService } from './core/services/api-error-text/api-error-text.service';
 export { AuthSessionService } from './core/services/auth-session/auth-session.service';
 export { CurrentUserService } from './core/services/current-user/current-user.service';
