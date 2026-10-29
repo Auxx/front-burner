@@ -172,6 +172,15 @@ describe('FileContents', () => {
     expect(readFileSync(join(root, 'notes.txt'), 'utf8')).toBe('text\n');
   });
 
+  it('refuses a name with a NUL as malformed', async () => {
+    const malformed = { status: 400, code: 'path-refused', params: { reason: 'malformed' } };
+    const request: SaveFileRequest = { path: 'a\u0000.md', content: 'x', lineEnding: 'lf', bom: false };
+
+    expect(await refusal(read('a\u0000.md'))).toEqual(malformed);
+    expect(await refusal(save(request))).toEqual(malformed);
+    expect(await refusal(recreate(request))).toEqual(malformed);
+  });
+
   it('saves and returns the new hash', async () => {
     const state = await save({ path: 'docs/readme.md', content: '# New\n', lineEnding: 'crlf', bom: false });
 
@@ -255,6 +264,9 @@ describe('FileContents', () => {
     expect(bytesOf('docs/readme.md')).toEqual(bytes);
     expect(await refusal(recreate({ ...request, path: 'gone/a.md' }))).toEqual(missing);
     expect(await refusal(recreate({ ...request, path: 'docs/a.txt' }))).toEqual(notEditable);
+    expect(await refusal(recreate({ ...request, path: 'docs/README.md' })))
+      .toEqual({ status: 409, code: 'entry-exists', params: {} });
+    expect(readdirSync(join(root, 'docs'))).toEqual([ 'readme.md' ]);
     expect(readdirSync(layout.tmpDir)).toEqual([]);
   });
 

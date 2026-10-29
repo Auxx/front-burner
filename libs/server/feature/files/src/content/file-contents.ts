@@ -1,13 +1,18 @@
 import { EventsHub } from '@front-burner/server-core-events';
 import { GitEngine } from '@front-burner/server-core-git';
-import { DATA_LAYOUT, DataLayout, openInWorkingCopy, PathRefusedError } from '@front-burner/server-core-storage';
+import {
+  DATA_LAYOUT,
+  DataLayout,
+  openInWorkingCopy,
+  PathRefusedError,
+  resolveInWorkingCopy
+} from '@front-burner/server-core-storage';
 import { EDITABLE_FILE_LIMIT } from '@front-burner/shared-contracts';
 import type { FileContent, FileState, SaveFileRequest } from '@front-burner/shared-contracts';
-import { isMarkdownName } from '@front-burner/shared-util';
+import { isMarkdownName, sameEntryName } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { Stats } from 'node:fs';
-import { link, lstat, open, rename, rm } from 'node:fs/promises';
+import { link, lstat, open, readdir, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { WorkingTreeGuard } from '../actions/working-tree-guard';
 import { entryExists, entryNotEditable, fileNotUtf8, fileTooLarge, toFilesError } from '../files/files-errors';
@@ -25,14 +30,8 @@ function markdownPath(path: string): [ string, string ] {
   return [ parent, name ];
 }
 
-/** The entry's stats without following a link, or `undefined` when it is missing. */
-const lstatOrMissing = (path: string): Promise<Stats | undefined> =>
-  lstat(path).catch((error: NodeJS.ErrnoException) => {
-    if (error.code === 'ENOENT') {
-      return undefined;
-    }
-    throw error;
-  });
+/** Read in chunks, so that a file grown past the limit since its stat is never buffered whole. */
+const READ_CHUNK = 64 * 1024;
 
 /**
  * Reads and saves the Markdown files the editor edits (ED-2, ED-6, ED-12,
@@ -85,23 +84,23 @@ export class FileContents {
     await this.guard.change(repositoryId, root, async () => {
       const folder = await openFolder(this.git, root, parent);
       try {
-        const target = join(folder.path, name);
-        const stats = await lstatOrMissing(target);
-        if (stats === undefined) {
-          throw new PathRefusedError('not-found');
-        }
-        if (stats.isSymbolicLink()) {
+        // The name's own checks (a NUL, `.git`) come with resolving it inside the opened folder.
+        const entry = await resolveInWorkingCopy(folder.path, name, { symlinkLeaf: true });
+        if (entry.type === 'symlink') {
           throw new PathRefusedError('symlink');
         }
-        if (!stats.isFile()) {
+        if (entry.type !== 'file') {
           throw entryNotEditable();
         }
-        const temporary = await this.writeTemporary(bytes, stats.mode & 0o7777);
+        const mode = (await lstat(entry.absolute)).mode & 0o7777;
+        const temporary = await this.writeTemporary(bytes, mode);
         // One rename: the file holds either the old content or the new, never part of it.
-        await rename(temporary, target).catch(async (error: unknown) => {
+        await rename(temporary, entry.absolute).catch(async (error: unknown) => {
           await rm(temporary, { force: true });
           throw error;
         });
+        // The new entry itself must survive a crash too, not only the bytes it names.
+        await folder.handle.sync();
       } finally {
         await folder.handle.close();
       }
@@ -117,15 +116,21 @@ export class FileContents {
     await this.guard.change(repositoryId, root, async () => {
       const folder = await openFolder(this.git, root, parent);
       try {
+        const entry = await resolveInWorkingCopy(folder.path, name, { mayBeMissing: true, symlinkLeaf: true });
+        // The same name in another case or form is a clash too (FB-27).
+        if (entry.type !== 'missing' || (await readdir(folder.path)).some(other => sameEntryName(other, name))) {
+          throw entryExists();
+        }
         const temporary = await this.writeTemporary(bytes, 0o644);
         try {
           // A hard link is exclusive: an entry created meanwhile is never overwritten.
-          await link(temporary, join(folder.path, name));
+          await link(temporary, entry.absolute);
         } catch (error) {
           throw (error as NodeJS.ErrnoException).code === 'EEXIST' ? entryExists() : error;
         } finally {
           await rm(temporary, { force: true });
         }
+        await folder.handle.sync();
       } finally {
         await folder.handle.close();
       }
@@ -148,12 +153,20 @@ export class FileContents {
       if ((await opened.handle.stat()).size > EDITABLE_FILE_LIMIT) {
         throw fileTooLarge(EDITABLE_FILE_LIMIT);
       }
-      const bytes = await opened.handle.readFile();
-      // It may have grown since the stat.
-      if (bytes.length > EDITABLE_FILE_LIMIT) {
-        throw fileTooLarge(EDITABLE_FILE_LIMIT);
+      // It may have grown since the stat: read no more than one byte past the limit.
+      const chunks: Buffer[] = [];
+      let total = 0;
+      for (;;) {
+        const { bytesRead, buffer } = await opened.handle.read({ buffer: Buffer.alloc(READ_CHUNK) });
+        if (bytesRead === 0) {
+          return Buffer.concat(chunks, total);
+        }
+        total += bytesRead;
+        if (total > EDITABLE_FILE_LIMIT) {
+          throw fileTooLarge(EDITABLE_FILE_LIMIT);
+        }
+        chunks.push(buffer.subarray(0, bytesRead));
       }
-      return bytes;
     } finally {
       await opened.handle.close();
     }
