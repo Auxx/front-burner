@@ -1,0 +1,65 @@
+name: Set up the workspace
+description: >
+  Installs Node.js and the npm dependencies, sets the base and head commits for
+  nx affected, and restores the Nx cache of one CI job.
+
+inputs:
+  nx-cache:
+    description: >
+      Name of the Nx cache to restore and save. Each job has its own, since
+      parallel jobs cannot save the same cache key.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .nvmrc
+
+    # node_modules is what npm ci made from this exact lockfile (NF-11.9), so
+    # reusing it skips the install.
+    - name: Cache node_modules
+      id: node-modules
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: node_modules
+        key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+
+    - name: Install dependencies
+      if: steps.node-modules.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm ci
+
+    - uses: nrwl/nx-set-shas@e602fada7ad5987b0f7b1905e7a99ea1c661514c # v5.1.0
+      with:
+        main-branch-name: master
+
+    # Every run saves a new entry; the newest one with the same prefix is
+    # restored. Pull requests can also restore the entries of master.
+    - name: Cache Nx
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ${{ env.NX_CACHE_DIRECTORY }}
+          ${{ env.NX_WORKSPACE_DATA_DIRECTORY }}
+        key: nx-${{ inputs.nx-cache }}-${{ runner.os }}-${{ github.sha }}
+        restore-keys: nx-${{ inputs.nx-cache }}-${{ runner.os }}-
+
+    # Nx names its cache database after /etc/machine-id and ignores a database
+    # with another name, and every runner has a new machine ID. Renaming the
+    # restored database lets this runner use the cache.
+    - name: Adopt the restored Nx cache
+      shell: bash
+      run: |
+        dir="$NX_WORKSPACE_DATA_DIRECTORY"
+        id=$(cat /etc/machine-id)
+        for db in "$dir"/*-v*.db; do
+          [ -e "$db" ] || continue
+          old=$(basename "$db")
+          old=${old%%-*}
+          [ "$old" = "$id" ] && continue
+          for file in "$dir/$old"-*; do
+            mv "$file" "$dir/$id-${file#"$dir/$old"-}"
+          done
+        done

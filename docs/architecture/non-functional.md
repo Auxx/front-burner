@@ -373,7 +373,8 @@ These rules add to the security rules already in the requirements.
 
 ### Supply chain and container
 
-- **NF-11.9** Lockfiles are committed and CI installs with `npm ci`. Renovate or
+- **NF-11.9** Lockfiles are committed and CI installs with `npm ci`. CI may
+  reuse a `node_modules` that `npm ci` made from the same lockfile. Renovate or
   Dependabot proposes dependency updates.
 - **NF-11.10** **Trivy** runs in the CI/CD pipeline:
   - on the dependencies (lockfiles), failing the build on a high or critical
