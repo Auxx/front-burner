@@ -284,4 +284,35 @@ describe('FileTreeComponent', () => {
       expect(host.actions).toEqual([ { action: 'rename', path: 'guide.md' } ]);
     });
   });
+
+  describe('focus requests', () => {
+    it('focuses the requested row', async () => {
+      await create();
+
+      TestBed.inject(FileTreeStoreService).focusRequest.set('docs');
+      await settle(fixture);
+
+      expect(document.activeElement).toBe(tree());
+      expect(tree().getAttribute('aria-activedescendant')).toBe(row('docs').id);
+      expect(TestBed.inject(FileTreeStoreService).focusRequest()).toBeNull();
+    });
+
+    it('drops a request for a row that is not shown', async () => {
+      await create();
+      const store = TestBed.inject(FileTreeStoreService);
+
+      store.focusRequest.set('docs/intro.md');
+      await settle(fixture);
+
+      expect(store.focusRequest()).toBeNull();
+      expect(document.activeElement).not.toBe(tree());
+
+      // Shown later, it does not take the focus.
+      row('docs').click();
+      (document.activeElement as HTMLElement | null)?.blur();
+      await settle(fixture);
+      expect(row('intro.md')).toBeDefined();
+      expect(document.activeElement).not.toBe(tree());
+    });
+  });
 });

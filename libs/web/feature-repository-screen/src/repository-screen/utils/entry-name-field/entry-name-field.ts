@@ -12,6 +12,8 @@ import { FilesApi } from '@front-burner/web-api-client';
 import { type ApiErrorTextService, toApiError } from '@front-burner/web-core';
 import { catchError, debounceTime, distinctUntilChanged, map, of, switchMap } from 'rxjs';
 
+import { joinPath } from '../file-name/file-name';
+
 /** Why a name cannot be used: FB-27's rules, or a clash with a sibling (`name-taken`). */
 export type EntryNameError = EntryNameProblem | 'name-taken';
 
@@ -19,7 +21,7 @@ export interface EntryNameFieldOptions {
   readonly kind: NewEntryKind;
   /** The names of the entries in the folder, as listed. */
   readonly siblings: () => readonly string[];
-  /** The entry's own name when it is renamed, so that it does not clash with itself (FB-27). */
+  /** The entry's own name, as listed, when it is renamed, so that it does not clash with itself (FB-27). */
   readonly current?: string;
 }
 
@@ -48,10 +50,8 @@ export function entryNameField(name: () => string, options: EntryNameFieldOption
       return found;
     }
     const final = finalName();
-    const current = options.current;
-    const taken = options.siblings().some(sibling =>
-      sameEntryName(sibling, final) && (current === undefined || !sameEntryName(sibling, current))
-    );
+    // Only the entry itself is skipped: another sibling that differs from it only in case still clashes.
+    const taken = options.siblings().some(sibling => sibling !== options.current && sameEntryName(sibling, final));
     return taken ? 'name-taken' : null;
   });
   return { finalName, problem };
@@ -93,11 +93,6 @@ export function ignoredEntryName(options: IgnoredNameOptions): Signal<boolean> {
     ),
     { initialValue: false }
   );
-}
-
-/** The path of `name` in `folder`; the root folder is `''`. */
-export function joinPath(folder: string, name: string): string {
-  return folder === '' ? name : `${folder}/${name}`;
 }
 
 /** The codes of the name field that have a text, under `web-feature-repository-screen.nameErrors`. */

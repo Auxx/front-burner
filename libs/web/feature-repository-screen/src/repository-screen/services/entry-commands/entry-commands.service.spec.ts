@@ -133,7 +133,7 @@ describe('EntryCommandsService', () => {
   it('opens a new file after creating it', async () => {
     const opened = await run('new-file', 'docs', async () => {
       type(nameInput(), 'notes');
-      dialogButton(`${P}.NewEntryDialog.create`)?.click();
+      dialogButton(`${P}.EntryNameDialog.submit.create`)?.click();
     });
 
     expect(created).toEqual([ { folder: 'docs', name: 'notes', kind: 'file' } ]);
@@ -144,9 +144,9 @@ describe('EntryCommandsService', () => {
   it('warns about an ignored folder before creating in it', async () => {
     await run('new-file', 'build', async () => {
       expect(overlay().querySelector('ui-inline-banner')?.textContent?.trim()).toBe(
-        `${P}.NewEntryDialog.ignored.file`
+        `${P}.EntryNameDialog.ignored.file`
       );
-      dialogButton(`${P}.NewEntryDialog.cancel`)?.click();
+      dialogButton(`${P}.EntryNameDialog.cancel`)?.click();
     });
 
     expect(created).toEqual([]);
@@ -160,7 +160,7 @@ describe('EntryCommandsService', () => {
 
     const opened = await run('new-folder', '', async () => {
       type(nameInput(), 'drafts');
-      dialogButton(`${P}.NewEntryDialog.create`)?.click();
+      dialogButton(`${P}.EntryNameDialog.submit.create`)?.click();
     });
     focusRequests.push(store.focusRequest());
 
@@ -176,7 +176,7 @@ describe('EntryCommandsService', () => {
 
     await run('rename', 'docs', async () => {
       type(nameInput(), 'guides');
-      dialogButton(`${P}.RenameEntryDialog.rename`)?.click();
+      dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
       await settleDialog();
       expect(confirmation()?.textContent).toContain('2 non-Markdown files move with this folder.');
       expect(renamed).toEqual([]);
@@ -189,7 +189,7 @@ describe('EntryCommandsService', () => {
   it('renames a folder without images at once', async () => {
     await run('rename', 'docs', async () => {
       type(nameInput(), 'guides');
-      dialogButton(`${P}.RenameEntryDialog.rename`)?.click();
+      dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
       await settleDialog();
       expect(confirmation()).toBeNull();
     });
@@ -202,7 +202,7 @@ describe('EntryCommandsService', () => {
     const done = commands.run('rename', 'docs');
     await settleDialog();
     type(nameInput(), 'guides');
-    dialogButton(`${P}.RenameEntryDialog.rename`)?.click();
+    dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
     await settleDialog();
 
     dialogButton(`${P}.EntryCommandsService.renameFolder.cancel`)?.click();
@@ -213,7 +213,7 @@ describe('EntryCommandsService', () => {
     expect(nameInput().value).toBe('guides');
     expect(store.expanded()).toEqual([ 'docs', 'docs/api' ]);
 
-    dialogButton(`${P}.RenameEntryDialog.cancel`)?.click();
+    dialogButton(`${P}.EntryNameDialog.cancel`)?.click();
     await done;
   });
 
@@ -225,7 +225,7 @@ describe('EntryCommandsService', () => {
 
     await run('rename', 'docs', async () => {
       type(nameInput(), 'guides');
-      dialogButton(`${P}.RenameEntryDialog.rename`)?.click();
+      dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
     });
 
     expect(navigate).toHaveBeenCalledWith([ '/repositories', 12, 'files', 'guides', 'api', 'index.md' ], {
@@ -241,7 +241,7 @@ describe('EntryCommandsService', () => {
 
     await run('rename', 'docs/guide.md', async () => {
       type(nameInput(), 'intro.md');
-      dialogButton(`${P}.RenameEntryDialog.rename`)?.click();
+      dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
     });
 
     expect(renamed).toEqual([ { path: 'docs/guide.md', name: 'intro.md' } ]);
@@ -254,10 +254,41 @@ describe('EntryCommandsService', () => {
 
     await run('rename', 'docs/guide.md', async () => {
       type(nameInput(), 'intro.md');
-      dialogButton(`${P}.RenameEntryDialog.rename`)?.click();
+      dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
     });
 
     expect(renamed).toHaveLength(1);
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('ignores another action while one runs', async () => {
+    const first = commands.run('new-file', '');
+    const second = await commands.run('new-folder', '');
+    await settleDialog();
+
+    expect(second).toBeNull();
+    expect(overlay().querySelectorAll('rs-entry-name')).toHaveLength(1);
+
+    dialogButton(`${P}.EntryNameDialog.cancel`)?.click();
+    await first;
+    await settleDialog();
+
+    const third = commands.run('new-folder', '');
+    await settleDialog();
+    expect(overlay().querySelectorAll('rs-entry-name')).toHaveLength(1);
+    dialogButton(`${P}.EntryNameDialog.cancel`)?.click();
+    await third;
+  });
+
+  it('finds a new file beyond a long folder\'s listed entries (FB-18)', async () => {
+    folders['docs'] = listing('docs', [ folder('api'), entry('guide.md') ], { more: 6000 });
+    await store.load('docs');
+
+    await run('new-file', 'docs', async () => {
+      type(nameInput(), 'zzz');
+      dialogButton(`${P}.EntryNameDialog.submit.create`)?.click();
+    });
+
+    expect(await store.resolve('docs/zzz.md')).toMatchObject({ name: 'zzz.md', kind: 'file', markdown: true });
   });
 });

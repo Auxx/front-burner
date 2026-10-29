@@ -7,6 +7,7 @@ import { TranslocoService } from '@jsverse/transloco';
 import type { Subscription } from 'rxjs';
 
 import type { TreeEntry, TreeEntryKind } from '../../models/tree-entry.model';
+import { fileName, joinPath, movedPath, parentPath } from '../../utils/file-name/file-name';
 
 type FolderState =
   | { readonly status: 'loading'; }
@@ -31,6 +32,10 @@ const KEY = 'web-feature-repository-screen.FileTreeStoreService';
  * the rows a folder adds while it loads (FB-43), when it fails (FB-44), when
  * it has more entries than listed (FB-18) or none (FB-33).
  *
+ * A folder that lists only its first entries (FB-18) also shows the entries
+ * this client created or renamed in it that are not among them, after the
+ * listed ones, so that they can be found and opened (`known`).
+ *
  * Each device remembers the expanded folders of each repository under
  * `fb.<userId>.repo.<repositoryId>.expanded` (FB-14). They are restored parents
  * first, and only those that still exist; storage that is missing or refuses
@@ -45,6 +50,8 @@ export class FileTreeStoreService {
   private readonly translations = toSignal(this.transloco.selectTranslation());
 
   private readonly folders = signal<ReadonlyMap<string, FolderState>>(new Map());
+  /** The entries made by this client, by folder, for folders that do not list them (FB-18). */
+  private readonly extras = signal<ReadonlyMap<string, readonly Entry[]>>(new Map());
   /** Where the expanded folders are remembered, once they have been restored. */
   private readonly memoryKey = signal<string | null>(null);
 
@@ -88,6 +95,7 @@ export class FileTreeStoreService {
     this.repositoryId = repositoryId;
     this.cancelAll();
     this.folders.set(new Map());
+    this.extras.set(new Map());
     this.expanded.set([]);
     this.memoryKey.set(null);
 
@@ -104,22 +112,50 @@ export class FileTreeStoreService {
       .catch(() => undefined);
   }
 
-  /** Lists `folder` again and replaces its rows; the rest of the tree stays as it is. */
-  load(folder: string): void {
-    void this.fetch(folder);
+  /**
+   * Lists `folder` again and replaces its rows; the rest of the tree stays as
+   * it is. Resolves once the folder is listed, or could not be.
+   */
+  async load(folder: string): Promise<void> {
+    await this.fetch(folder);
   }
 
-  /** The entries of `folder`, listing it if needed; `null` when it cannot be listed. */
-  async entries(folder: string): Promise<readonly Entry[] | null> {
+  /**
+   * The listing of `folder`, listing it if needed, with the entries this
+   * client made in it (`known`); `null` when it cannot be listed.
+   */
+  async listing(folder: string): Promise<FolderListing | null> {
     const listing = await this.listingOf(folder);
-    return typeof listing === 'string' ? null : listing.entries;
+    return typeof listing === 'string' ? null : this.withExtras(folder, listing, this.extras());
+  }
+
+  /** The entries of `folder`, as `listing` gives them; `null` when it cannot be listed. */
+  async entries(folder: string): Promise<readonly Entry[] | null> {
+    return (await this.listing(folder))?.entries ?? null;
   }
 
   /** The entry at `path`, if its folder is loaded. */
   entry(path: string): Entry | undefined {
-    const { parent, name } = split(path);
-    const state = this.folders().get(parent);
-    return state?.status === 'loaded' ? state.listing.entries.find(item => item.name === name) : undefined;
+    const state = this.folders().get(parentPath(path));
+    const name = fileName(path);
+    return state?.status === 'loaded'
+      ? this.withExtras(parentPath(path), state.listing, this.extras()).entries.find(item => item.name === name)
+      : undefined;
+  }
+
+  /**
+   * Remembers the entry this client has just made at `path`, so that it is
+   * shown and found even when its folder lists only its first entries (FB-18).
+   * It is not shown while the folder's listing has it, or lists everything.
+   */
+  known(path: string, entry: Entry): void {
+    const folder = parentPath(path);
+    this.extras.update(extras => {
+      const next = new Map(extras);
+      const others = (extras.get(folder) ?? []).filter(item => item.name !== entry.name);
+      next.set(folder, [ ...others, entry ]);
+      return next;
+    });
   }
 
   /**
@@ -141,14 +177,14 @@ export class FileTreeStoreService {
       if (generation !== this.generation || listing === 'missing') {
         return null;
       }
-      const found = listing.entries.find(item => item.name === name);
+      const found = this.withExtras(folder, listing, this.extras()).entries.find(item => item.name === name);
       if (!found || index === names.length - 1) {
         return found ?? null;
       }
       if (found.kind !== 'folder') {
         return null;
       }
-      folder = join(folder, name);
+      folder = joinPath(folder, name);
       // Listing starts first, so that the tree finds the folder loading and does not ask for it.
       pending = this.listingOf(folder);
       this.expand(folder);
@@ -157,26 +193,33 @@ export class FileTreeStoreService {
   }
 
   /**
-   * Follows a rename of the entry at `from` to `to` (FB-36): the loaded
-   * listings and the expanded folders at and under `from` move to `to`, so
-   * that a renamed folder stays as it was shown, and listings on their way
-   * are asked for again at their new paths. The parent is listed again by
-   * the caller.
+   * Follows a rename of the entry at `from` to `to` (FB-36): the expanded
+   * folders at and under `from` stay expanded at their new paths, so that a
+   * renamed folder stays as it was shown, and so do the entries this client
+   * made in them. Their listings are dropped, not moved: whether git ignores
+   * an entry can change with its path (FB-31), so the tree lists them again.
+   * The parent is listed again by the caller.
    */
   renamed(from: string, to: string): void {
-    const move = (path: string) =>
-      path === from ? to : path.startsWith(`${from}/`) ? `${to}${path.slice(from.length)}` : path;
-    const moved = [ ...this.folders().keys() ].filter(path => move(path) !== path);
-    this.folders.update(folders => new Map([ ...folders ].map(([ path, state ]) => [ move(path), state ])));
-    this.expanded.update(expanded => expanded.map(move));
-    for (const path of moved) {
+    const gone = [ ...this.folders().keys() ].filter(path => movedPath(path, from, to) !== null);
+    for (const path of gone) {
       const request = this.requests.get(path);
       if (request) {
         this.requests.delete(path);
-        request.supersede(this.fetch(move(path)));
+        request.supersede(Promise.resolve('missing'));
         this.subscriptions.delete(path);
       }
+      this.setFolder(path, undefined);
     }
+    this.extras.update(extras => {
+      const next = new Map<string, readonly Entry[]>();
+      for (const [ folder, entries ] of extras) {
+        // The renamed entry itself is made known again by the caller, under its new name.
+        next.set(movedPath(folder, from, to) ?? folder, entries.filter(item => joinPath(folder, item.name) !== from));
+      }
+      return next;
+    });
+    this.expanded.update(expanded => expanded.map(path => movedPath(path, from, to) ?? path));
   }
 
   /**
@@ -199,7 +242,8 @@ export class FileTreeStoreService {
     const kept = new Set<string>();
     for (const level of levels) {
       await Promise.all(level.map(async path => {
-        const { parent, name } = split(path);
+        const parent = parentPath(path);
+        const name = fileName(path);
         const state = this.folders().get(parent);
         if ((parent !== '' && !kept.has(parent)) || state?.status !== 'loaded') {
           return;
@@ -321,7 +365,7 @@ export class FileTreeStoreService {
         selectable: true
       } ];
     }
-    const { entries, more } = state.listing;
+    const { entries, more } = this.withExtras(folder, state.listing, this.extras());
     const rows = entries.map(entry => this.entryRow(folder, entry, folders));
     if (more > 0) {
       rows.push(this.added('more', folder, this.text('more', { count: more })));
@@ -332,8 +376,28 @@ export class FileTreeStoreService {
     return rows;
   }
 
+  /**
+   * A listing with the entries this client made in its folder that it does
+   * not have, after the listed ones, and those no longer counted as not shown.
+   * A listing of every entry is the truth: it gets none.
+   */
+  private withExtras(
+    folder: string,
+    listing: FolderListing,
+    extras: ReadonlyMap<string, readonly Entry[]>
+  ): FolderListing {
+    if (listing.more === 0) {
+      return listing;
+    }
+    const listed = new Set(listing.entries.map(item => item.name));
+    const added = (extras.get(folder) ?? []).filter(item => !listed.has(item.name));
+    return added.length === 0
+      ? listing
+      : { ...listing, entries: [ ...listing.entries, ...added ], more: Math.max(0, listing.more - added.length) };
+  }
+
   private entryRow(folder: string, entry: Entry, folders: ReadonlyMap<string, FolderState>): TreeEntry {
-    const path = join(folder, entry.name);
+    const path = joinPath(folder, entry.name);
     const isFolder = entry.kind === 'folder';
     // `<name>, <kind>[, Markdown][, ignored][, empty]`, starting with the visible name (FB-46).
     const accessibleName = [
@@ -364,15 +428,6 @@ export class FileTreeStoreService {
   private text(key: string, params?: Record<string, unknown>): string {
     return this.transloco.translate(`${KEY}.${key}`, params);
   }
-}
-
-function join(folder: string, name: string): string {
-  return folder === '' ? name : `${folder}/${name}`;
-}
-
-function split(path: string): { parent: string; name: string; } {
-  const slash = path.lastIndexOf('/');
-  return slash === -1 ? { parent: '', name: path } : { parent: path.slice(0, slash), name: path.slice(slash + 1) };
 }
 
 /** The remembered folder paths, or none when the memory is missing or not a list of paths. */

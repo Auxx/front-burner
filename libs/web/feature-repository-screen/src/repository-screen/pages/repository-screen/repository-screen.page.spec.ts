@@ -295,7 +295,7 @@ describe('RepositoryScreenPage', () => {
 
       (page().querySelector('main [uiEmptyStateActions] button') as HTMLButtonElement).click();
       await settle(harness.fixture);
-      const input = document.querySelector('.cdk-overlay-container rs-new-entry input') as HTMLInputElement;
+      const input = document.querySelector('.cdk-overlay-container rs-entry-name input') as HTMLInputElement;
       input.value = 'notes';
       input.dispatchEvent(new Event('input'));
       folders[''] = listing('', [ entry('notes.md'), entry('notes.txt') ]);

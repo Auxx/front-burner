@@ -63,4 +63,10 @@ describe('entryNameField', () => {
     name.set('Guide.md');
     expect(field.problem()).toBe('name-taken');
   });
+
+  it('still flags a sibling that differs from the renamed entry only in case', () => {
+    const field = entryNameField(() => 'a.md', { kind: 'file', siblings: () => [ 'A.md', 'a.md' ], current: 'A.md' });
+
+    expect(field.problem()).toBe('name-taken');
+  });
 });

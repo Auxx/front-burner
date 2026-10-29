@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { CurrentUserService } from '@front-burner/web-core';
 
+import { movedPath } from '../../utils/file-name/file-name';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 
 /** A Markdown file named `README`, with any Markdown extension, ignoring case (FB-12). */
@@ -61,8 +62,9 @@ export class FirstFileService {
       .then(user => {
         const storageKey = key(user.id, repositoryId);
         const last = read(storageKey);
-        if (last === from || last?.startsWith(`${from}/`)) {
-          write(storageKey, `${to}${last.slice(from.length)}`);
+        const moved = last === null ? null : movedPath(last, from, to);
+        if (moved !== null) {
+          write(storageKey, moved);
         }
       })
       .catch(() => undefined);

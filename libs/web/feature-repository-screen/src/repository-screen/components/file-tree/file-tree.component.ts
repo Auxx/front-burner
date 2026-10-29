@@ -54,8 +54,8 @@ export interface EntryActionRequest {
  * share one menu, filled with the actions of the row that opened it (FB-24).
  * A chosen action is emitted as `action`.
  *
- * The store's `focusRequest` focuses its entry's row as soon as the row is
- * shown (FB-32).
+ * The store's `focusRequest` focuses its entry's row, if the tree shows it
+ * once the request is rendered (FB-32).
  */
 @Component({
   selector: 'rs-file-tree',
@@ -95,11 +95,12 @@ export class FileTreeComponent {
   });
 
   constructor() {
-    // After rendering, so that the tree has the rows the store has now.
+    // After rendering, so that the tree has the rows the store has now. Tried
+    // once: a row that is not shown then must not take the focus later.
     afterRenderEffect(() => {
       const path = this.store.focusRequest();
-      this.store.nodes();
-      if (path !== null && untracked(() => this.tree().focusRow(path))) {
+      if (path !== null) {
+        untracked(() => this.tree().focusRow(path));
         this.store.focusRequest.set(null);
       }
     });
