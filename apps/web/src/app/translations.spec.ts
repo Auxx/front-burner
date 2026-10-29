@@ -110,6 +110,11 @@ describe('i18n/en.json', () => {
       'Highlighting is off for large files on small screens, to keep typing fast.'
     ],
     [ `${SCREEN}.LargeFileNoteComponent.turnOn`, 'Turn on highlighting' ],
+    [ `${SCREEN}.SaveStatusComponent.saved`, 'Saved' ],
+    [ `${SCREEN}.SaveStatusComponent.saving`, 'Saving…' ],
+    [ `${SCREEN}.SaveStatusComponent.offline`, 'Not saved — offline, retrying' ],
+    [ `${SCREEN}.SaveStatusComponent.tooLarge`, 'Not saved — the file is larger than 1 MB' ],
+    [ `${SCREEN}.SaveStatusComponent.mergeInProgress`, 'Not saved — a merge is in progress' ],
     [ `${SCREEN}.EntryMessageComponent.missing`, 'This file doesn\'t exist.' ],
     [ `${SCREEN}.EntryMessageComponent.nonMarkdown`, 'Only Markdown files can be opened in Front Burner.' ],
     [ `${SCREEN}.EntryMessageComponent.symlink`, 'Symbolic links can\'t be opened.' ],

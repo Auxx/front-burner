@@ -1,17 +1,23 @@
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import type { PushEvent } from '@front-burner/shared-contracts';
 import { PushChannelService } from '@front-burner/web-core';
 import { filter, Subscription } from 'rxjs';
 
+import { parentPath } from '../../utils/file-name/file-name';
 import { EntryCommandsService } from '../entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
+import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 
 /**
  * Keeps the repository screen up to date with changes made elsewhere, from
  * the push channel (A-3.11, A-8.5). Provided by the page.
  *
- * - `files.changed` lists the shown folders it names again (FB-41).
+ * - `files.changed` lists the shown folders it names again (FB-41), except
+ *   the event of this tab's own save: one that names only the folders of the
+ *   saved files, each an open file whose hash matches its last save (A-3.11).
+ *   A listing shows no sizes, so nothing is lost.
  * - `repository.status` goes to `RepositorySessionService.statusChanged`.
  * - A (re)connect lists every shown folder again, since events are never
  *   replayed, reads the repository's status again, and tries again to open
@@ -27,6 +33,7 @@ export class TreeSyncService {
   private readonly store = inject(FileTreeStoreService);
   private readonly commands = inject(EntryCommandsService);
   private readonly session = inject(RepositorySessionService);
+  private readonly openFiles = inject(OpenFilesService);
   private readonly route = inject(ActivatedRoute);
 
   private readonly gone = signal<string | null>(null);
@@ -67,13 +74,26 @@ export class TreeSyncService {
         .pipe(filter(event => 'repositoryId' in event && event.repositoryId === repositoryId))
         .subscribe(event => {
           if (event.type === 'files.changed') {
-            void this.sync(event.folders);
+            if (!this.ownSave(event)) {
+              void this.sync(event.folders);
+            }
           } else if (event.type === 'repository.status') {
             this.session.statusChanged(event.status, event.error);
           }
         })
     );
     this.subscription = subscription;
+  }
+
+  /** Whether `event` tells only of saves this tab made, as ED-24 tells them apart. */
+  private ownSave(event: Extract<PushEvent, { type: 'files.changed'; }>): boolean {
+    const files = event.files ?? [];
+    if (files.length === 0 || event.folders === 'all') {
+      return false;
+    }
+    const parents = new Set(files.map(file => parentPath(file.path)));
+    return event.folders.every(folder => parents.has(folder))
+      && files.every(file => this.openFiles.get(file.path)?.hash() === file.hash);
   }
 
   /** Forgets the file gone elsewhere, as when another path is shown. */

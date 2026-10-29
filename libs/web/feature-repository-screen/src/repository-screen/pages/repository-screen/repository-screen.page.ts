@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  signal,
+  untracked
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import type { ApiError, Entry } from '@front-burner/shared-contracts';
@@ -124,6 +134,9 @@ export class RepositoryScreenPage {
     return gone !== null && gone === this.openPath();
   });
 
+  /** Whether the open file has unsaved edits (NV-13). */
+  private readonly unsaved = computed(() => this.openFiles.current()?.saver.unsaved() ?? false);
+
   /** Counts the paths shown, so that only the latest one's answer counts. */
   private showing = 0;
   /** Whether the path shown could not be found because a folder could not be listed. */
@@ -144,12 +157,15 @@ export class RepositoryScreenPage {
     this.route.paramMap
       .pipe(map(params => Number(params.get('id'))), takeUntilDestroyed())
       .subscribe(id => {
+        // Another repository, through the switcher: its waiting saves are sent at once (NV-12).
+        void this.openFiles.flushAll();
         this.session.start(id);
         this.sync.start(id);
       });
     // The app header's loader is not on this screen (NV-9).
     this.currentUser.load().catch(() => undefined);
     this.updateTitle();
+    this.flushWhenLeft();
   }
 
   /** **Files** collapses the tree on wide screens and opens it as a drawer on narrow ones. */
@@ -204,6 +220,11 @@ export class RepositoryScreenPage {
     this.sync.clear();
     this.openEntry.set(undefined);
     this.openError.set(null);
+    const previous = this.openFiles.current();
+    if (previous !== null && previous.path() !== path) {
+      // Another file: the previous one's waiting save is sent at once (ED-3, ED-17).
+      void previous.saver.flush();
+    }
     this.openFiles.clearCurrent();
     if (path === '' && closed) {
       this.openPath.set(null);
@@ -262,10 +283,26 @@ export class RepositoryScreenPage {
     }
   }
 
+  /** Sends the waiting saves at once when the tab is hidden or the screen is left (ED-17). */
+  private flushWhenLeft(): void {
+    const document = inject(DOCUMENT);
+    const hidden = () => {
+      if (document.visibilityState === 'hidden') {
+        void this.openFiles.flushAll();
+      }
+    };
+    document.addEventListener('visibilitychange', hidden);
+    inject(DestroyRef).onDestroy(() => {
+      document.removeEventListener('visibilitychange', hidden);
+      void this.openFiles.flushAll();
+    });
+  }
+
   /**
    * `<file name> · <repository name> · Front Burner`, or without a file
    * `<repository name> · Front Burner` (NV-13), published again for each file
-   * so that it is announced (NV-18). Until the repository has opened, the
+   * so that it is announced (NV-18), with `• ` in front while the open file
+   * has unsaved edits. Until the repository has opened, the
    * product name alone, so that no other page's title stays.
    */
   private updateTitle(): void {
@@ -275,6 +312,7 @@ export class RepositoryScreenPage {
       const state = this.session.state();
       const repository = this.session.repository();
       const file = fileName(this.path());
+      const unsaved = this.unsaved();
       untracked(() => {
         if (state === 'loading') {
           pageTitle.setPending();
@@ -286,7 +324,8 @@ export class RepositoryScreenPage {
           );
           onCleanup(() => pending.unsubscribe());
         } else if (repository) {
-          pageTitle.publish(file ? `${file} · ${repository.name}` : repository.name);
+          const title = file ? `${file} · ${repository.name}` : repository.name;
+          pageTitle.publish(unsaved ? `• ${title}` : title);
         } else {
           pageTitle.publish();
         }

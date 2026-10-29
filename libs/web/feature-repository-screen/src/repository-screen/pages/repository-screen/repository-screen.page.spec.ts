@@ -12,6 +12,7 @@ import type {
   RepositorySummary
 } from '@front-burner/shared-contracts';
 import { FilesApi, RepositoriesApi } from '@front-burner/web-api-client';
+import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
@@ -591,6 +592,117 @@ describe('RepositoryScreenPage', () => {
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
       expect(files()).toBeUndefined();
       expect(page().querySelector('section[aria-label]')).toBeNull();
+    });
+  });
+  describe('editing and saving', () => {
+    const STATUS = 'web-feature-repository-screen.SaveStatusComponent';
+    const status = () => page().querySelector('rs-repository-bar rs-save-status')?.textContent?.trim();
+
+    /** Types `text` at the end of the open file, as a keystroke in the editor would. */
+    function typeAtEnd(text: string): void {
+      const editor = harness.fixture.debugElement.query(element => element.name === 'ce-code-editor');
+      const code = editor.componentInstance as {
+        state(): EditorStateChange['state'];
+        stateChange: { emit(change: EditorStateChange): void; };
+      };
+      const state = code.state();
+      code.stateChange.emit({
+        state: state.update({ changes: { from: state.doc.length, insert: text } }).state,
+        docChanged: true
+      });
+      harness.fixture.detectChanges();
+    }
+
+    const savedPaths = () => saveFile.mock.calls.map(call => (call[1] as { path: string; }).path);
+
+    it('shows the open file\'s save status in the bar', async () => {
+      saveFile.mockReturnValue(new Subject());
+      await visit('/repositories/12/files/README.md');
+      expect(status()).toBe(`${STATUS}.saved`);
+
+      typeAtEnd('More.\n');
+      await settle(harness.fixture);
+
+      expect(status()).toBe(`${STATUS}.saving`);
+    });
+
+    it('AC-EDIT-001.4: saves the first file when another is opened', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      await go('/repositories/12/files/docs/guide.md');
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+      expect(saveFile.mock.calls[0][1]).toMatchObject({ content: '# README.md\nMore.\n' });
+    });
+
+    it('AC-EDIT-001.4: saves the first file also when the other one fails to open', async () => {
+      readFile.mockImplementation(path =>
+        path === 'README.md' ? of(fileContent(path)) : failure(422, 'file-too-large')
+      );
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      await go('/repositories/12/files/docs/guide.md');
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+    });
+
+    it('AC-APP-001.6: saves an edit typed just before switching repositories', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      await go('/repositories/13');
+
+      expect(saveFile).toHaveBeenCalledTimes(1);
+      expect(saveFile.mock.calls[0][0]).toBe(12);
+    });
+
+    it('flushes when the tab is hidden', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+      expect(saveFile).not.toHaveBeenCalled();
+
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      try {
+        document.dispatchEvent(new Event('visibilitychange'));
+        await settle(harness.fixture);
+      } finally {
+        Reflect.deleteProperty(document, 'visibilityState');
+      }
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+      expect(status()).toBe(`${STATUS}.saved`);
+    });
+
+    it('flushes when the screen is left', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      harness.fixture.destroy();
+      await new Promise(resolve => setTimeout(resolve));
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+    });
+
+    it('AC-APP-001.9: puts a dot in the title while an edit is unsaved', async () => {
+      const answer = new Subject<{ hash: string; size: number; }>();
+      saveFile.mockReturnValue(answer);
+      await visit('/repositories/12/files/README.md');
+      expect(document.title).toBe('README.md · handbook · Front Burner');
+
+      typeAtEnd('More.\n');
+      await settle(harness.fixture);
+      expect(document.title).toBe('• README.md · handbook · Front Burner');
+
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+      Reflect.deleteProperty(document, 'visibilityState');
+      answer.next({ hash: 'b'.repeat(64), size: 20 });
+      answer.complete();
+      await settle(harness.fixture);
+
+      expect(document.title).toBe('README.md · handbook · Front Burner');
     });
   });
 });

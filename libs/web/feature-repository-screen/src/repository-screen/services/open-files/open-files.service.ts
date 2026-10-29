@@ -99,7 +99,8 @@ export class OpenFilesService {
 
   /** The entry of the open repository's file at `path`, if it was opened. */
   get(path: string): OpenFile | undefined {
-    return this.byPath(this.repositoryId()).get(path);
+    const repositoryId = this.session.repository()?.id;
+    return repositoryId === undefined ? undefined : this.files.get(repositoryId)?.get(path);
   }
 
   /** Sends every waiting save at once and resolves when they are done (ED-17, FB-36). */

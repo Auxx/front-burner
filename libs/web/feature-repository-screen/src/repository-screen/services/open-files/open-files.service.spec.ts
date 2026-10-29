@@ -134,6 +134,12 @@ describe('OpenFilesService', () => {
     }
   });
 
+  it('finds no file while no repository is open', () => {
+    repository.set(null);
+
+    expect(service.get('README.md')).toBeUndefined();
+  });
+
   it('tells whether any file has unsaved edits', async () => {
     const file = await service.open('README.md');
     expect(service.anyUnsaved()).toBe(false);

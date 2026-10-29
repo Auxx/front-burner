@@ -12,6 +12,7 @@ import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 import { fileName, isWithin, joinPath, movedPath, parentPath } from '../../utils/file-name/file-name';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../first-file/first-file.service';
+import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 
 const KEY = 'web-feature-repository-screen.EntryCommandsService';
@@ -31,14 +32,16 @@ export const OWN_CHANGE_MS = 5000;
  * - **New file** opens the new file (FB-30).
  * - **New folder** expands the new folder and makes it the tree's active row
  *   (FB-32).
- * - **Rename** of a folder that holds non-Markdown files asks a second time,
- *   with the dialog still open (FB-35). The tree keeps a renamed folder as it
- *   was, and when the open file is the entry or lies under it, it stays open
- *   at its new path (FB-36).
+ * - **Rename** sends the waiting saves at once, and the rename waits for
+ *   them (FB-36). Of a folder that holds non-Markdown files it asks a second
+ *   time, with the dialog still open (FB-35). The tree keeps a renamed folder
+ *   as it was, and when the open file is the entry or lies under it, it stays
+ *   open at its new path, with its editor state (FB-36, ED-8).
  * - **Delete** asks first, saying what cannot be recovered (FB-38), and marks
  *   the entry as deleting while it runs (FB-40). When the open file is the
  *   entry or lies under it, the screen closes it and shows the empty state,
- *   not the README (FB-39).
+ *   not the README (FB-39); the waiting saves of the deleted files are
+ *   dropped.
  *
  * The entries a rename or delete changes are this tab's own changes
  * (`ownChange`) from when its request is sent until {@link OWN_CHANGE_MS}
@@ -54,6 +57,7 @@ export class EntryCommandsService {
   private readonly store = inject(FileTreeStoreService);
   private readonly firstFile = inject(FirstFileService);
   private readonly session = inject(RepositorySessionService);
+  private readonly openFiles = inject(OpenFilesService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly transloco = inject(TranslocoService);
@@ -168,6 +172,8 @@ export class EntryCommandsService {
       return;
     }
     const parent = parentPath(path);
+    // Sent at once; the rename is sent only once they are done (FB-36).
+    void this.openFiles.flushAll();
     const own = this.ownChangeWhile(path);
     const renamed = await this.ask({
       mode: 'rename',
@@ -175,13 +181,17 @@ export class EntryCommandsService {
       path,
       entry,
       siblings: (await this.store.entries(parent))?.map(item => item.name) ?? [],
-      confirm: entry.kind === 'folder' ? () => this.confirmFolderRename(repositoryId, path) : undefined,
+      confirm: async () => {
+        await this.openFiles.flushAll();
+        return entry.kind !== 'folder' || this.confirmFolderRename(repositoryId, path);
+      },
       sending: own.sending
     });
     own.answered();
     if (!renamed) {
       return;
     }
+    this.openFiles.rekey(path, renamed.path);
     this.store.renamed(path, renamed.path);
     this.store.known(renamed.path, { ...entry, name: fileName(renamed.path) });
     this.firstFile.renamed(repositoryId, path, renamed.path);
@@ -216,6 +226,7 @@ export class EntryCommandsService {
     if (!confirmed) {
       return;
     }
+    this.openFiles.close(path, { dropPending: true });
     if (isWithin(this.route.snapshot.paramMap.get('path') ?? '', path)) {
       // The page shows the empty state for this navigation, not the README (FB-39).
       void this.router.navigate([ '/repositories', repositoryId ], { replaceUrl: true, state: { closed: true } });
