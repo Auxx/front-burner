@@ -69,7 +69,11 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   - The editor's lazy chunk was 224 KB gzipped, a large share of it the HTML,
     CSS and JavaScript languages that `@codemirror/lang-markdown` always pulls
     in for embedded HTML. NF-2.2 on slow 4G needs it trimmed: no `basicSetup`,
-    only the extensions used.
+    only the extensions used. Trimmed so, the repository screen's editor pane
+    chunk, loaded with `@defer`, is 163 KB gzipped (estimated transfer size of
+    `nx build web`, 2026-10-29), and the initial bundle 108 KB (NF-2.9). A 100
+    KB file is editable within 2 s on slow 4G with the chunk not cached
+    (`apps/web-e2e/src/editor.spec.ts`, AC-EDIT-001.2).
   - On a real phone (spike 3, rounds 2 and 3), typing in a 1 MB file was too
     slow with highlighting and as fast as in a 2 KB file without it; soft wrap,
     spell check and per-line text direction made no difference. So on narrow
