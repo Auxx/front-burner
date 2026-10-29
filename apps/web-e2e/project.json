@@ -4,14 +4,29 @@
   "projectType": "application",
   "sourceRoot": "apps/web-e2e/src",
   "implicitDependencies": [
-    "web"
+    "web",
+    "server"
   ],
   "targets": {
     "e2e": {
       "executor": "nx:run-commands",
-      "cache": false,
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production",
+        {
+          "dependentTasksOutputFiles": "**/*",
+          "transitive": true
+        },
+        {
+          "runtime": "node --version"
+        },
+        {
+          "env": "E2E_BROWSERS"
+        }
+      ],
       "dependsOn": [
-        "web:build:production",
+        "web:build",
         "server:build"
       ],
       "options": {

@@ -13,7 +13,18 @@
   "targets": {
     "e2e": {
       "executor": "nx:run-commands",
-      "cache": false,
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production",
+        {
+          "dependentTasksOutputFiles": "**/*",
+          "transitive": true
+        },
+        {
+          "runtime": "node --version"
+        }
+      ],
       "dependsOn": [
         "server:build"
       ],

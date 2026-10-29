@@ -7,6 +7,14 @@ inputs:
   targets:
     description: Comma-separated Nx targets that run in a browser.
     required: true
+  projects:
+    description: Comma-separated Nx projects to look at; all when empty.
+    default: ''
+
+outputs:
+  needed:
+    description: Whether a project is affected, as 'true' or 'false'.
+    value: ${{ steps.browsers.outputs.needed }}
 
 runs:
   using: composite
@@ -15,7 +23,9 @@ runs:
       id: browsers
       shell: bash
       run: |
-        affected=$(npx nx show projects --affected -t ${{ inputs.targets }} --json)
+        filter=()
+        if [ -n "${{ inputs.projects }}" ]; then filter=(-p "${{ inputs.projects }}"); fi
+        affected=$(npx nx show projects --affected -t ${{ inputs.targets }} "${filter[@]}" --json)
         echo "Affected by ${{ inputs.targets }}: $affected"
         needed=false
         if [ "$affected" != "[]" ]; then needed=true; fi

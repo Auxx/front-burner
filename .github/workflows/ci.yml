@@ -74,9 +74,8 @@ jobs:
       - name: Test
         run: npx nx affected -t test --parallel=1
 
-  # End-to-end tests run against the builds, so they share a job.
   build:
-    name: Build, end-to-end tests
+    name: Build
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -90,16 +89,8 @@ jobs:
         with:
           nx-cache: build
 
-      # Here end-to-end tests run in Chromium alone, as its headless shell;
-      # nightly.yml runs every browser (NF-12.2).
-      - uses: ./.github/actions/playwright
-        with:
-          targets: e2e
-
-      - name: Build, end-to-end tests
-        run: npx nx affected -t build size-check e2e --parallel=3
-        env:
-          E2E_BROWSERS: chromium
+      - name: Build
+        run: npx nx affected -t build size-check --parallel=3
 
       # The OpenAPI document and the web client generated from it are
       # committed; regenerating must change nothing (A-3.7).
@@ -114,6 +105,62 @@ jobs:
             git diff -- $paths
             exit 1
           fi
+
+  # End-to-end tests build what they test themselves, from the job's Nx cache
+  # when it has the builds; the browser tests (web-e2e) are split into shards.
+  server-e2e:
+    name: API end-to-end tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          nx-cache: server-e2e
+
+      - name: API end-to-end tests
+        run: npx nx affected -t e2e --exclude=web-e2e --parallel=3
+
+  web-e2e:
+    name: Browser end-to-end tests (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      # Every shard reports its own failures.
+      fail-fast: false
+      matrix:
+        shard: [ 1, 2, 3 ]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          nx-cache: web-e2e-${{ matrix.shard }}
+
+      # Here end-to-end tests run in Chromium alone, as its headless shell;
+      # nightly.yml runs every browser (NF-12.2).
+      - id: playwright
+        uses: ./.github/actions/playwright
+        with:
+          targets: e2e
+          projects: web-e2e
+
+      # The shard is part of the task's cache key, so each shard has its own
+      # cache entry.
+      - name: Browser end-to-end tests
+        if: steps.playwright.outputs.needed == 'true'
+        run: npx nx run web-e2e:e2e --shard=${{ matrix.shard }}/3
+        env:
+          E2E_BROWSERS: chromium
 
   # Storybook stories run as browser tests (A-10.38), in Chromium alone.
   storybook:
