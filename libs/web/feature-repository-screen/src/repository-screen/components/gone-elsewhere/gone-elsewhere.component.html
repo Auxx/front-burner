@@ -1,0 +1,22 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.GoneElsewhereComponent'">
+  @if (exists()) {
+    <ui-inline-banner status="warning" announce>{{ t('exists') }}</ui-inline-banner>
+  } @else {
+    <!-- A banner of its own for each message, so that each is announced. -->
+    @if (failure(); as failure) {
+      <ui-inline-banner status="danger" announce>
+        {{ t('failed') }} {{ failure }}
+        <div uiBannerActions>
+          <button uiButton size="small" variant="primary" (click)="recreate.emit()">{{ t('recreate') }}</button>
+        </div>
+      </ui-inline-banner>
+    } @else {
+      <ui-inline-banner status="warning" announce>
+        {{ t('message') }}
+        <div uiBannerActions>
+          <button uiButton size="small" variant="primary" (click)="recreate.emit()">{{ t('recreate') }}</button>
+        </div>
+      </ui-inline-banner>
+    }
+  }
+</ng-container>

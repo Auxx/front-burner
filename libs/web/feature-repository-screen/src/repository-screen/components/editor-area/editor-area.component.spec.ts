@@ -5,6 +5,7 @@ import { entry } from '../../../testing/listings';
 import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { EditorAreaComponent } from './editor-area.component';
 
@@ -28,7 +29,7 @@ describe('EditorAreaComponent', () => {
   beforeEach(async () => {
     TestBed.configureTestingModule({
       imports: [ EditorAreaComponent, translocoTesting() ],
-      providers: [ { provide: OpenFilesService, useValue: {} } ]
+      providers: [ { provide: OpenFilesService, useValue: {} }, { provide: DiskChangesService, useValue: {} } ]
     });
     fixture = TestBed.createComponent(EditorAreaComponent);
     await settle(fixture);

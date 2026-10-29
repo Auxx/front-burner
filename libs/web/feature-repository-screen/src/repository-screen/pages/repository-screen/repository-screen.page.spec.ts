@@ -11,10 +11,11 @@ import type {
   PushEvent,
   RepositorySummary
 } from '@front-burner/shared-contracts';
+import { ToastService } from '@front-burner/ui';
 import { FilesApi, RepositoriesApi } from '@front-burner/web-api-client';
 import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
-import { Observable, of, Subject, throwError } from 'rxjs';
+import { map, Observable, of, Subject, throwError } from 'rxjs';
 
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { entry, folder, listing } from '../../../testing/listings';
@@ -61,12 +62,15 @@ describe('RepositoryScreenPage', () => {
   let createEntry: ReturnType<typeof vi.fn>;
   let readFile: ReturnType<typeof vi.fn<(path: string) => Observable<FileContent>>>;
   let saveFile: ReturnType<typeof vi.fn>;
+  let recreateFile: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
   let events: Subject<PushEvent>;
   /** The folders listed, in order. */
   let listings: string[];
   let drafts: MemoryDraftStore;
+  /** The files `fileState` does not find. */
+  let gone: Set<string>;
 
   const page = () => harness.fixture.nativeElement as HTMLElement;
   const button = (text: string) =>
@@ -90,7 +94,12 @@ describe('RepositoryScreenPage', () => {
             createEntry,
             isIgnored: () => of({ ignored: false }),
             readFile: (_id: number, query: { path: string; }) => readFile(query.path),
-            saveFile
+            fileState: (_id: number, query: { path: string; }) =>
+              gone.has(query.path)
+                ? failure(404, 'entry-not-found')
+                : readFile(query.path).pipe(map(({ hash, size }) => ({ hash, size }))),
+            saveFile,
+            recreateFile
           }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
@@ -137,7 +146,9 @@ describe('RepositoryScreenPage', () => {
     open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
     createEntry = vi.fn((_id: number, request: { name: string; }) => of({ path: `${request.name}.md` }));
     readFile = vi.fn((path: string) => of(fileContent(path)));
+    gone = new Set();
     saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
+    recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
     document.title = '';
   });
 
@@ -388,6 +399,7 @@ describe('RepositoryScreenPage', () => {
       const GONE = 'web-feature-repository-screen.EditorAreaComponent.goneElsewhere';
 
       folders['docs'] = listing('docs', [ entry('other.md') ]);
+      gone.add('docs/guide.md');
       events.next({ type: 'files.changed', repositoryId: 12, folders: [ 'docs' ] });
       await settle(harness.fixture);
       await settle(harness.fixture);
@@ -766,6 +778,104 @@ describe('RepositoryScreenPage', () => {
       await settle(harness.fixture);
 
       expect(document.title).toBe('README.md · handbook · Front Burner');
+    });
+
+    describe('changes on disk (ED-21, ED-24)', () => {
+      const THEIRS = 'c'.repeat(64);
+      const editorText = () => page().querySelector('rs-editor-pane .cm-content')?.textContent ?? '';
+      const toasts = () => TestBed.inject(ToastService).toasts().map(toast => toast.message);
+      const button = (text: string) =>
+        [ ...page().querySelectorAll<HTMLButtonElement>('rs-editor-pane button') ].find(element =>
+          element.textContent?.trim() === text
+        );
+
+      function changedElsewhere(): void {
+        readFile.mockImplementation(path => of(fileContent(path, { content: 'Theirs.\n', hash: THEIRS })));
+        events.next({
+          type: 'files.changed',
+          repositoryId: 12,
+          folders: [ '' ],
+          files: [ { path: 'README.md', hash: THEIRS } ]
+        });
+      }
+
+      it('AC-EDIT-001.12: updates the editor after a change elsewhere and says so', async () => {
+        await visit('/repositories/12/files/README.md');
+
+        changedElsewhere();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(editorText()).toContain('Theirs.');
+        expect(toasts()).toEqual([ 'web-feature-repository-screen.DiskChangesService.updated' ]);
+      });
+
+      it('AC-EDIT-001.12: asks with unsaved edits, and Reload loads the change', async () => {
+        saveFile.mockReturnValue(new Subject());
+        await visit('/repositories/12/files/README.md');
+        typeAtEnd('Mine.\n');
+
+        changedElsewhere();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(editorText()).toContain('Mine.');
+        expect(status()).toBe(`${STATUS}.notSaved`);
+        expect(toasts()).toEqual([]);
+        button('web-feature-repository-screen.ChangedOnDiskComponent.reload')?.click();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(editorText()).toContain('Theirs.');
+        expect(editorText()).not.toContain('Mine.');
+        expect(status()).toBe(`${STATUS}.saved`);
+        expect(page().querySelector('rs-changed-on-disk')).toBeNull();
+        expect(saveFile).not.toHaveBeenCalled();
+      });
+
+      it('AC-FILE-001.21: keeps unsaved edits of a file deleted elsewhere and offers Recreate it', async () => {
+        saveFile.mockReturnValue(new Subject());
+        await visit('/repositories/12/files/README.md');
+        typeAtEnd('Mine.\n');
+
+        gone.add('README.md');
+        folders[''] = listing('', [ folder('docs') ]);
+        events.next({ type: 'files.changed', repositoryId: 12, folders: [ '' ] });
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(editorText()).toContain('Mine.');
+        expect(page().querySelector('rs-editor-area')?.textContent).not.toContain(
+          'web-feature-repository-screen.EditorAreaComponent.goneElsewhere'
+        );
+        expect(page().querySelector('rs-gone-elsewhere')).not.toBeNull();
+        expect(status()).toBe(`${STATUS}.notSaved`);
+
+        button('web-feature-repository-screen.GoneElsewhereComponent.recreate')?.click();
+        await settle(harness.fixture);
+
+        expect(recreateFile).toHaveBeenCalledWith(
+          12,
+          expect.objectContaining({
+            path: 'README.md',
+            content: '# README.md\nMine.\n'
+          })
+        );
+        expect(page().querySelector('rs-gone-elsewhere')).toBeNull();
+        expect(status()).toBe(`${STATUS}.saved`);
+      });
+
+      it('checks a file opened again for changes made while another was open', async () => {
+        await visit('/repositories/12/files/README.md');
+        await go('/repositories/12/files/docs/guide.md');
+        readFile.mockImplementation(path => of(fileContent(path, { content: 'Theirs.\n', hash: THEIRS })));
+        gone.clear();
+
+        await go('/repositories/12/files/README.md');
+        await settle(harness.fixture);
+
+        expect(editorText()).toContain('Theirs.');
+      });
     });
   });
 });

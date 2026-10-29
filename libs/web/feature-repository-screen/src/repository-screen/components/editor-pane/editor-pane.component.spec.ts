@@ -1,10 +1,17 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { undo, undoDepth } from '@codemirror/commands';
-import { contentOf, type EditorStateChange, isHighlighting } from '@front-burner/web-code-editor';
+import {
+  CodeEditorComponent,
+  contentOf,
+  cursorOf,
+  type EditorStateChange,
+  isHighlighting
+} from '@front-burner/web-code-editor';
 
 import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { type OpenFile, OpenFilesService } from '../../services/open-files/open-files.service';
 import { EditorPaneComponent } from './editor-pane.component';
 
@@ -14,7 +21,14 @@ type EditorState = EditorStateChange['state'];
 
 describe('EditorPaneComponent', () => {
   let fixture: ComponentFixture<EditorPaneComponent>;
-  let openFiles: { restoreDraft: ReturnType<typeof vi.fn>; discardDraft: ReturnType<typeof vi.fn>; };
+  let notice: ReturnType<typeof vi.fn>;
+  let openFiles: {
+    restoreDraft: ReturnType<typeof vi.fn>;
+    discardDraft: ReturnType<typeof vi.fn>;
+    reload: ReturnType<typeof vi.fn>;
+    keepMine: ReturnType<typeof vi.fn>;
+    recreate: ReturnType<typeof vi.fn>;
+  };
 
   const pane = () => fixture.nativeElement as HTMLElement;
   const stateOf = (file: OpenFile) => file.editorState as EditorState;
@@ -48,11 +62,18 @@ describe('EditorPaneComponent', () => {
           file.saver.edit(apply(draft.content));
         }
       }),
-      discardDraft: vi.fn(() => fixture.componentInstance.file().draft.set(null))
+      discardDraft: vi.fn(() => fixture.componentInstance.file().draft.set(null)),
+      reload: vi.fn(async () => true),
+      keepMine: vi.fn(() => fixture.componentInstance.file().changed.set(null)),
+      recreate: vi.fn(async () => fixture.componentInstance.file().gone.set(false))
     };
+    notice = vi.fn();
     TestBed.configureTestingModule({
       imports: [ EditorPaneComponent, translocoTesting() ],
-      providers: [ { provide: OpenFilesService, useValue: openFiles } ]
+      providers: [
+        { provide: OpenFilesService, useValue: openFiles },
+        { provide: DiskChangesService, useValue: { notice } }
+      ]
     });
     fixture = TestBed.createComponent(EditorPaneComponent);
   });
@@ -214,6 +235,159 @@ describe('EditorPaneComponent', () => {
       expect(contentOf(stateOf(file))).toBe(DISK);
       expect(stateOf(file).readOnly).toBe(false);
       expect(pane().querySelector('rs-draft-offer')).toBeNull();
+    });
+  });
+
+  describe('changes on disk (ED-21, ED-24)', () => {
+    const MINE = 'one\ntwo\nthree\n';
+
+    /** As `OpenFilesService.reload` does: the file is loaded again with `text`. */
+    function reloadWith(file: OpenFile, text: string): void {
+      file.file = { ...file.file, content: text };
+      file.revision.update(revision => revision + 1);
+    }
+
+    function editorComponent(): CodeEditorComponent {
+      return fixture.debugElement.query(element => element.name === 'ce-code-editor').componentInstance;
+    }
+
+    it('AC-EDIT-001.12: shows the new content when the file is reloaded', async () => {
+      const file = openFile('README.md', { content: MINE });
+      await show(file);
+
+      reloadWith(file, 'theirs\n');
+      await settle(fixture);
+
+      expect(contentOf(stateOf(file))).toBe('theirs\n');
+      expect(content().textContent).toContain('theirs');
+      expect(stateOf(file).readOnly).toBe(false);
+    });
+
+    it('keeps the cursor and scroll line on reload', async () => {
+      const file = openFile('README.md', { content: MINE });
+      await show(file);
+      const editor = editorComponent();
+      vi.spyOn(editor, 'topLine').mockReturnValue(2);
+      const scrolled = vi.spyOn(editor, 'scrollToLine');
+      editor.stateChange.emit({
+        state: stateOf(file).update({ selection: { anchor: 6 } }).state,
+        docChanged: false
+      });
+
+      reloadWith(file, 'one\nt\nthree, changed\n');
+      await settle(fixture);
+
+      expect(cursorOf(stateOf(file))).toEqual({ line: 2, column: 2 });
+      expect(scrolled).toHaveBeenCalledWith(2);
+    });
+
+    it('clears the undo history on reload', async () => {
+      const file = openFile('README.md', { content: MINE });
+      await show(file);
+      typeAtEnd('more');
+      expect(undoDepth(stateOf(file))).toBe(1);
+
+      reloadWith(file, 'theirs\n');
+      await settle(fixture);
+
+      expect(undoDepth(stateOf(file))).toBe(0);
+    });
+
+    it('AC-EDIT-001.12: asks with unsaved edits, and Reload discards them', async () => {
+      const file = openFile('README.md', { content: MINE });
+      await show(file);
+      file.changed.set('b'.repeat(64));
+      await settle(fixture);
+
+      expect(pane().querySelector('rs-changed-on-disk')?.textContent).toContain(
+        'web-feature-repository-screen.ChangedOnDiskComponent.message'
+      );
+      // Nothing is saved until the user chooses, so nothing is typed meanwhile.
+      expect(stateOf(file).readOnly).toBe(true);
+      button('web-feature-repository-screen.ChangedOnDiskComponent.reload')?.click();
+
+      expect(openFiles.reload).toHaveBeenCalledWith('README.md', { discard: true });
+    });
+
+    it('keeps mine with the editor\'s content', async () => {
+      const file = openFile('README.md', { content: MINE });
+      await show(file);
+      typeAtEnd('mine');
+      file.changed.set('b'.repeat(64));
+      await settle(fixture);
+
+      button('web-feature-repository-screen.ChangedOnDiskComponent.keepMine')?.click();
+      await settle(fixture);
+
+      const [ path, read ] = openFiles.keepMine.mock.calls[0] as [ string, () => string ];
+      expect(path).toBe('README.md');
+      expect(read()).toBe(`${MINE}mine`);
+      expect(pane().querySelector('rs-changed-on-disk')).toBeNull();
+    });
+
+    it('AC-EDIT-001.11: keeps a file gone elsewhere read-only with Recreate it', async () => {
+      const file = openFile('README.md', { content: MINE });
+      await show(file);
+      typeAtEnd('mine');
+      file.gone.set(true);
+      await settle(fixture);
+
+      expect(stateOf(file).readOnly).toBe(true);
+      expect(contentOf(stateOf(file))).toBe(`${MINE}mine`);
+      expect(pane().querySelector('rs-gone-elsewhere')?.textContent).toContain(
+        'web-feature-repository-screen.GoneElsewhereComponent.message'
+      );
+
+      button('web-feature-repository-screen.GoneElsewhereComponent.recreate')?.click();
+      await settle(fixture);
+
+      const [ path, read ] = openFiles.recreate.mock.calls[0] as [ string, () => string ];
+      expect(path).toBe('README.md');
+      expect(read()).toBe(`${MINE}mine`);
+      expect(stateOf(file).readOnly).toBe(false);
+      expect(undoDepth(stateOf(file))).toBe(1);
+      expect(pane().querySelector('rs-gone-elsewhere')).toBeNull();
+    });
+
+    it('starts a file reloaded while another was shown at the top', async () => {
+      const file = openFile('README.md', { content: MINE });
+      const other = openFile('docs/guide.md');
+      await show(file);
+      await show(other);
+      const scrolled = vi.spyOn(editorComponent(), 'scrollToLine');
+
+      reloadWith(file, 'theirs\n');
+      await show(file);
+
+      expect(contentOf(stateOf(file))).toBe('theirs\n');
+      expect(scrolled).not.toHaveBeenCalled();
+    });
+
+    it('builds a file reloaded while no pane was there', async () => {
+      const file = openFile('README.md', { content: MINE });
+      await show(file);
+      fixture.destroy();
+      reloadWith(file, 'theirs\n');
+      fixture = TestBed.createComponent(EditorPaneComponent);
+
+      await show(file);
+
+      expect(content().textContent).toContain('theirs');
+    });
+
+    it('checks the file again when Recreate it finds it there again', async () => {
+      const file = openFile('README.md', { content: MINE });
+      openFiles.recreate.mockImplementation(async () =>
+        file.recreateError.set({ code: 'entry-exists', params: {}, requestId: 'r1', message: 'entry-exists' })
+      );
+      await show(file);
+      file.gone.set(true);
+      await settle(fixture);
+
+      button('web-feature-repository-screen.GoneElsewhereComponent.recreate')?.click();
+      await settle(fixture);
+
+      expect(notice).toHaveBeenCalledWith('README.md');
     });
   });
 });

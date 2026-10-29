@@ -9,6 +9,12 @@ export function parentPath(path: string): string {
   return slash === -1 ? '' : path.slice(0, slash);
 }
 
+/** The folders that lead to `path`, from the root: `''`, `docs` and `docs/api` for `docs/api/index.md`. */
+export function ancestors(path: string): string[] {
+  const parts = path.split('/').slice(0, -1);
+  return [ '', ...parts.map((_, index) => parts.slice(0, index + 1).join('/')) ];
+}
+
 /** The path of `name` in `folder`; the root folder is `''`. */
 export function joinPath(folder: string, name: string): string {
   return folder === '' ? name : `${folder}/${name}`;

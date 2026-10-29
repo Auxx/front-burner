@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import type { Locator, Page } from '@playwright/test';
+import type { Browser, Locator, Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,6 +18,10 @@ const OFFLINE = 'Not saved — offline, retrying';
 const TOO_LARGE = 'Not saved — the file is larger than 1 MB';
 const DRAFT_OFFER = /You have unsaved changes from /;
 const LARGE_NOTE = 'Highlighting is off for large files on small screens, to keep typing fast.';
+const NOT_SAVED = 'Not saved';
+const UPDATED = 'This file was updated.';
+const CHANGED = 'This file changed while you were editing.';
+const GONE_ELSEWHERE = 'This file was deleted or renamed elsewhere.';
 
 const filesButton = (page: Page) => page.getByRole('banner').getByRole('button', { name: 'Files', exact: true });
 const tree = (page: Page) => page.getByRole('region', { name: 'Files', exact: true });
@@ -31,6 +35,8 @@ const entry = (page: Page, name: string) =>
     name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},`)
   });
 const dialog = (page: Page) => page.getByRole('dialog');
+/** The toasts, without the live region that announces them. */
+const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
 
 /** Seeds `handbook` and the files of `extra` in its working copy; returns its ID and its working copy. */
 function seedHandbook(
@@ -129,6 +135,29 @@ async function typeUnsaved(page: Page, repositoryId: number, name: string, text:
   await expect.poll(async () => Object.keys(await storedDrafts(page)).length).toBe(1);
 }
 
+/**
+ * Opens `url` on a second device: another browser, logged in as the same
+ * user, on a desktop. Closed with the returned function.
+ */
+async function otherDevice(
+  browser: Browser,
+  baseURL: string,
+  url: string
+): Promise<{ page: Page; close(): Promise<void>; }> {
+  const context = await browser.newContext({ baseURL });
+  const page = await context.newPage();
+  await openScreen(page, url);
+  return { page, close: () => context.close() };
+}
+
+/** Chooses `action` from the actions menu of the tree entry `name`. */
+async function entryAction(page: Page, name: string, action: string, isMobile: boolean): Promise<void> {
+  await showTree(page);
+  await press(page, entry(page, name).getByRole('button', { name: `Actions for ${name}` }), isMobile);
+  await press(page, page.getByRole('menuitem', { name: action, exact: true }), isMobile);
+  await expect(dialog(page)).toBeVisible();
+}
+
 /** Selects the entry `name` in the tree, as a user opens a file. */
 async function select(page: Page, name: string, isMobile: boolean): Promise<void> {
   await showTree(page);
@@ -138,6 +167,8 @@ async function select(page: Page, name: string, isMobile: boolean): Promise<void
 /** The console errors of saves and pushes that failed while offline or were refused, which the test expects. */
 function drainSaves(monitor: Monitor, repositoryId: number): void {
   drainFailedRequests(monitor, `/api/v1/repositories/${repositoryId}/file`);
+  // Checking a file deleted elsewhere (ED-21).
+  drainFailedRequests(monitor, `/api/v1/repositories/${repositoryId}/file/state`);
   drainFailedRequests(monitor, '/api/v1/events');
 }
 
@@ -449,6 +480,139 @@ test.describe('editor', () => {
       const results = await new AxeBuilder({ page }).exclude('ui-split-pane > .divider').analyze();
 
       expect(results.violations).toEqual([]);
+      drainSaves(monitor, id);
+    });
+  });
+
+  test.describe('changes on disk', () => {
+    test('AC-EDIT-001.12: updates the editor after a change elsewhere, and asks with unsaved edits', async ({ page, browser, instance, monitor }) => {
+      const { id, dir } = seedHandbook(instance.dataDir);
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await expect(editor(page, 'README.md')).toHaveText('# Handbook');
+      const other = await otherDevice(browser, instance.url, `/repositories/${id}/files/README.md`);
+      try {
+        // No unsaved edits: the editor follows.
+        await typeAtEnd(other.page, 'README.md', 'Theirs.');
+        await expect(status(other.page)).toHaveText(SAVED);
+        await expect(toasts(page).getByText(UPDATED)).toBeVisible();
+        await expect(editor(page, 'README.md')).toContainText('Theirs.');
+
+        // Unsaved edits, then Keep mine.
+        await typeUnsaved(page, id, 'README.md', ' Mine.');
+        await typeAtEnd(other.page, 'README.md', ' Again.');
+        await expect(status(other.page)).toHaveText(SAVED);
+        await expect(main(page).getByText(CHANGED)).toBeVisible();
+        await expect(status(page)).toHaveText(NOT_SAVED);
+        await expect(editor(page, 'README.md')).toContainText('Mine.');
+        const results = await new AxeBuilder({ page }).exclude('ui-split-pane > .divider').analyze();
+        expect(results.violations).toEqual([]);
+        await page.unroute(`**/api/v1/repositories/${id}/file`);
+        await main(page).getByRole('button', { name: 'Keep mine', exact: true }).click();
+        await expect(main(page).getByText(CHANGED)).toBeHidden();
+        await expect(status(page)).toHaveText(SAVED);
+        expect(onDisk(dir, 'README.md')).toBe('# Handbook\nTheirs. Mine.');
+        await expect.poll(() => storedDrafts(page)).toEqual({});
+
+        // Unsaved edits, then Reload.
+        await typeUnsaved(page, id, 'README.md', ' Lost.');
+        await other.page.reload();
+        await typeAtEnd(other.page, 'README.md', ' Kept.');
+        await expect(status(other.page)).toHaveText(SAVED);
+        await expect(main(page).getByText(CHANGED)).toBeVisible();
+        await main(page).getByRole('button', { name: 'Reload', exact: true }).click();
+        await expect(main(page).getByText(CHANGED)).toBeHidden();
+        await expect(editor(page, 'README.md')).toHaveText('# HandbookTheirs. Mine. Kept.');
+        await expect(status(page)).toHaveText(SAVED);
+        await expect.poll(() => storedDrafts(page)).toEqual({});
+        await page.unroute(`**/api/v1/repositories/${id}/file`);
+        expect(onDisk(dir, 'README.md')).toBe('# Handbook\nTheirs. Mine. Kept.');
+      } finally {
+        await other.close();
+      }
+      drainSaves(monitor, id);
+    });
+
+    test('never shows either notice for the user\'s own saves', async ({ page, instance }) => {
+      const { id, dir } = seedHandbook(instance.dataDir);
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await expect(status(page)).toHaveText(SAVED);
+
+      // Over 10 s of typing, with a save after every word, each event coming
+      // back while the next word is typed.
+      for (let word = 0; word < 8; word++) {
+        await typeAtEnd(page, 'README.md', ` word${word}`);
+        await expect(status(page)).toHaveText(SAVING);
+        await expect(status(page)).toHaveText(SAVED);
+      }
+
+      // A notice would still be shown: the toast stays for 6 s, the question until answered.
+      await expect(toasts(page).getByText(UPDATED)).toHaveCount(0);
+      await expect(main(page).getByText(CHANGED)).toHaveCount(0);
+      expect(onDisk(dir, 'README.md')).toBe(
+        `# Handbook\n${[ 0, 1, 2, 3, 4, 5, 6, 7 ].map(word => ` word${word}`).join('')}`
+      );
+    });
+
+    test('AC-EDIT-001.11: offers Recreate it after the file was deleted on another device', async ({ page, browser, instance, monitor, isMobile }) => {
+      const { id, dir } = seedHandbook(instance.dataDir);
+      // No events reach this device, so that the next save finds the file gone.
+      await page.route('**/api/v1/events**', route => route.abort('internetdisconnected'));
+      await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
+      await expect(editor(page, 'guide.md')).toHaveText('# Guide');
+      const other = await otherDevice(browser, instance.url, `/repositories/${id}/files/docs/guide.md`);
+      try {
+        await entryAction(other.page, 'guide.md', 'Delete', false);
+        await other.page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+        await expect(other.page.getByRole('dialog')).toBeHidden();
+      } finally {
+        await other.close();
+      }
+      expect(existsSync(join(dir, 'docs/guide.md'))).toBe(false);
+
+      await typeAtEnd(page, 'guide.md', 'Mine.');
+
+      await expect(main(page).getByText(GONE_ELSEWHERE)).toBeVisible();
+      await expect(status(page)).toHaveText(NOT_SAVED);
+      await expect(editor(page, 'guide.md')).toHaveAttribute('contenteditable', 'false');
+      await press(page, main(page).getByRole('button', { name: 'Recreate it', exact: true }), isMobile);
+
+      await expect(main(page).getByText(GONE_ELSEWHERE)).toBeHidden();
+      await expect(status(page)).toHaveText(SAVED);
+      expect(onDisk(dir, 'docs/guide.md')).toBe('# Guide\nMine.');
+      await expect(editor(page, 'guide.md')).toHaveAttribute('contenteditable', 'true');
+      drainSaves(monitor, id);
+    });
+
+    test('AC-FILE-001.21: keeps unsaved edits of a file deleted on another device and offers Recreate it', async ({ page, browser, instance, monitor, isMobile }) => {
+      const { id, dir } = seedHandbook(instance.dataDir);
+      await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
+      await typeUnsaved(page, id, 'guide.md', 'Mine.');
+      const other = await otherDevice(browser, instance.url, `/repositories/${id}/files/docs/guide.md`);
+      try {
+        await entryAction(other.page, 'guide.md', 'Delete', false);
+        await other.page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+        await expect(other.page.getByRole('dialog')).toBeHidden();
+      } finally {
+        await other.close();
+      }
+
+      await expect(main(page).getByText(GONE_ELSEWHERE)).toBeVisible();
+      await expect(editor(page, 'guide.md')).toHaveText('# GuideMine.');
+      await expect(editor(page, 'guide.md')).toHaveAttribute('contenteditable', 'false');
+      await expect(status(page)).toHaveText(NOT_SAVED);
+      expect(Object.values(await storedDrafts(page))).toEqual([ '# Guide\nMine.' ]);
+      const results = await new AxeBuilder({ page }).exclude('ui-split-pane > .divider').analyze();
+      expect(results.violations).toEqual([]);
+
+      await page.unroute(`**/api/v1/repositories/${id}/file`);
+      await press(page, main(page).getByRole('button', { name: 'Recreate it', exact: true }), isMobile);
+
+      await expect(main(page).getByText(GONE_ELSEWHERE)).toBeHidden();
+      await expect(status(page)).toHaveText(SAVED);
+      expect(onDisk(dir, 'docs/guide.md')).toBe('# Guide\nMine.');
+      await expect.poll(() => storedDrafts(page)).toEqual({});
+      await showTree(page);
+      await expect(entry(page, 'guide.md')).toBeVisible();
       drainSaves(monitor, id);
     });
   });

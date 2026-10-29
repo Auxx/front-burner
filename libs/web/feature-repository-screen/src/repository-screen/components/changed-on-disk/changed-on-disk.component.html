@@ -1,0 +1,7 @@
+<ui-inline-banner *transloco="let t; prefix: 'web-feature-repository-screen.ChangedOnDiskComponent'" status="warning" announce>
+  {{ existsAgain() ? t('existsAgain') : t('message') }}
+  <div uiBannerActions>
+    <button uiButton size="small" (click)="reload.emit()">{{ t('reload') }}</button>
+    <button uiButton size="small" variant="primary" (click)="keepMine.emit()">{{ t('keepMine') }}</button>
+  </div>
+</ui-inline-banner>

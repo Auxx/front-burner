@@ -882,7 +882,7 @@ test.describe('repository screen', () => {
 test.describe('repository screen, kept up to date', () => {
   const GONE_ELSEWHERE = 'This file was deleted or renamed elsewhere.';
 
-  test('AC-FILE-001.21: shows a file created on another device and closes one deleted there', async ({ page, browser, instance, isMobile }) => {
+  test('AC-FILE-001.21: shows a file created on another device and closes one deleted there', async ({ page, browser, instance, isMobile, monitor }) => {
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
     await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
     await expect(editorOf(page, 'guide.md')).toBeVisible();
@@ -912,6 +912,8 @@ test.describe('repository screen, kept up to date', () => {
     } finally {
       await other.close();
     }
+    // The editor's check of the file gone elsewhere (ED-21).
+    drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/file/state`);
   });
 
   test.describe('with a git server', () => {

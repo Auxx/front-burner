@@ -15,7 +15,7 @@ import { BehaviorSubject, map, type Observable, of, Subject, throwError } from '
 import { apiError } from '../../../testing/dialog-testing';
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
-import { LARGE_FILE_ON_NARROW, OpenFilesService } from './open-files.service';
+import { LARGE_FILE_ON_NARROW, OpenFilesService, OWN_SAVE_MS } from './open-files.service';
 
 const HASH = 'a'.repeat(64);
 
@@ -32,6 +32,7 @@ describe('OpenFilesService', () => {
   let reads: Record<string, () => Observable<FileContent>>;
   let saves: { id: number; request: SaveFileRequest; answer: Subject<FileState>; }[];
   let drafts: MemoryDraftStore;
+  let recreates: { request: SaveFileRequest; answer: Subject<FileState>; }[];
 
   beforeEach(() => {
     drafts = new MemoryDraftStore();
@@ -39,6 +40,7 @@ describe('OpenFilesService', () => {
     repository = signal<RepositorySummary | null>({ id: 12 } as RepositorySummary);
     reads = {};
     saves = [];
+    recreates = [];
     TestBed.configureTestingModule({
       providers: [
         OpenFilesService,
@@ -52,6 +54,11 @@ describe('OpenFilesService', () => {
             saveFile: (id: number, request: SaveFileRequest) => {
               const answer = new Subject<FileState>();
               saves.push({ id, request, answer });
+              return answer;
+            },
+            recreateFile: (_id: number, request: SaveFileRequest) => {
+              const answer = new Subject<FileState>();
+              recreates.push({ request, answer });
               return answer;
             }
           }
@@ -416,6 +423,202 @@ describe('OpenFilesService', () => {
 
       expect(drafts.at('docs/other.md')).toBeUndefined();
       expect(drafts.at('guide/other.md')).toEqual(DRAFT);
+    });
+  });
+
+  describe('changes on disk (ED-21, ED-24)', () => {
+    const THEIRS = 'b'.repeat(64);
+    const key = { userId: 4, repositoryId: 12, path: 'README.md' };
+
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    async function answer(list: { answer: Subject<FileState>; }[], index: number, state: FileState): Promise<void> {
+      list[index].answer.next(state);
+      list[index].answer.complete();
+      await vi.advanceTimersByTimeAsync(0);
+    }
+
+    it('reloads a file without unsaved edits', async () => {
+      const file = await service.open('README.md');
+      reads['README.md'] = () => of(content('README.md', { content: 'theirs', hash: THEIRS, size: 6 }));
+
+      expect(await service.reload('README.md', { discard: false })).toBe(true);
+
+      expect(file.file.content).toBe('theirs');
+      expect(file.hash()).toBe(THEIRS);
+      expect(file.size).toBe(6);
+      expect(file.revision()).toBe(1);
+      expect(file.saver.lastSaved()).toEqual({ content: 'theirs', hash: THEIRS });
+    });
+
+    it('does not reload without discard when the user typed while it was read', async () => {
+      const file = await service.open('README.md');
+      const read = new Subject<FileContent>();
+      reads['README.md'] = () => read;
+      const reloading = service.reload('README.md', { discard: false });
+      file.saver.edit(() => 'typed');
+
+      read.next(content('README.md', { content: 'theirs', hash: THEIRS }));
+      read.complete();
+
+      expect(await reloading).toBe(false);
+      expect(file.revision()).toBe(0);
+      expect(file.saver.unsaved()).toBe(true);
+    });
+
+    it('marks a file gone when it cannot be read again', async () => {
+      const file = await service.open('README.md');
+      reads['README.md'] = () => throwError(() => apiError(404, 'entry-not-found'));
+
+      expect(await service.reload('README.md', { discard: false })).toBe(false);
+      expect(file.gone()).toBe(true);
+    });
+
+    it('waits for the user after a change with unsaved edits, and Reload discards them and their draft', async () => {
+      const file = await service.open('README.md');
+      file.saver.edit(() => 'mine');
+
+      service.changedOnDisk('README.md', THEIRS);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(saves).toHaveLength(0);
+      expect(drafts.at('README.md')?.content).toBe('mine');
+      expect(service.statusOf(file)).toMatchObject({ kind: 'refused', code: 'changed-on-disk' });
+
+      reads['README.md'] = () => of(content('README.md', { content: 'theirs', hash: THEIRS }));
+      await service.reload('README.md', { discard: true });
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(file.changed()).toBeNull();
+      expect(file.saver.unsaved()).toBe(false);
+      expect(file.file.content).toBe('theirs');
+      expect(saves).toHaveLength(0);
+      expect(drafts.at('README.md')).toBeUndefined();
+      expect(service.statusOf(file)).toEqual({ kind: 'saved' });
+    });
+
+    it('keeps mine and saves over the change', async () => {
+      const file = await service.open('README.md');
+      let text = 'mine';
+      file.saver.edit(() => text);
+      service.changedOnDisk('README.md', THEIRS);
+
+      text = 'mine, typed on';
+      service.keepMine('README.md', () => text);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(file.changed()).toBeNull();
+      expect(saves.map(save => save.request.content)).toEqual([ 'mine, typed on' ]);
+      await answer(saves, 0, { hash: 'c'.repeat(64), size: 14 });
+      expect(file.hash()).toBe('c'.repeat(64));
+      expect(file.saver.unsaved()).toBe(false);
+      expect(drafts.at('README.md')).toBeUndefined();
+    });
+
+    it('keeps mine also when it equals the content last saved', async () => {
+      const file = await service.open('README.md');
+      file.saver.edit(() => '# README.md');
+      service.changedOnDisk('README.md', THEIRS);
+
+      service.keepMine('README.md', () => '# README.md');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(saves.map(save => save.request.content)).toEqual([ '# README.md' ]);
+      expect(file.hash()).toBe(THEIRS);
+    });
+
+    it('tells when a save is refused because the file does not exist', async () => {
+      const missing: string[] = [];
+      service.missing.subscribe(path => missing.push(path));
+      const file = await service.open('README.md');
+      file.saver.edit(() => 'mine');
+      await vi.advanceTimersByTimeAsync(1500);
+
+      saves[0].answer.error(apiError(404, 'entry-not-found'));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(missing).toEqual([ 'README.md' ]);
+    });
+
+    it('closes a file gone elsewhere without unsaved edits, and reads it again when it is opened', async () => {
+      const file = await service.open('README.md');
+
+      service.markGone('README.md');
+      expect(file.gone()).toBe(true);
+
+      const again = await service.open('README.md');
+      expect(again).not.toBe(file);
+      expect(again.gone()).toBe(false);
+    });
+
+    it('stops saving while the file is gone', async () => {
+      const file = await service.open('README.md');
+      file.saver.edit(() => 'mine');
+
+      service.markGone('README.md');
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(saves).toHaveLength(0);
+      expect(service.statusOf(file)).toMatchObject({ kind: 'refused' });
+      expect(await service.open('README.md')).toBe(file);
+    });
+
+    it('keeps the draft until the recreate is confirmed', async () => {
+      const file = await service.open('README.md');
+      file.saver.edit(() => 'mine');
+      service.markGone('README.md');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(drafts.at('README.md')?.content).toBe('mine');
+
+      const recreating = service.recreate('README.md', () => 'mine');
+      expect(recreates[0].request).toEqual({ path: 'README.md', content: 'mine', lineEnding: 'lf', bom: false });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(drafts.at('README.md')?.content).toBe('mine');
+
+      await answer(recreates, 0, { hash: 'c'.repeat(64), size: 4 });
+      await recreating;
+      expect(file.gone()).toBe(false);
+      expect(file.hash()).toBe('c'.repeat(64));
+      expect(file.saver.unsaved()).toBe(false);
+      expect(drafts.at('README.md')).toBeUndefined();
+
+      file.saver.edit(() => 'mine again');
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(saves.map(save => save.request.content)).toEqual([ 'mine again' ]);
+    });
+
+    it('keeps the content when the file exists again', async () => {
+      const file = await service.open('README.md');
+      file.saver.edit(() => 'mine');
+      service.markGone('README.md');
+      await vi.advanceTimersByTimeAsync(0);
+
+      const recreating = service.recreate('README.md', () => 'mine');
+      recreates[0].answer.error(apiError(409, 'entry-exists'));
+      await recreating;
+
+      expect(file.gone()).toBe(true);
+      expect(file.recreateError()?.code).toBe('entry-exists');
+      expect(file.saver.unsaved()).toBe(true);
+      expect(await drafts.get(key)).toMatchObject({ content: 'mine' });
+    });
+
+    it('counts the hashes of its recent saves as its own', async () => {
+      const file = await service.open('README.md');
+      file.saver.edit(() => 'one');
+      await vi.advanceTimersByTimeAsync(1500);
+      await answer(saves, 0, { hash: 'c'.repeat(64), size: 3 });
+      file.saver.edit(() => 'two');
+      await vi.advanceTimersByTimeAsync(1500);
+      await answer(saves, 1, { hash: 'd'.repeat(64), size: 3 });
+
+      expect(service.isOwnSave(file, 'c'.repeat(64))).toBe(true);
+      expect(service.isOwnSave(file, 'd'.repeat(64))).toBe(true);
+      expect(service.isOwnSave(file, THEIRS)).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(OWN_SAVE_MS + 1);
+      expect(service.isOwnSave(file, 'c'.repeat(64))).toBe(false);
+      expect(service.isOwnSave(file, 'd'.repeat(64))).toBe(true);
     });
   });
 });
