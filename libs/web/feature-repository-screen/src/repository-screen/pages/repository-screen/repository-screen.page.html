@@ -53,6 +53,7 @@
           [user]="user()"
           [narrow]="shell.narrow()"
           [filesOpen]="shell.narrow() ? drawerOpen() : panes.sideOpen()"
+          [saveStatus]="openFiles.current()?.saver?.status() ?? null"
           (toggleFiles)="toggleFiles(shell.narrow())"
         />
         <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')" [attr.aria-label]="t('files')">
@@ -66,9 +67,12 @@
         <rs-editor-area
           [path]="openPath()"
           [entry]="openEntry()"
+          [file]="openFiles.current()"
+          [openError]="openError()"
           [goneElsewhere]="goneElsewhere()"
           (newFile)="runAction('new-file', '')"
           (action)="runAction($event, openPath() ?? '')"
+          (retryOpen)="retryOpen()"
         />
       </ui-app-shell>
     }

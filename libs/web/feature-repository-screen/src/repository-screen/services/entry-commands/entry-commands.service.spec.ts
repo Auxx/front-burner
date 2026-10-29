@@ -1,3 +1,5 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
@@ -6,8 +8,10 @@ import type {
   CurrentUser,
   EntryPath,
   EntrySummary,
+  FileState,
   FolderListing,
-  RenameEntryRequest
+  RenameEntryRequest,
+  SaveFileRequest
 } from '@front-burner/shared-contracts';
 import { DialogService } from '@front-burner/ui';
 import { FilesApi } from '@front-burner/web-api-client';
@@ -16,9 +20,11 @@ import { type Observable, of, Subject, throwError } from 'rxjs';
 
 import { apiError, dialogButton, nameInput, overlay, settleDialog, type } from '../../../testing/dialog-testing';
 import { entry, folder, listing } from '../../../testing/listings';
+import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../first-file/first-file.service';
+import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 import { EntryCommandsService, OWN_CHANGE_MS } from './entry-commands.service';
 
@@ -45,6 +51,10 @@ describe('EntryCommandsService', () => {
   let navigate: ReturnType<typeof vi.fn>;
   let commands: EntryCommandsService;
   let store: FileTreeStoreService;
+  let openFiles: OpenFilesService;
+  /** The requests that change files, in order. */
+  let requests: string[];
+  let saveAnswer: () => Observable<FileState>;
 
   /** Runs a command while the user answers its dialogs with `answer`. */
   async function run(
@@ -71,6 +81,8 @@ describe('EntryCommandsService', () => {
     summaryAnswer = () => of(summary);
     deleted = [];
     deleteAnswer = () => of(undefined);
+    requests = [];
+    saveAnswer = () => of({ hash: 'b'.repeat(64), size: 10 });
     renameAnswer = request => {
       const slash = request.path.lastIndexOf('/');
       return of({ path: slash === -1 ? request.name : `${request.path.slice(0, slash)}/${request.name}` });
@@ -117,6 +129,7 @@ describe('EntryCommandsService', () => {
             },
             renameEntry: (_id: number, request: RenameEntryRequest) => {
               renamed.push(request);
+              requests.push(`rename ${request.path}`);
               return renameAnswer(request);
             },
             entrySummary: () => summaryAnswer(),
@@ -124,11 +137,22 @@ describe('EntryCommandsService', () => {
               deleted.push(query.path);
               return deleteAnswer();
             },
-            isIgnored: () => of({ ignored: false })
+            isIgnored: () => of({ ignored: false }),
+            readFile: (_id: number, query: { path: string; }) => of(fileContent(query.path)),
+            saveFile: (_id: number, request: SaveFileRequest) => {
+              requests.push(`save ${request.path}`);
+              return saveAnswer();
+            }
           }
+        },
+        OpenFilesService,
+        {
+          provide: BreakpointObserver,
+          useValue: { observe: () => of({ matches: false, breakpoints: {} }), isMatched: () => false }
         }
       ]
     });
+    openFiles = TestBed.inject(OpenFilesService);
     commands = TestBed.inject(EntryCommandsService);
     store = TestBed.inject(FileTreeStoreService);
     store.init(12);
@@ -257,6 +281,78 @@ describe('EntryCommandsService', () => {
     expect(renamed).toEqual([ { path: 'docs/guide.md', name: 'intro.md' } ]);
     expect(navigate).toHaveBeenCalledWith([ '/repositories', 12, 'files', 'docs', 'intro.md' ], { replaceUrl: true });
     expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBe('docs/intro.md');
+  });
+
+  it('flushes before a rename', async () => {
+    openPath = 'docs/guide.md';
+    const file = await openFiles.open('docs/guide.md');
+    file.saver.edit(() => 'typed just before');
+    const save = new Subject<FileState>();
+    saveAnswer = () => save;
+
+    const done = commands.run('rename', 'docs/guide.md');
+    await settleDialog();
+    // Sent at once when the rename starts.
+    expect(requests).toEqual([ 'save docs/guide.md' ]);
+    type(nameInput(), 'intro.md');
+    dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
+    await settleDialog();
+    // The rename waits for the save.
+    expect(requests).toEqual([ 'save docs/guide.md' ]);
+
+    save.next({ hash: 'b'.repeat(64), size: 17 });
+    save.complete();
+    await done;
+
+    expect(requests).toEqual([ 'save docs/guide.md', 'rename docs/guide.md' ]);
+    expect(file.saver.lastSaved().content).toBe('typed just before');
+    expect(openFiles.get('docs/intro.md')).toBe(file);
+    expect(file.path()).toBe('docs/intro.md');
+    expect(openFiles.get('docs/guide.md')).toBeUndefined();
+  });
+
+  it('sends no save to the old path while the rename is sent', async () => {
+    openPath = 'docs/guide.md';
+    const file = await openFiles.open('docs/guide.md');
+    file.saver.edit(() => 'typed offline');
+    saveAnswer = () => throwError(() => new HttpErrorResponse({ status: 0 }));
+    const rename = new Subject<EntryPath>();
+    renameAnswer = () => rename;
+
+    const done = commands.run('rename', 'docs/guide.md');
+    await settleDialog();
+    type(nameInput(), 'intro.md');
+    dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
+    await settleDialog();
+    expect(requests).toEqual([ 'save docs/guide.md', 'save docs/guide.md', 'rename docs/guide.md' ]);
+    // Past the retry's delay (2 s after the second failure), with the rename still in flight.
+    await new Promise(resolve => setTimeout(resolve, 2100));
+    expect(requests).toHaveLength(3);
+
+    saveAnswer = () => of({ hash: 'b'.repeat(64), size: 13 });
+    rename.next({ path: 'docs/intro.md' });
+    rename.complete();
+    await done;
+    await settleDialog();
+
+    expect(requests).toEqual([
+      'save docs/guide.md',
+      'save docs/guide.md',
+      'rename docs/guide.md',
+      'save docs/intro.md'
+    ]);
+    expect(file.saver.status()).toEqual({ kind: 'saved' });
+  });
+
+  it('moves the open files under a renamed folder', async () => {
+    const file = await openFiles.open('docs/api/index.md');
+
+    await run('rename', 'docs', async () => {
+      type(nameInput(), 'guides');
+      dialogButton(`${P}.EntryNameDialog.submit.rename`)?.click();
+    });
+
+    expect(openFiles.get('guides/api/index.md')).toBe(file);
   });
 
   /** The function a command set to run {@link OWN_CHANGE_MS} after its answer. */
@@ -421,6 +517,22 @@ describe('EntryCommandsService', () => {
       expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBeNull();
       expect(store.expanded()).toEqual([]);
       expect(await TestBed.inject(FirstFileService).pick(12)).toBe('README.md');
+    });
+
+    it('drops the waiting save when the file is deleted', async () => {
+      openPath = 'docs/guide.md';
+      const file = await openFiles.open('docs/guide.md');
+      file.saver.edit(() => 'typed just before');
+
+      await run('delete', 'docs', async () => {
+        dialogButton(`${D}.delete`)?.click();
+      });
+      await file.saver.flush();
+
+      expect(requests).toEqual([]);
+      expect(file.saver.unsaved()).toBe(false);
+      expect(openFiles.get('docs/guide.md')).toBeUndefined();
+      expect(openFiles.anyUnsaved()).toBe(false);
     });
 
     it('keeps the open file when another entry is deleted', async () => {

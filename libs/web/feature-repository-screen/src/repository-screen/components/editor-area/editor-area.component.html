@@ -3,10 +3,25 @@
     @if (goneElsewhere()) {
       <ui-empty-state icon="info" [heading]="name()">{{ t('goneElsewhere') }}</ui-empty-state>
     } @else if (entry() !== undefined) {
-      @if (markdown()) {
-        <ui-empty-state icon="markdown" [heading]="name()">{{ t('later') }}</ui-empty-state>
-      } @else {
+      @if (!markdown()) {
         <rs-entry-message [entry]="entry() ?? null" [path]="path" (action)="action.emit($event)" />
+      } @else if (explained(); as code) {
+        <rs-entry-message [entry]="entry() ?? null" [path]="path" [openError]="code" (action)="action.emit($event)" />
+      } @else if (failure(); as failure) {
+        <ui-empty-state icon="error" [heading]="name()">
+          {{ t('openFailed') }} {{ failure.text }}
+          <div uiEmptyStateActions>
+            <button uiButton (click)="retryOpen.emit()">{{ t('retry') }}</button>
+          </div>
+        </ui-empty-state>
+      } @else if (file(); as file) {
+        @defer {
+          <rs-editor-pane [file]="file" />
+        } @loading (minimum 0ms) {
+          <ui-spinner [label]="t('opening')" />
+        }
+      } @else {
+        <ui-spinner [label]="t('opening')" />
       }
     }
   } @else if (path() === null) {

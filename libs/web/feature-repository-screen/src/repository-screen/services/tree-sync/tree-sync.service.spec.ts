@@ -1,3 +1,4 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -8,10 +9,12 @@ import { CurrentUserService, PushChannelService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { entry, folder, listing } from '../../../testing/listings';
+import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { EntryCommandsService } from '../entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../first-file/first-file.service';
+import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 import { TreeSyncService } from './tree-sync.service';
 
@@ -114,7 +117,15 @@ describe('TreeSyncService', () => {
           }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
-        { provide: FilesApi, useValue: { listFolder } }
+        {
+          provide: FilesApi,
+          useValue: { listFolder, readFile: (_id: number, query: { path: string; }) => of(fileContent(query.path)) }
+        },
+        OpenFilesService,
+        {
+          provide: BreakpointObserver,
+          useValue: { observe: () => of({ matches: false, breakpoints: {} }), isMatched: () => false }
+        }
       ]
     });
     store = TestBed.inject(FileTreeStoreService);
@@ -130,6 +141,45 @@ describe('TreeSyncService', () => {
 
     expect(listed()).toEqual([ 'docs' ]);
     expect(store.entry('docs/new.md')).toBeDefined();
+  });
+
+  describe('own saves', () => {
+    const OWN = 'a'.repeat(64);
+    const saved = (folders: string[], files: { path: string; hash: string; }[]) =>
+      events.next({ type: 'files.changed', repositoryId: 12, folders, files });
+
+    beforeEach(async () => {
+      await start([ 'docs' ]);
+      await TestBed.inject(OpenFilesService).open('docs/guide.md');
+    });
+
+    it('skips the event of a save of an open file whose hash matches its last save', async () => {
+      saved([ 'docs' ], [ { path: 'docs/guide.md', hash: OWN } ]);
+      await flush();
+
+      expect(listed()).toEqual([]);
+    });
+
+    it('lists the folder again for a save made elsewhere', async () => {
+      saved([ 'docs' ], [ { path: 'docs/guide.md', hash: 'c'.repeat(64) } ]);
+      await flush();
+
+      expect(listed()).toEqual([ 'docs' ]);
+    });
+
+    it('lists the folder again for a save of a file that is not open', async () => {
+      saved([ '' ], [ { path: 'README.md', hash: OWN } ]);
+      await flush();
+
+      expect(listed()).toEqual([ '' ]);
+    });
+
+    it('lists other folders the event names', async () => {
+      saved([ 'docs', '' ], [ { path: 'docs/guide.md', hash: OWN } ]);
+      await flush();
+
+      expect(listed().sort()).toEqual([ '', 'docs' ]);
+    });
   });
 
   it('reloads every expanded folder for all', async () => {

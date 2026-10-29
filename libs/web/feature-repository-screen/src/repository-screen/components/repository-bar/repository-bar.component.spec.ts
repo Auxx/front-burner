@@ -53,6 +53,24 @@ describe('RepositoryBarComponent', () => {
     await settle(fixture);
   }
 
+  it('shows the save status after the repository name (NV-9)', async () => {
+    await show();
+    fixture.componentRef.setInput('saveStatus', { kind: 'saving' });
+    await settle(fixture);
+
+    const parts = [ ...bar().querySelectorAll('h1, rs-save-status, button.files') ];
+    expect(parts.map(part => part.localName)).toEqual([ 'h1', 'rs-save-status', 'button' ]);
+    expect(bar().querySelector('rs-save-status')?.textContent?.trim()).toBe(
+      'web-feature-repository-screen.SaveStatusComponent.saving'
+    );
+  });
+
+  it('shows no save status for a repository that cannot be opened', async () => {
+    await show({ withFiles: false });
+
+    expect(bar().querySelector('rs-save-status')).toBeNull();
+  });
+
   it('shows the bar\'s parts in order', async () => {
     await show();
 

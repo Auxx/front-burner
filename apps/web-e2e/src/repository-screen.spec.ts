@@ -22,6 +22,8 @@ const heading = (page: Page, name: string) => page.getByRole('heading', { name, 
 const filesButton = (page: Page) => page.getByRole('banner').getByRole('button', { name: 'Files', exact: true });
 const tree = (page: Page) => page.getByRole('region', { name: 'Files', exact: true });
 const editor = (page: Page) => page.getByRole('main', { name: 'Editor' });
+/** The editor, labelled with the open file's name (ED-37). */
+const editorOf = (page: Page, name: string) => editor(page).getByRole('textbox', { name, exact: true });
 const separator = (page: Page) => page.getByRole('separator', { name: 'Resize file tree' });
 /** A row of the file tree, by the name its accessible name starts with (FB-46). */
 const entry = (page: Page, name: string) =>
@@ -30,7 +32,6 @@ const entry = (page: Page, name: string) =>
   });
 const ignoredIcon = (page: Page, name: string) => entry(page, name).locator('.ignored-icon');
 const tooltip = (page: Page) => page.locator('ui-tooltip');
-const LATER = 'The editor comes in a later version.';
 const IGNORED_FILE = 'Ignored by .gitignore. Git won\'t commit this file.';
 const IGNORED_FOLDER = 'Ignored by .gitignore. Git won\'t commit anything in this folder.';
 
@@ -285,7 +286,7 @@ test.describe('repository screen', () => {
     await page.setViewportSize({ width: 320, height: 640 });
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
     await openScreen(page, `/repositories/${handbook}`);
-    await expect(heading(page, 'README.md')).toBeVisible();
+    await expect(editorOf(page, 'README.md')).toBeVisible();
 
     await showTree(page);
     await entry(page, 'docs').click();
@@ -295,7 +296,7 @@ test.describe('repository screen', () => {
 
     await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/guide.md$`));
     await expect(tree(page)).toBeHidden();
-    await expect(heading(page, 'guide.md')).toBeVisible();
+    await expect(editorOf(page, 'guide.md')).toBeVisible();
   });
 
   test('AC-FILE-001.5: opens the README first and then the last file', async ({ page, instance }) => {
@@ -306,8 +307,7 @@ test.describe('repository screen', () => {
     await openScreen(page, `/repositories/${handbook}`);
 
     await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/README.md$`));
-    await expect(editor(page).getByRole('heading', { name: 'README.md' })).toBeVisible();
-    await expect(editor(page).getByText(LATER)).toBeVisible();
+    await expect(editorOf(page, 'README.md')).toBeVisible();
     await expect(page).toHaveTitle('README.md · handbook · Front Burner');
 
     await showTree(page);
@@ -319,7 +319,7 @@ test.describe('repository screen', () => {
     await page.getByRole('banner').getByRole('link', { name: /Front Burner|Dashboard/ }).click();
     await page.getByRole('link', { name: 'handbook', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/guide.md$`));
-    await expect(editor(page).getByRole('heading', { name: 'guide.md' })).toBeVisible();
+    await expect(editorOf(page, 'guide.md')).toBeVisible();
 
     await page.getByRole('banner').getByRole('link', { name: /Front Burner|Dashboard/ }).click();
     await page.getByRole('link', { name: 'empty-one', exact: true }).click();
@@ -332,7 +332,7 @@ test.describe('repository screen', () => {
     await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
 
     for (let visit = 0; visit < 2; visit++) {
-      await expect(editor(page).getByRole('heading', { name: 'guide.md' })).toBeVisible();
+      await expect(editorOf(page, 'guide.md')).toBeVisible();
       await showTree(page);
       await expect(entry(page, 'docs')).toHaveAttribute('aria-expanded', 'true');
       await expect(entry(page, 'guide.md')).toHaveAttribute('aria-selected', 'true');
@@ -356,7 +356,7 @@ test.describe('repository screen', () => {
 
     await page.goBack();
     await expect(page).toHaveURL(/\/files\/README.md$/);
-    await expect(editor(page).getByRole('heading', { name: 'README.md' })).toBeVisible();
+    await expect(editorOf(page, 'README.md')).toBeVisible();
 
     // Opening the README replaced the screen's URL, so Back leaves the screen.
     await page.goBack();
@@ -462,7 +462,7 @@ test.describe('repository screen', () => {
 
     await error.click();
     // On a phone the drawer stays open over the editor area after Try again.
-    await expect(page.locator('main h2')).toHaveText('guide.md');
+    await expect(page.locator('main .cm-content')).toHaveAttribute('aria-label', 'guide.md');
 
     drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/folder`);
   });
@@ -499,7 +499,7 @@ test.describe('repository screen', () => {
     await page.keyboard.press('Enter');
 
     await expect(page).toHaveURL(/\/files\/docs\/guide.md$/);
-    await expect(editor(page).getByRole('heading', { name: 'guide.md' })).toBeVisible();
+    await expect(editorOf(page, 'guide.md')).toBeVisible();
   });
 
   test('AC-FILE-001.23: browses by touch alone', async ({ page, instance, isMobile }) => {
@@ -539,8 +539,7 @@ test.describe('repository screen', () => {
     await confirmDialog(page, 'Create', isMobile);
 
     await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/notes.md$`));
-    await expect(editor(page).getByRole('heading', { name: 'notes.md' })).toBeVisible();
-    await expect(editor(page).getByText(LATER)).toBeVisible();
+    await expect(editorOf(page, 'notes.md')).toBeVisible();
 
     await entryAction(page, 'build', 'New file', isMobile);
     await expect(dialog(page).getByText(IGNORED_NEW_FILE)).toBeVisible();
@@ -639,7 +638,7 @@ test.describe('repository screen', () => {
     await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/guides/intro.md$`));
     // On a phone the drawer stays open after a rename, over the editor area.
     await expect(entry(page, 'intro.md')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('main h2')).toHaveText('intro.md');
+    await expect(page.locator('main .cm-content')).toHaveAttribute('aria-label', 'intro.md');
   });
 
   test('AC-FILE-001.23: creates and renames with the keyboard alone', async ({ page, instance, isMobile }) => {
@@ -770,7 +769,7 @@ test.describe('repository screen', () => {
 
     // The folder that holds the open file closes it too.
     await page.goto(`/repositories/${handbook}/files/media/cover.md`);
-    await expect(editor(page).getByRole('heading', { name: 'cover.md' })).toBeVisible();
+    await expect(editorOf(page, 'cover.md')).toBeVisible();
     await entryAction(page, 'media', 'Delete', isMobile);
     await confirmDialog(page, 'Delete', isMobile);
 
@@ -886,7 +885,7 @@ test.describe('repository screen, kept up to date', () => {
   test('AC-FILE-001.21: shows a file created on another device and closes one deleted there', async ({ page, browser, instance, isMobile }) => {
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
     await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
-    await expect(editor(page).getByRole('heading', { name: 'guide.md' })).toBeVisible();
+    await expect(editorOf(page, 'guide.md')).toBeVisible();
     // The second device: another browser, logged in as the same user, on a desktop.
     const other = await browser.newContext({ baseURL: instance.url });
     const second = await other.newPage();

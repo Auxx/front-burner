@@ -9,8 +9,8 @@ import { fileName } from '../../utils/file-name/file-name';
 /**
  * What the editor area shows for an entry that cannot be opened: its name and
  * why (FB-21), or that the route's path does not exist (FB-13). The two
- * reasons found only when a file is opened (too large, not UTF-8) come with
- * reading files. It offers **Delete** where the tree would (FB-21, FB-37),
+ * reasons found only when a Markdown file is opened, too large or not UTF-8,
+ * are given as `openError`. It offers **Delete** where the tree would (FB-21, FB-37),
  * emitted as `action`.
  */
 @Component({
@@ -24,6 +24,8 @@ export class EntryMessageComponent {
   /** The entry at `path`, or `null` when there is none. */
   readonly entry = input.required<Entry | null>();
   readonly path = input.required<string>();
+  /** The error code with which opening the Markdown file at `path` failed: `file-too-large` or `file-not-utf8`. */
+  readonly openError = input<string | null>(null);
 
   readonly action = output<EntryAction>();
 
@@ -33,6 +35,10 @@ export class EntryMessageComponent {
     return entry !== null && entryActions(entry).includes('delete');
   });
   protected readonly reason = computed(() => {
+    const openError = this.openError();
+    if (openError !== null) {
+      return openError === 'file-too-large' ? 'tooLarge' : 'notUtf8';
+    }
     switch (this.entry()?.kind) {
       case undefined:
         return 'missing';

@@ -1,0 +1,16 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.editor {
+  flex: 1;
+}

@@ -1,7 +1,17 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  signal,
+  untracked
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
-import type { Entry } from '@front-burner/shared-contracts';
+import type { ApiError, Entry } from '@front-burner/shared-contracts';
 import {
   AppShellComponent,
   AppShellSideDirective,
@@ -21,6 +31,7 @@ import { RepositoryBarComponent } from '../../components/repository-bar/reposito
 import { EntryCommandsService } from '../../services/entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../../services/first-file/first-file.service';
+import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { PaneMemoryService } from '../../services/pane-memory/pane-memory.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
@@ -40,7 +51,9 @@ import { fileName } from '../../utils/file-name/file-name';
  * as this device's last file. Without a path, the screen goes to the first
  * file to open, if there is one (FB-12), except after a navigation with
  * `state: { closed: true }`, which closed the open file because it was
- * deleted: the editor area then shows the empty state (FB-39). Selecting an entry in the tree goes
+ * deleted: the editor area then shows the empty state (FB-39). A Markdown
+ * file is opened in the editor through `OpenFilesService` (FB-21, ED-3).
+ * Selecting an entry in the tree goes
  * to its path and closes the drawer (FB-9). The tree's actions, and **New
  * file** of the empty editor area, run through `EntryCommandsService` (FB-24).
  * `TreeSyncService` keeps the tree up to date with changes made elsewhere,
@@ -70,7 +83,8 @@ import { fileName } from '../../utils/file-name/file-name';
     FileTreeStoreService,
     FirstFileService,
     EntryCommandsService,
-    TreeSyncService
+    TreeSyncService,
+    OpenFilesService
   ],
   templateUrl: './repository-screen.page.html',
   styleUrl: './repository-screen.page.scss',
@@ -85,6 +99,7 @@ export class RepositoryScreenPage {
   protected readonly tree = inject(FileTreeStoreService);
   private readonly commands = inject(EntryCommandsService);
   private readonly sync = inject(TreeSyncService);
+  protected readonly openFiles = inject(OpenFilesService);
 
   protected readonly user = this.currentUser.user;
   /** The file tree's size and whether it is collapsed, as this device last left them (FB-8). */
@@ -111,11 +126,16 @@ export class RepositoryScreenPage {
   protected readonly openPath = signal<string | null>('');
   /** The entry at `openPath`: `null` when there is none, `undefined` while it is being found. */
   protected readonly openEntry = signal<Entry | null | undefined>(undefined);
+  /** Why the Markdown file at `openPath` could not be opened. */
+  protected readonly openError = signal<ApiError | null>(null);
   /** Whether the open file was deleted or renamed elsewhere (FB-42). */
   protected readonly goneElsewhere = computed(() => {
     const gone = this.sync.goneElsewhere();
     return gone !== null && gone === this.openPath();
   });
+
+  /** Whether the open file has unsaved edits (NV-13). */
+  private readonly unsaved = computed(() => this.openFiles.current()?.saver.unsaved() ?? false);
 
   /** Counts the paths shown, so that only the latest one's answer counts. */
   private showing = 0;
@@ -137,12 +157,15 @@ export class RepositoryScreenPage {
     this.route.paramMap
       .pipe(map(params => Number(params.get('id'))), takeUntilDestroyed())
       .subscribe(id => {
+        // Another repository, through the switcher: its waiting saves are sent at once (NV-12).
+        void this.openFiles.flushAll();
         this.session.start(id);
         this.sync.start(id);
       });
     // The app header's loader is not on this screen (NV-9).
     this.currentUser.load().catch(() => undefined);
     this.updateTitle();
+    this.flushWhenLeft();
   }
 
   /** **Files** collapses the tree on wide screens and opens it as a drawer on narrow ones. */
@@ -196,6 +219,13 @@ export class RepositoryScreenPage {
     this.tree.init(repositoryId);
     this.sync.clear();
     this.openEntry.set(undefined);
+    this.openError.set(null);
+    const previous = this.openFiles.current();
+    if (previous !== null && previous.path() !== path) {
+      // Another file: the previous one's waiting save is sent at once (ED-3, ED-17).
+      void previous.saver.flush();
+    }
+    this.openFiles.clearCurrent();
     if (path === '' && closed) {
       this.openPath.set(null);
       return;
@@ -229,22 +259,63 @@ export class RepositoryScreenPage {
     this.openEntry.set(found);
     if (found?.kind === 'file' && found.markdown) {
       this.firstFile.remember(repositoryId, path);
+      await this.openFile(path, showing);
     }
+  }
+
+  /** **Try again** after the Markdown file at the route's path could not be opened. */
+  protected retryOpen(): void {
+    const path = this.openPath();
+    if (path) {
+      this.openError.set(null);
+      void this.openFile(path, this.showing);
+    }
+  }
+
+  /** Opens the Markdown file at `path` in the editor (FB-21, ED-5); only the latest path shown counts. */
+  private async openFile(path: string, showing: number): Promise<void> {
+    try {
+      await this.openFiles.open(path);
+    } catch (error) {
+      if (showing === this.showing) {
+        this.openError.set(error as ApiError);
+      }
+    }
+  }
+
+  /** Sends the waiting saves at once when the tab is hidden or the screen is left (ED-17). */
+  private flushWhenLeft(): void {
+    const document = inject(DOCUMENT);
+    const hidden = () => {
+      if (document.visibilityState === 'hidden') {
+        void this.openFiles.flushAll();
+      }
+    };
+    document.addEventListener('visibilitychange', hidden);
+    inject(DestroyRef).onDestroy(() => {
+      document.removeEventListener('visibilitychange', hidden);
+      void this.openFiles.flushAll();
+    });
   }
 
   /**
    * `<file name> · <repository name> · Front Burner`, or without a file
    * `<repository name> · Front Burner` (NV-13), published again for each file
-   * so that it is announced (NV-18). Until the repository has opened, the
+   * so that it is announced (NV-18), with `• ` in front while the open file
+   * has unsaved edits. Until the repository has opened, the
    * product name alone, so that no other page's title stays.
    */
   private updateTitle(): void {
     const pageTitle = inject(PageTitleService);
     const transloco = inject(TranslocoService);
+    /** What the title last announced was for: the mark alone changes it without announcing it again. */
+    let announced: string | undefined;
     effect(onCleanup => {
       const state = this.session.state();
       const repository = this.session.repository();
-      const file = fileName(this.path());
+      const path = this.path();
+      const file = fileName(path);
+      const unsaved = this.unsaved();
       untracked(() => {
         if (state === 'loading') {
           pageTitle.setPending();
@@ -256,7 +327,15 @@ export class RepositoryScreenPage {
           );
           onCleanup(() => pending.unsubscribe());
         } else if (repository) {
-          pageTitle.publish(file ? `${file} · ${repository.name}` : repository.name);
+          const title = file ? `${file} · ${repository.name}` : repository.name;
+          const marked = unsaved ? `• ${title}` : title;
+          const shown = `${repository.id}:${repository.name}:${path}`;
+          if (shown === announced) {
+            pageTitle.update(marked);
+          } else {
+            announced = shown;
+            pageTitle.publish(marked);
+          }
         } else {
           pageTitle.publish();
         }

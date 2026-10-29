@@ -4,12 +4,20 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import type { CurrentUser, FolderListing, PushEvent, RepositorySummary } from '@front-burner/shared-contracts';
+import type {
+  CurrentUser,
+  FileContent,
+  FolderListing,
+  PushEvent,
+  RepositorySummary
+} from '@front-burner/shared-contracts';
 import { FilesApi, RepositoriesApi } from '@front-burner/web-api-client';
+import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { entry, folder, listing } from '../../../testing/listings';
+import { fileContent } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
@@ -50,6 +58,8 @@ describe('RepositoryScreenPage', () => {
   let failOnce: Set<string>;
   let open: ReturnType<typeof vi.fn>;
   let createEntry: ReturnType<typeof vi.fn>;
+  let readFile: ReturnType<typeof vi.fn<(path: string) => Observable<FileContent>>>;
+  let saveFile: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
   let events: Subject<PushEvent>;
@@ -76,7 +86,9 @@ describe('RepositoryScreenPage', () => {
                 ? of(folders[query.path])
                 : failure(404, 'entry-not-found'),
             createEntry,
-            isIgnored: () => of({ ignored: false })
+            isIgnored: () => of({ ignored: false }),
+            readFile: (_id: number, query: { path: string; }) => readFile(query.path),
+            saveFile
           }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
@@ -120,6 +132,8 @@ describe('RepositoryScreenPage', () => {
     localStorage.clear();
     open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
     createEntry = vi.fn((_id: number, request: { name: string; }) => of({ path: `${request.name}.md` }));
+    readFile = vi.fn((path: string) => of(fileContent(path)));
+    saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
     document.title = '';
   });
 
@@ -299,15 +313,37 @@ describe('RepositoryScreenPage', () => {
       ) as HTMLElement;
     const url = () => TestBed.inject(Router).url;
     const editor = () => page().querySelector('main') as HTMLElement;
-    const LATER = 'web-feature-repository-screen.EditorAreaComponent.later';
+    const editorText = () => editor().querySelector('rs-editor-pane .cm-content')?.textContent ?? '';
     const MESSAGE = 'web-feature-repository-screen.EntryMessageComponent';
+
+    it('AC-EDIT-001.1: opens a Markdown file selected in the tree in the editor', async () => {
+      await visit('/repositories/12/files/docs/guide.md');
+      expect(editorText()).toContain('# docs/guide.md');
+
+      row('README.md').click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(url()).toBe('/repositories/12/files/README.md');
+      expect(readFile).toHaveBeenLastCalledWith('README.md');
+      expect(editorText()).toContain('# README.md');
+      expect(editor().querySelector('.cm-content')?.getAttribute('aria-label')).toBe('README.md');
+    });
+
+    it('AC-FILE-001.10: says why a Markdown file could not be opened', async () => {
+      readFile.mockImplementation(() => failure(422, 'file-not-utf8'));
+
+      await visit('/repositories/12/files/README.md');
+
+      expect(editor().textContent).toContain(`${MESSAGE}.notUtf8`);
+      expect(editor().querySelector('rs-editor-pane')).toBeNull();
+    });
 
     it('opens the README the first time', async () => {
       await visit('/repositories/12');
 
       expect(url()).toBe('/repositories/12/files/README.md');
-      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('README.md');
-      expect(editor().textContent).toContain(LATER);
+      expect(editorText()).toContain('# README.md');
       expect(row('README.md').getAttribute('aria-selected')).toBe('true');
       expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBe('README.md');
     });
@@ -320,7 +356,7 @@ describe('RepositoryScreenPage', () => {
       expect(url()).toBe('/repositories/12/files/docs/guide.md');
       expect(row('docs').getAttribute('aria-expanded')).toBe('true');
       expect(row('guide.md').getAttribute('aria-selected')).toBe('true');
-      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
+      expect(editorText()).toContain('# docs/guide.md');
     });
 
     it('falls back to the README when the last file is gone', async () => {
@@ -417,7 +453,7 @@ describe('RepositoryScreenPage', () => {
 
       expect(editor().querySelector('h2')?.textContent?.trim()).toBe(name);
       expect(editor().textContent).toContain(`${MESSAGE}.${key}`);
-      expect(editor().textContent).not.toContain(LATER);
+      expect(editor().querySelector('rs-editor-pane')).toBeNull();
       expect(row(name).getAttribute('aria-selected')).toBe('true');
       // Only Markdown files are remembered as the last file.
       expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBeNull();
@@ -440,7 +476,7 @@ describe('RepositoryScreenPage', () => {
       await settle(harness.fixture);
       await settle(harness.fixture);
 
-      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
+      expect(editorText()).toContain('# docs/guide.md');
       expect(row('guide.md').getAttribute('aria-selected')).toBe('true');
     });
 
@@ -482,7 +518,7 @@ describe('RepositoryScreenPage', () => {
       await settle(harness.fixture);
 
       expect(url()).toBe('/repositories/12/files/docs/guide.md');
-      expect(editor().querySelector('h2')?.textContent?.trim()).toBe('guide.md');
+      expect(editorText()).toContain('# docs/guide.md');
     });
 
     it('closes the drawer when a file is selected', async () => {
@@ -556,6 +592,131 @@ describe('RepositoryScreenPage', () => {
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
       expect(files()).toBeUndefined();
       expect(page().querySelector('section[aria-label]')).toBeNull();
+    });
+  });
+  describe('editing and saving', () => {
+    const STATUS = 'web-feature-repository-screen.SaveStatusComponent';
+    const status = () => page().querySelector('rs-repository-bar rs-save-status')?.textContent?.trim();
+
+    /** Types `text` at the end of the open file, as a keystroke in the editor would. */
+    function typeAtEnd(text: string): void {
+      const editor = harness.fixture.debugElement.query(element => element.name === 'ce-code-editor');
+      const code = editor.componentInstance as {
+        state(): EditorStateChange['state'];
+        stateChange: { emit(change: EditorStateChange): void; };
+      };
+      const state = code.state();
+      code.stateChange.emit({
+        state: state.update({ changes: { from: state.doc.length, insert: text } }).state,
+        docChanged: true
+      });
+      harness.fixture.detectChanges();
+    }
+
+    const savedPaths = () => saveFile.mock.calls.map(call => (call[1] as { path: string; }).path);
+
+    it('shows the open file\'s save status in the bar', async () => {
+      saveFile.mockReturnValue(new Subject());
+      await visit('/repositories/12/files/README.md');
+      expect(status()).toBe(`${STATUS}.saved`);
+
+      typeAtEnd('More.\n');
+      await settle(harness.fixture);
+
+      expect(status()).toBe(`${STATUS}.saving`);
+    });
+
+    it('AC-EDIT-001.4: saves the first file when another is opened', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      await go('/repositories/12/files/docs/guide.md');
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+      expect(saveFile.mock.calls[0][1]).toMatchObject({ content: '# README.md\nMore.\n' });
+    });
+
+    it('AC-EDIT-001.4: saves the first file also when the other one fails to open', async () => {
+      readFile.mockImplementation(path =>
+        path === 'README.md' ? of(fileContent(path)) : failure(422, 'file-too-large')
+      );
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      await go('/repositories/12/files/docs/guide.md');
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+    });
+
+    it('AC-APP-001.6: saves an edit typed just before switching repositories', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      await go('/repositories/13');
+
+      expect(saveFile).toHaveBeenCalledTimes(1);
+      expect(saveFile.mock.calls[0][0]).toBe(12);
+    });
+
+    it('flushes when the tab is hidden', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+      expect(saveFile).not.toHaveBeenCalled();
+
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      try {
+        document.dispatchEvent(new Event('visibilitychange'));
+        await settle(harness.fixture);
+      } finally {
+        Reflect.deleteProperty(document, 'visibilityState');
+      }
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+      expect(status()).toBe(`${STATUS}.saved`);
+    });
+
+    it('flushes when the screen is left', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      harness.fixture.destroy();
+      await new Promise(resolve => setTimeout(resolve));
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+    });
+
+    it('does not announce the title again when only the dot changes', async () => {
+      saveFile.mockReturnValue(new Subject());
+      await visit('/repositories/12/files/README.md');
+      const published: string[] = [];
+      const subscription = TestBed.inject(PageTitleService).changes.subscribe(title => published.push(title));
+
+      typeAtEnd('More.\n');
+      await settle(harness.fixture);
+      subscription.unsubscribe();
+
+      expect(document.title).toBe('• README.md · handbook · Front Burner');
+      expect(published).toEqual([]);
+    });
+
+    it('AC-APP-001.9: puts a dot in the title while an edit is unsaved', async () => {
+      const answer = new Subject<{ hash: string; size: number; }>();
+      saveFile.mockReturnValue(answer);
+      await visit('/repositories/12/files/README.md');
+      expect(document.title).toBe('README.md · handbook · Front Burner');
+
+      typeAtEnd('More.\n');
+      await settle(harness.fixture);
+      expect(document.title).toBe('• README.md · handbook · Front Burner');
+
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+      Reflect.deleteProperty(document, 'visibilityState');
+      answer.next({ hash: 'b'.repeat(64), size: 20 });
+      answer.complete();
+      await settle(harness.fixture);
+
+      expect(document.title).toBe('README.md · handbook · Front Burner');
     });
   });
 });
