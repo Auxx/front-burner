@@ -74,7 +74,9 @@ export class DeleteEntryDialog {
       case 'folder':
         return [
           { key: 'folder', params: { files: summary.files, nonMarkdown: summary.nonMarkdown } },
-          ...(summary.uncommitted > 0 ? [ { key: 'uncommittedFolder', params: { uncommitted: summary.uncommitted } } ] : [])
+          ...(summary.uncommitted > 0
+            ? [ { key: 'uncommittedFolder', params: { uncommitted: summary.uncommitted } } ]
+            : [])
         ];
       case 'symlink':
         return [ { key: 'symlink', params: {} } ];

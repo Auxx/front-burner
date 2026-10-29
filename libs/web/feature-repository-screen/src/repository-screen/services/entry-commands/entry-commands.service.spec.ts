@@ -337,7 +337,8 @@ describe('EntryCommandsService', () => {
 
       dialogButton(`${D}.delete`)?.click();
       await settleDialog();
-      const row = () => store.nodes().find(item => item.path === 'docs')?.children?.find(item => item.label === 'guide.md');
+      const row = () =>
+        store.nodes().find(item => item.path === 'docs')?.children?.find(item => item.label === 'guide.md');
       expect(row()?.deleting).toBe(true);
 
       answer.error(apiError(409, 'merge-in-progress'));
