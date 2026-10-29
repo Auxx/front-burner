@@ -7,7 +7,7 @@ import { TranslocoService } from '@jsverse/transloco';
 import type { Subscription } from 'rxjs';
 
 import type { TreeEntry, TreeEntryKind } from '../../models/tree-entry.model';
-import { fileName, joinPath, movedPath, parentPath } from '../../utils/file-name/file-name';
+import { fileName, isWithin, joinPath, movedPath, parentPath } from '../../utils/file-name/file-name';
 
 type FolderState =
   | { readonly status: 'loading'; }
@@ -249,7 +249,7 @@ export class FileTreeStoreService {
    * deleting mark. The parent is listed again by the caller.
    */
   deleted(path: string): void {
-    const under = (item: string) => item === path || item.startsWith(`${path}/`);
+    const under = (item: string) => isWithin(item, path);
     for (const folder of [ ...this.folders().keys() ].filter(under)) {
       const request = this.requests.get(folder);
       if (request) {

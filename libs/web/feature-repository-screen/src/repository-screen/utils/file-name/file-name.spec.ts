@@ -1,4 +1,4 @@
-import { fileName, joinPath, movedPath, parentPath } from './file-name';
+import { fileName, isWithin, joinPath, movedPath, parentPath } from './file-name';
 
 describe('fileName', () => {
   it.each([
@@ -37,5 +37,16 @@ describe('movedPath', () => {
     [ 'README.md', null ]
   ])('moves %j to %j when docs becomes guides', (path, moved) => {
     expect(movedPath(path, 'docs', 'guides')).toBe(moved);
+  });
+});
+
+describe('isWithin', () => {
+  it.each([
+    [ 'docs', true ],
+    [ 'docs/api/index.md', true ],
+    [ 'docs2/x.md', false ],
+    [ 'doc', false ]
+  ])('says whether %j is docs or lies under it', (path, within) => {
+    expect(isWithin(path, 'docs')).toBe(within);
   });
 });

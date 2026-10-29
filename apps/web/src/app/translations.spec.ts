@@ -107,7 +107,10 @@ describe('i18n/en.json', () => {
     [ `${SCREEN}.EntryMessageComponent.missing`, 'This file doesn\'t exist.' ],
     [ `${SCREEN}.EntryMessageComponent.nonMarkdown`, 'Only Markdown files can be opened in Front Burner.' ],
     [ `${SCREEN}.EntryMessageComponent.symlink`, 'Symbolic links can\'t be opened.' ],
-    [ `${SCREEN}.EntryMessageComponent.submodule`, 'Submodules aren\'t supported.' ]
+    [ `${SCREEN}.EntryMessageComponent.submodule`, 'Submodules aren\'t supported.' ],
+    [ `${SCREEN}.FileTreeStoreService.deleting`, 'Deleting…' ],
+    [ `${SCREEN}.DeleteEntryDialog.uncommittedFile`, 'This file isn\'t committed, so it can\'t be recovered.' ],
+    [ `${SCREEN}.DeleteEntryDialog.symlink`, 'Only the link is deleted, not what it points to.' ]
   ])('has the fixed text %s', (key, text) => {
     expect(texts[key]).toBe(text);
   });

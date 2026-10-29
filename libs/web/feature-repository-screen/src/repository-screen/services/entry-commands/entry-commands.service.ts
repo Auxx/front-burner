@@ -6,9 +6,10 @@ import { FilesApi } from '@front-burner/web-api-client';
 import { TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 
+import { type DeleteEntryData, DeleteEntryDialog } from '../../dialogs/delete-entry/delete-entry.dialog';
 import { type EntryNameData, EntryNameDialog } from '../../dialogs/entry-name/entry-name.dialog';
 import type { EntryAction } from '../../utils/entry-actions/entry-actions';
-import { fileName, movedPath, parentPath } from '../../utils/file-name/file-name';
+import { fileName, isWithin, movedPath, parentPath } from '../../utils/file-name/file-name';
 import { FileTreeStoreService } from '../file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../first-file/first-file.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
@@ -31,6 +32,10 @@ const KEY = 'web-feature-repository-screen.EntryCommandsService';
  *   with the dialog still open (FB-35). The tree keeps a renamed folder as it
  *   was, and when the open file is the entry or lies under it, it stays open
  *   at its new path (FB-36).
+ * - **Delete** asks first, saying what cannot be recovered (FB-38), and marks
+ *   the entry as deleting while it runs (FB-40). When the open file is the
+ *   entry or lies under it, the screen closes it and shows the empty state,
+ *   not the README (FB-39).
  */
 @Injectable()
 export class EntryCommandsService {
@@ -65,7 +70,7 @@ export class EntryCommandsService {
           await this.rename(repositoryId, path);
           return null;
         case 'delete':
-          // Plan 20.
+          await this.delete(repositoryId, path);
           return null;
       }
     } finally {
@@ -135,6 +140,27 @@ export class EntryCommandsService {
     if (open !== null) {
       this.go(repositoryId, open, true);
     }
+  }
+
+  private async delete(repositoryId: number, path: string): Promise<void> {
+    const entry = this.store.entry(path);
+    if (!entry) {
+      return;
+    }
+    const ref = this.dialogs.open<DeleteEntryDialog, DeleteEntryData, boolean>(DeleteEntryDialog, {
+      data: { repositoryId, path, entry, marked: deleting => this.store.markDeleting(path, deleting) }
+    });
+    if (!(await firstValueFrom(ref.closed))) {
+      return;
+    }
+    const closed = isWithin(this.route.snapshot.paramMap.get('path') ?? '', path);
+    await this.firstFile.deleted(repositoryId, path, closed);
+    if (closed) {
+      void this.router.navigate([ '/repositories', repositoryId ], { replaceUrl: true });
+    }
+    // The row keeps its mark until the listing without it is shown.
+    await this.store.load(parentPath(path));
+    this.store.deleted(path);
   }
 
   private ask(data: EntryNameData): Promise<EntryPath | undefined> {

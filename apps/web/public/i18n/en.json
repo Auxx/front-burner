@@ -397,5 +397,15 @@
   "web-feature-repository-screen.FileTreeStoreService.deleting": "Deleting…",
   "web-feature-repository-screen.FileTreeComponent.deleting": "Deleting…",
   "web-feature-repository-screen.FileTreeComponent.actions.delete": "Delete",
-  "web-feature-repository-screen.EntryMessageComponent.delete": "Delete"
+  "web-feature-repository-screen.EntryMessageComponent.delete": "Delete",
+  "web-feature-repository-screen.DeleteEntryDialog.heading": "Delete {{ name }}?",
+  "web-feature-repository-screen.DeleteEntryDialog.loading": "Checking what this deletes",
+  "web-feature-repository-screen.DeleteEntryDialog.uncommittedFile": "This file isn't committed, so it can't be recovered.",
+  "web-feature-repository-screen.DeleteEntryDialog.folder": "It holds {files, plural, one {# file} other {# files}}, {nonMarkdown, plural, =0 {none of them non-Markdown} one {# of them non-Markdown} other {# of them non-Markdown}}.",
+  "web-feature-repository-screen.DeleteEntryDialog.uncommittedFolder": "{uncommitted, plural, one {# file isn't committed, so it} other {# files aren't committed, so they}} can't be recovered.",
+  "web-feature-repository-screen.DeleteEntryDialog.symlink": "Only the link is deleted, not what it points to.",
+  "web-feature-repository-screen.DeleteEntryDialog.reference": "Reference:",
+  "web-feature-repository-screen.DeleteEntryDialog.cancel": "Cancel",
+  "web-feature-repository-screen.DeleteEntryDialog.retry": "Try again",
+  "web-feature-repository-screen.DeleteEntryDialog.delete": "Delete"
 }
