@@ -100,6 +100,26 @@ class ConditionalHostComponent {
   readonly show = signal(true);
 }
 
+@Component({
+  imports: [ MenuComponent, MenuItemComponent, MenuTriggerDirective ],
+  template: `
+    <button [uiMenuTrigger]="menu.aria">Repositories</button>
+    <ui-menu #menu="uiMenu">
+      @if (loading()) {
+        <button uiMenuItem="loading">Loading</button>
+      }
+      @for (name of names(); track name) {
+        <a [uiMenuItem]="name" href="/{{ name }}">{{ name }}</a>
+      }
+      <a uiMenuItem="all" href="/repositories">All repositories</a>
+    </ui-menu>
+  `
+})
+class LoadingHostComponent {
+  readonly loading = signal(false);
+  readonly names = signal<string[]>([]);
+}
+
 describe('MenuComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -128,7 +148,13 @@ describe('MenuComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ HostComponent, GroupHostComponent, SharedHostComponent, ConditionalHostComponent ]
+      imports: [
+        HostComponent,
+        GroupHostComponent,
+        SharedHostComponent,
+        ConditionalHostComponent,
+        LoadingHostComponent
+      ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(HostComponent);
@@ -379,6 +405,58 @@ describe('MenuComponent', () => {
       shareTrigger('Second row').click();
       await shared.whenStable();
       expect(inOverlay()).not.toBeNull();
+    });
+  });
+
+  describe('with items that arrive while it is open', () => {
+    let loading: ComponentFixture<LoadingHostComponent>;
+
+    const opener = () => loading.nativeElement.querySelector('button') as HTMLButtonElement;
+    const arrive = async (names: string[]) => {
+      loading.componentInstance.loading.set(false);
+      loading.componentInstance.names.set(names);
+      await loading.whenStable();
+    };
+
+    beforeEach(async () => {
+      loading = TestBed.createComponent(LoadingHostComponent);
+      await loading.whenStable();
+    });
+
+    it('moves the focus to the new first item', async () => {
+      opener().click();
+      await loading.whenStable();
+      expect(activeText()).toBe('All repositories');
+
+      await arrive([ 'notes', 'blog' ]);
+
+      expect(activeText()).toBe('notes');
+      expect(opener().getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('moves the focus to the first item when the focused one goes', async () => {
+      loading.componentInstance.loading.set(true);
+      await loading.whenStable();
+      opener().click();
+      await loading.whenStable();
+      expect(activeText()).toBe('Loading');
+
+      await arrive([ 'notes' ]);
+
+      expect(activeText()).toBe('notes');
+      expect(opener().getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('leaves the focus where the user moved it', async () => {
+      await arrive([ 'notes' ]);
+      opener().click();
+      await loading.whenStable();
+      await press('ArrowDown');
+      expect(activeText()).toBe('All repositories');
+
+      await arrive([ 'notes', 'blog' ]);
+
+      expect(activeText()).toBe('All repositories');
     });
   });
 });
