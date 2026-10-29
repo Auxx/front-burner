@@ -16,6 +16,7 @@ import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
+import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { entry, folder, listing } from '../../../testing/listings';
 import { fileContent } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
@@ -65,6 +66,7 @@ describe('RepositoryScreenPage', () => {
   let events: Subject<PushEvent>;
   /** The folders listed, in order. */
   let listings: string[];
+  let drafts: MemoryDraftStore;
 
   const page = () => harness.fixture.nativeElement as HTMLElement;
   const button = (text: string) =>
@@ -92,6 +94,7 @@ describe('RepositoryScreenPage', () => {
           }
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
+        provideMemoryDrafts(drafts),
         { provide: AuthSessionService, useValue: { loggedIn: signal(true), logout: vi.fn() } },
         { provide: PushChannelService, useValue: { events, reconnected: new Subject<void>() } },
         {
@@ -114,6 +117,7 @@ describe('RepositoryScreenPage', () => {
   afterAll(restoreLayout);
 
   beforeEach(() => {
+    drafts = new MemoryDraftStore();
     answers = [];
     failOnce = new Set();
     folders = {
@@ -683,6 +687,51 @@ describe('RepositoryScreenPage', () => {
       await new Promise(resolve => setTimeout(resolve));
 
       expect(savedPaths()).toEqual([ 'README.md' ]);
+    });
+
+    it('asks before the tab closes with unsaved edits', async () => {
+      saveFile.mockReturnValue(new Subject());
+      const listens = vi.spyOn(window, 'addEventListener');
+      await visit('/repositories/12/files/README.md');
+      // Not listening otherwise keeps the page in the back/forward cache.
+      expect(listens.mock.calls.map(([ type ]) => type)).not.toContain('beforeunload');
+      const unload = () => {
+        const event = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+      expect(unload()).toBe(false);
+
+      typeAtEnd('More.\n');
+
+      expect(unload()).toBe(true);
+    });
+
+    it('writes the waiting content as a draft when the page is hidden for good', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      window.dispatchEvent(new Event('pagehide'));
+      await settle(harness.fixture);
+
+      expect(drafts.at('README.md', 12, ada.id)?.content).toBe('# README.md\nMore.\n');
+    });
+
+    it('offers a draft when a file is opened, with the editor read-only until the user chooses', async () => {
+      await drafts.put({ userId: ada.id, repositoryId: 12, path: 'README.md' }, {
+        content: '# README.md\nOffline.\n',
+        savedAt: '2026-10-29T10:05:00.000Z'
+      });
+
+      await visit('/repositories/12/files/README.md');
+
+      expect(page().querySelector('rs-draft-offer')).not.toBeNull();
+      expect(page().querySelector('.cm-content')?.getAttribute('contenteditable')).toBe('false');
+      button('web-feature-repository-screen.DraftOfferComponent.restore')?.click();
+      await settle(harness.fixture);
+
+      expect(page().querySelector('rs-draft-offer')).toBeNull();
+      expect(saveFile.mock.calls[0][1]).toMatchObject({ path: 'README.md', content: '# README.md\nOffline.\n' });
     });
 
     it('does not announce the title again when only the dot changes', async () => {

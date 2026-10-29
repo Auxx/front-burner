@@ -58,7 +58,9 @@ import { fileName } from '../../utils/file-name/file-name';
  * file** of the empty editor area, run through `EntryCommandsService` (FB-24).
  * `TreeSyncService` keeps the tree up to date with changes made elsewhere,
  * and says when the open file is gone because of one (FB-41, FB-42); the
- * route stays, so a reload then says it does not exist (FB-13).
+ * route stays, so a reload then says it does not exist (FB-13). Unsaved
+ * edits are kept as browser drafts and offered when the file is opened
+ * again (ED-7, ED-20).
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -283,17 +285,39 @@ export class RepositoryScreenPage {
     }
   }
 
-  /** Sends the waiting saves at once when the tab is hidden or the screen is left (ED-17). */
+  /**
+   * Sends the waiting saves at once when the tab is hidden or the screen is
+   * left (ED-17). When the page is hidden for good, such as on a reload, the
+   * waiting content is also written as browser drafts (ED-20); closing or
+   * reloading the tab with unsaved edits makes the browser ask first (ED-22).
+   */
   private flushWhenLeft(): void {
     const document = inject(DOCUMENT);
+    const window = document.defaultView;
     const hidden = () => {
       if (document.visibilityState === 'hidden') {
         void this.openFiles.flushAll();
       }
     };
+    const pageHidden = () => this.openFiles.writeDrafts();
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      // Browsers that ask only when it is set.
+      event.returnValue = '';
+    };
     document.addEventListener('visibilitychange', hidden);
+    window?.addEventListener('pagehide', pageHidden);
+    // Only while there are unsaved edits: the listener keeps the page out of
+    // the back/forward cache in some browsers.
+    effect(onCleanup => {
+      if (this.openFiles.anyUnsaved()) {
+        window?.addEventListener('beforeunload', beforeUnload);
+        onCleanup(() => window?.removeEventListener('beforeunload', beforeUnload));
+      }
+    });
     inject(DestroyRef).onDestroy(() => {
       document.removeEventListener('visibilitychange', hidden);
+      window?.removeEventListener('pagehide', pageHidden);
       void this.openFiles.flushAll();
     });
   }

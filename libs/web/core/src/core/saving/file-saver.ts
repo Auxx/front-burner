@@ -43,13 +43,22 @@ export class FileSaver {
   private readonly currentStatus = signal<SaveStatus>({ kind: 'saved' });
   private readonly dirty = signal(false);
   private readonly savedSubject = new Subject<SaveResult>();
+  private readonly sendingSubject = new Subject<string>();
+  private readonly upToDateSubject = new Subject<void>();
 
   /** The status of the open file's saves (ED-18). */
   readonly status: Signal<SaveStatus> = this.currentStatus.asReadonly();
   /** Whether there are edits the backend has not confirmed (NV-13). */
   readonly unsaved: Signal<boolean> = this.dirty.asReadonly();
-  /** Each confirmed save. */
+  /** Each confirmed save, once `unsaved` tells whether newer content waits behind it. */
   readonly saved: Observable<SaveResult> = this.savedSubject.asObservable();
+  /** The content of each save as it is sent, such as to keep it as a browser draft (ED-20). */
+  readonly sending: Observable<string> = this.sendingSubject.asObservable();
+  /**
+   * Each time no edits are left unsaved: a save confirmed the newest content,
+   * or the edits were undone back to the last saved content. Not on `discard`.
+   */
+  readonly upToDate: Observable<void> = this.upToDateSubject.asObservable();
 
   private last: { content: string; hash: string | null; };
   /** Reads the content waiting to be sent, read only when it is sent. */
@@ -75,6 +84,11 @@ export class FileSaver {
   /** The content last confirmed by the backend, or loaded, and its hash once a save confirmed it. */
   lastSaved(): { content: string; hash: string | null; } {
     return this.last;
+  }
+
+  /** The content waiting to be sent, read now, or `null` when none waits; not the content of a save in flight. */
+  waiting(): string | null {
+    return this.pending?.() ?? null;
   }
 
   /** Records an edit; `content` is read only when the save is sent. */
@@ -152,11 +166,11 @@ export class FileSaver {
     this.pending = null;
     this.due = false;
     if (content === this.last.content) {
-      this.dirty.set(false);
-      this.currentStatus.set({ kind: 'saved' });
+      this.caughtUp();
       return;
     }
     const generation = this.generation;
+    this.sendingSubject.next(content);
     this.inFlight = this.send(content).then(
       result => {
         if (generation === this.generation) {
@@ -179,11 +193,21 @@ export class FileSaver {
   private succeeded(content: string, result: SaveResult): void {
     this.last = { content, hash: result.hash };
     this.failures = 0;
-    this.savedSubject.next(result);
-    if (this.pending === null) {
+    const newest = this.pending === null;
+    if (newest) {
       this.dirty.set(false);
       this.currentStatus.set({ kind: 'saved' });
     }
+    this.savedSubject.next(result);
+    if (newest) {
+      this.upToDateSubject.next();
+    }
+  }
+
+  private caughtUp(): void {
+    this.dirty.set(false);
+    this.currentStatus.set({ kind: 'saved' });
+    this.upToDateSubject.next();
   }
 
   private failed(content: string, error: unknown): void {

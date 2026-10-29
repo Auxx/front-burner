@@ -1,4 +1,7 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.EditorPaneComponent'">
+  @if (file().draft(); as draft) {
+    <rs-draft-offer [draft]="draft" (restore)="restore()" (discard)="discard()" />
+  }
   @if (noteShown()) {
     <rs-large-file-note (turnOn)="file().highlight.set(true)" />
   }

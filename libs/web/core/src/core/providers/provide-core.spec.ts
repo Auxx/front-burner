@@ -3,7 +3,9 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TranslocoService } from '@jsverse/transloco';
+import { NEVER } from 'rxjs';
 
+import { DraftStore } from '../saving/draft-store';
 import { AuthSessionService } from '../services/auth-session/auth-session.service';
 
 import { provideCore } from './provide-core';
@@ -24,12 +26,27 @@ describe('provideCore', () => {
         provideCore(),
         provideHttpClientTesting(),
         provideRouter([]),
-        { provide: AuthSessionService, useValue: { authToken: () => 'token' } }
+        { provide: AuthSessionService, useValue: { authToken: () => 'token', ended: NEVER } }
       ]
     });
     TestBed.inject(HttpClient).get('/api/v1/me').subscribe();
 
     const request = TestBed.inject(HttpTestingController).expectOne('/api/v1/me').request;
     expect(request.headers.get('Authorization')).toBe('Bearer token');
+  });
+
+  it('creates the draft store at start-up, so that drafts are deleted when the session ends', () => {
+    const created = vi.fn();
+    TestBed.configureTestingModule({
+      providers: [
+        provideCore(),
+        provideHttpClientTesting(),
+        { provide: DraftStore, useFactory: () => created() ?? {} }
+      ]
+    });
+
+    TestBed.inject(TranslocoService);
+
+    expect(created).toHaveBeenCalledTimes(1);
   });
 });

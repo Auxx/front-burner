@@ -7,6 +7,7 @@ import {
   createEditorState,
   type EditorStateOptions,
   isHighlighting,
+  replaceContent,
   setHighlighting,
   setLabel,
   setReadOnly
@@ -154,6 +155,15 @@ describe('createEditorState', () => {
     expect(view.contentDOM.getAttribute('aria-label')).toBe('ideas.md');
     expect(runUndo(renamed).doc.toString()).toBe(FILE);
     view.destroy();
+  });
+
+  it('replaces the whole text as one undoable edit', () => {
+    const state = create();
+
+    const replaced = state.update(replaceContent(state, '# Draft\n')).state;
+
+    expect(contentOf(replaced)).toBe('# Draft\n');
+    expect(runUndo(replaced).doc.toString()).toBe(FILE);
   });
 
   it('returns the text with LF', () => {

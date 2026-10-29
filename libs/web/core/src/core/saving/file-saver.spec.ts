@@ -95,6 +95,88 @@ describe('FileSaver', () => {
     expect(saver.unsaved()).toBe(false);
   });
 
+  it('tells the content of each save as it is sent', async () => {
+    const sending: string[] = [];
+    saver.sending.subscribe(text => sending.push(text));
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    type('ab');
+    expect(sending).toEqual([ 'a' ]);
+
+    sent[0].reject(new Error('offline'));
+    await settle();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(sending).toEqual([ 'a', 'ab' ]);
+  });
+
+  it('reports a confirmed save once it knows whether newer content waits', async () => {
+    const unsavedWhenSaved: boolean[] = [];
+    saver.saved.subscribe(() => unsavedWhenSaved.push(saver.unsaved()));
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    type('ab');
+    sent[0].resolve({ hash: 'h1' });
+    await settle();
+    await vi.advanceTimersByTimeAsync(1500);
+    sent[1].resolve({ hash: 'h2' });
+    await settle();
+
+    expect(unsavedWhenSaved).toEqual([ true, false ]);
+  });
+
+  it('reports being up to date when the newest content is saved', async () => {
+    const upToDate = vi.fn();
+    saver.upToDate.subscribe(upToDate);
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    type('ab');
+    sent[0].resolve({ hash: 'h1' });
+    await settle();
+    expect(upToDate).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1500);
+    sent[1].resolve({ hash: 'h2' });
+    await settle();
+    expect(upToDate).toHaveBeenCalledOnce();
+  });
+
+  it('reports being up to date when the edits are undone back to the saved content', async () => {
+    const upToDate = vi.fn();
+    saver.upToDate.subscribe(upToDate);
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    sent[0].reject(httpError(413, 'file-too-large'));
+    await settle();
+
+    type('start');
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(sent).toHaveLength(1);
+    expect(saver.unsaved()).toBe(false);
+    expect(upToDate).toHaveBeenCalledOnce();
+  });
+
+  it('does not report being up to date on discard', async () => {
+    const upToDate = vi.fn();
+    saver.upToDate.subscribe(upToDate);
+    type('a');
+
+    saver.discard();
+
+    expect(upToDate).not.toHaveBeenCalled();
+  });
+
+  it('reads the waiting content without sending it', async () => {
+    expect(saver.waiting()).toBeNull();
+    type('a');
+
+    expect(saver.waiting()).toBe('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    // In flight, no longer waiting.
+    expect(saver.waiting()).toBeNull();
+  });
+
   it('sends nothing when the content equals the last save', async () => {
     type('changed');
     type('start');

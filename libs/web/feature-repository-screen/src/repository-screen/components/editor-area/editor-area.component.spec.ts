@@ -5,6 +5,7 @@ import { entry } from '../../../testing/listings';
 import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { EditorAreaComponent } from './editor-area.component';
 
 const K = 'web-feature-repository-screen.EditorAreaComponent';
@@ -25,7 +26,10 @@ describe('EditorAreaComponent', () => {
   }
 
   beforeEach(async () => {
-    TestBed.configureTestingModule({ imports: [ EditorAreaComponent, translocoTesting() ] });
+    TestBed.configureTestingModule({
+      imports: [ EditorAreaComponent, translocoTesting() ],
+      providers: [ { provide: OpenFilesService, useValue: {} } ]
+    });
     fixture = TestBed.createComponent(EditorAreaComponent);
     await settle(fixture);
   });

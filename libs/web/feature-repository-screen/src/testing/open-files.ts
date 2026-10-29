@@ -32,6 +32,7 @@ export function openFile(
     saver: new FileSaver({ lastSaved: file.content, send }),
     highlight: signal(true),
     largeOnNarrow: false,
-    size: file.size
+    size: file.size,
+    draft: signal(null)
   };
 }

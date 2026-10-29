@@ -1,8 +1,15 @@
-import { computed, inject, Injectable, type Signal, signal, type WritableSignal } from '@angular/core';
+import { computed, DestroyRef, inject, Injectable, type Signal, signal, type WritableSignal } from '@angular/core';
 import type { FileContent } from '@front-burner/shared-contracts';
 import { injectNarrowViewport } from '@front-burner/ui';
 import { FilesApi } from '@front-burner/web-api-client';
-import { FileSaver, toApiError } from '@front-burner/web-core';
+import {
+  CurrentUserService,
+  type Draft,
+  type DraftKey,
+  DraftStore,
+  FileSaver,
+  toApiError
+} from '@front-burner/web-core';
 import { firstValueFrom } from 'rxjs';
 
 import { isWithin, movedPath } from '../../utils/file-name/file-name';
@@ -35,6 +42,11 @@ export interface OpenFile {
   largeOnNarrow: boolean;
   /** Its size in bytes as stored, after its last load or save. */
   size: number;
+  /**
+   * The browser draft found when it was opened, offered until the user
+   * restores or discards it; meanwhile the editor is read-only (ED-7).
+   */
+  draft: WritableSignal<Draft | null>;
 }
 
 /**
@@ -44,12 +56,24 @@ export interface OpenFile {
  *
  * Each file's saver sends `saveFile` to the file's current path with the line
  * ending and byte order mark it was loaded with (ED-12).
+ *
+ * Unsaved content is kept as a browser draft (ED-20, A-8.10): written each
+ * time a saver sends it, and by `writeDrafts` when the page is hidden for
+ * good; deleted once the backend holds the newest content, whether a save
+ * confirmed it or the edits were undone back to it. Opening a file looks for
+ * its draft and offers it (ED-7); one equal to the file is deleted without
+ * asking. A file another tab has open is claimed by it, and its draft, still
+ * being saved there, is neither offered nor deleted (D-1.3). Deleting from this tab's file tree deletes the drafts
+ * (FB-39), and renaming moves them (FB-36); a file that is gone for any other
+ * reason keeps its draft (FB-42, ED-21).
  */
 @Injectable()
 export class OpenFilesService {
   private readonly api = inject(FilesApi);
   private readonly session = inject(RepositorySessionService);
   private readonly narrow = injectNarrowViewport();
+  private readonly drafts = inject(DraftStore);
+  private readonly currentUser = inject(CurrentUserService);
 
   /** By repository, then by path. */
   private readonly files = new Map<number, Map<string, OpenFile>>();
@@ -58,6 +82,12 @@ export class OpenFilesService {
   private readonly currentFile = signal<OpenFile | null>(null);
   /** Counts the files opened, so that only the latest one becomes the current one. */
   private opening = 0;
+  /** Releases each entry's claim on its draft. */
+  private readonly claims = new Map<OpenFile, () => void>();
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.claims.forEach(release => release()));
+  }
 
   /** The file shown in the editor, once it has opened. */
   readonly current: Signal<OpenFile | null> = this.currentFile.asReadonly();
@@ -86,8 +116,14 @@ export class OpenFilesService {
         }
         throw toApiError(error);
       }
+      const key = await this.draftKey(repositoryId, content.path);
+      let draft = key && !(await this.drafts.claimedElsewhere(key)) ? await this.drafts.get(key) : null;
+      if (key && draft?.content === content.content) {
+        void this.drafts.delete(key);
+        draft = null;
+      }
       // Opened meanwhile by another call.
-      file = this.byPath(repositoryId).get(path) ?? this.create(repositoryId, content);
+      file = this.byPath(repositoryId).get(path) ?? this.create(repositoryId, content, draft);
     }
     file.largeOnNarrow = this.narrow() && file.size > LARGE_FILE_ON_NARROW;
     file.highlight.set(!file.largeOnNarrow);
@@ -108,6 +144,52 @@ export class OpenFilesService {
     await Promise.all(this.all().map(file => file.saver.flush()));
   }
 
+  /**
+   * Writes the waiting content of every file as its browser draft, such as
+   * when the page is hidden for good; the content of a save in flight was
+   * written when it was sent.
+   */
+  writeDrafts(): void {
+    for (const [ repositoryId, files ] of this.files) {
+      for (const file of files.values()) {
+        const waiting = file.saver.waiting();
+        if (waiting !== null) {
+          this.putDraft(file, repositoryId, waiting);
+        }
+      }
+    }
+  }
+
+  /**
+   * Restores the file's offered draft (ED-7): `apply` puts the draft's content
+   * in the editor and returns what reads the editor's content, which is saved
+   * at once. `apply` is not called when no draft is offered. The draft is kept
+   * until that save is confirmed.
+   */
+  restoreDraft(path: string, apply: (content: string) => () => string): void {
+    const file = this.get(path);
+    const draft = file?.draft();
+    if (!file || !draft) {
+      return;
+    }
+    file.draft.set(null);
+    file.saver.edit(apply(draft.content));
+    void file.saver.flush();
+  }
+
+  /** Deletes the file's offered draft and leaves the file as it is on disk (ED-7). */
+  discardDraft(path: string): void {
+    const file = this.get(path);
+    if (!file || file.draft() === null) {
+      return;
+    }
+    file.draft.set(null);
+    const key = this.keyAt(this.repositoryId(), file.path());
+    if (key) {
+      void this.drafts.delete(key);
+    }
+  }
+
   /** Keeps every file's saver from sending until the returned function is called, such as during a rename. */
   hold(): () => void {
     const releases = this.all().map(file => file.saver.hold());
@@ -122,27 +204,41 @@ export class OpenFilesService {
 
   /**
    * Moves the entry at `from`, or every entry under the folder at `from`, to
-   * its path under `to`, keeping its state (FB-36, ED-8).
+   * its path under `to`, keeping its state (FB-36, ED-8), and their browser
+   * drafts with them, also those of files not opened.
    */
   rekey(from: string, to: string): void {
-    const files = this.byPath(this.repositoryId());
+    const repositoryId = this.repositoryId();
+    const fromKey = this.keyAt(repositoryId, from);
+    const toKey = this.keyAt(repositoryId, to);
+    if (fromKey && toKey) {
+      void this.drafts.move(fromKey, toKey);
+    }
+    const files = this.byPath(repositoryId);
     for (const [ path, file ] of [ ...files ]) {
       const moved = movedPath(path, from, to);
       if (moved !== null && moved !== path) {
         files.delete(path);
         files.set(moved, file);
         file.path.set(moved);
+        this.claim(file, repositoryId);
       }
     }
   }
 
   /**
    * Forgets the entry at `path`, or every entry under the folder at `path`,
-   * such as after a delete; with `dropPending` its waiting save is dropped
-   * (FB-39), otherwise sent first.
+   * such as after a delete; with `dropPending` its waiting save is dropped and
+   * the browser drafts at `path` are deleted, also those of files not opened
+   * (FB-39); otherwise the waiting save is sent first.
    */
   close(path: string, options: { dropPending: boolean; }): void {
-    const files = this.byPath(this.repositoryId());
+    const repositoryId = this.repositoryId();
+    const draftKey = this.keyAt(repositoryId, path);
+    if (options.dropPending && draftKey) {
+      void this.drafts.delete(draftKey);
+    }
+    const files = this.byPath(repositoryId);
     for (const [ key, file ] of [ ...files ]) {
       if (!isWithin(key, path)) {
         continue;
@@ -153,6 +249,8 @@ export class OpenFilesService {
         void file.saver.flush();
       }
       files.delete(key);
+      this.claims.get(file)?.();
+      this.claims.delete(file);
       this.all.update(all => all.filter(item => item !== file));
       if (this.currentFile() === file) {
         this.clearCurrent();
@@ -160,7 +258,7 @@ export class OpenFilesService {
     }
   }
 
-  private create(repositoryId: number, content: FileContent): OpenFile {
+  private create(repositoryId: number, content: FileContent, draft: Draft | null): OpenFile {
     const path = signal(content.path);
     const file: OpenFile = {
       path,
@@ -183,11 +281,50 @@ export class OpenFilesService {
       }),
       highlight: signal(true),
       largeOnNarrow: false,
-      size: content.size
+      size: content.size,
+      draft: signal(draft)
     };
+    file.saver.sending.subscribe(text => this.putDraft(file, repositoryId, text));
+    file.saver.upToDate.subscribe(() => {
+      const key = this.keyAt(repositoryId, file.path());
+      if (key) {
+        void this.drafts.delete(key);
+      }
+    });
+    this.claim(file, repositoryId);
     this.byPath(repositoryId).set(content.path, file);
     this.all.update(all => [ ...all, file ]);
     return file;
+  }
+
+  /** The draft key of the file at `path`, once the user is known; `null` if they cannot be loaded. */
+  private async draftKey(repositoryId: number, path: string): Promise<DraftKey | null> {
+    try {
+      const { id } = await this.currentUser.load();
+      return { userId: id, repositoryId, path };
+    } catch {
+      return null;
+    }
+  }
+
+  /** The draft key of the file at `path`, once the user is known. */
+  private keyAt(repositoryId: number, path: string): DraftKey | null {
+    const userId = this.currentUser.user()?.id;
+    return userId === undefined ? null : { userId, repositoryId, path };
+  }
+
+  private putDraft(file: OpenFile, repositoryId: number, content: string): void {
+    const key = this.keyAt(repositoryId, file.path());
+    if (key) {
+      void this.drafts.put(key, { content, savedAt: new Date().toISOString() });
+    }
+  }
+
+  /** Claims the draft of `file` at its current path, releasing its claim on an earlier one. */
+  private claim(file: OpenFile, repositoryId: number): void {
+    this.claims.get(file)?.();
+    const key = this.keyAt(repositoryId, file.path());
+    this.claims.set(file, key ? this.drafts.claim(key) : () => undefined);
   }
 
   private byPath(repositoryId: number): Map<string, OpenFile> {

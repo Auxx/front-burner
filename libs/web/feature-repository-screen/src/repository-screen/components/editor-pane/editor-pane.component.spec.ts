@@ -1,11 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { undoDepth } from '@codemirror/commands';
+import { undo, undoDepth } from '@codemirror/commands';
 import { contentOf, type EditorStateChange, isHighlighting } from '@front-burner/web-code-editor';
 
 import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
-import type { OpenFile } from '../../services/open-files/open-files.service';
+import { type OpenFile, OpenFilesService } from '../../services/open-files/open-files.service';
 import { EditorPaneComponent } from './editor-pane.component';
 
 const K = 'web-feature-repository-screen.EditorPaneComponent';
@@ -14,6 +14,7 @@ type EditorState = EditorStateChange['state'];
 
 describe('EditorPaneComponent', () => {
   let fixture: ComponentFixture<EditorPaneComponent>;
+  let openFiles: { restoreDraft: ReturnType<typeof vi.fn>; discardDraft: ReturnType<typeof vi.fn>; };
 
   const pane = () => fixture.nativeElement as HTMLElement;
   const stateOf = (file: OpenFile) => file.editorState as EditorState;
@@ -37,7 +38,22 @@ describe('EditorPaneComponent', () => {
   }
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ imports: [ EditorPaneComponent, translocoTesting() ] });
+    // As OpenFilesService does: the offer ends, and a restored draft is saved.
+    openFiles = {
+      restoreDraft: vi.fn((_path: string, apply: (content: string) => () => string) => {
+        const file = fixture.componentInstance.file();
+        const draft = file.draft();
+        if (draft) {
+          file.draft.set(null);
+          file.saver.edit(apply(draft.content));
+        }
+      }),
+      discardDraft: vi.fn(() => fixture.componentInstance.file().draft.set(null))
+    };
+    TestBed.configureTestingModule({
+      imports: [ EditorPaneComponent, translocoTesting() ],
+      providers: [ { provide: OpenFilesService, useValue: openFiles } ]
+    });
     fixture = TestBed.createComponent(EditorPaneComponent);
   });
 
@@ -144,6 +160,60 @@ describe('EditorPaneComponent', () => {
       expect(contentOf(stateOf(file))).toContain('Edited.');
       // The edit is still in the history.
       expect(undoDepth(stateOf(file))).toBeGreaterThan(0);
+    });
+  });
+
+  describe('a browser draft (ED-7)', () => {
+    const DISK = '# README.md\n';
+    const DRAFT = { content: '# README.md\nOffline edit.\n', savedAt: '2026-10-29T10:05:00.000Z' };
+
+    function withDraft(): OpenFile {
+      const file = openFile('README.md');
+      file.draft.set(DRAFT);
+      return file;
+    }
+
+    it('offers a draft and keeps the editor read-only', async () => {
+      const file = withDraft();
+
+      await show(file);
+
+      expect(pane().querySelector('rs-draft-offer')).not.toBeNull();
+      expect(contentOf(stateOf(file))).toBe(DISK);
+      expect(stateOf(file).readOnly).toBe(true);
+      expect(content().getAttribute('contenteditable')).toBe('false');
+    });
+
+    it('restores a draft as one undoable edit and saves it', async () => {
+      const file = withDraft();
+      await show(file);
+
+      button('web-feature-repository-screen.DraftOfferComponent.restore')?.click();
+      await settle(fixture);
+
+      expect(contentOf(stateOf(file))).toBe(DRAFT.content);
+      expect(content().textContent).toContain('Offline edit.');
+      expect(stateOf(file).readOnly).toBe(false);
+      expect(pane().querySelector('rs-draft-offer')).toBeNull();
+      expect(openFiles.restoreDraft).toHaveBeenCalledWith('README.md', expect.any(Function));
+      expect(file.saver.unsaved()).toBe(true);
+      expect(file.saver.waiting()).toBe(DRAFT.content);
+      let undone = stateOf(file);
+      undo({ state: undone, dispatch: transaction => (undone = transaction.state) });
+      expect(contentOf(undone)).toBe(DISK);
+    });
+
+    it('discards a draft and keeps the file as on disk', async () => {
+      const file = withDraft();
+      await show(file);
+
+      button('web-feature-repository-screen.DraftOfferComponent.discard')?.click();
+      await settle(fixture);
+
+      expect(openFiles.discardDraft).toHaveBeenCalledWith('README.md');
+      expect(contentOf(stateOf(file))).toBe(DISK);
+      expect(stateOf(file).readOnly).toBe(false);
+      expect(pane().querySelector('rs-draft-offer')).toBeNull();
     });
   });
 });

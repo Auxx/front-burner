@@ -102,6 +102,11 @@ export function setReadOnly(on: boolean): TransactionSpec {
   return { effects: readOnly.reconfigure(on ? readOnlyExtension : []) };
 }
 
+/** Replaces the whole text as one undoable edit, such as with a restored browser draft (ED-7). */
+export function replaceContent(state: EditorState, content: string): TransactionSpec {
+  return { changes: { from: 0, to: state.doc.length, insert: content }, userEvent: 'input.replace' };
+}
+
 /** Renames the editor (ED-37) without recreating the state, so the undo history stays. */
 export function setLabel(text: string): TransactionSpec {
   return { effects: label.reconfigure(labelExtension(text)) };

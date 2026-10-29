@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { drainFailedRequests, expect, type Monitor, test } from './support/fixtures';
-import { logIn, seed } from './support/instance';
+import { logIn, seed, TEST_ADMIN } from './support/instance';
 
 test.use({ instanceOptions: { onboarded: true } });
 
@@ -16,6 +16,7 @@ const SAVED = 'Saved';
 const SAVING = 'Saving…';
 const OFFLINE = 'Not saved — offline, retrying';
 const TOO_LARGE = 'Not saved — the file is larger than 1 MB';
+const DRAFT_OFFER = /You have unsaved changes from /;
 const LARGE_NOTE = 'Highlighting is off for large files on small screens, to keep typing fast.';
 
 const filesButton = (page: Page) => page.getByRole('banner').getByRole('button', { name: 'Files', exact: true });
@@ -85,6 +86,47 @@ async function typeAtEnd(page: Page, name: string, text: string): Promise<void> 
   await editor(page, name).click();
   await page.keyboard.press('ControlOrMeta+End');
   await page.keyboard.type(text);
+}
+
+/** Makes every save of the repository fail as if the network were off; reading still works. */
+async function failSaves(page: Page, repositoryId: number): Promise<void> {
+  await page.route(
+    `**/api/v1/repositories/${repositoryId}/file`,
+    route => route.request().method() === 'PUT' ? route.abort('internetdisconnected') : route.fallback()
+  );
+}
+
+/** The browser drafts in IndexedDB, by key (A-8.10). */
+function storedDrafts(page: Page): Promise<Record<string, string>> {
+  return page.evaluate(() =>
+    new Promise<Record<string, string>>((resolve, reject) => {
+      const request = indexedDB.open('front-burner', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('drafts');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const drafts: Record<string, string> = {};
+        const cursor = request.result.transaction('drafts').objectStore('drafts').openCursor();
+        cursor.onerror = () => reject(cursor.error);
+        cursor.onsuccess = () => {
+          if (cursor.result) {
+            drafts[String(cursor.result.key)] = (cursor.result.value as { content: string; }).content;
+            cursor.result.continue();
+          } else {
+            request.result.close();
+            resolve(drafts);
+          }
+        };
+      };
+    })
+  );
+}
+
+/** Types an edit that cannot be saved, and waits until it is kept as a browser draft. */
+async function typeUnsaved(page: Page, repositoryId: number, name: string, text: string): Promise<void> {
+  await failSaves(page, repositoryId);
+  await typeAtEnd(page, name, text);
+  await expect(status(page)).toHaveText(OFFLINE, { timeout: 10_000 });
+  await expect.poll(async () => Object.keys(await storedDrafts(page)).length).toBe(1);
 }
 
 /** Selects the entry `name` in the tree, as a user opens a file. */
@@ -319,5 +361,95 @@ test.describe('editor', () => {
 
     expect(results.violations).toEqual([]);
     expect(isMobile || await main(page).isVisible()).toBe(true);
+  });
+
+  test.describe('browser drafts', () => {
+    test('AC-EDIT-001.6: offers an offline edit after a reload and restores it', async ({ page, instance, monitor }) => {
+      const { id, dir } = seedHandbook(instance.dataDir);
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await typeUnsaved(page, id, 'README.md', 'Offline edit.');
+
+      // The browser asks before the reload, since the edit is unsaved (ED-22).
+      page.once('dialog', dialog => void dialog.accept());
+      await page.reload();
+
+      const offer = main(page).getByText(DRAFT_OFFER);
+      await expect(offer).toBeVisible();
+      await page.unroute(`**/api/v1/repositories/${id}/file`);
+      await expect(editor(page, 'README.md')).toHaveText('# Handbook');
+      await expect(editor(page, 'README.md')).toHaveAttribute('contenteditable', 'false');
+      await main(page).getByRole('button', { name: 'Restore', exact: true }).click();
+
+      await expect(offer).toBeHidden();
+      await expect(editor(page, 'README.md')).toContainText('Offline edit.');
+      await expect(status(page)).toHaveText(SAVED);
+      expect(onDisk(dir, 'README.md')).toBe('# Handbook\nOffline edit.');
+      await expect.poll(() => storedDrafts(page)).toEqual({});
+      drainSaves(monitor, id);
+    });
+
+    test('AC-EDIT-001.7: deletes drafts on logout', async ({ page, instance, monitor }) => {
+      const { id } = seedHandbook(instance.dataDir);
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await typeUnsaved(page, id, 'README.md', 'Unsaved.');
+
+      page.once('dialog', dialog => void dialog.accept());
+      await page.getByRole('button', { name: /^Account menu for / }).click();
+      await page.getByRole('menuitem', { name: 'Log out' }).click();
+
+      await expect(page.getByRole('heading', { level: 1, name: 'Log in' })).toBeVisible();
+      await expect.poll(() => storedDrafts(page)).toEqual({});
+      drainSaves(monitor, id);
+    });
+
+    test('AC-EDIT-001.8: asks before closing a tab with unsaved edits', async ({ page, instance, monitor }) => {
+      const { id } = seedHandbook(instance.dataDir);
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await typeUnsaved(page, id, 'README.md', 'Unsaved.');
+
+      const asked = page.waitForEvent('dialog');
+      await page.close({ runBeforeUnload: true });
+      const dialog = await asked;
+
+      expect(dialog.type()).toBe('beforeunload');
+      await dialog.dismiss();
+      expect(page.isClosed()).toBe(false);
+      drainSaves(monitor, id);
+    });
+
+    test('AC-APP-001.3: deletes browser drafts when logging out, in every tab', async ({ page, context, instance, monitor }) => {
+      const { id } = seedHandbook(instance.dataDir);
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await typeUnsaved(page, id, 'README.md', 'Unsaved.');
+      const other = await context.newPage();
+      await other.goto('/');
+      await expect(other.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
+
+      await other.getByRole('button', { name: /^Account menu for / }).click();
+      const menu = other.getByRole('menu');
+      await expect(menu).toContainText(TEST_ADMIN.displayName);
+      await expect(menu).toContainText(TEST_ADMIN.email);
+      await expect(menu.getByRole('menuitem', { name: 'Log out' })).toBeVisible();
+      await menu.getByRole('menuitem', { name: 'Log out' }).click();
+
+      await expect(other.getByRole('heading', { level: 1, name: 'Log in' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: 'Log in' })).toBeVisible();
+      await expect.poll(() => storedDrafts(page)).toEqual({});
+      drainSaves(monitor, id);
+    });
+
+    test('has no axe violations with the offer shown', async ({ page, instance, monitor }) => {
+      const { id } = seedHandbook(instance.dataDir);
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await typeUnsaved(page, id, 'README.md', 'Unsaved.');
+      page.once('dialog', dialog => void dialog.accept());
+      await page.reload();
+      await expect(main(page).getByText(DRAFT_OFFER)).toBeVisible();
+
+      const results = await new AxeBuilder({ page }).exclude('ui-split-pane > .divider').analyze();
+
+      expect(results.violations).toEqual([]);
+      drainSaves(monitor, id);
+    });
   });
 });
