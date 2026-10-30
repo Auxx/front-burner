@@ -62,6 +62,10 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   // exempt (WCAG 1.4.3)
   text('text-default', 'surface-raised', 'surface-hover'),
   text('text-muted', 'surface-raised', 'surface-hover'),
+  ...[ 'text-default', 'text-muted', 'text-link' ].map(fg => text(fg, 'surface-card')),
+  text('text-default', 'surface-card', 'surface-hover'),
+  text('text-muted', 'surface-card', 'surface-hover'),
+  text('text-default', 'surface-sunken', 'surface-island'),
   text('text-inverse', 'text-default'),
 
   // Buttons: secondary and danger on their raised background, also hovered

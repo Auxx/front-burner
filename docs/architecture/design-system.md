@@ -39,7 +39,9 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 
 - **A-10.5** The look follows JetBrains' **Islands** theme and **VS Code**
   (D-9.2), so that it feels familiar to software developers:
-  - a darker **canvas** behind the whole page;
+  - islands sit on a **lighter canvas**; in dark mode the islands are the
+    darker surface, as in WebStorm's Islands Dark; in light mode they are white
+    on a grey canvas;
   - content sits on **islands**: panels with rounded corners, separated by a
     small gap, each with an optional header and toolbar;
   - a compact density on desktop, close to an IDE's;
@@ -149,7 +151,7 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 
   | Group     | Tokens                                                                                                            |
   | --------- | ----------------------------------------------------------------------------------------------------------------- |
-  | Surface   | `canvas`, `island`, `raised` (menus, popovers), `sunken` (inputs), `scrim`; `hover`, `pressed` overlays           |
+  | Surface   | `canvas`, `island`, `card` (a surface on an island: tiles, code blocks), `raised` (menus, popovers), `sunken` (inputs), `scrim`; `hover`, `pressed` overlays           |
   | Selection | `selected-active` and `selected-inactive`: a list shows its selection differently when it does not have the focus |
   | Text      | `default`, `muted`, `subtle`, `disabled`, `inverse`, `link`, `on-accent`                                          |
   | Icon      | as text                                                                                                           |
