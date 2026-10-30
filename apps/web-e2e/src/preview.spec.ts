@@ -1,10 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import { workspaceRoot } from '@nx/devkit';
-import type { Page } from '@playwright/test';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import type { Locator, Page, Request } from '@playwright/test';
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { crc32, deflateSync } from 'node:zlib';
 
-import { expect, test } from './support/fixtures';
+import { drainFailedRequests, expect, type Monitor, test } from './support/fixtures';
 import { logIn, seed } from './support/instance';
 
 test.use({ instanceOptions: { onboarded: true } });
@@ -24,12 +25,13 @@ const treeItem = (page: Page, name: string) =>
   });
 
 /** Seeds `handbook` with the files of `files` in its working copy; returns its ID and its working copy. */
-function seedHandbook(dataDir: string, files: Record<string, string> = {}): { id: number; dir: string; } {
+function seedHandbook(dataDir: string, files: Record<string, string | Buffer> = {}): { id: number; dir: string; } {
   const [ id ] = seed(dataDir, {
     repositories: [ { userId: ADMIN_ID, name: 'handbook', workingCopy: 'handbook' } ]
   }).repositoryIds;
   const dir = join(dataDir, 'repos', String(ADMIN_ID), String(id));
   for (const [ path, content ] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, path)), { recursive: true });
     writeFileSync(join(dir, path), content);
   }
   return { id, dir };
@@ -60,11 +62,11 @@ const PNG = Buffer.from(
 const WEB_ROOT = join(workspaceRoot, 'dist/apps/web/browser');
 
 /**
- * Answers the images of the preview with a pixel: remote ones, which
- * `img-src` allows, so that the test needs no network, and relative ones,
- * which the image loader (plan 33) does not resolve yet, so they resolve
- * against the page's `<base href="/">`. The web client's own images are
- * served as they are.
+ * Answers every image the browser loads by address with a pixel, so that
+ * the test needs no network: remote ones, which `img-src` allows, once
+ * **Show remote images** sets their address. Repository images come through
+ * the API as `blob:` URLs, and the web client's own images are served as
+ * they are.
  */
 async function answerImages(page: Page, origin: string): Promise<void> {
   const isBuildFile = (url: URL) =>
@@ -476,7 +478,8 @@ test.describe('preview', () => {
 
   test('AC-EDIT-002.16: renders the XSS corpus with no CSP violation', async ({ page, instance }) => {
     const corpus = readFileSync(join(workspaceRoot, 'apps/web-e2e/src/support/fixtures/xss-corpus.md'), 'utf8');
-    const { id } = seedHandbook(instance.dataDir, { 'xss.md': corpus });
+    // The corpus's one repository image, so that loading it logs no failed request.
+    const { id } = seedHandbook(instance.dataDir, { 'xss.md': corpus, 'a.png': PNG });
     const dialogs: string[] = [];
     page.on('dialog', dialog => {
       dialogs.push(dialog.message());
@@ -518,5 +521,398 @@ test.describe('preview', () => {
     const results = await new AxeBuilder({ page }).include('md-preview').analyze();
 
     expect(results.violations).toEqual([]);
+  });
+});
+
+/** A PNG of `width` × `height` transparent pixels, so that a test can tell images apart by their size. */
+function png(width: number, height: number): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([ Buffer.from(type, 'ascii'), data ]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([ length, body, crc ]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  // 8 bits per channel, RGBA.
+  header.writeUInt8(8, 8);
+  header.writeUInt8(6, 9);
+  // Each row starts with its filter type, 0.
+  const rows = Buffer.alloc(height * (1 + width * 4));
+  return Buffer.concat([
+    Buffer.from([ 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a ]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(rows)),
+    chunk('IEND', Buffer.alloc(0))
+  ]);
+}
+
+const IMAGE_ENDPOINT = /\/api\/v1\/repositories\/\d+\/image$/;
+
+/** The requests of the image endpoint, as the browser sends them. */
+function imageRequests(page: Page): Request[] {
+  const requests: Request[] = [];
+  page.on('request', request => {
+    if (IMAGE_ENDPOINT.test(new URL(request.url()).pathname)) {
+      requests.push(request);
+    }
+  });
+  return requests;
+}
+
+/** Waits until no request of `requests` has started for a while and none is in flight. */
+async function settled(requests: readonly Request[], inFlight: () => number): Promise<void> {
+  await expect.poll(async () => {
+    const before = requests.length;
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return requests.length === before && inFlight() === 0;
+  }).toBe(true);
+}
+
+const requestedPaths = (requests: readonly Request[]) =>
+  requests.map(request => new URL(request.url()).searchParams.get('path'));
+
+/** The width the browser decoded an image at: 0 while it has not loaded. */
+const naturalWidth = (image: Locator) => image.evaluate(img => (img as HTMLImageElement).naturalWidth);
+
+/** Expects `image` to be shown through a `blob:` URL, decoded at `width` pixels. */
+async function expectBlobImage(image: Locator, width = 1): Promise<void> {
+  await expect(image).toHaveAttribute('src', /^blob:/);
+  await expect.poll(() => naturalWidth(image)).toBe(width);
+}
+
+/** Opens the screen at `url` with its preview shown: on narrow screens, on the **Preview** tab. */
+async function openPreview(page: Page, url: string, isMobile: boolean): Promise<void> {
+  await openScreen(page, url);
+  if (isMobile) {
+    await main(page).getByRole('tablist', { name: 'View' }).getByRole('tab', { name: 'Preview' }).click();
+  }
+}
+
+/** Removes the console errors of image requests the test expects to fail. */
+function drainFailedImages(monitor: Monitor, repositoryId: number): void {
+  drainFailedRequests(monitor, `/api/v1/repositories/${repositoryId}/image`);
+}
+
+test.describe('images', () => {
+  test('AC-EDIT-003.1, AC-EDIT-003.2, AC-EDIT-003.3, AC-EDIT-003.4 and AC-EDIT-003.5: shows repository images by relative, parent and root paths, decoded, at their width, uncommitted too, through blob: URLs with the token in a header', async ({ page, instance, isMobile }) => {
+    // Written after the clone, so none of them is committed (AC-EDIT-003.3).
+    const { id } = seedHandbook(instance.dataDir, {
+      'docs/guide.md': [
+        '# Guide',
+        '',
+        '![Diagram](img/flow.png)',
+        '',
+        '![Logo](../logo.svg)',
+        '',
+        '![Cover](/images/cover.png)',
+        '',
+        '<img src="img/flow.png" width="200" alt="Wide">',
+        '',
+        '![Photo](my%20photo.png)',
+        '',
+        '![Versioned](img.png?v=2)',
+        ''
+      ].join('\n'),
+      'docs/img/flow.png': png(4, 2),
+      'logo.svg': '<svg xmlns="http://www.w3.org/2000/svg" width="6" height="6"><rect width="6" height="6"/></svg>',
+      'images/cover.png': png(5, 1),
+      'docs/my photo.png': png(7, 1),
+      'docs/img.png': png(8, 1)
+    });
+    const requests = imageRequests(page);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
+    const view = preview(page, 'guide.md');
+
+    await expectBlobImage(view.getByRole('img', { name: 'Diagram', exact: true }), 4);
+    await expectBlobImage(view.getByRole('img', { name: 'Logo', exact: true }), 6);
+    await expectBlobImage(view.getByRole('img', { name: 'Cover', exact: true }), 5);
+    await expectBlobImage(view.getByRole('img', { name: 'Photo', exact: true }), 7);
+    await expectBlobImage(view.getByRole('img', { name: 'Versioned', exact: true }), 8);
+    const wide = view.getByRole('img', { name: 'Wide', exact: true });
+    await expectBlobImage(wide, 4);
+    expect((await wide.boundingBox())?.width).toBe(200);
+
+    // AC-EDIT-003.4
+    expect(requestedPaths(requests).sort()).toEqual([
+      'docs/img.png',
+      'docs/img/flow.png',
+      'docs/my photo.png',
+      'images/cover.png',
+      'logo.svg'
+    ]);
+    for (const request of requests) {
+      expect(await request.headerValue('authorization')).toMatch(/^Bearer \S+$/);
+    }
+    const token = (await requests[0]?.headerValue('authorization'))?.replace('Bearer ', '') ?? '';
+    const addresses = await view.locator('img').evaluateAll(images => images.map(img => img.getAttribute('src') ?? ''));
+    expect(addresses).toHaveLength(6);
+    for (const address of [ ...addresses, ...requests.map(request => request.url()) ]) {
+      expect(address).not.toContain(token);
+    }
+    expect(addresses.every(address => address.startsWith('blob:'))).toBe(true);
+  });
+
+  test('AC-EDIT-003.6: refuses images outside the repository, in .git and through a symbolic link', async ({ page, instance, monitor, isMobile }) => {
+    const { id, dir } = seedHandbook(instance.dataDir, {
+      'docs/guide.md': '# Guide\n\n![Passwd](../../../../etc/passwd)\n\n![Config](.git/config)\n\n![Link](link.png)\n'
+    });
+    writeFileSync(join(instance.dataDir, 'outside.png'), PNG);
+    symlinkSync(join(instance.dataDir, 'outside.png'), join(dir, 'docs/link.png'));
+    const requests = imageRequests(page);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
+    const view = preview(page, 'guide.md');
+
+    for (const alt of [ 'Passwd', 'Config', 'Link' ]) {
+      await expect(view.getByRole('img', { name: `${alt}, Can't show this image`, exact: true })).toBeVisible();
+    }
+    // The first two are refused without a request; the backend refuses the link.
+    expect(requestedPaths(requests)).toEqual([ 'docs/link.png' ]);
+    const authorization = (await requests[0]?.headerValue('authorization')) ?? '';
+    for (const path of [ '../../../etc/passwd', '.git/config', 'docs/link.png' ]) {
+      const response = await page.request.get(`/api/v1/repositories/${id}/image`, {
+        params: { path },
+        headers: { authorization }
+      });
+      expect(response.status(), path).toBe(400);
+    }
+    drainFailedImages(monitor, id);
+  });
+
+  test('AC-EDIT-003.7: shows why a missing, too large or unsupported image isn\'t shown, with its alt text', async ({ page, instance, monitor, isMobile }) => {
+    const { id } = seedHandbook(instance.dataDir, {
+      'docs/guide.md': '# Guide\n\n![Flow](img/missing.png)\n\n![Big](big.png)\n\n![Scan](scan.tiff)\n',
+      // Only its size matters: the endpoint refuses it before reading it.
+      'docs/big.png': Buffer.concat([ PNG, Buffer.alloc(12 * 1024 * 1024) ]),
+      'docs/scan.tiff': 'II*\0'
+    });
+    const requests = imageRequests(page);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
+    const view = preview(page, 'guide.md');
+
+    await expect(view.getByRole('img', { name: 'Flow, Image not found: img/missing.png', exact: true })).toBeVisible();
+    await expect(view.getByRole('img', { name: 'Big, This image is too large to preview', exact: true }))
+      .toBeVisible();
+    await expect(view.getByRole('img', { name: 'Scan, This image format isn\'t supported', exact: true }))
+      .toBeVisible();
+    await expect(view.getByText('Image not found: img/missing.png')).toBeVisible();
+    expect(requestedPaths(requests).sort()).toEqual([ 'docs/big.png', 'docs/img/missing.png' ]);
+    drainFailedImages(monitor, id);
+  });
+
+  test('AC-EDIT-003.8: loads only nearby images, four at a time, and none again while typing or switching files', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'Typing while the preview shows needs Split.');
+    const images = Array.from({ length: 200 }, (_, index) => index + 1);
+    const { id } = seedHandbook(instance.dataDir, {
+      'many.md': [
+        '# Many',
+        '',
+        'Intro',
+        '',
+        '[Other](other.md)',
+        '',
+        ...images.map(index => `<img src="img/${index}.png" width="40" height="40" alt="Image ${index}">\n`)
+      ].join('\n'),
+      'other.md': '# Other\n\n[Back](many.md)\n',
+      ...Object.fromEntries(images.map(index => [ `img/${index}.png`, png(index, 1) ]))
+    });
+    // Counts the requests in flight, delayed so that more would overlap if the limit failed.
+    let inFlight = 0;
+    let mostInFlight = 0;
+    await page.route(url => IMAGE_ENDPOINT.test(url.pathname), async route => {
+      inFlight++;
+      mostInFlight = Math.max(mostInFlight, inFlight);
+      const response = await route.fetch();
+      await new Promise(resolve => setTimeout(resolve, 50));
+      inFlight--;
+      await route.fulfill({ response });
+    });
+    const loads: string[] = [];
+    page.on('response', response => {
+      if (IMAGE_ENDPOINT.test(new URL(response.url()).pathname) && response.status() === 200) {
+        loads.push(new URL(response.url()).searchParams.get('path') ?? '');
+      }
+    });
+    const requests = imageRequests(page);
+    await openPreview(page, `/repositories/${id}/files/many.md`, isMobile);
+    const view = preview(page, 'many.md');
+    await expectBlobImage(view.getByRole('img', { name: 'Image 1', exact: true }), 1);
+    await expect.poll(() => requests.length).toBeGreaterThan(4);
+    await settled(requests, () => inFlight);
+
+    expect(loads.length).toBeLessThan(60);
+    expect(loads).not.toContain('img/200.png');
+    expect(mostInFlight).toBeLessThanOrEqual(4);
+    const loaded = loads.length;
+    const requested = requests.length;
+
+    await editor(page, 'many.md').click();
+    await page.keyboard.press('ControlOrMeta+Home');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('End');
+    await page.keyboard.type(' more');
+    await expect(view.getByText('Intro more')).toBeVisible();
+    await expect(status(page)).toHaveText('Saved');
+    await settled(requests, () => inFlight);
+    expect(requests.length).toBe(requested);
+
+    await view.getByRole('link', { name: 'Other' }).click();
+    await preview(page, 'other.md').getByRole('link', { name: 'Back' }).click();
+    await expectBlobImage(preview(page, 'many.md').getByRole('img', { name: 'Image 1', exact: true }), 1);
+    await settled(requests, () => inFlight);
+    // Revalidated with `If-None-Match` at most, never loaded again.
+    expect(loads.length).toBe(loaded);
+  });
+
+  test('AC-EDIT-003.9: shows an image replaced on disk without a reload', async ({ page, instance, isMobile }) => {
+    const { id, dir } = seedHandbook(instance.dataDir, {
+      'docs/guide.md': '# Guide\n\n![Flow](img/flow.png)\n',
+      'docs/img/flow.png': png(1, 1)
+    });
+    const requests = imageRequests(page);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
+    const image = preview(page, 'guide.md').getByRole('img', { name: 'Flow', exact: true });
+    await expectBlobImage(image, 1);
+
+    writeFileSync(join(dir, 'docs/img/flow.png'), png(3, 2));
+    // A pull would name the folder in `files.changed`; creating a file there does too (the pull comes with step 4).
+    const response = await page.request.post(`/api/v1/repositories/${id}/entries`, {
+      headers: { authorization: (await requests[0]?.headerValue('authorization')) ?? '' },
+      data: { folder: 'docs/img', name: 'notes.md', kind: 'file' }
+    });
+    expect(response.ok()).toBe(true);
+
+    await expect.poll(() => naturalWidth(image)).toBe(3);
+    await expect(image).toHaveAttribute('src', /^blob:/);
+  });
+
+  test('AC-EDIT-003.10: shows the dark or the light picture by colour scheme, and switches', async ({ page, instance, isMobile }) => {
+    const { id } = seedHandbook(instance.dataDir, {
+      'brand.md': '# Brand\n\n<picture><source media="(prefers-color-scheme: dark)" srcset="logo-dark.png">'
+        + '<img src="logo-light.png" alt="Brand"></picture>\n',
+      'logo-dark.png': png(3, 1),
+      'logo-light.png': png(2, 1)
+    });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    const requests = imageRequests(page);
+    await openPreview(page, `/repositories/${id}/files/brand.md`, isMobile);
+    const image = preview(page, 'brand.md').getByRole('img', { name: 'Brand', exact: true });
+
+    await expectBlobImage(image, 3);
+    expect(requestedPaths(requests)).toEqual([ 'logo-dark.png' ]);
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect.poll(() => naturalWidth(image)).toBe(2);
+    expect(requestedPaths(requests)).toEqual([ 'logo-dark.png', 'logo-light.png' ]);
+  });
+
+  test('AC-EDIT-003.11 and AC-EDIT-003.12: shows remote images only after Show remote images, with no referrer, and never http ones', async ({ page, instance, isMobile }) => {
+    const { id } = seedHandbook(instance.dataDir, {
+      'badges.md': [
+        '# Badges',
+        '',
+        '![Build](https://img.shields.io/badge/build-passing-green.png)',
+        '',
+        '![Insecure](http://example.com/a.png)',
+        '',
+        '[Other](other.md)',
+        ''
+      ].join('\n'),
+      'other.md': '# Other\n\n[Back](badges.md)\n'
+    });
+    const remote: Request[] = [];
+    await page.route('https://img.shields.io/**', route => {
+      remote.push(route.request());
+      return route.fulfill({ contentType: 'image/png', body: png(9, 1) });
+    });
+    const insecure: string[] = [];
+    page.on('request', request => {
+      if (request.url().startsWith('http://example.com')) {
+        insecure.push(request.url());
+      }
+    });
+    await openPreview(page, `/repositories/${id}/files/badges.md`, isMobile);
+    const view = preview(page, 'badges.md');
+    const placeholder = view.getByRole('img', { name: 'Build, Remote image from img.shields.io', exact: true });
+
+    await expect(placeholder).toBeVisible();
+    await expect(view.getByText('Loading them lets these sites see your IP address.')).toBeVisible();
+    expect(remote).toEqual([]);
+    await view.getByRole('button', { name: 'Show remote images' }).click();
+
+    const image = view.getByRole('img', { name: 'Build', exact: true });
+    await expect.poll(() => naturalWidth(image)).toBe(9);
+    await expect(image).toHaveAttribute('src', 'https://img.shields.io/badge/build-passing-green.png');
+    expect(remote).toHaveLength(1);
+    expect(await remote[0]?.headerValue('referer')).toBeNull();
+    await expect(view.getByRole('button', { name: 'Show remote images' })).toHaveCount(0);
+    // AC-EDIT-003.12
+    await expect(view.getByRole('img', { name: 'Insecure, Insecure image (http) isn\'t shown', exact: true }))
+      .toBeVisible();
+    expect(insecure).toEqual([]);
+
+    await view.getByRole('link', { name: 'Other' }).click();
+    await preview(page, 'other.md').getByRole('link', { name: 'Back' }).click();
+    await expect(
+      preview(page, 'badges.md').getByRole('img', {
+        name: 'Build, Remote image from img.shields.io',
+        exact: true
+      })
+    ).toBeVisible();
+    await expect(preview(page, 'badges.md').getByRole('button', { name: 'Show remote images' })).toBeVisible();
+    expect(remote).toHaveLength(1);
+  });
+
+  test('AC-EDIT-003.13: shows an SVG with a script as an image and runs nothing', async ({ page, instance, isMobile }) => {
+    const { id } = seedHandbook(instance.dataDir, {
+      'docs/guide.md': '# Guide\n\n![Evil](evil.svg)\n',
+      'docs/evil.svg':
+        '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" onload="window.parent.ran = true">'
+        + '<script>window.parent.ran = true; alert(1)</script><rect width="10" height="10"/></svg>'
+    });
+    const dialogs: string[] = [];
+    page.on('dialog', dialog => {
+      dialogs.push(dialog.message());
+      void dialog.dismiss();
+    });
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
+
+    await expectBlobImage(preview(page, 'guide.md').getByRole('img', { name: 'Evil', exact: true }), 10);
+    expect(await page.evaluate(() => (window as unknown as { ran?: boolean; }).ran)).toBeUndefined();
+    expect(dialogs).toEqual([]);
+  });
+
+  test('AC-EDIT-003.14 and AC-EDIT-003.15: keeps a missing image\'s link around its placeholder, named by alt text and reason', async ({ page, instance, monitor, isMobile }) => {
+    const { id } = seedHandbook(instance.dataDir, {
+      'docs/guide.md': '# Guide\n\n[![Docs logo](missing.png)](https://example.com)\n'
+    });
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
+    const link = preview(page, 'guide.md').getByRole('link', { name: 'Docs logo, Image not found: missing.png' });
+
+    await expect(link).toHaveAttribute('href', 'https://example.com');
+    await expect(link.getByRole('img', { name: 'Docs logo, Image not found: missing.png', exact: true }))
+      .toBeVisible();
+    drainFailedImages(monitor, id);
+  });
+
+  test('has no axe violations with image placeholders shown', async ({ page, instance, monitor, isMobile }) => {
+    const { id } = seedHandbook(instance.dataDir, {
+      'docs/guide.md': '# Guide\n\n![Flow](img/flow.png)\n\n![Missing](missing.png)\n\n![](decorative.tiff)\n\n'
+        + '![Badge](https://img.shields.io/badge/a.png) ![](http://example.com/a.png)\n',
+      'docs/img/flow.png': png(4, 2)
+    });
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
+    const view = preview(page, 'guide.md');
+    await expectBlobImage(view.getByRole('img', { name: 'Flow', exact: true }), 4);
+    await expect(view.getByRole('img', { name: 'Missing, Image not found: missing.png' })).toBeVisible();
+    await expect(view.getByRole('button', { name: 'Show remote images' })).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).include('md-preview').analyze();
+
+    expect(results.violations).toEqual([]);
+    drainFailedImages(monitor, id);
   });
 });

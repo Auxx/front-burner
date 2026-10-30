@@ -70,8 +70,10 @@
       border: var(--ui-border-width) solid var(--ui-border-default);
     }
 
+    // IM-11: never wider than the preview, in proportion when scaled down.
     img {
       max-inline-size: 100%;
+      block-size: auto;
     }
 
     a {

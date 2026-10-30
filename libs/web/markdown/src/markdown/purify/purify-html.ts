@@ -1,6 +1,12 @@
 import DOMPurify, { type DOMPurify as Purifier, type UponSanitizeAttributeHookEvent } from 'dompurify';
 import { checkAddress, isAddressAttribute } from '../whitelist/addresses';
-import { allowedAttributes, isAllowedInputType, purifyConfig, withIdPrefix } from '../whitelist/derive';
+import {
+  allowedAttributes,
+  IMAGE_ADDRESS_ATTRIBUTES,
+  isAllowedInputType,
+  purifyConfig,
+  withIdPrefix
+} from '../whitelist/derive';
 import { SAFE_HTML, type SafeHtmlWhitelist } from '../whitelist/safe-html';
 
 /** The classes that highlighting adds after sanitising (plan 29, D-7.5), and the tags it adds them to. */
@@ -26,7 +32,8 @@ let purifier: Purifier | undefined;
  * The second sanitising step (A-8.12, D-7.6): DOMPurify with the whitelist's
  * configuration, right before the HTML reaches the page. It needs a DOM, so
  * it runs on the main thread only. Its own instance keeps its hooks away from
- * any other use of DOMPurify.
+ * any other use of DOMPurify. Image addresses come out in pipeline
+ * attributes, for the image loader to read (IM-24).
  */
 export function purifyHtml(html: string): PurifiedHtml {
   purifier ??= createPurifier(SAFE_HTML);
@@ -36,7 +43,10 @@ export function purifyHtml(html: string): PurifiedHtml {
 function createPurifier(whitelist: SafeHtmlWhitelist): Purifier {
   const instance = DOMPurify(window);
   instance.addHook('uponSanitizeAttribute', (node, event) => checkAttribute(node, event, whitelist));
-  instance.addHook('afterSanitizeAttributes', node => checkElement(node, whitelist));
+  instance.addHook('afterSanitizeAttributes', node => {
+    checkElement(node, whitelist);
+    moveImageAddress(node);
+  });
   return instance;
 }
 
@@ -80,6 +90,20 @@ function isAllowedClass(tag: string, value: string, whitelist: SafeHtmlWhitelist
     || (whitelist.attributes[tag]?.includes('class') && whitelist.values['class']?.test(value))
     || (HIGHLIGHTED_TAGS.includes(tag) && HIGHLIGHT_CLASS.test(value))
     || false;
+}
+
+/**
+ * Moves an image's address into its pipeline attribute (IM-24), after every
+ * check, so that the HTML that reaches the page loads nothing on its own.
+ */
+function moveImageAddress(node: Element): void {
+  const move = IMAGE_ADDRESS_ATTRIBUTES[node.localName];
+  const value = move ? node.getAttribute(move.from) : null;
+  if (!move || value === null) {
+    return;
+  }
+  node.removeAttribute(move.from);
+  node.setAttribute(move.to, value);
 }
 
 /** Removes a `source` outside `picture` and an `input` that is not a checkbox, and disables checkboxes (SH-11, SH-12). */

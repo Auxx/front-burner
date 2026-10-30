@@ -1,12 +1,17 @@
 import { renderSafeHtml } from '../pipeline/render-safe-html';
 import { purifyHtml } from '../purify/purify-html';
 import { checkAddress, isAddressAttribute } from '../whitelist/addresses';
-import { allowedAttributes } from '../whitelist/derive';
+import { allowedAttributes, IMAGE_ADDRESS_ATTRIBUTES } from '../whitelist/derive';
 import { SAFE_HTML } from '../whitelist/safe-html';
 import { corpusFile, PLACEMENTS, XSS_CORPUS } from './xss-corpus';
 
-/** What in `html` breaks SH-21 once a browser parses it: tags, attributes, classes or addresses outside the whitelist. */
-function problems(html: string): string[] {
+/**
+ * What in `html` breaks SH-21 once a browser parses it: tags, attributes,
+ * classes or addresses outside the whitelist. After DOMPurify's step
+ * (`purified`), image addresses must be in their pipeline attributes and
+ * nowhere else (IM-24).
+ */
+function problems(html: string, purified = false): string[] {
   const template = document.createElement('template');
   template.innerHTML = html;
   const found: string[] = [];
@@ -15,12 +20,16 @@ function problems(html: string): string[] {
     if (!SAFE_HTML.tags.includes(tag)) {
       found.push(`<${tag}>`);
     }
-    const allowed = [ ...allowedAttributes(tag), ...(SAFE_HTML.pipeline.attributes[tag] ?? []), 'class' ];
+    const move = purified ? IMAGE_ADDRESS_ATTRIBUTES[tag] : undefined;
+    const allowed = [ ...allowedAttributes(tag), ...(SAFE_HTML.pipeline.attributes[tag] ?? []), 'class' ]
+      .filter(name => name !== move?.from)
+      .concat(move ? [ move.to ] : []);
     for (const { name, value } of Array.from(element.attributes)) {
+      const address = name === move?.to ? move.from : name;
       if (name === 'style' || name.startsWith('on') || !allowed.includes(name)) {
         found.push(`${tag}[${name}]`);
-      } else if (isAddressAttribute(name)) {
-        const check = checkAddress(name, value);
+      } else if (isAddressAttribute(address)) {
+        const check = checkAddress(address, value);
         if (!check.allowed || check.value !== value) {
           found.push(`${tag}[${name}=${value}]`);
         }
@@ -52,7 +61,7 @@ describe('the XSS corpus', () => {
       if (first.length > 0) {
         firstStep.push([ file, first ]);
       }
-      const both = problems(String(purifyHtml(html)));
+      const both = problems(String(purifyHtml(html)), true);
       if (both.length > 0) {
         bothSteps.push([ file, both ]);
       }
@@ -65,7 +74,7 @@ describe('the XSS corpus', () => {
   }, 30_000);
 
   it('removes every XSS payload in the second step alone', () => {
-    const failures = XSS_CORPUS.map(payload => [ payload, problems(String(purifyHtml(payload))) ] as const)
+    const failures = XSS_CORPUS.map(payload => [ payload, problems(String(purifyHtml(payload)), true) ] as const)
       .filter(([ , found ]) => found.length > 0);
 
     expect(failures).toEqual([]);
@@ -81,6 +90,10 @@ describe('the XSS corpus', () => {
         'a[id=app]',
         'a.evil'
       ]);
+    expect(problems('<img src="a.png"><img data-md-src="javascript:x"><img data-md-src="b.png">', true)).toEqual([
+      'img[src]',
+      'img[data-md-src=javascript:x]'
+    ]);
   });
 
   it('is the end-to-end test\'s fixture', async () => {

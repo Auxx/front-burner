@@ -2,7 +2,9 @@ import { Component, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { TranslocoTestingModule } from '@jsverse/transloco';
+import { NEVER } from 'rxjs';
 
+import { ImageCache, type ImageResult } from '../../images/image-cache';
 import { PREVIEW_WORKER, type PreviewSource } from '../../services/preview-renderer/preview-renderer.service';
 import type { PreviewRequest, PreviewResponse } from '../../worker/preview-protocol';
 import { MarkdownPreviewComponent, type PreviewPathLink } from './markdown-preview.component';
@@ -45,6 +47,7 @@ function source(text: string): PreviewSource {
     [label]="label()"
     [fragment]="fragment()"
     [active]="active()"
+    [repositoryId]="repositoryId()"
     (openPath)="opened.push($event)"
     (scrolled)="places.push($event)"
   />`
@@ -55,6 +58,7 @@ class HostComponent {
   readonly label = signal('a.md');
   readonly fragment = signal<string | null>(null);
   readonly active = signal(true);
+  readonly repositoryId = signal<number | null>(7);
   readonly opened: PreviewPathLink[] = [];
   readonly places: number[] = [];
 }
@@ -64,8 +68,23 @@ describe('MarkdownPreviewComponent', () => {
   let host: HostComponent;
   let worker: FakeWorker;
   let scrolled: Element[];
+  let loads: [ number, string ][];
+  /** What the fake cache answers for a path. */
+  let images: Record<string, ImageResult>;
 
   beforeEach(async () => {
+    loads = [];
+    images = {};
+    const cache: Partial<ImageCache> = {
+      changed: NEVER,
+      peek: () => null,
+      load: (repositoryId: number, path: string) => {
+        loads.push([ repositoryId, path ]);
+        return Promise.resolve(images[path] ?? { kind: 'failed', reason: 'not-found' });
+      },
+      use: () => () => undefined,
+      revalidate: () => undefined
+    };
     worker = new FakeWorker();
     scrolled = [];
     Element.prototype.scrollIntoView = function(this: Element) {
@@ -75,12 +94,21 @@ describe('MarkdownPreviewComponent', () => {
       imports: [
         HostComponent,
         TranslocoTestingModule.forRoot({
-          langs: { en: { 'web-markdown.MarkdownPreviewComponent.label': 'Preview of {{ name }}' } },
+          langs: {
+            en: {
+              'web-markdown.MarkdownPreviewComponent.label': 'Preview of {{ name }}',
+              'web-markdown.MarkdownPreviewComponent.images.notFound': 'Image not found: {{ address }}',
+              'web-markdown.MarkdownPreviewComponent.images.remote': 'Remote image from {{ host }}',
+              'web-markdown.MarkdownPreviewComponent.images.showRemote': 'Show remote images',
+              'web-markdown.MarkdownPreviewComponent.images.remoteNote':
+                'Loading them lets these sites see your IP address.'
+            }
+          },
           preloadLangs: true,
           translocoConfig: { availableLangs: [ 'en' ], defaultLang: 'en' }
         })
       ],
-      providers: [ { provide: PREVIEW_WORKER, useValue: () => worker } ]
+      providers: [ { provide: PREVIEW_WORKER, useValue: () => worker }, { provide: ImageCache, useValue: cache } ]
     }).compileComponents();
     fixture = TestBed.createComponent(HostComponent);
     host = fixture.componentInstance;
@@ -150,6 +178,57 @@ describe('MarkdownPreviewComponent', () => {
     await fixture.whenStable();
 
     expect(worker.requests.slice(-2)).toEqual([ { type: 'reset' }, expect.objectContaining({ source: 'Other' }) ]);
+  });
+
+  describe('images', () => {
+    const tick = () => new Promise(resolve => setTimeout(resolve));
+
+    it('shows the repository\'s images through blob: URLs from the cache', async () => {
+      images['docs/img/a.png'] = { kind: 'loaded', url: 'blob:a' };
+
+      await answer([ [ 'i', '<p><img src="img/a.png" alt="A"> <img src="missing.png" alt="M"></p>' ] ]);
+      await tick();
+
+      expect(loads).toEqual([ [ 7, 'docs/img/a.png' ], [ 7, 'docs/missing.png' ] ]);
+      expect(blocks().querySelector('img')?.getAttribute('src')).toBe('blob:a');
+      expect(blocks().querySelector('.md-image-placeholder')?.getAttribute('aria-label')).toBe(
+        'M, Image not found: missing.png'
+      );
+    });
+
+    it('puts no address of the file into the page', async () => {
+      await answer([ [ 'i', '<p><img src="https://example.com/a.png" alt="A"></p>' ] ]);
+
+      expect(blocks().querySelectorAll('[src], [srcset]')).toHaveLength(0);
+      expect(blocks().querySelector('.md-image-placeholder')?.getAttribute('aria-label')).toBe(
+        'A, Remote image from example.com'
+      );
+    });
+
+    it('forgets Show remote images when another file is opened', async () => {
+      await answer([ [ 'i', '<p><img src="https://example.com/a.png" alt="A"></p>' ] ]);
+      blocks().querySelector('button')?.click();
+      expect(blocks().querySelector('img')?.getAttribute('src')).toBe('https://example.com/a.png');
+
+      host.source.set(source('Other'));
+      host.path.set('b.md');
+      await fixture.whenStable();
+      await answer([ [ 'j', '<p><img src="https://example.com/a.png" alt="A"></p>' ] ]);
+
+      expect(blocks().querySelectorAll('[src]')).toHaveLength(0);
+      expect(blocks().querySelector('button')?.textContent).toBe('Show remote images');
+    });
+
+    it('resolves images again when the open file moves', async () => {
+      await answer([ [ 'i', '<p><img src="a.png" alt="A"></p>' ] ]);
+      await tick();
+
+      host.path.set('notes/a.md');
+      await fixture.whenStable();
+      await tick();
+
+      expect(loads).toEqual([ [ 7, 'docs/a.png' ], [ 7, 'notes/a.png' ] ]);
+    });
   });
 
   describe('links', () => {

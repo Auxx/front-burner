@@ -2,7 +2,7 @@ import type { Config } from 'dompurify';
 import { find, html } from 'property-information';
 import type { Options as Schema } from 'rehype-sanitize';
 import { isAddressAttribute } from './addresses';
-import { SAFE_HTML, type SafeHtmlWhitelist } from './safe-html';
+import { type AddressAttribute, SAFE_HTML, type SafeHtmlWhitelist } from './safe-html';
 
 type PropertyDefinition = NonNullable<Schema['attributes']>[string][number];
 
@@ -15,6 +15,19 @@ export function propertyOf(attribute: string): string {
 export function attributeOf(property: string): string {
   return find(html, property).attribute;
 }
+
+/**
+ * Where DOMPurify's step moves each image address (IM-24): `src` on `img`
+ * and `srcset` on `source` go into these pipeline attributes, which the
+ * browser does not read, so that only the image loader sets an address. The
+ * first step has removed every `data-` attribute written in the file (SH-5),
+ * and DOMPurify's step removes them again: they are set after its checks,
+ * never allowed by them.
+ */
+export const IMAGE_ADDRESS_ATTRIBUTES: Readonly<Record<string, { from: AddressAttribute; to: string; }>> = {
+  img: { from: 'src', to: 'data-md-src' },
+  source: { from: 'srcset', to: 'data-md-srcset' }
+};
 
 const allowedByWhitelist = new WeakMap<SafeHtmlWhitelist, Map<string, ReadonlySet<string>>>();
 

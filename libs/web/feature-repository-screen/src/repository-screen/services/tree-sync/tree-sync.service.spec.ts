@@ -6,6 +6,7 @@ import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import type { CurrentUser, FolderListing, PushEvent } from '@front-burner/shared-contracts';
 import { FilesApi } from '@front-burner/web-api-client';
 import { CurrentUserService, PushChannelService } from '@front-burner/web-core';
+import { ImageCache } from '@front-burner/web-markdown/images';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { entry, folder, listing } from '../../../testing/listings';
@@ -52,6 +53,7 @@ describe('TreeSyncService', () => {
   let store: FileTreeStoreService;
   let sync: TreeSyncService;
   let notice: ReturnType<typeof vi.fn>;
+  let images: { revalidate: ReturnType<typeof vi.fn>; revalidateFolders: ReturnType<typeof vi.fn>; };
 
   const listed = () => listFolder.mock.calls.map(([ , query ]) => (query as { path: string; }).path);
   const changed = (folders: string[] | 'all', repositoryId = 12) =>
@@ -101,6 +103,7 @@ describe('TreeSyncService', () => {
     });
     session = { state: signal('ready'), statusChanged: vi.fn(), retry: vi.fn(), refresh: vi.fn() };
     notice = vi.fn();
+    images = { revalidate: vi.fn(), revalidateFolders: vi.fn() };
     TestBed.configureTestingModule({
       imports: [ translocoTesting() ],
       providers: [
@@ -130,6 +133,7 @@ describe('TreeSyncService', () => {
         },
         OpenFilesService,
         { provide: DiskChangesService, useValue: { notice } },
+        { provide: ImageCache, useValue: images },
         {
           provide: BreakpointObserver,
           useValue: { observe: () => of({ matches: false, breakpoints: {} }), isMatched: () => false }
@@ -151,6 +155,17 @@ describe('TreeSyncService', () => {
     expect(store.entry('docs/new.md')).toBeDefined();
   });
 
+  it('revalidates images when their folder changes', async () => {
+    await start([ 'docs' ]);
+
+    changed([ 'docs', 'docs/img' ]);
+    changed([ 'notes' ], 13);
+    reconnected.next();
+
+    expect(images.revalidateFolders.mock.calls).toEqual([ [ 12, [ 'docs', 'docs/img' ] ] ]);
+    expect(images.revalidate.mock.calls).toEqual([ [ 12, 'all' ] ]);
+  });
+
   describe('own saves', () => {
     const OWN = 'a'.repeat(64);
     const saved = (folders: string[], files: { path: string; hash: string; }[]) =>
@@ -166,6 +181,7 @@ describe('TreeSyncService', () => {
       await flush();
 
       expect(listed()).toEqual([]);
+      expect(images.revalidateFolders).not.toHaveBeenCalled();
     });
 
     it('lists the folder again for a save made elsewhere', async () => {

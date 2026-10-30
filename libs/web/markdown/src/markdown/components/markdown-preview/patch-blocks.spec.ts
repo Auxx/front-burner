@@ -50,6 +50,15 @@ describe('patchBlocks', () => {
     expect(observer.takeRecords()).toEqual([]);
   });
 
+  it('returns the elements it created and removed', () => {
+    const first = patchBlocks(container, state([ [ 'a', '<p>A</p>' ], [ 'b', '<p>B</p>' ] ]), purify);
+    const [ a, b ] = Array.from(container.children);
+
+    expect(first).toEqual({ added: [ a, b ], removed: [] });
+    const second = patchBlocks(container, state([ [ 'a', '<p>A</p>' ], [ 'c', '<p>C</p>' ] ]), purify);
+    expect(second).toEqual({ added: [ container.children[1] ], removed: [ b ] });
+  });
+
   it('removes blocks that are gone', () => {
     patchBlocks(container, state([ [ 'a', '<p>A</p>' ], [ 'b', '<p>B</p>' ] ]), purify);
 

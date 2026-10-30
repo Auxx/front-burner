@@ -101,6 +101,30 @@ describe('authInterceptor', () => {
     expect(session.expire).not.toHaveBeenCalled();
   });
 
+  it('refreshes and retries an expired token of a request for raw bytes', async () => {
+    const response = firstValueFrom(http.get('/api/v1/repositories/1/image', { responseType: 'blob' }));
+    const blob = (body: unknown) => new Blob([ JSON.stringify(body) ]);
+    backend.expectOne('/api/v1/repositories/1/image').flush(blob(apiError('auth-token-expired')), UNAUTHORIZED);
+    await settle();
+    await settle();
+
+    const retried = backend.expectOne('/api/v1/repositories/1/image');
+    expect(retried.request.headers.get('Authorization')).toBe('Bearer new');
+    retried.flush(new Blob([ 'png' ]));
+
+    expect(await response).toBeInstanceOf(Blob);
+    expect(session.expire).not.toHaveBeenCalled();
+  });
+
+  it('expires the session on a request for raw bytes whose 401 is not an expired token', async () => {
+    const response = firstValueFrom(http.get('/api/v1/repositories/1/image', { responseType: 'blob' }));
+    backend.expectOne('/api/v1/repositories/1/image').flush(new Blob([ 'not json' ]), UNAUTHORIZED);
+
+    await expect(response).rejects.toBeInstanceOf(HttpErrorResponse);
+    expect(session.refresh).not.toHaveBeenCalled();
+    expect(session.expire).toHaveBeenCalledOnce();
+  });
+
   it('retries only once', async () => {
     const response = firstValueFrom(http.get('/api/v1/me'));
     backend.expectOne('/api/v1/me').flush(apiError('auth-token-expired'), UNAUTHORIZED);

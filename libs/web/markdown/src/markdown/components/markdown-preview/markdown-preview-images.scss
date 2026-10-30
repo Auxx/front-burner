@@ -1,0 +1,84 @@
+// The image loader's placeholders and Show remote images (A-8.16), apart from
+// the preview's other styles to keep each stylesheet small.
+.blocks ::ng-deep {
+  // IM-18 to IM-22: in the image's place, of its size when known (set by the image loader).
+  .md-image-placeholder {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--ui-space-1);
+    box-sizing: border-box;
+    min-inline-size: min(10rem, 100%);
+    max-inline-size: 100%;
+    min-block-size: 3rem;
+    padding: var(--ui-space-2);
+    border: var(--ui-border-width) dashed var(--ui-border-default);
+    border-radius: var(--ui-radius-control);
+    background: var(--ui-surface-sunken);
+    color: var(--ui-text-muted);
+    font-size: var(--ui-font-size-ui-small);
+    line-height: var(--ui-line-height-ui);
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+
+    // IM-20: a quiet loading state, still under reduced motion (IM-22).
+    &[data-loading] {
+      border-style: solid;
+      border-color: var(--ui-border-subtle);
+      animation: md-image-loading 1.2s var(--ui-easing-standard) infinite alternate;
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    }
+  }
+
+  .md-image-placeholder__alt {
+    color: var(--ui-text-default);
+    font-weight: var(--ui-font-weight-semibold);
+  }
+
+  // IM-14: Show remote images, at the top of the first block with a remote image.
+  .md-remote-images {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ui-space-2);
+    margin-block-end: var(--ui-space-2);
+    color: var(--ui-text-muted);
+    font-size: var(--ui-font-size-ui-small);
+    line-height: var(--ui-line-height-ui);
+  }
+
+  // As the ui library's small default button, which the loader cannot use for an element it creates.
+  .md-remote-images__button {
+    min-block-size: var(--ui-control-height-small);
+    padding-inline: var(--ui-space-2);
+    border: var(--ui-border-width) solid var(--ui-border-default);
+    border-radius: var(--ui-radius-control);
+    background-color: var(--ui-surface-raised);
+    color: var(--ui-text-default);
+    font: inherit;
+    font-weight: var(--ui-font-weight-medium);
+    cursor: pointer;
+
+    &:hover {
+      background-image: linear-gradient(var(--ui-surface-hover), var(--ui-surface-hover));
+    }
+
+    &:active {
+      background-image: linear-gradient(var(--ui-surface-pressed), var(--ui-surface-pressed));
+    }
+
+    &:focus-visible {
+      outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
+      outline-offset: var(--ui-focus-ring-offset);
+    }
+  }
+}
+
+@keyframes md-image-loading {
+  to {
+    background: var(--ui-surface-hover);
+  }
+}

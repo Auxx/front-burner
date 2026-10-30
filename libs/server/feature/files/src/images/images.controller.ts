@@ -31,7 +31,7 @@ function matches(ifNoneMatch: string | undefined, etag: string): boolean {
 
 /**
  * Repository images as raw bytes, for the preview (IM-7, A-3.14). The web
- * client loads them with `fetch`, so the generated client has no method for
+ * client loads them as blobs itself, so the generated client has no method for
  * this route.
  */
 @ApiTags('files')

@@ -2,6 +2,7 @@ import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { PushChannelService } from '@front-burner/web-core';
+import { ImageCache } from '@front-burner/web-markdown/images';
 import { filter, Subscription } from 'rxjs';
 
 import { ancestors, parentPath } from '../../utils/file-name/file-name';
@@ -31,7 +32,10 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
  * keeps its unsaved edits (ED-21).
  *
  * The open Markdown file is also checked for changes on disk (ED-23): when an
- * event names it, its folder or `all`, and after a (re)connect. A file that
+ * event names it, its folder or `all`, and after a (re)connect. So are the
+ * preview's cached images of the folders an event names, or all of them
+ * after a (re)connect (IM-10), except for the event of this tab's own save,
+ * which changed no image. A file that
  * **Recreate it** created lists its folders again, since the event of that
  * looks like the tab's own save.
  */
@@ -44,6 +48,7 @@ export class TreeSyncService {
   private readonly openFiles = inject(OpenFilesService);
   private readonly route = inject(ActivatedRoute);
   private readonly diskChanges = inject(DiskChangesService);
+  private readonly images = inject(ImageCache);
 
   private readonly gone = signal<string | null>(null);
   /** The path of the open file once it was deleted or renamed elsewhere (FB-42). */
@@ -78,6 +83,7 @@ export class TreeSyncService {
       }
       void this.sync('all');
       this.checkOpenFile('all');
+      this.images.revalidate(repositoryId, 'all');
     }));
     subscription.add(
       this.push.events
@@ -86,6 +92,7 @@ export class TreeSyncService {
           if (event.type === 'files.changed') {
             if (!this.ownSave(event)) {
               void this.sync(event.folders);
+              this.images.revalidateFolders(repositoryId, event.folders);
             }
             this.checkOpenFile(event.folders, event.files);
           } else if (event.type === 'repository.status') {
