@@ -31,17 +31,26 @@ const toHast = unified()
   .use(marks.find)
   .freeze();
 
-const toSafeHtml = unified().use(rehypeSafeHtml).use(rehypeStringify).freeze();
+const sanitizer = unified().use(rehypeSafeHtml).freeze();
+const stringifier = unified().use(rehypeStringify).freeze();
 
 /** The syntax tree of a Markdown file, with its raw HTML parsed and nothing sanitised yet. */
 export function markdownToHast(markdown: string): Root {
   return toHast.runSync(toHast.parse(markdown));
 }
 
+/** The first sanitising step on a tree from `markdownToHast`. */
+export function sanitizeHast(tree: Root): Root {
+  return sanitizer.runSync(tree);
+}
+
+export function hastToHtml(tree: Root): string {
+  return stringifier.stringify(tree);
+}
+
 /** Renders Markdown as HTML that holds only what the safe HTML whitelist allows (REQ-EDIT-002). */
 export function renderSafeHtml(markdown: string): SafeHtml {
   const tree = markdownToHast(markdown);
   const removals = collectRemovals(tree);
-  const safe = toSafeHtml.runSync(tree);
-  return { html: toSafeHtml.stringify(safe), removals };
+  return { html: hastToHtml(sanitizeHast(tree)), removals };
 }
