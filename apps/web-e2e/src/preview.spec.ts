@@ -82,10 +82,144 @@ async function answerImages(page: Page, origin: string): Promise<void> {
 const filler = (count: number) =>
   Array.from({ length: count }, (_, index) => `Paragraph ${index + 1} of words that fill the preview.`).join('\n\n');
 
-// On narrow screens the preview is not on screen while typing (A-8.12); plan 31 adds its tab.
+/** A file of headings and paragraphs, one line each, long enough to scroll both panes. */
+const SECTIONS = Array.from({ length: 120 }, (_, index) => `## Section ${index + 1}\n\nText ${index + 1} of the file.`)
+  .join('\n\n') + '\n';
+const SECTION_LINES = SECTIONS.split('\n');
+
+/** The line of `SECTIONS` at the top of the editor: the first visible line with text. */
+async function editorTopLine(page: Page): Promise<number> {
+  const text = await main(page).locator('.cm-scroller').evaluate(scroller => {
+    const top = scroller.getBoundingClientRect().top;
+    const lines = Array.from(scroller.querySelectorAll('.cm-line'));
+    return lines.find(line => line.getBoundingClientRect().bottom > top + 1 && line.textContent)?.textContent ?? '';
+  });
+  return SECTION_LINES.indexOf(text) + 1;
+}
+
+/** The first line of the block at the top of the preview. */
+async function previewTopLine(page: Page): Promise<number> {
+  return main(page).locator('md-preview .blocks').evaluate(blocks => {
+    const top = blocks.getBoundingClientRect().top;
+    const block = Array.from(blocks.children).find(child => child.getBoundingClientRect().bottom > top + 1);
+    return Number(block?.getAttribute('data-from-line') ?? 0);
+  });
+}
+
+/** Scrolls an element of the main region as a script would; for phones, where Playwright has no wheel. */
+async function scrollTo(page: Page, selector: string, top: number): Promise<void> {
+  await main(page).locator(selector).evaluate((element, value) => {
+    element.scrollTop = value;
+  }, top);
+}
+
+test.describe('view modes', () => {
+  const view = (page: Page) => main(page).getByRole('radiogroup', { name: 'View' });
+  const tab = (page: Page, name: string) =>
+    main(page).getByRole('tablist', { name: 'View' }).getByRole('tab', { name });
+
+  test('AC-EDIT-001.20: scrolls the preview with the editor and back in Split, and shows one pane in Edit and Preview', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'Split is for wide screens.');
+    const { id } = seedHandbook(instance.dataDir, { 'sections.md': SECTIONS });
+    await openScreen(page, `/repositories/${id}/files/sections.md`);
+    await expect(preview(page, 'sections.md').getByRole('heading', { name: 'Section 120' })).toBeAttached();
+    await expect(view(page).getByRole('radio', { name: 'Split' })).toBeChecked();
+
+    await editor(page, 'sections.md').hover();
+    await page.mouse.wheel(0, 1500);
+    await expect.poll(async () => (await editorTopLine(page)) > 20).toBe(true);
+    await expect.poll(async () => Math.abs((await previewTopLine(page)) - (await editorTopLine(page))))
+      .toBeLessThanOrEqual(2);
+
+    const editorTop = await editorTopLine(page);
+    await preview(page, 'sections.md').hover();
+    await page.mouse.wheel(0, 1500);
+    await expect.poll(() => editorTopLine(page)).toBeGreaterThan(editorTop + 10);
+    await expect.poll(async () => Math.abs((await editorTopLine(page)) - (await previewTopLine(page))))
+      .toBeLessThanOrEqual(2);
+
+    await view(page).getByText('Edit', { exact: true }).click();
+    await expect(editor(page, 'sections.md')).toBeVisible();
+    await expect(preview(page, 'sections.md')).toBeHidden();
+
+    await view(page).getByText('Preview', { exact: true }).click();
+    await expect(preview(page, 'sections.md')).toBeVisible();
+    await expect(editor(page, 'sections.md')).toBeHidden();
+  });
+
+  test('AC-EDIT-001.21: switches Edit and Preview tabs on a phone, keeping the place, with the cursor above the on-screen keyboard', async ({ page, instance, isMobile, browserName }) => {
+    test.skip(!isMobile, 'The tabs are for narrow screens.');
+    const { id } = seedHandbook(instance.dataDir, { 'sections.md': SECTIONS });
+    await openScreen(page, `/repositories/${id}/files/sections.md`);
+    await expect(tab(page, 'Edit')).toHaveAttribute('aria-selected', 'true');
+    await expect(preview(page, 'sections.md')).toHaveCount(0);
+
+    await scrollTo(page, '.cm-scroller', 2000);
+    await expect.poll(() => editorTopLine(page)).toBeGreaterThan(20);
+    const editorTop = await editorTopLine(page);
+    await tab(page, 'Preview').click();
+    await expect(preview(page, 'sections.md')).toBeVisible();
+    await expect(editor(page, 'sections.md')).toBeHidden();
+    await expect.poll(async () => Math.abs((await previewTopLine(page)) - editorTop)).toBeLessThanOrEqual(2);
+
+    await scrollTo(page, 'md-preview .blocks', 4000);
+    await expect.poll(() => previewTopLine(page)).toBeGreaterThan(editorTop + 10);
+    const previewTop = await previewTopLine(page);
+    await tab(page, 'Edit').click();
+    await expect(editor(page, 'sections.md')).toBeVisible();
+    await expect.poll(async () => Math.abs((await editorTopLine(page)) - previewTop)).toBeLessThanOrEqual(2);
+
+    test.skip(browserName !== 'chromium', 'Shrinking the visual viewport as the keyboard does needs Chromium.');
+    const line = editor(page, 'sections.md').locator('.cm-line').filter({ hasText: /^Text \d+ of the file\.$/ }).last();
+    await line.click();
+    const size = page.viewportSize() ?? { width: 412, height: 839 };
+    await page.setViewportSize({ width: size.width, height: Math.round(size.height / 2) });
+    // CodeMirror draws the cursor in a layer beside the text, not inside it.
+    await expect(main(page).locator('.cm-cursor-primary')).toBeInViewport();
+  });
+
+  test('remembers the wide screen\'s mode after a reload', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'Phones have their own mode.');
+    const { id } = seedHandbook(instance.dataDir);
+    await openScreen(page, `/repositories/${id}/files/README.md`);
+    await view(page).getByText('Preview', { exact: true }).click();
+    await expect(editor(page, 'README.md')).toBeHidden();
+
+    await page.reload();
+
+    await expect(preview(page, 'README.md').getByRole('heading', { name: 'Handbook' })).toBeVisible();
+    await expect(editor(page, 'README.md')).toBeHidden();
+    await expect(view(page).getByRole('radio', { name: 'Preview' })).toBeChecked();
+  });
+
+  test('remembers the phone\'s mode after a reload', async ({ page, instance, isMobile }) => {
+    test.skip(!isMobile, 'Wide screens have their own mode.');
+    const { id } = seedHandbook(instance.dataDir);
+    await openScreen(page, `/repositories/${id}/files/README.md`);
+    await tab(page, 'Preview').click();
+    await expect(preview(page, 'README.md')).toBeVisible();
+
+    await page.reload();
+
+    await expect(preview(page, 'README.md').getByRole('heading', { name: 'Handbook' })).toBeVisible();
+    await expect(editor(page, 'README.md')).toBeHidden();
+    await expect(tab(page, 'Preview')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('AC-EDIT-001.24: has no axe violations in the view mode controls', async ({ page, instance }) => {
+    const { id } = seedHandbook(instance.dataDir);
+    await openScreen(page, `/repositories/${id}/files/README.md`);
+    await expect(main(page).locator('rs-view-mode-switch')).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).include('rs-view-mode-switch').analyze();
+
+    expect(results.violations).toEqual([]);
+  });
+});
+
 test.describe('preview', () => {
   test.beforeEach(({ isMobile }) => {
-    test.skip(isMobile, 'The preview is shown beside the editor on wide screens only.');
+    test.skip(isMobile, 'These check the preview beside the editor, on wide screens.');
   });
 
   test('AC-EDIT-001.1: shows the preview beside the editor', async ({ page, instance }) => {

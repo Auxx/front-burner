@@ -1,8 +1,6 @@
-import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   effect,
   type ElementRef,
   inject,
@@ -16,9 +14,9 @@ import { TranslocoDirective } from '@jsverse/transloco';
 
 import { purifyHtml } from '../../purify/purify-html';
 import { PreviewRendererService, type PreviewSource } from '../../services/preview-renderer/preview-renderer.service';
-import { ShikiSheet } from '../../styles/shiki-sheet';
 import { RemovalNoticeComponent } from '../removal-notice/removal-notice.component';
 import { findById, patchBlocks } from './patch-blocks';
+import { scrollTopOf, topPlace } from './preview-lines';
 import { resolvePreviewLink } from './preview-links';
 
 /** A link of the preview to another entry of the repository (ED-31). */
@@ -48,6 +46,13 @@ export interface PreviewPathLink {
  *
  * While another file is being rendered, the preview is empty, so that no
  * block or link of the previous file is shown under the new file's name.
+ *
+ * Places in the file are fractional lines (`preview-lines.ts`): `topLine`
+ * reads the place at the top, `scrollToLine` scrolls to one, and `scrolled`
+ * reports the new place after each scroll that the preview did not make
+ * itself, so that a pane that follows it never makes it follow back (ED-35,
+ * ED-36). While `active` is false, such as on a hidden tab, the preview
+ * neither reads the text nor renders (A-8.12).
  */
 @Component({
   selector: 'md-preview',
@@ -68,19 +73,26 @@ export class MarkdownPreviewComponent {
   readonly label = input('');
   /** A heading to scroll to once it is shown, such as from a link in another file. */
   readonly fragment = input<string | null>(null);
+  /** Whether the preview is on screen; while it is not, it does no work (A-8.12). */
+  readonly active = input(true);
 
   readonly openPath = output<PreviewPathLink>();
+  /** The place at the top after a scroll the preview did not make itself. */
+  readonly scrolled = output<number>();
 
   private readonly blocks = viewChild<ElementRef<HTMLElement>>('blocks');
-  protected readonly state = inject(PreviewRendererService).connect(this.source);
+  private readonly renderer = inject(PreviewRendererService);
+  protected readonly state = this.renderer.connect(this.source, this.active);
   /** **Hide** on the removal notice lasts until another file is opened (SH-19). */
   protected readonly noticeHidden = linkedSignal({ source: this.source, computation: () => false });
   /** The fragment already scrolled to, with its source; forgotten when the screen has none. */
-  private scrolled: { source: PreviewSource; fragment: string; } | null = null;
-  private readonly sheet = new ShikiSheet(inject(DOCUMENT));
+  private fragmentShown: { source: PreviewSource; fragment: string; } | null = null;
+  /** The `scrollTop` the preview last set, until its scroll event comes. */
+  private ownScrollTop: number | null = null;
+  /** A place to scroll to again once the newest text is shown. */
+  private pendingPlace: number | null = null;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.sheet.remove());
     effect(() => {
       const state = this.state();
       const container = this.blocks()?.nativeElement;
@@ -92,10 +104,53 @@ export class MarkdownPreviewComponent {
         container.replaceChildren();
         return;
       }
-      this.sheet.sync(state.css);
       patchBlocks(container, state, purifyHtml);
-      untracked(() => this.scrollToFragment(container));
+      untracked(() => {
+        this.scrollToFragment(container);
+        if (this.pendingPlace !== null) {
+          this.scrollToLine(this.pendingPlace);
+        }
+      });
     });
+  }
+
+  /** The place at the top of the preview; `1` while it shows nothing. */
+  topLine(): number {
+    const container = this.blocks()?.nativeElement;
+    return container ? topPlace(container) : 1;
+  }
+
+  /**
+   * Scrolls `place` to the top. While the preview shows nothing yet, or newer
+   * text is waiting or rendering, such as right after the preview becomes
+   * active, it scrolls there again once that text is shown, unless the user
+   * scrolls first.
+   */
+  scrollToLine(place: number): void {
+    const container = this.blocks()?.nativeElement;
+    this.pendingPlace = this.renderer.busy() || untracked(this.state) === null ? place : null;
+    const top = container ? scrollTopOf(container, place) : null;
+    if (!container || top === null) {
+      return;
+    }
+    const before = container.scrollTop;
+    container.scrollTop = top;
+    // The browser rounds and clamps, and fires a scroll event only when the preview moved.
+    this.ownScrollTop = container.scrollTop === before ? null : container.scrollTop;
+  }
+
+  protected onScroll(): void {
+    const container = this.blocks()?.nativeElement;
+    if (!container) {
+      return;
+    }
+    if (this.ownScrollTop !== null && Math.abs(container.scrollTop - this.ownScrollTop) <= 1) {
+      this.ownScrollTop = null;
+      return;
+    }
+    this.ownScrollTop = null;
+    this.pendingPlace = null;
+    this.scrolled.emit(topPlace(container));
   }
 
   /**
@@ -129,15 +184,15 @@ export class MarkdownPreviewComponent {
     const fragment = this.fragment();
     const source = this.source();
     if (!fragment) {
-      this.scrolled = null;
+      this.fragmentShown = null;
       return;
     }
-    if (this.scrolled?.source === source && this.scrolled.fragment === fragment) {
+    if (this.fragmentShown?.source === source && this.fragmentShown.fragment === fragment) {
       return;
     }
     const target = findById(container, fragment);
     if (target) {
-      this.scrolled = { source, fragment };
+      this.fragmentShown = { source, fragment };
       target.scrollIntoView?.();
     }
   }

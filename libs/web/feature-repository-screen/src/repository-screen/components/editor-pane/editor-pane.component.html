@@ -14,25 +14,65 @@
   @if (noteShown()) {
     <rs-large-file-note (turnOn)="file().highlight.set(true)" />
   }
-  <div class="toolbar">
-    <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
-  </div>
-  <ui-split-pane
-    class="panes"
-    [show]="narrow() ? 'start' : 'both'"
-    [(size)]="editorSize"
-    [separatorLabel]="t('resizePreview')"
-  >
-    <ce-code-editor uiSplitPaneStart class="editor" [state]="state()" (stateChange)="changed($event)" />
-    @if (!narrow()) {
+  @if (viewMode.narrow()) {
+    <!-- ED-34: Edit and Preview tabs; the hidden pane is kept, and the preview does no work meanwhile. -->
+    <div class="tabs" uiTabGroup>
+      <!-- Inside the tab group, so that the tabs reach their panels. -->
+      <div class="toolbar">
+        <rs-view-mode-switch />
+        @if (viewMode.editorShown()) {
+          <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+        }
+      </div>
+      <div class="panel" uiTabPanel="edit">
+        <ng-template uiTabContent>
+          <ce-code-editor
+            class="editor"
+            [state]="state()"
+            (stateChange)="changed($event)"
+            (scrolled)="editorScrolled($event)"
+          />
+        </ng-template>
+      </div>
+      <div class="panel" uiTabPanel="preview">
+        <ng-template uiTabContent>
+          <md-preview
+            [source]="file().preview"
+            [path]="file().path()"
+            [label]="name()"
+            [fragment]="fragment()"
+            [active]="viewMode.previewShown()"
+            (openPath)="openPath.emit($event)"
+            (scrolled)="previewScrolled($event)"
+          />
+        </ng-template>
+      </div>
+    </div>
+  } @else {
+    <div class="toolbar">
+      <rs-view-mode-switch />
+      @if (viewMode.editorShown()) {
+        <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+      }
+    </div>
+    <ui-split-pane class="panes" [show]="show()" [(size)]="editorSize" [separatorLabel]="t('resizePreview')">
+      <ce-code-editor
+        uiSplitPaneStart
+        class="editor"
+        [state]="state()"
+        (stateChange)="changed($event)"
+        (scrolled)="editorScrolled($event)"
+      />
       <md-preview
         uiSplitPaneEnd
         [source]="file().preview"
         [path]="file().path()"
         [label]="name()"
         [fragment]="fragment()"
+        [active]="viewMode.previewShown()"
         (openPath)="openPath.emit($event)"
+        (scrolled)="previewScrolled($event)"
       />
-    }
-  </ui-split-pane>
+    </ui-split-pane>
+  }
 </ng-container>

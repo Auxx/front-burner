@@ -8,5 +8,5 @@
   }
   <!-- Filled by patchBlocks only (D-7.6). -->
   <!-- Focusable, so that the preview can be scrolled with the keyboard. -->
-  <div #blocks class="blocks" tabindex="0"></div>
+  <div #blocks class="blocks" tabindex="0" (scroll)="onScroll()"></div>
 </section>

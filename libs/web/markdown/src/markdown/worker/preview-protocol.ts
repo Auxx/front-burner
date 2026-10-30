@@ -23,7 +23,5 @@ export type PreviewResponse =
     rendered: RenderedBlock[];
     /** What was removed from the whole file (SH-17). */
     removals: [ RemovalKey, number ][];
-    /** The rules of new highlighting classes. */
-    css: string;
   }
   | { type: 'error'; id: number; message: string; };

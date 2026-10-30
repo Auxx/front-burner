@@ -127,9 +127,12 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     violation, because its inert document inherits the page's policy: blocked
     and harmless, but it would flood violation reports.
   - Shiki's styles become classes through a small transformer of our own on the
-    `pre`, `code`, `line` and `span` hooks (D-7.5). The generated CSS goes into
-    a constructed stylesheet (`document.adoptedStyleSheets`), which `style-src`
-    does not restrict. Highlighting uses `@shikijs/rehype`'s `cache` option.
+    `pre`, `code`, `line` and `span` hooks (D-7.5). Shiki's theme is our own:
+    each colour is a `--ui-syntax-*` token, given to a list of TextMate scopes,
+    and the transformer turns it into a class `sk-<token>` that the preview's
+    stylesheet colours with that token (A-10.14). So code blocks match the
+    editor in both schemes, and no CSS is generated at run time. Highlighting
+    uses `@shikijs/rehype`'s `cache` option.
   - The preview waits 100 ms after typing stops for files up to 256 KB and 1 s
     above that (NF-2.5 allows larger files to update more slowly), so a large
     preview never updates between keystrokes. _(My call: 256 KB leaves a margin
@@ -137,7 +140,20 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   - **On phones, the preview is not on screen while typing** (Edit and Preview
     tabs). At 1 MB, a visible preview of ~4,400 blocks made 10–17 of 48
     keystrokes exceed 50 ms (worst 64–88 ms), although it updated only once;
-    hidden, typing matched the editor alone.
+    hidden, typing matched the editor alone. A preview that is not on screen
+    (Edit on any screen) neither reads the text nor renders; shown again, it
+    renders the newest text at once.
+  - **Scroll syncing works in places of the file** (ED-35, ED-36). A place is a
+    fractional line: in the preview, the top block's first line plus the share
+    of the block's height above the top, spread over the block's lines
+    (`data-from-line`, `data-to-line`); in the editor, the top line plus the
+    share of its height above the top. So both panes show the same block, and
+    the same share of it. Only the pane the user last scrolled, touched, clicked
+    or typed in leads, so the scrolls that syncing causes, which come late and
+    keep coming while a scroll on a phone glides, never sync back. When the view
+    mode or the screen size changes, the place that the panes on screen last
+    reported while scrolling is applied to the panes shown after it. It is not
+    read at the switch: by then the tabs may have hidden the pane already.
 - **A-8.13** The pipeline (remark, `rehype-sanitize`, Shiki) runs in a **Web
   Worker**; DOMPurify runs on the main thread, since it needs a DOM. Per update
   both modes were equally fast, but the first render of a 200 KB file blocked

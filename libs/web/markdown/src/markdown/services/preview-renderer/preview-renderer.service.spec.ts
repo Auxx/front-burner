@@ -38,8 +38,7 @@ function update(id: number, keys: string[], rendered: string[] = keys): PreviewR
     id,
     layout: keys.map((key, index) => ({ key, fromLine: index + 1, toLine: index + 1 })),
     rendered: rendered.map(key => ({ key, html: `<p>${key}</p>`, removals: [] })),
-    removals: [ [ 'tag:script', id ] ],
-    css: `.sk-${id} {}\n`
+    removals: [ [ 'tag:script', id ] ]
   };
 }
 
@@ -128,7 +127,6 @@ describe('PreviewRendererService', () => {
       layout: [ { key: 'a', fromLine: 1, toLine: 1 }, { key: 'b', fromLine: 2, toLine: 2 } ],
       rendered: new Map([ [ 'a', '<p>a</p>' ], [ 'b', '<p>b</p>' ] ]),
       removals: new Map([ [ 'tag:script', 1 ] ]),
-      css: '.sk-1 {}\n',
       id: 1
     });
   });
@@ -142,7 +140,6 @@ describe('PreviewRendererService', () => {
     worker.answer(update(2, [ 'a', 'c' ], [ 'c' ]));
 
     expect([ ...(state()?.rendered ?? []) ]).toEqual([ [ 'a', '<p>a</p>' ], [ 'c', '<p>c</p>' ] ]);
-    expect(state()?.css).toBe('.sk-1 {}\n.sk-2 {}\n');
   });
 
   it('drops an answer overtaken by a newer update', () => {
@@ -203,6 +200,75 @@ describe('PreviewRendererService', () => {
     TestBed.tick();
     vi.advanceTimersByTime(PREVIEW_DELAY_MS);
     expect(worker.updates).toEqual([ 'First file', 'Second file', 'Second file' ]);
+  });
+
+  it('does no work while inactive', () => {
+    const active = signal(false);
+    service.connect({
+      version,
+      read: () => {
+        reads++;
+        return text;
+      }
+    }, active);
+    TestBed.tick();
+    change('Second');
+    vi.advanceTimersByTime(PREVIEW_LARGE_DELAY_MS);
+
+    expect(reads).toBe(0);
+    expect(worker.requests).toEqual([]);
+  });
+
+  it('renders the newest text at once when it becomes active', () => {
+    const active = signal(true);
+    service.connect({ version, read: () => text }, active);
+    TestBed.tick();
+    active.set(false);
+    TestBed.tick();
+    change('Second');
+
+    active.set(true);
+    TestBed.tick();
+
+    expect(worker.updates).toEqual([ 'First', 'Second' ]);
+    vi.advanceTimersByTime(PREVIEW_DELAY_MS);
+    expect(worker.updates).toEqual([ 'First', 'Second' ]);
+  });
+
+  it('does not render again when it becomes active without a change', () => {
+    const active = signal(true);
+    service.connect({ version, read: () => text }, active);
+    TestBed.tick();
+    active.set(false);
+    TestBed.tick();
+
+    active.set(true);
+    TestBed.tick();
+
+    expect(worker.updates).toEqual([ 'First' ]);
+  });
+
+  it('is busy while newer text waits or renders', () => {
+    connect();
+    expect(service.busy()).toBe(true);
+    worker.answer(update(1, [ 'a' ]));
+    expect(service.busy()).toBe(false);
+
+    change('Second');
+    expect(service.busy()).toBe(true);
+    vi.advanceTimersByTime(PREVIEW_DELAY_MS);
+    expect(service.busy()).toBe(true);
+    worker.answer({ type: 'error', id: 2, message: 'Broken' });
+    expect(service.busy()).toBe(false);
+  });
+
+  it('is not busy after a reset drops the update in flight', () => {
+    connect();
+    expect(service.busy()).toBe(true);
+
+    service.reset();
+
+    expect(service.busy()).toBe(false);
   });
 
   it('terminates the worker', () => {

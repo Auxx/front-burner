@@ -1,5 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 
 import { PREVIEW_WORKER, type PreviewSource } from '../../services/preview-renderer/preview-renderer.service';
@@ -19,15 +20,14 @@ class FakeWorker extends EventTarget {
   }
 
   /** Answers the latest update with blocks given as `[key, html]`. */
-  answer(blocks: [ string, string ][], options: { css?: string; } = {}): void {
+  answer(blocks: [ string, string ][]): void {
     const latest = this.requests.findLast(request => request.type === 'update');
     const response: PreviewResponse = {
       type: 'update',
       id: latest?.type === 'update' ? latest.id : 0,
       layout: blocks.map(([ key ], index) => ({ key, fromLine: index + 1, toLine: index + 1 })),
       rendered: blocks.map(([ key, html ]) => ({ key, html, removals: [] })),
-      removals: [],
-      css: options.css ?? ''
+      removals: []
     };
     this.dispatchEvent(new MessageEvent('message', { data: response }));
   }
@@ -44,7 +44,9 @@ function source(text: string): PreviewSource {
     [path]="path()"
     [label]="label()"
     [fragment]="fragment()"
+    [active]="active()"
     (openPath)="opened.push($event)"
+    (scrolled)="places.push($event)"
   />`
 })
 class HostComponent {
@@ -52,7 +54,9 @@ class HostComponent {
   readonly path = signal('docs/a.md');
   readonly label = signal('a.md');
   readonly fragment = signal<string | null>(null);
+  readonly active = signal(true);
   readonly opened: PreviewPathLink[] = [];
+  readonly places: number[] = [];
 }
 
 describe('MarkdownPreviewComponent', () => {
@@ -60,13 +64,6 @@ describe('MarkdownPreviewComponent', () => {
   let host: HostComponent;
   let worker: FakeWorker;
   let scrolled: Element[];
-
-  // jsdom has constructed stylesheets but not `adoptedStyleSheets`.
-  beforeEach(() => {
-    Object.defineProperty(document, 'adoptedStyleSheets', { configurable: true, writable: true, value: [] });
-  });
-
-  afterAll(() => Reflect.deleteProperty(document, 'adoptedStyleSheets'));
 
   beforeEach(async () => {
     worker = new FakeWorker();
@@ -95,8 +92,8 @@ describe('MarkdownPreviewComponent', () => {
   const element = () => fixture.nativeElement as HTMLElement;
   const blocks = () => element().querySelector('.blocks') as HTMLElement;
 
-  async function answer(blocks: [ string, string ][], options: { css?: string; } = {}): Promise<void> {
-    worker.answer(blocks, options);
+  async function answer(blocks: [ string, string ][]): Promise<void> {
+    worker.answer(blocks);
     await fixture.whenStable();
   }
 
@@ -132,28 +129,6 @@ describe('MarkdownPreviewComponent', () => {
     host.label.set('b.md');
     await fixture.whenStable();
     expect(region?.getAttribute('aria-label')).toBe('Preview of b.md');
-  });
-
-  it('adopts Shiki\'s CSS once per class, in a sheet of its own', async () => {
-    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-1 { color: red }\n' });
-    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-2 { color: blue }\n' });
-    await answer([ [ 'b', '<p>B</p>' ] ]);
-
-    const sheets = document.adoptedStyleSheets;
-    expect(sheets).toHaveLength(1);
-    expect(Array.from(sheets[0].cssRules, rule => rule.cssText)).toEqual([
-      '.sk-1 { color: red; }',
-      '.sk-2 { color: blue; }'
-    ]);
-  });
-
-  it('removes its sheet with it, so that another preview\'s classes win', async () => {
-    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-1 { color: red }\n' });
-    expect(document.adoptedStyleSheets).toHaveLength(1);
-
-    fixture.destroy();
-
-    expect(document.adoptedStyleSheets).toEqual([]);
   });
 
   it('shows nothing of the previous file while another one renders', async () => {
@@ -274,8 +249,7 @@ describe('MarkdownPreviewComponent', () => {
           id: 1,
           layout: [ { key: 'a', fromLine: 1, toLine: 1 } ],
           rendered: [ { key: 'a', html: '<p>A</p>', removals: [] } ],
-          removals: [ [ 'tag:script', 1 ] ],
-          css: ''
+          removals: [ [ 'tag:script', 1 ] ]
         } satisfies PreviewResponse
       })
     );
@@ -297,12 +271,91 @@ describe('MarkdownPreviewComponent', () => {
           id: 2,
           layout: [ { key: 'b', fromLine: 1, toLine: 1 } ],
           rendered: [ { key: 'b', html: '<p>B</p>', removals: [] } ],
-          removals: [ [ 'tag:script', 1 ] ],
-          css: ''
+          removals: [ [ 'tag:script', 1 ] ]
         } satisfies PreviewResponse
       })
     );
     await fixture.whenStable();
     expect(notice()).not.toBeNull();
+  });
+  describe('places', () => {
+    /** Gives the blocks a layout of 100 px each, which follows `scrollTop` (jsdom has none). */
+    function layOut(): void {
+      const container = blocks();
+      let scrollTop = 0;
+      Object.defineProperty(container, 'scrollTop', {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          if (value === scrollTop) {
+            return;
+          }
+          scrollTop = value;
+          // Browsers fire `scroll` after a change, not during it, and only when it moved.
+          setTimeout(() => container.dispatchEvent(new Event('scroll')));
+        }
+      });
+      container.getBoundingClientRect = () => new DOMRect(0, 0, 100, 300);
+      Array.from(container.children).forEach((block, index) => {
+        block.getBoundingClientRect = () => new DOMRect(0, index * 100 - scrollTop, 100, 100);
+      });
+    }
+
+    function preview() {
+      return fixture.debugElement.query(By.directive(MarkdownPreviewComponent))
+        .componentInstance as MarkdownPreviewComponent;
+    }
+
+    beforeEach(async () => {
+      // Lines 1, 3 to 6 and 8.
+      await answer([ [ 'a', '<p>A</p>' ], [ 'b', '<p>B</p>' ], [ 'c', '<p>C</p>' ] ]);
+      const [ a, b, c ] = Array.from(blocks().children);
+      a.setAttribute('data-to-line', '1');
+      b.setAttribute('data-from-line', '3');
+      b.setAttribute('data-to-line', '6');
+      c.setAttribute('data-from-line', '8');
+      c.setAttribute('data-to-line', '8');
+      layOut();
+    });
+
+    it('scrolls to a line and a share of its block', () => {
+      preview().scrollToLine(5);
+
+      expect(blocks().scrollTop).toBe(150);
+      expect(preview().topLine()).toBe(5);
+    });
+
+    it('does not report a scroll it made itself', async () => {
+      preview().scrollToLine(5);
+      await new Promise(resolve => setTimeout(resolve));
+      expect(host.places).toEqual([]);
+
+      blocks().scrollTop = 100;
+      await new Promise(resolve => setTimeout(resolve));
+
+      expect(host.places).toEqual([ 3 ]);
+    });
+
+    it('reports the next scroll when scrolling to where it already is', async () => {
+      preview().scrollToLine(1);
+      blocks().scrollTop = 1;
+      await new Promise(resolve => setTimeout(resolve));
+
+      expect(host.places).toHaveLength(1);
+    });
+  });
+
+  it('does no work while inactive', async () => {
+    host.active.set(false);
+    await fixture.whenStable();
+    const sent = worker.requests.length;
+
+    host.source.set(source('# B'));
+    await fixture.whenStable();
+
+    expect(worker.requests.slice(sent).filter(request => request.type === 'update')).toEqual([]);
+    host.active.set(true);
+    await fixture.whenStable();
+    expect(worker.requests.at(-1)).toEqual(expect.objectContaining({ type: 'update', source: '# B' }));
   });
 });

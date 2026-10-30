@@ -8,9 +8,29 @@
 
 .toolbar {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2);
 }
 
 .panes {
   flex: 1;
+}
+
+.tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  min-block-size: 0;
+}
+
+.panel {
+  display: grid;
+  flex: 1;
+  min-block-size: 0;
+
+  &[hidden] {
+    display: none;
+  }
 }
