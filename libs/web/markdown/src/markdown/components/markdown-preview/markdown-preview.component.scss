@@ -1,0 +1,64 @@
+// A fixed size, so that the preview's contents never affect the page's layout (A-8.12).
+:host {
+  display: block;
+  block-size: 100%;
+  min-block-size: 0;
+  contain: strict;
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  block-size: 100%;
+}
+
+.blocks {
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+  padding: var(--ui-space-2) var(--ui-space-4);
+  overflow-wrap: break-word;
+  color: var(--ui-text-default);
+  font-size: var(--ui-font-size-prose);
+  line-height: var(--ui-line-height-prose);
+
+  ::ng-deep {
+    .md-block {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 2rem;
+    }
+
+    // ED-33: wide tables and code blocks scroll sideways inside the preview.
+    pre,
+    table {
+      display: block;
+      max-inline-size: 100%;
+      overflow-x: auto;
+    }
+
+    pre {
+      padding: var(--ui-space-2);
+      border-radius: var(--ui-radius-control);
+      background: var(--ui-surface-sunken);
+      font-family: var(--ui-font-family-mono);
+    }
+
+    table {
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: var(--ui-space-1) var(--ui-space-2);
+      border: var(--ui-border-width) solid var(--ui-border-default);
+    }
+
+    img {
+      max-inline-size: 100%;
+    }
+
+    a {
+      color: var(--ui-text-link);
+    }
+  }
+}

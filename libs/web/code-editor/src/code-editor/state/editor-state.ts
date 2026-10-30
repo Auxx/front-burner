@@ -15,6 +15,7 @@ import {
 import { drawSelection, EditorView, keymap } from '@codemirror/view';
 import { classHighlighter, tagHighlighter, tags } from '@lezer/highlight';
 import { editorTheme } from '../theme/editor-theme';
+import { lineDirection } from './line-direction';
 
 export interface EditorStateOptions {
   content: string;
@@ -99,6 +100,7 @@ export function createEditorState(options: EditorStateOptions): EditorState {
       syntaxHighlighting(markdownHighlighter),
       EditorView.lineWrapping,
       EditorView.perLineTextDirection.of(true),
+      lineDirection,
       EditorView.contentAttributes.of({
         spellcheck: 'true',
         autocorrect: 'on',

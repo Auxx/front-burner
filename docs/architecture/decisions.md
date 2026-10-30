@@ -219,7 +219,18 @@ _(My calls.)_
   ([REQ-EDIT-002](../requirements/preview-html.md)). It is written to the page
   by a single shared preview component, and nowhere else. _(My call. Spike 3:
   the component writes DOMPurify's `TrustedHTML` into one element per block
-  instead of passing a string through `bypassSecurityTrustHtml`; A-8.12.)_
+  instead of passing a string through `bypassSecurityTrustHtml`; A-8.12. Plan
+  30's call: a `no-restricted-syntax` rule in the root ESLint config catches the
+  common direct forms in the web client's code outside specs: `x.innerHTML =`
+  and `x.outerHTML =`, `insertAdjacentHTML`, `setHTMLUnsafe` and any
+  `bypassSecurityTrust…`, with one disable comment in the component's
+  `patchBlocks`. It is a guard against mistakes, not the enforcement: it reads
+  only TypeScript and only those spellings, so bracket access,
+  `Renderer2.setProperty`, `document.write` or an `[innerHTML]` binding in a
+  template pass it. What enforces D-7.6 at run time is Trusted Types
+  (`require-trusted-types-for 'script'`, NF-11.1), under which only DOMPurify's
+  `TrustedHTML` can be written as HTML, and Angular's sanitiser for template
+  bindings.)_
 - **D-7.7** How image paths are resolved and how the web client loads repository
   and remote images is [REQ-EDIT-003](../requirements/preview-images.md).
 - **D-7.8** A small throwaway spike will confirm the Shiki + remark + Angular

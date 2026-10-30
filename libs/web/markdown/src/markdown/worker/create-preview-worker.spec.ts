@@ -8,6 +8,11 @@ describe('createPreviewWorker', () => {
     expect(workerScriptUrl(`${location.origin}/app/worker-x_1.js`)).toBe(`${location.origin}/app/worker-x_1.js`);
   });
 
+  it('allows the query the development server adds to worker chunks', () => {
+    expect(workerScriptUrl('/worker-JI5SIU7Q.js?worker_file&type=module'))
+      .toBe(`${location.origin}/worker-JI5SIU7Q.js?worker_file&type=module`);
+  });
+
   it('refuses a worker URL from another origin', () => {
     expect(() => workerScriptUrl('https://evil.example/worker-ABC123.js')).toThrow(TypeError);
     expect(() => workerScriptUrl('data:text/javascript,worker-x.js')).toThrow(TypeError);
@@ -17,6 +22,8 @@ describe('createPreviewWorker', () => {
   it('refuses any other script of this origin', () => {
     expect(() => workerScriptUrl('/main-ABC123.js')).toThrow(TypeError);
     expect(() => workerScriptUrl('/worker-ABC123.js?x=1')).toThrow(TypeError);
+    expect(() => workerScriptUrl('/worker-ABC123.js?worker_file&type=module&x=1')).toThrow(TypeError);
+    expect(() => workerScriptUrl('/worker-ABC123.js?worker_file&type=module#x')).toThrow(TypeError);
     expect(() => workerScriptUrl('/worker-ABC123.js.map')).toThrow(TypeError);
   });
 

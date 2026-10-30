@@ -16,7 +16,7 @@
         </ui-empty-state>
       } @else if (file(); as file) {
         @defer {
-          <rs-editor-pane [file]="file" />
+          <rs-editor-pane [file]="file" [fragment]="fragment()" (openPath)="openPath.emit($event)" />
         } @loading (minimum 0ms) {
           <ui-spinner [label]="t('opening')" />
         }

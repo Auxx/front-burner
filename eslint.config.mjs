@@ -107,6 +107,37 @@ export default [
     }
   },
   {
+    // D-7.6: only the preview component writes HTML into the page, with
+    // DOMPurify's output. This catches the common direct forms only; Trusted
+    // Types enforce it at run time. Specs may build fixtures with `innerHTML`.
+    files: [
+      'apps/web/**/*.ts',
+      'libs/web/**/*.ts',
+      'libs/ui/**/*.ts'
+    ],
+    ignores: [
+      '**/*.spec.ts',
+      '**/testing/**'
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'AssignmentExpression > MemberExpression.left[property.name=/^(innerHTML|outerHTML)$/]',
+          message: 'Only the preview component writes HTML into the page (D-7.6).'
+        },
+        {
+          selector: 'CallExpression > MemberExpression.callee[property.name=/^(insertAdjacentHTML|setHTMLUnsafe)$/]',
+          message: 'Only the preview component writes HTML into the page (D-7.6).'
+        },
+        {
+          selector: 'MemberExpression[property.name=/^bypassSecurityTrust/]',
+          message: 'Angular\'s sanitiser is never bypassed (D-7.6).'
+        }
+      ]
+    }
+  },
+  {
     files: [
       '**/*.ts',
       '**/*.tsx',

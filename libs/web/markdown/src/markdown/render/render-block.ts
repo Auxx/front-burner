@@ -36,7 +36,10 @@ export interface BlockRendererOptions {
   languages?: LanguageLoaders;
 }
 
-const THEMES = { light: 'github-light', dark: 'github-dark' } as const;
+// The high-contrast themes: the default GitHub themes fall below 4.5:1 on the
+// code block's surface in both schemes (orange, red, dark-scheme comments);
+// these pass with at least 4.75:1 (NF-13, ED-39).
+const THEMES = { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' } as const;
 
 /** The highlighted code blocks kept for blocks rendered again (`@shikijs/rehype`'s `cache`). */
 const CACHE_SIZE = 500;
@@ -50,7 +53,10 @@ const CACHE_SIZE = 500;
 export async function createBlockRenderer(options: BlockRendererOptions = {}): Promise<BlockRenderer> {
   const languages = options.languages ?? bundledLanguages;
   const highlighter = await createHighlighterCore({
-    themes: [ import('shiki/themes/github-light.mjs'), import('shiki/themes/github-dark.mjs') ],
+    themes: [
+      import('shiki/themes/github-light-high-contrast.mjs'),
+      import('shiki/themes/github-dark-high-contrast.mjs')
+    ],
     langs: [
       import('shiki/langs/javascript.mjs'),
       import('shiki/langs/typescript.mjs'),

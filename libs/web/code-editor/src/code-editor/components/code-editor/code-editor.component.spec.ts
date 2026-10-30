@@ -52,6 +52,20 @@ describe('CodeEditorComponent', () => {
     expect(fixture.nativeElement.querySelector('.cm-content').textContent).toContain('Some text.');
   });
 
+  it('lets each line take its direction from its text (ED-30)', async () => {
+    await setUp();
+    await show(stateOf('# Title\n\nمرحبا بكم\n'));
+
+    const lines = Array.from(fixture.nativeElement.querySelectorAll('.cm-line') as NodeListOf<HTMLElement>);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.map(line => line.getAttribute('dir'))).toEqual(lines.map(() => 'auto'));
+
+    view().dispatch({ changes: { from: view().state.doc.length, insert: '\nMore' } });
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector('.cm-line:last-child')?.getAttribute('dir')).toBe('auto');
+  });
+
   it('AC-EDIT-001.23: undoes the first file\'s edit after switching back', async () => {
     await setUp();
     const notes = stateOf(NOTES);

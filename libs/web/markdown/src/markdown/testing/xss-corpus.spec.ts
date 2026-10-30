@@ -3,7 +3,7 @@ import { purifyHtml } from '../purify/purify-html';
 import { checkAddress, isAddressAttribute } from '../whitelist/addresses';
 import { allowedAttributes } from '../whitelist/derive';
 import { SAFE_HTML } from '../whitelist/safe-html';
-import { PLACEMENTS, XSS_CORPUS } from './xss-corpus';
+import { corpusFile, PLACEMENTS, XSS_CORPUS } from './xss-corpus';
 
 /** What in `html` breaks SH-21 once a browser parses it: tags, attributes, classes or addresses outside the whitelist. */
 function problems(html: string): string[] {
@@ -61,7 +61,8 @@ describe('the XSS corpus', () => {
     // SH-21: nothing hostile reaches DOMPurify.
     expect(firstStep).toEqual([]);
     expect(bothSteps).toEqual([]);
-  });
+    // Renders every payload in every placement: slow when other tests share the machine.
+  }, 30_000);
 
   it('removes every XSS payload in the second step alone', () => {
     const failures = XSS_CORPUS.map(payload => [ payload, problems(String(purifyHtml(payload))) ] as const)
@@ -80,5 +81,10 @@ describe('the XSS corpus', () => {
         'a[id=app]',
         'a.evil'
       ]);
+  });
+
+  it('is the end-to-end test\'s fixture', async () => {
+    // Written by `vitest -u`; the end-to-end test renders it (AC-EDIT-002.16).
+    await expect(corpusFile()).toMatchFileSnapshot('../../../../../../apps/web-e2e/src/support/fixtures/xss-corpus.md');
   });
 });

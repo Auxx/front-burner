@@ -17,5 +17,22 @@
   <div class="toolbar">
     <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
   </div>
-  <ce-code-editor class="editor" [state]="state()" (stateChange)="changed($event)" />
+  <ui-split-pane
+    class="panes"
+    [show]="narrow() ? 'start' : 'both'"
+    [(size)]="editorSize"
+    [separatorLabel]="t('resizePreview')"
+  >
+    <ce-code-editor uiSplitPaneStart class="editor" [state]="state()" (stateChange)="changed($event)" />
+    @if (!narrow()) {
+      <md-preview
+        uiSplitPaneEnd
+        [source]="file().preview"
+        [path]="file().path()"
+        [label]="name()"
+        [fragment]="fragment()"
+        (openPath)="openPath.emit($event)"
+      />
+    }
+  </ui-split-pane>
 </ng-container>

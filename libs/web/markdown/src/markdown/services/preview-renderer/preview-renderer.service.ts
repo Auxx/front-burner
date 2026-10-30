@@ -43,7 +43,10 @@ export interface PreviewState {
   rendered: ReadonlyMap<string, string>;
   /** What was removed from the whole file (SH-17). */
   removals: RemovalReport;
-  /** Every highlighting rule so far. */
+  /**
+   * Every highlighting rule of this renderer so far. It only grows, so a
+   * reader that has seen an earlier state adds only its end (`ShikiSheet`).
+   */
   css: string;
   /** The update this state answers. */
   id: number;
@@ -80,20 +83,28 @@ export class PreviewRendererService {
     });
   }
 
-  /** Follows a source: renders it at once, then after each change once typing stops. */
-  connect(source: PreviewSource): Signal<PreviewState | null> {
-    let first = true;
+  /**
+   * Follows a source: renders it at once, then after each change once typing
+   * stops. Given a signal of sources, such as a file's when another file is
+   * opened, it forgets the blocks and renders the new source at once.
+   */
+  connect(source: PreviewSource | Signal<PreviewSource>): Signal<PreviewState | null> {
+    let connected: PreviewSource | null = null;
     effect(() => {
-      source.version();
+      const current = typeof source === 'function' ? source() : source;
+      current.version();
       untracked(() => {
         clearTimeout(this.timer);
-        if (first) {
-          first = false;
-          this.send(source.read());
+        if (current !== connected) {
+          if (connected !== null) {
+            this.reset();
+          }
+          connected = current;
+          this.send(current.read());
           return;
         }
         const delay = this.length > PREVIEW_LARGE_FILE ? PREVIEW_LARGE_DELAY_MS : PREVIEW_DELAY_MS;
-        this.timer = setTimeout(() => this.send(source.read()), delay);
+        this.timer = setTimeout(() => this.send(current.read()), delay);
       });
     }, { injector: this.injector });
     return this.state.asReadonly();

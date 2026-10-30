@@ -186,6 +186,25 @@ describe('PreviewRendererService', () => {
     expect([ ...(state()?.rendered.keys() ?? []) ]).toEqual([ 'b' ]);
   });
 
+  it('forgets the blocks and renders another source at once', () => {
+    const first = { version: signal(0), read: () => 'First file' };
+    const second = { version: signal(0), read: () => 'Second file' };
+    const source = signal(first);
+    const state = service.connect(source);
+    TestBed.tick();
+    worker.answer(update(1, [ 'a' ]));
+
+    source.set(second);
+    TestBed.tick();
+
+    expect(worker.requests.slice(1)).toEqual([ { type: 'reset' }, { type: 'update', id: 2, source: 'Second file' } ]);
+    expect(state()).toBeNull();
+    second.version.set(1);
+    TestBed.tick();
+    vi.advanceTimersByTime(PREVIEW_DELAY_MS);
+    expect(worker.updates).toEqual([ 'First file', 'Second file', 'Second file' ]);
+  });
+
   it('terminates the worker', () => {
     connect();
 

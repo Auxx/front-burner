@@ -1,0 +1,12 @@
+<section
+  *transloco="let t; prefix: 'web-markdown.MarkdownPreviewComponent'"
+  class="preview"
+  [attr.aria-label]="t('label', { name: label() })"
+>
+  @if (state(); as state) {
+    <md-removal-notice [removals]="state.removals" [(hidden)]="noticeHidden" />
+  }
+  <!-- Filled by patchBlocks only (D-7.6). -->
+  <!-- Focusable, so that the preview can be scrolled with the keyboard. -->
+  <div #blocks class="blocks" tabindex="0"></div>
+</section>
