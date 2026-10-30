@@ -6,10 +6,11 @@
 
 $tokens: (
   // Surfaces
-  surface-canvas: (functions.ref(neutral-95), functions.ref(neutral-18)),
-  surface-island: (functions.ref(neutral-100), functions.ref(neutral-23)),
+  surface-canvas: (functions.ref(neutral-95), functions.ref(neutral-27)),
+  surface-island: (functions.ref(neutral-100), functions.ref(neutral-22)),
+  surface-card: (functions.ref(neutral-98), functions.ref(neutral-25)),
   surface-raised: (functions.ref(neutral-100), functions.ref(neutral-27)),
-  surface-sunken: (functions.ref(neutral-98), functions.ref(neutral-20)),
+  surface-sunken: (functions.ref(neutral-98), functions.ref(neutral-23)),
   surface-hover: (functions.alpha(neutral-0, 5%), functions.alpha(neutral-100, 6%)),
   surface-pressed: (functions.alpha(neutral-0, 9%), functions.alpha(neutral-100, 10%)),
   surface-scrim: (functions.alpha(neutral-0, 40%), functions.alpha(neutral-0, 60%)),
