@@ -16,6 +16,7 @@
     color: var(--ui-text-default);
     font-size: var(--ui-font-size-ui);
     font-weight: var(--ui-font-weight-medium);
+    margin-block-end: calc(var(--ui-space-2) - var(--ui-space-1));
   }
 
   // The control and anything next to it, such as a password reveal button.
