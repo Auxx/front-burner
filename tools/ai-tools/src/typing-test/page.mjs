@@ -7,8 +7,8 @@ import { markdown } from '@codemirror/lang-markdown';
 import { yamlFrontmatter } from '@codemirror/lang-yaml';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { search, searchKeymap } from '@codemirror/search';
-import { EditorSelection, EditorState } from '@codemirror/state';
-import { drawSelection, EditorView, keymap } from '@codemirror/view';
+import { EditorSelection, EditorState, RangeSetBuilder } from '@codemirror/state';
+import { Decoration, drawSelection, EditorView, keymap, ViewPlugin } from '@codemirror/view';
 import {
   formatResults,
   parseSetup,
@@ -101,6 +101,36 @@ const view = new EditorView({
   state: EditorState.create({ doc: 'Loading…' })
 });
 
+const autoDirection = Decoration.line({ attributes: { dir: 'auto' } });
+
+/** A copy of the editor's `lineDirection` (libs/web/code-editor): `dir="auto"` on every visible line. */
+const lineDirection = ViewPlugin.fromClass(
+  class {
+    constructor(view) {
+      this.decorations = decorateLines(view);
+    }
+
+    update(update) {
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = decorateLines(update.view);
+      }
+    }
+  },
+  { decorations: plugin => plugin.decorations }
+);
+
+function decorateLines(view) {
+  const builder = new RangeSetBuilder();
+  for (const { from, to } of view.visibleRanges) {
+    for (let position = from; position <= to;) {
+      const line = view.state.doc.lineAt(position);
+      builder.add(line.from, line.from, autoDirection);
+      position = line.to + 1;
+    }
+  }
+  return builder.finish();
+}
+
 /** The editor's setup as A-8.11 plans it, without the parts the address switches off. */
 function extensions() {
   const on = name => !setup.off.includes(name);
@@ -113,7 +143,7 @@ function extensions() {
     ...language,
     syntaxHighlighting(defaultHighlightStyle),
     on('wrap') ? EditorView.lineWrapping : [],
-    on('direction') ? EditorView.perLineTextDirection.of(true) : [],
+    on('direction') ? [ EditorView.perLineTextDirection.of(true), lineDirection ] : [],
     EditorView.contentAttributes.of(
       on('spellcheck')
         ? { spellcheck: 'true', autocorrect: 'on', autocapitalize: 'sentences' }

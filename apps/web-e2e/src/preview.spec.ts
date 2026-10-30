@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { workspaceRoot } from '@nx/devkit';
 import type { Page } from '@playwright/test';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { expect, test } from './support/fixtures';
@@ -56,14 +56,21 @@ const PNG = Buffer.from(
   'base64'
 );
 
+/** The built web client, which the instance serves. */
+const WEB_ROOT = join(workspaceRoot, 'dist/apps/web/browser');
+
 /**
  * Answers the images of the preview with a pixel: remote ones, which
  * `img-src` allows, so that the test needs no network, and relative ones,
- * which the image loader (plan 33) does not resolve yet.
+ * which the image loader (plan 33) does not resolve yet, so they resolve
+ * against the page's `<base href="/">`. The web client's own images are
+ * served as they are.
  */
 async function answerImages(page: Page, origin: string): Promise<void> {
+  const isBuildFile = (url: URL) =>
+    url.origin === origin && existsSync(join(WEB_ROOT, decodeURIComponent(url.pathname)));
   await page.route(
-    url => url.origin !== origin || url.pathname.startsWith('/repositories/'),
+    url => !isBuildFile(url),
     route =>
       route.request().resourceType() === 'image'
         ? route.fulfill({ contentType: 'image/png', body: PNG })
@@ -290,6 +297,9 @@ test.describe('preview', () => {
 
       await editor(page, 'embed.md').click();
       await page.keyboard.press('ControlOrMeta+a');
+      // Deleted by CodeMirror first: typing over a selection of highlighted text makes Chrome
+      // insert `style` attributes of its own, which the policy refuses.
+      await page.keyboard.press('Backspace');
       await page.keyboard.type('# Embed\n\nNothing left.\n');
       await expect(view.getByText('Nothing left.')).toBeVisible();
       await expect(view.getByText(NOTICE)).toHaveCount(0);

@@ -85,6 +85,10 @@ function createBlock(document: Document, key: string, html: PurifiedHtml): HTMLE
       headingIds.set(heading, heading.id);
     }
   }
+  // Code blocks and tables scroll sideways when wide (ED-33), so the keyboard must reach them (NF-13).
+  for (const scroller of Array.from(element.querySelectorAll('pre, table'))) {
+    scroller.setAttribute('tabindex', '0');
+  }
   // A task list's checkbox is named by its item's text (ED-32, ED-39).
   for (const checkbox of Array.from(element.querySelectorAll('li > input[type="checkbox"]'))) {
     const text = checkbox.parentElement?.textContent?.replace(/\s+/g, ' ').trim();

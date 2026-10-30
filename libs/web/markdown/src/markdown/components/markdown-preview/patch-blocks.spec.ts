@@ -143,4 +143,15 @@ describe('patchBlocks', () => {
 
     expect(container.querySelector('input')?.getAttribute('aria-label')).toBe('Write the plan');
   });
+
+  it('lets the keyboard reach code blocks and tables, which scroll sideways', () => {
+    patchBlocks(
+      container,
+      state([ [ 'a', '<pre><code>x</code></pre>' ], [ 'b', '<table><tr><td>1</td></tr></table>' ] ]),
+      purify
+    );
+
+    expect(Array.from(container.querySelectorAll('pre, table'), element => element.getAttribute('tabindex')))
+      .toEqual([ '0', '0' ]);
+  });
 });
