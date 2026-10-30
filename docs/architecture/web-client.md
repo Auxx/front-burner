@@ -190,11 +190,16 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   screen, so that tabs can be added later (ED-3). Changes to the open file on
   disk are found by comparing `files.changed` events with that hash (A-3.11,
   ED-24).
-- **A-8.16** **Image loader** (REQ-EDIT-003), in `web/markdown`: after
-  DOMPurify, and before the HTML reaches the page, it replaces every image
-  address with a placeholder (IM-24). On the main thread, an
-  `IntersectionObserver` loads repository images near the viewport, at most 4 at
-  a time per tab (IM-8), with `fetch` and the auth token, into `blob:` URLs
-  cached per repository screen and revalidated with `If-None-Match` (A-3.14,
-  IM-10). Remote images are set only after **Show remote images**. It also picks
-  the `<source>` of a `<picture>` with `matchMedia` (IM-12).
+- **A-8.16** **Image loader** (REQ-EDIT-003), in `web/markdown`: DOMPurify's
+  step moves every image address into a pipeline attribute (`data-md-src` on
+  `img`, `data-md-srcset` on `source`), which the browser does not read, so no
+  address written in the file loads anything on its own (IM-24). After each
+  patch of the preview, the loader puts a placeholder in each image's place. On
+  the main thread, an `IntersectionObserver` loads repository images within 200
+  px of the viewport, at most 4 at a time per tab (IM-8), through `HttpClient`
+  with `responseType: 'blob'`, so the auth interceptor adds the token and
+  refreshes it as for any other request, into `blob:` URLs cached per repository
+  screen and revalidated with `If-None-Match` (A-3.14, IM-10). _(Plan 33's call:
+  `HttpClient` rather than `fetch`, to keep one token path.)_ Remote images are
+  set only after **Show remote images**. It also picks the `<source>` of a
+  `<picture>` with `matchMedia` (IM-12).
