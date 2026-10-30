@@ -140,6 +140,24 @@ describe('EditorPaneComponent', () => {
     expect(file.preview.read()).toBe('# README.md\nMore.\n');
   });
 
+  it('bumps the preview\'s version for a reload, not for another label or read-only mode', async () => {
+    const file = openFile('README.md');
+    await show(file);
+    const version = file.preview.version();
+
+    file.path.set('HANDBOOK.md');
+    file.changed.set('b'.repeat(64));
+    await settle(fixture);
+    expect(file.preview.version()).toBe(version);
+
+    file.file = { ...file.file, content: '# Reloaded\n' };
+    file.changed.set(null);
+    file.revision.update(revision => revision + 1);
+    await settle(fixture);
+    expect(file.preview.version()).toBe(version + 1);
+    expect(file.preview.read()).toBe('# Reloaded\n');
+  });
+
   it('emits a link of the preview to another entry', async () => {
     const opened: unknown[] = [];
     fixture.componentInstance.openPath.subscribe(link => opened.push(link));
@@ -147,9 +165,9 @@ describe('EditorPaneComponent', () => {
 
     fixture.debugElement
       .query(element => element.name === 'md-preview')
-      .componentInstance.openPath.emit({ path: 'docs/other.md', fragment: 'install' });
+      .componentInstance.openPath.emit({ path: 'docs/other.md', fragment: 'install', newTab: false });
 
-    expect(opened).toEqual([ { path: 'docs/other.md', fragment: 'install' } ]);
+    expect(opened).toEqual([ { path: 'docs/other.md', fragment: 'install', newTab: false } ]);
   });
 
   it('writes each new state back into the open file and records edits', async () => {

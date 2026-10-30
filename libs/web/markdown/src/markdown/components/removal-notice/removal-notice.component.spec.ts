@@ -61,16 +61,18 @@ describe('RemovalNoticeComponent', () => {
     await show([ [ 'tag:iframe', 2 ], [ 'attribute:style', 5 ], [ 'address:javascript', 1 ] ]);
 
     expect(text()).toContain('Some HTML isn\'t shown in the preview.');
-    expect(items()).toEqual([]);
     const details = button('Details');
+    const list = () => element().querySelector(`#${details?.getAttribute('aria-controls')}`) as HTMLElement | null;
     expect(details?.getAttribute('aria-expanded')).toBe('false');
+    expect(list()?.tagName).toBe('UL');
+    expect(list()?.hidden).toBe(true);
 
     details?.click();
     await fixture.whenStable();
 
     expect(details?.getAttribute('aria-expanded')).toBe('true');
+    expect(list()?.hidden).toBe(false);
     expect(items()).toEqual([ 'style attribute × 5', '<iframe> × 2', 'javascript: address × 1' ]);
-    expect(element().querySelector(`#${details?.getAttribute('aria-controls')}`)?.tagName).toBe('UL');
   });
 
   it('goes away when nothing is removed', async () => {

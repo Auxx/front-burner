@@ -3,7 +3,6 @@ import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 
 import { PREVIEW_WORKER, type PreviewSource } from '../../services/preview-renderer/preview-renderer.service';
-import { adoptShikiCss } from '../../styles/shiki-sheet';
 import type { PreviewRequest, PreviewResponse } from '../../worker/preview-protocol';
 import { MarkdownPreviewComponent, type PreviewPathLink } from './markdown-preview.component';
 
@@ -62,7 +61,8 @@ describe('MarkdownPreviewComponent', () => {
   let worker: FakeWorker;
   let scrolled: Element[];
 
-  beforeAll(() => {
+  // jsdom has constructed stylesheets but not `adoptedStyleSheets`.
+  beforeEach(() => {
     Object.defineProperty(document, 'adoptedStyleSheets', { configurable: true, writable: true, value: [] });
   });
 
@@ -134,15 +134,38 @@ describe('MarkdownPreviewComponent', () => {
     expect(region?.getAttribute('aria-label')).toBe('Preview of b.md');
   });
 
-  it('adopts Shiki\'s CSS once per class', async () => {
-    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-901 { color: red }\n' });
-    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-901 { color: red }\n.sk-902 { color: blue }\n' });
-    adoptShikiCss('.sk-902 { color: blue }\n');
+  it('adopts Shiki\'s CSS once per class, in a sheet of its own', async () => {
+    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-1 { color: red }\n' });
+    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-2 { color: blue }\n' });
+    await answer([ [ 'b', '<p>B</p>' ] ]);
 
     const sheets = document.adoptedStyleSheets;
     expect(sheets).toHaveLength(1);
-    const rules = Array.from(sheets[0].cssRules, rule => rule.cssText).filter(rule => /sk-90[12]/.test(rule));
-    expect(rules).toHaveLength(2);
+    expect(Array.from(sheets[0].cssRules, rule => rule.cssText)).toEqual([
+      '.sk-1 { color: red; }',
+      '.sk-2 { color: blue; }'
+    ]);
+  });
+
+  it('removes its sheet with it, so that another preview\'s classes win', async () => {
+    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-1 { color: red }\n' });
+    expect(document.adoptedStyleSheets).toHaveLength(1);
+
+    fixture.destroy();
+
+    expect(document.adoptedStyleSheets).toEqual([]);
+  });
+
+  it('shows nothing of the previous file while another one renders', async () => {
+    await answer([ [ 'a', '<p><a href="guide.md">Guide</a></p>' ] ]);
+
+    host.source.set(source('Other'));
+    host.path.set('notes/x.md');
+    await fixture.whenStable();
+
+    expect(blocks().children).toHaveLength(0);
+    await answer([ [ 'b', '<p>B</p>' ] ]);
+    expect(blocks().textContent).toBe('B');
   });
 
   it('renders another file from scratch', async () => {
@@ -155,12 +178,12 @@ describe('MarkdownPreviewComponent', () => {
   });
 
   describe('links', () => {
-    async function click(href: string): Promise<MouseEvent> {
+    async function click(href: string, init: MouseEventInit & { type?: string; } = {}): Promise<MouseEvent> {
       await answer([ [ 'h', '<h2 id="user-content-set-up">Set up</h2>' ], [
         'l',
         `<p><a href="${href}">link</a></p>`
       ] ]);
-      const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+      const event = new MouseEvent(init.type ?? 'click', { bubbles: true, cancelable: true, ...init });
       blocks().querySelector('a')?.dispatchEvent(event);
       return event;
     }
@@ -183,7 +206,34 @@ describe('MarkdownPreviewComponent', () => {
       const event = await click('../guide.md#install');
 
       expect(event.defaultPrevented).toBe(true);
-      expect(host.opened).toEqual([ { path: 'guide.md', fragment: 'install' } ]);
+      expect(host.opened).toEqual([ { path: 'guide.md', fragment: 'install', newTab: false } ]);
+    });
+
+    it.each([
+      [ 'Ctrl', { ctrlKey: true } ],
+      [ 'Cmd', { metaKey: true } ],
+      [ 'Shift', { shiftKey: true } ],
+      [ 'the middle button', { type: 'auxclick', button: 1 } ]
+    ])('asks for a new tab after a click with %s', async (_name, init) => {
+      const event = await click('../guide.md', init);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(host.opened).toEqual([ { path: 'guide.md', fragment: null, newTab: true } ]);
+    });
+
+    it('leaves a right click alone', async () => {
+      const event = await click('../guide.md', { type: 'auxclick', button: 2 });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(host.opened).toEqual([]);
+    });
+
+    it('scrolls to the heading of a link to the open file itself', async () => {
+      const event = await click('a.md#set-up');
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(host.opened).toEqual([]);
+      expect(scrolled).toEqual([ blocks().querySelector('h2') ]);
     });
 
     it('ignores a link above the root', async () => {
@@ -201,6 +251,19 @@ describe('MarkdownPreviewComponent', () => {
     await answer([ [ 'b', '<p>B</p>' ], [ 'h', '<h2 id="user-content-set-up">Set up</h2>' ] ]);
 
     expect(scrolled).toEqual([ blocks().querySelector('h2') ]);
+  });
+
+  it('scrolls to the same fragment again after the screen had none', async () => {
+    host.fragment.set('set-up');
+    await fixture.whenStable();
+    await answer([ [ 'h', '<h2 id="user-content-set-up">Set up</h2>' ] ]);
+
+    host.fragment.set(null);
+    await fixture.whenStable();
+    host.fragment.set('set-up');
+    await fixture.whenStable();
+
+    expect(scrolled).toHaveLength(2);
   });
 
   it('keeps Hide on the removal notice until another file is opened', async () => {

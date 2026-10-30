@@ -74,7 +74,7 @@
           (newFile)="runAction('new-file', '')"
           (action)="runAction($event, openPath() ?? '')"
           (retryOpen)="retryOpen()"
-          (openPath)="openEntryAt($event.path, $event.fragment)"
+          (openPath)="followLink($event)"
         />
       </ui-app-shell>
     }

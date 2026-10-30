@@ -8,6 +8,15 @@ export type PreviewLink =
 const EXTERNAL = /^(?:https?|mailto):/i;
 
 /**
+ * Whether a link of the preview opens in a new tab, which the browser does
+ * on its own (ED-31): `http:`, `https:`, `mailto:` and protocol-relative
+ * addresses (SH-16).
+ */
+export function isExternalLink(href: string): boolean {
+  return EXTERNAL.test(href) || href.startsWith('//');
+}
+
+/**
  * Reads a link of the preview of the file at `filePath` (ED-31):
  * - `http:`, `https:` and `mailto:` open in a new tab;
  * - `#name` scrolls to the heading `name` of the same file;
@@ -16,7 +25,7 @@ const EXTERNAL = /^(?:https?|mailto):/i;
  *   climbs above the root, or names the root itself, does nothing.
  */
 export function resolvePreviewLink(filePath: string, href: string): PreviewLink {
-  if (EXTERNAL.test(href) || href.startsWith('//')) {
+  if (isExternalLink(href)) {
     return { kind: 'external' };
   }
   const hash = href.indexOf('#');

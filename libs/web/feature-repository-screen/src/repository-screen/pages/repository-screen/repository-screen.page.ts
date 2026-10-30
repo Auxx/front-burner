@@ -20,6 +20,7 @@ import {
   SpinnerComponent
 } from '@front-burner/ui';
 import { CurrentUserService, PageTitleService } from '@front-burner/web-core';
+import type { PreviewPathLink } from '@front-burner/web-markdown';
 import { AppHeaderComponent, PageNotFoundPage, RouteAnnouncerComponent } from '@front-burner/web-shell';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { map, take } from 'rxjs';
@@ -101,6 +102,7 @@ export class RepositoryScreenPage {
   private readonly route = inject(ActivatedRoute);
   private readonly currentUser = inject(CurrentUserService);
   private readonly router = inject(Router);
+  private readonly document = inject(DOCUMENT);
   private readonly firstFile = inject(FirstFileService);
   protected readonly tree = inject(FileTreeStoreService);
   private readonly commands = inject(EntryCommandsService);
@@ -209,6 +211,25 @@ export class RepositoryScreenPage {
     void this.router.navigate([ '/repositories', repository.id, 'files', ...path.split('/') ], {
       fragment: fragment ?? undefined
     });
+  }
+
+  /**
+   * Follows a link of the preview to another entry (ED-31): like a tree
+   * selection, or in a new tab when the user asked for one.
+   */
+  protected followLink(link: PreviewPathLink): void {
+    const repository = this.session.repository();
+    if (!repository) {
+      return;
+    }
+    if (!link.newTab) {
+      this.openEntryAt(link.path, link.fragment);
+      return;
+    }
+    const tree = this.router.createUrlTree([ '/repositories', repository.id, 'files', ...link.path.split('/') ], {
+      fragment: link.fragment ?? undefined
+    });
+    this.document.defaultView?.open(this.router.serializeUrl(tree), '_blank', 'noopener');
   }
 
   /** Runs an action of the tree; a new file it opens closes the drawer, as a selected one does (FB-9). */

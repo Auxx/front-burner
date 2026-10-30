@@ -43,7 +43,10 @@ export interface PreviewState {
   rendered: ReadonlyMap<string, string>;
   /** What was removed from the whole file (SH-17). */
   removals: RemovalReport;
-  /** Every highlighting rule so far. */
+  /**
+   * Every highlighting rule of this renderer so far. It only grows, so a
+   * reader that has seen an earlier state adds only its end (`ShikiSheet`).
+   */
   css: string;
   /** The update this state answers. */
   id: number;

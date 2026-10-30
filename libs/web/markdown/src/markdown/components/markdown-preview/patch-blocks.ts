@@ -1,6 +1,7 @@
 import type { PurifiedHtml } from '../../purify/purify-html';
 import type { PreviewState } from '../../services/preview-renderer/preview-renderer.service';
 import { SAFE_HTML } from '../../whitelist/safe-html';
+import { isExternalLink } from './preview-links';
 
 /** Purifies a block's HTML right before it reaches the page (plan 28). */
 export type Purify = (html: string) => PurifiedHtml;
@@ -14,7 +15,6 @@ const keys = new WeakMap<Element, string>();
 const headingIds = new WeakMap<Element, string>();
 
 const HEADINGS = 'h1, h2, h3, h4, h5, h6';
-const EXTERNAL = /^(?:https?|mailto):/i;
 
 /**
  * Brings `container`'s blocks to `state`'s layout (A-8.12, D-7.6): a block
@@ -93,7 +93,7 @@ function createBlock(document: Document, key: string, html: PurifiedHtml): HTMLE
     }
   }
   for (const link of Array.from(element.querySelectorAll('a[href]'))) {
-    if (EXTERNAL.test(link.getAttribute('href') ?? '')) {
+    if (isExternalLink(link.getAttribute('href') ?? '')) {
       link.setAttribute('target', '_blank');
       link.setAttribute('rel', 'noopener noreferrer');
     }
@@ -134,6 +134,5 @@ function setAttribute(element: Element, name: string, value: string): void {
 /** The element of the preview with this `id`, which may lack the `user-content-` prefix (SH-14). */
 export function findById(container: HTMLElement, id: string): HTMLElement | null {
   const prefixed = id.startsWith(SAFE_HTML.idPrefix) ? id : SAFE_HTML.idPrefix + id;
-  const elements = Array.from(container.querySelectorAll<HTMLElement>('[id]'));
-  return elements.find(element => element.id === prefixed) ?? null;
+  return container.querySelector<HTMLElement>(`[id="${prefixed.replace(/["\\]/g, '\\$&')}"]`);
 }

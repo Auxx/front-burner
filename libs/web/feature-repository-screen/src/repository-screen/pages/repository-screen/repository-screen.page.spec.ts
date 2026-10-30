@@ -349,7 +349,7 @@ describe('RepositoryScreenPage', () => {
       await visit('/repositories/12/files/docs/guide.md');
       const preview = harness.fixture.debugElement.query(element => element.name === 'md-preview');
 
-      preview.componentInstance.openPath.emit({ path: 'README.md', fragment: 'install' });
+      preview.componentInstance.openPath.emit({ path: 'README.md', fragment: 'install', newTab: false });
       await settle(harness.fixture);
       await settle(harness.fixture);
 
@@ -357,6 +357,19 @@ describe('RepositoryScreenPage', () => {
       expect(editorText()).toContain('# README.md');
       expect(harness.fixture.debugElement.query(element => element.name === 'md-preview').componentInstance.fragment())
         .toBe('install');
+    });
+
+    it('opens a file linked from the preview in a new tab when asked', async () => {
+      await visit('/repositories/12/files/docs/guide.md');
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      const preview = harness.fixture.debugElement.query(element => element.name === 'md-preview');
+
+      preview.componentInstance.openPath.emit({ path: 'docs/a b.md', fragment: 'install', newTab: true });
+      await settle(harness.fixture);
+
+      expect(open).toHaveBeenCalledWith('/repositories/12/files/docs/a%20b.md#install', '_blank', 'noopener');
+      expect(url()).toBe('/repositories/12/files/docs/guide.md');
+      open.mockRestore();
     });
 
     it('AC-FILE-001.10: says why a Markdown file could not be opened', async () => {

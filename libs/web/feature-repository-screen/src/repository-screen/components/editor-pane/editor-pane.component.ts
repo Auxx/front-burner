@@ -211,8 +211,13 @@ export class EditorPaneComponent {
         ...(existing.readOnly === readOnly ? [] : [ setReadOnly(readOnly) ])
       ).state;
     file.editorState = state;
-    file.preview.read = () => contentOf(file.editorState as EditorState);
-    untracked(() => file.preview.version.update(version => version + 1));
+    if (existing === null) {
+      // The same text as the loaded content, which the preview read until now.
+      file.preview.read = () => contentOf(file.editorState as EditorState);
+    } else if (reloaded) {
+      // Only a reload changes the text here; a new label, highlighting or read-only mode does not.
+      untracked(() => file.preview.version.update(version => version + 1));
+    }
     return state;
   }
 }
