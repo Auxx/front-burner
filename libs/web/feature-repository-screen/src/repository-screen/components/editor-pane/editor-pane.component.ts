@@ -138,6 +138,8 @@ export class EditorPaneComponent {
   private synced: { editor: ScrollPane; preview: ScrollPane; } | null = null;
   /** The layout the panes are shown in. */
   private shownLayout: Layout | null = null;
+  /** The place the panes of a new layout open at, and the panes still to scroll there (ED-36). */
+  private placeToKeep: { place: number; editor: boolean; preview: boolean; } | null = null;
 
   protected readonly show = computed<SplitPaneShow>(() => {
     const mode = this.viewMode.mode();
@@ -167,6 +169,13 @@ export class EditorPaneComponent {
     effect(() => {
       const layout = { narrow: this.viewMode.narrow(), mode: this.viewMode.mode() };
       untracked(() => this.keepPlace(layout));
+    });
+
+    // A pane of a tab is created only when its tab is first opened, after the layout has rendered.
+    effect(() => {
+      this.editor();
+      this.preview();
+      untracked(() => afterNextRender(() => this.applyPlace(), { injector: this.injector }));
     });
 
     // ED-35: Split mode only, once both panes are there.
@@ -275,16 +284,28 @@ export class EditorPaneComponent {
     }
     const place = before.mode === 'preview' ? this.preview()?.topLine() : this.editor()?.topPlace();
     if (place === undefined) {
+      this.placeToKeep = null;
       return;
     }
-    afterNextRender(() => {
-      if (layout.mode !== 'preview') {
-        this.editor()?.scrollToLine(place);
-      }
-      if (layout.mode !== 'edit') {
-        this.preview()?.scrollToLine(place);
-      }
-    }, { injector: this.injector });
+    this.placeToKeep = { place, editor: layout.mode !== 'preview', preview: layout.mode !== 'edit' };
+    afterNextRender(() => this.applyPlace(), { injector: this.injector });
+  }
+
+  /** Scrolls the panes of the new layout that are there to the kept place. */
+  private applyPlace(): void {
+    const keep = this.placeToKeep;
+    if (!keep) {
+      return;
+    }
+    const editor = keep.editor ? this.editor() : undefined;
+    const preview = keep.preview ? this.preview() : undefined;
+    editor?.scrollToLine(keep.place);
+    preview?.scrollToLine(keep.place);
+    keep.editor &&= !editor;
+    keep.preview &&= !preview;
+    if (!keep.editor && !keep.preview) {
+      this.placeToKeep = null;
+    }
   }
 
   /**
