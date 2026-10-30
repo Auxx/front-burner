@@ -9,6 +9,12 @@ export type Purify = (html: string) => PurifiedHtml;
 /** The class of a block's element. */
 export const BLOCK_CLASS = 'md-block';
 
+/** The elements `patchBlocks` created and removed. */
+export interface BlockChanges {
+  added: HTMLElement[];
+  removed: HTMLElement[];
+}
+
 /** The key of each block element. */
 const keys = new WeakMap<Element, string>();
 /** The ID each heading was rendered with, before it was made unique in the file. */
@@ -22,16 +28,19 @@ const HEADINGS = 'h1, h2, h3, h4, h5, h6';
  * with its purified HTML, and a block that is gone loses its element. New
  * elements are inserted before the kept ones without moving them; only a
  * block moved in the file moves. Then the headings get unique IDs in
- * document order, numbered as GitHub numbers them.
+ * document order, numbered as GitHub numbers them. The elements created and
+ * removed come back, for the image loader (A-8.16).
  *
  * This is the only place in the web client that writes HTML into the page.
  */
-export function patchBlocks(container: HTMLElement, state: PreviewState, purify: Purify): void {
+export function patchBlocks(container: HTMLElement, state: PreviewState, purify: Purify): BlockChanges {
+  const changes: BlockChanges = { added: [], removed: [] };
   const pool = new Map<string, HTMLElement[]>();
   for (const element of Array.from(container.children) as HTMLElement[]) {
     const key = keys.get(element);
     if (key === undefined) {
       element.remove();
+      changes.removed.push(element);
       continue;
     }
     const same = pool.get(key);
@@ -51,6 +60,7 @@ export function patchBlocks(container: HTMLElement, state: PreviewState, purify:
         continue;
       }
       element = createBlock(container.ownerDocument, block.key, purify(html));
+      changes.added.push(element);
     }
     setAttribute(element, 'data-from-line', String(block.fromLine));
     setAttribute(element, 'data-to-line', String(block.toLine));
@@ -59,6 +69,7 @@ export function patchBlocks(container: HTMLElement, state: PreviewState, purify:
   for (const elements of pool.values()) {
     for (const element of elements) {
       element.remove();
+      changes.removed.push(element);
     }
   }
 
@@ -70,6 +81,7 @@ export function patchBlocks(container: HTMLElement, state: PreviewState, purify:
   });
 
   numberHeadings(container);
+  return changes;
 }
 
 function createBlock(document: Document, key: string, html: PurifiedHtml): HTMLElement {

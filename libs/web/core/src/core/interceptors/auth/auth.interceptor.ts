@@ -32,13 +32,15 @@ function errorCode(error: HttpErrorResponse): Observable<unknown> {
   if (!(body instanceof Blob)) {
     return of(codeOf(body));
   }
-  return from(readText(body).then(text => {
-    try {
-      return codeOf(JSON.parse(text));
-    } catch {
-      return undefined;
-    }
-  }));
+  return from(
+    readText(body).then(text => {
+      try {
+        return codeOf(JSON.parse(text));
+      } catch {
+        return undefined;
+      }
+    })
+  );
 }
 
 // `FileReader` rather than `Blob.text()`, which the tests' DOM lacks.

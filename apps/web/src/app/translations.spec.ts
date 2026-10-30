@@ -123,7 +123,17 @@ describe('i18n/en.json', () => {
     [ `${SCREEN}.DeleteEntryDialog.uncommittedFile`, 'This file isn\'t committed, so it can\'t be recovered.' ],
     [ `${SCREEN}.DeleteEntryDialog.symlink`, 'Only the link is deleted, not what it points to.' ],
     [ 'web-markdown.MarkdownPreviewComponent.label', 'Preview of {{ name }}' ],
-    [ 'web-markdown.RemovalNoticeComponent.message', 'Some HTML isn\'t shown in the preview.' ]
+    [ 'web-markdown.RemovalNoticeComponent.message', 'Some HTML isn\'t shown in the preview.' ],
+    [ 'web-markdown.MarkdownPreviewComponent.images.notFound', 'Image not found: {{ address }}' ],
+    [ 'web-markdown.MarkdownPreviewComponent.images.tooLarge', 'This image is too large to preview' ],
+    [ 'web-markdown.MarkdownPreviewComponent.images.unsupported', 'This image format isn\'t supported' ],
+    [ 'web-markdown.MarkdownPreviewComponent.images.refused', 'Can\'t show this image' ],
+    [ 'web-markdown.MarkdownPreviewComponent.images.error', 'This image couldn\'t be loaded' ],
+    [ 'web-markdown.MarkdownPreviewComponent.images.remote', 'Remote image from {{ host }}' ],
+    [ 'web-markdown.MarkdownPreviewComponent.images.remoteFailed', 'Remote image couldn\'t be loaded' ],
+    [ 'web-markdown.MarkdownPreviewComponent.images.insecure', 'Insecure image (http) isn\'t shown' ],
+    [ 'web-markdown.MarkdownPreviewComponent.images.showRemote', 'Show remote images' ],
+    [ 'web-markdown.MarkdownPreviewComponent.images.remoteNote', 'Loading them lets these sites see your IP address.' ]
   ])('has the fixed text %s', (key, text) => {
     expect(texts[key]).toBe(text);
   });

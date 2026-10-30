@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting, type TestRequest } fro
 import { TestBed } from '@angular/core/testing';
 import { catchError, switchMap, throwError, timer } from 'rxjs';
 
-import { type ImageChange, ImageCache, type ImageResult, UNUSED_IMAGE_LIMIT } from './image-cache';
+import { ImageCache, type ImageChange, type ImageResult, UNUSED_IMAGE_LIMIT } from './image-cache';
 
 const URL_OF = (path: string) => `/api/v1/repositories/7/image?path=${path}`;
 

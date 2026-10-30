@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   effect,
   type ElementRef,
   inject,
@@ -10,8 +11,10 @@ import {
   untracked,
   viewChild
 } from '@angular/core';
-import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
+import { ImageCache } from '../../images/image-cache';
+import { ImageLoader, type ImageLoaderTexts } from '../../images/image-loader';
 import { purifyHtml } from '../../purify/purify-html';
 import { PreviewRendererService, type PreviewSource } from '../../services/preview-renderer/preview-renderer.service';
 import { RemovalNoticeComponent } from '../removal-notice/removal-notice.component';
@@ -26,6 +29,13 @@ export interface PreviewPathLink {
   fragment: string | null;
   /** Whether the user asked for a new tab: a middle click, or a click with Ctrl, Cmd or Shift. */
   newTab: boolean;
+}
+
+/** What the preview's images are resolved for. */
+interface ImagesFor {
+  source: PreviewSource;
+  path: string;
+  repositoryId: number | null;
 }
 
 /**
@@ -53,6 +63,9 @@ export interface PreviewPathLink {
  * itself, so that a pane that follows it never makes it follow back (ED-35,
  * ED-36). While `active` is false, such as on a hidden tab, the preview
  * neither reads the text nor renders (A-8.12).
+ *
+ * Images are shown by an `ImageLoader` (A-8.16) from the `ImageCache` that
+ * the repository screen provides, for the repository `repositoryId`.
  */
 @Component({
   selector: 'md-preview',
@@ -75,6 +88,8 @@ export class MarkdownPreviewComponent {
   readonly fragment = input<string | null>(null);
   /** Whether the preview is on screen; while it is not, it does no work (A-8.12). */
   readonly active = input(true);
+  /** The repository whose images the preview shows (A-8.16). */
+  readonly repositoryId = input<number | null>(null);
 
   readonly openPath = output<PreviewPathLink>();
   /** The place at the top after a scroll the preview did not make itself. */
@@ -82,6 +97,11 @@ export class MarkdownPreviewComponent {
 
   private readonly blocks = viewChild<ElementRef<HTMLElement>>('blocks');
   private readonly renderer = inject(PreviewRendererService);
+  private readonly transloco = inject(TranslocoService);
+  private readonly imageCache = inject(ImageCache, { optional: true });
+  private imageLoader: ImageLoader | null = null;
+  /** What the images were last resolved for: another source is another file, another path moves it. */
+  private imagesFor: ImagesFor | null = null;
   protected readonly state = this.renderer.connect(this.source, this.active);
   /** **Hide** on the removal notice lasts until another file is opened (SH-19). */
   protected readonly noticeHidden = linkedSignal({ source: this.source, computation: () => false });
@@ -93,25 +113,70 @@ export class MarkdownPreviewComponent {
   private pendingPlace: number | null = null;
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => this.imageLoader?.destroy());
     effect(() => {
       const state = this.state();
       const container = this.blocks()?.nativeElement;
       this.fragment();
+      const images = { source: this.source(), path: this.path(), repositoryId: this.repositoryId() };
       if (!container) {
         return;
       }
+      const loader = untracked(() => this.loaderFor(container, images));
       if (!state) {
+        untracked(() => loader.detach(Array.from(container.children) as HTMLElement[]));
         container.replaceChildren();
         return;
       }
-      patchBlocks(container, state, purifyHtml);
+      const changes = patchBlocks(container, state, purifyHtml);
       untracked(() => {
+        loader.detach(changes.removed);
+        loader.attach(changes.added);
         this.scrollToFragment(container);
         if (this.pendingPlace !== null) {
           this.scrollToLine(this.pendingPlace);
         }
       });
     });
+  }
+
+  /**
+   * The image loader, created with the preview's container, and told when
+   * another file is opened (IM-10, IM-15) or the open file moved.
+   */
+  private loaderFor(container: HTMLElement, images: ImagesFor): ImageLoader {
+    this.imageLoader ??= new ImageLoader({
+      root: container,
+      cache: this.imageCache,
+      repositoryId: () => this.imagesFor?.repositoryId ?? null,
+      filePath: () => this.imagesFor?.path ?? '',
+      texts: () => this.imageTexts()
+    });
+    const before = this.imagesFor;
+    this.imagesFor = images;
+    if (!before || before.source !== images.source) {
+      this.imageLoader.reset();
+    } else if (before.path !== images.path || before.repositoryId !== images.repositoryId) {
+      this.imageLoader.refresh();
+    }
+    return this.imageLoader;
+  }
+
+  private imageTexts(): ImageLoaderTexts {
+    const t = (key: string, params?: Record<string, string>) =>
+      this.transloco.translate(`web-markdown.MarkdownPreviewComponent.images.${key}`, params);
+    return {
+      notFound: address => t('notFound', { address }),
+      tooLarge: t('tooLarge'),
+      unsupported: t('unsupported'),
+      refused: t('refused'),
+      error: t('error'),
+      remote: host => t('remote', { host }),
+      remoteFailed: t('remoteFailed'),
+      insecure: t('insecure'),
+      button: t('showRemote'),
+      note: t('remoteNote')
+    };
   }
 
   /** The place at the top of the preview; `1` while it shows nothing. */

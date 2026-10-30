@@ -1,6 +1,12 @@
 import DOMPurify, { type DOMPurify as Purifier, type UponSanitizeAttributeHookEvent } from 'dompurify';
 import { checkAddress, isAddressAttribute } from '../whitelist/addresses';
-import { allowedAttributes, IMAGE_ADDRESS_ATTRIBUTES, isAllowedInputType, purifyConfig, withIdPrefix } from '../whitelist/derive';
+import {
+  allowedAttributes,
+  IMAGE_ADDRESS_ATTRIBUTES,
+  isAllowedInputType,
+  purifyConfig,
+  withIdPrefix
+} from '../whitelist/derive';
 import { SAFE_HTML, type SafeHtmlWhitelist } from '../whitelist/safe-html';
 
 /** The classes that highlighting adds after sanitising (plan 29, D-7.5), and the tags it adds them to. */
