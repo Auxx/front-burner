@@ -2,6 +2,12 @@ export {
   MarkdownPreviewComponent,
   type PreviewPathLink
 } from './markdown/components/markdown-preview/markdown-preview.component';
+export {
+  type ImageChange,
+  ImageCache,
+  type ImageFailure,
+  type ImageResult
+} from './markdown/images/image-cache';
 export { mergeRemovals, type RemovalKey, type RemovalReport } from './markdown/pipeline/collect-removals';
 export { renderSafeHtml, type SafeHtml } from './markdown/pipeline/render-safe-html';
 export { type PurifiedHtml, purifyHtml } from './markdown/purify/purify-html';

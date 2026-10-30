@@ -3,7 +3,7 @@ import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 // A type only: a value import of the contracts would bring Zod into the initial bundle (NF-2.9).
 import type { REFRESH_HEADER as ContractsRefreshHeader } from '@front-burner/shared-contracts';
-import { catchError, from, switchMap, throwError } from 'rxjs';
+import { catchError, from, type Observable, of, switchMap, throwError } from 'rxjs';
 
 import { AuthSessionService } from '../../services/auth-session/auth-session.service';
 
@@ -22,9 +22,33 @@ function is401(error: unknown): error is HttpErrorResponse {
   return error instanceof HttpErrorResponse && error.status === 401;
 }
 
-function errorCode(error: HttpErrorResponse): unknown {
-  const body: unknown = error.error;
+function codeOf(body: unknown): unknown {
   return typeof body === 'object' && body !== null ? (body as { code?: unknown; }).code : undefined;
+}
+
+/** The error's code; a request for raw bytes, such as an image (A-3.14), gets its error as a `Blob` to read first. */
+function errorCode(error: HttpErrorResponse): Observable<unknown> {
+  const body: unknown = error.error;
+  if (!(body instanceof Blob)) {
+    return of(codeOf(body));
+  }
+  return from(readText(body).then(text => {
+    try {
+      return codeOf(JSON.parse(text));
+    } catch {
+      return undefined;
+    }
+  }));
+}
+
+// `FileReader` rather than `Blob.text()`, which the tests' DOM lacks.
+function readText(blob: Blob): Promise<string> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => resolve('');
+    reader.readAsText(blob);
+  });
 }
 
 /**
@@ -59,14 +83,19 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
 
   return next(withToken(request, token)).pipe(
     catchError(error => {
-      if (!is401(error) || errorCode(error) !== 'auth-token-expired') {
+      if (!is401(error)) {
         return expire(token)(error);
       }
-      return from(session.refresh(token)).pipe(
-        // A failed refresh has already expired the session.
-        catchError(() => throwError(() => error)),
-        switchMap(refreshed => next(withToken(request, refreshed)).pipe(catchError(expire(refreshed))))
-      );
+      return errorCode(error).pipe(switchMap(code => {
+        if (code !== 'auth-token-expired') {
+          return expire(token)(error);
+        }
+        return from(session.refresh(token)).pipe(
+          // A failed refresh has already expired the session.
+          catchError(() => throwError(() => error)),
+          switchMap(refreshed => next(withToken(request, refreshed)).pipe(catchError(expire(refreshed))))
+        );
+      }));
     })
   );
 };
