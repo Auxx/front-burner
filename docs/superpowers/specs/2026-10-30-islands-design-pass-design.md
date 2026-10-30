@@ -23,15 +23,14 @@ things:
    typography: shared layout components, global heading styles, and tokens for
    every surface used.
 
-Success: on a desktop in dark mode, each page looks like the agreed mockups
-(see [Mockups](#mockups)), and no page styles its own page layout or title.
+Success: on a desktop in dark mode, each page looks like the agreed mockups (see
+[Mockups](#mockups)), and no page styles its own page layout or title.
 
 ## Goals, non-goals, anti-goals
 
 **Goals**
 
-- Every item in [Global changes](#global-changes) and
-  [Per page](#per-page).
+- Every item in [Global changes](#global-changes) and [Per page](#per-page).
 - Shared layout components that replace the duplicated page scaffolding (see
   [Shared layouts](#shared-layouts)).
 - Requirement and architecture docs updated in the same change (see
@@ -51,14 +50,14 @@ Success: on a desktop in dark mode, each page looks like the agreed mockups
 
 **Anti-goals (a failure even if it technically works)**
 
-- Breaking light mode or narrow screens. Both must still work and stay
-  usable at 320 CSS px (NF-12.4); they just are not polished in this pass.
+- Breaking light mode or narrow screens. Both must still work and stay usable at
+  320 CSS px (NF-12.4); they just are not polished in this pass.
 - Hard-coded colours or sizes in components or pages: everything goes through
   semantic or component tokens (A-10 token tiers). New surfaces get new tokens
   with light and dark values.
-- Pulling in a third-party editor theme or a GitHub stylesheet wholesale. Colours
-  come from our tokens; syntax colours stay CSS classes on `--ui-syntax-*`
-  tokens (web-client.md, A-10.14).
+- Pulling in a third-party editor theme or a GitHub stylesheet wholesale.
+  Colours come from our tokens; syntax colours stay CSS classes on
+  `--ui-syntax-*` tokens (web-client.md, A-10.14).
 - Layout shifts: links that change width when they become active, a find panel
   that pushes the text down, banner buttons that jump.
 - Losing accessibility that exists today: route focus on the `h1`, landmarks,
@@ -75,9 +74,9 @@ Success: on a desktop in dark mode, each page looks like the agreed mockups
 - Contrast: every new or changed colour pair meets NF-13 against the surface it
   sits on (use the `ai-tools` contrast tool and the token contrast pairs in
   `libs/ui/src/design-tokens/models/contrast-pairs.model.ts`).
-- The editor chunk size budget (web-client.md, NF-2.2) must not grow
-  noticeably: line numbers and the soft-wrap marker use CodeMirror's own
-  `@codemirror/view` gutters, no new dependency.
+- The editor chunk size budget (web-client.md, NF-2.2) must not grow noticeably:
+  line numbers and the soft-wrap marker use CodeMirror's own `@codemirror/view`
+  gutters, no new dependency.
 
 ## Global changes
 
@@ -105,16 +104,16 @@ Success: on a desktop in dark mode, each page looks like the agreed mockups
   values are the builder's call, close to these.
 - The `h1` normally appears only in the page title bar (G4), styled there.
 - Remove the per-page `.heading` font-size/weight/line-height copies (login,
-  onboarding, dashboard, add repository, page not found, dashboard
-  components). `libs/ui` components that set their own title sizes (dialog,
-  empty state) keep their own styles.
+  onboarding, dashboard, add repository, page not found, dashboard components).
+  `libs/ui` components that set their own title sizes (dialog, empty state) keep
+  their own styles.
 
 ### G3. Field spacing
 
-`ui-field` (`libs/ui/src/controls/components/field/field.component.scss`):
-the gap between the **label and the control** becomes `--ui-space-2` (8 px).
-The hint and error stay `--ui-space-1` (4 px) below the control. Do not change
-the gap for all parts.
+`ui-field` (`libs/ui/src/controls/components/field/field.component.scss`): the
+gap between the **label and the control** becomes `--ui-space-2` (8 px). The
+hint and error stay `--ui-space-1` (4 px) below the control. Do not change the
+gap for all parts.
 
 ### G4. Page title bar (breadcrumbs as the title)
 
@@ -130,11 +129,11 @@ Top-level pages (Dashboard) show only the `h1`. The `h1` keeps `tabindex="-1"`
 and still gets route focus. The separate `ui-breadcrumbs` row and the large
 heading go away. It belongs to the shared full-island layout (see
 [Shared layouts](#shared-layouts)), so no page styles its own title. Whether it
-reuses `ui-breadcrumbs` internally is the builder's call; the semantics above are
-not (the `h1` must not be inside the `nav`).
+reuses `ui-breadcrumbs` internally is the builder's call; the semantics above
+are not (the `h1` must not be inside the `nav`).
 
-Examples: Dashboard → "**Dashboard**"; Add repository → "Repositories ›
-**Add repository**"; repository settings (later) → "Repositories › handbook ›
+Examples: Dashboard → "**Dashboard**"; Add repository → "Repositories › **Add
+repository**"; repository settings (later) → "Repositories › handbook ›
 **Settings**".
 
 ### G5. App header
@@ -183,13 +182,13 @@ app header) and their exact API are the builder's call. What they must do:
    centred island inside `<main>` rather than full screen.
 2. **Full-island page** (Dashboard, Add repository, later the repository
    management, settings and preferences pages): the page is one `ui-island`
-   filling `<main>` below the header, with the title bar (G4) at its top and
-   the page content below; scrolls inside the island. An option to centre the
+   filling `<main>` below the header, with the title bar (G4) at its top and the
+   page content below; scrolls inside the island. An option to centre the
    content column (Add repository: 40rem) is needed.
-3. **App shell body**: padding around the islands **8 px top, 16 px inline,
-   16 px bottom** (today `0 var(--ui-island-gap) var(--ui-island-gap)`). The
-   gap **between** neighbouring islands (file tree / editor) is **8 px**.
-   Introduce tokens for both; keep the narrow-screen values working.
+3. **App shell body**: padding around the islands **8 px top, 16 px inline, 16
+   px bottom** (today `0 var(--ui-island-gap) var(--ui-island-gap)`). The gap
+   **between** neighbouring islands (file tree / editor) is **8 px**. Introduce
+   tokens for both; keep the narrow-screen values working.
 4. **Pages fill `<main>`.** Bug today: `<main>` in `ui-app-shell` is a grid with
    one `1fr` row; `<router-outlet>` takes that row and the routed page lands in
    an implicit row below, so pages stick to the bottom. Fix it once (e.g. in
@@ -255,9 +254,10 @@ Layout:
 
 - **Activity bar** on the left, on the canvas background, using the existing
   `ui-activity-bar` / `ui-activity-bar-item` and the `ui-app-shell` slot. It
-  holds the **Files** toggle, with the **`folder`** icon (already in the sprite),
-  replacing the "Files" button in `rs-repository-bar`. On narrow screens the
-  activity bar moves per A-10.6; it must still toggle the files drawer.
+  holds the **Files** toggle, with the **`folder`** icon (already in the
+  sprite), replacing the "Files" button in `rs-repository-bar`. On narrow
+  screens the activity bar moves per A-10.6; it must still toggle the files
+  drawer.
 - **File tree** in its own island; **editor area** in another island; 8 px gap.
 - `rs-repository-bar` follows G5 (padding, no flame icon, "Dashboard" link).
 - The repository screen has **no G4 title bar**: its `h1` stays in the
@@ -266,14 +266,14 @@ Layout:
 States other than "ready" _(my call)_:
 
 - **loading**: the spinner, centred, as today (no shell).
-- **missing** and **failed**: the app shell with `shell-app-header`, no
-  activity bar; the content (Page not found, or the failure banner with
-  **Try again**) in a centred island, as on Page not found.
+- **missing** and **failed**: the app shell with `shell-app-header`, no activity
+  bar; the content (Page not found, or the failure banner with **Try again**) in
+  a centred island, as on Page not found.
 - **not-openable**: the app shell with `rs-repository-bar` without files, no
   activity bar; `rs-not-openable` in a centred island.
 
-So the full-island layout always has a title bar, and the centred island
-layout works both with and without the app shell.
+So the full-island layout always has a title bar, and the centred island layout
+works both with and without the app shell.
 
 Editor toolbar (in the editor island, wide and narrow layouts):
 
@@ -306,8 +306,8 @@ Find panel (`@codemirror/search`, today `search({ top: true })`):
     shortcut (`Ctrl+H` / `Cmd+Alt+F`) opens it expanded _(my call)_. `Esc`
     closes it and returns focus to the editor. Enter / Shift+Enter go to the
     next / previous match.
-  - All labels translated; every control has an accessible name, toggles
-    expose their pressed state, the counter is announced politely.
+  - All labels translated; every control has an accessible name, toggles expose
+    their pressed state, the counter is announced politely.
   - Exact layout and icons are the builder's call, close to VS Code's find
     widget.
 
@@ -324,21 +324,21 @@ Editor content:
   per-user preference can replace it directly.
 - **Darcula colours**: set the dark values of the `--ui-syntax-*` tokens (and
   the editor tokens: gutter, line number, active line, selection, cursor, match
-  highlight) from IntelliJ's Darcula scheme. Do **not** add a theme package.
-  The editor background stays the island colour. Map Darcula's colours to our
-  token names (heading, emphasis, link, url, code, quote, list marker, HTML tag
-  and attribute, meta/front matter, keyword, string, number, function, type,
+  highlight) from IntelliJ's Darcula scheme. Do **not** add a theme package. The
+  editor background stays the island colour. Map Darcula's colours to our token
+  names (heading, emphasis, link, url, code, quote, list marker, HTML tag and
+  attribute, meta/front matter, keyword, string, number, function, type,
   comment, punctuation) as closely as Darcula does for Markdown; where Darcula
   has no Markdown-specific colour, use its general one. Check contrast against
-  the island. Light mode syntax colours are unchanged. The preview's code
-  blocks share these tokens, so they change too.
+  the island. Light mode syntax colours are unchanged. The preview's code blocks
+  share these tokens, so they change too.
 
 Preview (`libs/web/markdown`, `markdown-preview.component.scss`):
 
 - **GitHub-style** Markdown body: GitHub's spacing, sizes and structure
-  (paragraph / list / blockquote / table / pre margins of 16 px, `h1`/`h2` with a
-  bottom border and `0.3em` padding, heading sizes 2em / 1.5em / 1.25em / 1em /
-  0.875em / 0.85em, inline code with a tinted background and 6 px radius, code
+  (paragraph / list / blockquote / table / pre margins of 16 px, `h1`/`h2` with
+  a bottom border and `0.3em` padding, heading sizes 2em / 1.5em / 1.25em / 1em
+  / 0.875em / 0.85em, inline code with a tinted background and 6 px radius, code
   blocks on a surface with 16 px padding, blockquotes with a left border, tables
   with borders and striped rows, `hr`, images max-width 100%, task lists).
 - **Our colours, not GitHub's**: text, muted, borders, link, and the code
@@ -353,16 +353,16 @@ Preview (`libs/web/markdown`, `markdown-preview.component.scss`):
 Update in the same change:
 
 - `docs/architecture/design-system.md`
-  - A-10.5: islands sit on a **lighter canvas**; islands are darker in dark
-    mode (today it says "a darker canvas").
+  - A-10.5: islands sit on a **lighter canvas**; islands are darker in dark mode
+    (today it says "a darker canvas").
   - Record the page title bar (breadcrumbs as the title), the shared layouts,
     the "surface on an island" token, the bold active header link, and the
     Darcula-based dark syntax colours.
   - Add the new layout components to the component table (A-10).
 - `docs/requirements/navigation.md`
-  - NV-14: keep breadcrumbs on the same pages; add that the breadcrumb trail
-    and the page's `h1` form one line at the top of the page, and that pages
-    without ancestors show only the `h1` there.
+  - NV-14: keep breadcrumbs on the same pages; add that the breadcrumb trail and
+    the page's `h1` form one line at the top of the page, and that pages without
+    ancestors show only the `h1` there.
   - The header's brand link: "Dashboard", no icon (wherever the link is
     described).
   - Active header link: bold (NV wording "marked as current" stays).
@@ -411,5 +411,5 @@ they differ.
 - The order of work and how to split it into reviewable steps (suggestion:
   tokens and global styles → shared layouts and pages → header → repository
   screen layout → editor → preview → docs, with docs updated alongside each).
-- Test coverage per the development workflow; the logged-out banner fix and
-  the router-outlet fix get regression tests.
+- Test coverage per the development workflow; the logged-out banner fix and the
+  router-outlet fix get regression tests.
