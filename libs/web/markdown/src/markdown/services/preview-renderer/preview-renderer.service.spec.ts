@@ -202,6 +202,66 @@ describe('PreviewRendererService', () => {
     expect(worker.updates).toEqual([ 'First file', 'Second file', 'Second file' ]);
   });
 
+  it('does no work while inactive', () => {
+    const active = signal(false);
+    service.connect({
+      version,
+      read: () => {
+        reads++;
+        return text;
+      }
+    }, active);
+    TestBed.tick();
+    change('Second');
+    vi.advanceTimersByTime(PREVIEW_LARGE_DELAY_MS);
+
+    expect(reads).toBe(0);
+    expect(worker.requests).toEqual([]);
+  });
+
+  it('renders the newest text at once when it becomes active', () => {
+    const active = signal(true);
+    service.connect({ version, read: () => text }, active);
+    TestBed.tick();
+    active.set(false);
+    TestBed.tick();
+    change('Second');
+
+    active.set(true);
+    TestBed.tick();
+
+    expect(worker.updates).toEqual([ 'First', 'Second' ]);
+    vi.advanceTimersByTime(PREVIEW_DELAY_MS);
+    expect(worker.updates).toEqual([ 'First', 'Second' ]);
+  });
+
+  it('does not render again when it becomes active without a change', () => {
+    const active = signal(true);
+    service.connect({ version, read: () => text }, active);
+    TestBed.tick();
+    active.set(false);
+    TestBed.tick();
+
+    active.set(true);
+    TestBed.tick();
+
+    expect(worker.updates).toEqual([ 'First' ]);
+  });
+
+  it('is busy while newer text waits or renders', () => {
+    connect();
+    expect(service.busy()).toBe(true);
+    worker.answer(update(1, [ 'a' ]));
+    expect(service.busy()).toBe(false);
+
+    change('Second');
+    expect(service.busy()).toBe(true);
+    vi.advanceTimersByTime(PREVIEW_DELAY_MS);
+    expect(service.busy()).toBe(true);
+    worker.answer({ type: 'error', id: 2, message: 'Broken' });
+    expect(service.busy()).toBe(false);
+  });
+
   it('terminates the worker', () => {
     connect();
 

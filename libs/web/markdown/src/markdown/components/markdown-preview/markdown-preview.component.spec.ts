@@ -1,5 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 
 import { PREVIEW_WORKER, type PreviewSource } from '../../services/preview-renderer/preview-renderer.service';
@@ -43,7 +44,9 @@ function source(text: string): PreviewSource {
     [path]="path()"
     [label]="label()"
     [fragment]="fragment()"
+    [active]="active()"
     (openPath)="opened.push($event)"
+    (scrolled)="places.push($event)"
   />`
 })
 class HostComponent {
@@ -51,7 +54,9 @@ class HostComponent {
   readonly path = signal('docs/a.md');
   readonly label = signal('a.md');
   readonly fragment = signal<string | null>(null);
+  readonly active = signal(true);
   readonly opened: PreviewPathLink[] = [];
+  readonly places: number[] = [];
 }
 
 describe('MarkdownPreviewComponent', () => {
@@ -59,13 +64,6 @@ describe('MarkdownPreviewComponent', () => {
   let host: HostComponent;
   let worker: FakeWorker;
   let scrolled: Element[];
-
-  // jsdom has constructed stylesheets but not `adoptedStyleSheets`.
-  beforeEach(() => {
-    Object.defineProperty(document, 'adoptedStyleSheets', { configurable: true, writable: true, value: [] });
-  });
-
-  afterAll(() => Reflect.deleteProperty(document, 'adoptedStyleSheets'));
 
   beforeEach(async () => {
     worker = new FakeWorker();
@@ -279,5 +277,74 @@ describe('MarkdownPreviewComponent', () => {
     );
     await fixture.whenStable();
     expect(notice()).not.toBeNull();
+  });
+  describe('places', () => {
+    /** Gives the blocks a layout of 100 px each, which follows `scrollTop` (jsdom has none). */
+    function layOut(): void {
+      const container = blocks();
+      let scrollTop = 0;
+      Object.defineProperty(container, 'scrollTop', {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value;
+          // Browsers fire `scroll` after the change, not during it.
+          setTimeout(() => container.dispatchEvent(new Event('scroll')));
+        }
+      });
+      container.getBoundingClientRect = () => new DOMRect(0, 0, 100, 300);
+      Array.from(container.children).forEach((block, index) => {
+        block.getBoundingClientRect = () => new DOMRect(0, index * 100 - scrollTop, 100, 100);
+      });
+    }
+
+    function preview() {
+      return fixture.debugElement.query(By.directive(MarkdownPreviewComponent))
+        .componentInstance as MarkdownPreviewComponent;
+    }
+
+    beforeEach(async () => {
+      // Lines 1, 3 to 6 and 8.
+      await answer([ [ 'a', '<p>A</p>' ], [ 'b', '<p>B</p>' ], [ 'c', '<p>C</p>' ] ]);
+      const [ a, b, c ] = Array.from(blocks().children);
+      a.setAttribute('data-to-line', '1');
+      b.setAttribute('data-from-line', '3');
+      b.setAttribute('data-to-line', '6');
+      c.setAttribute('data-from-line', '8');
+      c.setAttribute('data-to-line', '8');
+      layOut();
+    });
+
+    it('scrolls to a line and a share of its block', () => {
+      preview().scrollToLine(5);
+
+      expect(blocks().scrollTop).toBe(150);
+      expect(preview().topLine()).toBe(5);
+    });
+
+    it('does not report a scroll it made itself', async () => {
+      preview().scrollToLine(5);
+      await new Promise(resolve => setTimeout(resolve));
+      expect(host.places).toEqual([]);
+
+      blocks().scrollTop = 100;
+      await new Promise(resolve => setTimeout(resolve));
+
+      expect(host.places).toEqual([ 3 ]);
+    });
+  });
+
+  it('does no work while inactive', async () => {
+    host.active.set(false);
+    await fixture.whenStable();
+    const sent = worker.requests.length;
+
+    host.source.set(source('# B'));
+    await fixture.whenStable();
+
+    expect(worker.requests.slice(sent).filter(request => request.type === 'update')).toEqual([]);
+    host.active.set(true);
+    await fixture.whenStable();
+    expect(worker.requests.at(-1)).toEqual(expect.objectContaining({ type: 'update', source: '# B' }));
   });
 });

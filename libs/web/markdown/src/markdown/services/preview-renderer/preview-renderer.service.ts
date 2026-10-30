@@ -64,6 +64,8 @@ export class PreviewRendererService {
   private timer: ReturnType<typeof setTimeout> | undefined;
   /** The id of the latest update sent. */
   private latest = 0;
+  /** The id of the latest update answered, with blocks or an error. */
+  private answered = 0;
   /** Answers to updates before this id came before a reset, and are dropped whole. */
   private resetAt = 0;
   private rendered = new Map<string, string>();
@@ -81,27 +83,60 @@ export class PreviewRendererService {
    * Follows a source: renders it at once, then after each change once typing
    * stops. Given a signal of sources, such as a file's when another file is
    * opened, it forgets the blocks and renders the new source at once.
+   *
+   * While `active` is false, such as for a preview that is not on screen, it
+   * neither reads the text nor renders (A-8.12); becoming active renders the
+   * newest text at once, if it changed meanwhile.
    */
-  connect(source: PreviewSource | Signal<PreviewSource>): Signal<PreviewState | null> {
+  connect(
+    source: PreviewSource | Signal<PreviewSource>,
+    active: Signal<boolean> = signal(true)
+  ): Signal<PreviewState | null> {
     let connected: PreviewSource | null = null;
+    /** The version of the connected source last sent, or `null` when nothing of it was. */
+    let sent: number | null = null;
+    let wasActive = false;
     effect(() => {
       const current = typeof source === 'function' ? source() : source;
-      current.version();
+      const version = current.version();
+      const on = active();
       untracked(() => {
+        const activated = on && !wasActive;
+        wasActive = on;
         clearTimeout(this.timer);
+        this.timer = undefined;
         if (current !== connected) {
           if (connected !== null) {
             this.reset();
           }
           connected = current;
+          sent = null;
+        }
+        if (!on) {
+          return;
+        }
+        if (sent === null || (activated && sent !== version)) {
+          sent = version;
           this.send(current.read());
           return;
         }
+        if (sent === version) {
+          return;
+        }
         const delay = this.length > PREVIEW_LARGE_FILE ? PREVIEW_LARGE_DELAY_MS : PREVIEW_DELAY_MS;
-        this.timer = setTimeout(() => this.send(current.read()), delay);
+        this.timer = setTimeout(() => {
+          this.timer = undefined;
+          sent = current.version();
+          this.send(current.read());
+        }, delay);
       });
     }, { injector: this.injector });
     return this.state.asReadonly();
+  }
+
+  /** Whether newer text than the state shows is waiting or being rendered. */
+  busy(): boolean {
+    return this.timer !== undefined || this.answered !== this.latest;
   }
 
   /** Forgets the blocks, as for another file: the next update renders every block. */
@@ -130,6 +165,7 @@ export class PreviewRendererService {
     if (response.id < this.resetAt) {
       return;
     }
+    this.answered = Math.max(this.answered, response.id);
     if (response.type === 'error') {
       // The preview keeps showing the last version that rendered.
       console.error('The preview could not be rendered:', response.message);
