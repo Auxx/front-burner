@@ -64,6 +64,12 @@ export interface OpenFile {
   gone: WritableSignal<boolean>;
   /** Why the last **Recreate it** failed, such as `entry-exists`. */
   recreateError: WritableSignal<ApiError | null>;
+  /**
+   * What its live preview shows (A-8.12). The editor pane bumps `version` on
+   * every change of the text and sets `read` to read the editor's content
+   * once it shows the file; until then it reads the loaded content.
+   */
+  preview: { version: WritableSignal<number>; read: () => string; };
 }
 
 /** How long after its answer a save's hash still counts as this tab's own, for its late event (A-3.11). */
@@ -524,7 +530,8 @@ export class OpenFilesService {
       draft: signal(draft),
       changed: signal(null),
       gone: signal(false),
-      recreateError: signal(null)
+      recreateError: signal(null),
+      preview: { version: signal(0), read: () => file.file.content }
     };
     file.saver.sending.subscribe(text => this.putDraft(file, repositoryId, text));
     file.saver.upToDate.subscribe(() => {

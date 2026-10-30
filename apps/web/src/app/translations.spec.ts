@@ -121,7 +121,9 @@ describe('i18n/en.json', () => {
     [ `${SCREEN}.EntryMessageComponent.submodule`, 'Submodules aren\'t supported.' ],
     [ `${SCREEN}.FileTreeStoreService.deleting`, 'Deleting…' ],
     [ `${SCREEN}.DeleteEntryDialog.uncommittedFile`, 'This file isn\'t committed, so it can\'t be recovered.' ],
-    [ `${SCREEN}.DeleteEntryDialog.symlink`, 'Only the link is deleted, not what it points to.' ]
+    [ `${SCREEN}.DeleteEntryDialog.symlink`, 'Only the link is deleted, not what it points to.' ],
+    [ 'web-markdown.MarkdownPreviewComponent.label', 'Preview of {{ name }}' ],
+    [ 'web-markdown.RemovalNoticeComponent.message', 'Some HTML isn\'t shown in the preview.' ]
   ])('has the fixed text %s', (key, text) => {
     expect(texts[key]).toBe(text);
   });

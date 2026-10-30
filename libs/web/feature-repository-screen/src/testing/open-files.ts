@@ -37,6 +37,7 @@ export function openFile(
     draft: signal(null),
     changed: signal(null),
     gone: signal(false),
-    recreateError: signal(null)
+    recreateError: signal(null),
+    preview: { version: signal(0), read: () => file.content }
   };
 }

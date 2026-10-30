@@ -7,9 +7,12 @@ import {
   Injector,
   input,
   linkedSignal,
+  output,
+  signal,
+  untracked,
   viewChild
 } from '@angular/core';
-import { ButtonComponent } from '@front-burner/ui';
+import { ButtonComponent, injectNarrowViewport, SplitPaneComponent } from '@front-burner/ui';
 import {
   CodeEditorComponent,
   contentOf,
@@ -22,6 +25,7 @@ import {
   setLabel,
   setReadOnly
 } from '@front-burner/web-code-editor';
+import { MarkdownPreviewComponent, type PreviewPathLink } from '@front-burner/web-markdown';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
@@ -57,6 +61,12 @@ const built = new WeakMap<OpenFile, number>();
  * own. A reloaded file gets a new state, without undo history, with the
  * cursor at the same line and column as far as the new text allows, and,
  * when it was the file shown, the same first visible line (ED-24).
+ *
+ * On wide screens the live preview is beside the editor (ED-26, A-8.12),
+ * with `fragment` as the heading to scroll to; a link in it to another entry
+ * is emitted as `openPath` (ED-31). On narrow screens only the editor is
+ * shown. The preview follows the file's `preview` source, whose version is
+ * bumped on every change of the text.
  */
 @Component({
   selector: 'rs-editor-pane',
@@ -67,7 +77,9 @@ const built = new WeakMap<OpenFile, number>();
     ChangedOnDiskComponent,
     DraftOfferComponent,
     GoneElsewhereComponent,
-    LargeFileNoteComponent
+    LargeFileNoteComponent,
+    MarkdownPreviewComponent,
+    SplitPaneComponent
   ],
   templateUrl: './editor-pane.component.html',
   styleUrl: './editor-pane.component.scss',
@@ -75,6 +87,10 @@ const built = new WeakMap<OpenFile, number>();
 })
 export class EditorPaneComponent {
   readonly file = input.required<OpenFile>();
+  /** The heading of the file to show in the preview, such as from a link in another file. */
+  readonly fragment = input<string | null>(null);
+  /** A link in the preview to another entry of the repository (ED-31). */
+  readonly openPath = output<PreviewPathLink>();
 
   private readonly openFiles = inject(OpenFilesService);
   private readonly diskChanges = inject(DiskChangesService);
@@ -84,6 +100,11 @@ export class EditorPaneComponent {
   private readonly injector = inject(Injector);
   /** The file whose state the editor was last given. */
   private shownFile: OpenFile | null = null;
+
+  protected readonly narrow = injectNarrowViewport();
+  /** The editor's share of the pane beside the preview, in percent. */
+  protected readonly editorSize = signal(50);
+  protected readonly name = computed(() => fileName(this.file().path()));
 
   protected readonly state = linkedSignal(() => {
     const file = this.file();
@@ -112,6 +133,7 @@ export class EditorPaneComponent {
       file.editorState = current.update(replaceContent(current, content)).state;
       return () => contentOf(file.editorState as EditorState);
     });
+    file.preview.version.update(version => version + 1);
     this.editor().focus();
   }
 
@@ -151,6 +173,7 @@ export class EditorPaneComponent {
     this.state.set(change.state);
     if (change.docChanged) {
       file.saver.edit(() => contentOf(file.editorState as EditorState));
+      file.preview.version.update(version => version + 1);
     }
   }
 
@@ -188,6 +211,8 @@ export class EditorPaneComponent {
         ...(existing.readOnly === readOnly ? [] : [ setReadOnly(readOnly) ])
       ).state;
     file.editorState = state;
+    file.preview.read = () => contentOf(file.editorState as EditorState);
+    untracked(() => file.preview.version.update(version => version + 1));
     return state;
   }
 }

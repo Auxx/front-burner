@@ -67,7 +67,8 @@
     "**/.nx",
     "**/.vscode",
     ".agents/skills",
-    ".junie/**/plans/*"
+    ".junie/**/plans/*",
+    "apps/web-e2e/src/support/fixtures/xss-corpus.md"
   ],
   "plugins": [
     "npm:@dprint/typescript@0.96.1",

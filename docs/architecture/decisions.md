@@ -219,7 +219,11 @@ _(My calls.)_
   ([REQ-EDIT-002](../requirements/preview-html.md)). It is written to the page
   by a single shared preview component, and nowhere else. _(My call. Spike 3:
   the component writes DOMPurify's `TrustedHTML` into one element per block
-  instead of passing a string through `bypassSecurityTrustHtml`; A-8.12.)_
+  instead of passing a string through `bypassSecurityTrustHtml`; A-8.12. Plan
+  30's call: a `no-restricted-syntax` rule in the root ESLint config refuses
+  assigning `innerHTML` or `outerHTML`, `insertAdjacentHTML`, `setHTMLUnsafe`
+  and `bypassSecurityTrust…` in the web client's code outside specs, with one
+  disable comment in the component's `patchBlocks`.)_
 - **D-7.7** How image paths are resolved and how the web client loads repository
   and remote images is [REQ-EDIT-003](../requirements/preview-images.md).
 - **D-7.8** A small throwaway spike will confirm the Shiki + remark + Angular

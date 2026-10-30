@@ -129,6 +129,8 @@ export class RepositoryScreenPage {
 
   /** The entry highlighted in the tree. */
   protected readonly selectedPath = computed(() => this.path() || null);
+  /** The heading of the open file to show in its preview (ED-31). */
+  protected readonly fragment = toSignal(this.route.fragment, { initialValue: null });
   /** What the editor area shows: no file (`null`), or a path, `''` while the first file is picked. */
   protected readonly openPath = signal<string | null>('');
   /** The entry at `openPath`: `null` when there is none, `undefined` while it is being found. */
@@ -193,14 +195,20 @@ export class RepositoryScreenPage {
     }
   }
 
-  /** Goes to the selected entry's path (FB-1) and closes the drawer of narrow screens (FB-9). */
-  protected openEntryAt(path: string): void {
+  /**
+   * Goes to the selected entry's path (FB-1) and closes the drawer of narrow
+   * screens (FB-9). A link in the preview goes the same way, with the heading
+   * to show as the fragment (ED-31).
+   */
+  protected openEntryAt(path: string, fragment: string | null = null): void {
     const repository = this.session.repository();
     if (!repository) {
       return;
     }
     this.drawerOpen.set(false);
-    void this.router.navigate([ '/repositories', repository.id, 'files', ...path.split('/') ]);
+    void this.router.navigate([ '/repositories', repository.id, 'files', ...path.split('/') ], {
+      fragment: fragment ?? undefined
+    });
   }
 
   /** Runs an action of the tree; a new file it opens closes the drawer, as a selected one does (FB-9). */

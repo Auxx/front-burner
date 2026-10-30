@@ -196,3 +196,13 @@ export const PLACEMENTS: readonly ((payload: string) => string)[] = [
   payload => `> ${payload}`,
   payload => `<div>\n\n${payload}\n\n</div>`
 ];
+
+/**
+ * One Markdown file holding every payload in every placement, for the
+ * end-to-end test that renders the corpus under the real Content Security
+ * Policy (AC-EDIT-002.16). Kept in `apps/web-e2e` by `xss-corpus.spec.ts`.
+ */
+export function corpusFile(): string {
+  const parts = PLACEMENTS.flatMap(place => XSS_CORPUS.map(payload => place(payload)));
+  return `# XSS corpus\n\n${parts.join('\n\n')}\n`;
+}

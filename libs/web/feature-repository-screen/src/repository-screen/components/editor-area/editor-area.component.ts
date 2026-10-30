@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import type { ApiError, Entry } from '@front-burner/shared-contracts';
 import { ButtonComponent, EmptyStateActionsComponent, EmptyStateComponent, SpinnerComponent } from '@front-burner/ui';
 import { ApiErrorTextService } from '@front-burner/web-core';
+import type { PreviewPathLink } from '@front-burner/web-markdown';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import type { OpenFile } from '../../services/open-files/open-files.service';
@@ -22,7 +23,8 @@ const EXPLAINED = new Set([ 'file-too-large', 'file-not-utf8' ]);
  * panel (FB-21), and any other failure offers **Try again** (`retryOpen`).
  * For any other entry, or a path that does not exist, it says why it cannot
  * be opened (FB-13, FB-21), with its actions emitted as `action`. A file
- * deleted or renamed elsewhere says so (`goneElsewhere`, FB-42).
+ * deleted or renamed elsewhere says so (`goneElsewhere`, FB-42). A link in
+ * the preview to another entry is emitted as `openPath` (ED-31).
  */
 @Component({
   selector: 'rs-editor-area',
@@ -53,12 +55,16 @@ export class EditorAreaComponent {
   readonly openError = input<ApiError | null>(null);
   /** Whether the file at `path` was deleted or renamed elsewhere since it was opened (FB-42). */
   readonly goneElsewhere = input(false);
+  /** The heading of the open file to show in its preview (ED-31). */
+  readonly fragment = input<string | null>(null);
 
   readonly newFile = output<void>();
   /** An action chosen for the entry at `path`, such as **Delete** (FB-21). */
   readonly action = output<EntryAction>();
   /** **Try again** after opening the Markdown file failed. */
   readonly retryOpen = output<void>();
+  /** A link in the preview to another entry of the repository (ED-31). */
+  readonly openPath = output<PreviewPathLink>();
 
   protected readonly name = computed(() => fileName(this.path() ?? ''));
   protected readonly markdown = computed(() => this.entry()?.kind === 'file' && this.entry()?.markdown === true);

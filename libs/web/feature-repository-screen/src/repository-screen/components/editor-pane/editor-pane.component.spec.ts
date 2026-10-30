@@ -1,3 +1,4 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { undo, undoDepth } from '@codemirror/commands';
 import {
@@ -7,6 +8,7 @@ import {
   type EditorStateChange,
   isHighlighting
 } from '@front-burner/web-code-editor';
+import { BehaviorSubject, map } from 'rxjs';
 
 import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
@@ -22,6 +24,7 @@ type EditorState = EditorStateChange['state'];
 describe('EditorPaneComponent', () => {
   let fixture: ComponentFixture<EditorPaneComponent>;
   let notice: ReturnType<typeof vi.fn>;
+  let narrow: BehaviorSubject<boolean>;
   let openFiles: {
     restoreDraft: ReturnType<typeof vi.fn>;
     discardDraft: ReturnType<typeof vi.fn>;
@@ -68,9 +71,17 @@ describe('EditorPaneComponent', () => {
       recreate: vi.fn(async () => fixture.componentInstance.file().gone.set(false))
     };
     notice = vi.fn();
+    narrow = new BehaviorSubject(false);
     TestBed.configureTestingModule({
       imports: [ EditorPaneComponent, translocoTesting() ],
       providers: [
+        {
+          provide: BreakpointObserver,
+          useValue: {
+            isMatched: () => narrow.value,
+            observe: () => narrow.pipe(map(matches => ({ matches, breakpoints: {} })))
+          }
+        },
         { provide: OpenFilesService, useValue: openFiles },
         { provide: DiskChangesService, useValue: { notice } }
       ]
@@ -99,6 +110,46 @@ describe('EditorPaneComponent', () => {
     await settle(fixture);
 
     expect(content().getAttribute('aria-label')).toBe('handbook.md');
+  });
+
+  it('shows the preview beside the editor on wide screens and not on narrow ones', async () => {
+    await show(openFile('docs/guide.md'));
+
+    const preview = pane().querySelector('ui-split-pane [uiSplitPaneEnd]');
+    expect(preview?.tagName).toBe('MD-PREVIEW');
+    expect(preview?.querySelector('section')?.getAttribute('aria-label')).toBe(
+      'web-markdown.MarkdownPreviewComponent.label'
+    );
+    expect(pane().querySelector('ui-split-pane [uiSplitPaneStart]')?.tagName).toBe('CE-CODE-EDITOR');
+
+    narrow.next(true);
+    await settle(fixture);
+
+    expect(pane().querySelector('md-preview')).toBeNull();
+    expect(pane().querySelector('ce-code-editor')).not.toBeNull();
+  });
+
+  it('gives the preview the editor\'s text and bumps its version on every edit', async () => {
+    const file = openFile('README.md');
+    await show(file);
+    const version = file.preview.version();
+
+    typeAtEnd('More.\n');
+
+    expect(file.preview.version()).toBe(version + 1);
+    expect(file.preview.read()).toBe('# README.md\nMore.\n');
+  });
+
+  it('emits a link of the preview to another entry', async () => {
+    const opened: unknown[] = [];
+    fixture.componentInstance.openPath.subscribe(link => opened.push(link));
+    await show(openFile('docs/guide.md'));
+
+    fixture.debugElement
+      .query(element => element.name === 'md-preview')
+      .componentInstance.openPath.emit({ path: 'docs/other.md', fragment: 'install' });
+
+    expect(opened).toEqual([ { path: 'docs/other.md', fragment: 'install' } ]);
   });
 
   it('writes each new state back into the open file and records edits', async () => {

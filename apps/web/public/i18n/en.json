@@ -373,6 +373,7 @@
   "web-feature-repository-screen.DraftOfferComponent.restore": "Restore",
   "web-feature-repository-screen.DraftOfferComponent.discard": "Discard",
   "web-feature-repository-screen.EditorPaneComponent.find": "Find",
+  "web-feature-repository-screen.EditorPaneComponent.resizePreview": "Resize the preview",
   "web-feature-repository-screen.SaveStatusComponent.saved": "Saved",
   "web-feature-repository-screen.SaveStatusComponent.saving": "Saving…",
   "web-feature-repository-screen.SaveStatusComponent.offline": "Not saved — offline, retrying",
@@ -445,5 +446,12 @@
   "web-feature-repository-screen.DeleteEntryDialog.reference": "Reference:",
   "web-feature-repository-screen.DeleteEntryDialog.cancel": "Cancel",
   "web-feature-repository-screen.DeleteEntryDialog.retry": "Try again",
-  "web-feature-repository-screen.DeleteEntryDialog.delete": "Delete"
+  "web-feature-repository-screen.DeleteEntryDialog.delete": "Delete",
+  "web-markdown.MarkdownPreviewComponent.label": "Preview of {{ name }}",
+  "web-markdown.RemovalNoticeComponent.message": "Some HTML isn't shown in the preview.",
+  "web-markdown.RemovalNoticeComponent.details": "Details",
+  "web-markdown.RemovalNoticeComponent.hide": "Hide",
+  "web-markdown.RemovalNoticeComponent.kinds.tag": "× {{ count }}",
+  "web-markdown.RemovalNoticeComponent.kinds.attribute": "attribute × {{ count }}",
+  "web-markdown.RemovalNoticeComponent.kinds.address": "address × {{ count }}"
 }
