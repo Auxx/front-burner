@@ -43,7 +43,15 @@ export const RemoteUrl: Story = {
         </ui-field>
       </div>
     `
-  })
+  }),
+  play: async ({ canvasElement }) => {
+    const label = canvasElement.querySelector('.label')!.getBoundingClientRect();
+    const control = canvasElement.querySelector('.control')!.getBoundingClientRect();
+    const hint = canvasElement.querySelector('.hint')!.getBoundingClientRect();
+
+    await expect(Math.round(control.top - label.bottom)).toBe(8);
+    await expect(Math.round(hint.top - control.bottom)).toBe(4);
+  }
 };
 
 /** A password with a reveal button (AR-20). */
