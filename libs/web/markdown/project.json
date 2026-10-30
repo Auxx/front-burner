@@ -1,0 +1,36 @@
+{
+  "name": "web-markdown",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/web/markdown/src",
+  "prefix": "md",
+  "projectType": "library",
+  "tags": [
+    "scope:web",
+    "type:domain"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/web/markdown"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/web/markdown/tsconfig.lib.json",
+          "tsc --noEmit -p libs/web/markdown/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

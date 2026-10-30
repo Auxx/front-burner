@@ -101,6 +101,9 @@
       ],
       "@front-burner/web-feature-repository-screen": [
         "./libs/web/feature-repository-screen/src/index.ts"
+      ],
+      "@front-burner/web-markdown": [
+        "./libs/web/markdown/src/index.ts"
       ]
     }
   },
