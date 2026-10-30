@@ -1,6 +1,6 @@
 import DOMPurify, { type DOMPurify as Purifier, type UponSanitizeAttributeHookEvent } from 'dompurify';
 import { checkAddress, isAddressAttribute } from '../whitelist/addresses';
-import { allowedAttributes, purifyConfig } from '../whitelist/derive';
+import { allowedAttributes, isAllowedInputType, purifyConfig, withIdPrefix } from '../whitelist/derive';
 import { SAFE_HTML, type SafeHtmlWhitelist } from '../whitelist/safe-html';
 
 /** The classes that highlighting adds after sanitising (plan 29, D-7.5), and the tags it adds them to. */
@@ -10,6 +10,7 @@ const HIGHLIGHTED_TAGS: readonly string[] = [ 'span' ];
 /** Attributes that hold an `id`, which always carry the prefix (SH-14). */
 const ID_ATTRIBUTES: readonly string[] = [ 'id', 'name', 'aria-describedby' ];
 
+// `purifyConfig` sets `RETURN_TRUSTED_TYPE` already; the literal picks DOMPurify's `TrustedHTML` overload.
 const CONFIG = { ...purifyConfig(), RETURN_TRUSTED_TYPE: true } as const;
 
 function sanitize(purifier: Purifier, html: string) {
@@ -49,7 +50,7 @@ function checkAttribute(node: Element, event: UponSanitizeAttributeHookEvent, wh
     event.keepAttr = classes.length > 0;
     return;
   }
-  if (!allowedAttributes(tag, whitelist).includes(name) && !whitelist.pipeline.attributes[tag]?.includes(name)) {
+  if (!allowedAttributes(tag, whitelist).has(name) && !whitelist.pipeline.attributes[tag]?.includes(name)) {
     event.keepAttr = false;
     return;
   }
@@ -69,7 +70,7 @@ function checkAttribute(node: Element, event: UponSanitizeAttributeHookEvent, wh
   if (ID_ATTRIBUTES.includes(name)) {
     event.attrValue = event.attrValue
       .split(/\s+/)
-      .map(id => id.startsWith(whitelist.idPrefix) ? id : whitelist.idPrefix + id)
+      .map(id => withIdPrefix(id, whitelist))
       .join(' ');
   }
 }
@@ -90,7 +91,7 @@ function checkElement(node: Element, whitelist: SafeHtmlWhitelist): void {
     return;
   }
   if (tag === 'input') {
-    if ((node.getAttribute('type') ?? '').toLowerCase() !== whitelist.input.type) {
+    if (!isAllowedInputType(node.getAttribute('type') ?? '', whitelist)) {
       node.remove();
       return;
     }

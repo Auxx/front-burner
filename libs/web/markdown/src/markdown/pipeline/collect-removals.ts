@@ -4,7 +4,7 @@ import { allowedAttributes, attributeOf } from '../whitelist/derive';
 import { SAFE_HTML, type SafeHtmlWhitelist } from '../whitelist/safe-html';
 import { classesOf } from './elements';
 import './pipeline-marks';
-import { isRemovedInput } from './rehype-safe-html';
+import { isRemovedInput, valueOf } from './rehype-safe-html';
 
 /** What was removed: a tag, an attribute (or its value), or an address by its scheme (SH-18). */
 export type RemovalKey = `tag:${string}` | `attribute:${string}` | `address:${string}`;
@@ -22,7 +22,8 @@ export type RemovalReport = ReadonlyMap<RemovalKey, number>;
 export function collectRemovals(tree: Root, whitelist: SafeHtmlWhitelist = SAFE_HTML): RemovalReport {
   const report = new Map<RemovalKey, number>();
   const add = (key: RemovalKey) => report.set(key, (report.get(key) ?? 0) + 1);
-  const visit = (node: Root | Element, ancestors: string[]) => {
+  const ancestors: string[] = [];
+  const visit = (node: Root | Element) => {
     for (const child of node.children) {
       if (child.type !== 'element') {
         continue;
@@ -36,10 +37,12 @@ export function collectRemovals(tree: Root, whitelist: SafeHtmlWhitelist = SAFE_
       } else {
         collectAttributes(child, whitelist, add);
       }
-      visit(child, [ ...ancestors, tag ]);
+      ancestors.push(tag);
+      visit(child);
+      ancestors.pop();
     }
   };
-  visit(tree, []);
+  visit(tree);
   return report;
 }
 
@@ -70,19 +73,23 @@ function collectAttributes(element: Element, whitelist: SafeHtmlWhitelist, add: 
       continue;
     }
     const attribute = attributeOf(property);
+    if (whitelist.unsafeValue.test(valueOf(value))) {
+      add(`attribute:${attribute}`);
+      continue;
+    }
     if (pipeline && whitelist.pipeline.attributes[tag]?.includes(attribute)) {
       continue;
     }
     if (attribute === 'class') {
       const pipelineClasses = pipeline ? whitelist.pipeline.classes[tag] ?? [] : [];
-      const pattern = allowed.includes('class') ? whitelist.values['class'] : undefined;
+      const pattern = allowed.has('class') ? whitelist.values['class'] : undefined;
       const removed = classesOf(element).filter(name => !pipelineClasses.includes(name) && !pattern?.test(name));
       if (removed.length > 0) {
         add('attribute:class');
       }
       continue;
     }
-    if (!allowed.includes(attribute)) {
+    if (!allowed.has(attribute)) {
       add(`attribute:${attribute}`);
       continue;
     }

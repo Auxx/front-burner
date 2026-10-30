@@ -20,6 +20,8 @@ const KEPT = [
   '```ts\nlet a;\n```\n\n<code class="evil language-js">x</code>',
   '<img src="//cdn.example.com/a.png"> <a href="//example.com">e</a> [m](mailto:me@example.com)',
   '<ol start="3" reversed type="a"><li value="4">x</li></ol> <q cite="https://example.com">q</q> <del datetime="2026-10-29T10:00">d</del>',
+  '<table><tr><td headers="row:1 row:2">a</td></tr></table> <time datetime="T:10">t</time> <abbr title="Note: x">n</abbr>',
+  '```ts:app.ts\nlet a;\n```\n\n```日本語\nx\n```',
   '<bdo dir="rtl" lang="ar">x</bdo> <ruby>漢<rp>(</rp><rt>kan</rt><rp>)</rp></ruby>',
   '| a | b |\n| - | :-: |\n| 1 | 2 |\n\n- [x] task\n\n~~gone~~ www.example.com\n\nNote[^n]\n\n[^n]: Text.'
 ];

@@ -1,6 +1,7 @@
 import type { Config } from 'dompurify';
 import { find, html } from 'property-information';
 import type { Options as Schema } from 'rehype-sanitize';
+import { isAddressAttribute } from './addresses';
 import { SAFE_HTML, type SafeHtmlWhitelist } from './safe-html';
 
 type PropertyDefinition = NonNullable<Schema['attributes']>[string][number];
@@ -15,9 +16,31 @@ export function attributeOf(property: string): string {
   return find(html, property).attribute;
 }
 
+const allowedByWhitelist = new WeakMap<SafeHtmlWhitelist, Map<string, ReadonlySet<string>>>();
+
 /** Every attribute the whitelist allows on `tag`, in the file's own HTML (SH-11, SH-12). */
-export function allowedAttributes(tag: string, whitelist: SafeHtmlWhitelist = SAFE_HTML): readonly string[] {
-  return [ ...whitelist.globalAttributes, ...(whitelist.attributes[tag] ?? []) ];
+export function allowedAttributes(tag: string, whitelist: SafeHtmlWhitelist = SAFE_HTML): ReadonlySet<string> {
+  let byTag = allowedByWhitelist.get(whitelist);
+  if (!byTag) {
+    byTag = new Map();
+    allowedByWhitelist.set(whitelist, byTag);
+  }
+  let allowed = byTag.get(tag);
+  if (!allowed) {
+    allowed = new Set([ ...whitelist.globalAttributes, ...(whitelist.attributes[tag] ?? []) ]);
+    byTag.set(tag, allowed);
+  }
+  return allowed;
+}
+
+/** `value` as an `id` or `name` with the whitelist's prefix, which it gets only once (SH-14). */
+export function withIdPrefix(value: string, whitelist: SafeHtmlWhitelist = SAFE_HTML): string {
+  return value.startsWith(whitelist.idPrefix) ? value : whitelist.idPrefix + value;
+}
+
+/** Whether an `input` of this `type` is allowed (SH-12); any other `input` is removed whole. */
+export function isAllowedInputType(type: string, whitelist: SafeHtmlWhitelist = SAFE_HTML): boolean {
+  return type.toLowerCase() === whitelist.input.type;
 }
 
 /**
@@ -82,6 +105,9 @@ export function purifyConfig(whitelist: SafeHtmlWhitelist = SAFE_HTML): Config {
     // A scheme of the whitelist, or no scheme at all: the shape of DOMPurify's
     // own default. The hooks then check each attribute's own schemes.
     ALLOWED_URI_REGEXP: new RegExp(`^(?:(?:${schemes}):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))`, 'i'),
+    // DOMPurify checks every other attribute against that pattern too, so
+    // that `headers="row:1"` would lose its value; only addresses are checked.
+    ADD_URI_SAFE_ATTR: [ ...attributes ].filter(attribute => !isAddressAttribute(attribute)),
     FORBID_CONTENTS: [ ...whitelist.contentRemovedTags ],
     KEEP_CONTENT: true,
     RETURN_TRUSTED_TYPE: true,

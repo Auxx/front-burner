@@ -33,6 +33,12 @@ export interface SafeHtmlWhitelist {
   ancestors: Readonly<Record<string, readonly string[]>>;
   /** The values an attribute may have; any other value removes it (SH-11, SH-13). */
   values: Readonly<Record<string, RegExp>>;
+  /**
+   * Values that remove any attribute, as text that could close the markup
+   * around it. DOMPurify removes them on its own (`SAFE_FOR_XML`), so the first
+   * step removes them too, and both steps agree.
+   */
+  unsafeValue: RegExp;
   /** The schemes an address may have, besides relative addresses (SH-15). */
   protocols: Readonly<Record<AddressAttribute, readonly string[]>>;
   /** `input` is allowed only with this `type`, and always gets the `required` attributes (SH-12). */
@@ -189,12 +195,14 @@ export const SAFE_HTML: SafeHtmlWhitelist = {
   ancestors: { source: [ 'picture' ] },
   values: {
     align: /^(?:left|center|right|justify)$/i,
-    class: /^language-[\w+#.-]+$/,
+    // Any name, as remark gives it from the info string, such as `ts:app.ts`.
+    class: /^language-\S+$/,
     dir: /^(?:ltr|rtl|auto)$/i,
     height: /^\d+%?$/,
     valign: /^(?:top|middle|bottom|baseline)$/i,
     width: /^\d+%?$/
   },
+  unsafeValue: /((--!?|])>)|<\/(style|script|title|xmp|textarea|noscript|iframe|noembed|noframes)/i,
   protocols: {
     href: [ 'http', 'https', 'mailto' ],
     src: [ 'http', 'https' ],

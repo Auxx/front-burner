@@ -87,6 +87,7 @@ describe('renderSafeHtml', () => {
     expect(render('```ts\nlet a;\n```')).toBe('<pre><code class="language-ts">let a;\n</code></pre>');
     expect(render('<code class="evil">x</code>')).toBe('<p><code>x</code></p>');
     expect(render('<code class="evil language-js">x</code>')).toBe('<p><code class="language-js">x</code></p>');
+    expect(render('```ts:app.ts\nx\n```')).toBe('<pre><code class="language-ts:app.ts">x\n</code></pre>');
   });
 
   it('AC-EDIT-002.17: reads protocol-relative addresses as https:', () => {

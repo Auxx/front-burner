@@ -41,6 +41,18 @@ describe('collectRemovals', () => {
     });
   });
 
+  it('counts values that DOMPurify would remove as markup', () => {
+    expect(removals('<abbr title="a-->b">x</abbr> <span lang="</style>">y</span>')).toEqual({
+      'attribute:title': 1,
+      'attribute:lang': 1
+    });
+    expect(renderSafeHtml('<abbr title="a-->b">x</abbr>').html).toBe('<p><abbr>x</abbr></p>');
+  });
+
+  it('counts nothing for code blocks in any language', () => {
+    expect(removals('```ts:app.ts\nx\n```\n\n```日本語\nx\n```\n\n```c++\nx\n```')).toEqual({});
+  });
+
   it('does not count comments', () => {
     expect(removals('<!-- a comment -->\n\nText <!-- another -->')).toEqual({});
   });

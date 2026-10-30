@@ -14,9 +14,9 @@ const MARK = 'dataMdPipeline';
 /** The two plugins that tell the pipeline's own elements from raw HTML. */
 export interface PipelineMarks {
   /** Runs right before `rehype-raw`, when every element is the pipeline's. */
-  mark: () => (tree: Root) => void;
+  mark: () => (tree: Root, file: object) => void;
   /** Runs right after `rehype-raw`: sets `data.pipeline` on the elements that kept their mark. */
-  find: () => (tree: Root) => void;
+  find: () => (tree: Root, file: object) => void;
 }
 
 /**
@@ -29,20 +29,23 @@ export interface PipelineMarks {
  * just like the pipeline's footnote list and checkboxes.
  */
 export function pipelineMarks(): PipelineMarks {
-  let nonce = '';
+  // Per file, so that runs of the same processor never share a value.
+  const nonces = new WeakMap<object, string>();
   return {
-    mark: () => tree => {
-      nonce = randomNonce();
+    mark: () => (tree, file) => {
+      const nonce = randomNonce();
+      nonces.set(file, nonce);
       visitElements(tree, element => void (element.properties[MARK] = nonce));
     },
-    find: () => tree => {
+    find: () => (tree, file) => {
+      const nonce = nonces.get(file);
+      nonces.delete(file);
       visitElements(tree, element => {
         if (nonce && element.properties[MARK] === nonce) {
           element.data = { ...element.data, pipeline: true };
         }
         delete element.properties[MARK];
       });
-      nonce = '';
     }
   };
 }
