@@ -169,6 +169,15 @@ describe('startServer', () => {
     expect(logs.filter(line => line.includes('serving the API only'))).toHaveLength(0);
   });
 
+  it('keeps img-src as IM-23 says', async () => {
+    writeFileSync(join(webRoot, 'index.html'), '<html><script nonce="__CSP_NONCE__"></script></html>');
+    app = await start();
+
+    const response = await request(app.getHttpServer()).get('/repositories/1');
+
+    expect(response.headers['content-security-policy']).toContain('img-src \'self\' blob: data: https:;');
+  });
+
   it('fails at the config step', async () => {
     const failure = await start({ FRONT_BURNER_PORT: 'abc' }).catch((error: unknown) => error);
 

@@ -347,6 +347,77 @@ describe('folder listing (REQ-FILE-001)', () => {
     expect(await names('')).toContain('README.md');
   });
 
+  describe('repository images (REQ-EDIT-003)', () => {
+    const rootDir = () => join(server.dataDir, 'repos', String(alice.userId), String(handbook));
+    /** `null` sends no auth token. */
+    const image = (path: string, token: string | null = alice.token, id = handbook) =>
+      fetch(`${server.url}/api/v1/repositories/${id}/image?path=${encodeURIComponent(path)}`, {
+        headers: token === null ? {} : { authorization: `Bearer ${token}` }
+      });
+
+    it('AC-EDIT-003.13: serves an SVG with a script sandboxed', async () => {
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>';
+      writeFileSync(join(rootDir(), 'docs', 'evil.svg'), svg);
+
+      const response = await image('docs/evil.svg');
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('image/svg+xml');
+      expect(response.headers.get('content-security-policy')).toBe('default-src \'none\'; sandbox');
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(response.headers.get('cache-control')).toBe('private, no-cache');
+      expect(await response.text()).toBe(svg);
+
+      const again = await fetch(response.url, {
+        headers: { authorization: `Bearer ${alice.token}`, 'if-none-match': response.headers.get('etag') ?? '' }
+      });
+      expect(again.status).toBe(304);
+      expect(again.headers.get('content-security-policy')).toBe('default-src \'none\'; sandbox');
+    });
+
+    it('AC-EDIT-003.16: answers another user\'s repository like a missing one', async () => {
+      writeFileSync(join(rootDir(), 'docs', 'logo.png'), 'png');
+      const strip = async (response: Response) => ({
+        status: response.status,
+        body: { ...(await response.json() as Record<string, unknown>), requestId: undefined }
+      });
+
+      expect((await image('docs/logo.png', null)).status).toBe(401);
+      const other = await strip(await image('docs/logo.png', bob.token));
+      const missing = await strip(await image('docs/logo.png', bob.token, handbook + 1000));
+      expect(other.status).toBe(404);
+      expect(other.body['code']).toBe('not-found');
+      expect(other).toEqual(missing);
+    });
+
+    it('counts image requests in the per-user rate limit', async () => {
+      // A user of their own, so that the other tests keep their budget.
+      const { userIds: [ carolId ] } = seed(server.dataDir, { users: [ { email: 'carol@example.com' } ] });
+      const carol = (await login(server, 'body', { email: 'carol@example.com', password: E2E_ADMIN.password }))
+        .authToken;
+      const repository = seed(server.dataDir, {
+        repositories: [ { userId: carolId as number, name: 'notes', lastAccessedAt: new Date(0) } ]
+      }).repositoryIds[0] as number;
+      const root = join(server.dataDir, 'repos', String(carolId), String(repository));
+      mkdirSync(root, { recursive: true });
+      execFileSync('git', [ 'init', '-q', '-b', 'main', root ]);
+      writeFileSync(join(root, 'logo.png'), 'png');
+
+      // NF-11.4: 600 a minute; the login above did not count, as it is not authenticated.
+      const statuses: number[] = [];
+      for (let batch = 0; batch < 600 / 50; batch++) {
+        const answers = await Promise.all(Array.from({ length: 50 }, () => image('logo.png', carol, repository)));
+        statuses.push(...answers.map(answer => answer.status));
+        await Promise.all(answers.map(answer => answer.arrayBuffer()));
+      }
+      expect(statuses.filter(status => status !== 200)).toEqual([]);
+
+      const limited = await image('logo.png', carol, repository);
+      expect(limited.status).toBe(429);
+      expect(await limited.json()).toMatchObject({ code: 'rate-limited' });
+    }, 60_000);
+  });
+
   describe('reading and saving (REQ-EDIT-001)', () => {
     /** 1 MB as stored (ED-2, ED-19). */
     const LIMIT = 1_048_576;
