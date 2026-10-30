@@ -176,7 +176,9 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   | Editor       | 14 px   | 16 px | The same iOS zoom applies to CodeMirror's content                                        |
   | Live preview | 16 px   | 16 px | Reading text, like GitHub's Markdown; its own **prose** tokens with a longer line height |
 
-  Weights are 400, 500 and 600.
+  Weights are 400, 500 and 600. Headings `h1` to `h6` are styled once, in the
+  `base` layer of `libs/ui` (semibold, tight line height, `h1` 15 px, `h2` 14
+  px, `h3` to `h6` 13 px); components and the Markdown preview set their own.
 
 - **A-10.21** **Space** is a 4 px based scale (2, 4, 6, 8, 12, 16, 20, 24, 32,
   48 px, written in `rem`). Icons are 16 px in compact density and 20 px in

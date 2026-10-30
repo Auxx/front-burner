@@ -10,7 +10,7 @@ export interface ContrastPair {
   readonly minimum: 4.5 | 3;
 }
 
-const surfaces = [ 'surface-canvas', 'surface-island', 'surface-raised', 'surface-sunken' ];
+const surfaces = [ 'surface-canvas', 'surface-island', 'surface-raised', 'surface-sunken', 'surface-card' ];
 const statuses = [ 'info', 'success', 'warning', 'danger' ];
 const gitStatuses = [ 'added', 'modified', 'deleted', 'renamed', 'untracked', 'conflicted', 'ignored' ];
 const diffBackgrounds = [
@@ -62,10 +62,8 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   // exempt (WCAG 1.4.3)
   text('text-default', 'surface-raised', 'surface-hover'),
   text('text-muted', 'surface-raised', 'surface-hover'),
-  ...[ 'text-default', 'text-muted', 'text-link' ].map(fg => text(fg, 'surface-card')),
   text('text-default', 'surface-card', 'surface-hover'),
   text('text-muted', 'surface-card', 'surface-hover'),
-  text('text-default', 'surface-sunken', 'surface-island'),
   text('text-inverse', 'text-default'),
 
   // Buttons: secondary and danger on their raised background, also hovered
@@ -99,8 +97,10 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   ...[ 'accent', 'accent-hover', 'accent-pressed' ].map(bg => text('text-on-accent', bg)),
 
   // Control borders, focus ring and accent
-  ...[ 'surface-island', 'surface-sunken', 'surface-canvas' ].map(bg => graphic('border-strong', bg)),
-  ...[ 'surface-canvas', 'surface-island', 'surface-raised', 'selected-active' ].map(bg => graphic('border-focus', bg)),
+  ...[ 'surface-island', 'surface-sunken', 'surface-canvas', 'surface-card' ].map(bg => graphic('border-strong', bg)),
+  ...[ 'surface-canvas', 'surface-island', 'surface-raised', 'surface-card', 'selected-active' ].map(bg =>
+    graphic('border-focus', bg)
+  ),
   ...[ 'surface-canvas', 'surface-island' ].map(bg => graphic('accent', bg)),
 
   // Icons on the canvas, such as the activity bar's, also when hovered
