@@ -1,7 +1,5 @@
-// For the `req.auth` declaration.
-import '@front-burner/server-core-security';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
-import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Logger, Param, Query, Req, Res } from '@nestjs/common';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -11,6 +9,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { pipeline } from 'node:stream';
+import { authOf } from '../files/auth-of';
 import { toFilesError } from '../files/files-errors';
 import { ImageQueryDto } from '../files/files.dto';
 import { OpenableRepository } from '../repository/openable-repository';
@@ -38,6 +37,8 @@ function matches(ifNoneMatch: string | undefined, etag: string): boolean {
 @ApiTags('files')
 @Controller('repositories/:id')
 export class ImagesController {
+  private readonly logger = new Logger(ImagesController.name);
+
   constructor(
     private readonly repositories: OpenableRepository,
     private readonly images: ImageFiles
@@ -51,7 +52,7 @@ export class ImagesController {
   @ApiResponse({ status: 304, description: 'The image matches `If-None-Match`.' })
   @ApiResponse({ status: 400, description: '`path-refused`: outside the working copy, in `.git` or through a link.' })
   @ApiNotFoundResponse({ description: '`entry-not-found`, or `not-found` for the repository.' })
-  @ApiResponse({ status: 413, description: '`image-too-large`: over 10 MB.' })
+  @ApiResponse({ status: 413, description: '`image-too-large`: over the limit; params `{ limit }` in bytes.' })
   @ApiUnsupportedMediaTypeResponse({ description: '`image-format-unsupported`.' })
   async image(
     @Req() req: Request,
@@ -62,10 +63,7 @@ export class ImagesController {
     // On every answer, refusals and 304 included.
     res.setHeader('Content-Security-Policy', IMAGE_CSP);
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    if (req.auth === undefined) {
-      throw new Error('ImagesController reached without req.auth');
-    }
-    const root = this.repositories.root(req.auth.userId, params.id);
+    const root = this.repositories.root(authOf(req).userId, params.id);
     const image = await this.images.open(root, query.path).catch(toFilesError);
     res.setHeader('ETag', image.etag);
     res.setHeader('Cache-Control', 'private, no-cache');
@@ -85,6 +83,10 @@ export class ImagesController {
     // From the opened descriptor, never reopened by path (A-7.6), and no more than was measured.
     const stream = image.handle.createReadStream({ start: 0, end: image.size - 1 });
     // Closes the descriptor when the client goes away too; a failure mid-stream can only cut the answer short.
-    pipeline(stream, res, () => undefined);
+    pipeline(stream, res, error => {
+      if (error && (error as NodeJS.ErrnoException).code !== 'ERR_STREAM_PREMATURE_CLOSE') {
+        this.logger.warn(`Streaming an image failed: ${error.message}`);
+      }
+    });
   }
 }

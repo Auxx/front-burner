@@ -30,7 +30,7 @@ export interface OpenedImage {
 
 export const imageFormatUnsupported = () => new ApiErrorException(415, 'image-format-unsupported');
 
-export const imageTooLarge = () => new ApiErrorException(413, 'image-too-large');
+export const imageTooLarge = () => new ApiErrorException(413, 'image-too-large', { limit: IMAGE_SIZE_LIMIT });
 
 /**
  * The image files of a working copy, as they are on disk: uncommitted and
@@ -46,13 +46,14 @@ export class ImageFiles {
    * @throws ApiErrorException
    */
   async open(root: string, path: string): Promise<OpenedImage> {
-    const type = IMAGE_TYPES[extname(path).toLowerCase()];
-    if (type === undefined) {
-      throw imageFormatUnsupported();
-    }
+    // Resolved first, so that a refused path is refused whatever its extension (IM-4).
     const { entry, submodule } = await resolveEntry(this.git, root, path);
     if (entry.type === 'symlink') {
       throw new PathRefusedError('symlink');
+    }
+    const type = IMAGE_TYPES[extname(path).toLowerCase()];
+    if (type === undefined) {
+      throw imageFormatUnsupported();
     }
     if (submodule || entry.type !== 'file') {
       throw new PathRefusedError('not-found');
@@ -60,9 +61,6 @@ export class ImageFiles {
     const { handle } = await openInWorkingCopy(root, entry);
     try {
       const stat = await handle.stat();
-      if (!stat.isFile()) {
-        throw new PathRefusedError('not-found');
-      }
       if (stat.size > IMAGE_SIZE_LIMIT) {
         throw imageTooLarge();
       }

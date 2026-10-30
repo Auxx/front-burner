@@ -77,7 +77,7 @@ describe('ImageFiles', () => {
     expect(await refusal(images.open(root, 'missing.png')))
       .toEqual({ status: 404, code: 'entry-not-found', params: {} });
     expect(await refusal(images.open(root, 'big.png')))
-      .toEqual({ status: 413, code: 'image-too-large', params: {} });
+      .toEqual({ status: 413, code: 'image-too-large', params: { limit: IMAGE_SIZE_LIMIT } });
     expect(await refusal(images.open(root, 'photo.tiff')))
       .toEqual({ status: 415, code: 'image-format-unsupported', params: {} });
     expect(await open('limit.png')).toMatchObject({ size: IMAGE_SIZE_LIMIT });
@@ -99,6 +99,8 @@ describe('ImageFiles', () => {
     const symlink = { status: 400, code: 'path-refused', params: { reason: 'symlink' } };
 
     expect(await refusal(images.open(root, 'logo.png'))).toEqual(symlink);
+    symlinkSync('/etc/passwd', join(root, 'passwd'));
+    expect(await refusal(images.open(root, 'passwd'))).toEqual(symlink);
     expect(await refusal(images.open(root, 'img/outside.png'))).toEqual(symlink);
     expect(await refusal(images.open(root, 'linked/a.png'))).toEqual(symlink);
   });
@@ -114,6 +116,11 @@ describe('ImageFiles', () => {
     expect(await refusal(images.open(root, '.git/x.png')))
       .toMatchObject({ status: 400, code: 'path-refused' });
     expect(await refusal(images.open(root, '/etc/x.png')))
+      .toMatchObject({ status: 400, code: 'path-refused' });
+    // Refused for the path, not for the format.
+    expect(await refusal(images.open(root, '../../../../etc/passwd')))
+      .toMatchObject({ status: 400, code: 'path-refused' });
+    expect(await refusal(images.open(root, '.git/config')))
       .toMatchObject({ status: 400, code: 'path-refused' });
   });
 });

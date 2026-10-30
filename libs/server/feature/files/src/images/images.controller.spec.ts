@@ -136,6 +136,7 @@ describe('ImagesController', () => {
     const ok = await image('evil.svg').expect(200);
     const notModified = await image('evil.svg').set('If-None-Match', ok.headers['etag'] as string).expect(304);
     const missing = await image('missing.svg').expect(404);
+    writeFileSync(join(root, 'a.tiff'), 'tiff');
     const unsupported = await image('a.tiff').expect(415);
 
     for (const res of [ ok, notModified, missing, unsupported ]) {

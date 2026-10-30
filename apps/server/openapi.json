@@ -1040,7 +1040,7 @@
             "description": "`entry-not-found`, or `not-found` for the repository."
           },
           "413": {
-            "description": "`image-too-large`: over 10 MB."
+            "description": "`image-too-large`: over the limit; params `{ limit }` in bytes."
           },
           "415": {
             "description": "`image-format-unsupported`."

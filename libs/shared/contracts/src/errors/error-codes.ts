@@ -40,7 +40,7 @@ export const ERROR_CODES = [
   'entry-exists',
   /** 415; a repository image whose format the preview doesn't show (IM-9). */
   'image-format-unsupported',
-  /** 413; a repository image over the 10 MB limit (IM-9). */
+  /** 413; a repository image over the 10 MB limit; params `{ limit }` in bytes (IM-9). */
   'image-too-large'
 ] as const;
 
