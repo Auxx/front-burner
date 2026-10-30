@@ -262,6 +262,15 @@ describe('PreviewRendererService', () => {
     expect(service.busy()).toBe(false);
   });
 
+  it('is not busy after a reset drops the update in flight', () => {
+    connect();
+    expect(service.busy()).toBe(true);
+
+    service.reset();
+
+    expect(service.busy()).toBe(false);
+  });
+
   it('terminates the worker', () => {
     connect();
 

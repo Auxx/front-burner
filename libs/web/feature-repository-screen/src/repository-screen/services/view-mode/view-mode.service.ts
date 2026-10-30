@@ -28,11 +28,14 @@ export class ViewModeService {
   readonly narrow = injectNarrowViewport();
 
   private readonly modes = signal<Record<Size, ViewModeName>>({ wide: 'split', narrow: 'edit' });
+  private readonly restoredModes = signal(false);
   private userId: number | undefined;
 
   readonly mode = computed(() => this.modes()[this.size()]);
   readonly editorShown = computed(() => this.mode() !== 'preview');
   readonly previewShown = computed(() => this.mode() !== 'edit');
+  /** Whether this device's remembered modes were read; until then the defaults show. */
+  readonly restored = this.restoredModes.asReadonly();
 
   private readonly size = computed<Size>(() => this.narrow() ? 'narrow' : 'wide');
 
@@ -53,6 +56,7 @@ export class ViewModeService {
           }
         }
         this.modes.set(modes);
+        this.restoredModes.set(true);
       });
     });
   }

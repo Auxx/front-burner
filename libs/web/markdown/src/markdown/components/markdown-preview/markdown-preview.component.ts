@@ -133,9 +133,10 @@ export class MarkdownPreviewComponent {
     if (!container || top === null) {
       return;
     }
+    const before = container.scrollTop;
     container.scrollTop = top;
-    // The browser rounds and clamps; only a scroll that moved fires an event.
-    this.ownScrollTop = container.scrollTop;
+    // The browser rounds and clamps, and fires a scroll event only when the preview moved.
+    this.ownScrollTop = container.scrollTop === before ? null : container.scrollTop;
   }
 
   protected onScroll(): void {

@@ -153,7 +153,7 @@ Limited in MVP:
 | Requirement                                       | Status   | In MVP                                                | Limited in MVP | Not in MVP | MVP notes                                                                      |
 | ------------------------------------------------- | -------- | ----------------------------------------------------- | -------------- | ---------- | ------------------------------------------------------------------------------ |
 | [REQ-EDIT-001](../requirements/editor.md)         | Accepted | ED-1 to ED-39, ED-9a; AC-EDIT-001.1 to AC-EDIT-001.25 | —              | —          | As written. Builds on D-1 and D-7. A formatting toolbar and tabs are deferred. |
-| [REQ-EDIT-002](../requirements/preview-html.md)   | 2        | Done                                                  | #55 to #57     | —          | —                                                                              |
+| [REQ-EDIT-002](../requirements/preview-html.md)   | Accepted | SH-1 to SH-23; AC-EDIT-002.1 to AC-EDIT-002.17        | —              | —          | As written.                                                                    |
 | [REQ-EDIT-003](../requirements/preview-images.md) | Accepted | IM-1 to IM-26; AC-EDIT-003.1 to AC-EDIT-003.16        | —              | —          | As written. Blog-engine image folders are deferred.                            |
 
 ### 8. Git at the Advanced level

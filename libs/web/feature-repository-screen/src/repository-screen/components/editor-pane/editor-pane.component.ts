@@ -166,10 +166,22 @@ export class EditorPaneComponent {
 
   constructor() {
     // Runs before the template shows the new layout, so the place is read from the panes still on screen (ED-36).
+    // The switch to the remembered mode at start is not the user's, so it keeps no place.
     effect(() => {
       const layout = { narrow: this.viewMode.narrow(), mode: this.viewMode.mode() };
-      untracked(() => this.keepPlace(layout));
+      const restored = this.viewMode.restored();
+      untracked(() => {
+        if (restored) {
+          this.keepPlace(layout);
+        } else {
+          this.shownLayout = null;
+        }
+      });
     });
+
+    // The editor's state is built even while the editor is not there, as on a narrow screen before the
+    // Edit tab was first opened, so that Restore, Keep mine and Recreate it have the file's content.
+    effect(() => this.state());
 
     // A pane of a tab is created only when its tab is first opened, after the layout has rendered.
     effect(() => {

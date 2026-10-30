@@ -46,6 +46,7 @@ describe('EditorPaneComponent', () => {
   let notice: ReturnType<typeof vi.fn>;
   let narrow: BehaviorSubject<boolean>;
   let worker: FakeWorker;
+  let user: ReturnType<typeof signal<CurrentUser | undefined>>;
   let openFiles: {
     restoreDraft: ReturnType<typeof vi.fn>;
     discardDraft: ReturnType<typeof vi.fn>;
@@ -94,6 +95,14 @@ describe('EditorPaneComponent', () => {
     notice = vi.fn();
     narrow = new BehaviorSubject(false);
     worker = new FakeWorker();
+    localStorage.clear();
+    user = signal<CurrentUser | undefined>({
+      id: 4,
+      email: 'ada@example.com',
+      displayName: 'Ada Lovelace',
+      role: 'user',
+      allowedGitLevels: [ 'advanced' ]
+    });
     TestBed.configureTestingModule({
       imports: [ EditorPaneComponent, translocoTesting() ],
       providers: [
@@ -108,13 +117,16 @@ describe('EditorPaneComponent', () => {
         { provide: DiskChangesService, useValue: { notice } },
         { provide: PREVIEW_WORKER, useValue: () => worker },
         ViewModeService,
-        { provide: CurrentUserService, useValue: { user: signal<CurrentUser | undefined>(undefined) } }
+        { provide: CurrentUserService, useValue: { user } }
       ]
     });
     fixture = TestBed.createComponent(EditorPaneComponent);
   });
 
-  afterEach(() => fixture.destroy());
+  afterEach(() => {
+    fixture.destroy();
+    localStorage.clear();
+  });
 
   it('AC-EDIT-001.1: opens a Markdown file in the editor, highlighted', async () => {
     const file = openFile('docs/guide.md', { content: '---\ntitle: Guide\n---\n# Guide\n' });
@@ -341,6 +353,33 @@ describe('EditorPaneComponent', () => {
       expect(scrollToLine).toHaveBeenCalledWith(6);
       expect(viewMode().mode()).toBe('split');
       scrollToLine.mockRestore();
+    });
+
+    it('keeps no place when the remembered mode replaces the default at start', async () => {
+      user.set(undefined);
+      localStorage.setItem('fb.4.viewMode.wide', 'preview');
+      await show(openFile('docs/guide.md'));
+      const scrolled = vi.spyOn(preview(), 'scrollToLine');
+
+      user.set({ id: 4, email: 'ada@example.com', displayName: 'Ada', role: 'user', allowedGitLevels: [ 'advanced' ] });
+      await settle(fixture);
+
+      expect(viewMode().mode()).toBe('preview');
+      expect(scrolled).not.toHaveBeenCalled();
+    });
+
+    it('restores a draft on a narrow screen before the Edit tab was opened', async () => {
+      localStorage.setItem('fb.4.viewMode.narrow', 'preview');
+      narrow.next(true);
+      const file = openFile('README.md');
+      file.draft.set({ content: '# README.md\nOffline edit.\n', savedAt: '2026-10-29T10:05:00.000Z' });
+      await show(file);
+      expect(pane().querySelector('ce-code-editor')).toBeNull();
+
+      button('web-feature-repository-screen.DraftOfferComponent.restore')?.click();
+      await settle(fixture);
+
+      expect(contentOf(stateOf(file))).toBe('# README.md\nOffline edit.\n');
     });
 
     it('renders the newest text when the preview becomes active', async () => {

@@ -143,6 +143,8 @@ export class PreviewRendererService {
   reset(): void {
     this.post({ type: 'reset' });
     this.resetAt = this.latest + 1;
+    // Answers from before the reset are dropped, so none is awaited.
+    this.answered = this.latest;
     this.rendered = new Map();
     this.state.set(null);
   }

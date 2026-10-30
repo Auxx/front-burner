@@ -287,8 +287,11 @@ describe('MarkdownPreviewComponent', () => {
         configurable: true,
         get: () => scrollTop,
         set: (value: number) => {
+          if (value === scrollTop) {
+            return;
+          }
           scrollTop = value;
-          // Browsers fire `scroll` after the change, not during it.
+          // Browsers fire `scroll` after a change, not during it, and only when it moved.
           setTimeout(() => container.dispatchEvent(new Event('scroll')));
         }
       });
@@ -331,6 +334,14 @@ describe('MarkdownPreviewComponent', () => {
       await new Promise(resolve => setTimeout(resolve));
 
       expect(host.places).toEqual([ 3 ]);
+    });
+
+    it('reports the next scroll when scrolling to where it already is', async () => {
+      preview().scrollToLine(1);
+      blocks().scrollTop = 1;
+      await new Promise(resolve => setTimeout(resolve));
+
+      expect(host.places).toHaveLength(1);
     });
   });
 

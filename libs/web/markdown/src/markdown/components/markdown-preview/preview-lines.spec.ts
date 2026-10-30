@@ -48,6 +48,13 @@ describe('preview lines', () => {
     expect(lines(blockAtLine(container, 99))).toEqual([ '40', '42' ]);
   });
 
+  it('maps the last line to the last block, not to the footnote list after it', () => {
+    // The footnote list is laid out at the last block's last line.
+    const container = preview([ [ 1, 1, 40 ], [ 40, 42, 60 ], [ 42, 42, 80 ] ]);
+
+    expect(blockAtLine(container, 42)).toBe(container.children[1]);
+  });
+
   it('reads the place at the top as a block and a share of it', () => {
     const container = preview([ [ 1, 1, 40 ], [ 3, 6, 100 ], [ 8, 8, 40 ] ]);
 

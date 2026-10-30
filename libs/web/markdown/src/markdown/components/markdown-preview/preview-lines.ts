@@ -28,6 +28,10 @@ export function blockAtLine(container: HTMLElement, line: number): HTMLElement |
   if (before === -1) {
     return blocks[0] as HTMLElement;
   }
+  // The first block that holds the line: the footnote list shares the last block's last line.
+  while (before > 0 && toLine(blocks[before - 1]) >= line) {
+    before--;
+  }
   const block = blocks[before] as HTMLElement;
   const next = blocks[before + 1] as HTMLElement | undefined;
   if (toLine(block) >= line || !next) {
