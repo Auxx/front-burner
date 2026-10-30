@@ -39,6 +39,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { type OpenFile, OpenFilesService } from '../../services/open-files/open-files.service';
+import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { type ViewModeName, ViewModeService } from '../../services/view-mode/view-mode.service';
 import { fileName } from '../../utils/file-name/file-name';
 import { type ScrollPane, ScrollSync } from '../../utils/scroll-sync/scroll-sync';
@@ -120,6 +121,9 @@ export class EditorPaneComponent {
 
   private readonly openFiles = inject(OpenFilesService);
   private readonly diskChanges = inject(DiskChangesService);
+  private readonly session = inject(RepositorySessionService);
+  /** The repository whose images the preview shows (A-8.16). */
+  protected readonly repositoryId = computed(() => this.session.repository()?.id ?? null);
   protected readonly viewMode = inject(ViewModeService);
   /**
    * The editor, once it is there: not while the pane first renders, nor on a

@@ -19,6 +19,7 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { type OpenFile, OpenFilesService } from '../../services/open-files/open-files.service';
+import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import { EditorPaneComponent } from './editor-pane.component';
 
@@ -115,6 +116,7 @@ describe('EditorPaneComponent', () => {
         },
         { provide: OpenFilesService, useValue: openFiles },
         { provide: DiskChangesService, useValue: { notice } },
+        { provide: RepositorySessionService, useValue: { repository: signal({ id: 12 }) } },
         { provide: PREVIEW_WORKER, useValue: () => worker },
         ViewModeService,
         { provide: CurrentUserService, useValue: { user } }

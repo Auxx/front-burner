@@ -21,6 +21,7 @@ import {
 } from '@front-burner/ui';
 import { CurrentUserService, PageTitleService } from '@front-burner/web-core';
 import type { PreviewPathLink } from '@front-burner/web-markdown';
+import { ImageCache } from '@front-burner/web-markdown/images';
 import { AppHeaderComponent, PageNotFoundPage, RouteAnnouncerComponent } from '@front-burner/web-shell';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { map, take } from 'rxjs';
@@ -93,7 +94,9 @@ import { fileName } from '../../utils/file-name/file-name';
     EntryCommandsService,
     TreeSyncService,
     OpenFilesService,
-    DiskChangesService
+    DiskChangesService,
+    // One per screen, so that switching files or tabs loads no image again (IM-10).
+    ImageCache
   ],
   templateUrl: './repository-screen.page.html',
   styleUrl: './repository-screen.page.scss',

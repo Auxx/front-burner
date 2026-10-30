@@ -42,6 +42,7 @@
             [label]="name()"
             [fragment]="fragment()"
             [active]="viewMode.previewShown()"
+            [repositoryId]="repositoryId()"
             (openPath)="openPath.emit($event)"
             (scrolled)="previewScrolled($event)"
           />
@@ -70,6 +71,7 @@
         [label]="name()"
         [fragment]="fragment()"
         [active]="viewMode.previewShown()"
+        [repositoryId]="repositoryId()"
         (openPath)="openPath.emit($event)"
         (scrolled)="previewScrolled($event)"
       />
