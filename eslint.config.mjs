@@ -108,7 +108,8 @@ export default [
   },
   {
     // D-7.6: only the preview component writes HTML into the page, with
-    // DOMPurify's output. Specs may build their fixtures with `innerHTML`.
+    // DOMPurify's output. This catches the common direct forms only; Trusted
+    // Types enforce it at run time. Specs may build fixtures with `innerHTML`.
     files: [
       'apps/web/**/*.ts',
       'libs/web/**/*.ts',
