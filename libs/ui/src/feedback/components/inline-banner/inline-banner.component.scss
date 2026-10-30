@@ -88,7 +88,20 @@
 
     .layout,
     .layout:has(> .actions:empty) {
-      align-items: center;
+      align-items: start;
+    }
+
+    // Actions and dismiss stay beside the message's first line, so a message
+    // that grows does not move them. A one-line banner looks as before: the
+    // icon and message are padded to the height of a small control, which the
+    // actions and dismiss button are.
+    .layout:has(> .actions:not(:empty), > .dismiss) {
+      .icon,
+      .message {
+        box-sizing: border-box;
+        min-block-size: var(--ui-control-height-small);
+        padding-block: calc((var(--ui-control-height-small) - 1em * var(--ui-line-height-ui)) / 2);
+      }
     }
   }
 }
