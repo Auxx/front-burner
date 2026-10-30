@@ -151,9 +151,9 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     the same share of it. Only the pane the user last scrolled, touched, clicked
     or typed in leads, so the scrolls that syncing causes, which come late and
     keep coming while a scroll on a phone glides, never sync back. When the view
-    mode or the screen size changes, the place at the top of the pane shown
-    before is read before the new layout renders, and applied to the panes shown
-    after it.
+    mode or the screen size changes, the place that the panes on screen last
+    reported while scrolling is applied to the panes shown after it. It is not
+    read at the switch: by then the tabs may have hidden the pane already.
 - **A-8.13** The pipeline (remark, `rehype-sanitize`, Shiki) runs in a **Web
   Worker**; DOMPurify runs on the main thread, since it needs a DOM. Per update
   both modes were equally fast, but the first render of a 200 KB file blocked

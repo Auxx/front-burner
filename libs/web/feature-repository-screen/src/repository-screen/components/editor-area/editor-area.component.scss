@@ -5,8 +5,10 @@
   padding: var(--ui-space-4);
 }
 
-// The editor fills the area; the messages stay centred.
+// The editor fills the area; the messages stay centred. `place-items` is reset too, since
+// browsers now apply `justify-items` to block layout, which would size the editor to its content.
 :host(.editing) {
   display: block;
+  place-items: normal;
   padding: var(--ui-space-2);
 }

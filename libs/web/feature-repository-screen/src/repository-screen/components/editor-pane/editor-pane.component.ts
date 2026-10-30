@@ -138,6 +138,12 @@ export class EditorPaneComponent {
   private synced: { editor: ScrollPane; preview: ScrollPane; } | null = null;
   /** The layout the panes are shown in. */
   private shownLayout: Layout | null = null;
+  /**
+   * The place at the top of the panes on screen, as they last reported it, or `null` before
+   * either scrolled. It is not read when the layout changes: by then the tabs may have hidden
+   * the pane already.
+   */
+  private place: number | null = null;
   /** The place the panes of a new layout open at, and the panes still to scroll there (ED-36). */
   private placeToKeep: { place: number; editor: boolean; preview: boolean; } | null = null;
 
@@ -165,7 +171,6 @@ export class EditorPaneComponent {
   });
 
   constructor() {
-    // Runs before the template shows the new layout, so the place is read from the panes still on screen (ED-36).
     // The switch to the remembered mode at start is not the user's, so it keeps no place.
     effect(() => {
       const layout = { narrow: this.viewMode.narrow(), mode: this.viewMode.mode() };
@@ -220,12 +225,18 @@ export class EditorPaneComponent {
   }
 
   protected editorScrolled(place: number): void {
+    if (onScreen(this.editorElement())) {
+      this.place = place;
+    }
     if (this.synced) {
       this.scrollSync.scrolled(this.synced.editor, place);
     }
   }
 
   protected previewScrolled(place: number): void {
+    if (onScreen(this.previewElement())) {
+      this.place = place;
+    }
     if (this.synced) {
       this.scrollSync.scrolled(this.synced.preview, place);
     }
@@ -285,8 +296,7 @@ export class EditorPaneComponent {
 
   /**
    * ED-36: when the layout changes, the panes shown next open at the place
-   * that was at the top of the pane shown before: the editor's, unless only
-   * the preview was shown.
+   * that was at the top of the panes shown before.
    */
   private keepPlace(layout: Layout): void {
     const before = this.shownLayout;
@@ -294,8 +304,8 @@ export class EditorPaneComponent {
     if (!before || (before.narrow === layout.narrow && before.mode === layout.mode)) {
       return;
     }
-    const place = before.mode === 'preview' ? this.preview()?.topLine() : this.editor()?.topPlace();
-    if (place === undefined) {
+    const place = this.place;
+    if (place === null) {
       this.placeToKeep = null;
       return;
     }
@@ -339,6 +349,10 @@ export class EditorPaneComponent {
       const top = view.topLine();
       afterNextRender(() => this.editor()?.scrollToLine(top), { injector: this.injector });
     }
+    if (this.shownFile !== file) {
+      // Another file opens at its own place.
+      this.place = null;
+    }
     this.shownFile = file;
     const state = existing === null || reloaded
       ? createEditorState({
@@ -363,4 +377,10 @@ export class EditorPaneComponent {
     }
     return state;
   }
+}
+
+/** Whether a pane is on screen: there, and not in a hidden tab panel or split pane. */
+function onScreen(pane: ElementRef | undefined): boolean {
+  const element = pane?.nativeElement as HTMLElement | undefined;
+  return element !== undefined && element.closest('[hidden]') === null;
 }

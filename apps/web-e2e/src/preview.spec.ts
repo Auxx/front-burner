@@ -174,7 +174,8 @@ test.describe('view modes', () => {
     await line.click();
     const size = page.viewportSize() ?? { width: 412, height: 839 };
     await page.setViewportSize({ width: size.width, height: Math.round(size.height / 2) });
-    await expect(editor(page, 'sections.md').locator('.cm-cursor')).toBeInViewport();
+    // CodeMirror draws the cursor in a layer beside the text, not inside it.
+    await expect(main(page).locator('.cm-cursor-primary')).toBeInViewport();
   });
 
   test('remembers the wide screen\'s mode after a reload', async ({ page, instance, isMobile }) => {

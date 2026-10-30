@@ -316,7 +316,7 @@ describe('EditorPaneComponent', () => {
     it('opens the preview at the editor\'s place', async () => {
       narrow.next(true);
       await show(openFile('docs/guide.md'));
-      vi.spyOn(editor(), 'topPlace').mockReturnValue(9.5);
+      editor().scrolled.emit(9.5);
       // The preview is created when its tab is first opened.
       const scrolled = vi.spyOn(MarkdownPreviewComponent.prototype, 'scrollToLine');
 
@@ -332,7 +332,7 @@ describe('EditorPaneComponent', () => {
       await show(openFile('docs/guide.md'));
       viewMode().set('preview');
       await settle(fixture);
-      vi.spyOn(preview(), 'topLine').mockReturnValue(4.25);
+      preview().scrolled.emit(4.25);
       const scrolled = vi.spyOn(editor(), 'scrollToLine');
 
       viewMode().set('edit');
@@ -344,7 +344,7 @@ describe('EditorPaneComponent', () => {
     it('keeps the place when the screen size changes', async () => {
       narrow.next(true);
       await show(openFile('docs/guide.md'));
-      vi.spyOn(editor(), 'topPlace').mockReturnValue(6);
+      editor().scrolled.emit(6);
       const scrollToLine = vi.spyOn(CodeEditorComponent.prototype, 'scrollToLine');
 
       narrow.next(false);
@@ -380,6 +380,33 @@ describe('EditorPaneComponent', () => {
       await settle(fixture);
 
       expect(contentOf(stateOf(file))).toBe('# README.md\nOffline edit.\n');
+    });
+
+    it('keeps no place reported by a hidden pane', async () => {
+      narrow.next(true);
+      await show(openFile('docs/guide.md'));
+      viewMode().set('preview');
+      await settle(fixture);
+      const scrolled = vi.spyOn(editor(), 'scrollToLine');
+
+      // The editor's tab is hidden: its scroll is not the place on screen.
+      editor().scrolled.emit(30);
+      viewMode().set('edit');
+      await settle(fixture);
+
+      expect(scrolled).not.toHaveBeenCalledWith(30);
+    });
+
+    it('keeps no place of another file', async () => {
+      await show(openFile('docs/guide.md'));
+      editor().scrolled.emit(30);
+      await show(openFile('docs/other.md'));
+      const scrolled = vi.spyOn(preview(), 'scrollToLine');
+
+      viewMode().set('preview');
+      await settle(fixture);
+
+      expect(scrolled).not.toHaveBeenCalled();
     });
 
     it('renders the newest text when the preview becomes active', async () => {
