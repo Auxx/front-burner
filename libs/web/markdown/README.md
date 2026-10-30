@@ -17,6 +17,22 @@ The live preview's Markdown pipeline (A-8.12). Loaded only from lazy code.
 - `purifyHtml` (`purify/`): the second step, DOMPurify with the same whitelist,
   on the main thread only; it returns `TrustedHTML` where the browser has
   Trusted Types.
+- `splitBlocks` (`blocks/`): a line scanner that splits the source into
+  top-level blocks keyed by a hash of their text, the link reference definitions
+  they use and their footnotes' numbers (A-8.12). It also collects every link
+  reference definition and numbers footnotes across the file.
+- `createBlockRenderer` (`render/`): renders one block through the pipeline
+  above with every definition appended, gives headings GitHub's slugs, and
+  highlights code with Shiki after sanitising (D-7.5). `shiki-classes.ts` turns
+  token colours into `sk-<n>` classes and their CSS. `footnotes.ts` numbers a
+  block's footnotes as the file does, drops its list, and renders the one list
+  of every footnote as a last block.
+- The worker (`worker/`): `PreviewSession` renders only the blocks the page does
+  not hold yet; `preview.worker.ts` runs it off the main thread (A-8.13);
+  `createPreviewWorker` starts it through the `fb-worker` Trusted Types policy.
+- `PreviewRendererService` (`services/`): provided by each preview, it waits
+  until typing stops (100 ms, 1 s above 256 KB), talks to the worker, and shows
+  only the answer to its latest update.
 - `testing/xss-corpus.ts`: the XSS corpus that both steps are tested with
   (SH-22).
 

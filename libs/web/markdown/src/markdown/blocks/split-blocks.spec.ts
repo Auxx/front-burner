@@ -111,18 +111,28 @@ describe('splitBlocks', () => {
     );
     const chunk = `## Heading\n\n${paragraph}\n\n- item\n- item with more text\n\n\`\`\`ts\nconst a = 1;\n\n`
       + `console.log(a);\n\`\`\`\n\n> A quote\n> on two lines\n\n${paragraph}\n\n`;
-    const source = chunk.repeat(Math.ceil(1_000_000 / chunk.length)) + '[link]: /x\n\n[^1]: Note\n';
-
-    // The best of a few runs, once the code is warm: the test guards against a quadratic scanner.
+    const fileOf = (size: number) => chunk.repeat(Math.ceil(size / chunk.length)) + '[link]: /x\n\n[^1]: Note\n';
+    const source = fileOf(1_000_000);
+    const eighth = fileOf(125_000);
+    // The best of a few runs, once the code is warm, taken in turns so that a
+    // busy machine slows both sizes alike.
     let elapsed = Infinity;
-    let blocks = 0;
-    for (let run = 0; run < 5; run++) {
-      const start = performance.now();
-      blocks = splitBlocks(source).blocks.length;
-      elapsed = Math.min(elapsed, performance.now() - start);
+    let elapsedEighth = Infinity;
+    for (let run = 0; run < 8; run++) {
+      elapsedEighth = Math.min(elapsedEighth, timed(() => splitBlocks(eighth)));
+      elapsed = Math.min(elapsed, timed(() => splitBlocks(source)));
     }
 
-    expect(blocks).toBeGreaterThan(5_000);
-    expect(elapsed).toBeLessThan(50);
+    expect(splitBlocks(source).blocks.length).toBeGreaterThan(5_000);
+    // About 20 ms on a desktop. On a busy machine the test still holds while
+    // the time grows about linearly, 8 times for 8 times the text; a
+    // quadratic scanner would take 64 times as long.
+    expect(elapsed).toBeLessThan(Math.max(50, 24 * elapsedEighth));
   });
 });
+
+function timed(run: () => void): number {
+  const start = performance.now();
+  run();
+  return performance.now() - start;
+}

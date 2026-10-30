@@ -22,6 +22,10 @@
           "apps/web/src/app/zod-jitless.ts"
         ],
         "tsConfig": "apps/web/tsconfig.app.json",
+        "conditions": [
+          "module",
+          "worker"
+        ],
         "inlineStyleLanguage": "scss",
         "assets": [
           {
