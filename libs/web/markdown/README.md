@@ -23,10 +23,11 @@ The live preview's Markdown pipeline (A-8.12). Loaded only from lazy code.
   reference definition and numbers footnotes across the file.
 - `createBlockRenderer` (`render/`): renders one block through the pipeline
   above with every definition appended, gives headings GitHub's slugs, and
-  highlights code with Shiki after sanitising (D-7.5). `shiki-classes.ts` turns
-  token colours into `sk-<n>` classes and their CSS. `footnotes.ts` numbers a
-  block's footnotes as the file does, drops its list, and renders the one list
-  of every footnote as a last block.
+  highlights code with Shiki after sanitising (D-7.5). `shiki-classes.ts` holds
+  Shiki's theme, whose colours are the `--ui-syntax-*` tokens (A-10.14), and
+  turns them into `sk-<token>` classes, which the preview's stylesheet colours.
+  `footnotes.ts` numbers a block's footnotes as the file does, drops its list,
+  and renders the one list of every footnote as a last block.
 - The worker (`worker/`): `PreviewSession` renders only the blocks the page does
   not hold yet; `preview.worker.ts` runs it off the main thread (A-8.13);
   `createPreviewWorker` starts it through the `fb-worker` Trusted Types policy.

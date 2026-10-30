@@ -11,7 +11,7 @@ import { classesOf, visitElements } from '../pipeline/elements';
 import { hastToHtml, markdownToHast, sanitizeHast } from '../pipeline/render-safe-html';
 import { SAFE_HTML } from '../whitelist/safe-html';
 import { footnoteListSource, footnoteStubs, keepFootnoteList, renumberFootnotes } from './footnotes';
-import { createShikiClasses } from './shiki-classes';
+import { shikiClasses, SYNTAX_THEME } from './shiki-classes';
 
 /** A block's HTML, sanitised once (A-8.12), and what was removed from it. */
 export interface RenderedBlock {
@@ -24,8 +24,6 @@ export interface BlockRenderer {
   render: (block: SourceBlock, split: SplitSource) => Promise<RenderedBlock>;
   /** The list of every footnote, or `null` when the file references none. */
   renderFootnotes: (split: SplitSource) => Promise<RenderedBlock | null>;
-  /** The CSS rules of the highlighting classes created since the last call. */
-  takeCss: () => string;
 }
 
 /** Languages that Shiki can load, by name and alias. */
@@ -35,11 +33,6 @@ export interface BlockRendererOptions {
   /** The languages loaded on demand; Shiki's bundled list by default. */
   languages?: LanguageLoaders;
 }
-
-// The high-contrast themes: the default GitHub themes fall below 4.5:1 on the
-// code block's surface in both schemes (orange, red, dark-scheme comments);
-// these pass with at least 4.75:1 (NF-13, ED-39).
-const THEMES = { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' } as const;
 
 /** The highlighted code blocks kept for blocks rendered again (`@shikijs/rehype`'s `cache`). */
 const CACHE_SIZE = 500;
@@ -53,10 +46,7 @@ const CACHE_SIZE = 500;
 export async function createBlockRenderer(options: BlockRendererOptions = {}): Promise<BlockRenderer> {
   const languages = options.languages ?? bundledLanguages;
   const highlighter = await createHighlighterCore({
-    themes: [
-      import('shiki/themes/github-light-high-contrast.mjs'),
-      import('shiki/themes/github-dark-high-contrast.mjs')
-    ],
+    themes: [ SYNTAX_THEME ],
     langs: [
       import('shiki/langs/javascript.mjs'),
       import('shiki/langs/typescript.mjs'),
@@ -69,12 +59,10 @@ export async function createBlockRenderer(options: BlockRendererOptions = {}): P
     ],
     engine: createJavaScriptRegexEngine()
   });
-  const classes = createShikiClasses();
   const highlight = unified()
     .use(rehypeShikiFromHighlighter, highlighter, {
-      themes: THEMES,
-      defaultColor: false,
-      transformers: [ classes.transformer ],
+      theme: SYNTAX_THEME,
+      transformers: [ shikiClasses ],
       cache: new BoundedMap<string, Root>(CACHE_SIZE),
       // A block that Shiki cannot highlight stays a plain code block.
       onError: () => undefined
@@ -101,8 +89,7 @@ export async function createBlockRenderer(options: BlockRendererOptions = {}): P
     renderFootnotes: async split => {
       const markdown = footnoteListSource(split);
       return markdown === null ? null : renderTree(markdown, hashKey('footnotes', markdown), keepFootnoteList);
-    },
-    takeCss: classes.takeCss
+    }
   };
 }
 

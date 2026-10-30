@@ -86,7 +86,7 @@ describe('createBlockRenderer', () => {
 
     expect(markup).not.toContain('style');
     expect(markup).not.toContain('shiki');
-    expect(markup).toMatch(/^<pre><code class="language-js"><span><span class="sk-\d+">/);
+    expect(markup).toMatch(/^<pre><code class="language-js"><span><span class="sk-keyword">let<\/span>/);
   });
 
   it('keeps highlighting through the second sanitising step', async () => {
@@ -97,25 +97,32 @@ describe('createBlockRenderer', () => {
     expect(purified.innerHTML).toBe(markup);
   });
 
-  it('creates one class per colour pair and its CSS once', async () => {
-    const own = await createBlockRenderer();
+  it('colours code with the syntax tokens (A-10.14)', async () => {
+    const markup = await html(renderer, '```js\n// note\nconst a = "x" + 1;\nlog(a);\n```');
 
-    const first = await html(own, '```js\nlet a = 1;\nlet b = 2;\n```');
-    const css = own.takeCss();
-    await html(own, '```js\nlet c = 3;\n```');
+    const classes = new Set(markup.match(/sk-[a-z-]+/g));
+    expect([ ...classes ].sort()).toEqual([
+      'sk-comment',
+      'sk-function',
+      'sk-keyword',
+      'sk-number',
+      'sk-punctuation',
+      'sk-string'
+    ]);
+    expect(markup).toContain('<span class="sk-comment">// note</span>');
+  });
 
-    const classes = new Set(first.match(/sk-\d+/g));
-    const rules = css.trim().split('\n');
-    expect(rules).toHaveLength(classes.size);
-    expect(rules[0]).toMatch(/^\.sk-1 \{ color: light-dark\(#[\da-f]+, #[\da-f]+\) \}$/);
-    expect(own.takeCss()).toBe('');
+  it('leaves text that no token colours without a class', async () => {
+    const markup = await html(renderer, '```js\na;\n```');
+
+    expect(markup).toContain('<span>a</span>');
   });
 
   it('loads a language on demand', async () => {
     const markup = await html(renderer, '```python\nprint("hi")\n```');
 
     expect(markup).toContain('class="language-python"');
-    expect(markup).toMatch(/class="sk-\d+"/);
+    expect(markup).toContain('<span class="sk-function">print</span>');
   });
 
   it('renders a code block whose language fails to load as plain code', async () => {
@@ -190,7 +197,10 @@ describe('createBlockRenderer', () => {
   });
 
   it('never takes highlighting classes from the file', async () => {
-    const markup = await html(renderer, '<span class="sk-1">x</span> <pre><code class="sk-2">y</code></pre>');
+    const markup = await html(
+      renderer,
+      '<span class="sk-keyword">x</span> <pre><code class="sk-string">y</code></pre>'
+    );
 
     expect(markup).not.toContain('sk-');
   });

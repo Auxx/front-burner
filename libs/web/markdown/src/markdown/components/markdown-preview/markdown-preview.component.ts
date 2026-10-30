@@ -1,8 +1,6 @@
-import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   effect,
   type ElementRef,
   inject,
@@ -16,7 +14,6 @@ import { TranslocoDirective } from '@jsverse/transloco';
 
 import { purifyHtml } from '../../purify/purify-html';
 import { PreviewRendererService, type PreviewSource } from '../../services/preview-renderer/preview-renderer.service';
-import { ShikiSheet } from '../../styles/shiki-sheet';
 import { RemovalNoticeComponent } from '../removal-notice/removal-notice.component';
 import { findById, patchBlocks } from './patch-blocks';
 import { resolvePreviewLink } from './preview-links';
@@ -77,10 +74,8 @@ export class MarkdownPreviewComponent {
   protected readonly noticeHidden = linkedSignal({ source: this.source, computation: () => false });
   /** The fragment already scrolled to, with its source; forgotten when the screen has none. */
   private scrolled: { source: PreviewSource; fragment: string; } | null = null;
-  private readonly sheet = new ShikiSheet(inject(DOCUMENT));
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.sheet.remove());
     effect(() => {
       const state = this.state();
       const container = this.blocks()?.nativeElement;
@@ -92,7 +87,6 @@ export class MarkdownPreviewComponent {
         container.replaceChildren();
         return;
       }
-      this.sheet.sync(state.css);
       patchBlocks(container, state, purifyHtml);
       untracked(() => this.scrollToFragment(container));
     });

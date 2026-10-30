@@ -17,8 +17,7 @@ describe('PreviewSession', () => {
         rendered.push(block.text);
         return real.render(block, split);
       },
-      renderFootnotes: split => real.renderFootnotes(split),
-      takeCss: () => real.takeCss()
+      renderFootnotes: split => real.renderFootnotes(split)
     };
   });
 
@@ -87,12 +86,6 @@ describe('PreviewSession', () => {
     expect(first.rendered.at(-1)?.html).toContain('data-footnotes');
     expect(second.layout.at(-1)?.key).toBe(first.layout.at(-1)?.key);
     expect(second.rendered.map(block => block.html)).toEqual([ '<p>More.</p>' ]);
-  });
-
-  it('sends the CSS of new highlighting classes', async () => {
-    const response = await update(1, '```js\nlet a = 1;\n```');
-
-    expect(response.css).toContain('.sk-');
   });
 
   it('answers with an error when a block fails', async () => {

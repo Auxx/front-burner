@@ -43,11 +43,6 @@ export interface PreviewState {
   rendered: ReadonlyMap<string, string>;
   /** What was removed from the whole file (SH-17). */
   removals: RemovalReport;
-  /**
-   * Every highlighting rule of this renderer so far. It only grows, so a
-   * reader that has seen an earlier state adds only its end (`ShikiSheet`).
-   */
-  css: string;
   /** The update this state answers. */
   id: number;
 }
@@ -72,7 +67,6 @@ export class PreviewRendererService {
   /** Answers to updates before this id came before a reset, and are dropped whole. */
   private resetAt = 0;
   private rendered = new Map<string, string>();
-  private css = '';
   private length = 0;
 
   constructor() {
@@ -144,7 +138,6 @@ export class PreviewRendererService {
     for (const block of response.rendered) {
       this.rendered.set(block.key, block.html);
     }
-    this.css += response.css;
     if (response.id !== this.latest) {
       return;
     }
@@ -160,7 +153,6 @@ export class PreviewRendererService {
       layout: response.layout,
       rendered,
       removals: new Map(response.removals),
-      css: this.css,
       id: response.id
     });
   }

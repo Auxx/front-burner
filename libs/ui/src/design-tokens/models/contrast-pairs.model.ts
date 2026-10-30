@@ -140,5 +140,8 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
     text(`syntax-${token}`, 'editor-background', 'editor-selection'),
     text(`syntax-${token}`, 'editor-background', 'editor-match')
   ]),
-  text('text-default', 'editor-background', 'editor-match')
+  text('text-default', 'editor-background', 'editor-match'),
+
+  // Code blocks of the live preview, highlighted with the same tokens (A-10.14)
+  ...syntax.map(token => text(`syntax-${token}`, 'surface-sunken'))
 ];

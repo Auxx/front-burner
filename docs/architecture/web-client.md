@@ -127,9 +127,12 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     violation, because its inert document inherits the page's policy: blocked
     and harmless, but it would flood violation reports.
   - Shiki's styles become classes through a small transformer of our own on the
-    `pre`, `code`, `line` and `span` hooks (D-7.5). The generated CSS goes into
-    a constructed stylesheet (`document.adoptedStyleSheets`), which `style-src`
-    does not restrict. Highlighting uses `@shikijs/rehype`'s `cache` option.
+    `pre`, `code`, `line` and `span` hooks (D-7.5). Shiki's theme is our own:
+    each colour is a `--ui-syntax-*` token, given to a list of TextMate scopes,
+    and the transformer turns it into a class `sk-<token>` that the preview's
+    stylesheet colours with that token (A-10.14). So code blocks match the
+    editor in both schemes, and no CSS is generated at run time. Highlighting
+    uses `@shikijs/rehype`'s `cache` option.
   - The preview waits 100 ms after typing stops for files up to 256 KB and 1 s
     above that (NF-2.5 allows larger files to update more slowly), so a large
     preview never updates between keystrokes. _(My call: 256 KB leaves a margin

@@ -46,7 +46,7 @@ export class PreviewSession {
       this.known = known;
 
       const removals = mergeRemovals(layout.map(({ key }) => known.get(key) ?? new Map<RemovalKey, number>()));
-      return { type: 'update', id, layout, rendered, removals: [ ...removals ], css: this.renderer.takeCss() };
+      return { type: 'update', id, layout, rendered, removals: [ ...removals ] };
     } catch (error) {
       return { type: 'error', id, message: error instanceof Error ? error.message : String(error) };
     }

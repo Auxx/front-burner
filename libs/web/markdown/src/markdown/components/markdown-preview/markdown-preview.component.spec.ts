@@ -19,15 +19,14 @@ class FakeWorker extends EventTarget {
   }
 
   /** Answers the latest update with blocks given as `[key, html]`. */
-  answer(blocks: [ string, string ][], options: { css?: string; } = {}): void {
+  answer(blocks: [ string, string ][]): void {
     const latest = this.requests.findLast(request => request.type === 'update');
     const response: PreviewResponse = {
       type: 'update',
       id: latest?.type === 'update' ? latest.id : 0,
       layout: blocks.map(([ key ], index) => ({ key, fromLine: index + 1, toLine: index + 1 })),
       rendered: blocks.map(([ key, html ]) => ({ key, html, removals: [] })),
-      removals: [],
-      css: options.css ?? ''
+      removals: []
     };
     this.dispatchEvent(new MessageEvent('message', { data: response }));
   }
@@ -95,8 +94,8 @@ describe('MarkdownPreviewComponent', () => {
   const element = () => fixture.nativeElement as HTMLElement;
   const blocks = () => element().querySelector('.blocks') as HTMLElement;
 
-  async function answer(blocks: [ string, string ][], options: { css?: string; } = {}): Promise<void> {
-    worker.answer(blocks, options);
+  async function answer(blocks: [ string, string ][]): Promise<void> {
+    worker.answer(blocks);
     await fixture.whenStable();
   }
 
@@ -132,28 +131,6 @@ describe('MarkdownPreviewComponent', () => {
     host.label.set('b.md');
     await fixture.whenStable();
     expect(region?.getAttribute('aria-label')).toBe('Preview of b.md');
-  });
-
-  it('adopts Shiki\'s CSS once per class, in a sheet of its own', async () => {
-    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-1 { color: red }\n' });
-    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-2 { color: blue }\n' });
-    await answer([ [ 'b', '<p>B</p>' ] ]);
-
-    const sheets = document.adoptedStyleSheets;
-    expect(sheets).toHaveLength(1);
-    expect(Array.from(sheets[0].cssRules, rule => rule.cssText)).toEqual([
-      '.sk-1 { color: red; }',
-      '.sk-2 { color: blue; }'
-    ]);
-  });
-
-  it('removes its sheet with it, so that another preview\'s classes win', async () => {
-    await answer([ [ 'a', '<p>A</p>' ] ], { css: '.sk-1 { color: red }\n' });
-    expect(document.adoptedStyleSheets).toHaveLength(1);
-
-    fixture.destroy();
-
-    expect(document.adoptedStyleSheets).toEqual([]);
   });
 
   it('shows nothing of the previous file while another one renders', async () => {
@@ -274,8 +251,7 @@ describe('MarkdownPreviewComponent', () => {
           id: 1,
           layout: [ { key: 'a', fromLine: 1, toLine: 1 } ],
           rendered: [ { key: 'a', html: '<p>A</p>', removals: [] } ],
-          removals: [ [ 'tag:script', 1 ] ],
-          css: ''
+          removals: [ [ 'tag:script', 1 ] ]
         } satisfies PreviewResponse
       })
     );
@@ -297,8 +273,7 @@ describe('MarkdownPreviewComponent', () => {
           id: 2,
           layout: [ { key: 'b', fromLine: 1, toLine: 1 } ],
           rendered: [ { key: 'b', html: '<p>B</p>', removals: [] } ],
-          removals: [ [ 'tag:script', 1 ] ],
-          css: ''
+          removals: [ [ 'tag:script', 1 ] ]
         } satisfies PreviewResponse
       })
     );

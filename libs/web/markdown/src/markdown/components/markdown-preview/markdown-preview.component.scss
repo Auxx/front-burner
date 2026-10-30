@@ -43,6 +43,23 @@
       font-family: var(--ui-font-family-mono);
     }
 
+    // Highlighting's classes on the syntax tokens, as in the editor (A-10.14).
+    @each $token in (comment, keyword, punctuation, string, number, function, type, meta, html-tag,
+      html-attribute, heading, strong, emphasis, quote, code, list-marker, link, url)
+    {
+      .sk-#{$token} {
+        color: var(--ui-syntax-#{$token});
+      }
+    }
+
+    .sk-strong {
+      font-weight: var(--ui-font-weight-semibold);
+    }
+
+    .sk-emphasis {
+      font-style: italic;
+    }
+
     table {
       border-collapse: collapse;
     }

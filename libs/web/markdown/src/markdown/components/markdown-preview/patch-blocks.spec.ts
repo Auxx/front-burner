@@ -7,7 +7,6 @@ function state(blocks: [ string, string ][]): PreviewState {
     layout: blocks.map(([ key ], index) => ({ key, fromLine: index + 1, toLine: index + 1 })),
     rendered: new Map(blocks),
     removals: new Map(),
-    css: '',
     id: 1
   };
 }

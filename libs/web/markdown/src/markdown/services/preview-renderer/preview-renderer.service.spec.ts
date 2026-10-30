@@ -38,8 +38,7 @@ function update(id: number, keys: string[], rendered: string[] = keys): PreviewR
     id,
     layout: keys.map((key, index) => ({ key, fromLine: index + 1, toLine: index + 1 })),
     rendered: rendered.map(key => ({ key, html: `<p>${key}</p>`, removals: [] })),
-    removals: [ [ 'tag:script', id ] ],
-    css: `.sk-${id} {}\n`
+    removals: [ [ 'tag:script', id ] ]
   };
 }
 
@@ -128,7 +127,6 @@ describe('PreviewRendererService', () => {
       layout: [ { key: 'a', fromLine: 1, toLine: 1 }, { key: 'b', fromLine: 2, toLine: 2 } ],
       rendered: new Map([ [ 'a', '<p>a</p>' ], [ 'b', '<p>b</p>' ] ]),
       removals: new Map([ [ 'tag:script', 1 ] ]),
-      css: '.sk-1 {}\n',
       id: 1
     });
   });
@@ -142,7 +140,6 @@ describe('PreviewRendererService', () => {
     worker.answer(update(2, [ 'a', 'c' ], [ 'c' ]));
 
     expect([ ...(state()?.rendered ?? []) ]).toEqual([ [ 'a', '<p>a</p>' ], [ 'c', '<p>c</p>' ] ]);
-    expect(state()?.css).toBe('.sk-1 {}\n.sk-2 {}\n');
   });
 
   it('drops an answer overtaken by a newer update', () => {
