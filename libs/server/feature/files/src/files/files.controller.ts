@@ -1,6 +1,5 @@
 // For the `req.auth` declaration.
 import '@front-burner/server-core-security';
-import type { RequestAuth } from '@front-burner/server-core-security';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
 import type {
   EntryPath,
@@ -20,6 +19,7 @@ import { FileContents } from '../content/file-contents';
 import { FolderLister } from '../listing/folder-lister';
 import { OpenableRepository } from '../repository/openable-repository';
 import { EntrySummaries } from '../summary/entry-summaries';
+import { authOf } from './auth-of';
 import { toFilesError } from './files-errors';
 import {
   CreateEntryRequestDto,
@@ -36,14 +36,6 @@ import {
   RenameEntryRequestDto,
   SaveFileRequestDto
 } from './files.dto';
-
-/** The logged-in user and session; the global auth guard has checked `req.auth`. */
-function authOf(req: Request): RequestAuth {
-  if (req.auth === undefined) {
-    throw new Error('FilesController reached without req.auth');
-  }
-  return req.auth;
-}
 
 /** The files of the logged-in user's working copies (REQ-FILE-001). */
 @ApiTags('files')

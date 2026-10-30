@@ -6,6 +6,8 @@ import { EntryDelete } from './actions/entry-delete';
 import { WorkingTreeGuard } from './actions/working-tree-guard';
 import { FileContents } from './content/file-contents';
 import { FilesController } from './files/files.controller';
+import { ImageFiles } from './images/image-files';
+import { ImagesController } from './images/images.controller';
 import { FolderLister } from './listing/folder-lister';
 import { OpenableRepository } from './repository/openable-repository';
 import { EntrySummaries } from './summary/entry-summaries';
@@ -16,7 +18,7 @@ import { EntrySummaries } from './summary/entry-summaries';
  */
 @Module({
   imports: [ RepositoriesModule ],
-  controllers: [ FilesController ],
+  controllers: [ FilesController, ImagesController ],
   providers: [
     OpenableRepository,
     FolderLister,
@@ -25,7 +27,8 @@ import { EntrySummaries } from './summary/entry-summaries';
     EntryDelete,
     DeleteFolderJob,
     EntrySummaries,
-    FileContents
+    FileContents,
+    ImageFiles
   ],
   exports: [ OpenableRepository, WorkingTreeGuard ]
 })

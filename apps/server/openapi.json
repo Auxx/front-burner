@@ -957,6 +957,100 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/image": {
+      "get": {
+        "operationId": "image",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/gif": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/avif": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jxl": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "description": ""
+          },
+          "304": {
+            "description": "The image matches `If-None-Match`."
+          },
+          "400": {
+            "description": "`path-refused`: outside the working copy, in `.git` or through a link."
+          },
+          "404": {
+            "description": "`entry-not-found`, or `not-found` for the repository."
+          },
+          "413": {
+            "description": "`image-too-large`: over the limit; params `{ limit }` in bytes."
+          },
+          "415": {
+            "description": "`image-format-unsupported`."
+          }
+        },
+        "tags": [
+          "files"
+        ]
+      }
+    },
     "/api/v1/onboarding": {
       "get": {
         "operationId": "status",

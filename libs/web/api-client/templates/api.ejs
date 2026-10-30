@@ -4,7 +4,21 @@ const { pascalCase } = utils;
 const className = `${pascalCase(route.moduleName)}Api`;
 // A route that only redirects (such as auth/oidc/start) is a browser
 // navigation, not a call: it stays in the OpenAPI document but gets no method.
-const routes = route.routes.filter((r) => !Object.keys(r.raw.responses || {}).every((code) => /^3\d\d$/.test(code)));
+// A route that answers raw bytes (such as an image) is loaded by the client
+// with fetch or an element, not through HttpClient's JSON: it gets no method
+// either (A-3.14). A route that answers both JSON and raw bytes fails the
+// generation, so that a JSON route never silently loses its method.
+const isJson = (type) => /^application\/(.+\+)?json$/.test(type);
+const answersRawBytes = (r) => {
+  const types = Object.entries(r.raw.responses || {})
+    .filter(([ code ]) => /^2\d\d$/.test(code))
+    .flatMap(([ , response ]) => Object.keys((response && response.content) || {}));
+  if (types.some(isJson) && !types.every(isJson)) {
+    throw new Error(className + '.' + r.routeName.usage + ': answers both JSON and raw bytes (' + types.join(', ') + ')');
+  }
+  return types.length > 0 && !types.some(isJson);
+};
+const routes = route.routes.filter((r) => !Object.keys(r.raw.responses || {}).every((code) => /^3\d\d$/.test(code)) && !answersRawBytes(r));
 // Every request and response type lives in @front-burner/shared-contracts
 // (A-3.6): import the ones this class uses, declare none. A type that is not a
 // component schema (an inline schema) or a primitive fails the generation. A
