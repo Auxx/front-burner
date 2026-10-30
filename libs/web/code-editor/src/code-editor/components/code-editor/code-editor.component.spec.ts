@@ -131,6 +131,31 @@ describe('CodeEditorComponent', () => {
     expect(changes).toEqual([]);
   });
 
+  it('reports the place at the top after a scroll', async () => {
+    await setUp();
+    await show(stateOf(NOTES));
+    const places: number[] = [];
+    fixture.componentInstance.scrolled.subscribe(place => places.push(place));
+
+    view().scrollDOM.dispatchEvent(new Event('scroll'));
+
+    expect(places).toEqual([ 1 ]);
+  });
+
+  it('scrolls a fractional line that share of the line further', async () => {
+    await setUp();
+    await show(stateOf(NOTES));
+    const dispatch = vi.spyOn(view(), 'dispatch');
+
+    fixture.componentInstance.scrollToLine(3.5);
+
+    const effect = dispatch.mock.calls[0][0] as {
+      effects: { value: { range: { head: number; }; yMargin: number; }; };
+    };
+    expect(effect.effects.value.range.head).toBe(NOTES.indexOf('Some'));
+    expect(effect.effects.value.yMargin).toBe(-0.5 * view().lineBlockAt(NOTES.indexOf('Some')).height);
+  });
+
   it('passes the CSP nonce to CodeMirror', async () => {
     await setUp('test-nonce');
 

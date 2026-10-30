@@ -140,7 +140,20 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   - **On phones, the preview is not on screen while typing** (Edit and Preview
     tabs). At 1 MB, a visible preview of ~4,400 blocks made 10–17 of 48
     keystrokes exceed 50 ms (worst 64–88 ms), although it updated only once;
-    hidden, typing matched the editor alone.
+    hidden, typing matched the editor alone. A preview that is not on screen
+    (Edit on any screen) neither reads the text nor renders; shown again, it
+    renders the newest text at once.
+  - **Scroll syncing works in places of the file** (ED-35, ED-36). A place is a
+    fractional line: in the preview, the top block's first line plus the share
+    of the block's height above the top, spread over the block's lines
+    (`data-from-line`, `data-to-line`); in the editor, the top line plus the
+    share of its height above the top. So both panes show the same block, and
+    the same share of it. Only the pane the user last scrolled, touched, clicked
+    or typed in leads, so the scrolls that syncing causes, which come late and
+    keep coming while a scroll on a phone glides, never sync back. When the view
+    mode or the screen size changes, the place at the top of the pane shown
+    before is read before the new layout renders, and applied to the panes shown
+    after it.
 - **A-8.13** The pipeline (remark, `rehype-sanitize`, Shiki) runs in a **Web
   Worker**; DOMPurify runs on the main thread, since it needs a DOM. Per update
   both modes were equally fast, but the first render of a 200 KB file blocked

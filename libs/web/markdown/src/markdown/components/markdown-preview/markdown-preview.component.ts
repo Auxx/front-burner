@@ -121,13 +121,14 @@ export class MarkdownPreviewComponent {
   }
 
   /**
-   * Scrolls `place` to the top. While newer text is waiting or rendering,
-   * such as right after the preview becomes active, it scrolls there again
-   * once that text is shown, unless the user scrolls first.
+   * Scrolls `place` to the top. While the preview shows nothing yet, or newer
+   * text is waiting or rendering, such as right after the preview becomes
+   * active, it scrolls there again once that text is shown, unless the user
+   * scrolls first.
    */
   scrollToLine(place: number): void {
     const container = this.blocks()?.nativeElement;
-    this.pendingPlace = this.renderer.busy() ? place : null;
+    this.pendingPlace = this.renderer.busy() || untracked(this.state) === null ? place : null;
     const top = container ? scrollTopOf(container, place) : null;
     if (!container || top === null) {
       return;

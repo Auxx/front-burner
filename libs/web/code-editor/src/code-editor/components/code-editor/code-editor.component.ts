@@ -37,6 +37,8 @@ export interface EditorStateChange {
 export class CodeEditorComponent {
   readonly state = input.required<EditorState>();
   readonly stateChange = output<EditorStateChange>();
+  /** The place at the top (`topPlace`) after each scroll. */
+  readonly scrolled = output<number>();
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly nonce = inject(CSP_NONCE, { optional: true });
@@ -71,23 +73,40 @@ export class CodeEditorComponent {
     this.view?.focus();
   }
 
-  /** Scrolls so that the line (1-based) is at the top; does nothing for a line that is not a number. */
+  /**
+   * Scrolls so that the line (1-based) is at the top, and a fractional line
+   * that share of the line's height further (ED-35); does nothing for a line
+   * that is not a number.
+   */
   scrollToLine(line: number): void {
     if (this.view && Number.isFinite(line)) {
       const { doc } = this.view.state;
-      const { from } = doc.line(Math.min(Math.max(1, Math.round(line)), doc.lines));
-      this.view.dispatch({ effects: EditorView.scrollIntoView(from, { y: 'start' }) });
+      const number = Math.min(Math.max(1, Math.floor(line)), doc.lines);
+      const { from } = doc.line(number);
+      const share = number === Math.floor(line) ? line - number : 0;
+      const yMargin = -share * this.view.lineBlockAt(from).height;
+      this.view.dispatch({ effects: EditorView.scrollIntoView(from, { y: 'start', yMargin }) });
     }
   }
 
   /** The first visible line (1-based). */
   topLine(): number {
+    return Math.floor(this.topPlace());
+  }
+
+  /**
+   * The place at the top as a fractional line: the first visible line plus
+   * the share of its height scrolled past, so `12.5` is half-way down line 12
+   * (ED-35).
+   */
+  topPlace(): number {
     if (!this.view) {
       return 1;
     }
-    const height = this.view.scrollDOM.getBoundingClientRect().top - this.view.documentTop;
-    const block = this.view.lineBlockAtHeight(Math.max(0, height));
-    return this.view.state.doc.lineAt(block.from).number;
+    const height = Math.max(0, this.view.scrollDOM.getBoundingClientRect().top - this.view.documentTop);
+    const block = this.view.lineBlockAtHeight(height);
+    const share = block.height > 0 ? Math.min(Math.max((height - block.top) / block.height, 0), 0.999) : 0;
+    return this.view.state.doc.lineAt(block.from).number + share;
   }
 
   private show(state: EditorState): void {
@@ -98,7 +117,7 @@ export class CodeEditorComponent {
   }
 
   private createView(): EditorView {
-    return new EditorView({
+    const view = new EditorView({
       parent: this.host,
       // The first state carries the page's CSP nonce, so that CodeMirror's style element
       // gets it whatever the given states hold (NF-11.1).
@@ -111,5 +130,7 @@ export class CodeEditorComponent {
         });
       }
     });
+    view.scrollDOM.addEventListener('scroll', () => this.scrolled.emit(this.topPlace()), { passive: true });
+    return view;
   }
 }

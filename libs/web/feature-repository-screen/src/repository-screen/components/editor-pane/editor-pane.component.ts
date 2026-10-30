@@ -3,6 +3,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
+  ElementRef,
   inject,
   Injector,
   input,
@@ -12,7 +14,14 @@ import {
   untracked,
   viewChild
 } from '@angular/core';
-import { ButtonComponent, injectNarrowViewport, SplitPaneComponent } from '@front-burner/ui';
+import {
+  ButtonComponent,
+  SplitPaneComponent,
+  type SplitPaneShow,
+  TabContentDirective,
+  TabGroupDirective,
+  TabPanelDirective
+} from '@front-burner/ui';
 import {
   CodeEditorComponent,
   contentOf,
@@ -30,13 +39,22 @@ import { TranslocoDirective } from '@jsverse/transloco';
 
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { type OpenFile, OpenFilesService } from '../../services/open-files/open-files.service';
+import { type ViewModeName, ViewModeService } from '../../services/view-mode/view-mode.service';
 import { fileName } from '../../utils/file-name/file-name';
+import { type ScrollPane, ScrollSync } from '../../utils/scroll-sync/scroll-sync';
 import { ChangedOnDiskComponent } from '../changed-on-disk/changed-on-disk.component';
 import { DraftOfferComponent } from '../draft-offer/draft-offer.component';
 import { GoneElsewhereComponent } from '../gone-elsewhere/gone-elsewhere.component';
 import { LargeFileNoteComponent } from '../large-file-note/large-file-note.component';
+import { ViewModeSwitchComponent } from '../view-mode-switch/view-mode-switch.component';
 
 type EditorState = EditorStateChange['state'];
+
+/** Which panes are on screen, and how. */
+interface Layout {
+  narrow: boolean;
+  mode: ViewModeName;
+}
 
 /** The `revision` of the content each file's editor state was built from (ED-24). */
 const built = new WeakMap<OpenFile, number>();
@@ -62,11 +80,15 @@ const built = new WeakMap<OpenFile, number>();
  * cursor at the same line and column as far as the new text allows, and,
  * when it was the file shown, the same first visible line (ED-24).
  *
- * On wide screens the live preview is beside the editor (ED-26, A-8.12),
- * with `fragment` as the heading to scroll to; a link in it to another entry
- * is emitted as `openPath` (ED-31). On narrow screens only the editor is
- * shown. The preview follows the file's `preview` source, whose version is
- * bumped on every change of the text.
+ * The live preview (ED-26, A-8.12) has `fragment` as the heading to scroll
+ * to; a link in it to another entry is emitted as `openPath` (ED-31). It
+ * follows the file's `preview` source, whose version is bumped on every
+ * change of the text. The view mode (ED-34) shows the editor and the preview
+ * side by side, or one of them: in a split pane on wide screens, as **Edit**
+ * and **Preview** tabs on narrow ones. A preview that is not on screen does
+ * no work (A-8.12). In **Split** mode the two scroll together (ED-35); when
+ * the mode or the screen size changes, the panes now shown open at the place
+ * of the file that was at the top before (ED-36).
  */
 @Component({
   selector: 'rs-editor-pane',
@@ -79,7 +101,11 @@ const built = new WeakMap<OpenFile, number>();
     GoneElsewhereComponent,
     LargeFileNoteComponent,
     MarkdownPreviewComponent,
-    SplitPaneComponent
+    SplitPaneComponent,
+    TabContentDirective,
+    TabGroupDirective,
+    TabPanelDirective,
+    ViewModeSwitchComponent
   ],
   templateUrl: './editor-pane.component.html',
   styleUrl: './editor-pane.component.scss',
@@ -94,14 +120,29 @@ export class EditorPaneComponent {
 
   private readonly openFiles = inject(OpenFilesService);
   private readonly diskChanges = inject(DiskChangesService);
-  private readonly editor = viewChild.required(CodeEditorComponent);
-  /** The editor, once it is there: not while the pane first renders. */
-  private readonly shownEditor = viewChild(CodeEditorComponent);
+  protected readonly viewMode = inject(ViewModeService);
+  /**
+   * The editor, once it is there: not while the pane first renders, nor on a
+   * narrow screen before the **Edit** tab was first opened.
+   */
+  private readonly editor = viewChild(CodeEditorComponent);
+  private readonly editorElement = viewChild(CodeEditorComponent, { read: ElementRef });
+  private readonly preview = viewChild(MarkdownPreviewComponent);
+  private readonly previewElement = viewChild(MarkdownPreviewComponent, { read: ElementRef });
   private readonly injector = inject(Injector);
   /** The file whose state the editor was last given. */
   private shownFile: OpenFile | null = null;
 
-  protected readonly narrow = injectNarrowViewport();
+  private readonly scrollSync = new ScrollSync();
+  /** The panes that scroll together, while they do. */
+  private synced: { editor: ScrollPane; preview: ScrollPane; } | null = null;
+  /** The layout the panes are shown in. */
+  private shownLayout: Layout | null = null;
+
+  protected readonly show = computed<SplitPaneShow>(() => {
+    const mode = this.viewMode.mode();
+    return mode === 'split' ? 'both' : mode === 'edit' ? 'start' : 'end';
+  });
   /** The editor's share of the pane beside the preview, in percent. */
   protected readonly editorSize = signal(50);
   protected readonly name = computed(() => fileName(this.file().path()));
@@ -118,11 +159,55 @@ export class EditorPaneComponent {
   });
   protected readonly noteShown = computed(() => {
     const file = this.file();
-    return file.largeOnNarrow && !file.highlight();
+    return file.largeOnNarrow && !file.highlight() && this.viewMode.editorShown();
   });
 
+  constructor() {
+    // Runs before the template shows the new layout, so the place is read from the panes still on screen (ED-36).
+    effect(() => {
+      const layout = { narrow: this.viewMode.narrow(), mode: this.viewMode.mode() };
+      untracked(() => this.keepPlace(layout));
+    });
+
+    // ED-35: Split mode only, once both panes are there.
+    effect(onCleanup => {
+      const split = !this.viewMode.narrow() && this.viewMode.mode() === 'split';
+      const editor = this.editor();
+      const editorElement = this.editorElement()?.nativeElement as HTMLElement | undefined;
+      const preview = this.preview();
+      const previewElement = this.previewElement()?.nativeElement as HTMLElement | undefined;
+      if (!split || !editor || !editorElement || !preview || !previewElement) {
+        return;
+      }
+      const synced = {
+        editor: { element: editorElement, scrollToLine: (place: number) => editor.scrollToLine(place) },
+        preview: { element: previewElement, scrollToLine: (place: number) => preview.scrollToLine(place) }
+      };
+      this.synced = synced;
+      const disconnect = this.scrollSync.connect(synced.editor, synced.preview);
+      onCleanup(() => {
+        disconnect();
+        if (this.synced === synced) {
+          this.synced = null;
+        }
+      });
+    });
+  }
+
   protected openSearch(): void {
-    this.editor().openSearch();
+    this.editor()?.openSearch();
+  }
+
+  protected editorScrolled(place: number): void {
+    if (this.synced) {
+      this.scrollSync.scrolled(this.synced.editor, place);
+    }
+  }
+
+  protected previewScrolled(place: number): void {
+    if (this.synced) {
+      this.scrollSync.scrolled(this.synced.preview, place);
+    }
   }
 
   /** **Restore**: the draft replaces the text as one undoable edit and is saved at once (ED-7). */
@@ -134,26 +219,26 @@ export class EditorPaneComponent {
       return () => contentOf(file.editorState as EditorState);
     });
     file.preview.version.update(version => version + 1);
-    this.editor().focus();
+    this.editor()?.focus();
   }
 
   /** **Discard**: the draft is deleted and the file stays as on disk (ED-7). */
   protected discard(): void {
     this.openFiles.discardDraft(this.file().path());
-    this.editor().focus();
+    this.editor()?.focus();
   }
 
   /** **Reload**: the new content replaces the unsaved edits (ED-24). */
   protected reload(): void {
     this.openFiles.reload(this.file().path(), { discard: true }).catch(() => undefined);
-    this.editor().focus();
+    this.editor()?.focus();
   }
 
   /** **Keep mine**: the editor's content is saved over the change on disk (ED-24). */
   protected keepMine(): void {
     const file = this.file();
     this.openFiles.keepMine(file.path(), () => contentOf(file.editorState as EditorState));
-    this.editor().focus();
+    this.editor()?.focus();
   }
 
   /** **Recreate it**: the file is created again with the editor's content (ED-21). */
@@ -163,7 +248,7 @@ export class EditorPaneComponent {
     if (file.recreateError()?.code === 'entry-exists') {
       this.diskChanges.notice(file.path());
     } else if (!file.gone() && this.file() === file) {
-      this.editor().focus();
+      this.editor()?.focus();
     }
   }
 
@@ -175,6 +260,31 @@ export class EditorPaneComponent {
       file.saver.edit(() => contentOf(file.editorState as EditorState));
       file.preview.version.update(version => version + 1);
     }
+  }
+
+  /**
+   * ED-36: when the layout changes, the panes shown next open at the place
+   * that was at the top of the pane shown before: the editor's, unless only
+   * the preview was shown.
+   */
+  private keepPlace(layout: Layout): void {
+    const before = this.shownLayout;
+    this.shownLayout = layout;
+    if (!before || (before.narrow === layout.narrow && before.mode === layout.mode)) {
+      return;
+    }
+    const place = before.mode === 'preview' ? this.preview()?.topLine() : this.editor()?.topPlace();
+    if (place === undefined) {
+      return;
+    }
+    afterNextRender(() => {
+      if (layout.mode !== 'preview') {
+        this.editor()?.scrollToLine(place);
+      }
+      if (layout.mode !== 'edit') {
+        this.preview()?.scrollToLine(place);
+      }
+    }, { injector: this.injector });
   }
 
   /**
@@ -191,10 +301,10 @@ export class EditorPaneComponent {
     const existing = file.editorState as EditorState | null;
     const reloaded = existing !== null && (built.get(file) ?? 0) !== revision;
     built.set(file, revision);
-    const view = this.shownEditor();
+    const view = this.editor();
     if (reloaded && view && this.shownFile === file) {
       const top = view.topLine();
-      afterNextRender(() => this.editor().scrollToLine(top), { injector: this.injector });
+      afterNextRender(() => this.editor()?.scrollToLine(top), { injector: this.injector });
     }
     this.shownFile = file;
     const state = existing === null || reloaded

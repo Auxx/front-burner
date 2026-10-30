@@ -1,5 +1,7 @@
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import type { ApiError, Entry } from '@front-burner/shared-contracts';
+import type { ApiError, CurrentUser, Entry } from '@front-burner/shared-contracts';
+import { CurrentUserService } from '@front-burner/web-core';
 
 import { entry } from '../../../testing/listings';
 import { openFile } from '../../../testing/open-files';
@@ -7,6 +9,7 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
+import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import { EditorAreaComponent } from './editor-area.component';
 
 const K = 'web-feature-repository-screen.EditorAreaComponent';
@@ -29,7 +32,12 @@ describe('EditorAreaComponent', () => {
   beforeEach(async () => {
     TestBed.configureTestingModule({
       imports: [ EditorAreaComponent, translocoTesting() ],
-      providers: [ { provide: OpenFilesService, useValue: {} }, { provide: DiskChangesService, useValue: {} } ]
+      providers: [
+        { provide: OpenFilesService, useValue: {} },
+        { provide: DiskChangesService, useValue: {} },
+        ViewModeService,
+        { provide: CurrentUserService, useValue: { user: signal<CurrentUser | undefined>(undefined) } }
+      ]
     });
     fixture = TestBed.createComponent(EditorAreaComponent);
     await settle(fixture);

@@ -1,6 +1,8 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { undo, undoDepth } from '@codemirror/commands';
+import type { CurrentUser } from '@front-burner/shared-contracts';
 import {
   CodeEditorComponent,
   contentOf,
@@ -8,6 +10,8 @@ import {
   type EditorStateChange,
   isHighlighting
 } from '@front-burner/web-code-editor';
+import { CurrentUserService } from '@front-burner/web-core';
+import { MarkdownPreviewComponent, PREVIEW_WORKER } from '@front-burner/web-markdown';
 import { BehaviorSubject, map } from 'rxjs';
 
 import { openFile } from '../../../testing/open-files';
@@ -15,7 +19,23 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { type OpenFile, OpenFilesService } from '../../services/open-files/open-files.service';
+import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import { EditorPaneComponent } from './editor-pane.component';
+
+/** A preview worker that records the texts it is sent and never answers. */
+class FakeWorker extends EventTarget {
+  readonly texts: string[] = [];
+
+  postMessage(request: { type: string; source?: string; }): void {
+    if (request.type === 'update' && request.source !== undefined) {
+      this.texts.push(request.source);
+    }
+  }
+
+  terminate(): void {
+    // Nothing to stop.
+  }
+}
 
 const K = 'web-feature-repository-screen.EditorPaneComponent';
 
@@ -25,6 +45,7 @@ describe('EditorPaneComponent', () => {
   let fixture: ComponentFixture<EditorPaneComponent>;
   let notice: ReturnType<typeof vi.fn>;
   let narrow: BehaviorSubject<boolean>;
+  let worker: FakeWorker;
   let openFiles: {
     restoreDraft: ReturnType<typeof vi.fn>;
     discardDraft: ReturnType<typeof vi.fn>;
@@ -72,6 +93,7 @@ describe('EditorPaneComponent', () => {
     };
     notice = vi.fn();
     narrow = new BehaviorSubject(false);
+    worker = new FakeWorker();
     TestBed.configureTestingModule({
       imports: [ EditorPaneComponent, translocoTesting() ],
       providers: [
@@ -83,7 +105,10 @@ describe('EditorPaneComponent', () => {
           }
         },
         { provide: OpenFilesService, useValue: openFiles },
-        { provide: DiskChangesService, useValue: { notice } }
+        { provide: DiskChangesService, useValue: { notice } },
+        { provide: PREVIEW_WORKER, useValue: () => worker },
+        ViewModeService,
+        { provide: CurrentUserService, useValue: { user: signal<CurrentUser | undefined>(undefined) } }
       ]
     });
     fixture = TestBed.createComponent(EditorPaneComponent);
@@ -112,7 +137,7 @@ describe('EditorPaneComponent', () => {
     expect(content().getAttribute('aria-label')).toBe('handbook.md');
   });
 
-  it('shows the preview beside the editor on wide screens and not on narrow ones', async () => {
+  it('shows the preview beside the editor on wide screens, and the editor alone on narrow ones', async () => {
     await show(openFile('docs/guide.md'));
 
     const preview = pane().querySelector('ui-split-pane [uiSplitPaneEnd]');
@@ -126,7 +151,7 @@ describe('EditorPaneComponent', () => {
     await settle(fixture);
 
     expect(pane().querySelector('md-preview')).toBeNull();
-    expect(pane().querySelector('ce-code-editor')).not.toBeNull();
+    expect(pane().querySelector('[role="tabpanel"] ce-code-editor')).not.toBeNull();
   });
 
   it('gives the preview the editor\'s text and bumps its version on every edit', async () => {
@@ -201,6 +226,139 @@ describe('EditorPaneComponent', () => {
     await settle(fixture);
 
     expect(pane().querySelector('.cm-search')).not.toBeNull();
+  });
+
+  describe('view modes (ED-34 to ED-36)', () => {
+    const editor = () =>
+      fixture.debugElement.query(element => element.name === 'ce-code-editor')
+        .componentInstance as CodeEditorComponent;
+    const preview = () =>
+      fixture.debugElement.query(element => element.name === 'md-preview')
+        .componentInstance as MarkdownPreviewComponent;
+    const viewMode = () => TestBed.inject(ViewModeService);
+    const shown = (selector: string) => {
+      const element = pane().querySelector(selector);
+      return element !== null && element.closest('[hidden]') === null;
+    };
+
+    it('AC-EDIT-001.20: shows one pane only in Edit and Preview', async () => {
+      await show(openFile('docs/guide.md'));
+      expect([ shown('ce-code-editor'), shown('md-preview') ]).toEqual([ true, true ]);
+
+      viewMode().set('edit');
+      await settle(fixture);
+      expect([ shown('ce-code-editor'), shown('md-preview') ]).toEqual([ true, false ]);
+      expect(preview().active()).toBe(false);
+
+      viewMode().set('preview');
+      await settle(fixture);
+      expect([ shown('ce-code-editor'), shown('md-preview') ]).toEqual([ false, true ]);
+      expect(button(`${K}.find`)).toBeUndefined();
+    });
+
+    it('scrolls the preview with the editor', async () => {
+      await show(openFile('docs/guide.md'));
+      const scrolled = vi.spyOn(preview(), 'scrollToLine').mockImplementation(() => undefined);
+
+      pane().querySelector('ce-code-editor')?.dispatchEvent(new WheelEvent('wheel'));
+      editor().scrolled.emit(12.5);
+
+      expect(scrolled).toHaveBeenCalledWith(12.5);
+    });
+
+    it('scrolls the editor with the preview', async () => {
+      await show(openFile('docs/guide.md'));
+      const scrolled = vi.spyOn(editor(), 'scrollToLine').mockImplementation(() => undefined);
+
+      pane().querySelector('md-preview')?.dispatchEvent(new Event('touchstart'));
+      preview().scrolled.emit(7);
+
+      expect(scrolled).toHaveBeenCalledWith(7);
+    });
+
+    it('does not sync a scroll it caused', async () => {
+      await show(openFile('docs/guide.md'));
+      const previewScrolled = vi.spyOn(preview(), 'scrollToLine').mockImplementation(() => undefined);
+      const editorScrolled = vi.spyOn(editor(), 'scrollToLine').mockImplementation(() => undefined);
+
+      pane().querySelector('ce-code-editor')?.dispatchEvent(new KeyboardEvent('keydown'));
+      editor().scrolled.emit(12.5);
+      preview().scrolled.emit(12.4);
+
+      expect(previewScrolled).toHaveBeenCalledTimes(1);
+      expect(editorScrolled).not.toHaveBeenCalled();
+    });
+
+    it('does not sync outside Split', async () => {
+      await show(openFile('docs/guide.md'));
+      viewMode().set('edit');
+      await settle(fixture);
+      const scrolled = vi.spyOn(preview(), 'scrollToLine');
+
+      pane().querySelector('ce-code-editor')?.dispatchEvent(new WheelEvent('wheel'));
+      editor().scrolled.emit(3);
+
+      expect(scrolled).not.toHaveBeenCalled();
+    });
+
+    it('opens the preview at the editor\'s place', async () => {
+      narrow.next(true);
+      await show(openFile('docs/guide.md'));
+      vi.spyOn(editor(), 'topPlace').mockReturnValue(9.5);
+      // The preview is created when its tab is first opened.
+      const scrolled = vi.spyOn(MarkdownPreviewComponent.prototype, 'scrollToLine');
+
+      viewMode().set('preview');
+      await settle(fixture);
+
+      expect(scrolled).toHaveBeenCalledWith(9.5);
+      scrolled.mockRestore();
+    });
+
+    it('opens the editor at the preview\'s place', async () => {
+      narrow.next(true);
+      await show(openFile('docs/guide.md'));
+      viewMode().set('preview');
+      await settle(fixture);
+      vi.spyOn(preview(), 'topLine').mockReturnValue(4.25);
+      const scrolled = vi.spyOn(editor(), 'scrollToLine');
+
+      viewMode().set('edit');
+      await settle(fixture);
+
+      expect(scrolled).toHaveBeenCalledWith(4.25);
+    });
+
+    it('keeps the place when the screen size changes', async () => {
+      narrow.next(true);
+      await show(openFile('docs/guide.md'));
+      vi.spyOn(editor(), 'topPlace').mockReturnValue(6);
+      const scrollToLine = vi.spyOn(CodeEditorComponent.prototype, 'scrollToLine');
+
+      narrow.next(false);
+      await settle(fixture);
+
+      expect(scrollToLine).toHaveBeenCalledWith(6);
+      expect(viewMode().mode()).toBe('split');
+      scrollToLine.mockRestore();
+    });
+
+    it('renders the newest text when the preview becomes active', async () => {
+      const file = openFile('README.md');
+      await show(file);
+      viewMode().set('edit');
+      await settle(fixture);
+      const sent = worker.texts.length;
+
+      typeAtEnd('Typed while hidden.\n');
+      await settle(fixture);
+      expect(worker.texts.length).toBe(sent);
+
+      viewMode().set('split');
+      await settle(fixture);
+
+      expect(worker.texts.at(-1)).toBe('# README.md\nTyped while hidden.\n');
+    });
   });
 
   describe('AC-EDIT-001.25: a large file on a narrow screen', () => {

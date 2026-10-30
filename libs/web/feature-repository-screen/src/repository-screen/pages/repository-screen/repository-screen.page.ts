@@ -37,6 +37,7 @@ import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { PaneMemoryService } from '../../services/pane-memory/pane-memory.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
+import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 import { fileName } from '../../utils/file-name/file-name';
 
@@ -86,6 +87,7 @@ import { fileName } from '../../utils/file-name/file-name';
   providers: [
     RepositorySessionService,
     PaneMemoryService,
+    ViewModeService,
     FileTreeStoreService,
     FirstFileService,
     EntryCommandsService,

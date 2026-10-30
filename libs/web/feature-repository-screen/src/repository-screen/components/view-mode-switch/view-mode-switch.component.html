@@ -1,0 +1,15 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ViewModeSwitchComponent'">
+  @if (viewMode.narrow()) {
+    <ui-tab-strip [label]="t('label')" [selected]="viewMode.mode()" (selectedChange)="select($event)">
+      <button uiTab="edit">{{ t('edit') }}</button>
+      <button uiTab="preview">{{ t('preview') }}</button>
+    </ui-tab-strip>
+  } @else {
+    <ui-segmented-control
+      [label]="t('label')"
+      [options]="options()"
+      [value]="viewMode.mode()"
+      (valueChange)="select($event)"
+    />
+  }
+</ng-container>
