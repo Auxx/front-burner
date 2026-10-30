@@ -71,3 +71,22 @@ export const Busy: Story = {
     `
   })
 };
+
+/** The icon keeps `--ui-icon-size` square in both sizes. */
+export const IconSize: Story = {
+  render: () => ({
+    styles: [ '.row { display: flex; gap: var(--ui-space-1); }' ],
+    template: `
+      <div class="row">
+        <button uiIconButton label="Files"><ui-icon name="files" /></button>
+        <button uiIconButton label="Files" size="small"><ui-icon name="files" /></button>
+      </div>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    for (const icon of canvasElement.querySelectorAll('ui-icon')) {
+      const box = icon.getBoundingClientRect();
+      await expect([ box.width, box.height ]).toEqual([ 16, 16 ]);
+    }
+  }
+};
