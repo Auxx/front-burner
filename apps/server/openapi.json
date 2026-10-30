@@ -1015,6 +1015,12 @@
                   "format": "binary"
                 }
               },
+              "image/jxl": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
               "image/svg+xml": {
                 "schema": {
                   "type": "string",

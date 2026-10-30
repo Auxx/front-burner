@@ -19,7 +19,7 @@ file embeds, written either as Markdown (`![alt](path)`) or as HTML (`<img>`,
 - an image that cannot be shown is replaced by a **placeholder** with its alt
   text and the reason.
 
-PNG, JPEG, GIF, WebP, AVIF and SVG images are shown.
+PNG, JPEG, GIF, WebP, AVIF, JPEG XL and SVG images are shown.
 
 ## Context
 
@@ -104,9 +104,11 @@ PNG, JPEG, GIF, WebP, AVIF and SVG images are shown.
 - **IM-8** Images are loaded only when they are near the visible part of the
   preview, and at most **4** at a time per tab. _(My call.)_ An image that
   scrolls away before it loads is not loaded.
-- **IM-9** These formats are shown: PNG, JPEG, GIF (animated too), WebP, AVIF
-  and SVG. Files with other extensions, such as `.bmp`, `.tiff` or `.heic`, get
-  the placeholder "This image format isn't supported".
+- **IM-9** These formats are shown: PNG, JPEG, GIF (animated too), WebP, AVIF,
+  JPEG XL (`.jxl`) and SVG. Files with other extensions, such as `.bmp`, `.tiff`
+  or `.heic`, get the placeholder "This image format isn't supported". A browser
+  that cannot decode a JPEG XL image shows "This image couldn't be loaded" for
+  it, as for any other bad data (IM-18).
 - **IM-10** Each tab keeps the images it has loaded while the repository screen
   is open, so that switching between files or between the Edit and Preview tabs
   does not load them again. A cached image is checked against the server (IM-7)

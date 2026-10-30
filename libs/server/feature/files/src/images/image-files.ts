@@ -15,6 +15,7 @@ export const IMAGE_TYPES: Readonly<Record<string, string>> = Object.freeze({
   '.gif': 'image/gif',
   '.webp': 'image/webp',
   '.avif': 'image/avif',
+  '.jxl': 'image/jxl',
   '.svg': 'image/svg+xml'
 });
 

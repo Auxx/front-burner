@@ -33,8 +33,8 @@ IM-23, IM-25, IM-26; the API halves of criteria 3, 6, 7, 13 and 16);
 - **Formats** (IM-9), by extension, ignoring case, with the content type from
   the extension (never sniffed): `.png` `image/png`; `.jpg`, `.jpeg`
   `image/jpeg`; `.gif` `image/gif`; `.webp` `image/webp`; `.avif` `image/avif`;
-  `.svg` `image/svg+xml`. Anything else: `415 image-format-unsupported` ("This
-  image format isn't supported").
+  `.jxl` `image/jxl`; `.svg` `image/svg+xml`. Anything else: `415
+  image-format-unsupported` ("This image format isn't supported").
 - **Size**: more than **10 MB = 10,485,760 bytes** is `413 image-too-large`
   ("This image is too large to preview").
 - **Headers** (NF-11.3, A-3.14): `Content-Type` as above;

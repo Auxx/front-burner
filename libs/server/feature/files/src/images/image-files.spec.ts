@@ -64,6 +64,7 @@ describe('ImageFiles', () => {
       expect(await open(`img/a${extension.toUpperCase()}`)).toMatchObject({ type, size: 25 });
     }
     expect(IMAGE_TYPES['.jpeg']).toBe('image/jpeg');
+    expect(IMAGE_TYPES['.jxl']).toBe('image/jxl');
   });
 
   it('AC-EDIT-003.7: refuses a missing image, a 12 MB PNG and a .tiff with their codes', async () => {
