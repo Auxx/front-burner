@@ -1,7 +1,7 @@
 import type { Subscription } from 'rxjs';
 
 import type { ImageCache, ImageFailure, ImageResult } from './image-cache';
-import { createPlaceholder, type PlaceholderContent, setPlaceholderContent } from './image-placeholder';
+import { createPlaceholder, type PlaceholderContent, setPlaceholderContent, writtenSize } from './image-placeholder';
 import { pickPictureSource } from './pick-source';
 import { RemoteImages, type RemoteImagesTexts } from './remote-images';
 import { type ImageTarget, resolveImageAddress } from './resolve-image';
@@ -138,6 +138,7 @@ export class ImageLoader {
           release: null,
           check: false
         };
+        keepWrittenSize(img);
         this.pick(slot);
         slots.push(slot);
         this.slots.add(slot);
@@ -447,5 +448,19 @@ export class ImageLoader {
       }
     }
     this.placeRemoteButton();
+  }
+}
+
+/**
+ * Keeps the height written on an image (IM-11): the stylesheet's `block-size:
+ * auto` keeps an image scaled down to the preview's width in proportion, but
+ * would take those proportions from the image's own size once it loads.
+ */
+function keepWrittenSize(img: HTMLImageElement): void {
+  const { aspectRatio, blockSize } = writtenSize(img);
+  if (aspectRatio) {
+    img.style.aspectRatio = aspectRatio;
+  } else if (blockSize) {
+    img.style.blockSize = blockSize;
   }
 }

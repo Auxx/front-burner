@@ -63,20 +63,36 @@ function part(document: Document, name: string, text: string): HTMLElement {
   return element;
 }
 
-/**
- * Gives the placeholder the image's size (IM-11): its `width`, in pixels or
- * as a percentage, and its proportions when both `width` and `height` are
- * pixels. The stylesheet keeps it within the preview's width.
- */
-function reserveSize(placeholder: HTMLElement, img: HTMLImageElement): void {
+/** The size written on an image (SH-11), as CSS: what of it the image's `width` and `height` say. */
+export interface WrittenSize {
+  /** Its `width`, in pixels or as a percentage. */
+  inlineSize?: string;
+  /** Its proportions, when both `width` and `height` are pixels. */
+  aspectRatio?: string;
+  /** Its `height`, when it has no `width`. */
+  blockSize?: string;
+}
+
+/** Reads the size written on `img` (IM-11). */
+export function writtenSize(img: HTMLImageElement): WrittenSize {
   const width = /^(\d+)(%?)$/.exec(img.getAttribute('width') ?? '');
   const height = /^(\d+)$/.exec(img.getAttribute('height') ?? '');
+  const size: WrittenSize = {};
   if (width) {
-    placeholder.style.inlineSize = `${width[1]}${width[2] || 'px'}`;
+    size.inlineSize = `${width[1]}${width[2] || 'px'}`;
   }
   if (width && !width[2] && height && Number(width[1]) > 0 && Number(height[1]) > 0) {
-    placeholder.style.aspectRatio = `${width[1]} / ${height[1]}`;
+    size.aspectRatio = `${width[1]} / ${height[1]}`;
   } else if (!width && height) {
-    placeholder.style.blockSize = `${height[1]}px`;
+    size.blockSize = `${height[1]}px`;
   }
+  return size;
+}
+
+/**
+ * Gives the placeholder the image's size (IM-11). The stylesheet keeps it
+ * within the preview's width.
+ */
+function reserveSize(placeholder: HTMLElement, img: HTMLImageElement): void {
+  Object.assign(placeholder.style, writtenSize(img));
 }

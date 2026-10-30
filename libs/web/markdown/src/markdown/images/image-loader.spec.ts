@@ -260,6 +260,20 @@ describe('ImageLoader', () => {
     await tick();
     const img = container.querySelector('img');
     expect([ img?.getAttribute('width'), img?.getAttribute('height') ]).toEqual([ '200', '100' ]);
+    // So that a loaded image of other proportions keeps the written height (IM-11).
+    expect(img?.style.aspectRatio).toBe('200 / 100');
+  });
+
+  it('keeps a written height without a width', async () => {
+    block('<img src="img/flow.png" height="80" alt="Flow"> <img src="img/b.png" alt="B">');
+    observer().intersect();
+    cache.loads[0]?.answer({ kind: 'loaded', url: 'blob:1' });
+    cache.loads[1]?.answer({ kind: 'loaded', url: 'blob:2' });
+    await tick();
+
+    const [ first, second ] = Array.from(container.querySelectorAll('img'));
+    expect(first?.style.blockSize).toBe('80px');
+    expect(second?.hasAttribute('style')).toBe(false);
   });
 
   it('shows a cached image at once, so that a block rendered again loads nothing', async () => {

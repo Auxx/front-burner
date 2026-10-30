@@ -584,13 +584,21 @@ async function expectBlobImage(image: Locator, width = 1): Promise<void> {
   await expect.poll(() => naturalWidth(image)).toBe(width);
 }
 
+/** Opens the screen at `url` with its preview shown: on narrow screens, on the **Preview** tab. */
+async function openPreview(page: Page, url: string, isMobile: boolean): Promise<void> {
+  await openScreen(page, url);
+  if (isMobile) {
+    await main(page).getByRole('tablist', { name: 'View' }).getByRole('tab', { name: 'Preview' }).click();
+  }
+}
+
 /** Removes the console errors of image requests the test expects to fail. */
 function drainFailedImages(monitor: Monitor, repositoryId: number): void {
   drainFailedRequests(monitor, `/api/v1/repositories/${repositoryId}/image`);
 }
 
 test.describe('images', () => {
-  test('AC-EDIT-003.1, AC-EDIT-003.2, AC-EDIT-003.3, AC-EDIT-003.4 and AC-EDIT-003.5: shows repository images by relative, parent and root paths, decoded, at their width, uncommitted too, through blob: URLs with the token in a header', async ({ page, instance }) => {
+  test('AC-EDIT-003.1, AC-EDIT-003.2, AC-EDIT-003.3, AC-EDIT-003.4 and AC-EDIT-003.5: shows repository images by relative, parent and root paths, decoded, at their width, uncommitted too, through blob: URLs with the token in a header', async ({ page, instance, isMobile }) => {
     // Written after the clone, so none of them is committed (AC-EDIT-003.3).
     const { id } = seedHandbook(instance.dataDir, {
       'docs/guide.md': [
@@ -616,7 +624,7 @@ test.describe('images', () => {
       'docs/img.png': png(8, 1)
     });
     const requests = imageRequests(page);
-    await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
     const view = preview(page, 'guide.md');
 
     await expectBlobImage(view.getByRole('img', { name: 'Diagram', exact: true }), 4);
@@ -648,14 +656,14 @@ test.describe('images', () => {
     expect(addresses.every(address => address.startsWith('blob:'))).toBe(true);
   });
 
-  test('AC-EDIT-003.6: refuses images outside the repository, in .git and through a symbolic link', async ({ page, instance, monitor }) => {
+  test('AC-EDIT-003.6: refuses images outside the repository, in .git and through a symbolic link', async ({ page, instance, monitor, isMobile }) => {
     const { id, dir } = seedHandbook(instance.dataDir, {
       'docs/guide.md': '# Guide\n\n![Passwd](../../../../etc/passwd)\n\n![Config](.git/config)\n\n![Link](link.png)\n'
     });
     writeFileSync(join(instance.dataDir, 'outside.png'), PNG);
     symlinkSync(join(instance.dataDir, 'outside.png'), join(dir, 'docs/link.png'));
     const requests = imageRequests(page);
-    await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
     const view = preview(page, 'guide.md');
 
     for (const alt of [ 'Passwd', 'Config', 'Link' ]) {
@@ -674,7 +682,7 @@ test.describe('images', () => {
     drainFailedImages(monitor, id);
   });
 
-  test('AC-EDIT-003.7: shows why a missing, too large or unsupported image isn\'t shown, with its alt text', async ({ page, instance, monitor }) => {
+  test('AC-EDIT-003.7: shows why a missing, too large or unsupported image isn\'t shown, with its alt text', async ({ page, instance, monitor, isMobile }) => {
     const { id } = seedHandbook(instance.dataDir, {
       'docs/guide.md': '# Guide\n\n![Flow](img/missing.png)\n\n![Big](big.png)\n\n![Scan](scan.tiff)\n',
       // Only its size matters: the endpoint refuses it before reading it.
@@ -682,7 +690,7 @@ test.describe('images', () => {
       'docs/scan.tiff': 'II*\0'
     });
     const requests = imageRequests(page);
-    await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
     const view = preview(page, 'guide.md');
 
     await expect(view.getByRole('img', { name: 'Flow, Image not found: img/missing.png', exact: true })).toBeVisible();
@@ -729,7 +737,7 @@ test.describe('images', () => {
       }
     });
     const requests = imageRequests(page);
-    await openScreen(page, `/repositories/${id}/files/many.md`);
+    await openPreview(page, `/repositories/${id}/files/many.md`, isMobile);
     const view = preview(page, 'many.md');
     await expectBlobImage(view.getByRole('img', { name: 'Image 1', exact: true }), 1);
     await expect.poll(() => requests.length).toBeGreaterThan(4);
@@ -760,13 +768,13 @@ test.describe('images', () => {
     expect(loads.length).toBe(loaded);
   });
 
-  test('AC-EDIT-003.9: shows an image replaced on disk without a reload', async ({ page, instance }) => {
+  test('AC-EDIT-003.9: shows an image replaced on disk without a reload', async ({ page, instance, isMobile }) => {
     const { id, dir } = seedHandbook(instance.dataDir, {
       'docs/guide.md': '# Guide\n\n![Flow](img/flow.png)\n',
       'docs/img/flow.png': png(1, 1)
     });
     const requests = imageRequests(page);
-    await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
     const image = preview(page, 'guide.md').getByRole('img', { name: 'Flow', exact: true });
     await expectBlobImage(image, 1);
 
@@ -782,7 +790,7 @@ test.describe('images', () => {
     await expect(image).toHaveAttribute('src', /^blob:/);
   });
 
-  test('AC-EDIT-003.10: shows the dark or the light picture by colour scheme, and switches', async ({ page, instance }) => {
+  test('AC-EDIT-003.10: shows the dark or the light picture by colour scheme, and switches', async ({ page, instance, isMobile }) => {
     const { id } = seedHandbook(instance.dataDir, {
       'brand.md': '# Brand\n\n<picture><source media="(prefers-color-scheme: dark)" srcset="logo-dark.png">'
         + '<img src="logo-light.png" alt="Brand"></picture>\n',
@@ -791,7 +799,7 @@ test.describe('images', () => {
     });
     await page.emulateMedia({ colorScheme: 'dark' });
     const requests = imageRequests(page);
-    await openScreen(page, `/repositories/${id}/files/brand.md`);
+    await openPreview(page, `/repositories/${id}/files/brand.md`, isMobile);
     const image = preview(page, 'brand.md').getByRole('img', { name: 'Brand', exact: true });
 
     await expectBlobImage(image, 3);
@@ -801,7 +809,7 @@ test.describe('images', () => {
     expect(requestedPaths(requests)).toEqual([ 'logo-dark.png', 'logo-light.png' ]);
   });
 
-  test('AC-EDIT-003.11 and AC-EDIT-003.12: shows remote images only after Show remote images, with no referrer, and never http ones', async ({ page, instance }) => {
+  test('AC-EDIT-003.11 and AC-EDIT-003.12: shows remote images only after Show remote images, with no referrer, and never http ones', async ({ page, instance, isMobile }) => {
     const { id } = seedHandbook(instance.dataDir, {
       'badges.md': [
         '# Badges',
@@ -826,7 +834,7 @@ test.describe('images', () => {
         insecure.push(request.url());
       }
     });
-    await openScreen(page, `/repositories/${id}/files/badges.md`);
+    await openPreview(page, `/repositories/${id}/files/badges.md`, isMobile);
     const view = preview(page, 'badges.md');
     const placeholder = view.getByRole('img', { name: 'Build, Remote image from img.shields.io', exact: true });
 
@@ -858,7 +866,7 @@ test.describe('images', () => {
     expect(remote).toHaveLength(1);
   });
 
-  test('AC-EDIT-003.13: shows an SVG with a script as an image and runs nothing', async ({ page, instance }) => {
+  test('AC-EDIT-003.13: shows an SVG with a script as an image and runs nothing', async ({ page, instance, isMobile }) => {
     const { id } = seedHandbook(instance.dataDir, {
       'docs/guide.md': '# Guide\n\n![Evil](evil.svg)\n',
       'docs/evil.svg':
@@ -870,18 +878,18 @@ test.describe('images', () => {
       dialogs.push(dialog.message());
       void dialog.dismiss();
     });
-    await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
 
     await expectBlobImage(preview(page, 'guide.md').getByRole('img', { name: 'Evil', exact: true }), 10);
     expect(await page.evaluate(() => (window as unknown as { ran?: boolean; }).ran)).toBeUndefined();
     expect(dialogs).toEqual([]);
   });
 
-  test('AC-EDIT-003.14 and AC-EDIT-003.15: keeps a missing image\'s link around its placeholder, named by alt text and reason', async ({ page, instance, monitor }) => {
+  test('AC-EDIT-003.14 and AC-EDIT-003.15: keeps a missing image\'s link around its placeholder, named by alt text and reason', async ({ page, instance, monitor, isMobile }) => {
     const { id } = seedHandbook(instance.dataDir, {
       'docs/guide.md': '# Guide\n\n[![Docs logo](missing.png)](https://example.com)\n'
     });
-    await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
     const link = preview(page, 'guide.md').getByRole('link', { name: 'Docs logo, Image not found: missing.png' });
 
     await expect(link).toHaveAttribute('href', 'https://example.com');
@@ -890,13 +898,13 @@ test.describe('images', () => {
     drainFailedImages(monitor, id);
   });
 
-  test('has no axe violations with image placeholders shown', async ({ page, instance, monitor }) => {
+  test('has no axe violations with image placeholders shown', async ({ page, instance, monitor, isMobile }) => {
     const { id } = seedHandbook(instance.dataDir, {
       'docs/guide.md': '# Guide\n\n![Flow](img/flow.png)\n\n![Missing](missing.png)\n\n![](decorative.tiff)\n\n'
         + '![Badge](https://img.shields.io/badge/a.png) ![](http://example.com/a.png)\n',
       'docs/img/flow.png': png(4, 2)
     });
-    await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
+    await openPreview(page, `/repositories/${id}/files/docs/guide.md`, isMobile);
     const view = preview(page, 'guide.md');
     await expectBlobImage(view.getByRole('img', { name: 'Flow', exact: true }), 4);
     await expect(view.getByRole('img', { name: 'Missing, Image not found: missing.png' })).toBeVisible();
