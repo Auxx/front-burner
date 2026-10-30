@@ -101,6 +101,17 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     page does not hold yet are rendered. Link reference definitions are appended
     to every block, so references work across blocks. With this, the preview
     updated 120–130 ms after the last keystroke, debounce included.
+  - **Footnotes are numbered across blocks.** _(Plan 29's call: rendered on its
+    own, every block would number its footnotes from 1 and list them.)_ The
+    worker numbers footnotes in the order they are first referenced in the whole
+    file; each block is rendered with stand-in definitions of the footnotes it
+    references, given their numbers and reference IDs in the file, and without a
+    footnote list. One last block, keyed by the definitions and their order,
+    lists every footnote. A block's key includes the numbers of its footnotes,
+    so a renumbered footnote re-renders the blocks that reference it.
+  - **Heading IDs** are GitHub's slugs with the `user-content-` prefix, computed
+    per block in the worker; the preview component de-duplicates them in
+    document order.
   - **The DOM is patched per block.** The component keeps one element per block,
     sanitises only new blocks, removes blocks that are gone and inserts new ones
     without moving the rest. Blocks use `content-visibility: auto`, and the

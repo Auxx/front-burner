@@ -20,6 +20,18 @@ debounces updates, talks to the worker through a Trusted Types policy (A-8.13),
 and drops answers that a newer update has overtaken. DOMPurify and the DOM are
 plan 30's.
 
+**As built:** the renderer is `PreviewRendererService` (the service generator's
+name). It keeps the HTML of an overtaken answer, since the worker will not send
+those blocks again, and shows only the latest answer. Each `SourceBlock` also
+lists its `footnotes` (label, number in the file, first reference), and a
+block's key includes them, so a renumbered footnote re-renders the blocks that
+use it. `createBlockRenderer` takes the on-demand languages as an option, so a
+test can make one fail to load. Footnote IDs and labels are normalised as remark
+does, with `micromark-util-normalize-identifier` and
+`micromark-util-sanitize-uri`; heading slugs come from `github-slugger`. The 1
+MB test takes the best of a few runs and allows linear growth on a busy machine,
+since a bare 50 ms limit failed under load.
+
 **Tech Stack:** `shiki` (`shiki/core`, the JavaScript regex engine) and
 `@shikijs/rehype`, installed with `npm install --save-exact`.
 
