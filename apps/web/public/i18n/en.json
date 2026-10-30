@@ -28,6 +28,8 @@
   "errors.file-not-utf8": "This file isn't UTF-8 text, so it can't be edited safely.",
   "errors.entry-not-editable": "Only Markdown files can be opened in Front Burner.",
   "errors.entry-exists": "A file with this name exists again.",
+  "errors.image-format-unsupported": "This image format isn't supported",
+  "errors.image-too-large": "This image is too large to preview",
   "errors.network": "Could not reach the server. Check your connection.",
   "web-feature-auth.LoginPage.title": "Log in",
   "web-feature-auth.LoginPage.messages.logged-out": "You have been logged out",

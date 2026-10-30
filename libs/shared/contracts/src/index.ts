@@ -9,6 +9,7 @@ export * from './events/push-event.schema';
 export * from './files/entry-actions.schema';
 export * from './files/file-content.schema';
 export * from './files/folder-listing.schema';
+export * from './files/image.schema';
 export * from './health/health-status.schema';
 export * from './onboarding/onboarding.schema';
 export * from './repositories/add-repository.schema';

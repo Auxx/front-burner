@@ -35,7 +35,9 @@ const MESSAGES: Record<ErrorCode, string> = {
   'file-too-large': 'This file is too large to edit (the limit is 1 MB).',
   'file-not-utf8': 'This file isn\'t UTF-8 text, so it can\'t be edited safely.',
   'entry-not-editable': 'Only Markdown files can be opened in Front Burner.',
-  'entry-exists': 'A file with this name exists again.'
+  'entry-exists': 'A file with this name exists again.',
+  'image-format-unsupported': 'This image format isn\'t supported',
+  'image-too-large': 'This image is too large to preview'
 };
 
 interface ZodIssueLike {

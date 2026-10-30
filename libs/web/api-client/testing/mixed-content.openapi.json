@@ -1,0 +1,31 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Fixture", "version": "1" },
+  "paths": {
+    "/api/v1/pictures/{id}": {
+      "get": {
+        "operationId": "summary",
+        "tags": ["pictures"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "number" } }],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/HealthStatus" } },
+              "image/png": { "schema": { "type": "string", "format": "binary" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthStatus": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "enum": ["ok", "degraded", "fail"] } },
+        "required": ["status"]
+      }
+    }
+  }
+}

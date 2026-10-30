@@ -37,7 +37,11 @@ export const ERROR_CODES = [
   /** 400; only Markdown files can be read or saved through the editor's API (ED-2, FB-21). */
   'entry-not-editable',
   /** 409; **Recreate it** found a file at the path (ED-21). */
-  'entry-exists'
+  'entry-exists',
+  /** 415; a repository image whose format the preview doesn't show (IM-9). */
+  'image-format-unsupported',
+  /** 413; a repository image over the 10 MB limit (IM-9). */
+  'image-too-large'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
