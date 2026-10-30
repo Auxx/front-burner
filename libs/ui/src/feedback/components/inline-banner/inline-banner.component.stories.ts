@@ -111,3 +111,46 @@ export const RemovedHtml: Story = {
     `
   })
 };
+
+/** In the wide layout, actions stay beside the message's first line (plan 34, G6). */
+export const ActionsWithLongMessage: Story = {
+  render: () => ({
+    styles: [ '.wide { inline-size: 40rem; }' ],
+    template: `
+      <div class="wide">
+        <ui-inline-banner status="warning" dismissLabel="Dismiss">
+          This file changed on the remote while you were editing it. Reload to see the remote version, or keep your
+          own and decide later; your edits are kept in the browser either way, so nothing is lost if you close this
+          tab before choosing, and you can compare both versions once you are back.
+          <div uiBannerActions>
+            <button uiButton size="small">Reload</button>
+            <button uiButton size="small">Keep mine</button>
+          </div>
+        </ui-inline-banner>
+      </div>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    const message = canvasElement.querySelector('.message')!.getBoundingClientRect();
+    const actions = canvasElement.querySelector('.actions')!.getBoundingClientRect();
+    await expect(message.height).toBeGreaterThan(48);
+    await expect(Math.abs(actions.top - message.top)).toBeLessThanOrEqual(2);
+  }
+};
+
+/** One-line references for before/after comparison. */
+export const OneLineWideReference: Story = {
+  render: () => ({
+    styles: [ '.wide { inline-size: 40rem; display: grid; gap: var(--ui-space-2); }' ],
+    template: `
+      <div class="wide">
+        <ui-inline-banner>No actions, no dismiss.</ui-inline-banner>
+        <ui-inline-banner dismissLabel="Dismiss">Dismiss only.</ui-inline-banner>
+        <ui-inline-banner status="warning" dismissLabel="Dismiss">
+          Actions and dismiss.
+          <div uiBannerActions><button uiButton size="small">Reload</button></div>
+        </ui-inline-banner>
+      </div>
+    `
+  })
+};
