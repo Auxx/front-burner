@@ -147,12 +147,17 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     Angular builder only bundles a worker written literally as `new Worker(new
     URL('./x.worker', import.meta.url))`. The code shadows `Worker` with a
     subclass that passes the URL through a policy (`fb-worker`) allowing only
-    same-origin `worker-*.js` files.
+    same-origin `worker-*.js` files, with no query or with the
+    `?worker_file&type=module` that the development server adds.
   - The build adds the `worker` export condition (`conditions: ["module",
     "worker"]`). The builder resolves the worker with the `browser` condition,
     which picks DOM-based builds of some packages
     (`decode-named-character-reference` calls `document.createElement`);
-    `worker` comes first in their export maps.
+    `worker` comes first in their export maps. The development server's
+    dependency pre-bundling (Vite) ignores these conditions, so `ng serve` runs
+    with `prebundle: false` and the builder bundles the dependencies itself.
+    _(Plan 30's call: with pre-bundling, the worker got the DOM build and failed
+    with `document is not defined`.)_
   - The main thread loads only CodeMirror, DOMPurify and the component; the
     pipeline is 164 KB gzipped in the worker, and each Shiki language and theme
     is its own chunk.

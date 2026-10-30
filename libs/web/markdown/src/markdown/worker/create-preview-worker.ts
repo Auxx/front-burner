@@ -1,14 +1,18 @@
 /** The only scripts the preview worker may load: the builder's worker chunks, from this origin (A-8.13). */
 const WORKER_SCRIPT = /^\/(?:[\w-]+\/)*worker-[\w-]+\.js$/;
+/** The query the development server (`ng serve`) adds to a worker chunk's URL; a build adds none. */
+const DEV_SERVER_QUERY = '?worker_file&type=module';
 
 /**
  * Checks the URL of a worker script: Trusted Types make `new Worker` require
- * a `TrustedScriptURL`, and this is the policy behind it. Throws for any other
- * URL.
+ * a `TrustedScriptURL`, and this is the policy behind it. A worker chunk of
+ * this origin passes, with no query or with the development server's own;
+ * it throws for any other URL.
  */
 export function workerScriptUrl(url: string): string {
   const parsed = new URL(url, location.href);
-  if (parsed.origin !== location.origin || !WORKER_SCRIPT.test(parsed.pathname) || parsed.search || parsed.hash) {
+  const query = parsed.search === '' || parsed.search === DEV_SERVER_QUERY;
+  if (parsed.origin !== location.origin || !WORKER_SCRIPT.test(parsed.pathname) || !query || parsed.hash) {
     throw new TypeError(`Refused to load a worker from ${url}`);
   }
   return parsed.href;
