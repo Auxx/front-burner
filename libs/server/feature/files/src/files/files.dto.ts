@@ -10,6 +10,7 @@ import {
   FolderQuerySchema,
   IgnoreQuerySchema,
   IgnoreResultSchema,
+  ImageQuerySchema,
   RenameEntryRequestSchema,
   SaveFileRequestSchema
 } from '@front-burner/shared-contracts';
@@ -57,3 +58,6 @@ export class SaveFileRequestDto extends createZodDto(z.object(SaveFileRequestSch
 
 @ApiSchema({ name: 'FileState' })
 export class FileStateDto extends createZodDto(z.object(FileStateSchema.shape)) {}
+
+@ApiSchema({ name: 'ImageQuery' })
+export class ImageQueryDto extends createZodDto(z.object(ImageQuerySchema.shape)) {}
