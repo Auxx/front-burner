@@ -29,6 +29,19 @@
           </div>
         }
         <div class="end">
+          @if (viewMode.editorShown()) {
+            <button
+              uiButton
+              class="wrap"
+              variant="ghost"
+              size="small"
+              [attr.aria-pressed]="settings.softWrap()"
+              (click)="settings.softWrap.set(!settings.softWrap())"
+            >
+              <ui-icon name="word-wrap" />
+              {{ t('wrap') }}
+            </button>
+          }
           <rs-view-mode-switch />
         </div>
       </div>
@@ -65,6 +78,19 @@
         </div>
       }
       <div class="end">
+        @if (viewMode.editorShown()) {
+          <button
+            uiButton
+            class="wrap"
+            variant="ghost"
+            size="small"
+            [attr.aria-pressed]="settings.softWrap()"
+            (click)="settings.softWrap.set(!settings.softWrap())"
+          >
+            <ui-icon name="word-wrap" />
+            {{ t('wrap') }}
+          </button>
+        }
         <rs-view-mode-switch />
       </div>
     </div>

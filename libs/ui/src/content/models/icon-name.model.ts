@@ -33,7 +33,8 @@ export const ICON_NAMES = [
   'repo-push',
   'source-control',
   'sync',
-  'warning'
+  'warning',
+  'word-wrap'
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];

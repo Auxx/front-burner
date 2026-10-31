@@ -89,11 +89,11 @@ $tokens: (
   // Editor
   editor-background: (functions.ref(surface-island), functions.ref(surface-island)),
   editor-active-line: (functions.alpha(blue-55, 6%), functions.alpha(neutral-100, 4%)),
-  editor-selection: (functions.alpha(blue-55, 20%), functions.alpha(blue-60, 35%)),
+  editor-selection: (functions.alpha(blue-55, 20%), functions.ref(darcula-selection)),
   editor-match: (functions.alpha(amber-75, 40%), functions.alpha(amber-60, 30%)),
   editor-line-number: (functions.ref(text-subtle), functions.ref(text-subtle)),
   editor-line-number-active: (functions.ref(text-default), functions.ref(text-default)),
-  editor-cursor: (functions.ref(text-default), functions.ref(text-default)),
+  editor-cursor: (functions.ref(text-default), functions.ref(darcula-caret)),
 
   // Live preview: the tint behind inline code, as GitHub's on our neutral;
   // lighter in light mode, for links in code on striped table rows

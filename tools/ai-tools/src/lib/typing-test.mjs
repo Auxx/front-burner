@@ -15,6 +15,8 @@ export const SWITCHES = Object.freeze({
   frontmatter: 'front matter highlighting',
   language: 'Markdown highlighting, front matter included',
   wrap: 'soft wrap',
+  linenumbers: 'line numbers and the active-line gutter',
+  wrapmarker: 'the wrap marker gutter',
   spellcheck: 'spell check and autocorrect',
   direction: 'per-line text direction'
 });
@@ -27,8 +29,17 @@ export const SETUPS = Object.freeze([
   [ 'wrap' ],
   [ 'spellcheck' ],
   [ 'direction' ],
-  [ 'language', 'wrap', 'spellcheck', 'direction' ]
+  [ 'linenumbers', 'wrapmarker' ],
+  [ 'language', 'wrap', 'linenumbers', 'wrapmarker', 'spellcheck', 'direction' ]
 ]);
+
+/**
+ * Whether a part of the setup is on. As in the product, the wrap marker gutter marks wrapped
+ * lines, so it is off whenever soft wrap is.
+ */
+export function isOn(off, name) {
+  return !off.includes(name) && !(name === 'wrapmarker' && off.includes('wrap'));
+}
 
 /**
  * The file and switches named by the page's address: `?file=1mb.md&off=wrap,spellcheck`.

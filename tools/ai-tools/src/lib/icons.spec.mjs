@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildSprite, findIcons, loadIcons, readIcon, readIconList, UI_ICON_LIST, UI_SPRITE } from './icons.mjs';
-import { WORKSPACE_ROOT } from './workspace.mjs';
+import { readText, WORKSPACE_ROOT } from './workspace.mjs';
 
 describe('icons', () => {
   const icons = loadIcons();
@@ -88,6 +88,6 @@ describe('icons', () => {
   });
 
   it('keeps the committed sprite in step with the icon list', () => {
-    expect(readFileSync(UI_SPRITE, 'utf8')).toBe(buildSprite(icons, readIconList()));
+    expect(readText(UI_SPRITE)).toBe(buildSprite(icons, readIconList()));
   });
 });

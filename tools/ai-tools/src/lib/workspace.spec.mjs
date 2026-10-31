@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { OutsideWorkspaceError, resolveInWorkspace, WORKSPACE_ROOT, workspacePath } from './workspace.mjs';
+import { OutsideWorkspaceError, readText, resolveInWorkspace, WORKSPACE_ROOT, workspacePath } from './workspace.mjs';
 
 describe('workspace', () => {
   let fixture;
@@ -62,5 +62,12 @@ describe('workspace', () => {
 
   it('formats workspace paths for messages', () => {
     expect(workspacePath(join(WORKSPACE_ROOT, 'libs', 'ui'))).toBe('libs/ui');
+  });
+
+  it('reads text with LF line breaks, also from a Windows checkout', () => {
+    writeFileSync(join(fixture, 'crlf.md'), '# One\r\n\r\nTwo\r\n');
+    writeFileSync(join(fixture, 'lf.md'), '# One\n\nTwo\n');
+    expect(readText(join(fixture, 'crlf.md'))).toBe('# One\n\nTwo\n');
+    expect(readText(join(fixture, 'lf.md'))).toBe('# One\n\nTwo\n');
   });
 });

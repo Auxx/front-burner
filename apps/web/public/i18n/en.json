@@ -376,6 +376,7 @@
   "web-feature-repository-screen.DraftOfferComponent.restore": "Restore",
   "web-feature-repository-screen.DraftOfferComponent.discard": "Discard",
   "web-feature-repository-screen.EditorPaneComponent.find": "Find",
+  "web-feature-repository-screen.EditorPaneComponent.wrap": "Wrap",
   "web-feature-repository-screen.EditorPaneComponent.resizePreview": "Resize the preview",
   "web-feature-repository-screen.ViewModeSwitchComponent.label": "View",
   "web-feature-repository-screen.ViewModeSwitchComponent.split": "Split",

@@ -289,9 +289,12 @@ with YAML front matter, soft wrap, spell check), with five generated test files
 (`2kb.md`, `100kb.md`, `200kb.md`, `500kb.md`, `1mb.md`, seeded so every build
 is the same) and two meters. The address names the file and the parts of the
 setup to switch off, `?file=1mb.md&off=frontmatter,wrap` (`SWITCHES`:
-`frontmatter`, `language`, `wrap`, `spellcheck`, `direction`); the page refuses
-unknown switches rather than measure the wrong setup, and its menus offer the
-setups of `SETUPS`.
+`frontmatter`, `language`, `wrap`, `linenumbers`, `wrapmarker`, `spellcheck`,
+`direction`; `linenumbers` is line numbers with the active-line gutter,
+`wrapmarker` a mirror of the editor's wrap-marker gutter, which the page turns
+off whenever `wrap` is off, as the product does); the page refuses unknown
+switches rather than measure the wrong setup, and its menus offer the setups of
+`SETUPS`.
 
 | Command                                          | Does                                                                  |
 | ------------------------------------------------ | --------------------------------------------------------------------- |

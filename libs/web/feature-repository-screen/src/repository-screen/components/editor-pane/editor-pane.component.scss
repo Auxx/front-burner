@@ -23,7 +23,23 @@
 }
 
 .end {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
   margin-inline-start: auto;
+}
+
+// On is shown by a border as well as a background (A-10.22).
+.wrap[aria-pressed='true'] {
+  border-color: var(--ui-border-strong);
+  background-color: var(--ui-selected-inactive);
+}
+
+// The pressed background is `Highlight` (`--ui-selected-inactive`).
+@media (forced-colors: active) {
+  .wrap[aria-pressed='true'] {
+    color: HighlightText;
+  }
 }
 
 .panes {
@@ -42,6 +58,8 @@
 
 .panel {
   display: grid;
+  // One column as wide as the panel: an auto column would grow to a long line once Wrap is off (ED-10).
+  grid-template-columns: minmax(0, 1fr);
   flex: 1;
   min-block-size: 0;
 

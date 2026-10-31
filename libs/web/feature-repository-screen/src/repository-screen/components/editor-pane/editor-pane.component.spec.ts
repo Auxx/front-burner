@@ -8,7 +8,8 @@ import {
   contentOf,
   cursorOf,
   type EditorStateChange,
-  isHighlighting
+  isHighlighting,
+  isSoftWrapping
 } from '@front-burner/web-code-editor';
 import { CurrentUserService } from '@front-burner/web-core';
 import { MarkdownPreviewComponent, PREVIEW_WORKER } from '@front-burner/web-markdown';
@@ -184,6 +185,116 @@ describe('EditorPaneComponent', () => {
 
     expect(pane().querySelector('[uiTabGroup] .toolbar')).not.toBeNull();
     expect(findFirst()).toBe(true);
+  });
+
+  describe('the Wrap toggle', () => {
+    const wrap = () => button(`${K}.wrap`);
+
+    it('wraps by default, with a pressed Wrap button before the view modes', async () => {
+      const file = openFile('docs/guide.md');
+      await show(file);
+
+      expect(wrap()?.getAttribute('aria-pressed')).toBe('true');
+      expect(isSoftWrapping(stateOf(file))).toBe(true);
+      const modes = pane().querySelector('.toolbar rs-view-mode-switch')!;
+      expect(Boolean(wrap()!.compareDocumentPosition(modes) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    });
+
+    it('stops wrapping when clicked, and wraps again when clicked again', async () => {
+      const file = openFile('docs/guide.md');
+      await show(file);
+
+      wrap()!.click();
+      await settle(fixture);
+
+      expect(wrap()?.getAttribute('aria-pressed')).toBe('false');
+      expect(isSoftWrapping(stateOf(file))).toBe(false);
+
+      wrap()!.click();
+      await settle(fixture);
+
+      expect(wrap()?.getAttribute('aria-pressed')).toBe('true');
+      expect(isSoftWrapping(stateOf(file))).toBe(true);
+    });
+
+    it('keeps the line at the top of the editor when switching', async () => {
+      const file = openFile('docs/guide.md');
+      await show(file);
+      const editor: CodeEditorComponent =
+        fixture.debugElement.query(el => el.name === 'ce-code-editor').componentInstance;
+      vi.spyOn(editor, 'topLine').mockReturnValue(3);
+      const scrolled = vi.spyOn(editor, 'scrollToLine');
+
+      wrap()!.click();
+      await settle(fixture);
+
+      expect(scrolled).toHaveBeenCalledWith(3);
+    });
+
+    it('keeps the text and the undo history when switching', async () => {
+      const file = openFile('docs/guide.md');
+      await show(file);
+      typeAtEnd('More.');
+      await settle(fixture);
+      const before = stateOf(file);
+      const depth = undoDepth(before);
+      expect(depth).toBeGreaterThan(0);
+
+      wrap()!.click();
+      await settle(fixture);
+
+      const after = stateOf(file);
+      expect(after).not.toBe(before);
+      expect(isSoftWrapping(after)).toBe(false);
+      expect(after.doc.toString()).toBe(before.doc.toString());
+      expect(undoDepth(after)).toBe(depth);
+      undo({ state: after, dispatch: transaction => (file.editorState = transaction.state) });
+      expect(stateOf(file).doc.toString()).not.toContain('More.');
+    });
+
+    it('stays off in another file, and in the first file when it is shown again', async () => {
+      const first = openFile('docs/guide.md');
+      const second = openFile('docs/handbook.md');
+      await show(first);
+
+      wrap()!.click();
+      await settle(fixture);
+      await show(second);
+
+      expect(wrap()?.getAttribute('aria-pressed')).toBe('false');
+      expect(isSoftWrapping(stateOf(second))).toBe(false);
+
+      await show(first);
+
+      expect(wrap()?.getAttribute('aria-pressed')).toBe('false');
+      expect(isSoftWrapping(stateOf(first))).toBe(false);
+    });
+
+    it('updates a file shown earlier when Wrap is switched while another file is shown', async () => {
+      const first = openFile('docs/guide.md');
+      const second = openFile('docs/handbook.md');
+      await show(first);
+      expect(isSoftWrapping(stateOf(first))).toBe(true);
+      await show(second);
+
+      wrap()!.click();
+      await settle(fixture);
+      expect(isSoftWrapping(stateOf(second))).toBe(false);
+      expect(isSoftWrapping(stateOf(first))).toBe(true);
+
+      await show(first);
+
+      expect(wrap()?.getAttribute('aria-pressed')).toBe('false');
+      expect(isSoftWrapping(stateOf(first))).toBe(false);
+    });
+
+    it('is shown only while the editor is', async () => {
+      await show(openFile('docs/guide.md'));
+      TestBed.inject(ViewModeService).set('preview');
+      await settle(fixture);
+
+      expect(wrap()).toBeUndefined();
+    });
   });
 
   it('keeps the notices in one wrapper above the toolbar, absent when none show', async () => {

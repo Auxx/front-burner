@@ -6,6 +6,7 @@ import { buildSite, createSiteServer, isBuilt } from './typing-test-site.mjs';
 import {
   formatResults,
   generateMarkdown,
+  isOn,
   keystrokeTimings,
   parseSetup,
   setupQuery,
@@ -94,6 +95,27 @@ describe('keystrokeTimings', () => {
 
   it('gives nothing for no entries', () => {
     expect(keystrokeTimings([])).toEqual([]);
+  });
+});
+
+describe('switches', () => {
+  it('has line numbers and the wrap marker gutter, and a setup that turns both off', () => {
+    expect(Object.keys(SWITCHES)).toEqual(expect.arrayContaining([ 'linenumbers', 'wrapmarker' ]));
+    expect(SETUPS).toContainEqual([ 'linenumbers', 'wrapmarker' ]);
+  });
+
+  it('has a last setup with every part off, the floor of the editor', () => {
+    expect([ ...SETUPS.at(-1) ].sort()).toEqual(
+      Object.keys(SWITCHES).filter(name => name !== 'frontmatter').sort()
+    );
+  });
+
+  it('turns the wrap marker off with soft wrap, as the product does', () => {
+    expect(isOn([], 'wrapmarker')).toBe(true);
+    expect(isOn([ 'wrap' ], 'wrapmarker')).toBe(false);
+    expect(isOn([ 'wrapmarker' ], 'wrapmarker')).toBe(false);
+    expect(isOn([ 'wrap' ], 'linenumbers')).toBe(true);
+    expect(isOn([ 'wrap' ], 'wrap')).toBe(false);
   });
 });
 

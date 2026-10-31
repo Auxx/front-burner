@@ -126,8 +126,13 @@ images ([REQ-EDIT-003](preview-images.md)).
   apart. A file just over the limit costs one tap. Remembered preferences for
   the limit and for highlighting large files come after the MVP,
   `docs/wiki/todo.md`.)_
-- **ED-10** Long lines wrap softly; the file is not changed by wrapping. The
-  browser's spell check and, on phones, autocorrect are on. _(My call.)_
+- **ED-10** Long lines wrap softly by default; the file is not changed by
+  wrapping. A **Wrap** button in the editor's toolbar turns soft wrap off and
+  on, and the gutter marks the lines that wrap. The choice is a user preference,
+  one for all of the user's repositories, remembered once the Preferences page
+  exists; until then it lasts until the page is reloaded. The browser's spell
+  check and, on phones, autocorrect are on. _(My call.)_
+- **ED-10a** The editor shows line numbers in a gutter.
 - **ED-11** The editor offers find and replace within the open file, from a
   button and with the platform's shortcut (`Ctrl+F` / `Cmd+F`). _(My call.)_
   `Tab` inserts a tab; `Esc` then `Tab` moves focus out of the editor (NF-13.3).
@@ -353,6 +358,8 @@ images ([REQ-EDIT-003](preview-images.md)).
 - Real-time collaborative editing (vision non-goal).
 - Export, print, word count and outline views.
 - Remote-change notices and committing, which belong to REQ-GIT-002.
+- Remembering the soft-wrap choice, which comes with the Preferences page
+  (CA-9).
 
 ## Open questions
 

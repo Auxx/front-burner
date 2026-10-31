@@ -106,17 +106,20 @@ function walk(absolute, files, includePlans, root = false) {
   }
 }
 
-/** Reads the files under `roots` (workspace paths), as `{ path, text }`. */
+/**
+ * Reads the files under `roots` (workspace paths), as `{ path, file, text, crlf }`:
+ * `text` has `\n` line breaks, and `crlf` says whether the file on disk has
+ * `\r\n`, as in a Windows checkout, so that a renumbering writes them back.
+ */
 export function scan({ roots = DEFAULT_ROOTS, includePlans = false } = {}) {
   const files = [];
   for (const root of roots) {
     walk(resolveInWorkspace(root), files, includePlans, true);
   }
-  return [ ...new Set(files) ].sort().map(file => ({
-    path: workspacePath(file),
-    file,
-    text: readFileSync(file, 'utf8')
-  }));
+  return [ ...new Set(files) ].sort().map(file => {
+    const raw = readFileSync(file, 'utf8');
+    return { path: workspacePath(file), file, text: raw.replaceAll('\r\n', '\n'), crlf: raw.includes('\r\n') };
+  });
 }
 
 /**
@@ -284,7 +287,7 @@ export function applyMapping(files, mapping, { write = false } = {}) {
   }
   const changes = [];
   const changed = [];
-  for (const { path, file, text } of files) {
+  for (const { path, file, text, crlf = false } of files) {
     const lines = text.split('\n').map((line, index) =>
       line.replace(ID, id => {
         const to = mapping.get(id);
@@ -299,7 +302,7 @@ export function applyMapping(files, mapping, { write = false } = {}) {
     if (next !== text) {
       changed.push({ path, file, text: next });
       if (write) {
-        writeFileSync(file, next);
+        writeFileSync(file, crlf ? next.replaceAll('\n', '\r\n') : next);
       }
     }
   }

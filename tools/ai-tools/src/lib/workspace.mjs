@@ -1,4 +1,4 @@
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -52,6 +52,14 @@ export function resolveInWorkspace(path, { base = WORKSPACE_ROOT, root = WORKSPA
     throw new OutsideWorkspaceError(path);
   }
   return absolute;
+}
+
+/**
+ * A text file with `\n` line breaks. A checkout on Windows (`core.autocrlf`)
+ * has `\r\n` in its files, while the repository and every parser here use `\n`.
+ */
+export function readText(file) {
+  return readFileSync(file, 'utf8').replaceAll('\r\n', '\n');
 }
 
 /** A workspace path for messages, relative to the root and with `/` separators. */
