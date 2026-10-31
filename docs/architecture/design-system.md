@@ -116,6 +116,8 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   (`--ui-syntax-keyword`, `--ui-syntax-string`, …), shared by the CodeMirror
   theme (A-8.11), the Shiki classes of the live preview (A-8.12) and diffs, so
   that the editor, the preview and the rest of the UI match in both schemes.
+  Dark syntax colours follow IntelliJ's Darcula scheme, lightened where the
+  contrast pairs need it; light colours are unchanged.
 
 - **A-10.15** **Source.** Tokens are written by hand as custom properties in
   SCSS partials; there is no token build step. Group and token names follow the

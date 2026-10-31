@@ -6,28 +6,28 @@
 
 $tokens: (
   // Markdown
-  syntax-heading: (functions.ref(blue-45), functions.ref(blue-80)),
+  syntax-heading: (functions.ref(blue-45), functions.ref(darcula-orange)),
   syntax-strong: (functions.ref(text-default), functions.ref(text-default)),
   syntax-emphasis: (functions.ref(text-default), functions.ref(text-default)),
-  syntax-link: (functions.ref(blue-45), functions.ref(blue-80)),
-  syntax-url: (functions.ref(teal-45), functions.ref(teal-80)),
-  syntax-code: (functions.ref(purple-45), functions.ref(purple-80)),
-  syntax-quote: (functions.ref(green-45), functions.ref(green-80)),
-  syntax-list-marker: (functions.ref(amber-45), functions.ref(amber-80)),
-  syntax-html-tag: (functions.ref(red-45), functions.ref(red-80)),
-  syntax-html-attribute: (functions.ref(amber-45), functions.ref(amber-80)),
+  syntax-link: (functions.ref(blue-45), functions.ref(darcula-link)),
+  syntax-url: (functions.ref(teal-45), functions.ref(darcula-link)),
+  syntax-code: (functions.ref(purple-45), functions.ref(darcula-lime)),
+  syntax-quote: (functions.ref(green-45), functions.ref(darcula-green)),
+  syntax-list-marker: (functions.ref(amber-45), functions.ref(darcula-orange)),
+  syntax-html-tag: (functions.ref(red-45), functions.ref(darcula-gold)),
+  syntax-html-attribute: (functions.ref(amber-45), functions.ref(darcula-silver)),
 
   // Front matter keys and other metadata
-  syntax-meta: (functions.ref(purple-45), functions.ref(purple-80)),
+  syntax-meta: (functions.ref(purple-45), functions.ref(darcula-olive)),
 
   // Fenced code
-  syntax-keyword: (functions.ref(purple-45), functions.ref(purple-80)),
-  syntax-string: (functions.ref(green-45), functions.ref(green-80)),
-  syntax-number: (functions.ref(teal-45), functions.ref(teal-80)),
-  syntax-function: (functions.ref(blue-45), functions.ref(blue-80)),
-  syntax-type: (functions.ref(teal-45), functions.ref(teal-80)),
-  syntax-comment: (functions.ref(text-muted), functions.ref(text-muted)),
-  syntax-punctuation: (functions.ref(text-muted), functions.ref(text-muted))
+  syntax-keyword: (functions.ref(purple-45), functions.ref(darcula-orange)),
+  syntax-string: (functions.ref(green-45), functions.ref(darcula-green)),
+  syntax-number: (functions.ref(teal-45), functions.ref(darcula-blue)),
+  syntax-function: (functions.ref(blue-45), functions.ref(darcula-yellow)),
+  syntax-type: (functions.ref(teal-45), functions.ref(darcula-olive)),
+  syntax-comment: (functions.ref(text-muted), functions.ref(darcula-grey)),
+  syntax-punctuation: (functions.ref(text-muted), functions.ref(darcula-grey))
 );
 
 @layer tokens {
