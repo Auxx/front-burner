@@ -44,6 +44,13 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
     grey canvas;
   - content sits on **islands**: panels with rounded corners, separated by a
     small gap, each with an optional header and toolbar;
+  - a page such as the dashboard is **one island** filling the space below the
+    app header (`ui-page`). Its first line is the **title bar**: the
+    breadcrumbs' ancestor links, muted and separated by `›`, then the page's
+    `h1` at the same size, semibold, outside the breadcrumb `nav` (NV-14);
+  - the app header's links are plain text; the current page's link is **bold**,
+    and each link reserves its bold width, so that nothing moves when the
+    current page changes (NV-5);
   - a compact density on desktop, close to an IDE's;
   - an **activity bar** (VS Code's column of icons) to switch the side panel,
     and a **status bar** at the bottom (save state, sync state, branch).
@@ -149,24 +156,24 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
     contrast does not depend on what is behind them.
 - **A-10.19** **Semantic groups.** Besides syntax colours (A-10.14):
 
-  | Group     | Tokens                                                                                                                                                       |
-  | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-  | Surface   | `canvas`, `island`, `card` (a surface on an island: tiles, code blocks), `raised` (menus, popovers), `sunken` (inputs), `scrim`; `hover`, `pressed` overlays |
-  | Selection | `selected-active` and `selected-inactive`: a list shows its selection differently when it does not have the focus                                            |
-  | Text      | `default`, `muted`, `subtle`, `disabled`, `inverse`, `link`, `on-accent`                                                                                     |
-  | Icon      | as text                                                                                                                                                      |
-  | Border    | `default`, `subtle`, `strong`, `focus`                                                                                                                       |
-  | Accent    | `accent`, `accent-hover`, `accent-pressed`                                                                                                                   |
-  | Status    | `info`, `success`, `warning`, `danger`, each with background, border, text and icon                                                                          |
-  | Preview   | `preview-code-background`: the tint behind inline code in the live preview (A-8.12)                                                                          |
-  | Git       | `added`, `modified`, `deleted`, `renamed`, `untracked`, `ignored`, `conflicted`                                                                              |
-  | Diff      | inserted and deleted line and word backgrounds, gutter                                                                                                       |
-  | Conflict  | mine, theirs and base block backgrounds, marker line                                                                                                         |
-  | Editor    | background, gutter, line number, active line, selection, cursor, match highlight                                                                             |
-  | Elevation | two shadows (popover, dialog); raised surfaces are also lighter and bordered, since shadows barely show in dark                                              |
-  | Shape     | radii for controls, islands, popovers and pills; the gap between islands                                                                                     |
-  | Motion    | `fast`, `base` and `slow` durations; two easings                                                                                                             |
-  | Focus     | ring width, offset and colour                                                                                                                                |
+  | Group     | Tokens                                                                                                                                                                                                                        |
+  | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Surface   | `canvas`, `island`, `card` (a surface on an island: tiles, code blocks), `raised` (menus, popovers), `control` (secondary and icon buttons, lighter than the canvas), `sunken` (inputs), `scrim`; `hover`, `pressed` overlays |
+  | Selection | `selected-active` and `selected-inactive`: a list shows its selection differently when it does not have the focus                                                                                                             |
+  | Text      | `default`, `muted`, `subtle`, `disabled`, `inverse`, `link`, `on-accent`                                                                                                                                                      |
+  | Icon      | as text                                                                                                                                                                                                                       |
+  | Border    | `default`, `subtle`, `strong`, `focus`                                                                                                                                                                                        |
+  | Accent    | `accent`, `accent-hover`, `accent-pressed`                                                                                                                                                                                    |
+  | Status    | `info`, `success`, `warning`, `danger`, each with background, border, text and icon                                                                                                                                           |
+  | Preview   | `preview-code-background`: the tint behind inline code in the live preview (A-8.12)                                                                                                                                           |
+  | Git       | `added`, `modified`, `deleted`, `renamed`, `untracked`, `ignored`, `conflicted`                                                                                                                                               |
+  | Diff      | inserted and deleted line and word backgrounds, gutter                                                                                                                                                                        |
+  | Conflict  | mine, theirs and base block backgrounds, marker line                                                                                                                                                                          |
+  | Editor    | background, gutter, line number, active line, selection, cursor, match highlight                                                                                                                                              |
+  | Elevation | two shadows (popover, dialog); raised surfaces are also lighter and bordered, since shadows barely show in dark                                                                                                               |
+  | Shape     | radii for controls, islands, popovers and pills; the gap between islands                                                                                                                                                      |
+  | Motion    | `fast`, `base` and `slow` durations; two easings                                                                                                                                                                              |
+  | Focus     | ring width, offset and colour                                                                                                                                                                                                 |
 
 - **A-10.20** **Type.** Inter for the UI, JetBrains Mono for code (A-10.36).
 
@@ -239,8 +246,8 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 
   | Group      | Components                                                                                               | Built on                                                |
   | ---------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-  | Layout     | `AppShell`, `Island`, `CentredIsland`, `SplitPane`, `ActivityBar`, `StatusBar`                           | Own code, CDK `Breakpoints`                             |
-  | Navigation | `TabStrip`, `Tree`, `Menu`, `Breadcrumbs`                                                                | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
+  | Layout     | `AppShell`, `Island`, `CentredIsland`, `Page`, `SplitPane`, `ActivityBar`, `StatusBar`                   | Own code, CDK `Breakpoints`                             |
+  | Navigation | `TabStrip`, `Tree`, `Menu`                                                                               | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
   | Controls   | `Button`, `IconButton`, `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements; Aria Combobox and Listbox; CDK Overlay |
   | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`               | CDK Overlay, Dialog and LiveAnnouncer                   |
   | Content    | `Icon`, `EmptyState`, `KeyValueList`, `Divider`                                                          | Own code; a curated Codicons sprite                     |
