@@ -239,11 +239,11 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 
   | Group      | Components                                                                                               | Built on                                                |
   | ---------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-  | Layout     | `AppShell`, `Island`, `SplitPane`, `ActivityBar`, `StatusBar`                                            | Own code, CDK `Breakpoints`                             |
+  | Layout     | `AppShell`, `Island`, `CentredIsland`, `SplitPane`, `ActivityBar`, `StatusBar`                           | Own code, CDK `Breakpoints`                             |
   | Navigation | `TabStrip`, `Tree`, `Menu`, `Breadcrumbs`                                                                | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
   | Controls   | `Button`, `IconButton`, `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements; Aria Combobox and Listbox; CDK Overlay |
   | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`               | CDK Overlay, Dialog and LiveAnnouncer                   |
-  | Content    | `Icon`, `EmptyState`, `KeyValueList`                                                                     | Own code; a curated Codicons sprite                     |
+  | Content    | `Icon`, `EmptyState`, `KeyValueList`, `Divider`                                                          | Own code; a curated Codicons sprite                     |
 
   _(My call.)_ The list grows when a requirement needs a new component, not
   ahead of it.

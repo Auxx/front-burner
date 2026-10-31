@@ -1,21 +1,11 @@
 <ng-container *transloco="let t; prefix: 'web-feature-auth.OnboardingPage'">
   <main>
-    <div class="content">
-      <h1 class="heading">{{ t('title') }}</h1>
-      @if (failure(); as failure) {
-        <ui-inline-banner status="danger">
-          {{ failure.text }}
-          @if (failure.reference) {
-            <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
-          }
-          <div uiBannerActions>
-            <button uiButton size="small" [busy]="retrying()" (click)="retry()">{{ t('retry') }}</button>
-          </div>
-        </ui-inline-banner>
-      } @else if (status(); as status) {
+    <ui-centred-island width="28rem">
+      <h1>{{ t('title') }}</h1>
+      @if (status(); as status) {
         @if (!status.setupTokenConfigured) {
           <section class="no-token">
-            <h2 class="step-heading">{{ t('noToken.heading') }}</h2>
+            <h2>{{ t('noToken.heading') }}</h2>
             <p>{{ t('noToken.message') }}</p>
             <p>{{ t('noToken.howTo') }}</p>
             <code class="variable">FRONT_BURNER_SETUP_TOKEN</code>
@@ -44,6 +34,17 @@
           }
         }
       }
-    </div>
+      @if (failure(); as failure) {
+        <ui-inline-banner uiCentredIslandAfter status="danger">
+          {{ failure.text }}
+          @if (failure.reference) {
+            <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+          }
+          <div uiBannerActions>
+            <button uiButton size="small" [busy]="retrying()" (click)="retry()">{{ t('retry') }}</button>
+          </div>
+        </ui-inline-banner>
+      }
+    </ui-centred-island>
   </main>
 </ng-container>

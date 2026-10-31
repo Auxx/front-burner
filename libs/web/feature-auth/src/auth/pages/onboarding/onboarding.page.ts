@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { OIDC_FAILURE_REASONS, type OidcFailureReason, type OidcSetupView } from '@front-burner/shared-contracts';
-import { ButtonComponent, InlineBannerComponent } from '@front-burner/ui';
+import { ButtonComponent, CentredIslandComponent, InlineBannerComponent } from '@front-burner/ui';
 import { OnboardingApi } from '@front-burner/web-api-client';
 import {
   ApiErrorTextService,
@@ -36,6 +36,7 @@ const ONBOARDING = '/onboarding';
   imports: [
     TranslocoDirective,
     ButtonComponent,
+    CentredIslandComponent,
     InlineBannerComponent,
     SetupTokenStepComponent,
     LoginMethodStepComponent,

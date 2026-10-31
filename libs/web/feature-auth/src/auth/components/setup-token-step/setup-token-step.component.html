@@ -1,6 +1,6 @@
 <ng-container *transloco="let t; prefix: 'web-feature-auth.SetupTokenStepComponent'">
   <form novalidate (submit)="submit($event)">
-    <h2 class="step-heading">{{ t('heading') }}</h2>
+    <h2>{{ t('heading') }}</h2>
     <p>{{ t('intro') }}</p>
     @if (failure(); as failure) {
       <ui-inline-banner status="danger">
