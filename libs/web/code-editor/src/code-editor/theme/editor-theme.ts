@@ -24,6 +24,10 @@ export const editorTheme = EditorView.theme({
     border: 'none'
   },
   '.cm-lineNumbers .cm-gutterElement': { color: 'var(--ui-editor-line-number)' },
+  '.cm-wrapMarkers .cm-gutterElement': {
+    color: 'var(--ui-editor-line-number)',
+    padding: '0 var(--ui-space-1)'
+  },
   '.cm-activeLineGutter': {
     color: 'var(--ui-editor-line-number-active)',
     backgroundColor: 'transparent'

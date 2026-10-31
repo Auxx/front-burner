@@ -16,6 +16,7 @@ import { drawSelection, EditorView, highlightActiveLineGutter, keymap, lineNumbe
 import { classHighlighter, tagHighlighter, tags } from '@lezer/highlight';
 import { editorTheme } from '../theme/editor-theme';
 import { lineDirection } from './line-direction';
+import { wrapMarker } from './wrap-marker';
 
 export interface EditorStateOptions {
   content: string;
@@ -59,7 +60,8 @@ const readOnly = new Compartment();
 const label = new Compartment();
 const softWrap = new Compartment();
 
-const softWrapExtension: Extension = EditorView.lineWrapping;
+// Built once: `isSoftWrapping` compares the compartment's content with it by identity.
+const softWrapExtension: Extension = [ EditorView.lineWrapping, wrapMarker() ];
 
 const readOnlyExtension: Extension = [ EditorState.readOnly.of(true), EditorView.editable.of(false) ];
 
@@ -103,9 +105,10 @@ export function createEditorState(options: EditorStateOptions): EditorState {
       highlighting.of(options.highlight ? language : []),
       syntaxHighlighting(classHighlighter),
       syntaxHighlighting(markdownHighlighter),
-      softWrap.of(options.softWrap === false ? [] : softWrapExtension),
       lineNumbers(),
       highlightActiveLineGutter(),
+      // After the line numbers, so that the wrap markers' gutter comes after them.
+      softWrap.of(options.softWrap === false ? [] : softWrapExtension),
       EditorView.perLineTextDirection.of(true),
       lineDirection,
       EditorView.contentAttributes.of({
