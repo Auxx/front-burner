@@ -1,3 +1,4 @@
+export { DividerComponent } from './content/components/divider/divider.component';
 export { EmptyStateActionsComponent } from './content/components/empty-state-actions/empty-state-actions.component';
 export { EmptyStateComponent } from './content/components/empty-state/empty-state.component';
 export { IconComponent } from './content/components/icon/icon.component';

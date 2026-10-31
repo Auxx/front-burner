@@ -1,0 +1,5 @@
+<span class="line"></span>
+<span #text class="text" [hidden]="!hasText()"><ng-content /></span>
+@if (hasText()) {
+  <span class="line"></span>
+}
