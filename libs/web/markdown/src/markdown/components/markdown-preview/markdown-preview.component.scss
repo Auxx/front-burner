@@ -28,6 +28,21 @@
       contain-intrinsic-size: auto 2rem;
     }
 
+    // The global heading rules of the ui library's `base` layer (A-10.20) are
+    // for the interface, not for rendered Markdown: back to the browser's
+    // headings (the reset already removes their margins). Plan 40 (GitHub-style
+    // preview) replaces this with real heading styles.
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      font-size: revert;
+      font-weight: revert;
+      line-height: revert;
+    }
+
     // ED-33: wide tables and code blocks scroll sideways inside the preview.
     pre,
     table {

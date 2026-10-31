@@ -276,7 +276,8 @@ _(My calls.)_
   rather than reused.
 - **D-9.2** The look is inspired by **JetBrains' Islands theme** and **VS
   Code**, so that it is familiar to software developers: rounded panels on a
-  darker canvas, compact density on desktop, an activity bar and a status bar.
+  lighter canvas (darker islands in dark mode), compact density on desktop, an
+  activity bar and a status bar.
 - **D-9.3** Styling is **semantic CSS**: SCSS with design tokens as CSS custom
   properties, styled through elements and their ARIA state. No Tailwind or other
   utility-class framework, so that templates hold structure and not styling.

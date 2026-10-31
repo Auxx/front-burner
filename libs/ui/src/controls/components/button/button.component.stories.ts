@@ -111,3 +111,21 @@ export const Busy: Story = {
     await expect(button).toHaveFocus();
   }
 };
+
+/** An icon in front of a label stays `--ui-icon-size` square in every size. */
+export const GhostWithIconAndText: Story = {
+  render: () => ({
+    template: `
+      <div class="row">
+        <button uiButton variant="ghost"><ui-icon name="files" /> Files</button>
+        <button uiButton variant="ghost" size="small"><ui-icon name="files" /> Files</button>
+      </div>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    for (const icon of canvasElement.querySelectorAll('ui-icon')) {
+      const box = icon.getBoundingClientRect();
+      await expect([ box.width, box.height ]).toEqual([ 16, 16 ]);
+    }
+  }
+};

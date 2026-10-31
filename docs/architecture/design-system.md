@@ -39,7 +39,9 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 
 - **A-10.5** The look follows JetBrains' **Islands** theme and **VS Code**
   (D-9.2), so that it feels familiar to software developers:
-  - a darker **canvas** behind the whole page;
+  - islands sit on a **lighter canvas**; in dark mode the islands are the darker
+    surface, as in WebStorm's Islands Dark; in light mode they are white on a
+    grey canvas;
   - content sits on **islands**: panels with rounded corners, separated by a
     small gap, each with an optional header and toolbar;
   - a compact density on desktop, close to an IDE's;
@@ -147,23 +149,23 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
     contrast does not depend on what is behind them.
 - **A-10.19** **Semantic groups.** Besides syntax colours (A-10.14):
 
-  | Group     | Tokens                                                                                                            |
-  | --------- | ----------------------------------------------------------------------------------------------------------------- |
-  | Surface   | `canvas`, `island`, `raised` (menus, popovers), `sunken` (inputs), `scrim`; `hover`, `pressed` overlays           |
-  | Selection | `selected-active` and `selected-inactive`: a list shows its selection differently when it does not have the focus |
-  | Text      | `default`, `muted`, `subtle`, `disabled`, `inverse`, `link`, `on-accent`                                          |
-  | Icon      | as text                                                                                                           |
-  | Border    | `default`, `subtle`, `strong`, `focus`                                                                            |
-  | Accent    | `accent`, `accent-hover`, `accent-pressed`                                                                        |
-  | Status    | `info`, `success`, `warning`, `danger`, each with background, border, text and icon                               |
-  | Git       | `added`, `modified`, `deleted`, `renamed`, `untracked`, `ignored`, `conflicted`                                   |
-  | Diff      | inserted and deleted line and word backgrounds, gutter                                                            |
-  | Conflict  | mine, theirs and base block backgrounds, marker line                                                              |
-  | Editor    | background, gutter, line number, active line, selection, cursor, match highlight                                  |
-  | Elevation | two shadows (popover, dialog); raised surfaces are also lighter and bordered, since shadows barely show in dark   |
-  | Shape     | radii for controls, islands, popovers and pills; the gap between islands                                          |
-  | Motion    | `fast`, `base` and `slow` durations; two easings                                                                  |
-  | Focus     | ring width, offset and colour                                                                                     |
+  | Group     | Tokens                                                                                                                                                       |
+  | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+  | Surface   | `canvas`, `island`, `card` (a surface on an island: tiles, code blocks), `raised` (menus, popovers), `sunken` (inputs), `scrim`; `hover`, `pressed` overlays |
+  | Selection | `selected-active` and `selected-inactive`: a list shows its selection differently when it does not have the focus                                            |
+  | Text      | `default`, `muted`, `subtle`, `disabled`, `inverse`, `link`, `on-accent`                                                                                     |
+  | Icon      | as text                                                                                                                                                      |
+  | Border    | `default`, `subtle`, `strong`, `focus`                                                                                                                       |
+  | Accent    | `accent`, `accent-hover`, `accent-pressed`                                                                                                                   |
+  | Status    | `info`, `success`, `warning`, `danger`, each with background, border, text and icon                                                                          |
+  | Git       | `added`, `modified`, `deleted`, `renamed`, `untracked`, `ignored`, `conflicted`                                                                              |
+  | Diff      | inserted and deleted line and word backgrounds, gutter                                                                                                       |
+  | Conflict  | mine, theirs and base block backgrounds, marker line                                                                                                         |
+  | Editor    | background, gutter, line number, active line, selection, cursor, match highlight                                                                             |
+  | Elevation | two shadows (popover, dialog); raised surfaces are also lighter and bordered, since shadows barely show in dark                                              |
+  | Shape     | radii for controls, islands, popovers and pills; the gap between islands                                                                                     |
+  | Motion    | `fast`, `base` and `slow` durations; two easings                                                                                                             |
+  | Focus     | ring width, offset and colour                                                                                                                                |
 
 - **A-10.20** **Type.** Inter for the UI, JetBrains Mono for code (A-10.36).
 
@@ -174,7 +176,9 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   | Editor       | 14 px   | 16 px | The same iOS zoom applies to CodeMirror's content                                        |
   | Live preview | 16 px   | 16 px | Reading text, like GitHub's Markdown; its own **prose** tokens with a longer line height |
 
-  Weights are 400, 500 and 600.
+  Weights are 400, 500 and 600. Headings `h1` to `h6` are styled once, in the
+  `base` layer of `libs/ui` (semibold, tight line height, `h1` 15 px, `h2` 14
+  px, `h3` to `h6` 13 px); components and the Markdown preview set their own.
 
 - **A-10.21** **Space** is a 4 px based scale (2, 4, 6, 8, 12, 16, 20, 24, 32,
   48 px, written in `rem`). Icons are 16 px in compact density and 20 px in
