@@ -14,10 +14,11 @@ import {
 import { parseRemoteUrl } from '@front-burner/shared-util';
 import {
   BreadcrumbDirective,
-  BreadcrumbsComponent,
   ButtonComponent,
   DialogService,
-  InlineBannerComponent
+  InlineBannerComponent,
+  PageComponent,
+  PageTitleDirective
 } from '@front-burner/ui';
 import { CredentialsApi, KnownHostsApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { ApiErrorTextService, CurrentUserService, toApiError } from '@front-burner/web-core';
@@ -64,7 +65,8 @@ function unknownHostKey(apiError: ApiError): HostKey | undefined {
   imports: [
     TranslocoDirective,
     RouterLink,
-    BreadcrumbsComponent,
+    PageComponent,
+    PageTitleDirective,
     BreadcrumbDirective,
     RemoteSectionComponent,
     CredentialsSectionComponent,

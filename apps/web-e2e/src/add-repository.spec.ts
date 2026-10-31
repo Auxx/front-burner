@@ -82,7 +82,9 @@ test.describe('Add repository, against a git server', () => {
     await expect(page).toHaveTitle('Add repository · Front Burner');
     const breadcrumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
     await expect(breadcrumbs.getByRole('link', { name: 'Repositories' })).toHaveAttribute('href', '/repositories');
-    await expect(breadcrumbs.getByText('Add repository')).toBeVisible();
+    // The page's h1 follows the breadcrumbs, outside them (NV-14).
+    await expect(breadcrumbs.getByText('Add repository')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Add repository', level: 1 })).toBeVisible();
     await expect(page.getByText('Enter the remote URL first')).toBeVisible();
 
     await enterUrl(page, 'https://github.com/acme/handbook.git');

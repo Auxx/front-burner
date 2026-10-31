@@ -125,16 +125,26 @@ describe('AddRepositoryPage', () => {
     expect(page().querySelector('h1')?.getAttribute('tabindex')).toBe('-1');
   });
 
-  it('shows the breadcrumbs', async () => {
+  it('shows Repositories, then the h1 outside the breadcrumbs, in the title bar', async () => {
     await open();
 
-    const breadcrumbs = page().querySelector('ui-breadcrumbs');
-    expect(breadcrumbs?.getAttribute('aria-label')).toBe(`${KEY}.breadcrumbs`);
-    const items = [ ...(breadcrumbs?.querySelectorAll('li') ?? []) ];
-    expect(items.map(item => item.textContent?.trim())).toEqual([ `${KEY}.repositories`, `${KEY}.heading` ]);
-    expect(items[0].querySelector('a')?.getAttribute('href')).toBe('/repositories');
-    expect(items[1].querySelector('a')).toBeNull();
-    expect(items[1].getAttribute('aria-current')).toBe('page');
+    const nav = page().querySelector('nav') as HTMLElement;
+    expect(nav.getAttribute('aria-label')).toBe(`${KEY}.breadcrumbs`);
+    const links = [ ...nav.querySelectorAll('a') ];
+    expect(links.map(link => [ link.textContent?.trim(), link.getAttribute('href') ])).toEqual([
+      [ `${KEY}.repositories`, '/repositories' ]
+    ]);
+    const h1 = page().querySelector('h1') as HTMLElement;
+    expect(nav.contains(h1)).toBe(false);
+    expect(nav.compareDocumentPosition(h1) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('puts the form in a centred column of 40rem', async () => {
+    await open();
+
+    const column = page().querySelector('ui-page .column') as HTMLElement;
+    expect(column.style.maxInlineSize).toBe('40rem');
+    expect(column.contains(page().querySelector('form'))).toBe(true);
   });
 
   it('has the sections in the order of AR-5', async () => {
