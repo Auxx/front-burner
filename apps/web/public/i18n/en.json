@@ -42,6 +42,7 @@
   "web-feature-auth.LoginPage.showPassword": "Show password",
   "web-feature-auth.LoginPage.submit": "Log in",
   "web-feature-auth.LoginPage.reference": "Reference:",
+  "web-feature-auth.LoginPage.or": "or",
   "web-feature-auth.LoginPage.oidc": "Log in with OIDC",
   "web-feature-auth.LoginPage.oidcUnavailable": "OIDC login is not available right now.",
   "web-feature-auth.OidcCallbackPage.loggingIn": "Logging in…",

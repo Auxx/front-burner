@@ -111,7 +111,8 @@ Onboarding of invited users is covered by a separate requirement.
   any other data, such as OIDC settings.
 - **LG-9** The login page can show a one-off message passed to it by another
   page, for example after a password reset (LG-56), after a logout (LG-39), or
-  when a session has expired (LG-40).
+  when a session has expired (LG-40). It is shown until the user's first login
+  attempt on that page.
 
 ### Username + password login
 

@@ -233,6 +233,66 @@ describe('LoginPage', () => {
     expect(page().querySelector('ui-inline-banner[status="info"]')).toBeNull();
   });
 
+  it('drops the logged-out message on the first login attempt', async () => {
+    login.mockRejectedValueOnce(apiError('wrong-credentials', 401));
+    await open('/login', { state: { loginMessage: 'logged-out' } });
+    await fillIn();
+    await submit();
+
+    expect(page().querySelector('ui-inline-banner[status="info"]')).toBeNull();
+    expect(page().querySelector('ui-inline-banner[status="danger"]')).not.toBeNull();
+  });
+
+  describe('banners', () => {
+    const statuses = () =>
+      [ ...page().querySelectorAll('ui-inline-banner') ].map(banner => banner.getAttribute('status'));
+    const http = { protocol: 'http:', hostname: 'fb.example' };
+
+    it('shows the banners below the island, not inside it', async () => {
+      await open('/login?oidcError=failed', { state: { loginMessage: 'logged-out' }, location: http });
+
+      expect(statuses()).toHaveLength(3);
+      expect(page().querySelector('ui-island ui-inline-banner')).toBeNull();
+      expect(page().querySelector('ui-inline-banner[uiCentredIslandAfter]')).not.toBeNull();
+    });
+
+    it('stacks the message, the OIDC error and the HTTP warning in that order', async () => {
+      await open('/login?oidcError=failed', { state: { loginMessage: 'logged-out' }, location: http });
+
+      expect(statuses()).toEqual([ 'info', 'danger', 'warning' ]);
+    });
+
+    it('puts a failed login first', async () => {
+      login.mockRejectedValue(apiError('wrong-credentials', 401));
+      await open('/login?oidcError=failed', { location: http });
+      await fillIn();
+      await submit();
+
+      expect(statuses()).toEqual([ 'danger', 'danger', 'warning' ]);
+      expect(page().querySelector('ui-inline-banner')?.textContent).toContain('wrong-credentials message');
+    });
+  });
+
+  it('separates OIDC from the form with "or"', async () => {
+    methods = { oidc: 'available', passwordReset: false };
+    await open();
+
+    expect(page().querySelector('ui-island ui-divider')?.textContent).toContain(`${KEY}.or`);
+  });
+
+  it('separates the OIDC unavailable note from the form with "or"', async () => {
+    methods = { oidc: 'unavailable', passwordReset: false };
+    await open();
+
+    expect(page().querySelector('ui-island ui-divider')?.textContent).toContain(`${KEY}.or`);
+  });
+
+  it('has no divider when OIDC is not configured', async () => {
+    await open();
+
+    expect(page().querySelector('ui-divider')).toBeNull();
+  });
+
   it('AC-AUTH-003.26: warns on plain HTTP away from localhost', async () => {
     await open('/login', { location: { protocol: 'http:', hostname: 'fb.example' } });
 

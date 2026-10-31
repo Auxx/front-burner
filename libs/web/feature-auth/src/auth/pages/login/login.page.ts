@@ -7,6 +7,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { LoginRequestSchema, OIDC_FAILURE_REASONS, type OidcFailureReason } from '@front-burner/shared-contracts';
 import {
   ButtonComponent,
+  CentredIslandComponent,
+  DividerComponent,
   FieldComponent,
   IconButtonComponent,
   IconComponent,
@@ -62,6 +64,8 @@ const OIDC_START = '/api/v1/auth/oidc/start';
     IconComponent,
     PasswordRevealDirective,
     ButtonComponent,
+    CentredIslandComponent,
+    DividerComponent,
     InlineBannerComponent
   ],
   templateUrl: './login.page.html',
@@ -96,7 +100,7 @@ export class LoginPage {
   protected readonly failure = signal<{ text: string; reference: string | null; } | null>(null);
 
   /** Passed in the navigation's state, so a reload does not show it again (LG-9). */
-  protected readonly message = this.loginMessage();
+  protected readonly message = signal(this.loginMessage());
 
   protected readonly insecure = (() => {
     const { protocol, hostname } = inject(BROWSER_LOCATION);
@@ -117,6 +121,7 @@ export class LoginPage {
     if (this.busy()) {
       return;
     }
+    this.message.set(null);
     await submit(this.model, async () => {
       const { email, password } = this.model().value();
       this.busy.set(true);
