@@ -36,12 +36,13 @@
       margin-block-end: var(--ui-space-4);
 
       // A heading, alone or as the first element of an HTML wrapper such as
-      // `<div align="center">`.
-      &:has(> :is(h1, h2, h3, h4, h5, h6), > :first-child > :is(h1, h2, h3, h4, h5, h6):first-child) {
+      // `<div align="center">`. In `:where()`, so that the first and last
+      // blocks' rules below win.
+      &:where(:has(> :is(h1, h2, h3, h4, h5, h6), > :first-child > :is(h1, h2, h3, h4, h5, h6):first-child)) {
         margin-block-start: var(--ui-space-6);
       }
 
-      &:has(> hr) {
+      &:where(:has(> hr)) {
         margin-block: var(--ui-space-6);
       }
 
