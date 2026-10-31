@@ -1,28 +1,36 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.EditorPaneComponent'">
-  @if (file().draft(); as draft) {
-    <rs-draft-offer [draft]="draft" (restore)="restore()" (discard)="discard()" />
-  }
-  @if (file().gone()) {
-    <rs-gone-elsewhere [error]="file().recreateError()" (recreate)="recreate()" />
-  } @else if (file().changed() !== null) {
-    <rs-changed-on-disk
-      [existsAgain]="file().recreateError()?.code === 'entry-exists'"
-      (reload)="reload()"
-      (keepMine)="keepMine()"
-    />
-  }
-  @if (noteShown()) {
-    <rs-large-file-note (turnOn)="file().highlight.set(true)" />
+  @if (file().draft() || file().gone() || file().changed() !== null || noteShown()) {
+    <div class="notices">
+    @if (file().draft(); as draft) {
+      <rs-draft-offer [draft]="draft" (restore)="restore()" (discard)="discard()" />
+    }
+    @if (file().gone()) {
+      <rs-gone-elsewhere [error]="file().recreateError()" (recreate)="recreate()" />
+    } @else if (file().changed() !== null) {
+      <rs-changed-on-disk
+        [existsAgain]="file().recreateError()?.code === 'entry-exists'"
+        (reload)="reload()"
+        (keepMine)="keepMine()"
+      />
+    }
+    @if (noteShown()) {
+      <rs-large-file-note (turnOn)="file().highlight.set(true)" />
+    }
+    </div>
   }
   @if (viewMode.narrow()) {
     <!-- ED-34: Edit and Preview tabs; the hidden pane is kept, and the preview does no work meanwhile. -->
     <div class="tabs" uiTabGroup>
       <!-- Inside the tab group, so that the tabs reach their panels. -->
       <div class="toolbar">
-        <rs-view-mode-switch />
         @if (viewMode.editorShown()) {
-          <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+          <div class="start">
+            <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+          </div>
         }
+        <div class="end">
+          <rs-view-mode-switch />
+        </div>
       </div>
       <div class="panel" uiTabPanel="edit">
         <ng-template uiTabContent>
@@ -51,10 +59,14 @@
     </div>
   } @else {
     <div class="toolbar">
-      <rs-view-mode-switch />
       @if (viewMode.editorShown()) {
-        <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+        <div class="start">
+          <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+        </div>
       }
+      <div class="end">
+        <rs-view-mode-switch />
+      </div>
     </div>
     <ui-split-pane class="panes" [show]="show()" [(size)]="editorSize" [separatorLabel]="t('resizePreview')">
       <ce-code-editor

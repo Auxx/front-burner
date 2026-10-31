@@ -168,6 +168,39 @@ describe('EditorPaneComponent', () => {
     expect(pane().querySelector('[role="tabpanel"] ce-code-editor')).not.toBeNull();
   });
 
+  it('puts Find before the view modes in the toolbar, wide and narrow', async () => {
+    await show(openFile('docs/guide.md'));
+    const findFirst = () => {
+      const find = button(`${K}.find`);
+      const modes = pane().querySelector('.toolbar rs-view-mode-switch');
+      expect(find).toBeDefined();
+      expect(modes).not.toBeNull();
+      return Boolean(find!.compareDocumentPosition(modes!) & Node.DOCUMENT_POSITION_FOLLOWING);
+    };
+    expect(findFirst()).toBe(true);
+
+    narrow.next(true);
+    await settle(fixture);
+
+    expect(pane().querySelector('[uiTabGroup] .toolbar')).not.toBeNull();
+    expect(findFirst()).toBe(true);
+  });
+
+  it('keeps the notices in one wrapper above the toolbar, absent when none show', async () => {
+    const file = openFile('docs/guide.md');
+    await show(file);
+
+    expect(pane().querySelector('.notices')).toBeNull();
+
+    file.draft.set({ content: '# Offline', savedAt: '2026-10-29T10:05:00.000Z' });
+    await settle(fixture);
+
+    const notices = pane().querySelector('.notices');
+    expect(notices?.querySelector('rs-draft-offer')).not.toBeNull();
+    expect(notices!.compareDocumentPosition(pane().querySelector('.toolbar')!) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+  });
+
   it('gives the preview the editor\'s text and bumps its version on every edit', async () => {
     const file = openFile('README.md');
     await show(file);

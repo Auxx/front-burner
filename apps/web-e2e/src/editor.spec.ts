@@ -23,7 +23,8 @@ const UPDATED = 'This file was updated.';
 const CHANGED = 'This file changed while you were editing.';
 const GONE_ELSEWHERE = 'This file was deleted or renamed elsewhere.';
 
-const filesButton = (page: Page) => page.getByRole('banner').getByRole('button', { name: 'Files', exact: true });
+const filesButton = (page: Page) =>
+  page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files', exact: true });
 const tree = (page: Page) => page.getByRole('region', { name: 'Files', exact: true });
 const main = (page: Page) => page.getByRole('main', { name: 'Editor' });
 /** The editor, labelled with the open file's name (ED-37). */
@@ -81,7 +82,7 @@ async function press(page: Page, target: Locator, isMobile: boolean): Promise<vo
 }
 
 async function showTree(page: Page): Promise<void> {
-  if (await filesButton(page).getAttribute('aria-expanded') === 'false') {
+  if (await filesButton(page).getAttribute('aria-pressed') === 'false') {
     await filesButton(page).click();
   }
   await expect(tree(page)).toBeVisible();
@@ -290,6 +291,21 @@ test.describe('editor', () => {
     if (browserName !== 'firefox') {
       await expect(editor(page, 'README.md')).not.toBeFocused();
     }
+  });
+
+  test('NF-13.5: resizes the editor and the preview with the arrow keys on the line between them', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'a phone shows the Edit and Preview tabs instead');
+    const { id } = seedHandbook(instance.dataDir);
+    await openScreen(page, `/repositories/${id}/files/README.md`);
+    const separator = main(page).getByRole('separator', { name: 'Resize the preview' });
+    const width = async () => (await editor(page, 'README.md').boundingBox())!.width;
+
+    const before = await width();
+    await separator.focus();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+
+    await expect.poll(width).toBeGreaterThan(before);
   });
 
   test('AC-EDIT-001.25: opens a large file without highlighting on a phone, and highlighted on a desktop', async ({ page, instance, isMobile }) => {

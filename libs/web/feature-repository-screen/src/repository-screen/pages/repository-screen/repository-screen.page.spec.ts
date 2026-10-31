@@ -15,7 +15,7 @@ import { ToastService } from '@front-burner/ui';
 import { FilesApi, RepositoriesApi } from '@front-burner/web-api-client';
 import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
-import { map, Observable, of, Subject, throwError } from 'rxjs';
+import { BehaviorSubject, map, Observable, of, Subject, throwError } from 'rxjs';
 
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { entry, folder, listing } from '../../../testing/listings';
@@ -65,6 +65,8 @@ describe('RepositoryScreenPage', () => {
   let recreateFile: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
+  /** The viewport's narrowness, which a test can flip. */
+  let viewport: BehaviorSubject<boolean>;
   let events: Subject<PushEvent>;
   /** The folders listed, in order. */
   let listings: string[];
@@ -77,6 +79,7 @@ describe('RepositoryScreenPage', () => {
     [ ...page().querySelectorAll('button') ].find(element => element.textContent?.trim() === text);
 
   async function visit(url: string): Promise<void> {
+    viewport = new BehaviorSubject(narrow);
     TestBed.configureTestingModule({
       imports: [ translocoTesting({ 'errors.internal': 'Something went wrong.' }) ],
       providers: [
@@ -108,7 +111,10 @@ describe('RepositoryScreenPage', () => {
         { provide: PushChannelService, useValue: { events, reconnected: new Subject<void>() } },
         {
           provide: BreakpointObserver,
-          useValue: { observe: () => of({ matches: narrow, breakpoints: {} }), isMatched: () => narrow }
+          useValue: {
+            observe: () => viewport.pipe(map(matches => ({ matches, breakpoints: {} }))),
+            isMatched: () => viewport.value
+          }
         }
       ]
     });
@@ -187,6 +193,61 @@ describe('RepositoryScreenPage', () => {
     expect(page().querySelector('shell-app-header')).not.toBeNull();
     expect(page().querySelector('rs-not-openable')).toBeNull();
     expect(document.title).toBe('web-shell.PageNotFoundPage.title · Front Burner');
+  });
+
+  describe('one app shell for every state', () => {
+    function expectOneShell(): void {
+      expect(page().querySelectorAll('ui-app-shell').length).toBe(1);
+      expect(page().querySelector('ui-activity-bar')).toBeNull();
+    }
+
+    it('renders the missing message in a centred island', async () => {
+      answers.push(failure(404, 'not-found'));
+      await visit('/repositories/12');
+
+      expectOneShell();
+      expect(
+        page().querySelector(
+          'ui-app-shell ui-centred-island shell-page-not-found, ui-app-shell shell-page-not-found ui-centred-island'
+        )
+      ).not.toBeNull();
+    });
+
+    it('renders the failure in a centred island', async () => {
+      answers.push(failure(500, 'internal'));
+      await visit('/repositories/12');
+
+      expectOneShell();
+      expect(page().querySelector('ui-app-shell ui-centred-island ui-inline-banner')).not.toBeNull();
+    });
+
+    it('renders the not-openable message in a centred island', async () => {
+      answers.push(of({ ...handbook, status: 'cloning' }));
+      await visit('/repositories/12');
+
+      expectOneShell();
+      expect(page().querySelector('ui-centred-island rs-not-openable')).not.toBeNull();
+    });
+
+    it.each([
+      [ 'missing', () => failure(404, 'not-found'), 'shell-app-header' ],
+      [ 'failed', () => failure(500, 'internal'), 'shell-app-header' ],
+      [ 'not-openable', () => of({ ...handbook, status: 'cloning' as const }), 'rs-repository-bar' ]
+    ])('puts the header of %s in the shell header and leaves main unlabelled', async (_state, answer, selector) => {
+      answers.push(answer());
+      await visit('/repositories/12');
+
+      expect(page().querySelector(`ui-app-shell header ${selector}`)).not.toBeNull();
+      expect(page().querySelector(`ui-app-shell main ${selector}`)).toBeNull();
+      expect(page().querySelector('ui-app-shell main')?.hasAttribute('aria-label')).toBe(false);
+    });
+
+    it('renders no shell while loading', async () => {
+      answers.push(new Subject<RepositorySummary>());
+      await visit('/repositories/12');
+
+      expect(page().querySelector('ui-app-shell')).toBeNull();
+    });
   });
 
   it('AC-FILE-001.3: shows the status and the settings link for a cloning repository', async () => {
@@ -304,8 +365,9 @@ describe('RepositoryScreenPage', () => {
   });
 
   describe('when the repository has opened', () => {
-    const files = () => button('web-feature-repository-screen.RepositoryBarComponent.files') as HTMLButtonElement;
-    const tree = () => page().querySelector('section[aria-label]') as HTMLElement;
+    const files = () => page().querySelector('ui-activity-bar button[uiActivityBarItem="files"]') as HTMLButtonElement;
+    const pressed = () => files().getAttribute('aria-pressed');
+    const tree = () => page().querySelector('ui-island[uiAppShellSide]') as HTMLElement;
     const shown = (element: Element) => !element.closest('[hidden]');
 
     afterEach(() => localStorage.clear());
@@ -315,6 +377,7 @@ describe('RepositoryScreenPage', () => {
 
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
       expect(tree().getAttribute('aria-label')).toBe(`${KEY}.files`);
+      expect(tree().getAttribute('role')).toBe('region');
       expect(page().querySelector('ui-split-pane [role="separator"]')?.getAttribute('aria-label')).toBe(
         `${KEY}.resizeFiles`
       );
@@ -584,16 +647,92 @@ describe('RepositoryScreenPage', () => {
       expect(shown(tree())).toBe(false);
     });
 
+    it('puts the file tree and the editor in two islands', async () => {
+      await visit('/repositories/12');
+
+      const [ side, editor ] = [ 'ui-island[uiAppShellSide]', 'main > ui-island' ].map(selector =>
+        page().querySelector(selector)
+      );
+      expect(side?.getAttribute('aria-label')).toBe(`${KEY}.files`);
+      expect(side?.querySelector('rs-file-tree')).not.toBeNull();
+      expect(editor?.querySelector('rs-editor-area')).not.toBeNull();
+      expect(side).not.toBe(editor);
+    });
+
+    it('has one pressed Files item with a folder icon in the activity bar', async () => {
+      await visit('/repositories/12');
+
+      const bar = page().querySelector('ui-activity-bar') as HTMLElement;
+      expect(bar.getAttribute('aria-label')).toBe(`${KEY}.toolWindows`);
+      expect(bar.querySelectorAll('button')).toHaveLength(1);
+      expect(files().getAttribute('aria-label')).toBe(`${KEY}.files`);
+      expect(files().querySelector('ui-icon[name="folder"]')).not.toBeNull();
+      expect(pressed()).toBe('true');
+      expect(button('web-feature-repository-screen.RepositoryBarComponent.files')).toBeUndefined();
+    });
+
+    it('lays the activity bar out vertically on wide screens and horizontally on narrow ones', async () => {
+      await visit('/repositories/12');
+      expect(page().querySelector('ui-activity-bar')?.getAttribute('aria-orientation')).toBe('vertical');
+
+      viewport.next(true);
+      await settle(harness.fixture);
+      expect(page().querySelector('ui-activity-bar')?.getAttribute('aria-orientation')).toBe('horizontal');
+    });
+
+    it('shows the item unpressed when the tree was left collapsed', async () => {
+      localStorage.setItem('fb.4.repositoryScreen.sideOpen', 'false');
+      await visit('/repositories/12');
+
+      expect(shown(tree())).toBe(false);
+      expect(pressed()).toBe('false');
+    });
+
+    it('unpresses the item when a file is opened from the drawer', async () => {
+      narrow = true;
+      await visit('/repositories/12');
+      files().click();
+      await settle(harness.fixture);
+      expect(pressed()).toBe('true');
+
+      row('README.md').click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(shown(tree())).toBe(false);
+      expect(pressed()).toBe('false');
+    });
+
+    it('leaves the item consistent when the viewport crosses the breakpoint with the drawer open', async () => {
+      narrow = true;
+      await visit('/repositories/12');
+      files().click();
+      await settle(harness.fixture);
+      expect(pressed()).toBe('true');
+
+      viewport.next(false);
+      await settle(harness.fixture);
+
+      // The drawer closed with the crossing; the wide tree was never collapsed.
+      expect(pressed()).toBe('true');
+      expect(shown(tree())).toBe(true);
+
+      viewport.next(true);
+      await settle(harness.fixture);
+      expect(shown(tree())).toBe(false);
+      expect(pressed()).toBe('false');
+    });
+
     it('collapses and expands the tree with Files, and remembers it', async () => {
       await visit('/repositories/12');
       expect(shown(tree())).toBe(true);
-      expect(files().getAttribute('aria-expanded')).toBe('true');
+      expect(pressed()).toBe('true');
 
       files().click();
       await settle(harness.fixture);
 
       expect(shown(tree())).toBe(false);
-      expect(files().getAttribute('aria-expanded')).toBe('false');
+      expect(pressed()).toBe('false');
       expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('false');
 
       files().click();
@@ -617,15 +756,28 @@ describe('RepositoryScreenPage', () => {
       await visit('/repositories/12');
       expect(shown(tree())).toBe(false);
       expect(shown(page().querySelector('main') as HTMLElement)).toBe(true);
-      expect(files().getAttribute('aria-expanded')).toBe('false');
+      expect(pressed()).toBe('false');
 
       files().click();
       await settle(harness.fixture);
 
       expect(shown(tree())).toBe(true);
-      expect(files().getAttribute('aria-expanded')).toBe('true');
+      expect(pressed()).toBe('true');
       // The drawer does not collapse the tree of wide screens.
       expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('true');
+    });
+
+    it('moves the focus to the named Files region when the drawer opens', async () => {
+      narrow = true;
+      await visit('/repositories/12');
+
+      files().click();
+      await settle(harness.fixture);
+
+      const active = document.activeElement as HTMLElement;
+      expect(active).toBe(tree());
+      expect(active.getAttribute('role')).toBe('region');
+      expect(active.getAttribute('aria-label')).toBe(`${KEY}.files`);
     });
 
     it('shows the bar without Files for a repository that cannot be opened', async () => {
@@ -633,8 +785,9 @@ describe('RepositoryScreenPage', () => {
       await visit('/repositories/12');
 
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
-      expect(files()).toBeUndefined();
-      expect(page().querySelector('section[aria-label]')).toBeNull();
+      expect(files()).toBeNull();
+      expect(page().querySelector('ui-activity-bar')).toBeNull();
+      expect(page().querySelector('ui-island[uiAppShellSide]')).toBeNull();
     });
   });
   describe('editing and saving', () => {

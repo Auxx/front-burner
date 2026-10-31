@@ -14,6 +14,7 @@ import {
 
 import { AppShellSideDirective } from '../../directives/app-shell-side/app-shell-side.directive';
 import { injectNarrowViewport } from '../../utils/narrow-viewport/narrow-viewport.util';
+import { ActivityBarComponent } from '../activity-bar/activity-bar.component';
 import { SplitPaneComponent, SplitPaneShow } from '../split-pane/split-pane.component';
 
 let nextId = 0;
@@ -59,6 +60,8 @@ export class AppShellComponent {
   readonly narrow = injectNarrowViewport();
 
   protected readonly side = contentChild(AppShellSideDirective);
+  /** The projected activity bar; its area is a landmark only when there is one. */
+  protected readonly activityBar = contentChild(ActivityBarComponent);
   protected readonly show = computed<SplitPaneShow>(() => {
     if (!this.side()) {
       return 'end';

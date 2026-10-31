@@ -19,7 +19,8 @@ test.use({ instanceOptions: { onboarded: true } });
 const ADMIN_ID = 1;
 
 const heading = (page: Page, name: string) => page.getByRole('heading', { name, exact: true });
-const filesButton = (page: Page) => page.getByRole('banner').getByRole('button', { name: 'Files', exact: true });
+const filesButton = (page: Page) =>
+  page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files', exact: true });
 const tree = (page: Page) => page.getByRole('region', { name: 'Files', exact: true });
 const editor = (page: Page) => page.getByRole('main', { name: 'Editor' });
 /** The editor, labelled with the open file's name (ED-37). */
@@ -52,7 +53,7 @@ async function openScreen(page: Page, url: string): Promise<void> {
 
 /** Shows the file tree: it is beside the editor on wide screens, and a drawer on phones (FB-9). */
 async function showTree(page: Page): Promise<void> {
-  if (await filesButton(page).getAttribute('aria-expanded') === 'false') {
+  if (await filesButton(page).getAttribute('aria-pressed') === 'false') {
     await filesButton(page).click();
   }
   await expect(tree(page)).toBeVisible();
@@ -69,7 +70,7 @@ async function explainIgnored(page: Page, name: string, isMobile: boolean): Prom
 
 /** Closes the drawer of a phone, which stays open after an action, over the editor area. */
 async function hideTreeOnPhone(page: Page, isMobile: boolean): Promise<void> {
-  if (isMobile && await filesButton(page).getAttribute('aria-expanded') === 'true') {
+  if (isMobile && await filesButton(page).getAttribute('aria-pressed') === 'true') {
     await filesButton(page).tap();
   }
 }
@@ -208,10 +209,10 @@ test.describe('repository screen', () => {
     await filesButton(page).focus();
     await page.keyboard.press('Enter');
     await expect(tree(page)).toBeHidden();
-    await expect(filesButton(page)).toHaveAttribute('aria-expanded', 'false');
+    await expect(filesButton(page)).toHaveAttribute('aria-pressed', 'false');
     await page.keyboard.press('Enter');
     await expect(tree(page)).toBeVisible();
-    await expect(filesButton(page)).toHaveAttribute('aria-expanded', 'true');
+    await expect(filesButton(page)).toHaveAttribute('aria-pressed', 'true');
 
     await separator(page).focus();
     await page.keyboard.press('ArrowRight');
@@ -220,7 +221,7 @@ test.describe('repository screen', () => {
 
     // This device remembers the size and the collapsed tree (FB-8).
     await filesButton(page).click();
-    await expect(filesButton(page)).toHaveAttribute('aria-expanded', 'false');
+    await expect(filesButton(page)).toHaveAttribute('aria-pressed', 'false');
     await page.reload();
     await expect(heading(page, 'handbook')).toBeVisible();
     await expect(tree(page)).toBeHidden();
@@ -242,7 +243,7 @@ test.describe('repository screen', () => {
 
     await filesButton(page).click();
     await expect(tree(page)).toBeVisible();
-    await expect(filesButton(page)).toHaveAttribute('aria-expanded', 'true');
+    await expect(filesButton(page)).toHaveAttribute('aria-pressed', 'true');
     expect(await fitsWidth(page)).toBe(true);
 
     await page.keyboard.press('Escape');

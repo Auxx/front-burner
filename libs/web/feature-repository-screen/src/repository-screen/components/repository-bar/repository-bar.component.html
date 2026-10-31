@@ -1,20 +1,8 @@
-<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.RepositoryBarComponent'">
-  <shell-brand-link [compact]="narrow()" />
-  <rs-repository-switcher class="name" [repository]="repository()" [narrow]="narrow()" />
-  @if (withFiles()) {
-    <rs-save-status class="status" [status]="saveStatus()" />
-    <button
-      uiButton
-      variant="ghost"
-      class="files"
-      [attr.aria-expanded]="filesOpen()"
-      (click)="toggleFiles.emit()"
-    >
-      <ui-icon name="files" />
-      {{ t('files') }}
-    </button>
-  }
-  @if (user(); as user) {
-    <shell-user-menu class="user" [user]="user" />
-  }
-</ng-container>
+<shell-brand-link [compact]="narrow()" />
+<rs-repository-switcher class="name" [repository]="repository()" [narrow]="narrow()" />
+@if (withFiles()) {
+  <rs-save-status class="status" [status]="saveStatus()" />
+}
+@if (user(); as user) {
+  <shell-user-menu class="user" [user]="user" />
+}

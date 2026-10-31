@@ -1,83 +1,93 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.RepositoryScreenPage'">
-  @switch (session.state()) {
-    @case ('loading') {
-      <ui-spinner class="loading" [label]="t('loading')" />
-    }
-    @case ('missing') {
-      <ui-app-shell [skipLinkLabel]="t('skipToContent')">
-        @if (user(); as user) {
-          <shell-app-header uiAppShellHeader [user]="user" />
-        }
-        <shell-page-not-found />
-      </ui-app-shell>
-    }
-    @case ('failed') {
-      <ui-app-shell [skipLinkLabel]="t('skipToContent')">
-        @if (user(); as user) {
-          <shell-app-header uiAppShellHeader [user]="user" />
-        }
-        <div class="failed">
-          <ui-inline-banner status="danger" announce>
-            {{ t('openFailed') }}
-            @if (session.error(); as error) {
-              {{ error.text }}
-              @if (error.reference) {
-                <span class="reference">{{ t('reference') }} <code>{{ error.reference }}</code></span>
-              }
-            }
-            <div uiBannerActions>
-              <button uiButton size="small" (click)="session.retry()">{{ t('retry') }}</button>
-            </div>
-          </ui-inline-banner>
-        </div>
-      </ui-app-shell>
-    }
-    @case ('not-openable') {
-      <ui-app-shell [skipLinkLabel]="t('skipToContent')">
-        <rs-repository-bar uiAppShellHeader [repository]="session.repository()!" [user]="user()" [withFiles]="false" />
-        <rs-not-openable [repository]="session.repository()!" />
-      </ui-app-shell>
-    }
-    @case ('ready') {
-      <ui-app-shell
-        #shell
-        [skipLinkLabel]="t('skipToContent')"
-        [mainLabel]="t('editor')"
-        [(sideOpen)]="panes.sideOpen"
-        [(sideSize)]="panes.sideSize"
-        [(drawerOpen)]="drawerOpen"
-      >
+  @let state = session.state();
+  @if (state === 'loading') {
+    <ui-spinner class="loading" [label]="t('loading')" />
+  } @else {
+    <ui-app-shell
+      #shell
+      [skipLinkLabel]="t('skipToContent')"
+      [mainLabel]="state === 'ready' ? t('editor') : undefined"
+      [(sideOpen)]="panes.sideOpen"
+      [(sideSize)]="panes.sideSize"
+      [(drawerOpen)]="drawerOpen"
+    >
+      @if (state === 'ready' || state === 'not-openable') {
         <rs-repository-bar
           uiAppShellHeader
           [repository]="session.repository()!"
           [user]="user()"
+          [withFiles]="state === 'ready'"
           [narrow]="shell.narrow()"
-          [filesOpen]="shell.narrow() ? drawerOpen() : panes.sideOpen()"
           [saveStatus]="saveStatus()"
-          (toggleFiles)="toggleFiles(shell.narrow())"
         />
-        <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')" [attr.aria-label]="t('files')">
+      } @else if (user(); as user) {
+        <shell-app-header uiAppShellHeader [user]="user" />
+      }
+      @switch (state) {
+        @case ('missing') {
+          <shell-page-not-found />
+        }
+        @case ('failed') {
+          <ui-centred-island width="24rem">
+            <ui-inline-banner status="danger" announce>
+              {{ t('openFailed') }}
+              @if (session.error(); as error) {
+                {{ error.text }}
+                @if (error.reference) {
+                  <span class="reference">{{ t('reference') }} <code>{{ error.reference }}</code></span>
+                }
+              }
+              <div uiBannerActions>
+                <button uiButton size="small" (click)="session.retry()">{{ t('retry') }}</button>
+              </div>
+            </ui-inline-banner>
+          </ui-centred-island>
+        }
+        @case ('not-openable') {
+          <ui-centred-island width="28rem">
+            <rs-not-openable [repository]="session.repository()!" />
+          </ui-centred-island>
+        }
+      }
+      @if (state === 'ready') {
+        <ui-activity-bar
+          [label]="t('toolWindows')"
+          [orientation]="shell.narrow() ? 'horizontal' : 'vertical'"
+          [selected]="filesSelected()"
+          (selectedChange)="toggleFiles(shell.narrow())"
+        >
+          <button uiActivityBarItem="files" [label]="t('files')">
+            <ui-icon name="folder" />
+          </button>
+        </ui-activity-bar>
+      }
+      @if (state === 'ready') {
+        <ui-island uiAppShellSide [label]="t('files')" [resizeLabel]="t('resizeFiles')" [scrollable]="false">
           <rs-file-tree
             [selected]="selectedPath()"
             (selectPath)="openEntryAt($event)"
             (retry)="retry($event)"
             (action)="runAction($event.action, $event.path)"
           />
-        </section>
-        <rs-editor-area
-          [path]="openPath()"
-          [entry]="openEntry()"
-          [file]="openFiles.current()"
-          [openError]="openError()"
-          [goneElsewhere]="goneElsewhere()"
-          [fragment]="fragment()"
-          (newFile)="runAction('new-file', '')"
-          (action)="runAction($event, openPath() ?? '')"
-          (retryOpen)="retryOpen()"
-          (openPath)="followLink($event)"
-        />
-      </ui-app-shell>
-    }
+        </ui-island>
+      }
+      @if (state === 'ready') {
+        <ui-island [scrollable]="false">
+          <rs-editor-area
+            [path]="openPath()"
+            [entry]="openEntry()"
+            [file]="openFiles.current()"
+            [openError]="openError()"
+            [goneElsewhere]="goneElsewhere()"
+            [fragment]="fragment()"
+            (newFile)="runAction('new-file', '')"
+            (action)="runAction($event, openPath() ?? '')"
+            (retryOpen)="retryOpen()"
+            (openPath)="followLink($event)"
+          />
+        </ui-island>
+      }
+    </ui-app-shell>
   }
 </ng-container>
 <shell-route-announcer />
