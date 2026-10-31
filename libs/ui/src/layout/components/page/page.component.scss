@@ -46,6 +46,16 @@
     color: var(--ui-text-muted);
   }
 
+  // The ancestors' links are muted, as the rest of the trail, and keep their
+  // underline.
+  li ::ng-deep a {
+    color: inherit;
+
+    &:hover {
+      color: var(--ui-text-link);
+    }
+  }
+
   // Each ancestor is followed by a separator, the last one by the page's `h1`.
   // The separators are drawn by CSS, so they are not announced.
   li::after {
