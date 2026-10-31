@@ -219,6 +219,19 @@ describe('RepositoryScreenPage', () => {
       expect(page().querySelector('ui-centred-island rs-not-openable')).not.toBeNull();
     });
 
+    it.each([
+      [ 'missing', () => failure(404, 'not-found'), 'shell-app-header' ],
+      [ 'failed', () => failure(500, 'internal'), 'shell-app-header' ],
+      [ 'not-openable', () => of({ ...handbook, status: 'cloning' as const }), 'rs-repository-bar' ]
+    ])('puts the header of %s in the shell header and leaves main unlabelled', async (_state, answer, selector) => {
+      answers.push(answer());
+      await visit('/repositories/12');
+
+      expect(page().querySelector(`ui-app-shell header ${selector}`)).not.toBeNull();
+      expect(page().querySelector(`ui-app-shell main ${selector}`)).toBeNull();
+      expect(page().querySelector('ui-app-shell main')?.hasAttribute('aria-label')).toBe(false);
+    });
+
     it('renders no shell while loading', async () => {
       answers.push(new Subject<RepositorySummary>());
       await visit('/repositories/12');

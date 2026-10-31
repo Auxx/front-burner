@@ -6,16 +6,12 @@
     <ui-app-shell
       #shell
       [skipLinkLabel]="t('skipToContent')"
-      [mainLabel]="t('editor')"
+      [mainLabel]="state === 'ready' ? t('editor') : undefined"
       [(sideOpen)]="panes.sideOpen"
       [(sideSize)]="panes.sideSize"
       [(drawerOpen)]="drawerOpen"
     >
-      @if (state === 'missing' || state === 'failed') {
-        @if (user(); as user) {
-          <shell-app-header uiAppShellHeader [user]="user" />
-        }
-      } @else {
+      @if (state === 'ready' || state === 'not-openable') {
         <rs-repository-bar
           uiAppShellHeader
           [repository]="session.repository()!"
@@ -26,6 +22,8 @@
           [saveStatus]="saveStatus()"
           (toggleFiles)="toggleFiles(shell.narrow())"
         />
+      } @else if (user(); as user) {
+        <shell-app-header uiAppShellHeader [user]="user" />
       }
       @switch (state) {
         @case ('missing') {
