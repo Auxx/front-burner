@@ -35,7 +35,7 @@ describe('RecentRepositoriesComponent', () => {
 
   it('lists the repositories in the order given, under its heading', () => {
     expect(host().querySelector('h2')?.textContent?.trim()).toBe(`${KEY}.heading`);
-    const entries = [ ...host().querySelectorAll('ul > li dash-repository-entry') ];
+    const entries = [ ...host().querySelectorAll('ul.tiles > li.tile dash-repository-entry') ];
     expect(entries.map(entry => entry.querySelector('.name')?.textContent?.trim())).toEqual([ 'notes', 'handbook' ]);
   });
 

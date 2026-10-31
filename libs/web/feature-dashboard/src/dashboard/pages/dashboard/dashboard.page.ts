@@ -3,7 +3,14 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import type { PushEvent, RepositorySummary } from '@front-burner/shared-contracts';
-import { ButtonComponent, InlineBannerComponent, SpinnerComponent, ToastService } from '@front-burner/ui';
+import {
+  ButtonComponent,
+  InlineBannerComponent,
+  PageComponent,
+  PageTitleDirective,
+  SpinnerComponent,
+  ToastService
+} from '@front-burner/ui';
 import { RepositoriesApi } from '@front-burner/web-api-client';
 import { CurrentUserService, PushChannelService } from '@front-burner/web-core';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
@@ -29,6 +36,8 @@ type RecentList =
   selector: 'dash-dashboard',
   imports: [
     TranslocoDirective,
+    PageComponent,
+    PageTitleDirective,
     ButtonComponent,
     InlineBannerComponent,
     SpinnerComponent,

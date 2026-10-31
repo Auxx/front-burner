@@ -4,17 +4,6 @@ $narrow: '(max-width: calc(37.5em - 0.02px))';
 :host {
   display: grid;
   gap: var(--ui-space-3);
-  padding: var(--ui-space-4);
-  border: var(--ui-border-width) solid var(--ui-border-subtle);
-  border-radius: var(--ui-radius-island);
-  background: var(--ui-surface-island);
-}
-
-.heading {
-  margin: 0;
-  font-size: var(--ui-font-size-lg);
-  font-weight: var(--ui-font-weight-semibold);
-  line-height: var(--ui-line-height-tight);
 }
 
 .explanation,

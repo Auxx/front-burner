@@ -123,6 +123,22 @@ test.describe('dashboard', () => {
     await expect(page.getByRole('link', { name: 'All repositories' })).toHaveAttribute('href', '/repositories');
   });
 
+  test('one tile keeps a readable width, and a long remote wraps inside it', async ({ page, instance }) => {
+    const remote = `https://github.com/acme/${'a'.repeat(100)}.git`;
+    seedRepositories(instance.dataDir, [ { name: 'handbook', remoteUrl: remote } ]);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openDashboard(page);
+
+    const tile = recentList(page).getByRole('listitem');
+    await expect(tile).toContainText('a'.repeat(100));
+    const tileWidth = (await tile.boundingBox())?.width ?? Infinity;
+    const islandWidth = (await page.locator('main ui-island').boundingBox())?.width ?? 0;
+    // auto-fill keeps the empty tracks: a single tile does not span the island.
+    expect(tileWidth).toBeLessThan(islandWidth / 2);
+    expect(await tile.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(await fitsWidth(page)).toBe(true);
+  });
+
   test('AC-DASH-001.13: cloning and failed repositories show their status and link to their settings', async ({ page, instance }) => {
     const [ cloning, failed ] = seedRepositories(instance.dataDir, [
       { name: 'cloning-one', status: 'cloning', lastAccessedAt: minutesAgo(1) },
