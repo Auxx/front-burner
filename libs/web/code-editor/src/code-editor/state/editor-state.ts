@@ -14,7 +14,7 @@ import {
 } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { classHighlighter, tagHighlighter, tags } from '@lezer/highlight';
-import { findIconSprite, type FindPanelLabels, findLabels } from '../search/find-labels';
+import { findIconSprite, findLabels, type FindPanelLabels } from '../search/find-labels';
 import { createFindPanel, openReplacePanel } from '../search/find-panel';
 import { editorTheme } from '../theme/editor-theme';
 import { lineDirection } from './line-direction';
@@ -91,7 +91,13 @@ const exactKeys = [
 
 // The platform's replace shortcut opens the find panel with the replace row (ED-11). It comes
 // before `searchKeymap`, and works in the panel too.
-const replaceKey = { key: 'Mod-h', mac: 'Mod-Alt-f', run: openReplacePanel, scope: 'editor search-panel', preventDefault: true };
+const replaceKey = {
+  key: 'Mod-h',
+  mac: 'Mod-Alt-f',
+  run: openReplacePanel,
+  scope: 'editor search-panel',
+  preventDefault: true
+};
 
 function labelExtension(text: string): Extension {
   return EditorView.contentAttributes.of({ 'aria-label': text });

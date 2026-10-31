@@ -11,7 +11,7 @@ import {
 } from '@codemirror/search';
 import { EditorSelection, type EditorState } from '@codemirror/state';
 import { type Command, EditorView, type Panel, runScopeHandlers, type ViewUpdate } from '@codemirror/view';
-import { findIconSprite, type FindPanelLabels, findLabels } from './find-labels';
+import { findIconSprite, findLabels, type FindPanelLabels } from './find-labels';
 
 /** The counter stops counting here, so that a short query in a 1 MB file stays responsive. */
 export const MAX_COUNTED_MATCHES = 1000;
@@ -213,8 +213,8 @@ class FindPanel implements Panel {
     if (query.eq(this.query)) {
       return;
     }
-    const searched = query.search !== this.query.search || query.caseSensitive !== this.query.caseSensitive ||
-      query.wholeWord !== this.query.wholeWord || query.regexp !== this.query.regexp;
+    const searched = query.search !== this.query.search || query.caseSensitive !== this.query.caseSensitive
+      || query.wholeWord !== this.query.wholeWord || query.regexp !== this.query.regexp;
     this.query = query;
     const { state } = this.view;
     const match = searched && query.valid ? firstMatchFrom(state, query, state.selection.main.from) : null;

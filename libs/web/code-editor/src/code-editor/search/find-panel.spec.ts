@@ -1,5 +1,5 @@
 import { undo } from '@codemirror/commands';
-import { getSearchQuery, openSearchPanel, SearchQuery, searchPanelOpen } from '@codemirror/search';
+import { getSearchQuery, openSearchPanel, searchPanelOpen, SearchQuery } from '@codemirror/search';
 import { EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it } from 'vitest';
 import { contentOf, createEditorState } from '../state/editor-state';
@@ -96,10 +96,12 @@ describe('the find panel', () => {
       const next = named(LABELS.next);
       expect(next.title).toBe(LABELS.next);
       expect(next.querySelector('use')?.getAttribute('href')).toBe('sprite.svg#arrow-down');
-      for (const [ label, icon ] of [ [ LABELS.matchCase, 'case-sensitive' ], [ LABELS.wholeWord, 'whole-word' ], [
-        LABELS.regexp,
-        'regex'
-      ] ]) {
+      for (
+        const [ label, icon ] of [ [ LABELS.matchCase, 'case-sensitive' ], [ LABELS.wholeWord, 'whole-word' ], [
+          LABELS.regexp,
+          'regex'
+        ] ]
+      ) {
         expect(named(label).getAttribute('aria-pressed')).toBe('false');
         expect(named(label).querySelector('use')?.getAttribute('href')).toBe(`sprite.svg#${icon}`);
       }
