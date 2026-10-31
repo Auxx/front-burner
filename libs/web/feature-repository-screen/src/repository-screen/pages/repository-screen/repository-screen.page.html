@@ -62,28 +62,32 @@
         </ui-activity-bar>
       }
       @if (state === 'ready') {
-        <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')" [attr.aria-label]="t('files')">
-          <rs-file-tree
-            [selected]="selectedPath()"
-            (selectPath)="openEntryAt($event)"
-            (retry)="retry($event)"
-            (action)="runAction($event.action, $event.path)"
-          />
+        <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')">
+          <ui-island [label]="t('files')" [scrollable]="false">
+            <rs-file-tree
+              [selected]="selectedPath()"
+              (selectPath)="openEntryAt($event)"
+              (retry)="retry($event)"
+              (action)="runAction($event.action, $event.path)"
+            />
+          </ui-island>
         </section>
       }
       @if (state === 'ready') {
-        <rs-editor-area
-          [path]="openPath()"
-          [entry]="openEntry()"
-          [file]="openFiles.current()"
-          [openError]="openError()"
-          [goneElsewhere]="goneElsewhere()"
-          [fragment]="fragment()"
-          (newFile)="runAction('new-file', '')"
-          (action)="runAction($event, openPath() ?? '')"
-          (retryOpen)="retryOpen()"
-          (openPath)="followLink($event)"
-        />
+        <ui-island [scrollable]="false">
+          <rs-editor-area
+            [path]="openPath()"
+            [entry]="openEntry()"
+            [file]="openFiles.current()"
+            [openError]="openError()"
+            [goneElsewhere]="goneElsewhere()"
+            [fragment]="fragment()"
+            (newFile)="runAction('new-file', '')"
+            (action)="runAction($event, openPath() ?? '')"
+            (retryOpen)="retryOpen()"
+            (openPath)="followLink($event)"
+          />
+        </ui-island>
       }
     </ui-app-shell>
   }

@@ -22,6 +22,7 @@ import {
   CentredIslandComponent,
   IconComponent,
   InlineBannerComponent,
+  IslandComponent,
   SpinnerComponent
 } from '@front-burner/ui';
 import { CurrentUserService, PageTitleService } from '@front-burner/web-core';
@@ -84,6 +85,7 @@ import { fileName } from '../../utils/file-name/file-name';
     ButtonComponent,
     CentredIslandComponent,
     IconComponent,
+    IslandComponent,
     InlineBannerComponent,
     SpinnerComponent,
     AppHeaderComponent,

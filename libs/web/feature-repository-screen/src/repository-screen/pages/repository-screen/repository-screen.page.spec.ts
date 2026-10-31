@@ -363,7 +363,7 @@ describe('RepositoryScreenPage', () => {
   describe('when the repository has opened', () => {
     const files = () => page().querySelector('ui-activity-bar button[uiActivityBarItem="files"]') as HTMLButtonElement;
     const pressed = () => files().getAttribute('aria-pressed');
-    const tree = () => page().querySelector('section[aria-label]') as HTMLElement;
+    const tree = () => page().querySelector('section.files') as HTMLElement;
     const shown = (element: Element) => !element.closest('[hidden]');
 
     afterEach(() => localStorage.clear());
@@ -372,7 +372,8 @@ describe('RepositoryScreenPage', () => {
       await visit('/repositories/12');
 
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
-      expect(tree().getAttribute('aria-label')).toBe(`${KEY}.files`);
+      expect(tree().hasAttribute('aria-label')).toBe(false);
+      expect(tree().querySelector('ui-island')?.getAttribute('aria-label')).toBe(`${KEY}.files`);
       expect(page().querySelector('ui-split-pane [role="separator"]')?.getAttribute('aria-label')).toBe(
         `${KEY}.resizeFiles`
       );
@@ -642,6 +643,18 @@ describe('RepositoryScreenPage', () => {
       expect(shown(tree())).toBe(false);
     });
 
+    it('puts the file tree and the editor in two islands', async () => {
+      await visit('/repositories/12');
+
+      const [ side, editor ] = [ 'section.files > ui-island', 'main > ui-island' ].map(selector =>
+        page().querySelector(selector)
+      );
+      expect(side?.getAttribute('aria-label')).toBe(`${KEY}.files`);
+      expect(side?.querySelector('rs-file-tree')).not.toBeNull();
+      expect(editor?.querySelector('rs-editor-area')).not.toBeNull();
+      expect(side).not.toBe(editor);
+    });
+
     it('has one pressed Files item with a folder icon in the activity bar', async () => {
       await visit('/repositories/12');
 
@@ -757,7 +770,7 @@ describe('RepositoryScreenPage', () => {
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
       expect(files()).toBeNull();
       expect(page().querySelector('ui-activity-bar')).toBeNull();
-      expect(page().querySelector('section[aria-label]')).toBeNull();
+      expect(page().querySelector('section.files')).toBeNull();
     });
   });
   describe('editing and saving', () => {
