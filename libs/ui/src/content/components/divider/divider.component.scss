@@ -18,6 +18,12 @@
     flex: none;
   }
 
+  // Nothing projected: no text, no gap and a single line.
+  .text:empty,
+  .text:empty + .line {
+    display: none;
+  }
+
   // Colour tokens are replaced in forced colours; keep the lines visible.
   @media (forced-colors: active) {
     .line {
