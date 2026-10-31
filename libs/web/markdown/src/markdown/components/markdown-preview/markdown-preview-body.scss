@@ -21,8 +21,6 @@
   h5,
   h6 {
     margin-block: var(--ui-space-6) var(--ui-space-4);
-    font-weight: var(--ui-font-weight-semibold);
-    line-height: var(--ui-line-height-tight);
   }
 
   h1,
@@ -95,8 +93,10 @@
     list-style-type: none;
   }
 
+  // In the list's indent, on either side: every block has `dir="auto"`.
   .task-list-item input[type='checkbox'] {
-    margin: 0 0.2em 0.25em -1.4em;
+    margin-block: 0 0.25em;
+    margin-inline: -1.4em 0.2em;
     vertical-align: middle;
   }
 
@@ -125,21 +125,13 @@
     }
   }
 
+  // A border, not a background, so that contrast themes keep it (A-10.22).
   hr {
-    block-size: 0.25em;
+    block-size: 0;
     margin-block: var(--ui-space-6);
     padding: 0;
     border: 0;
-    background: var(--ui-border-subtle);
-  }
-
-  a {
-    color: var(--ui-text-link);
-    text-decoration: none;
-
-    &:hover {
-      text-decoration: underline;
-    }
+    border-block-start: 0.25em solid var(--ui-border-subtle);
   }
 
   strong,

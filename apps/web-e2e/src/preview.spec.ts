@@ -229,7 +229,7 @@ const LAYOUT = [
   '',
   '## Lists',
   '',
-  'Some `inline code` in a paragraph.',
+  'Some `inline code` in a paragraph and [a link](#lists).',
   '',
   '- one',
   '  - nested',
@@ -253,6 +253,8 @@ const LAYOUT = [
   '---',
   '',
   'The end.',
+  '',
+  '<div align="center"><h3>Wrapped</h3></div>',
   ''
 ].join('\n');
 
@@ -574,6 +576,7 @@ test.describe('preview', () => {
     expect(await style('blockquote', 'border-left-style')).toBe('solid');
     expect(await style('.contains-task-list', 'list-style-type')).toBe('none');
     expect(await style('ul ul', 'margin-top')).toBe('0px');
+    expect(await style('p a', 'text-decoration-line')).toBe('underline');
 
     // A heading as the first block starts at the top of the preview.
     const [ blocks, first ] = await Promise.all([ box('.blocks'), box('h1') ]);
@@ -582,6 +585,7 @@ test.describe('preview', () => {
     // Margins between blocks collapse as between GitHub's elements.
     expect(await gap('p:text-is("First paragraph.")', 'p:text-is("Second paragraph.")')).toBe(16);
     expect(await gap('p:text-is("Second paragraph.")', 'h2')).toBe(24);
+    expect(await gap('p:text-is("The end.")', 'h3')).toBe(24);
 
     // ED-33: the long code line scrolls inside its block, not the preview.
     expect(await view.locator('pre').first().evaluate(pre => pre.scrollWidth > pre.clientWidth)).toBe(true);

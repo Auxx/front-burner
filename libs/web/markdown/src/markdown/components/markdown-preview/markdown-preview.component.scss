@@ -35,7 +35,9 @@
       contain-intrinsic-size: auto 2rem;
       margin-block-end: var(--ui-space-4);
 
-      &:has(> :is(h1, h2, h3, h4, h5, h6)) {
+      // A heading, alone or as the first element of an HTML wrapper such as
+      // `<div align="center">`.
+      &:has(> :is(h1, h2, h3, h4, h5, h6), > :first-child > :is(h1, h2, h3, h4, h5, h6):first-child) {
         margin-block-start: var(--ui-space-6);
       }
 
@@ -51,22 +53,18 @@
         margin-block-end: 0;
       }
 
-      > :first-child {
+      // The margins that would collapse through to the block's edges: the
+      // first (and last) element at every depth, inside first (and last) ones.
+      :first-child:not(.md-block :not(:first-child) *) {
         margin-block-start: 0;
       }
 
-      > :last-child {
+      :last-child:not(.md-block :not(:last-child) *) {
         margin-block-end: 0;
       }
     }
 
     // Code
-    code,
-    kbd,
-    pre {
-      font-family: var(--ui-font-family-mono);
-    }
-
     code {
       padding: 0.2em 0.4em;
       border-radius: var(--ui-radius-popover);
@@ -139,6 +137,13 @@
     }
 
     // IM-11: never wider than the preview, in proportion when scaled down.
+    // In the line, as on GitHub, so that badges sit side by side (the ui
+    // library's reset makes them blocks).
+    img,
+    picture {
+      display: inline;
+    }
+
     img {
       max-inline-size: 100%;
       block-size: auto;
