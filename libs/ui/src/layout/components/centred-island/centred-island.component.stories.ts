@@ -53,7 +53,15 @@ export const WithBannersAfter: Story = {
         </ui-centred-island>
       </div>
     `
-  })
+  }),
+  play: async ({ canvasElement }) => {
+    const island = canvasElement.querySelector('ui-island') as HTMLElement;
+    const banners = canvasElement.querySelectorAll('ui-inline-banner');
+    expect(banners).toHaveLength(2);
+    banners.forEach(banner => {
+      expect(banner.getBoundingClientRect().width).toBeCloseTo(island.getBoundingClientRect().width, 1);
+    });
+  }
 };
 
 /** A column taller than the window scrolls from its top, never off it. */
