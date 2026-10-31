@@ -1,7 +1,6 @@
 :host {
   display: flex;
   flex-direction: column;
-  gap: var(--ui-space-2);
   block-size: 100%;
   min-block-size: 0;
 }
@@ -9,19 +8,26 @@
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--ui-space-2);
+  padding: var(--ui-space-1) var(--ui-space-2);
+  // Two border widths: the line under the toolbar meets the separator's.
+  border-block-end: calc(var(--ui-border-width) * 2) solid var(--ui-surface-canvas);
+}
+
+.end {
+  margin-inline-start: auto;
 }
 
 .panes {
   flex: 1;
+  --ui-split-pane-gap: calc(var(--ui-border-width) * 2);
+  --ui-split-pane-line: var(--ui-surface-canvas);
 }
 
 .tabs {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--ui-space-2);
   min-block-size: 0;
 }
 

@@ -139,3 +139,42 @@ export const Nested: Story = {
     `
   })
 };
+
+/**
+ * The editor and the preview: a straight line in the canvas colour replaces
+ * the gap, and the separator keeps its 24 px target.
+ */
+export const LineDivider: Story = {
+  render: props => ({
+    props,
+    styles: [ canvas ],
+    template: `
+      <div class="canvas">
+        <ui-split-pane
+          style="--ui-split-pane-gap: calc(var(--ui-border-width) * 2); --ui-split-pane-line: var(--ui-surface-canvas)"
+          [(size)]="size"
+          separatorLabel="Resize first pane"
+        >
+          <ui-island uiSplitPaneStart heading="Editor"><p>Editor</p></ui-island>
+          <ui-island uiSplitPaneEnd heading="Preview"><p>Preview</p></ui-island>
+        </ui-split-pane>
+      </div>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    const separator = within(canvasElement).getByRole('separator');
+    const divider = separator.parentElement as HTMLElement;
+    const canvasColour = getComputedStyle(canvasElement.ownerDocument.documentElement)
+      .getPropertyValue('--ui-surface-canvas').trim();
+    const probe = canvasElement.ownerDocument.createElement('i');
+    probe.style.color = canvasColour;
+    canvasElement.appendChild(probe);
+    const expected = getComputedStyle(probe).color;
+    probe.remove();
+
+    await expect(divider.getBoundingClientRect().width).toBe(2);
+    await expect(getComputedStyle(divider).backgroundColor).toBe(expected);
+    await expect(getComputedStyle(separator, '::before').width).not.toBe('auto');
+    await expect(parseFloat(getComputedStyle(separator, '::before').width)).toBeGreaterThanOrEqual(24);
+  }
+};

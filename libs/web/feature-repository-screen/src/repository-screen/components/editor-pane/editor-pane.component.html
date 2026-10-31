@@ -19,10 +19,14 @@
     <div class="tabs" uiTabGroup>
       <!-- Inside the tab group, so that the tabs reach their panels. -->
       <div class="toolbar">
-        <rs-view-mode-switch />
         @if (viewMode.editorShown()) {
-          <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+          <div class="start">
+            <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+          </div>
         }
+        <div class="end">
+          <rs-view-mode-switch />
+        </div>
       </div>
       <div class="panel" uiTabPanel="edit">
         <ng-template uiTabContent>
@@ -51,10 +55,14 @@
     </div>
   } @else {
     <div class="toolbar">
-      <rs-view-mode-switch />
       @if (viewMode.editorShown()) {
-        <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+        <div class="start">
+          <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+        </div>
       }
+      <div class="end">
+        <rs-view-mode-switch />
+      </div>
     </div>
     <ui-split-pane class="panes" [show]="show()" [(size)]="editorSize" [separatorLabel]="t('resizePreview')">
       <ce-code-editor

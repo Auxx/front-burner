@@ -292,6 +292,21 @@ test.describe('editor', () => {
     }
   });
 
+  test('NF-13.5: resizes the editor and the preview with the arrow keys on the line between them', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'a phone shows the Edit and Preview tabs instead');
+    const { id } = seedHandbook(instance.dataDir);
+    await openScreen(page, `/repositories/${id}/files/README.md`);
+    const separator = main(page).getByRole('separator');
+    const width = async () => (await editor(page, 'README.md').boundingBox())!.width;
+
+    const before = await width();
+    await separator.focus();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+
+    await expect.poll(width).toBeGreaterThan(before);
+  });
+
   test('AC-EDIT-001.25: opens a large file without highlighting on a phone, and highlighted on a desktop', async ({ page, instance, isMobile }) => {
     const { id } = seedHandbook(instance.dataDir, {
       'large.md': markdownOf(150 * 1024),

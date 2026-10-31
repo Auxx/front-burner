@@ -54,6 +54,10 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   - a compact density on desktop, close to an IDE's;
   - an **activity bar** (VS Code's column of icons) to switch the side panel,
     and a **status bar** at the bottom (save state, sync state, branch).
+  - the activity bar sits on the canvas, outside the islands; inside an island,
+    a toolbar and the panes below it are divided by thin straight lines in the
+    canvas colour instead of gaps (the editor toolbar and the editor/preview
+    separator, still draggable with a 24 px target).
 - **A-10.6** On narrow screens the same parts rearrange rather than being
   replaced: islands take the full width with smaller gaps and radii, one side
   panel is shown at a time, and the activity bar moves to the bottom of the
