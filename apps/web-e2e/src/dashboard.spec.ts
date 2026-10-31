@@ -46,6 +46,14 @@ test.describe('dashboard', () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
+  test('the dashboard starts at the top of main, not at its bottom', async ({ page }) => {
+    await openDashboard(page);
+
+    const main = await page.locator('main').boundingBox();
+    const content = await page.locator('main > :not(router-outlet)').first().boundingBox();
+    expect(content!.y - main!.y).toBeLessThan(1);
+  });
+
   test('AC-DASH-001.2: without repositories, the full guide and no list', async ({ page }) => {
     await openDashboard(page);
 
