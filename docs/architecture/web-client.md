@@ -63,14 +63,16 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   front matter highlighting, `EditorView.cspNonce` set (NF-11.1), and the
   accessibility behaviour of NF-13.3. The editor, the conflict-marker view and
   the three-way merge editor all use it.
-  - The extensions used (no `basicSetup`): history, selection drawing, search,
-    the key bindings, the Markdown language with front matter, syntax
-    highlighting, soft wrap (switched with a `Compartment`, with the wrap-marker
-    gutter that marks wrapped lines), line numbers with the active-line gutter,
-    per-line text direction and the spell-check attributes. Line numbers and the
-    wrap-marker gutter left the median unchanged in emulation (one run each);
-    one keystroke in 50 reached 74 ms; to be repeated on a phone (spike 3, note
-    of 2026-10-31). The phone check of this list is to be repeated
+  - The extensions used (no `basicSetup`): history, selection drawing, search
+    (with the product's own compact find panel, whose texts and icon sprite the
+    client passes in, since the library has no Transloco), the key bindings, the
+    Markdown language with front matter, syntax highlighting, soft wrap
+    (switched with a `Compartment`, with the wrap-marker gutter that marks
+    wrapped lines), line numbers with the active-line gutter, per-line text
+    direction and the spell-check attributes. Line numbers and the wrap-marker
+    gutter left the median unchanged in emulation (one run each); one keystroke
+    in 50 reached 74 ms; to be repeated on a phone (spike 3, note of
+    2026-10-31). The phone check of this list is to be repeated
     (`docs/wiki/typing-test.md`).
   - Typing stays within NF-2.4 on its own: at a 4× CPU slowdown, keystrokes in a
     200 KB file took at most 32–40 ms, and in a 1 MB file 40–56 ms, right at the

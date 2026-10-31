@@ -26,6 +26,7 @@ describe('i18n/en.json', () => {
       'This instance is not served over HTTPS. You will be logged out when your session token expires.'
     ],
     [ `${AUTH}.LoginPage.insecureHowTo`, 'How to set up HTTPS' ],
+    [ `${SCREEN}.EditorPaneComponent.findPanel.count`, '{{ current }} of {{ total }}' ],
     [ 'web-shell.ShellLayoutComponent.skipToContent', 'Skip to content' ],
     [ 'web-shell.UserMenuComponent.label', 'Account menu for {{ name }}' ],
     [ 'web-shell.UserMenuComponent.logout', 'Log out' ],

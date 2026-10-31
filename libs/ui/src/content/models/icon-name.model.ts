@@ -5,6 +5,9 @@
  * sprite --write`. Find names with `icons.mjs find <word>`.
  */
 export const ICON_NAMES = [
+  'arrow-down',
+  'arrow-up',
+  'case-sensitive',
   'check',
   'chevron-down',
   'chevron-right',
@@ -27,6 +30,9 @@ export const ICON_NAMES = [
   'new-file',
   'new-folder',
   'pass',
+  'regex',
+  'replace',
+  'replace-all',
   'repo',
   'repo-fetch',
   'repo-pull',
@@ -34,6 +40,7 @@ export const ICON_NAMES = [
   'source-control',
   'sync',
   'warning',
+  'whole-word',
   'word-wrap'
 ] as const;
 

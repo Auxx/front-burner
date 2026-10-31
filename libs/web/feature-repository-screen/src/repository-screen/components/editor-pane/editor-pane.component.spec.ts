@@ -383,7 +383,10 @@ describe('EditorPaneComponent', () => {
     button(`${K}.find`)?.click();
     await settle(fixture);
 
-    expect(pane().querySelector('.cm-search')).not.toBeNull();
+    const panel = pane().querySelector('.fb-find');
+    expect(panel).not.toBeNull();
+    expect(panel?.querySelector('input')?.getAttribute('aria-label')).toBe(`${K}.findPanel.find`);
+    expect(panel?.querySelector('use')?.getAttribute('href')).toBe('assets/icons.svg#chevron-right');
   });
 
   describe('view modes (ED-34 to ED-36)', () => {
