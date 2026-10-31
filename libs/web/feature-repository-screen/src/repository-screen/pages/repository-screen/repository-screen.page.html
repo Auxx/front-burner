@@ -18,9 +18,7 @@
           [user]="user()"
           [withFiles]="state === 'ready'"
           [narrow]="shell.narrow()"
-          [filesOpen]="shell.narrow() ? drawerOpen() : panes.sideOpen()"
           [saveStatus]="saveStatus()"
-          (toggleFiles)="toggleFiles(shell.narrow())"
         />
       } @else if (user(); as user) {
         <shell-app-header uiAppShellHeader [user]="user" />
@@ -50,6 +48,18 @@
             <rs-not-openable [repository]="session.repository()!" />
           </ui-centred-island>
         }
+      }
+      @if (state === 'ready') {
+        <ui-activity-bar
+          [label]="t('toolWindows')"
+          [orientation]="shell.narrow() ? 'horizontal' : 'vertical'"
+          [selected]="filesSelected()"
+          (selectedChange)="toggleFiles(shell.narrow())"
+        >
+          <button uiActivityBarItem="files" [label]="t('files')">
+            <ui-icon name="folder" />
+          </button>
+        </ui-activity-bar>
       }
       @if (state === 'ready') {
         <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')" [attr.aria-label]="t('files')">

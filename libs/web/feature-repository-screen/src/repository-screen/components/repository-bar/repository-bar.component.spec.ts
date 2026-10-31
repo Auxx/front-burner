@@ -33,9 +33,8 @@ describe('RepositoryBarComponent', () => {
   let fixture: ComponentFixture<RepositoryBarComponent>;
 
   const bar = () => fixture.nativeElement as HTMLElement;
-  const files = () => bar().querySelector('button.files') as HTMLButtonElement;
 
-  async function show(inputs: { narrow?: boolean; filesOpen?: boolean; withFiles?: boolean; } = {}): Promise<void> {
+  async function show(inputs: { narrow?: boolean; withFiles?: boolean; } = {}): Promise<void> {
     TestBed.configureTestingModule({
       imports: [ RepositoryBarComponent, translocoTesting() ],
       providers: [
@@ -48,7 +47,6 @@ describe('RepositoryBarComponent', () => {
     fixture.componentRef.setInput('repository', handbook);
     fixture.componentRef.setInput('user', ada);
     fixture.componentRef.setInput('narrow', inputs.narrow ?? false);
-    fixture.componentRef.setInput('filesOpen', inputs.filesOpen ?? true);
     fixture.componentRef.setInput('withFiles', inputs.withFiles ?? true);
     await settle(fixture);
   }
@@ -58,8 +56,8 @@ describe('RepositoryBarComponent', () => {
     fixture.componentRef.setInput('saveStatus', { kind: 'saving' });
     await settle(fixture);
 
-    const parts = [ ...bar().querySelectorAll('h1, rs-save-status, button.files') ];
-    expect(parts.map(part => part.localName)).toEqual([ 'h1', 'rs-save-status', 'button' ]);
+    const parts = [ ...bar().querySelectorAll('h1, rs-save-status') ];
+    expect(parts.map(part => part.localName)).toEqual([ 'h1', 'rs-save-status' ]);
     expect(bar().querySelector('rs-save-status')?.textContent?.trim()).toBe(
       'web-feature-repository-screen.SaveStatusComponent.saving'
     );
@@ -74,8 +72,8 @@ describe('RepositoryBarComponent', () => {
   it('shows the bar\'s parts in order', async () => {
     await show();
 
-    const parts = [ ...bar().querySelectorAll('shell-brand-link, h1, button.files, shell-user-menu') ];
-    expect(parts.map(part => part.localName)).toEqual([ 'shell-brand-link', 'h1', 'button', 'shell-user-menu' ]);
+    const parts = [ ...bar().querySelectorAll('shell-brand-link, h1, shell-user-menu') ];
+    expect(parts.map(part => part.localName)).toEqual([ 'shell-brand-link', 'h1', 'shell-user-menu' ]);
     expect(bar().querySelector('h1')?.textContent?.trim()).toBe('handbook');
     expect(bar().querySelector('shell-brand-link a')?.getAttribute('href')).toBe('/');
   });
@@ -102,26 +100,10 @@ describe('RepositoryBarComponent', () => {
     );
   });
 
-  it('toggles the file tree and says whether it is shown', async () => {
-    await show({ filesOpen: false });
-    const toggled = vi.fn();
-    fixture.componentInstance.toggleFiles.subscribe(toggled);
+  it('has no Files button', async () => {
+    await show();
 
-    expect(files().textContent?.trim()).toBe(`${KEY}.files`);
-    expect(files().getAttribute('aria-expanded')).toBe('false');
-
-    files().click();
-    expect(toggled).toHaveBeenCalledTimes(1);
-
-    fixture.componentRef.setInput('filesOpen', true);
-    await settle(fixture);
-    expect(files().getAttribute('aria-expanded')).toBe('true');
-  });
-
-  it('has no Files button without a file tree', async () => {
-    await show({ withFiles: false });
-
-    expect(files()).toBeNull();
-    expect(bar().querySelector('h1')?.textContent?.trim()).toBe('handbook');
+    expect(bar().querySelector('button.files')).toBeNull();
+    expect(bar().textContent).not.toContain(`${KEY}.files`);
   });
 });

@@ -7,16 +7,20 @@ import {
   effect,
   inject,
   signal,
-  untracked
+  untracked,
+  viewChild
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import type { ApiError, Entry } from '@front-burner/shared-contracts';
 import {
+  ActivityBarComponent,
+  ActivityBarItemComponent,
   AppShellComponent,
   AppShellSideDirective,
   ButtonComponent,
   CentredIslandComponent,
+  IconComponent,
   InlineBannerComponent,
   SpinnerComponent
 } from '@front-burner/ui';
@@ -75,8 +79,11 @@ import { fileName } from '../../utils/file-name/file-name';
     TranslocoDirective,
     AppShellComponent,
     AppShellSideDirective,
+    ActivityBarComponent,
+    ActivityBarItemComponent,
     ButtonComponent,
     CentredIslandComponent,
+    IconComponent,
     InlineBannerComponent,
     SpinnerComponent,
     AppHeaderComponent,
@@ -122,6 +129,13 @@ export class RepositoryScreenPage {
   protected readonly panes = inject(PaneMemoryService);
   /** Whether the file tree is open as the drawer of narrow screens (FB-9). */
   protected readonly drawerOpen = signal(false);
+  /** The page's app shell, once there is one; it knows whether the layout is narrow. */
+  private readonly shell = viewChild(AppShellComponent);
+  /** The activity bar's selected item: **Files** while the tree is shown, beside the editor or as the drawer (FB-7, FB-9). */
+  protected readonly filesSelected = computed(() => {
+    const narrow = this.shell()?.narrow() ?? false;
+    return (narrow ? this.drawerOpen() : this.panes.sideOpen()) ? 'files' : null;
+  });
   /**
    * The route's path, and whether the navigation to it closed the open file
    * (FB-39), read while that navigation runs.

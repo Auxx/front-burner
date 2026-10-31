@@ -104,12 +104,14 @@ to them, as code editors usually do.
 
 - **FB-7** On wide screens the repository screen shows, side by side, the file
   tree, the editor and the live preview. The file tree can be collapsed and
-  expanded again. _(My call: the breakpoints are left to the builder.)_
+  expanded again. The **Files** button of the activity bar collapses and
+  expands it. _(My call: the breakpoints are left to the builder.)_
 - **FB-8** The panes can be resized. Resizing also works without dragging, for
   example with the keyboard or with buttons (NF-13.6). Each device remembers the
   pane sizes and whether the tree is collapsed. _(My call.)_
 - **FB-9** On narrow screens, such as phones, the file tree is a drawer that
-  opens from a button in the screen's header and closes when a file is opened.
+  opens from the **Files** button of the activity bar (at the bottom of the
+  screen on narrow screens) and closes when a file is opened.
   How the editor and preview share a narrow screen is in REQ-EDIT-001.
 - **FB-10** The screen's header shows the repository name and a link back to the
   dashboard. The current branch, git actions and the save status are added by

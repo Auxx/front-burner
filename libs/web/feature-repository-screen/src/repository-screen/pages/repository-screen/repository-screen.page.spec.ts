@@ -15,7 +15,7 @@ import { ToastService } from '@front-burner/ui';
 import { FilesApi, RepositoriesApi } from '@front-burner/web-api-client';
 import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
-import { map, Observable, of, Subject, throwError } from 'rxjs';
+import { BehaviorSubject, map, Observable, of, Subject, throwError } from 'rxjs';
 
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { entry, folder, listing } from '../../../testing/listings';
@@ -65,6 +65,8 @@ describe('RepositoryScreenPage', () => {
   let recreateFile: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
+  /** The viewport's narrowness, which a test can flip. */
+  let viewport: BehaviorSubject<boolean>;
   let events: Subject<PushEvent>;
   /** The folders listed, in order. */
   let listings: string[];
@@ -77,6 +79,7 @@ describe('RepositoryScreenPage', () => {
     [ ...page().querySelectorAll('button') ].find(element => element.textContent?.trim() === text);
 
   async function visit(url: string): Promise<void> {
+    viewport = new BehaviorSubject(narrow);
     TestBed.configureTestingModule({
       imports: [ translocoTesting({ 'errors.internal': 'Something went wrong.' }) ],
       providers: [
@@ -108,7 +111,10 @@ describe('RepositoryScreenPage', () => {
         { provide: PushChannelService, useValue: { events, reconnected: new Subject<void>() } },
         {
           provide: BreakpointObserver,
-          useValue: { observe: () => of({ matches: narrow, breakpoints: {} }), isMatched: () => narrow }
+          useValue: {
+            observe: () => viewport.pipe(map(matches => ({ matches, breakpoints: {} }))),
+            isMatched: () => viewport.value
+          }
         }
       ]
     });
@@ -355,7 +361,8 @@ describe('RepositoryScreenPage', () => {
   });
 
   describe('when the repository has opened', () => {
-    const files = () => button('web-feature-repository-screen.RepositoryBarComponent.files') as HTMLButtonElement;
+    const files = () => page().querySelector('ui-activity-bar button[uiActivityBarItem="files"]') as HTMLButtonElement;
+    const pressed = () => files().getAttribute('aria-pressed');
     const tree = () => page().querySelector('section[aria-label]') as HTMLElement;
     const shown = (element: Element) => !element.closest('[hidden]');
 
@@ -635,16 +642,80 @@ describe('RepositoryScreenPage', () => {
       expect(shown(tree())).toBe(false);
     });
 
+    it('has one pressed Files item with a folder icon in the activity bar', async () => {
+      await visit('/repositories/12');
+
+      const bar = page().querySelector('ui-activity-bar') as HTMLElement;
+      expect(bar.getAttribute('aria-label')).toBe(`${KEY}.toolWindows`);
+      expect(bar.querySelectorAll('button')).toHaveLength(1);
+      expect(files().getAttribute('aria-label')).toBe(`${KEY}.files`);
+      expect(files().querySelector('ui-icon[name="folder"]')).not.toBeNull();
+      expect(pressed()).toBe('true');
+      expect(button('web-feature-repository-screen.RepositoryBarComponent.files')).toBeUndefined();
+    });
+
+    it('lays the activity bar out vertically on wide screens and horizontally on narrow ones', async () => {
+      await visit('/repositories/12');
+      expect(page().querySelector('ui-activity-bar')?.getAttribute('aria-orientation')).toBe('vertical');
+
+      viewport.next(true);
+      await settle(harness.fixture);
+      expect(page().querySelector('ui-activity-bar')?.getAttribute('aria-orientation')).toBe('horizontal');
+    });
+
+    it('shows the item unpressed when the tree was left collapsed', async () => {
+      localStorage.setItem('fb.4.repositoryScreen.sideOpen', 'false');
+      await visit('/repositories/12');
+
+      expect(shown(tree())).toBe(false);
+      expect(pressed()).toBe('false');
+    });
+
+    it('unpresses the item when a file is opened from the drawer', async () => {
+      narrow = true;
+      await visit('/repositories/12');
+      files().click();
+      await settle(harness.fixture);
+      expect(pressed()).toBe('true');
+
+      row('README.md').click();
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(shown(tree())).toBe(false);
+      expect(pressed()).toBe('false');
+    });
+
+    it('leaves the item consistent when the viewport crosses the breakpoint with the drawer open', async () => {
+      narrow = true;
+      await visit('/repositories/12');
+      files().click();
+      await settle(harness.fixture);
+      expect(pressed()).toBe('true');
+
+      viewport.next(false);
+      await settle(harness.fixture);
+
+      // The drawer closed with the crossing; the wide tree was never collapsed.
+      expect(pressed()).toBe('true');
+      expect(shown(tree())).toBe(true);
+
+      viewport.next(true);
+      await settle(harness.fixture);
+      expect(shown(tree())).toBe(false);
+      expect(pressed()).toBe('false');
+    });
+
     it('collapses and expands the tree with Files, and remembers it', async () => {
       await visit('/repositories/12');
       expect(shown(tree())).toBe(true);
-      expect(files().getAttribute('aria-expanded')).toBe('true');
+      expect(pressed()).toBe('true');
 
       files().click();
       await settle(harness.fixture);
 
       expect(shown(tree())).toBe(false);
-      expect(files().getAttribute('aria-expanded')).toBe('false');
+      expect(pressed()).toBe('false');
       expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('false');
 
       files().click();
@@ -668,13 +739,13 @@ describe('RepositoryScreenPage', () => {
       await visit('/repositories/12');
       expect(shown(tree())).toBe(false);
       expect(shown(page().querySelector('main') as HTMLElement)).toBe(true);
-      expect(files().getAttribute('aria-expanded')).toBe('false');
+      expect(pressed()).toBe('false');
 
       files().click();
       await settle(harness.fixture);
 
       expect(shown(tree())).toBe(true);
-      expect(files().getAttribute('aria-expanded')).toBe('true');
+      expect(pressed()).toBe('true');
       // The drawer does not collapse the tree of wide screens.
       expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('true');
     });
@@ -684,7 +755,8 @@ describe('RepositoryScreenPage', () => {
       await visit('/repositories/12');
 
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
-      expect(files()).toBeUndefined();
+      expect(files()).toBeNull();
+      expect(page().querySelector('ui-activity-bar')).toBeNull();
       expect(page().querySelector('section[aria-label]')).toBeNull();
     });
   });
