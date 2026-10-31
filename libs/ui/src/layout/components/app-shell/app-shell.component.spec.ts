@@ -2,11 +2,11 @@ import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { AppShellSideDirective } from '../../directives/app-shell-side/app-shell-side.directive';
-import { ActivityBarComponent } from '../activity-bar/activity-bar.component';
 import {
   FakeBreakpointObserver,
   provideFakeBreakpointObserver
 } from '../../utils/narrow-viewport/narrow-viewport.testing';
+import { ActivityBarComponent } from '../activity-bar/activity-bar.component';
 import { AppShellComponent } from './app-shell.component';
 
 @Component({
