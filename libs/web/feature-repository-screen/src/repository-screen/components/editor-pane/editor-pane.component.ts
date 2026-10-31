@@ -16,6 +16,7 @@ import {
 } from '@angular/core';
 import {
   ButtonComponent,
+  IconComponent,
   SplitPaneComponent,
   type SplitPaneShow,
   TabContentDirective,
@@ -29,15 +30,18 @@ import {
   cursorOf,
   type EditorStateChange,
   isHighlighting,
+  isSoftWrapping,
   replaceContent,
   setHighlighting,
   setLabel,
-  setReadOnly
+  setReadOnly,
+  setSoftWrap
 } from '@front-burner/web-code-editor';
 import { MarkdownPreviewComponent, type PreviewPathLink } from '@front-burner/web-markdown';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
+import { EditorSettingsService } from '../../services/editor-settings/editor-settings.service';
 import { type OpenFile, OpenFilesService } from '../../services/open-files/open-files.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { type ViewModeName, ViewModeService } from '../../services/view-mode/view-mode.service';
@@ -100,6 +104,7 @@ const built = new WeakMap<OpenFile, number>();
     ChangedOnDiskComponent,
     DraftOfferComponent,
     GoneElsewhereComponent,
+    IconComponent,
     LargeFileNoteComponent,
     MarkdownPreviewComponent,
     SplitPaneComponent,
@@ -125,6 +130,7 @@ export class EditorPaneComponent {
   /** The repository whose images the preview shows (A-8.16). */
   protected readonly repositoryId = computed(() => this.session.repository()?.id ?? null);
   protected readonly viewMode = inject(ViewModeService);
+  protected readonly settings = inject(EditorSettingsService);
   /**
    * The editor, once it is there: not while the pane first renders, nor on a
    * narrow screen before the **Edit** tab was first opened.
@@ -164,6 +170,7 @@ export class EditorPaneComponent {
     return this.stateFor(
       file,
       file.highlight(),
+      this.settings.softWrap(),
       fileName(file.path()),
       file.draft() !== null || file.gone() || file.changed() !== null,
       file.revision()
@@ -336,11 +343,12 @@ export class EditorPaneComponent {
 
   /**
    * The file's state, created on its first showing and again for each
-   * reload, with its highlighting, name and read-only mode brought up to date.
+   * reload, with its highlighting, soft wrap, name and read-only mode brought up to date.
    */
   private stateFor(
     file: OpenFile,
     highlight: boolean,
+    softWrap: boolean,
     label: string,
     readOnly: boolean,
     revision: number
@@ -362,6 +370,7 @@ export class EditorPaneComponent {
       ? createEditorState({
         content: file.file.content,
         highlight,
+        softWrap,
         label,
         readOnly,
         cursor: reloaded ? cursorOf(existing) : undefined
@@ -369,6 +378,7 @@ export class EditorPaneComponent {
       : existing.update(
         setLabel(label),
         ...(isHighlighting(existing) === highlight ? [] : [ setHighlighting(highlight) ]),
+        ...(isSoftWrapping(existing) === softWrap ? [] : [ setSoftWrap(softWrap) ]),
         ...(existing.readOnly === readOnly ? [] : [ setReadOnly(readOnly) ])
       ).state;
     file.editorState = state;
@@ -376,7 +386,7 @@ export class EditorPaneComponent {
       // The same text as the loaded content, which the preview read until now.
       file.preview.read = () => contentOf(file.editorState as EditorState);
     } else if (reloaded) {
-      // Only a reload changes the text here; a new label, highlighting or read-only mode does not.
+      // Only a reload changes the text here; a new label, highlighting, soft wrap or read-only mode does not.
       untracked(() => file.preview.version.update(version => version + 1));
     }
     return state;

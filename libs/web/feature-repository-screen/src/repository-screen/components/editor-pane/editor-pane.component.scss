@@ -23,7 +23,14 @@
 }
 
 .end {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
   margin-inline-start: auto;
+}
+
+.wrap[aria-pressed='true'] {
+  background: var(--ui-surface-pressed);
 }
 
 .panes {

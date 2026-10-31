@@ -293,6 +293,23 @@ test.describe('editor', () => {
     }
   });
 
+  test('ED-10: scrolls a long line sideways inside the editor, not the page, once Wrap is off', async ({ page, instance }) => {
+    const { id } = seedHandbook(instance.dataDir, { 'long.md': `# Long\n${'word '.repeat(2000)}\n` });
+    await openScreen(page, `/repositories/${id}/files/long.md`);
+    await expect(editor(page, 'long.md')).toBeVisible();
+    const pageOverflow = () =>
+      page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    const wrap = main(page).getByRole('button', { name: 'Wrap', exact: true });
+
+    await expect(wrap).toHaveAttribute('aria-pressed', 'true');
+    await wrap.click();
+    await expect(wrap).toHaveAttribute('aria-pressed', 'false');
+
+    const scroller = main(page).locator('.cm-scroller').first();
+    await expect.poll(() => scroller.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+    expect(await pageOverflow()).toBe(0);
+  });
+
   test('NF-13.5: resizes the editor and the preview with the arrow keys on the line between them', async ({ page, instance, isMobile }) => {
     test.skip(isMobile, 'a phone shows the Edit and Preview tabs instead');
     const { id } = seedHandbook(instance.dataDir);
