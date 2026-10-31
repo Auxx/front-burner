@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { AppShellSideDirective } from '../../directives/app-shell-side/app-shell-side.directive';
+import { ActivityBarComponent } from '../activity-bar/activity-bar.component';
 import {
   FakeBreakpointObserver,
   provideFakeBreakpointObserver
@@ -9,12 +10,15 @@ import {
 import { AppShellComponent } from './app-shell.component';
 
 @Component({
-  imports: [ AppShellComponent, AppShellSideDirective ],
+  imports: [ ActivityBarComponent, AppShellComponent, AppShellSideDirective ],
   template: `
     <button type="button" class="outside">Outside</button>
     <button type="button" class="other">Other</button>
     <ui-app-shell skipLinkLabel="Skip to content" [(sideOpen)]="sideOpen" [(drawerOpen)]="drawerOpen" [(sideSize)]="sideSize" [mainLabel]="mainLabel()">
       <span uiAppShellHeader>Front Burner</span>
+      @if (withActivity()) {
+        <ui-activity-bar label="Tool windows" />
+      }
       @if (withSide()) {
         <div uiAppShellSide resizeLabel="Resize side panel">
           <button type="button" class="opener">Tree</button>
@@ -29,6 +33,7 @@ class HostComponent {
   readonly drawerOpen = signal(false);
   readonly sideSize = signal(20);
   readonly withSide = signal(true);
+  readonly withActivity = signal(false);
   readonly mainLabel = signal<string | undefined>(undefined);
 }
 
@@ -69,6 +74,16 @@ describe('AppShellComponent', () => {
   });
 
   afterEach(() => element.remove());
+
+  it('puts an activity bar in a navigation landmark named after it, so all content is in landmarks', async () => {
+    expect(query('[role="navigation"]')).toBeNull();
+
+    await set(() => host.withActivity.set(true));
+
+    const landmark = query('[role="navigation"]') as HTMLElement;
+    expect(landmark.getAttribute('aria-label')).toBe('Tool windows');
+    expect(landmark.querySelector('ui-activity-bar')).toBeTruthy();
+  });
 
   it('has banner and main landmarks and a skip link to main', () => {
     const skip = query<HTMLAnchorElement>('a.skip-link') as HTMLAnchorElement;

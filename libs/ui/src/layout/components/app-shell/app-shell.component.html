@@ -2,7 +2,13 @@
 <header class="header">
   <ng-content select="[uiAppShellHeader]" />
 </header>
-<div class="activity">
+<!-- All content must be in a landmark; the activity bar switches between the
+side panel's views, so it is navigation, named after the bar. -->
+<div
+  class="activity"
+  [attr.role]="activityBar() ? 'navigation' : null"
+  [attr.aria-label]="activityBar()?.label() ?? null"
+>
   <ng-content select="ui-activity-bar" />
 </div>
 <ui-split-pane
