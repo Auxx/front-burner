@@ -158,6 +158,7 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   | Border    | `default`, `subtle`, `strong`, `focus`                                                                                                                       |
   | Accent    | `accent`, `accent-hover`, `accent-pressed`                                                                                                                   |
   | Status    | `info`, `success`, `warning`, `danger`, each with background, border, text and icon                                                                          |
+  | Preview   | `preview-code-background`: the tint behind inline code in the live preview (A-8.12)                                                                          |
   | Git       | `added`, `modified`, `deleted`, `renamed`, `untracked`, `ignored`, `conflicted`                                                                              |
   | Diff      | inserted and deleted line and word backgrounds, gutter                                                                                                       |
   | Conflict  | mine, theirs and base block backgrounds, marker line                                                                                                         |

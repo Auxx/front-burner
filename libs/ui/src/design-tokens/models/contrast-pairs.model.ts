@@ -146,6 +146,12 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   ]),
   text('text-default', 'editor-background', 'editor-match'),
 
-  // Code blocks of the live preview, highlighted with the same tokens (A-10.14)
-  ...syntax.map(token => text(`syntax-${token}`, 'surface-sunken'))
+  // Code blocks of the live preview, highlighted with the same tokens (A-10.14),
+  // and its inline code: in text, links, muted text (quotes, footnotes) and
+  // table rows
+  ...syntax.map(token => text(`syntax-${token}`, 'surface-card')),
+  ...[ 'text-default', 'text-link', 'text-muted' ].flatMap(fg => [
+    text(fg, 'surface-island', 'preview-code-background'),
+    text(fg, 'surface-card', 'preview-code-background')
+  ])
 ];

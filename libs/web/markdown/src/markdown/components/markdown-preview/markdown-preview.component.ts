@@ -71,7 +71,7 @@ interface ImagesFor {
   selector: 'md-preview',
   imports: [ TranslocoDirective, RemovalNoticeComponent ],
   templateUrl: './markdown-preview.component.html',
-  styleUrls: [ './markdown-preview.component.scss', './markdown-preview-images.scss' ],
+  styleUrls: [ './markdown-preview.component.scss', './markdown-preview-body.scss', './markdown-preview-images.scss' ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [ PreviewRendererService ],
   // Links are followed by one delegated handler; a link is reached and activated with the keyboard as usual.

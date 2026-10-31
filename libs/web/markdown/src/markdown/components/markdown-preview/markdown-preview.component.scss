@@ -16,31 +16,62 @@
   flex: 1;
   min-block-size: 0;
   overflow: auto;
-  padding: var(--ui-space-2) var(--ui-space-4);
+  padding: var(--ui-space-4) var(--ui-space-6);
   overflow-wrap: break-word;
   color: var(--ui-text-default);
   font-size: var(--ui-font-size-prose);
   line-height: var(--ui-line-height-prose);
 
+  // Markdown laid out as GitHub lays out a README, in the product's colours
+  // (A-8.12): the blocks, code and tables here, the text in
+  // markdown-preview-body.scss.
   ::ng-deep {
+    // Each block is its own formatting context (layout containment), so its
+    // children's margins cannot collapse with the next block's. The space
+    // between blocks is the blocks' own margins instead, which do collapse:
+    // the larger of the two, as between GitHub's elements.
     .md-block {
       content-visibility: auto;
       contain-intrinsic-size: auto 2rem;
+      margin-block-end: var(--ui-space-4);
+
+      // A heading, alone or as the first element of an HTML wrapper such as
+      // `<div align="center">`. In `:where()`, so that the first and last
+      // blocks' rules below win.
+      &:where(:has(> :is(h1, h2, h3, h4, h5, h6), > :first-child > :is(h1, h2, h3, h4, h5, h6):first-child)) {
+        margin-block-start: var(--ui-space-6);
+      }
+
+      &:where(:has(> hr)) {
+        margin-block: var(--ui-space-6);
+      }
+
+      &:first-child {
+        margin-block-start: 0;
+      }
+
+      &:last-child {
+        margin-block-end: 0;
+      }
+
+      // The margins that would collapse through to the block's edges: the
+      // first (and last) element at every depth, inside first (and last) ones.
+      :first-child:not(.md-block :not(:first-child) *) {
+        margin-block-start: 0;
+      }
+
+      :last-child:not(.md-block :not(:last-child) *) {
+        margin-block-end: 0;
+      }
     }
 
-    // The global heading rules of the ui library's `base` layer (A-10.20) are
-    // for the interface, not for rendered Markdown: back to the browser's
-    // headings (the reset already removes their margins). Plan 40 (GitHub-style
-    // preview) replaces this with real heading styles.
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
-      font-size: revert;
-      font-weight: revert;
-      line-height: revert;
+    // Code
+    code {
+      padding: 0.2em 0.4em;
+      border-radius: var(--ui-radius-popover);
+      background: var(--ui-preview-code-background);
+      font-size: 85%;
+      white-space: break-spaces;
     }
 
     // ED-33: wide tables and code blocks scroll sideways inside the preview.
@@ -52,10 +83,20 @@
     }
 
     pre {
-      padding: var(--ui-space-2);
-      border-radius: var(--ui-radius-control);
-      background: var(--ui-surface-sunken);
-      font-family: var(--ui-font-family-mono);
+      padding: var(--ui-space-4);
+      border-radius: var(--ui-radius-popover);
+      background: var(--ui-surface-card);
+      font-size: 85%;
+      line-height: 1.45;
+      overflow-wrap: normal;
+
+      code {
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        font-size: 100%;
+        white-space: pre;
+      }
     }
 
     // Highlighting's classes on the syntax tokens, as in the editor (A-10.14).
@@ -75,24 +116,38 @@
       font-style: italic;
     }
 
+    // Tables
     table {
+      inline-size: max-content;
       border-collapse: collapse;
+      border-spacing: 0;
     }
 
     th,
     td {
-      padding: var(--ui-space-1) var(--ui-space-2);
+      padding: var(--ui-space-1-5) var(--ui-space-3);
       border: var(--ui-border-width) solid var(--ui-border-default);
     }
 
+    th {
+      font-weight: var(--ui-font-weight-semibold);
+    }
+
+    tr:nth-child(2n) {
+      background: var(--ui-surface-card);
+    }
+
     // IM-11: never wider than the preview, in proportion when scaled down.
+    // In the line, as on GitHub, so that badges sit side by side (the ui
+    // library's reset makes them blocks).
+    img,
+    picture {
+      display: inline;
+    }
+
     img {
       max-inline-size: 100%;
       block-size: auto;
-    }
-
-    a {
-      color: var(--ui-text-link);
     }
   }
 }
