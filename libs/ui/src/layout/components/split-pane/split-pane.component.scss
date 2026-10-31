@@ -5,6 +5,9 @@
     --ui-split-pane-gap: var(--ui-island-gap);
     --ui-split-pane-handle-size: var(--ui-control-height-small);
     --ui-split-pane-line: transparent;
+    // The line in forced colours, where backgrounds become Canvas: a system
+    // colour such as CanvasText, or transparent (the default) for no line.
+    --ui-split-pane-line-forced: transparent;
 
     display: grid;
     grid-template-columns: minmax(0, var(--ui-split-pane-size)) var(--ui-split-pane-gap) minmax(0, 1fr);
@@ -44,10 +47,8 @@
     z-index: 1;
     background: var(--ui-split-pane-line);
 
-    // Forced colours drop backgrounds; the line is one, so keep it. A transparent
-    // line (the default) stays invisible.
     @media (forced-colors: active) {
-      forced-color-adjust: none;
+      background: var(--ui-split-pane-line-forced);
     }
   }
 

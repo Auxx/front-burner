@@ -142,7 +142,8 @@ export const Nested: Story = {
 
 /**
  * The editor and the preview: a straight line in the canvas colour replaces
- * the gap, and the separator keeps its 24 px target.
+ * the gap, and the separator keeps its 24 px target. In forced colours the line
+ * is `--ui-split-pane-line-forced`.
  */
 export const LineDivider: Story = {
   render: props => ({
@@ -151,7 +152,7 @@ export const LineDivider: Story = {
     template: `
       <div class="canvas">
         <ui-split-pane
-          style="--ui-split-pane-gap: calc(var(--ui-border-width) * 2); --ui-split-pane-line: var(--ui-surface-canvas)"
+          style="--ui-split-pane-gap: calc(var(--ui-border-width) * 2); --ui-split-pane-line: var(--ui-surface-canvas); --ui-split-pane-line-forced: CanvasText"
           [(size)]="size"
           separatorLabel="Resize first pane"
         >

@@ -30,6 +30,7 @@
   flex: 1;
   --ui-split-pane-gap: calc(var(--ui-border-width) * 2);
   --ui-split-pane-line: var(--ui-surface-canvas);
+  --ui-split-pane-line-forced: CanvasText;
 }
 
 .tabs {
