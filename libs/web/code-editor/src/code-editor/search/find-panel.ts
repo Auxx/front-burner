@@ -16,6 +16,12 @@ import { findIconSprite, findLabels, type FindPanelLabels } from './find-labels'
 /** The counter stops counting here, so that a short query in a 1 MB file stays responsive. */
 export const MAX_COUNTED_MATCHES = 1000;
 
+/**
+ * How long after the last edit of the text the matches are counted again: a query that
+ * matches rarely makes the count scan the whole file, which must not happen on every keystroke.
+ */
+export const RECOUNT_DELAY_MS = 250;
+
 const SVG = 'http://www.w3.org/2000/svg';
 
 /** A match of the query in the text. */
@@ -77,6 +83,7 @@ class FindPanel implements Panel {
   private expanded = false;
   private matches: Match[] = [];
   private more = false;
+  private recountTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly view: EditorView) {
     this.labels = view.state.facet(findLabels);
@@ -144,7 +151,8 @@ class FindPanel implements Panel {
   }
 
   update(update: ViewUpdate): void {
-    let recount = update.docChanged;
+    // Replacing from the panel shows the new count at once; typing in the text waits.
+    let recount = update.transactions.some(transaction => transaction.isUserEvent('input.replace'));
     for (const transaction of update.transactions) {
       for (const effect of transaction.effects) {
         if (effect.is(setSearchQuery) && !effect.value.eq(this.query)) {
@@ -158,12 +166,18 @@ class FindPanel implements Panel {
     }
     if (recount) {
       this.recount();
+    } else if (update.docChanged) {
+      clearTimeout(this.recountTimer);
+      this.recountTimer = setTimeout(() => this.recount(), RECOUNT_DELAY_MS);
+      // Meanwhile the old total, with the current match off a moved selection.
+      this.showCount();
     } else if (update.selectionSet) {
       this.showCount();
     }
   }
 
   destroy(): void {
+    clearTimeout(this.recountTimer);
     panels.delete(this.view);
   }
 
@@ -188,10 +202,13 @@ class FindPanel implements Panel {
   private keydown(event: KeyboardEvent): void {
     if (runScopeHandlers(this.view, event, 'search-panel')) {
       event.preventDefault();
-    } else if (event.key === 'Enter' && event.target === this.findField) {
+    } else if (event.key !== 'Enter' || event.isComposing) {
+      // An Enter that ends an input method's composition is the input method's.
+      return;
+    } else if (event.target === this.findField) {
       event.preventDefault();
       (event.shiftKey ? findPrevious : findNext)(this.view);
-    } else if (event.key === 'Enter' && event.target === this.replaceField) {
+    } else if (event.target === this.replaceField) {
       event.preventDefault();
       replaceNext(this.view);
     }
@@ -216,6 +233,8 @@ class FindPanel implements Panel {
     const searched = query.search !== this.query.search || query.caseSensitive !== this.query.caseSensitive
       || query.wholeWord !== this.query.wholeWord || query.regexp !== this.query.regexp;
     this.query = query;
+    // Counted before the selection moves, so that the counter never shows the old query's count.
+    this.count();
     const { state } = this.view;
     const match = searched && query.valid ? firstMatchFrom(state, query, state.selection.main.from) : null;
     this.view.dispatch({
@@ -225,7 +244,7 @@ class FindPanel implements Panel {
       ],
       ...(match ? { selection: EditorSelection.single(match.from, match.to), userEvent: 'select.search' } : {})
     });
-    this.recount();
+    this.showCount();
   }
 
   private setQuery(query: SearchQuery): void {
@@ -238,10 +257,15 @@ class FindPanel implements Panel {
   }
 
   private recount(): void {
+    this.count();
+    this.showCount();
+  }
+
+  private count(): void {
+    clearTimeout(this.recountTimer);
     const counted = this.query.valid ? countMatches(this.view.state, this.query) : { matches: [], more: false };
     this.matches = counted.matches;
     this.more = counted.more;
-    this.showCount();
   }
 
   private showCount(): void {
@@ -332,7 +356,10 @@ export function createFindPanel(view: EditorView): Panel {
 
 /** Opens the find panel with the replace row shown and the replace field focused; only the find row while read-only. */
 export const openReplacePanel: Command = view => {
-  openSearchPanel(view);
+  // Not again when it is open: `openSearchPanel` would replace the query with the selected match.
+  if (!panels.has(view)) {
+    openSearchPanel(view);
+  }
   const panel = panels.get(view);
   if (panel && !view.state.readOnly) {
     panel.expand(true);

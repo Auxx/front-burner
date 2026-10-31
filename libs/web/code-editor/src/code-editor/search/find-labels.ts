@@ -38,7 +38,7 @@ const ENGLISH: FindPanelLabels = {
   previous: 'Previous match',
   next: 'Next match',
   close: 'Close',
-  replaceOne: 'Replace',
+  replaceOne: 'Replace match',
   replaceAll: 'Replace all',
   noResults: 'No results',
   invalid: 'Invalid expression',

@@ -1,10 +1,10 @@
 import { undo } from '@codemirror/commands';
 import { getSearchQuery, openSearchPanel, searchPanelOpen, SearchQuery } from '@codemirror/search';
 import { EditorView } from '@codemirror/view';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { contentOf, createEditorState } from '../state/editor-state';
 import { type FindPanelLabels } from './find-labels';
-import { countMatches, MAX_COUNTED_MATCHES, openReplacePanel } from './find-panel';
+import { countMatches, MAX_COUNTED_MATCHES, openReplacePanel, RECOUNT_DELAY_MS } from './find-panel';
 
 const LABELS: FindPanelLabels = {
   find: 'L.find',
@@ -27,6 +27,7 @@ describe('the find panel', () => {
   let view: EditorView;
 
   afterEach(() => {
+    vi.useRealTimers();
     view.destroy();
     view.dom.remove();
   });
@@ -180,13 +181,39 @@ describe('the find panel', () => {
       expect(getSearchQuery(view.state).regexp).toBe(true);
     });
 
-    it('counts again when the text changes, without a current match off the selection', () => {
+    it('counts again shortly after the text changes, without a current match off the selection', () => {
+      vi.useFakeTimers({ toFake: [ 'setTimeout', 'clearTimeout' ] });
       openSearchPanel(open());
       type(findField(), 'foo');
 
       view.dispatch({ changes: { from: view.state.doc.length, insert: ' foo' }, selection: { anchor: 4 } });
+      view.dispatch({ changes: { from: 4, insert: 'foo ' } });
+      expect(counter()).toBe('0/3');
 
-      expect(counter()).toBe('0/4');
+      vi.advanceTimersByTime(RECOUNT_DELAY_MS);
+      expect(counter()).toBe('0/5');
+    });
+
+    it('never shows the old query\'s count while the selection moves to the new query\'s match', () => {
+      openSearchPanel(open());
+      const counted = panel().querySelector('.fb-find-count') as HTMLElement;
+      const observer = new MutationObserver(() => undefined);
+      observer.observe(counted, { childList: true, characterData: true, subtree: true });
+
+      type(findField(), 'foo');
+
+      const shown = observer.takeRecords().flatMap(record => Array.from(record.addedNodes, node => node.textContent));
+      observer.disconnect();
+      expect(shown).toEqual([ '1/3' ]);
+    });
+
+    it('leaves an Enter that ends an input method\'s composition alone', () => {
+      openSearchPanel(open());
+      type(findField(), 'foo');
+
+      press(findField(), 'Enter', { isComposing: true });
+
+      expect(counter()).toBe('1/3');
     });
 
     it('says when nothing matches, and nothing for an empty query', () => {
@@ -266,6 +293,7 @@ describe('the find panel', () => {
 
       press(replaceField(), 'Enter');
       expect(contentOf(view.state)).toBe('X bar X baz foo');
+      expect(counter()).toBe('1/1');
     });
 
     it('replaces every match with Replace all', () => {
@@ -302,6 +330,21 @@ describe('the find panel', () => {
       press(findField(), 'Escape');
       press(view.contentDOM, 'h', { ctrlKey: true, keyCode: 72 } as KeyboardEventInit);
       expect(searchPanelOpen(view.state)).toBe(true);
+      expect(document.activeElement).toBe(replaceField());
+    });
+
+    it('keeps the query when the replace shortcut is pressed with the panel open', () => {
+      openSearchPanel(open('a 123 b 45'));
+      named(LABELS.regexp).click();
+      type(findField(), String.raw`\d+`);
+      expect(view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)).toBe('123');
+      toggle().click();
+      replaceField().focus();
+
+      press(replaceField(), 'h', { ctrlKey: true, keyCode: 72 } as KeyboardEventInit);
+
+      expect(getSearchQuery(view.state).search).toBe(String.raw`\d+`);
+      expect(findField().value).toBe(String.raw`\d+`);
       expect(document.activeElement).toBe(replaceField());
     });
 

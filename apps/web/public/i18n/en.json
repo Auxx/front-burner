@@ -385,7 +385,7 @@
   "web-feature-repository-screen.EditorPaneComponent.findPanel.previous": "Previous match",
   "web-feature-repository-screen.EditorPaneComponent.findPanel.next": "Next match",
   "web-feature-repository-screen.EditorPaneComponent.findPanel.close": "Close",
-  "web-feature-repository-screen.EditorPaneComponent.findPanel.replaceOne": "Replace",
+  "web-feature-repository-screen.EditorPaneComponent.findPanel.replaceOne": "Replace match",
   "web-feature-repository-screen.EditorPaneComponent.findPanel.replaceAll": "Replace all",
   "web-feature-repository-screen.EditorPaneComponent.findPanel.noResults": "No results",
   "web-feature-repository-screen.EditorPaneComponent.findPanel.invalid": "Invalid expression",

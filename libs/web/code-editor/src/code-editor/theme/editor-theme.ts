@@ -9,7 +9,9 @@ export const editorTheme = EditorView.theme({
     color: 'var(--ui-text-default)',
     backgroundColor: 'var(--ui-editor-background)',
     fontFamily: 'var(--ui-font-family-mono)',
-    fontSize: 'var(--ui-font-size-md)'
+    fontSize: 'var(--ui-font-size-md)',
+    // The find panel slides in from above the editor's top edge, not over what is above it.
+    overflow: 'clip'
   },
   // The focus ring (A-10.30), inside the editor so that the pane around it does not clip it.
   '&.cm-focused': {
