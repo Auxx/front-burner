@@ -43,6 +43,12 @@
     position: relative;
     z-index: 1;
     background: var(--ui-split-pane-line);
+
+    // Forced colours drop backgrounds; the line is one, so keep it. A transparent
+    // line (the default) stays invisible.
+    @media (forced-colors: active) {
+      forced-color-adjust: none;
+    }
   }
 
   .separator {

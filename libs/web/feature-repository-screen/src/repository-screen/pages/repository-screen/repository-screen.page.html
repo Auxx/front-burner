@@ -62,16 +62,14 @@
         </ui-activity-bar>
       }
       @if (state === 'ready') {
-        <section uiAppShellSide class="files" [resizeLabel]="t('resizeFiles')">
-          <ui-island [label]="t('files')" [scrollable]="false">
-            <rs-file-tree
-              [selected]="selectedPath()"
-              (selectPath)="openEntryAt($event)"
-              (retry)="retry($event)"
-              (action)="runAction($event.action, $event.path)"
-            />
-          </ui-island>
-        </section>
+        <ui-island uiAppShellSide [label]="t('files')" [resizeLabel]="t('resizeFiles')" [scrollable]="false">
+          <rs-file-tree
+            [selected]="selectedPath()"
+            (selectPath)="openEntryAt($event)"
+            (retry)="retry($event)"
+            (action)="runAction($event.action, $event.path)"
+          />
+        </ui-island>
       }
       @if (state === 'ready') {
         <ui-island [scrollable]="false">

@@ -5,8 +5,16 @@
   min-block-size: 0;
 }
 
+.notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-2);
+}
+
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--ui-space-2);
   padding: var(--ui-space-1) var(--ui-space-2);

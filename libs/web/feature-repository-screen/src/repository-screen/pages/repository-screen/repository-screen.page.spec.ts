@@ -363,7 +363,7 @@ describe('RepositoryScreenPage', () => {
   describe('when the repository has opened', () => {
     const files = () => page().querySelector('ui-activity-bar button[uiActivityBarItem="files"]') as HTMLButtonElement;
     const pressed = () => files().getAttribute('aria-pressed');
-    const tree = () => page().querySelector('section.files') as HTMLElement;
+    const tree = () => page().querySelector('ui-island[uiAppShellSide]') as HTMLElement;
     const shown = (element: Element) => !element.closest('[hidden]');
 
     afterEach(() => localStorage.clear());
@@ -372,8 +372,8 @@ describe('RepositoryScreenPage', () => {
       await visit('/repositories/12');
 
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
-      expect(tree().hasAttribute('aria-label')).toBe(false);
-      expect(tree().querySelector('ui-island')?.getAttribute('aria-label')).toBe(`${KEY}.files`);
+      expect(tree().getAttribute('aria-label')).toBe(`${KEY}.files`);
+      expect(tree().getAttribute('role')).toBe('region');
       expect(page().querySelector('ui-split-pane [role="separator"]')?.getAttribute('aria-label')).toBe(
         `${KEY}.resizeFiles`
       );
@@ -646,7 +646,7 @@ describe('RepositoryScreenPage', () => {
     it('puts the file tree and the editor in two islands', async () => {
       await visit('/repositories/12');
 
-      const [ side, editor ] = [ 'section.files > ui-island', 'main > ui-island' ].map(selector =>
+      const [ side, editor ] = [ 'ui-island[uiAppShellSide]', 'main > ui-island' ].map(selector =>
         page().querySelector(selector)
       );
       expect(side?.getAttribute('aria-label')).toBe(`${KEY}.files`);
@@ -763,6 +763,19 @@ describe('RepositoryScreenPage', () => {
       expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('true');
     });
 
+    it('moves the focus to the named Files region when the drawer opens', async () => {
+      narrow = true;
+      await visit('/repositories/12');
+
+      files().click();
+      await settle(harness.fixture);
+
+      const active = document.activeElement as HTMLElement;
+      expect(active).toBe(tree());
+      expect(active.getAttribute('role')).toBe('region');
+      expect(active.getAttribute('aria-label')).toBe(`${KEY}.files`);
+    });
+
     it('shows the bar without Files for a repository that cannot be opened', async () => {
       answers.push(of({ ...handbook, status: 'cloning' }));
       await visit('/repositories/12');
@@ -770,7 +783,7 @@ describe('RepositoryScreenPage', () => {
       expect(page().querySelector('header rs-repository-bar h1')?.textContent?.trim()).toBe('handbook');
       expect(files()).toBeNull();
       expect(page().querySelector('ui-activity-bar')).toBeNull();
-      expect(page().querySelector('section.files')).toBeNull();
+      expect(page().querySelector('ui-island[uiAppShellSide]')).toBeNull();
     });
   });
   describe('editing and saving', () => {

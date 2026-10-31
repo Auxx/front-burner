@@ -12,11 +12,3 @@
 .reference {
   display: block;
 }
-
-// One cell, so that the island fills the side and its tree scrolls inside.
-.files {
-  display: grid;
-  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-  block-size: 100%;
-  min-block-size: 0;
-}

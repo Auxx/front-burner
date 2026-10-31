@@ -296,7 +296,7 @@ test.describe('editor', () => {
     test.skip(isMobile, 'a phone shows the Edit and Preview tabs instead');
     const { id } = seedHandbook(instance.dataDir);
     await openScreen(page, `/repositories/${id}/files/README.md`);
-    const separator = main(page).getByRole('separator');
+    const separator = main(page).getByRole('separator', { name: 'Resize the preview' });
     const width = async () => (await editor(page, 'README.md').boundingBox())!.width;
 
     const before = await width();
