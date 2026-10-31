@@ -16,6 +16,7 @@ import {
   AppShellComponent,
   AppShellSideDirective,
   ButtonComponent,
+  CentredIslandComponent,
   InlineBannerComponent,
   SpinnerComponent
 } from '@front-burner/ui';
@@ -75,6 +76,7 @@ import { fileName } from '../../utils/file-name/file-name';
     AppShellComponent,
     AppShellSideDirective,
     ButtonComponent,
+    CentredIslandComponent,
     InlineBannerComponent,
     SpinnerComponent,
     AppHeaderComponent,

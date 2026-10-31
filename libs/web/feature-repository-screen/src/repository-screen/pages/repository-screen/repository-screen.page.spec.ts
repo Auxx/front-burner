@@ -189,6 +189,44 @@ describe('RepositoryScreenPage', () => {
     expect(document.title).toBe('web-shell.PageNotFoundPage.title · Front Burner');
   });
 
+  describe('one app shell for every state', () => {
+    function expectOneShell(): void {
+      expect(page().querySelectorAll('ui-app-shell').length).toBe(1);
+      expect(page().querySelector('ui-activity-bar')).toBeNull();
+    }
+
+    it('renders the missing message in a centred island', async () => {
+      answers.push(failure(404, 'not-found'));
+      await visit('/repositories/12');
+
+      expectOneShell();
+      expect(page().querySelector('ui-app-shell ui-centred-island shell-page-not-found, ui-app-shell shell-page-not-found ui-centred-island')).not.toBeNull();
+    });
+
+    it('renders the failure in a centred island', async () => {
+      answers.push(failure(500, 'internal'));
+      await visit('/repositories/12');
+
+      expectOneShell();
+      expect(page().querySelector('ui-app-shell ui-centred-island ui-inline-banner')).not.toBeNull();
+    });
+
+    it('renders the not-openable message in a centred island', async () => {
+      answers.push(of({ ...handbook, status: 'cloning' }));
+      await visit('/repositories/12');
+
+      expectOneShell();
+      expect(page().querySelector('ui-centred-island rs-not-openable')).not.toBeNull();
+    });
+
+    it('renders no shell while loading', async () => {
+      answers.push(new Subject<RepositorySummary>());
+      await visit('/repositories/12');
+
+      expect(page().querySelector('ui-app-shell')).toBeNull();
+    });
+  });
+
   it('AC-FILE-001.3: shows the status and the settings link for a cloning repository', async () => {
     answers.push(of({ ...handbook, status: 'cloning' }));
     await visit('/repositories/12');
