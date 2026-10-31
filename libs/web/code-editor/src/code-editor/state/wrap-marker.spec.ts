@@ -17,8 +17,10 @@ function stubHeights(view: EditorView, rowsOf: (text: string) => number): void {
 }
 
 function markers(view: EditorView): string[] {
-  const gutter = view.dom.querySelector('.cm-wrapMarkers');
-  return Array.from(gutter?.querySelectorAll('.cm-wrap-marker') ?? []).map(el => el.textContent ?? '');
+  // The first element is the hidden spacer that keeps the gutter's width.
+  const elements = Array.from(view.dom.querySelectorAll('.cm-wrapMarkers .cm-gutterElement'))
+    .filter(el => (el as HTMLElement).style.visibility !== 'hidden');
+  return elements.flatMap(el => Array.from(el.querySelectorAll('.cm-wrap-marker'))).map(el => el.textContent ?? '');
 }
 
 describe('wrapMarker', () => {
@@ -65,6 +67,17 @@ describe('wrapMarker', () => {
     view.measure();
     expect(geometryChanged).toBe(true);
     expect(markers(view)).toEqual([ '↪' ]);
+    view.destroy();
+  });
+
+  it('keeps the gutter width with a spacer when no line wraps', () => {
+    const view = open();
+    stubHeights(view, () => 1);
+    view.dispatch({ changes: { from: 0, insert: 'a' } });
+    expect(markers(view)).toEqual([]);
+    const spacer = view.dom.querySelector('.cm-wrapMarkers .cm-gutterElement');
+    expect(spacer?.querySelector('.cm-wrap-marker')).not.toBeNull();
+    expect((spacer as HTMLElement).style.visibility).toBe('hidden');
     view.destroy();
   });
 

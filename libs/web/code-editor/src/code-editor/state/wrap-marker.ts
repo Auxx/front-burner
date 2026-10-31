@@ -24,6 +24,8 @@ const marker = new WrapMarker();
 export function wrapMarker(): Extension {
   return gutter({
     class: 'cm-wrapMarkers',
+    // A hidden marker keeps the gutter at its width, so the text does not shift as lines wrap.
+    initialSpacer: () => marker,
     lineMarker: (view: EditorView, line) =>
       view.lineBlockAt(line.from).height > view.defaultLineHeight * WRAPPED_LINES ? marker : null,
     lineMarkerChange: update => update.geometryChanged || update.docChanged
