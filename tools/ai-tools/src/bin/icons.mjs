@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { main, print, table, UsageError } from '../lib/cli.mjs';
 import { buildSprite, findIcons, loadIcons, readIcon, readIconList, UI_SPRITE } from '../lib/icons.mjs';
-import { workspacePath } from '../lib/workspace.mjs';
+import { readText, workspacePath } from '../lib/workspace.mjs';
 
 main({
   name: 'icons',
@@ -36,7 +36,7 @@ main({
       run(options) {
         const names = readIconList();
         const sprite = buildSprite(loadIcons(), names);
-        const current = existsSync(UI_SPRITE) ? readFileSync(UI_SPRITE, 'utf8') : '';
+        const current = existsSync(UI_SPRITE) ? readText(UI_SPRITE) : '';
         const target = workspacePath(UI_SPRITE);
         if (current === sprite) {
           console.log(`${target} is up to date (${names.length} icons).`);

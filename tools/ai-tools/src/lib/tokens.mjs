@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isClose, measureContrast, parseColour } from './colour.mjs';
-import { WORKSPACE_ROOT } from './workspace.mjs';
+import { readText, WORKSPACE_ROOT } from './workspace.mjs';
 
 const TOKENS_DIR = join(WORKSPACE_ROOT, 'libs/ui/src/styles/tokens');
 
@@ -111,10 +110,10 @@ export function parseOverrides(list = []) {
 
 /** Reads the token files; `overrides` (from `parseOverrides`) replace or add tokens. */
 export function loadTokens({ overrides = [], sources = TOKEN_SOURCES } = {}) {
-  const primitives = parsePrimitives(readFileSync(sources.primitives, 'utf8'));
+  const primitives = parsePrimitives(readText(sources.primitives));
   const semantic = new Map();
   for (const file of sources.semantic) {
-    for (const [ name, values ] of parseSemantic(readFileSync(file, 'utf8'), file)) {
+    for (const [ name, values ] of parseSemantic(readText(file), file)) {
       semantic.set(name, values);
     }
   }

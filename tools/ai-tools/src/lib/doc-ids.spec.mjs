@@ -178,6 +178,16 @@ describe('doc-ids', () => {
       expect(readFileSync(path, 'utf8')).toBe('- **A-1.2** One.');
     });
 
+    it('reads CRLF files as LF and writes them back with CRLF', () => {
+      const path = join(fixture, 'docs', 'crlf.md');
+      writeFileSync(path, '## In scope\r\n\r\n- **A-2.1** One.\r\n');
+      const files = scan({ roots: [ workspacePath(fixture) ] }).filter(f => f.file === path);
+      expect(files.map(f => f.text)).toEqual([ '## In scope\n\n- **A-2.1** One.\n' ]);
+      applyMapping(files, new Map([ [ 'A-2.1', 'A-2.2' ] ]), { write: true });
+      expect(readFileSync(path, 'utf8')).toBe('## In scope\r\n\r\n- **A-2.2** One.\r\n');
+      rmSync(path);
+    });
+
     it('refuses paths outside the workspace', () => {
       expect(() => scan({ roots: [ '../' ] })).toThrow(OutsideWorkspaceError);
     });

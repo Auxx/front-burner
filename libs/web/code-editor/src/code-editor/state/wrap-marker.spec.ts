@@ -6,6 +6,12 @@ import { createEditorState, setSoftWrap } from './editor-state';
 const LINE_HEIGHT = 20;
 const LONG = 'x'.repeat(500);
 
+/** CodeMirror internals that its public types leave out, used to fake a resize. */
+interface ViewInternals {
+  viewState: { measure(): number; };
+  measure(): void;
+}
+
 // jsdom has no layout, so the heights of the line blocks are stubbed: a line is as tall as the
 // number of rows that `rowsOf` says it wraps to.
 function stubHeights(view: EditorView, rowsOf: (text: string) => number): void {
@@ -59,12 +65,13 @@ describe('wrapMarker', () => {
     // A resize makes CodeMirror's measure report a geometry change (flag 16), without any edit.
     // jsdom has no layout, so the measure is stubbed to report it once.
     const geometry = 16;
-    vi.spyOn(view.viewState, 'measure').mockReturnValueOnce(geometry);
+    const internals = view as unknown as ViewInternals;
+    vi.spyOn(internals.viewState, 'measure').mockReturnValueOnce(geometry);
     let geometryChanged = false;
     view.dispatch({
       effects: StateEffect.appendConfig.of(EditorView.updateListener.of(u => (geometryChanged ||= u.geometryChanged)))
     });
-    view.measure();
+    internals.measure();
     expect(geometryChanged).toBe(true);
     expect(markers(view)).toEqual([ '↪' ]);
     view.destroy();
