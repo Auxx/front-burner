@@ -12,7 +12,7 @@ import {
   Text,
   type TransactionSpec
 } from '@codemirror/state';
-import { drawSelection, EditorView, keymap } from '@codemirror/view';
+import { drawSelection, EditorView, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { classHighlighter, tagHighlighter, tags } from '@lezer/highlight';
 import { editorTheme } from '../theme/editor-theme';
 import { lineDirection } from './line-direction';
@@ -30,6 +30,8 @@ export interface EditorStateOptions {
    * without it.
    */
   cursor?: CursorPosition;
+  /** Long lines wrap at the editor's edge; off, they scroll sideways. On by default. */
+  softWrap?: boolean;
 }
 
 /** A position in the text by line and column, both 1-based. */
@@ -55,6 +57,9 @@ const markdownHighlighter = tagHighlighter([
 const highlighting = new Compartment();
 const readOnly = new Compartment();
 const label = new Compartment();
+const softWrap = new Compartment();
+
+const softWrapExtension: Extension = EditorView.lineWrapping;
 
 const readOnlyExtension: Extension = [ EditorState.readOnly.of(true), EditorView.editable.of(false) ];
 
@@ -81,7 +86,7 @@ function labelExtension(text: string): Extension {
 }
 
 /**
- * A file's editor state with exactly the extensions of A-8.11, the setup that spike 3
+ * A file's editor state with exactly the extensions of A-8.11 (including line numbers and the soft-wrap compartment), the setup that spike 3
  * measured on a real phone. Nothing in it changes the text on its own (ED-9): adding an
  * extension means measuring again with the `typing-test` tool.
  */
@@ -98,7 +103,9 @@ export function createEditorState(options: EditorStateOptions): EditorState {
       highlighting.of(options.highlight ? language : []),
       syntaxHighlighting(classHighlighter),
       syntaxHighlighting(markdownHighlighter),
-      EditorView.lineWrapping,
+      softWrap.of(options.softWrap === false ? [] : softWrapExtension),
+      lineNumbers(),
+      highlightActiveLineGutter(),
       EditorView.perLineTextDirection.of(true),
       lineDirection,
       EditorView.contentAttributes.of({
@@ -120,6 +127,15 @@ export function setHighlighting(on: boolean): TransactionSpec {
 
 export function isHighlighting(state: EditorState): boolean {
   return highlighting.get(state) === language;
+}
+
+/** Switches soft wrapping without recreating the state, so the undo history stays. */
+export function setSoftWrap(on: boolean): TransactionSpec {
+  return { effects: softWrap.reconfigure(on ? softWrapExtension : []) };
+}
+
+export function isSoftWrapping(state: EditorState): boolean {
+  return softWrap.get(state) === softWrapExtension;
 }
 
 export function setReadOnly(on: boolean): TransactionSpec {

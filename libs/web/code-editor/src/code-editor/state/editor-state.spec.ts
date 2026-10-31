@@ -1,4 +1,4 @@
-import { undo } from '@codemirror/commands';
+import { undo, undoDepth } from '@codemirror/commands';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorSelection, type EditorState, type Transaction } from '@codemirror/state';
 import { EditorView, runScopeHandlers } from '@codemirror/view';
@@ -8,10 +8,12 @@ import {
   cursorOf,
   type EditorStateOptions,
   isHighlighting,
+  isSoftWrapping,
   replaceContent,
   setHighlighting,
   setLabel,
-  setReadOnly
+  setReadOnly,
+  setSoftWrap
 } from './editor-state';
 
 const FILE = '---\ntitle: Notes\n---\n\n# Heading\n\nSome text.\n';
@@ -184,5 +186,30 @@ describe('createEditorState', () => {
     expect(cursorOf(create({ content: 'one\nt', cursor: { line: 2, column: 9 } }))).toEqual({ line: 2, column: 2 });
     expect(cursorOf(create({ content: 'one', cursor: { line: 5, column: 2 } }))).toEqual({ line: 1, column: 2 });
     expect(cursorOf(create({ content: 'one' }))).toEqual({ line: 1, column: 1 });
+  });
+
+  it('wraps by default and can stop without losing the undo history', () => {
+    let state = create({ content: 'a' });
+
+    expect(isSoftWrapping(state)).toBe(true);
+    state = state.update({ changes: { from: 1, insert: 'b' } }).state;
+    state = state.update(setSoftWrap(false)).state;
+
+    expect(isSoftWrapping(state)).toBe(false);
+    expect(undoDepth(state)).toBe(1);
+    expect(isSoftWrapping(state.update(setSoftWrap(true)).state)).toBe(true);
+  });
+
+  it('starts unwrapped when asked', () => {
+    expect(isSoftWrapping(create({ softWrap: false }))).toBe(false);
+  });
+
+  it('shows line numbers', () => {
+    const view = new EditorView({ state: create({ content: 'one\ntwo' }) });
+    const numbers = view.dom.querySelector('.cm-lineNumbers')?.textContent ?? '';
+
+    expect(numbers).toContain('1');
+    expect(numbers).toContain('2');
+    view.destroy();
   });
 });

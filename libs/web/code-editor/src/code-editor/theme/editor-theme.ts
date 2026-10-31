@@ -18,6 +18,17 @@ export const editorTheme = EditorView.theme({
   },
   '.cm-scroller': { fontFamily: 'inherit', lineHeight: 'var(--ui-line-height-code)' },
   '.cm-content': { padding: 'var(--ui-space-3) 0', caretColor: 'var(--ui-editor-cursor)' },
+  '.cm-gutters': {
+    color: 'var(--ui-editor-line-number)',
+    backgroundColor: 'var(--ui-editor-background)',
+    border: 'none'
+  },
+  '.cm-lineNumbers .cm-gutterElement': { color: 'var(--ui-editor-line-number)' },
+  '.cm-activeLineGutter': {
+    color: 'var(--ui-editor-line-number-active)',
+    backgroundColor: 'transparent'
+  },
+  '.cm-activeLineGutter.cm-gutterElement': { color: 'var(--ui-editor-line-number-active)' },
   '.cm-line': { padding: '0 var(--ui-space-4)' },
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--ui-editor-cursor)' },
   '.cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
