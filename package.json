@@ -152,7 +152,7 @@
     "vitest": "4.1.12",
     "webpack": "5.110.3",
     "webpack-cli": "7.2.3",
-    "webpack-dev-server": "5.2.7"
+    "webpack-dev-server": "6.1.0"
   },
   "overrides": {
     "multer": "2.5.0"
