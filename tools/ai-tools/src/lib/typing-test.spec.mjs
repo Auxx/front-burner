@@ -97,6 +97,13 @@ describe('keystrokeTimings', () => {
   });
 });
 
+describe('switches', () => {
+  it('has line numbers and the wrap marker gutter, and a setup that turns both off', () => {
+    expect(Object.keys(SWITCHES)).toEqual(expect.arrayContaining([ 'linenumbers', 'wrapmarker' ]));
+    expect(SETUPS).toContainEqual([ 'linenumbers', 'wrapmarker' ]);
+  });
+});
+
 describe('parseSetup', () => {
   it('defaults to the first file with everything on', () => {
     expect(parseSetup('')).toEqual({ file: '2kb.md', off: [], unknown: [] });

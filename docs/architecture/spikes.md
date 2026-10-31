@@ -205,6 +205,18 @@ they are built. See [overview.md](overview.md) for the numbering conventions.
     cautious 100 KB limit rather than measuring with runs of several hundred
     keystrokes; a file over it costs one tap, and preferences for the limit come
     after the MVP (`docs/wiki/todo.md`). The check is finished.
+  - **Note of 2026-10-31, line numbers and the wrap-marker gutter (plan 38).**
+    The typing test page gained the switches `linenumbers` (line numbers and the
+    active-line gutter) and `wrapmarker`, on by default. In emulation (Chromium,
+    Pixel 7, CPU slowed 4x, `1mb.md`, 50 letters typed in the middle) with
+    everything on, the page's own meter read a median of 19 ms and a maximum of
+    74 ms (one keystroke over 50 ms; browser timing maximum 77 ms); with
+    `off=linenumbers,wrapmarker` a median of 19 ms and a maximum of 35 ms
+    (browser timing maximum 37 ms). The 2026-10-28 run measured a median of 30
+    ms and a maximum of 43 ms. The median is unchanged by the gutters; the
+    single 74 ms keystroke was not repeated in the run without them, so it is
+    within what one run of 50 keystrokes can show. Not repeated on a real phone
+    yet.
   - **NF-2.9:** the initial JavaScript was 65.5 KB gzipped. The editor's lazy
     chunk was 224 KB and the worker 164 KB (A-8.11, A-8.13).
 

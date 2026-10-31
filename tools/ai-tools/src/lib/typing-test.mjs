@@ -15,6 +15,8 @@ export const SWITCHES = Object.freeze({
   frontmatter: 'front matter highlighting',
   language: 'Markdown highlighting, front matter included',
   wrap: 'soft wrap',
+  linenumbers: 'line numbers and the active-line gutter',
+  wrapmarker: 'the wrap marker gutter',
   spellcheck: 'spell check and autocorrect',
   direction: 'per-line text direction'
 });
@@ -27,6 +29,7 @@ export const SETUPS = Object.freeze([
   [ 'wrap' ],
   [ 'spellcheck' ],
   [ 'direction' ],
+  [ 'linenumbers', 'wrapmarker' ],
   [ 'language', 'wrap', 'spellcheck', 'direction' ]
 ]);
 

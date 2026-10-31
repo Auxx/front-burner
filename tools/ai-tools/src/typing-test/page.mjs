@@ -8,7 +8,17 @@ import { yamlFrontmatter } from '@codemirror/lang-yaml';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { search, searchKeymap } from '@codemirror/search';
 import { EditorSelection, EditorState, RangeSetBuilder } from '@codemirror/state';
-import { Decoration, drawSelection, EditorView, keymap, ViewPlugin } from '@codemirror/view';
+import {
+  Decoration,
+  drawSelection,
+  EditorView,
+  gutter,
+  GutterMarker,
+  highlightActiveLineGutter,
+  keymap,
+  lineNumbers,
+  ViewPlugin
+} from '@codemirror/view';
 import {
   formatResults,
   parseSetup,
@@ -131,6 +141,28 @@ function decorateLines(view) {
   return builder.finish();
 }
 
+/**
+ * A mirror of `wrapMarker()` in libs/web/code-editor/src/code-editor/state/wrap-marker.ts (a
+ * library cannot be imported from here), so that the test measures the same gutter.
+ */
+class WrapMarker extends GutterMarker {
+  toDOM() {
+    const element = document.createElement('span');
+    element.className = 'cm-wrap-marker';
+    element.textContent = '↪';
+    element.setAttribute('aria-hidden', 'true');
+    return element;
+  }
+}
+const marker = new WrapMarker();
+const wrapMarker = () =>
+  gutter({
+    class: 'cm-wrapMarkers',
+    initialSpacer: () => marker,
+    lineMarker: (view, line) => view.lineBlockAt(line.from).height > view.defaultLineHeight * 1.5 ? marker : null,
+    lineMarkerChange: update => update.geometryChanged || update.docChanged
+  });
+
 /** The editor's setup as A-8.11 plans it, without the parts the address switches off. */
 function extensions() {
   const on = name => !setup.off.includes(name);
@@ -143,6 +175,8 @@ function extensions() {
     ...language,
     syntaxHighlighting(defaultHighlightStyle),
     on('wrap') ? EditorView.lineWrapping : [],
+    on('linenumbers') ? [ lineNumbers(), highlightActiveLineGutter() ] : [],
+    on('wrapmarker') ? wrapMarker() : [],
     on('direction') ? [ EditorView.perLineTextDirection.of(true), lineDirection ] : [],
     EditorView.contentAttributes.of(
       on('spellcheck')
