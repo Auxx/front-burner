@@ -21,6 +21,7 @@ import {
 } from '@codemirror/view';
 import {
   formatResults,
+  isOn,
   parseSetup,
   setupQuery,
   SETUPS,
@@ -165,7 +166,7 @@ const wrapMarker = () =>
 
 /** The editor's setup as A-8.11 plans it, without the parts the address switches off. */
 function extensions() {
-  const on = name => !setup.off.includes(name);
+  const on = name => isOn(setup.off, name);
   const language = on('language') ? [ on('frontmatter') ? yamlFrontmatter({ content: markdown() }) : markdown() ] : [];
   return [
     history(),

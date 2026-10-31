@@ -68,8 +68,9 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     highlighting, soft wrap (switched with a `Compartment`, with the wrap-marker
     gutter that marks wrapped lines), line numbers with the active-line gutter,
     per-line text direction and the spell-check attributes. Line numbers and the
-    wrap-marker gutter cost no measurable typing time (spike 3, note of
-    2026-10-31). The phone check of this list is to be repeated
+    wrap-marker gutter left the median unchanged in emulation (one run each);
+    one keystroke in 50 reached 74 ms; to be repeated on a phone (spike 3, note
+    of 2026-10-31). The phone check of this list is to be repeated
     (`docs/wiki/typing-test.md`).
   - Typing stays within NF-2.4 on its own: at a 4× CPU slowdown, keystrokes in a
     200 KB file took at most 32–40 ms, and in a 1 MB file 40–56 ms, right at the

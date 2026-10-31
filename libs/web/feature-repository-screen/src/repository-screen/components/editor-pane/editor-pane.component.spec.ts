@@ -220,7 +220,8 @@ describe('EditorPaneComponent', () => {
     it('keeps the line at the top of the editor when switching', async () => {
       const file = openFile('docs/guide.md');
       await show(file);
-      const editor: CodeEditorComponent = fixture.debugElement.query(el => el.name === 'ce-code-editor').componentInstance;
+      const editor: CodeEditorComponent =
+        fixture.debugElement.query(el => el.name === 'ce-code-editor').componentInstance;
       vi.spyOn(editor, 'topLine').mockReturnValue(3);
       const scrolled = vi.spyOn(editor, 'scrollToLine');
 

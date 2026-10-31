@@ -135,6 +135,8 @@ page can switch off one part at a time:
 | `language`    | All highlighting: no Markdown or YAML parser at all                                  |
 | `wrap`        | Soft wrap: long lines scroll sideways instead                                        |
 | `spellcheck`  | The browser's spell check, autocorrect and automatic capitals (Gboard keeps its own) |
+| `linenumbers` | Line numbers and the active-line gutter                                              |
+| `wrapmarker`  | The wrap marker gutter (always off when `wrap` is off, as in the product)            |
 | `direction`   | Working out each line's text direction for right-to-left scripts                     |
 
 Choose the setup from the page's second menu (it shows "Everything on" at
@@ -156,7 +158,8 @@ except for run 1, the baseline:
 | 5   | `1mb.md` | Without soft wrap                                                  |
 | 6   | `1mb.md` | Without spell check and autocorrect                                |
 | 7   | `1mb.md` | Without per-line text direction                                    |
-| 8   | `1mb.md` | The last entry: everything above switched off (the editor's floor) |
+| 8   | `1mb.md` | Without line numbers and the wrap marker gutter                    |
+| 9   | `1mb.md` | The last entry: everything above switched off (the editor's floor) |
 
 Use the same phone, Chrome and Gboard as round 2, prepared as in step 2. Report
 with this template:
@@ -173,14 +176,15 @@ Run 4 (1 MB, end + Enter, off: language):
 Run 5 (1 MB, end + Enter, off: wrap):
 Run 6 (1 MB, end + Enter, off: spellcheck):
 Run 7 (1 MB, end + Enter, off: direction):
-Run 8 (1 MB, end + Enter, off: all four):
+Run 8 (1 MB, end + Enter, off: linenumbers, wrapmarker):
+Run 9 (1 MB, end + Enter, off: all six):
 
 How each felt, if any differed:
 ```
 
 A part costs the time when switching it off brings the share of keystrokes over
-50 ms (browser timing) down towards the baseline. Run 8 shows what the editor
-costs with all of them off; if even run 8 fails, no switch is enough and the 1
+50 ms (browser timing) down towards the baseline. Run 9 shows what the editor
+costs with all of them off; if even run 9 fails, no switch is enough and the 1
 MB limit on phones is the question.
 
 ## Round 4: set the size limit
