@@ -293,6 +293,38 @@ test.describe('editor', () => {
     }
   });
 
+  test('ED-11: floats the find panel over the editor without moving the text or covering the preview', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'a phone shows the editor and the preview in separate tabs');
+    const { id } = seedHandbook(instance.dataDir);
+    await openScreen(page, `/repositories/${id}/files/README.md`);
+    await expect(editor(page, 'README.md')).toBeVisible();
+    const firstLine = main(page).locator('.cm-line').first();
+    const lineTop = (await firstLine.boundingBox())!.y;
+    const editorBox = (await main(page).locator('.cm-editor').boundingBox())!;
+    const previewBox = (await main(page).locator('md-preview').boundingBox())!;
+    const panel = main(page).getByRole('search', { name: 'Find' });
+
+    await main(page).getByRole('button', { name: 'Find', exact: true }).click();
+    await expect(panel).toBeVisible();
+    // After the slide-in.
+    await expect.poll(() => panel.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+
+    expect((await firstLine.boundingBox())!.y).toBe(lineTop);
+    const box = (await panel.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(editorBox.x);
+    expect(box.y).toBeGreaterThanOrEqual(editorBox.y);
+    expect(box.x + box.width).toBeLessThanOrEqual(editorBox.x + editorBox.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(editorBox.y + editorBox.height);
+    expect(box.x + box.width).toBeLessThanOrEqual(previewBox.x);
+
+    await page.keyboard.type('Handbook');
+    await expect(panel.getByText('1 of 1')).toBeVisible();
+    await expect(panel.getByRole('textbox', { name: 'Replace' })).toBeHidden();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+f' : 'Control+h');
+    await expect(panel.getByRole('textbox', { name: 'Replace' })).toBeFocused();
+    await expect(panel.getByRole('button', { name: 'Toggle replace' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
   test('ED-10: scrolls a long line sideways inside the editor, not the page, once Wrap is off', async ({ page, instance }) => {
     const { id } = seedHandbook(instance.dataDir, { 'long.md': `# Long\n${'word '.repeat(2000)}\n` });
     await openScreen(page, `/repositories/${id}/files/long.md`);

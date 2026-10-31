@@ -16,6 +16,7 @@ import {
 } from '@angular/core';
 import {
   ButtonComponent,
+  ICON_SPRITE_URL,
   IconComponent,
   SplitPaneComponent,
   type SplitPaneShow,
@@ -29,6 +30,7 @@ import {
   createEditorState,
   cursorOf,
   type EditorStateChange,
+  type FindPanelLabels,
   isHighlighting,
   isSoftWrapping,
   replaceContent,
@@ -38,7 +40,7 @@ import {
   setSoftWrap
 } from '@front-burner/web-code-editor';
 import { MarkdownPreviewComponent, type PreviewPathLink } from '@front-burner/web-markdown';
-import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { EditorSettingsService } from '../../services/editor-settings/editor-settings.service';
@@ -127,6 +129,8 @@ export class EditorPaneComponent {
   private readonly openFiles = inject(OpenFilesService);
   private readonly diskChanges = inject(DiskChangesService);
   private readonly session = inject(RepositorySessionService);
+  private readonly transloco = inject(TranslocoService);
+  private readonly iconSprite = inject(ICON_SPRITE_URL);
   /** The repository whose images the preview shows (A-8.16). */
   protected readonly repositoryId = computed(() => this.session.repository()?.id ?? null);
   protected readonly viewMode = inject(ViewModeService);
@@ -229,6 +233,32 @@ export class EditorPaneComponent {
         }
       });
     });
+  }
+
+  /** The find panel's texts (ED-11), in the language of the moment. */
+  private findLabels(): FindPanelLabels {
+    const t = (key: string, params?: Record<string, string>) =>
+      this.transloco.translate(`web-feature-repository-screen.EditorPaneComponent.findPanel.${key}`, params);
+    const numbers = new Intl.NumberFormat(this.transloco.getActiveLang());
+    return {
+      find: t('find'),
+      replace: t('replace'),
+      toggleReplace: t('toggleReplace'),
+      matchCase: t('matchCase'),
+      wholeWord: t('wholeWord'),
+      regexp: t('regexp'),
+      previous: t('previous'),
+      next: t('next'),
+      close: t('close'),
+      replaceOne: t('replaceOne'),
+      replaceAll: t('replaceAll'),
+      noResults: t('noResults'),
+      invalid: t('invalid'),
+      count: (current, total, more) => {
+        const all = more ? t('more', { total: numbers.format(total) }) : numbers.format(total);
+        return current > 0 ? t('count', { current: numbers.format(current), total: all }) : t('found', { total: all });
+      }
+    };
   }
 
   protected openSearch(): void {
@@ -382,7 +412,9 @@ export class EditorPaneComponent {
         softWrap,
         label,
         readOnly,
-        cursor: reloaded ? cursorOf(existing) : undefined
+        cursor: reloaded ? cursorOf(existing) : undefined,
+        findLabels: this.findLabels(),
+        findIconSprite: this.iconSprite
       })
       : existing.update(
         setLabel(label),
