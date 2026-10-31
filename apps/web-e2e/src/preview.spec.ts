@@ -219,6 +219,43 @@ test.describe('view modes', () => {
   });
 });
 
+/** A file of every block GitHub styles, for the preview's layout. */
+const LAYOUT = [
+  '# Layout',
+  '',
+  'First paragraph.',
+  '',
+  'Second paragraph.',
+  '',
+  '## Lists',
+  '',
+  'Some `inline code` in a paragraph.',
+  '',
+  '- one',
+  '  - nested',
+  '    - deeper',
+  '- two',
+  '',
+  '- [x] done',
+  '- [ ] to do',
+  '',
+  '> A quote.',
+  '',
+  '```ts',
+  `const line = '${'long '.repeat(80)}';`,
+  '```',
+  '',
+  '| A | B |',
+  '| - | - |',
+  '| 1 | 2 |',
+  '| 3 | 4 |',
+  '',
+  '---',
+  '',
+  'The end.',
+  ''
+].join('\n');
+
 test.describe('preview', () => {
   test.beforeEach(({ isMobile }) => {
     test.skip(isMobile, 'These check the preview beside the editor, on wide screens.');
@@ -506,6 +543,49 @@ test.describe('preview', () => {
       )
     ).toBe(0);
     // The fixture fails the test on any `securitypolicyviolation` or console error.
+  });
+
+  test('lays out Markdown like GitHub', async ({ page, instance }) => {
+    const { id } = seedHandbook(instance.dataDir, { 'layout.md': LAYOUT });
+    await openScreen(page, `/repositories/${id}/files/layout.md`);
+    const view = preview(page, 'layout.md');
+    await expect(view.locator('hr')).toBeAttached();
+
+    const style = (selector: string, property: string) =>
+      view.locator(selector).first().evaluate(
+        (element, name) => getComputedStyle(element).getPropertyValue(name),
+        property
+      );
+    const box = async (selector: string) => {
+      const found = await view.locator(selector).first().boundingBox();
+      expect(found).not.toBeNull();
+      return found ?? { x: 0, y: 0, width: 0, height: 0 };
+    };
+    const gap = async (above: string, below: string) => {
+      const [ top, bottom ] = await Promise.all([ box(above), box(below) ]);
+      return Math.round(bottom.y - (top.y + top.height));
+    };
+
+    expect(await style('h2', 'border-bottom-style')).toBe('solid');
+    expect(await style('h2', 'font-weight')).toBe('600');
+    expect(await style('p code', 'background-color')).not.toBe('rgba(0, 0, 0, 0)');
+    expect(await style('pre', 'padding-top')).toBe('16px');
+    expect(await style('pre code', 'background-color')).toBe('rgba(0, 0, 0, 0)');
+    expect(await style('blockquote', 'border-left-style')).toBe('solid');
+    expect(await style('.contains-task-list', 'list-style-type')).toBe('none');
+    expect(await style('ul ul', 'margin-top')).toBe('0px');
+
+    // A heading as the first block starts at the top of the preview.
+    const [ blocks, first ] = await Promise.all([ box('.blocks'), box('h1') ]);
+    expect(Math.round(first.y - blocks.y)).toBe(16);
+
+    // Margins between blocks collapse as between GitHub's elements.
+    expect(await gap('p:text-is("First paragraph.")', 'p:text-is("Second paragraph.")')).toBe(16);
+    expect(await gap('p:text-is("Second paragraph.")', 'h2')).toBe(24);
+
+    // ED-33: the long code line scrolls inside its block, not the preview.
+    expect(await view.locator('pre').first().evaluate(pre => pre.scrollWidth > pre.clientWidth)).toBe(true);
+    expect(await view.locator('.blocks').evaluate(blocks => blocks.scrollWidth === blocks.clientWidth)).toBe(true);
   });
 
   test('AC-EDIT-001.24: has no axe violations in the preview', async ({ page, instance }) => {

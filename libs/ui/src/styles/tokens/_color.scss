@@ -94,6 +94,9 @@ $tokens: (
   editor-line-number-active: (functions.ref(text-default), functions.ref(text-default)),
   editor-cursor: (functions.ref(text-default), functions.ref(text-default)),
 
+  // Live preview: the tint behind inline code, as GitHub's on our neutral
+  preview-code-background: (functions.alpha(neutral-60, 25%), functions.alpha(neutral-60, 25%)),
+
   // Elevation and scrollbars
   shadow-color: (functions.alpha(neutral-0, 12%), functions.alpha(neutral-0, 50%)),
   scrollbar-thumb: (functions.ref(neutral-75), functions.ref(neutral-45))

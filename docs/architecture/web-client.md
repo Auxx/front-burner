@@ -117,6 +117,10 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     without moving the rest. Blocks use `content-visibility: auto`, and the
     preview pane has a fixed size with `contain: strict`, so its contents never
     affect the page's layout.
+  - **The preview follows GitHub's Markdown layout** (its spacing, sizes and
+    structure) in the product's colours. Each block is its own formatting
+    context, so the space between blocks is set on the block elements, whose
+    margins collapse as GitHub's elements' do.
   - DOMPurify returns `TrustedHTML` (`RETURN_TRUSTED_TYPE`), which the component
     assigns to each block's `innerHTML`; Angular's `bypassSecurityTrustHtml` is
     not used (D-7.6).
