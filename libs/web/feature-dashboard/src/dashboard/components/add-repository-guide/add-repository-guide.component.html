@@ -16,7 +16,7 @@
   </ng-template>
 
   @if (form() === 'full') {
-    <h2 class="heading">{{ t('heading') }}</h2>
+    <h2>{{ t('heading') }}</h2>
     <ng-container [ngTemplateOutlet]="details" />
     <div>
       <a uiButton variant="primary" routerLink="/repositories/new">{{ t('add') }}</a>

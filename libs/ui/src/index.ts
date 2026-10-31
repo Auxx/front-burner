@@ -54,6 +54,7 @@ export { ActivityBarComponent } from './layout/components/activity-bar/activity-
 export { AppShellComponent } from './layout/components/app-shell/app-shell.component';
 export { CentredIslandComponent } from './layout/components/centred-island/centred-island.component';
 export { IslandComponent } from './layout/components/island/island.component';
+export { PageComponent } from './layout/components/page/page.component';
 export {
   SplitPaneComponent,
   type SplitPanePreset,
@@ -61,8 +62,8 @@ export {
 } from './layout/components/split-pane/split-pane.component';
 export { StatusBarComponent } from './layout/components/status-bar/status-bar.component';
 export { AppShellSideDirective } from './layout/directives/app-shell-side/app-shell-side.directive';
+export { PageTitleDirective } from './layout/directives/page-title/page-title.directive';
 export { injectNarrowViewport } from './layout/utils/narrow-viewport/narrow-viewport.util';
-export { BreadcrumbsComponent } from './navigation/components/breadcrumbs/breadcrumbs.component';
 export { MenuItemComponent } from './navigation/components/menu-item/menu-item.component';
 export { MenuSeparatorComponent } from './navigation/components/menu-separator/menu-separator.component';
 export { MenuComponent } from './navigation/components/menu/menu.component';

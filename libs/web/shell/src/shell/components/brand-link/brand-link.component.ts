@@ -4,9 +4,10 @@ import { IconComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
- * The product's icon and name, a link to the dashboard (NV-5, NV-9). Compact,
- * it shows only the icon and is named "Dashboard". Otherwise the name is hidden
- * on narrow screens but stays the link's name for screen readers.
+ * **Dashboard**, the first link of the app header (NV-5, NV-9), in bold on the
+ * dashboard. Compact, it shows only a home icon and is named "Dashboard".
+ * Otherwise the home icon replaces the name on narrow screens, where the name
+ * stays the link's name for screen readers.
  */
 @Component({
   selector: 'shell-brand-link',

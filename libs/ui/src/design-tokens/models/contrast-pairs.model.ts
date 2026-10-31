@@ -75,6 +75,17 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   graphic('icon-default', 'selected-inactive'),
   graphic('border-strong', 'selected-inactive'),
 
+  // Secondary buttons, icon buttons and the user menu's button on their own
+  // control surface, which stands out from the canvas; also hovered or pressed
+  text('text-default', 'surface-control'),
+  text('text-default', 'surface-control', 'surface-hover'),
+  text('text-default', 'surface-control', 'surface-pressed'),
+  text('danger-text', 'surface-control'),
+  text('danger-text', 'surface-control', 'surface-hover'),
+  graphic('icon-default', 'surface-control'),
+  graphic('icon-default', 'surface-control', 'surface-hover'),
+  graphic('icon-default', 'surface-control', 'surface-pressed'),
+
   // The border of an invalid text field, and of controls on a raised surface
   graphic('danger-icon', 'surface-sunken'),
   graphic('border-strong', 'surface-raised'),

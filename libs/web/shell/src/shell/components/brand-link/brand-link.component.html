@@ -8,8 +8,8 @@
   [class.compact]="compact()"
   [attr.aria-label]="compact() ? t('dashboard') : null"
 >
-  <ui-icon name="flame" />
+  <ui-icon class="home" name="home" />
   @if (!compact()) {
-    <span class="brand-name">Front Burner</span>
+    <span class="label" [attr.data-label]="t('dashboard')">{{ t('dashboard') }}</span>
   }
 </a>

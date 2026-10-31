@@ -1,0 +1,21 @@
+<ui-island class="island">
+  <div class="padding">
+    <div class="column" [style.max-inline-size]="column()">
+      <div class="title-bar">
+        @if (ancestors().length > 0) {
+          <nav [attr.aria-label]="breadcrumbsLabel() ?? null">
+            <ol>
+              @for (ancestor of ancestors(); track ancestor) {
+                <li><ng-container *ngTemplateOutlet="ancestor.template" /></li>
+              }
+            </ol>
+          </nav>
+        }
+        <ng-content select="[uiPageTitle]" />
+      </div>
+      <div class="content">
+        <ng-content />
+      </div>
+    </div>
+  </div>
+</ui-island>

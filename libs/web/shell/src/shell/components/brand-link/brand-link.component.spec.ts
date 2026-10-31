@@ -31,18 +31,24 @@ describe('BrandLinkComponent', () => {
     await settle(harness.fixture);
   }
 
-  it('links to the dashboard and keeps its name when compact', async () => {
+  it('reads Dashboard, links to the dashboard and has no product icon', async () => {
     await open('/other');
 
     expect(link().getAttribute('href')).toBe('/');
-    expect(link().querySelector('ui-icon[name="flame"]')).not.toBeNull();
-    expect(name()).toBe('Front Burner');
+    expect(name()).toBe(`${KEY}.dashboard`);
+    expect(link().querySelector('ui-icon[name="flame"]')).toBeNull();
+    // The bold copy that reserves the width has the same text.
+    expect(link().querySelector('.label')?.getAttribute('data-label')).toBe(`${KEY}.dashboard`);
+  });
+
+  it('shows a home icon and keeps its name when compact', async () => {
+    await open('/other');
 
     (harness.routeDebugElement?.componentInstance as HostPage).compact.set(true);
     await settle(harness.fixture);
 
     expect(link().getAttribute('href')).toBe('/');
-    expect(link().querySelector('ui-icon[name="flame"]')).not.toBeNull();
+    expect(link().querySelector('ui-icon[name="home"]')).not.toBeNull();
     expect(link().textContent?.trim()).toBe('');
     expect(name()).toBe(`${KEY}.dashboard`);
   });
@@ -50,9 +56,11 @@ describe('BrandLinkComponent', () => {
   it('marks the dashboard as the current page only on the dashboard', async () => {
     await open('/');
     expect(link().getAttribute('aria-current')).toBe('page');
+    expect(link().classList).toContain('active');
 
     await harness.navigateByUrl('/other');
     await settle(harness.fixture);
     expect(link().hasAttribute('aria-current')).toBe(false);
+    expect(link().classList).not.toContain('active');
   });
 });

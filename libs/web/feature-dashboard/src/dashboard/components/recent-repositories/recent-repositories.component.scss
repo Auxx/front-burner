@@ -3,29 +3,22 @@
   gap: var(--ui-space-3);
 }
 
-.heading {
-  margin: 0;
-  font-size: var(--ui-font-size-lg);
-  font-weight: var(--ui-font-weight-semibold);
-  line-height: var(--ui-line-height-tight);
-}
-
-.list {
+// Empty tracks stay, so that a single tile keeps a readable width.
+.tiles {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+  gap: var(--ui-space-2);
   margin: 0;
   padding: 0;
-  border: var(--ui-border-width) solid var(--ui-border-subtle);
-  border-radius: var(--ui-radius-island);
-  background: var(--ui-surface-island);
   list-style: none;
 }
 
-.item {
-  padding: var(--ui-space-3) var(--ui-space-4);
-
-  & + & {
-    border-block-start: var(--ui-border-width) solid var(--ui-border-subtle);
-  }
+.tile {
+  display: grid;
+  min-inline-size: 0;
+  padding: var(--ui-space-3);
+  border-radius: var(--ui-radius-popover);
+  background: var(--ui-surface-card);
 }
 
 .all {

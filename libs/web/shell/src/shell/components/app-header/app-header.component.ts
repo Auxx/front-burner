@@ -14,9 +14,9 @@ import { BrandLinkComponent } from '../brand-link/brand-link.component';
 import { UserMenuComponent } from '../user-menu/user-menu.component';
 
 /**
- * The app header (NV-5, NV-6): **Front Burner** and **Repositories**, then the
- * user menu. On narrow screens the product's icon stands for the first link,
- * and the links are also in a **Menu**.
+ * The app header (NV-5, NV-6): **Dashboard** and **Repositories**, the current
+ * page's link in bold, then the user menu. On narrow screens a home icon stands
+ * for the first link, and the links are also in a **Menu**.
  */
 @Component({
   selector: 'shell-app-header',

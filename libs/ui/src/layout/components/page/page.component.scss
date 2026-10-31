@@ -1,0 +1,90 @@
+@layer components {
+  :host {
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  .padding {
+    padding: var(--ui-space-5) var(--ui-space-6);
+  }
+
+  .column {
+    display: grid;
+    gap: var(--ui-space-5);
+    min-inline-size: 0;
+    margin-inline: auto;
+  }
+
+  .title-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--ui-space-1);
+    min-inline-size: 0;
+    font-size: var(--ui-font-size-ui);
+    line-height: var(--ui-line-height-ui);
+  }
+
+  nav {
+    min-inline-size: 0;
+  }
+
+  ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ui-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  li {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    color: var(--ui-text-muted);
+  }
+
+  // The ancestors' links are muted, as the rest of the trail, and keep their
+  // underline.
+  li ::ng-deep a {
+    color: inherit;
+
+    &:hover {
+      color: var(--ui-text-link);
+    }
+  }
+
+  // Each ancestor is followed by a separator, the last one by the page's `h1`.
+  // The separators are drawn by CSS, so they are not announced.
+  li::after {
+    // Without alt text (Safari before 17.4), the separator is announced.
+    content: '›';
+    content: '›' / '';
+    margin-inline-start: var(--ui-space-1);
+    color: var(--ui-text-subtle);
+  }
+
+  // The page's `h1`, projected from the page's own template.
+  .title-bar ::ng-deep [uiPageTitle] {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    color: var(--ui-text-default);
+    font-size: inherit;
+    font-weight: var(--ui-font-weight-semibold);
+    line-height: inherit;
+
+    // It takes the focus after navigation (NV-18), which is not shown.
+    &:focus {
+      outline: none;
+    }
+  }
+
+  .content {
+    display: grid;
+    align-content: start;
+    gap: var(--ui-space-4);
+    min-inline-size: 0;
+  }
+}

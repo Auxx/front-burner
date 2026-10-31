@@ -97,6 +97,16 @@ describe('DashboardPage', () => {
     expect(page().querySelector('h1')?.getAttribute('tabindex')).toBe('-1');
   });
 
+  it('shows the h1 alone in the title bar of one island', async () => {
+    await open(of({ repositories: [ handbook ] }));
+
+    const island = page().querySelector('ui-page ui-island') as HTMLElement;
+    expect(island.querySelector('h1')).not.toBeNull();
+    expect(island.contains(guide())).toBe(true);
+    expect(island.contains(recent())).toBe(true);
+    expect(page().querySelector('nav')).toBeNull();
+  });
+
   it('is not a main landmark of its own: the shell has it', async () => {
     await open(of({ repositories: [] }));
     expect(page().querySelector('main')).toBeNull();
