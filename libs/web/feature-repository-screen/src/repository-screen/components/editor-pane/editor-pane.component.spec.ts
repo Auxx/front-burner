@@ -197,7 +197,8 @@ describe('EditorPaneComponent', () => {
 
     const notices = pane().querySelector('.notices');
     expect(notices?.querySelector('rs-draft-offer')).not.toBeNull();
-    expect(notices!.compareDocumentPosition(pane().querySelector('.toolbar')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(notices!.compareDocumentPosition(pane().querySelector('.toolbar')!) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
   });
 
   it('gives the preview the editor\'s text and bumps its version on every edit', async () => {

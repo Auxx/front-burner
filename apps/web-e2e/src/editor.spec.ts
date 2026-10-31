@@ -23,7 +23,8 @@ const UPDATED = 'This file was updated.';
 const CHANGED = 'This file changed while you were editing.';
 const GONE_ELSEWHERE = 'This file was deleted or renamed elsewhere.';
 
-const filesButton = (page: Page) => page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files', exact: true });
+const filesButton = (page: Page) =>
+  page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files', exact: true });
 const tree = (page: Page) => page.getByRole('region', { name: 'Files', exact: true });
 const main = (page: Page) => page.getByRole('main', { name: 'Editor' });
 /** The editor, labelled with the open file's name (ED-37). */

@@ -206,7 +206,11 @@ describe('RepositoryScreenPage', () => {
       await visit('/repositories/12');
 
       expectOneShell();
-      expect(page().querySelector('ui-app-shell ui-centred-island shell-page-not-found, ui-app-shell shell-page-not-found ui-centred-island')).not.toBeNull();
+      expect(
+        page().querySelector(
+          'ui-app-shell ui-centred-island shell-page-not-found, ui-app-shell shell-page-not-found ui-centred-island'
+        )
+      ).not.toBeNull();
     });
 
     it('renders the failure in a centred island', async () => {

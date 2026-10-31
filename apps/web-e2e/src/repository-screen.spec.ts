@@ -19,7 +19,8 @@ test.use({ instanceOptions: { onboarded: true } });
 const ADMIN_ID = 1;
 
 const heading = (page: Page, name: string) => page.getByRole('heading', { name, exact: true });
-const filesButton = (page: Page) => page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files', exact: true });
+const filesButton = (page: Page) =>
+  page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files', exact: true });
 const tree = (page: Page) => page.getByRole('region', { name: 'Files', exact: true });
 const editor = (page: Page) => page.getByRole('main', { name: 'Editor' });
 /** The editor, labelled with the open file's name (ED-37). */
