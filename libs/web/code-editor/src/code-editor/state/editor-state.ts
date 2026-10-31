@@ -14,6 +14,8 @@ import {
 } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { classHighlighter, tagHighlighter, tags } from '@lezer/highlight';
+import { findIconSprite, type FindPanelLabels, findLabels } from '../search/find-labels';
+import { createFindPanel, openReplacePanel } from '../search/find-panel';
 import { editorTheme } from '../theme/editor-theme';
 import { lineDirection } from './line-direction';
 import { wrapMarker } from './wrap-marker';
@@ -33,6 +35,10 @@ export interface EditorStateOptions {
   cursor?: CursorPosition;
   /** Long lines wrap at the editor's edge; off, they scroll sideways. On by default. */
   softWrap?: boolean;
+  /** The find panel's texts (ED-11); English without them. */
+  findLabels?: FindPanelLabels;
+  /** The URL of the icon sprite that the find panel draws from (A-10.35). */
+  findIconSprite?: string;
 }
 
 /** A position in the text by line and column, both 1-based. */
@@ -83,6 +89,10 @@ const exactKeys = [
   { key: 'Tab', run: insertTabCharacter }
 ];
 
+// The platform's replace shortcut opens the find panel with the replace row (ED-11). It comes
+// before `searchKeymap`, and works in the panel too.
+const replaceKey = { key: 'Mod-h', mac: 'Mod-Alt-f', run: openReplacePanel, scope: 'editor search-panel', preventDefault: true };
+
 function labelExtension(text: string): Extension {
   return EditorView.contentAttributes.of({ 'aria-label': text });
 }
@@ -100,8 +110,10 @@ export function createEditorState(options: EditorStateOptions): EditorState {
     extensions: [
       history(),
       drawSelection(),
-      search({ top: true }),
-      keymap.of([ ...exactKeys, ...defaultKeymap, ...historyKeymap, ...searchKeymap ]),
+      search({ top: true, createPanel: createFindPanel }),
+      options.findLabels ? findLabels.of(options.findLabels) : [],
+      options.findIconSprite === undefined ? [] : findIconSprite.of(options.findIconSprite),
+      keymap.of([ ...exactKeys, ...defaultKeymap, ...historyKeymap, replaceKey, ...searchKeymap ]),
       highlighting.of(options.highlight ? language : []),
       syntaxHighlighting(classHighlighter),
       syntaxHighlighting(markdownHighlighter),

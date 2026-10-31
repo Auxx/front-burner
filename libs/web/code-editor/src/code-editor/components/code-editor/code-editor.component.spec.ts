@@ -121,7 +121,7 @@ describe('CodeEditorComponent', () => {
 
     fixture.componentInstance.openSearch();
 
-    expect(fixture.nativeElement.querySelector('.cm-panels-top .cm-search')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.cm-panels-top .fb-find')).not.toBeNull();
   });
 
   it('ignores a line that is not a number', async () => {
