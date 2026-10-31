@@ -1,5 +1,6 @@
 :host {
   display: grid;
+  align-content: start;
   gap: var(--ui-space-4);
   padding: var(--ui-space-4);
 }

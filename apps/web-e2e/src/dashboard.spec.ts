@@ -51,7 +51,13 @@ test.describe('dashboard', () => {
 
     const main = await page.locator('main').boundingBox();
     const content = await page.locator('main > :not(router-outlet)').first().boundingBox();
+    expect(main).not.toBeNull();
+    expect(content).not.toBeNull();
     expect(content!.y - main!.y).toBeLessThan(1);
+    // Rows must not be stretched to fill main.
+    const h1 = await page.locator('main h1').first().boundingBox();
+    expect(h1).not.toBeNull();
+    expect(h1!.height).toBeLessThan(60);
   });
 
   test('AC-DASH-001.2: without repositories, the full guide and no list', async ({ page }) => {

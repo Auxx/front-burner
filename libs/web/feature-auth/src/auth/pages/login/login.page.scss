@@ -7,9 +7,6 @@ main {
 
 h1 {
   margin: 0 0 var(--ui-space-4);
-  font-size: var(--ui-font-size-title);
-  font-weight: var(--ui-font-weight-semibold);
-  line-height: var(--ui-line-height-tight);
 
   &:focus {
     outline: none;

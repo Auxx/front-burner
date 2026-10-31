@@ -5,7 +5,8 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
  * as "or", the text sits between two lines; without it, it is a single line.
  * Both lines are always rendered; CSS hides the text and the second line while
  * nothing is projected, so text that arrives late (a translation) causes no
- * layout shift.
+ * layout shift. With role="separator" its children are presentational, so the
+ * text is decorative and is not announced.
  */
 @Component({
   selector: 'ui-divider',

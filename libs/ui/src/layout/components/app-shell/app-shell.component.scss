@@ -84,7 +84,9 @@
   }
 
   // The empty router-outlet and the routed page share main's one cell,
-  // instead of the page falling into an implicit row below the outlet.
+  // instead of the page falling into an implicit row below the outlet. A
+  // routed page therefore fills main's height: a grid page must set its own
+  // align-content (start), or its rows stretch.
   :host main > ::ng-deep * {
     grid-area: 1 / 1;
   }
