@@ -306,8 +306,10 @@ test.describe('editor', () => {
 
     await main(page).getByRole('button', { name: 'Find', exact: true }).click();
     await expect(panel).toBeVisible();
-    // After the slide-in.
-    await expect.poll(() => panel.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+    // After the slide-in, which runs on CodeMirror's panel container around the find panel.
+    await expect
+      .poll(() => panel.evaluate(element => element.closest('.cm-panels')?.getAnimations({ subtree: true }).length))
+      .toBe(0);
 
     expect((await firstLine.boundingBox())!.y).toBe(lineTop);
     const box = (await panel.boundingBox())!;
