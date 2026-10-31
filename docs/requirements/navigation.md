@@ -108,8 +108,8 @@ rules that every page shares.
 
 - **NV-9** On the repository screen, the app header and the repository's header
   are one bar. From start to end it shows:
-  - a home icon, a link to the dashboard (FB-10) _(until the product has a
-    logo)_;
+  - **Dashboard**, a link to the dashboard (FB-10); on narrow screens a home
+    icon _(until the product has a logo)_;
   - the repository name, which opens the repository switcher (NV-10);
   - the current branch and the git status and actions of GA-7;
   - the save status of the open file (ED-18);
@@ -141,10 +141,10 @@ rules that every page shares.
   _(My call.)_
 - **NV-14** The repository settings page, the Add repository page and the
   Preferences page show breadcrumbs under the app header, for example
-  "Repositories › handbook › Settings". The last item is the current page and is
-  not a link. The breadcrumb trail and the page's heading are one line at the
-  top of the page: the ancestors are links and the current page is the heading.
-  A page without ancestors, such as the dashboard, shows only its heading there.
+  "Repositories › handbook › Settings". The breadcrumb trail and the page's
+  heading are one line at the top of the page: the ancestors are links, and the
+  last item, the current page, is the page's heading and not a link. A page
+  without ancestors, such as the dashboard, shows only its heading there.
 
 ### Banners
 

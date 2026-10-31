@@ -7,6 +7,8 @@
   }
 
   .label::after {
+    // Without alt text (Safari before 17.4), plain content; it is hidden anyway.
+    content: attr(data-label);
     content: attr(data-label) / '';
     block-size: 0;
     overflow: hidden;

@@ -59,6 +59,8 @@
   // Each ancestor is followed by a separator, the last one by the page's `h1`.
   // The separators are drawn by CSS, so they are not announced.
   li::after {
+    // Without alt text (Safari before 17.4), the separator is announced.
+    content: '›';
     content: '›' / '';
     margin-inline-start: var(--ui-space-1);
     color: var(--ui-text-subtle);
