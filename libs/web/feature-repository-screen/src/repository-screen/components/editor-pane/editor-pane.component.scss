@@ -58,6 +58,8 @@
 
 .panel {
   display: grid;
+  // One column as wide as the panel: an auto column would grow to a long line once Wrap is off (ED-10).
+  grid-template-columns: minmax(0, 1fr);
   flex: 1;
   min-block-size: 0;
 
