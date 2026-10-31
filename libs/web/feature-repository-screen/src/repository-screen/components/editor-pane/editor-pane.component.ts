@@ -341,6 +341,16 @@ export class EditorPaneComponent {
     }
   }
 
+  /** Brings the line at the top of the editor back to the top once the next state is shown. */
+  private keepTopLine(): void {
+    const view = this.editor();
+    if (!view) {
+      return;
+    }
+    const top = view.topLine();
+    afterNextRender(() => this.editor()?.scrollToLine(top), { injector: this.injector });
+  }
+
   /**
    * The file's state, created on its first showing and again for each
    * reload, with its highlighting, soft wrap, name and read-only mode brought up to date.
@@ -356,10 +366,9 @@ export class EditorPaneComponent {
     const existing = file.editorState as EditorState | null;
     const reloaded = existing !== null && (built.get(file) ?? 0) !== revision;
     built.set(file, revision);
-    const view = this.editor();
-    if (reloaded && view && this.shownFile === file) {
-      const top = view.topLine();
-      afterNextRender(() => this.editor()?.scrollToLine(top), { injector: this.injector });
+    const wrapChanged = existing !== null && isSoftWrapping(existing) !== softWrap;
+    if ((reloaded || wrapChanged) && this.shownFile === file) {
+      this.keepTopLine();
     }
     if (this.shownFile !== file) {
       // Another file opens at its own place.

@@ -8,7 +8,6 @@ import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
-import { EditorSettingsService } from '../../services/editor-settings/editor-settings.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
@@ -39,7 +38,6 @@ describe('EditorAreaComponent', () => {
         { provide: DiskChangesService, useValue: {} },
         { provide: RepositorySessionService, useValue: { repository: signal({ id: 12 }) } },
         ViewModeService,
-        EditorSettingsService,
         { provide: CurrentUserService, useValue: { user: signal<CurrentUser | undefined>(undefined) } }
       ]
     });

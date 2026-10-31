@@ -37,7 +37,6 @@ import { FileTreeComponent } from '../../components/file-tree/file-tree.componen
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
-import { EditorSettingsService } from '../../services/editor-settings/editor-settings.service';
 import { EntryCommandsService } from '../../services/entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../../services/first-file/first-file.service';
@@ -101,7 +100,6 @@ import { fileName } from '../../utils/file-name/file-name';
     RepositorySessionService,
     PaneMemoryService,
     ViewModeService,
-    EditorSettingsService,
     FileTreeStoreService,
     FirstFileService,
     EntryCommandsService,
