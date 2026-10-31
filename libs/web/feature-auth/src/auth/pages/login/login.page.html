@@ -1,30 +1,8 @@
 <ng-container *transloco="let t; prefix: 'web-feature-auth.LoginPage'">
   <main>
-    <div class="content">
-      <h1 class="heading" tabindex="-1">{{ t('title') }}</h1>
-      @if (message; as message) {
-        <ui-inline-banner status="info">{{ t('messages.' + message) }}</ui-inline-banner>
-      }
-      @if (oidcError; as reason) {
-        <ng-container *transloco="let root">
-          <ui-inline-banner status="danger">{{ root('web-feature-auth.oidcErrors.' + reason) }}</ui-inline-banner>
-        </ng-container>
-      }
-      @if (insecure) {
-        <ui-inline-banner status="warning">
-          {{ t('insecure') }}
-          <a [href]="deploymentGuide">{{ t('insecureHowTo') }}</a>
-        </ui-inline-banner>
-      }
+    <ui-centred-island width="24rem">
+      <h1 tabindex="-1">{{ t('title') }}</h1>
       <form novalidate (submit)="submit($event)">
-        @if (failure(); as failure) {
-          <ui-inline-banner status="danger">
-            {{ failure.text }}
-            @if (failure.reference) {
-              <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
-            }
-          </ui-inline-banner>
-        }
         <ui-field [label]="t('email')" [error]="errorKey('email') ? t('errors.' + errorKey('email')) : undefined">
           <input uiInput type="email" autocomplete="username" spellcheck="false" [formField]="model.email" />
         </ui-field>
@@ -46,13 +24,42 @@
       @switch (oidc()) {
         @case ('available') {
           <div class="oidc">
+            <ui-divider>{{ t('or') }}</ui-divider>
             <a uiButton [href]="oidcStart" (click)="rememberReturn()">{{ t('oidc') }}</a>
           </div>
         }
         @case ('unavailable') {
-          <p class="oidc-unavailable">{{ t('oidcUnavailable') }}</p>
+          <div class="oidc">
+            <ui-divider>{{ t('or') }}</ui-divider>
+            <p class="oidc-unavailable">{{ t('oidcUnavailable') }}</p>
+          </div>
         }
       }
-    </div>
+
+      @if (failure(); as failure) {
+        <ui-inline-banner uiCentredIslandAfter status="danger">
+          {{ failure.text }}
+          @if (failure.reference) {
+            <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+          }
+        </ui-inline-banner>
+      }
+      @if (message(); as message) {
+        <ui-inline-banner uiCentredIslandAfter status="info">{{ t('messages.' + message) }}</ui-inline-banner>
+      }
+      @if (oidcError; as reason) {
+        <ng-container *transloco="let root" ngProjectAs="[uiCentredIslandAfter]">
+          <ui-inline-banner uiCentredIslandAfter status="danger">{{
+            root('web-feature-auth.oidcErrors.' + reason)
+          }}</ui-inline-banner>
+        </ng-container>
+      }
+      @if (insecure) {
+        <ui-inline-banner uiCentredIslandAfter status="warning">
+          {{ t('insecure') }}
+          <a [href]="deploymentGuide">{{ t('insecureHowTo') }}</a>
+        </ui-inline-banner>
+      }
+    </ui-centred-island>
   </main>
 </ng-container>

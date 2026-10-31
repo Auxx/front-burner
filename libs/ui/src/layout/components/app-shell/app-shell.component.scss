@@ -42,7 +42,7 @@
     align-items: center;
     min-inline-size: 0;
     min-block-size: var(--ui-control-height);
-    padding-inline: var(--ui-island-gap);
+    padding-inline: var(--ui-page-padding-inline);
   }
 
   .activity {
@@ -64,7 +64,7 @@
 
   .body {
     grid-area: body;
-    padding: 0 var(--ui-island-gap) var(--ui-island-gap);
+    padding: var(--ui-page-padding-block-start) var(--ui-page-padding-inline) var(--ui-page-padding-block-end);
   }
 
   // Beside the activity bar, whose own padding is the gap.
@@ -81,5 +81,13 @@
     grid-template: minmax(0, 1fr) / minmax(0, 1fr);
     min-inline-size: 0;
     min-block-size: 0;
+  }
+
+  // The empty router-outlet and the routed page share main's one cell,
+  // instead of the page falling into an implicit row below the outlet. A
+  // routed page therefore fills main's height: a grid page must set its own
+  // align-content (start), or its rows stretch.
+  :host main > ::ng-deep * {
+    grid-area: 1 / 1;
   }
 }

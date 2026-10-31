@@ -103,6 +103,20 @@ describe('OnboardingPage', () => {
     expect(element().querySelector('h1')?.textContent).toContain(`${KEY}.title`);
   });
 
+  it('puts the heading and the current step on the island', async () => {
+    await start(status());
+    expect(element().querySelector('ui-centred-island')).not.toBeNull();
+    expect(element().querySelector('ui-island h1')).not.toBeNull();
+    expect(element().querySelector('ui-island auth-setup-token-step')).not.toBeNull();
+  });
+
+  it('puts the failure banner below the island', async () => {
+    await start({ kind: 'error', cause: new HttpErrorResponse({ status: 0 }) });
+    expect(element().querySelector('ui-island h1')).not.toBeNull();
+    expect(element().querySelector('ui-island ui-inline-banner')).toBeNull();
+    expect(element().querySelector('ui-inline-banner[uiCentredIslandAfter]')).not.toBeNull();
+  });
+
   it('shows the no-token explanation', async () => {
     await start(status({ setupTokenConfigured: false }));
     expect(element().textContent).toContain(`${KEY}.noToken.message`);

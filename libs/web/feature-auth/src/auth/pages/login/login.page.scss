@@ -1,33 +1,26 @@
-// Centred on the page, with no app header; the padding keeps it off the edges
-// at 320 px (NF-12.4).
+// The page's own <main> is a grid so the centred island fills it and centres
+// (a percentage min-block-size would not resolve against a min-height parent).
 main {
   display: grid;
-  justify-items: center;
-  align-content: center;
   min-block-size: 100dvh;
-  padding: var(--ui-space-4);
 }
 
-.content,
-form {
-  display: grid;
-  gap: var(--ui-space-4);
-  inline-size: 100%;
-}
-
-.content {
-  max-inline-size: 24rem;
-}
-
-.heading {
-  margin: 0;
-  font-size: var(--ui-font-size-title);
-  font-weight: var(--ui-font-weight-semibold);
-  line-height: var(--ui-line-height-tight);
+h1 {
+  margin: 0 0 var(--ui-space-4);
 
   &:focus {
     outline: none;
   }
+}
+
+form,
+.oidc {
+  display: grid;
+  gap: var(--ui-space-4);
+}
+
+.oidc {
+  margin-block-start: var(--ui-space-4);
 }
 
 .actions {
@@ -38,10 +31,6 @@ form {
 .reference {
   display: block;
   color: var(--ui-text-muted);
-}
-
-.oidc {
-  display: grid;
 }
 
 .oidc-unavailable {

@@ -1,12 +1,5 @@
 // Shared by the steps of the onboarding page.
 @mixin step {
-  .step-heading {
-    margin: 0;
-    font-size: var(--ui-font-size-ui);
-    font-weight: var(--ui-font-weight-semibold);
-    line-height: var(--ui-line-height-ui);
-  }
-
   .actions {
     display: flex;
     flex-wrap: wrap;

@@ -9,7 +9,12 @@
     --ui-radius-island: 0.625rem;
     --ui-radius-pill: 999rem;
 
-    --ui-island-gap: var(--ui-space-1-5);
+    --ui-island-gap: var(--ui-space-2);
+
+    // Space between the app shell's body and the pages in it.
+    --ui-page-padding-block-start: var(--ui-space-2);
+    --ui-page-padding-inline: var(--ui-space-4);
+    --ui-page-padding-block-end: var(--ui-space-4);
 
     --ui-border-width: 1px;
 
@@ -27,6 +32,9 @@
   @include mixins.breakpoint-below(mixins.$breakpoint-medium) {
     :root {
       --ui-island-gap: var(--ui-space-1);
+      --ui-page-padding-block-start: var(--ui-space-1);
+      --ui-page-padding-inline: var(--ui-space-1);
+      --ui-page-padding-block-end: var(--ui-space-1);
       --ui-radius-island: var(--ui-radius-popover);
     }
   }

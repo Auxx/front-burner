@@ -28,6 +28,11 @@ describe('PageNotFoundPage', () => {
     expect(page.querySelector('h1')?.getAttribute('tabindex')).toBe('-1');
   });
 
+  it('puts the heading and the dashboard link on the island', () => {
+    expect(page.querySelector('ui-island h1')).not.toBeNull();
+    expect(page.querySelector('ui-island a[href="/"]')).not.toBeNull();
+  });
+
   it('links to the dashboard', () => {
     const link = page.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/');

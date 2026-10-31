@@ -1,0 +1,33 @@
+@layer components {
+  :host {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    margin-block: var(--ui-space-1);
+    color: var(--ui-text-subtle);
+    font-size: var(--ui-font-size-ui-small);
+  }
+
+  .line {
+    flex: 1;
+    block-size: 0;
+    border-block-start: 1px solid var(--ui-border-subtle);
+  }
+
+  .text {
+    flex: none;
+  }
+
+  // Nothing projected: no text, no gap and a single line.
+  .text:empty,
+  .text:empty + .line {
+    display: none;
+  }
+
+  // Colour tokens are replaced in forced colours; keep the lines visible.
+  @media (forced-colors: active) {
+    .line {
+      border-block-start-color: CanvasText;
+    }
+  }
+}

@@ -1,0 +1,8 @@
+<div class="column" [style.--ui-centred-island-width]="width()">
+  <ui-island class="island" [style.max-inline-size]="width()">
+    <div class="padding">
+      <ng-content />
+    </div>
+  </ui-island>
+  <ng-content select="[uiCentredIslandAfter]" />
+</div>
