@@ -29,8 +29,17 @@
   margin-inline-start: auto;
 }
 
+// On is shown by a border as well as a background (A-10.22).
 .wrap[aria-pressed='true'] {
-  background: var(--ui-surface-pressed);
+  border-color: var(--ui-border-strong);
+  background-color: var(--ui-selected-inactive);
+}
+
+// The pressed background is `Highlight` (`--ui-selected-inactive`).
+@media (forced-colors: active) {
+  .wrap[aria-pressed='true'] {
+    color: HighlightText;
+  }
 }
 
 .panes {

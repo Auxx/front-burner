@@ -222,13 +222,22 @@ describe('EditorPaneComponent', () => {
     it('keeps the text and the undo history when switching', async () => {
       const file = openFile('docs/guide.md');
       await show(file);
+      typeAtEnd('More.');
+      await settle(fixture);
       const before = stateOf(file);
+      const depth = undoDepth(before);
+      expect(depth).toBeGreaterThan(0);
 
-      TestBed.inject(EditorSettingsService).softWrap.set(false);
+      wrap()!.click();
       await settle(fixture);
 
-      expect(stateOf(file).doc.toString()).toBe(before.doc.toString());
-      expect(stateOf(file)).not.toBe(before);
+      const after = stateOf(file);
+      expect(after).not.toBe(before);
+      expect(isSoftWrapping(after)).toBe(false);
+      expect(after.doc.toString()).toBe(before.doc.toString());
+      expect(undoDepth(after)).toBe(depth);
+      undo({ state: after, dispatch: transaction => (file.editorState = transaction.state) });
+      expect(stateOf(file).doc.toString()).not.toContain('More.');
     });
 
     it('stays off in another file, and in the first file when it is shown again', async () => {
@@ -242,6 +251,24 @@ describe('EditorPaneComponent', () => {
 
       expect(wrap()?.getAttribute('aria-pressed')).toBe('false');
       expect(isSoftWrapping(stateOf(second))).toBe(false);
+
+      await show(first);
+
+      expect(wrap()?.getAttribute('aria-pressed')).toBe('false');
+      expect(isSoftWrapping(stateOf(first))).toBe(false);
+    });
+
+    it('updates a file shown earlier when Wrap is switched while another file is shown', async () => {
+      const first = openFile('docs/guide.md');
+      const second = openFile('docs/handbook.md');
+      await show(first);
+      expect(isSoftWrapping(stateOf(first))).toBe(true);
+      await show(second);
+
+      wrap()!.click();
+      await settle(fixture);
+      expect(isSoftWrapping(stateOf(second))).toBe(false);
+      expect(isSoftWrapping(stateOf(first))).toBe(true);
 
       await show(first);
 
