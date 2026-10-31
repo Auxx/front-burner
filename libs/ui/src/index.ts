@@ -51,6 +51,7 @@ export { TOAST_DURATION_MS, ToastService } from './feedback/services/toast/toast
 export { ActivityBarItemComponent } from './layout/components/activity-bar-item/activity-bar-item.component';
 export { ActivityBarComponent } from './layout/components/activity-bar/activity-bar.component';
 export { AppShellComponent } from './layout/components/app-shell/app-shell.component';
+export { CentredIslandComponent } from './layout/components/centred-island/centred-island.component';
 export { IslandComponent } from './layout/components/island/island.component';
 export {
   SplitPaneComponent,

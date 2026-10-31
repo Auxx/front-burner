@@ -1,0 +1,36 @@
+@layer components {
+  :host {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    box-sizing: border-box;
+    min-block-size: 100%;
+    padding: var(--ui-space-4);
+  }
+
+  // `margin-block: auto` centres the column and, unlike `align-items: center`,
+  // lets a taller column scroll from its top.
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-3);
+    inline-size: 100%;
+    min-inline-size: 0;
+    margin-block: auto;
+    align-items: center;
+  }
+
+  .island {
+    inline-size: 100%;
+    flex: none;
+  }
+
+  .padding {
+    padding: var(--ui-space-5) var(--ui-space-6);
+  }
+
+  .column > :not(.island) {
+    inline-size: 100%;
+    max-inline-size: var(--ui-centred-island-width);
+  }
+}
