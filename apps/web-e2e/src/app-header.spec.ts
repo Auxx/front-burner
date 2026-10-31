@@ -17,13 +17,16 @@ async function openDashboard(page: Page): Promise<void> {
 }
 
 test.describe('app header', () => {
-  test('has Front Burner, Repositories and the user menu', async ({ page, isMobile }) => {
+  test('has Dashboard, Repositories and the user menu', async ({ page, isMobile }) => {
     test.skip(isMobile, 'the phone layout has its own test');
     await openDashboard(page);
 
     const banner = page.getByRole('banner');
     const navigation = banner.getByRole('navigation');
-    await expect(navigation.getByRole('link', { name: 'Front Burner' })).toHaveAttribute('aria-current', 'page');
+    await expect(navigation.getByRole('link', { name: 'Dashboard', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
     await expect(navigation.getByRole('link', { name: 'Repositories' })).not.toHaveAttribute('aria-current');
     await expect(banner.getByRole('button', { name: /^Account menu for / })).toHaveText('A');
   });
@@ -38,8 +41,23 @@ test.describe('app header', () => {
     await expect(heading(page, 'This page doesn\'t exist.')).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'Repositories' })).toHaveAttribute('aria-current', 'page');
 
-    await navigation.getByRole('link', { name: 'Front Burner' }).click();
+    await navigation.getByRole('link', { name: 'Dashboard', exact: true }).click();
     await expect(heading(page, 'Dashboard')).toBeVisible();
+  });
+
+  test('moves nothing when the current link changes', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'the phone layout shows the links in a Menu');
+    await openDashboard(page);
+    const navigation = page.getByRole('banner').getByRole('navigation');
+    const repositories = navigation.getByRole('link', { name: 'Repositories' });
+    const boxes = async () => [ await repositories.boundingBox(), await accountButton(page).boundingBox() ];
+
+    const onDashboard = await boxes();
+    await page.goto('/repositories/new');
+    await expect(heading(page, 'Add repository')).toBeVisible();
+    await expect(repositories).toHaveAttribute('aria-current', 'page');
+
+    expect(await boxes()).toEqual(onDashboard);
   });
 
   test('shows the user in the user menu', async ({ page }) => {

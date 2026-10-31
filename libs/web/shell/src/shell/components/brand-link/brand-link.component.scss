@@ -1,3 +1,5 @@
+@use '../../styles/header-link';
+
 // The narrow layout applies below the medium breakpoint, as `NARROW_VIEWPORT`
 // and `below(breakpoint.$medium)` of the ui library (600 px, NV-6).
 $narrow: '(max-width: calc(37.5em - 0.02px))';
@@ -10,9 +12,7 @@ $narrow: '(max-width: calc(37.5em - 0.02px))';
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--ui-space-1-5);
   min-block-size: var(--ui-control-height);
-  font-weight: var(--ui-font-weight-semibold);
   color: var(--ui-text-default);
   white-space: nowrap;
   text-decoration: none;
@@ -23,9 +23,20 @@ $narrow: '(max-width: calc(37.5em - 0.02px))';
   }
 }
 
+@include header-link.label('.brand');
+
+// The home icon stands for the link only where its name is not shown.
+.home {
+  display: none;
+}
+
 .compact {
   justify-content: center;
   min-inline-size: var(--ui-control-height);
+
+  .home {
+    display: inline-flex;
+  }
 }
 
 @media #{$narrow} {
@@ -34,8 +45,12 @@ $narrow: '(max-width: calc(37.5em - 0.02px))';
     min-inline-size: var(--ui-control-height);
   }
 
+  .home {
+    display: inline-flex;
+  }
+
   // Still the link's name for screen readers.
-  .brand-name {
+  .label {
     position: absolute;
     inline-size: 1px;
     block-size: 1px;

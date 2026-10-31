@@ -2,7 +2,7 @@
 
 @layer components {
   :host {
-    --ui-button-background: var(--ui-surface-raised);
+    --ui-button-background: var(--ui-surface-control);
     --ui-button-color: var(--ui-text-default);
     --ui-button-border: var(--ui-border-default);
     // Hover and pressed overlays go on top of the variant's background.
@@ -84,7 +84,7 @@
 
   // Busy is not unavailable: it keeps its colours (A-10.46).
   :host([data-busy='true']) {
-    --ui-button-background: var(--ui-surface-raised);
+    --ui-button-background: var(--ui-surface-control);
     --ui-button-color: var(--ui-text-default);
     --ui-button-border: var(--ui-border-default);
 

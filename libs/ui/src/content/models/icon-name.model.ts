@@ -19,6 +19,7 @@ export const ICON_NAMES = [
   'files',
   'flame',
   'folder',
+  'home',
   'info',
   'lock',
   'markdown',

@@ -1,0 +1,20 @@
+// The label of a header link (NV-5) is bold while the link is the current
+// page. A hidden bold copy of the label, from its `data-label`, reserves the
+// bold width, so that its neighbours never move when the current page changes.
+@mixin label($link) {
+  .label {
+    display: inline-grid;
+  }
+
+  .label::after {
+    content: attr(data-label) / '';
+    block-size: 0;
+    overflow: hidden;
+    font-weight: var(--ui-font-weight-semibold);
+    visibility: hidden;
+  }
+
+  #{$link}.active .label {
+    font-weight: var(--ui-font-weight-semibold);
+  }
+}

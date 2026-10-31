@@ -10,6 +10,7 @@ $tokens: (
   surface-island: (functions.ref(neutral-100), functions.ref(neutral-22)),
   surface-card: (functions.ref(neutral-98), functions.ref(neutral-25)),
   surface-raised: (functions.ref(neutral-100), functions.ref(neutral-27)),
+  surface-control: (functions.ref(neutral-100), functions.ref(neutral-30)),
   surface-sunken: (functions.ref(neutral-98), functions.ref(neutral-23)),
   surface-hover: (functions.alpha(neutral-0, 5%), functions.alpha(neutral-100, 6%)),
   surface-pressed: (functions.alpha(neutral-0, 9%), functions.alpha(neutral-100, 10%)),
@@ -128,6 +129,7 @@ $tokens: (
       --ui-surface-canvas: Canvas;
       --ui-surface-island: Canvas;
       --ui-surface-raised: Canvas;
+      --ui-surface-control: Canvas;
       --ui-surface-card: Canvas;
       --ui-surface-sunken: Field;
       --ui-surface-hover: transparent;

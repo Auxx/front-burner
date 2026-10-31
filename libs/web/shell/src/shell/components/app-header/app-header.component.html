@@ -2,7 +2,7 @@
   <nav [attr.aria-label]="t('navigation')">
     <shell-brand-link />
     <a class="link wide" routerLink="/repositories" routerLinkActive="active" ariaCurrentWhenActive="page">
-      {{ t('repositories') }}
+      <span class="label" [attr.data-label]="t('repositories')">{{ t('repositories') }}</span>
     </a>
     <button uiButton variant="ghost" class="narrow" [uiMenuTrigger]="links.aria">
       <ui-icon name="menu" />

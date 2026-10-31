@@ -1,3 +1,5 @@
+@use '../../styles/header-link';
+
 // The narrow layout applies below the medium breakpoint, as `NARROW_VIEWPORT`
 // and `below(breakpoint.$medium)` of the ui library (600 px, NV-6).
 $narrow: '(max-width: calc(37.5em - 0.02px))';
@@ -13,7 +15,7 @@ $narrow: '(max-width: calc(37.5em - 0.02px))';
 nav {
   display: flex;
   align-items: center;
-  gap: var(--ui-space-4);
+  gap: var(--ui-space-8);
   min-inline-size: 0;
 }
 
@@ -23,6 +25,7 @@ nav {
   gap: var(--ui-space-1-5);
   min-block-size: var(--ui-control-height);
   color: var(--ui-text-default);
+  white-space: nowrap;
   text-decoration: none;
   border-radius: var(--ui-radius-control);
 
@@ -31,10 +34,7 @@ nav {
   }
 }
 
-.link.active {
-  text-decoration: underline;
-  text-underline-offset: 0.3em;
-}
+@include header-link.label('.link');
 
 .narrow {
   display: none;

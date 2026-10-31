@@ -6,7 +6,7 @@
 
 Every page of the web client that needs a login has the same **app header**:
 
-- **Front Burner**, which leads to the dashboard;
+- **Dashboard**, which leads to the dashboard;
 - **Repositories**, which leads to the repository management page;
 - the **user menu**, with the user's name and email, **Preferences**, **Log
   out** and the instance's version.
@@ -81,15 +81,17 @@ rules that every page shares.
 
 - **NV-5** Every page that needs a login has the app header. It shows, from
   start to end:
-  - **Front Burner**, with the product's icon, a link to the dashboard;
+  - **Dashboard**, a link to the dashboard;
   - **Repositories**, a link to the repository management page;
   - the user menu (NV-7).
 
   The link to the current page is marked as current, also for screen readers.
-  _(My call: an **Administration** link comes with the administration pages.)_
-- **NV-6** On narrow screens, the app header shows the product's icon (a link to
-  the dashboard), a **Menu** button with the links of NV-5, and the user menu.
-  _(My call: the breakpoint is left to the builder.)_
+  The current page's link is bold. _(My call: an **Administration** link comes
+  with the administration pages.)_
+- **NV-6** On narrow screens, the app header shows a home icon, a link to the
+  dashboard _(until the product has a logo)_, a **Menu** button with the links
+  of NV-5, and the user menu. _(My call: the breakpoint is left to the
+  builder.)_
 - **NV-7** The user menu opens from a button that shows the user's initials,
   taken from their display name, and has an accessible name such as "Account
   menu for _&lt;name&gt;_". It shows:
@@ -106,7 +108,8 @@ rules that every page shares.
 
 - **NV-9** On the repository screen, the app header and the repository's header
   are one bar. From start to end it shows:
-  - the product's icon, a link to the dashboard (FB-10);
+  - a home icon, a link to the dashboard (FB-10) _(until the product has a
+    logo)_;
   - the repository name, which opens the repository switcher (NV-10);
   - the current branch and the git status and actions of GA-7;
   - the save status of the open file (ED-18);
@@ -124,8 +127,8 @@ rules that every page shares.
   pull** counts (GA-7), the save status and the user menu. The git actions are
   in a menu (GA-7). Long repository and branch names are shortened with an
   ellipsis, and the full name is shown on hover, focus or long press. On narrow
-  screens the repository switcher also has **Dashboard**, since the product's
-  icon is not in the bar. _(My call.)_
+  screens the repository switcher also has **Dashboard**, since the home icon is
+  not in the bar. _(My call.)_
 - **NV-12** Opening another repository from the repository switcher sends a save
   that is waiting for the open file first (ED-17).
 
@@ -139,7 +142,9 @@ rules that every page shares.
 - **NV-14** The repository settings page, the Add repository page and the
   Preferences page show breadcrumbs under the app header, for example
   "Repositories › handbook › Settings". The last item is the current page and is
-  not a link.
+  not a link. The breadcrumb trail and the page's heading are one line at the
+  top of the page: the ancestors are links and the current page is the heading.
+  A page without ancestors, such as the dashboard, shows only its heading there.
 
 ### Banners
 
@@ -173,12 +178,11 @@ rules that every page shares.
 
 ## Acceptance criteria
 
-- **AC-APP-001.1** Every page that needs a login has the app header with **Front
-  Burner**, **Repositories** and the user menu; the login page has no app
+- **AC-APP-001.1** Every page that needs a login has the app header with
+  **Dashboard**, **Repositories** and the user menu; the login page has no app
   header.
-- **AC-APP-001.2** **Front Burner** leads to the dashboard and **Repositories**
-  to the repository management page; the current page's link is marked as
-  current.
+- **AC-APP-001.2** **Dashboard** leads to the dashboard and **Repositories** to
+  the repository management page; the current page's link is marked as current.
 - **AC-APP-001.3** The user menu shows the user's display name, email and the
   instance's version, and offers **Preferences** and **Log out**. **Log out**
   logs out every open tab and deletes browser drafts.

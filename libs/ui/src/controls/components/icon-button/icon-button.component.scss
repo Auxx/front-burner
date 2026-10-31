@@ -23,7 +23,7 @@
   }
 
   :host([data-variant='secondary']) {
-    --ui-icon-button-background: var(--ui-surface-raised);
+    --ui-icon-button-background: var(--ui-surface-control);
     --ui-icon-button-border: var(--ui-border-default);
   }
 
