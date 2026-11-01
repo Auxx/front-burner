@@ -75,6 +75,19 @@ describe('RemovalNoticeComponent', () => {
     expect(items()).toEqual([ 'style attribute × 5', '<iframe> × 2', 'javascript: address × 1' ]);
   });
 
+  it('ends closed after two quick clicks on Details', async () => {
+    await show([ [ 'tag:iframe', 1 ] ]);
+    const details = button('Details');
+    const region = () => element().querySelector(`#${details?.getAttribute('aria-controls')}`) as HTMLElement | null;
+
+    details?.click();
+    details?.click();
+    await fixture.whenStable();
+
+    expect(details?.getAttribute('aria-expanded')).toBe('false');
+    expect(region()?.hasAttribute('inert')).toBe(true);
+  });
+
   it('ends open after three quick clicks on Details', async () => {
     await show([ [ 'tag:iframe', 1 ] ]);
     const details = button('Details');

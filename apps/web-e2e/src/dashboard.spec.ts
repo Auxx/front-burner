@@ -93,6 +93,8 @@ test.describe('dashboard', () => {
     await howItWorks.click();
     await expect(howItWorks).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByText('Copy the remote URL')).toBeVisible();
+    // One chevron, turned to point down.
+    await expect(howItWorks.locator('ui-icon')).toHaveCSS('transform', 'matrix(0, 1, -1, 0, 0, 0)');
     await howItWorks.click();
     await expect(page.getByText('Copy the remote URL')).toBeHidden();
   });

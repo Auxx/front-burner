@@ -40,6 +40,20 @@ $narrow: '(max-width: calc(37.5em - 0.02px))';
   flex: 1 1 auto;
 }
 
+// One chevron, which turns to point down while the guide is open, as the find
+// panel's does.
+.chevron {
+  transition: transform var(--ui-duration-base) var(--ui-easing-standard);
+}
+
+.how[aria-expanded='true'] .chevron {
+  transform: rotate(90deg);
+
+  &:dir(rtl) {
+    transform: rotate(-90deg);
+  }
+}
+
 // The host's gap would stay open below a closed region, so the space comes from
 // the region's content instead.
 :host([data-form='compact']) {

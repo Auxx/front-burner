@@ -34,7 +34,7 @@
         (click)="expanded.set(!expanded())"
       >
         {{ t('howItWorks') }}
-        <ui-icon [name]="expanded() ? 'chevron-down' : 'chevron-right'" />
+        <ui-icon class="chevron" name="chevron-right" />
       </button>
       <a uiButton variant="primary" class="add" routerLink="/repositories/new">{{ t('add') }}</a>
     </div>

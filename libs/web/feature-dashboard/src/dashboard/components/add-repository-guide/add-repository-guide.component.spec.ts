@@ -76,6 +76,18 @@ describe('AddRepositoryGuideComponent', () => {
       expect(panel()?.hasAttribute('inert')).toBe(true);
     });
 
+    it('keeps one chevron, which CSS turns while the guide is open', async () => {
+      const button = howItWorks() as HTMLButtonElement;
+      const chevron = () => button.querySelector('use')?.getAttribute('href') ?? '';
+      expect(chevron()).toMatch(/#chevron-right$/);
+
+      button.click();
+      await settle(fixture);
+
+      expect(button.getAttribute('aria-expanded')).toBe('true');
+      expect(chevron()).toMatch(/#chevron-right$/);
+    });
+
     it('ends closed after two quick clicks on How it works', async () => {
       const button = howItWorks() as HTMLButtonElement;
 
