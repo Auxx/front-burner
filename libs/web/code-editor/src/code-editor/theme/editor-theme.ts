@@ -13,11 +13,9 @@ export const editorTheme = EditorView.theme({
     // The find panel slides in from above the editor's top edge, not over what is above it.
     overflow: 'clip'
   },
-  // The focus ring (A-10.30), inside the editor so that the pane around it does not clip it.
-  '&.cm-focused': {
-    outline: 'var(--ui-focus-ring-width) solid var(--ui-border-focus)',
-    outlineOffset: 'calc(-1 * var(--ui-focus-ring-width))'
-  },
+  // No focus ring, as in IDEs: the caret and the active line's number show the focus
+  // (A-10.30). Set, not left out, since CodeMirror's base theme draws a dotted outline.
+  '&.cm-focused': { outline: 'none' },
   '.cm-scroller': { fontFamily: 'inherit', lineHeight: 'var(--ui-line-height-code)' },
   '.cm-content': { padding: 'var(--ui-space-3) 0', caretColor: 'var(--ui-editor-cursor)' },
   '.cm-gutters': {

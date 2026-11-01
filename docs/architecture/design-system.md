@@ -244,7 +244,9 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   HTML are not used.
 - **A-10.30** **Focus.** Every focusable element shows a 2 px focus ring from
   the `focus-ring()` mixin on `:focus-visible`, offset from the element and
-  meeting 3:1 against both the island and the canvas (NF-13.3).
+  meeting 3:1 against both the island and the canvas (NF-13.3). The code editor
+  has no ring: its caret and the active line's number show the focus, as in
+  IDEs.
 
 ## A-10: Components
 

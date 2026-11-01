@@ -422,8 +422,9 @@ These rules add to the security rules already in the requirements.
   editor and meets AA, is always offered next to it at the Advanced level. Every
   Advanced user therefore has an accessible way to resolve conflicts.
 - **NF-13.3** Everything can be done with the keyboard alone, with a visible
-  focus indicator and no keyboard traps. In the editor, `Tab` inserts a tab;
-  `Esc` then `Tab` moves focus out, as CodeMirror does by default.
+  focus indicator and no keyboard traps. In the editor, the caret and the active
+  line's number are the focus indicator (A-10.30); `Tab` inserts a tab; `Esc`
+  then `Tab` moves focus out, as CodeMirror does by default.
 - **NF-13.4** **Choose per change** has a sensible reading order and labelled
   controls for screen readers; its side-by-side layout is not the only way to
   understand it.

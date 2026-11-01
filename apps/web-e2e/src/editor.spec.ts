@@ -341,6 +341,25 @@ test.describe('editor', () => {
     await expect(main(page).locator('.fb-find-closing')).toHaveCount(0);
   });
 
+  test('A-10.30: the focused editor has no focus ring; the find panel\'s controls have one', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'the find panel is reached the same way on a phone');
+    const { id } = seedHandbook(instance.dataDir);
+    await openScreen(page, `/repositories/${id}/files/README.md`);
+    const text = editor(page, 'README.md');
+    const outline = (locator: Locator) => locator.evaluate(element => getComputedStyle(element).outlineStyle);
+
+    await text.click();
+    await expect(text).toBeFocused();
+    expect(await outline(main(page).locator('.cm-editor'))).toBe('none');
+    expect(await outline(text)).toBe('none');
+
+    await main(page).getByRole('button', { name: 'Find', exact: true }).click();
+    await page.keyboard.press('Tab');
+    const matchCase = main(page).getByRole('button', { name: 'Match case' });
+    await expect(matchCase).toBeFocused();
+    expect(await outline(matchCase)).toBe('solid');
+  });
+
   test('ED-10: scrolls a long line sideways inside the editor, not the page, once Wrap is off', async ({ page, instance }) => {
     const { id } = seedHandbook(instance.dataDir, { 'long.md': `# Long\n${'word '.repeat(2000)}\n` });
     await openScreen(page, `/repositories/${id}/files/long.md`);
