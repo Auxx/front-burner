@@ -2,7 +2,15 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { listStories, parseViewport, serve, storybookDir, variantLabel, variants } from './storybook.mjs';
+import {
+  listStories,
+  parseTokenOverrides,
+  parseViewport,
+  serve,
+  storybookDir,
+  variantLabel,
+  variants
+} from './storybook.mjs';
 import { OutsideWorkspaceError, WORKSPACE_ROOT, workspacePath } from './workspace.mjs';
 
 /** A raw GET, so that `..` in the path reaches the server as it is. */
@@ -97,6 +105,19 @@ describe('storybook', () => {
       expect((await get(server.url, '/..%2F..%2F..%2Fnx.json')).status).toBe(403);
     } finally {
       await server.close();
+    }
+  });
+  it('parses token overrides as token references or CSS values', () => {
+    expect(parseTokenOverrides([ 'surface-canvas=neutral-30', 'accent=oklch(60% 0.1 250)' ])).toEqual([
+      [ '--ui-surface-canvas', 'var(--ui-neutral-30)' ],
+      [ '--ui-accent', 'oklch(60% 0.1 250)' ]
+    ]);
+    expect(parseTokenOverrides(undefined)).toEqual([]);
+  });
+
+  it('refuses overrides that are not token=value or could break out of a declaration', () => {
+    for (const text of [ 'surface-canvas', '=red', 'Bad=red', 'a=red; color: blue', 'a=}', 'a=<b>' ]) {
+      expect(() => parseTokenOverrides([ text ])).toThrow(/token override/);
     }
   });
 });

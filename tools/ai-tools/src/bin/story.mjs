@@ -8,6 +8,7 @@ import {
   launchBrowser,
   listStories,
   openStory,
+  parseTokenOverrides,
   parseViewport,
   serve,
   storybookDir,
@@ -23,6 +24,7 @@ const VARIANT_OPTIONS = {
   'reduced-motion': { type: 'boolean' },
   viewport: { type: 'string', default: '480x640' },
   wait: { type: 'string', default: '300' },
+  set: { type: 'string', multiple: true },
   storybook: { type: 'string', default: DEFAULT_STORYBOOK }
 };
 
@@ -33,6 +35,7 @@ const VARIANT_HELP = `Options:
   --reduced-motion           emulate prefers-reduced-motion: reduce
   --viewport 480x640         the page size (default 480x640)
   --wait 300                 milliseconds to wait after rendering, for play functions
+  --set token=value          overrides a ui token, repeatable; value is a token name or CSS
   --storybook <dir>          the built Storybook (default ${DEFAULT_STORYBOOK})
 
 Stories run from the built Storybook: build it first with
@@ -87,12 +90,18 @@ async function eachStory(ids, options, visit) {
   }
   const list = readVariants(options);
   const wait = Number(options.wait);
+  let overrides;
+  try {
+    overrides = parseTokenOverrides(options.set);
+  } catch (error) {
+    throw new UsageError(error.message);
+  }
   const server = await serve(dir);
   const browser = await launchBrowser();
   try {
     for (const id of ids) {
       for (const variant of list) {
-        const { page, close } = await openStory(browser, server.url, id, variant, { wait });
+        const { page, close } = await openStory(browser, server.url, id, variant, { wait, overrides });
         try {
           await visit({ id, variant, page });
         } finally {

@@ -136,6 +136,7 @@ Variant options, for `shot` and `eval`:
 | `--reduced-motion`        | off                 | Emulates `prefers-reduced-motion: reduce`          |
 | `--viewport WxH`          | `480x640`           | `320x640` for the narrowest screen (NF-12.4)       |
 | `--wait ms`               | `300`               | Extra wait after rendering, for play functions     |
+| `--set token=value`       | none                | Overrides a ui token on the root; repeatable       |
 | `--storybook <dir>`       | `dist/storybook/ui` | Another build, inside the workspace                |
 
 `shot` also takes `--selector <css>` to shoot one element instead of the page,
@@ -149,8 +150,13 @@ story.mjs shot controls-button--variants --theme light,dark --density compact,to
 story.mjs shot controls-select--saved-keys --viewport 320x640 --selector '#storybook-root'
 story.mjs eval controls-checkbox--states "getComputedStyle(document.querySelector('input:checked'), '::after').borderRightColor" --forced-colors
 story.mjs eval controls-button--variants "matchMedia('(prefers-reduced-motion: reduce)').matches" --reduced-motion
+story.mjs shot layout-app-shell--dashboard --theme dark --set surface-canvas=neutral-30 --out tmp/canvas-30
 ```
 
+- `--set` tries a token value without rebuilding: the value is another token's
+  name (`neutral-30`) or a CSS colour. It is set on the root element, so it
+  applies in every scheme; shoot one `--theme` at a time when it should not. Use
+  `--out` to keep each option's shots apart.
 - **Rebuild Storybook after changing `ui`.** The tool warns when files in
   `libs/ui` are newer than the build.
 - The expression runs in the story's page and may return a promise; its result
