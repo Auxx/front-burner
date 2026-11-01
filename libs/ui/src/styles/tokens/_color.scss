@@ -6,7 +6,7 @@
 
 $tokens: (
   // Surfaces
-  surface-canvas: (functions.ref(neutral-95), functions.ref(neutral-27)),
+  surface-canvas: (functions.ref(neutral-95), functions.ref(neutral-30)),
   surface-island: (functions.ref(neutral-100), functions.ref(neutral-22)),
   surface-card: (functions.ref(neutral-98), functions.ref(neutral-25)),
   surface-raised: (functions.ref(neutral-100), functions.ref(neutral-27)),
@@ -44,6 +44,9 @@ $tokens: (
 
   // Accent
   accent: (functions.ref(blue-55), functions.ref(blue-55)),
+  // Thin accent lines on the canvas and islands; lighter in dark, where blue-55 has too
+  // little contrast against the canvas, while white text on accent fills needs blue-55.
+  accent-indicator: (functions.ref(blue-55), functions.ref(blue-70)),
   accent-hover: (functions.ref(blue-50), functions.ref(blue-50)),
   accent-pressed: (functions.ref(blue-45), functions.ref(blue-45)),
 

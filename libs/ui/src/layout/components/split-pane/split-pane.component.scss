@@ -82,7 +82,7 @@
     &:hover::after,
     &:active::after,
     &:focus-visible::after {
-      background: var(--ui-accent);
+      background: var(--ui-accent-indicator);
     }
   }
 

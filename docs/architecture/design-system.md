@@ -173,7 +173,7 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   | Text      | `default`, `muted`, `subtle`, `disabled`, `inverse`, `link`, `on-accent`                                                                                                                                                      |
   | Icon      | as text                                                                                                                                                                                                                       |
   | Border    | `default`, `subtle`, `strong`, `focus`                                                                                                                                                                                        |
-  | Accent    | `accent`, `accent-hover`, `accent-pressed`                                                                                                                                                                                    |
+  | Accent    | `accent`, `accent-hover`, `accent-pressed` for fills; `accent-indicator` for thin lines on the canvas and islands (the activity bar's marker, the selected tab, the split-pane handle), lighter in dark                       |
   | Status    | `info`, `success`, `warning`, `danger`, each with background, border, text and icon                                                                                                                                           |
   | Preview   | `preview-code-background`: the tint behind inline code in the live preview (A-8.12)                                                                                                                                           |
   | Git       | `added`, `modified`, `deleted`, `renamed`, `untracked`, `ignored`, `conflicted`                                                                                                                                               |
@@ -185,6 +185,9 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   | Motion    | `fast`, `base` and `slow` durations; two easings                                                                                                                                                                              |
   | Focus     | ring width, offset and colour                                                                                                                                                                                                 |
 
+  In dark, the canvas (`neutral-30`) is about 1.27:1 against the islands
+  (`neutral-22`), so that the islands stand out from the shell; later changes
+  keep that gap.
 - **A-10.20** **Type.** Inter for the UI, JetBrains Mono for code (A-10.36).
 
   | Context      | Compact | Touch | Why                                                                                      |
