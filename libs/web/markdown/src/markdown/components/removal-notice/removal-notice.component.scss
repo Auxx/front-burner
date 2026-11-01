@@ -3,6 +3,8 @@
 }
 
 .details {
-  margin: var(--ui-space-1) 0 0;
+  // Padding, not margin, so that the closed region leaves no gap.
+  margin: 0;
+  padding-block-start: var(--ui-space-1);
   padding-inline-start: var(--ui-space-4);
 }

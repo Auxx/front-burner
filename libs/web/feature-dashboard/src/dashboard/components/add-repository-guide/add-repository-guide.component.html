@@ -38,10 +38,10 @@
       </button>
       <a uiButton variant="primary" class="add" routerLink="/repositories/new">{{ t('add') }}</a>
     </div>
-    <div class="details" [id]="detailsId">
-      @if (expanded()) {
+    <ui-collapsible [id]="detailsId" [open]="expanded()">
+      <div class="details">
         <ng-container [ngTemplateOutlet]="details" />
-      }
-    </div>
+      </div>
+    </ui-collapsible>
   }
 </ng-container>

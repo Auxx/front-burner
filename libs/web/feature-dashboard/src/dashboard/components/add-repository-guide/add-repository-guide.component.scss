@@ -40,8 +40,16 @@ $narrow: '(max-width: calc(37.5em - 0.02px))';
   flex: 1 1 auto;
 }
 
-.details:empty {
-  display: none;
+// The host's gap would stay open below a closed region, so the space comes from
+// the region's content instead.
+:host([data-form='compact']) {
+  gap: 0;
+}
+
+.details {
+  display: grid;
+  gap: var(--ui-space-3);
+  padding-block-start: var(--ui-space-3);
 }
 
 @media #{$narrow} {

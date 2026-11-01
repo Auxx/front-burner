@@ -1,0 +1,28 @@
+@layer components {
+  // The row grows from 0fr to 1fr, which slides the content without measuring
+  // it. Closing hides the content only once the slide has ended.
+  :host {
+    display: grid;
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transition:
+      grid-template-rows var(--ui-duration-base) var(--ui-easing-standard),
+      opacity var(--ui-duration-base) var(--ui-easing-standard),
+      visibility 0s;
+  }
+
+  :host([inert]) {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      grid-template-rows var(--ui-duration-base) var(--ui-easing-exit),
+      opacity var(--ui-duration-base) var(--ui-easing-exit),
+      visibility 0s var(--ui-duration-base);
+  }
+
+  .content {
+    min-block-size: 0;
+    overflow: hidden;
+  }
+}

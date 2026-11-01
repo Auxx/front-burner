@@ -94,7 +94,7 @@ test.describe('dashboard', () => {
     await expect(howItWorks).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByText('Copy the remote URL')).toBeVisible();
     await howItWorks.click();
-    await expect(page.getByText('Copy the remote URL')).toHaveCount(0);
+    await expect(page.getByText('Copy the remote URL')).toBeHidden();
   });
 
   test('AC-DASH-001.4: Add repository starts the add-repository flow from both guides', async ({ page, instance }) => {

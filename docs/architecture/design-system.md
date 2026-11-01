@@ -109,7 +109,11 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   density tokens only and have no separate mobile variants.
 
 - **A-10.12** **Motion.** Durations are tokens, and the media query
-  `(prefers-reduced-motion: reduce)` sets them to zero (NF-13.7).
+  `(prefers-reduced-motion: reduce)` sets them to zero (NF-13.7). A region that
+  opens in place, such as **Details**, is a `ui-collapsible`: it slides open
+  with the standard easing and closed with the exit easing, and stays in the
+  document, inert while closed, so that its button's `aria-controls` always
+  names it.
 - **A-10.13** **Breakpoints** are SCSS variables, not custom properties, because
   custom properties cannot be used in media queries.
 - **A-10.14** **Syntax colours** are a fourth group of semantic tokens
@@ -252,7 +256,7 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 
   | Group      | Components                                                                                               | Built on                                                |
   | ---------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-  | Layout     | `AppShell`, `Island`, `CentredIsland`, `Page`, `SplitPane`, `ActivityBar`, `StatusBar`                   | Own code, CDK `Breakpoints`                             |
+  | Layout     | `AppShell`, `Island`, `CentredIsland`, `Page`, `SplitPane`, `ActivityBar`, `StatusBar`, `Collapsible`    | Own code, CDK `Breakpoints`                             |
   | Navigation | `TabStrip`, `Tree`, `Menu`                                                                               | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
   | Controls   | `Button`, `IconButton`, `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements; Aria Combobox and Listbox; CDK Overlay |
   | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`               | CDK Overlay, Dialog and LiveAnnouncer                   |

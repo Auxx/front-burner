@@ -179,7 +179,7 @@ file, only from the preview.
   shows a single, quiet line at its top: "Some HTML isn't shown in the preview."
   with **Details**. HTML comments (SH-10) do not count.
 - **SH-18** **Details** expands a list of what was removed, grouped and counted,
-  for example:
+  sliding it open and closed (at once with reduced motion), for example:
   - `<iframe>` × 2;
   - `style` attribute × 5;
   - `onclick` attribute × 1;

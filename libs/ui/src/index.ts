@@ -53,6 +53,7 @@ export { ActivityBarItemComponent } from './layout/components/activity-bar-item/
 export { ActivityBarComponent } from './layout/components/activity-bar/activity-bar.component';
 export { AppShellComponent } from './layout/components/app-shell/app-shell.component';
 export { CentredIslandComponent } from './layout/components/centred-island/centred-island.component';
+export { CollapsibleComponent } from './layout/components/collapsible/collapsible.component';
 export { IslandComponent } from './layout/components/island/island.component';
 export { PageComponent } from './layout/components/page/page.component';
 export {

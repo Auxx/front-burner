@@ -50,28 +50,41 @@ describe('AddRepositoryGuideComponent', () => {
     it('shows one strip with its text', () => {
       expect(host().textContent).toContain(`${KEY}.compactText`);
       expect(host().querySelector('h2')).toBeNull();
-      expect(steps()).toHaveLength(0);
     });
 
     it('toggles How it works in place', async () => {
       const button = howItWorks() as HTMLButtonElement;
+      const panel = () => host().querySelector(`#${button.getAttribute('aria-controls')}`) as HTMLElement | null;
       expect(button.textContent?.trim()).toBe(`${KEY}.howItWorks`);
       expect(button.getAttribute('aria-expanded')).toBe('false');
+      // In the document while closed, so that aria-controls names it, but inert.
+      expect(panel()?.hasAttribute('inert')).toBe(true);
+      expect(panel()?.textContent).toContain(`${KEY}.explanation`);
 
       button.click();
       await settle(fixture);
 
       expect(button.getAttribute('aria-expanded')).toBe('true');
+      expect(panel()?.hasAttribute('inert')).toBe(false);
       expect(steps()).toHaveLength(3);
-      expect(host().textContent).toContain(`${KEY}.explanation`);
-      const panel = host().querySelector(`#${button.getAttribute('aria-controls')}`);
-      expect(panel?.contains(steps()[0] as Node)).toBe(true);
+      expect(panel()?.contains(steps()[0] as Node)).toBe(true);
 
       button.click();
       await settle(fixture);
 
       expect(button.getAttribute('aria-expanded')).toBe('false');
-      expect(steps()).toHaveLength(0);
+      expect(panel()?.hasAttribute('inert')).toBe(true);
+    });
+
+    it('ends closed after two quick clicks on How it works', async () => {
+      const button = howItWorks() as HTMLButtonElement;
+
+      button.click();
+      button.click();
+      await settle(fixture);
+
+      expect(button.getAttribute('aria-expanded')).toBe('false');
+      expect(host().querySelector(`#${button.getAttribute('aria-controls')}`)?.hasAttribute('inert')).toBe(true);
     });
 
     it('links Add repository to /repositories/new', () => {
