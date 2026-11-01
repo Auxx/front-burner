@@ -324,7 +324,13 @@ test.describe('editor', () => {
     await expect(panel.getByRole('textbox', { name: 'Replace' })).toBeHidden();
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+f' : 'Control+h');
     await expect(panel.getByRole('textbox', { name: 'Replace' })).toBeFocused();
-    await expect(panel.getByRole('button', { name: 'Toggle replace' })).toHaveAttribute('aria-expanded', 'true');
+    const toggle = panel.getByRole('button', { name: 'Toggle replace' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // The chevron keeps the height of the panel's other buttons once the replace row has slid open.
+    await expect.poll(() => panel.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+    expect((await toggle.boundingBox())!.height).toBe(
+      (await panel.getByRole('button', { name: 'Close' }).boundingBox())!.height
+    );
 
     // Closing leaves an inert copy that slides out and then goes away.
     await main(page).locator('.cm-editor').evaluate(element => {

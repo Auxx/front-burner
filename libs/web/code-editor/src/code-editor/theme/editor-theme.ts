@@ -98,31 +98,10 @@ export const editorTheme = EditorView.theme({
     font: 'inherit',
     fontSize: 'var(--ui-font-size-input)'
   },
-  '.fb-find-button': {
-    display: 'inline-flex',
-    flex: 'none',
-    alignItems: 'center',
-    justifyContent: 'center',
-    inlineSize: 'var(--ui-control-height-small)',
-    blockSize: 'var(--ui-control-height-small)',
-    boxSizing: 'border-box',
-    margin: '0',
-    padding: '0',
-    color: 'var(--ui-text-default)',
-    backgroundColor: 'transparent',
-    border: 'var(--ui-border-width) solid transparent',
-    borderRadius: 'var(--ui-radius-control)',
-    cursor: 'pointer'
-  },
-  '.fb-find-button:hover': { backgroundColor: 'var(--ui-surface-hover)' },
-  '.fb-find-button:active': { backgroundColor: 'var(--ui-surface-pressed)' },
-  '.fb-find-button[aria-pressed=true]': {
-    borderColor: 'var(--ui-border-strong)',
-    backgroundColor: 'var(--ui-selected-inactive)'
-  },
-  // The chevron spans both rows, as in VS Code, and turns to point down while the replace
-  // row is open.
-  '.fb-find-toggle': { blockSize: 'auto', minBlockSize: 'var(--ui-control-height-small)' },
+  // The buttons are the ui library's small icon buttons (find-panel.ts). The chevron keeps
+  // their fixed size at the top of the panel and turns to point down while the replace row
+  // is open.
+  '.fb-find-toggle': { alignSelf: 'flex-start' },
   '.fb-find-toggle .fb-find-icon': {
     transition: 'transform var(--ui-duration-base) var(--ui-easing-standard)'
   },
@@ -156,14 +135,15 @@ export const editorTheme = EditorView.theme({
     textAlign: 'center',
     whiteSpace: 'nowrap'
   },
-  '.fb-find-field:focus-visible, .fb-find-button:focus-visible': {
+  // The focus ring is drawn inside, since the editor and the replace row's region clip what
+  // is outside the panel's controls.
+  '.fb-find-field:focus-visible': {
     outline: 'var(--ui-focus-ring-width) solid var(--ui-border-focus)',
     outlineOffset: 'calc(-1 * var(--ui-focus-ring-width))'
   },
-  // Shadows are removed in forced colours, so the panel gets a border; the pressed background
-  // is `Highlight` (A-10.22).
+  '.fb-find-button:focus-visible': { outlineOffset: 'calc(-1 * var(--ui-focus-ring-width))' },
+  // Shadows are removed in forced colours, so the panel gets a border (A-10.22).
   '@media (forced-colors: active)': {
-    '.cm-panels.cm-panels-top': { border: 'var(--ui-border-width) solid var(--ui-border-default)' },
-    '.fb-find-button[aria-pressed=true]': { color: 'HighlightText' }
+    '.cm-panels.cm-panels-top': { border: 'var(--ui-border-width) solid var(--ui-border-default)' }
   }
 });

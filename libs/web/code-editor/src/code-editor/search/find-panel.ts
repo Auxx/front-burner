@@ -1,3 +1,4 @@
+import { ApplicationRef, type ComponentRef, createComponent, type EnvironmentInjector } from '@angular/core';
 import {
   closeSearchPanel,
   findNext,
@@ -11,6 +12,7 @@ import {
 } from '@codemirror/search';
 import { EditorSelection, type EditorState } from '@codemirror/state';
 import { type Command, EditorView, type Panel, runScopeHandlers, type ViewUpdate } from '@codemirror/view';
+import { IconButtonComponent } from '@front-burner/ui';
 import { findIconSprite, findLabels, type FindPanelLabels } from './find-labels';
 
 /** The counter stops counting here, so that a short query in a 1 MB file stays responsive. */
@@ -83,6 +85,17 @@ function firstMatchFrom(state: EditorState, query: SearchQuery, from: number): M
   return before.done ? null : before.value;
 }
 
+/** The injector each view's find panel creates its ui buttons with. */
+const injectors = new WeakMap<EditorView, EnvironmentInjector>();
+
+/**
+ * Gives the view's find panel the injector it creates the ui library's icon
+ * buttons with. The code editor component calls it for its view.
+ */
+export function setFindPanelInjector(view: EditorView, injector: EnvironmentInjector): void {
+  injectors.set(view, injector);
+}
+
 /** The panels on screen, so that `openReplacePanel` can reach the one it opened. */
 const panels = new WeakMap<EditorView, FindPanel>();
 
@@ -100,6 +113,9 @@ class FindPanel implements Panel {
 
   private readonly labels: FindPanelLabels;
   private readonly sprite: string;
+  private readonly injector: EnvironmentInjector;
+  /** The ui icon buttons of the panel, by their host element. */
+  private readonly buttons = new Map<HTMLButtonElement, ComponentRef<IconButtonComponent>>();
   private readonly toggle: HTMLButtonElement;
   private readonly findField: HTMLInputElement;
   readonly replaceField: HTMLInputElement;
@@ -118,6 +134,11 @@ class FindPanel implements Panel {
   constructor(private readonly view: EditorView) {
     this.labels = view.state.facet(findLabels);
     this.sprite = view.state.facet(findIconSprite);
+    const injector = injectors.get(view);
+    if (!injector) {
+      throw new Error('The find panel needs setFindPanelInjector for its view');
+    }
+    this.injector = injector;
     this.query = getSearchQuery(view.state);
     const labels = this.labels;
     const replaceRowId = `fb-find-replace-${++ids}`;
@@ -219,6 +240,12 @@ class FindPanel implements Panel {
     if (container && !this.view.dom.hasAttribute(SWAPPING_ATTRIBUTE)) {
       leaveClosingCopy(container, this.view.dom);
     }
+    const appRef = this.injector.get(ApplicationRef);
+    for (const button of this.buttons.values()) {
+      appRef.detachView(button.hostView);
+      button.destroy();
+    }
+    this.buttons.clear();
   }
 
   /** Shows or hides the replace row. */
@@ -291,9 +318,9 @@ class FindPanel implements Panel {
     this.query = query;
     this.findField.value = query.search;
     this.replaceField.value = query.replace;
-    this.caseButton.setAttribute('aria-pressed', String(query.caseSensitive));
-    this.wordButton.setAttribute('aria-pressed', String(query.wholeWord));
-    this.regexpButton.setAttribute('aria-pressed', String(query.regexp));
+    this.setPressed(this.caseButton, query.caseSensitive);
+    this.setPressed(this.wordButton, query.wholeWord);
+    this.setPressed(this.regexpButton, query.regexp);
   }
 
   private recount(): void {
@@ -351,24 +378,41 @@ class FindPanel implements Panel {
     return input;
   }
 
+  /**
+   * A small `uiIconButton` of the ui library on a button of the panel's own,
+   * since CodeMirror panels are DOM: its label is its accessible name and its
+   * tooltip, and its size is the small control height.
+   */
   private iconButton(icon: string, label: string, run: () => void): HTMLButtonElement {
     const button = document.createElement('button');
-    button.type = 'button';
     button.className = 'fb-find-button';
-    button.setAttribute('aria-label', label);
-    button.title = label;
-    button.append(this.icon(icon));
+    const ref = createComponent(IconButtonComponent, {
+      environmentInjector: this.injector,
+      hostElement: button,
+      projectableNodes: [ [ this.icon(icon) ] ]
+    });
+    ref.setInput('label', label);
+    ref.setInput('size', 'small');
+    this.injector.get(ApplicationRef).attachView(ref.hostView);
+    ref.changeDetectorRef.detectChanges();
+    this.buttons.set(button, ref);
     button.addEventListener('click', run);
     return button;
   }
 
   private optionButton(icon: string, label: string, on: boolean): HTMLButtonElement {
     const button = this.iconButton(icon, label, () => {
-      button.setAttribute('aria-pressed', String(!pressed(button)));
+      this.setPressed(button, !pressed(button));
       this.commit();
     });
-    button.setAttribute('aria-pressed', String(on));
+    this.setPressed(button, on);
     return button;
+  }
+
+  private setPressed(button: HTMLButtonElement, on: boolean): void {
+    const ref = this.buttons.get(button);
+    ref?.setInput('pressed', on);
+    ref?.changeDetectorRef.detectChanges();
   }
 
   /** A Codicon from the sprite, as `ui-icon` draws it. */

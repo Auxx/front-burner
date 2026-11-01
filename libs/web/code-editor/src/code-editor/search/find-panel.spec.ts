@@ -1,10 +1,19 @@
 import { undo } from '@codemirror/commands';
 import { getSearchQuery, openSearchPanel, searchPanelOpen, SearchQuery } from '@codemirror/search';
 import { EditorView } from '@codemirror/view';
+import { EnvironmentInjector } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { contentOf, createEditorState } from '../state/editor-state';
 import { type FindPanelLabels } from './find-labels';
-import { countMatches, MAX_COUNTED_MATCHES, openReplacePanel, RECOUNT_DELAY_MS, SWAPPING_ATTRIBUTE } from './find-panel';
+import {
+  countMatches,
+  MAX_COUNTED_MATCHES,
+  openReplacePanel,
+  RECOUNT_DELAY_MS,
+  setFindPanelInjector,
+  SWAPPING_ATTRIBUTE
+} from './find-panel';
 
 const LABELS: FindPanelLabels = {
   find: 'L.find',
@@ -44,6 +53,7 @@ describe('the find panel', () => {
       })
     });
     document.body.append(view.dom);
+    setFindPanelInjector(view, TestBed.inject(EnvironmentInjector));
     return view;
   }
 
@@ -94,11 +104,18 @@ describe('the find panel', () => {
       expect(panel().getAttribute('role')).toBe('search');
     });
 
-    it('gives icon buttons a title and an icon from the sprite', () => {
+    it('makes every button a small ui icon button with an icon from the sprite', () => {
       openSearchPanel(open());
 
+      const buttons = Array.from(panel().querySelectorAll('button'));
+      expect(buttons).toHaveLength(9);
+      for (const button of buttons) {
+        // The ui library's icon button: its size is fixed by the control height, and its label is its tooltip.
+        expect(button.getAttribute('data-size')).toBe('small');
+        expect(button.getAttribute('type')).toBe('button');
+        expect(button.title).toBe('');
+      }
       const next = named(LABELS.next);
-      expect(next.title).toBe(LABELS.next);
       expect(next.querySelector('use')?.getAttribute('href')).toBe('sprite.svg#arrow-down');
       for (
         const [ label, icon ] of [ [ LABELS.matchCase, 'case-sensitive' ], [ LABELS.wholeWord, 'whole-word' ], [
@@ -150,6 +167,7 @@ describe('the find panel', () => {
     it('works in English without labels', () => {
       view = new EditorView({ state: createEditorState({ content: 'a', highlight: false, label: 'a.md' }) });
       document.body.append(view.dom);
+      setFindPanelInjector(view, TestBed.inject(EnvironmentInjector));
       openSearchPanel(view);
 
       type(named('Find') as HTMLInputElement, 'a');
