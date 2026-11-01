@@ -1,5 +1,6 @@
 // A round button with the initials; its size is the controls' height, which
-// grows to 44 px on touch screens (NF-13.5).
+// grows to 44 px on touch screens (NF-13.5). It sits on the canvas, so it is
+// filled with the island shade: the control shade is the canvas's own in dark.
 .trigger {
   display: inline-grid;
   place-items: center;
@@ -8,7 +9,7 @@
   padding: 0;
   border: var(--ui-border-width) solid var(--ui-border-default);
   border-radius: var(--ui-radius-pill);
-  background: var(--ui-surface-control);
+  background: var(--ui-surface-island);
   color: var(--ui-text-default);
   font: inherit;
   font-weight: var(--ui-font-weight-semibold);
