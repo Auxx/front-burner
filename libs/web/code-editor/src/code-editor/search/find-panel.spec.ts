@@ -1,8 +1,8 @@
+import { EnvironmentInjector } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { undo } from '@codemirror/commands';
 import { getSearchQuery, openSearchPanel, searchPanelOpen, SearchQuery } from '@codemirror/search';
 import { EditorView } from '@codemirror/view';
-import { EnvironmentInjector } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { contentOf, createEditorState } from '../state/editor-state';
 import { type FindPanelLabels } from './find-labels';

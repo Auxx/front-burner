@@ -335,7 +335,11 @@ test.describe('editor', () => {
     // Closing leaves an inert copy that slides out and then goes away.
     await main(page).locator('.cm-editor').evaluate(element => {
       new MutationObserver(records => {
-        if (records.some(record => [ ...record.addedNodes ].some(node => (node as Element).classList?.contains('fb-find-closing')))) {
+        if (
+          records.some(record =>
+            [ ...record.addedNodes ].some(node => (node as Element).classList?.contains('fb-find-closing'))
+          )
+        ) {
           element.setAttribute('data-saw-closing', '');
         }
       }).observe(element, { childList: true });

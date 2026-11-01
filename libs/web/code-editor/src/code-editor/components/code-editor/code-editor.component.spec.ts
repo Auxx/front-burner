@@ -1,8 +1,8 @@
 import { CSP_NONCE } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { undo } from '@codemirror/commands';
-import { EditorSelection, type EditorState } from '@codemirror/state';
 import { openSearchPanel } from '@codemirror/search';
+import { EditorSelection, type EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 
 import { SWAPPING_ATTRIBUTE } from '../../search/find-panel';

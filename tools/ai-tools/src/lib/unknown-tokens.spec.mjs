@@ -19,7 +19,10 @@ describe('unknown tokens', () => {
 
   it('counts declarations, token map keys, style bindings and setProperty as definitions', () => {
     const defined = definedTokens([
-      source('_color.scss', '$tokens: (\n  // Text\n  text-muted: (functions.ref(neutral-45), functions.ref(neutral-75)),\n);'),
+      source(
+        '_color.scss',
+        '$tokens: (\n  // Text\n  text-muted: (functions.ref(neutral-45), functions.ref(neutral-75)),\n);'
+      ),
       source('_density.scss', '$tokens: (\n  control-height: (1.75rem, 2.75rem),\n);'),
       source('theme.ts', `const theme = { '--ui-checkbox-mark': 'red' };`),
       source('pane.html', '<div [style.--ui-pane-size]="size"></div>'),
