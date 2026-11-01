@@ -77,11 +77,12 @@ tokens.mjs unknown libs/web
 
 `unknown` reads the SCSS, TypeScript and HTML files under the folders (default
 `libs`). A token counts as defined by a declaration, a `$tokens` map key, a
-`[style.--ui-*]` binding or a `setProperty` call. References with a fallback
-(`var(--ui-x, transparent)`) and names built by interpolation are not checked.
-`unknown-tokens.spec.mjs` runs the same check on `libs` in the unit tests, so a
-renamed token that a component still reads fails them; `ai-tools` has implicit
-dependencies on `ui` and `web-*` for it.
+`[style.--ui-*]` binding or a `setProperty` call; specs, stories and comments
+define nothing, and a file instead of a folder is refused. References with a
+fallback (`var(--ui-x, transparent)`) and names built by interpolation are not
+checked. `unknown-tokens.spec.mjs` runs the same check on `libs` in the unit
+tests, so a renamed token that a component still reads fails them; `ai-tools`
+has implicit dependencies on `ui` and `web-*` for it.
 
 - Use it while choosing token values: try candidates, then edit the SCSS.
 - **The unit test.** `tools/ai-tools/src/lib/ui-contrast.spec.mjs` runs the same

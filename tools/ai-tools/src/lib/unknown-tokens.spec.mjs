@@ -35,6 +35,17 @@ describe('unknown tokens', () => {
     ]);
   });
 
+  it('does not count definitions in specs, stories or comments', () => {
+    const defined = definedTokens([
+      source('a.component.spec.ts', `const style = '--ui-in-spec: red';`),
+      source('a.component.stories.ts', `styles: [ 'b { --ui-in-story: red; }' ]`),
+      source('a.scss', '// --ui-in-line-comment: red;\n/* --ui-in-block-comment: red; */\na { --ui-real: red; }'),
+      source('b.ts', `// '--ui-in-ts-comment': 'red'`)
+    ]);
+
+    expect([ ...defined ]).toEqual([ '--ui-real' ]);
+  });
+
   it('leaves out references with a fallback and names built by interpolation', () => {
     const found = unknownTokens(
       [ source('a.scss', 'a { b: var(--ui-banner-background, transparent); c: var(--ui-#{$status}-border); }') ],
@@ -71,6 +82,12 @@ describe('unknown tokens', () => {
       const paths = readSources([ relative ]).map(found => found.path).sort();
 
       expect(paths).toEqual([ `${relative}/src/a.scss`, `${relative}/src/b.ts` ]);
+    });
+
+    it('says so when given a file instead of a folder', () => {
+      const relative = fixture.slice(WORKSPACE_ROOT.length + 1);
+
+      expect(() => readSources([ `${relative}/src/a.scss` ])).toThrow(/is not a folder/);
     });
 
     it('refuses a folder outside the workspace', () => {

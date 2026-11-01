@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { readText, resolveInWorkspace, workspacePath } from './workspace.mjs';
 
@@ -23,9 +23,21 @@ export function readSources(folders) {
     }
   };
   for (const folder of folders) {
-    walk(resolveInWorkspace(folder));
+    const absolute = resolveInWorkspace(folder);
+    if (!statSync(absolute).isDirectory()) {
+      throw new Error(`${workspacePath(absolute)} is not a folder`);
+    }
+    walk(absolute);
   }
   return sources;
+}
+
+/** Specs and stories may write any token for their fixtures; they define nothing. */
+const NOT_DEFINING = /\.(spec|stories)\.ts$/;
+
+/** The text without comments; `//` after a colon, as in `https://`, is not a comment. */
+function withoutComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
 /** The keys of a `$tokens: (name: (…), …);` map; each becomes `--ui-<name>`. */
@@ -52,10 +64,15 @@ function mapKeys(text, path) {
  * Every `--ui-*` custom property the sources define: declarations (also as a
  * quoted key in TypeScript), `[style.--ui-*]` bindings, `setProperty` calls
  * and the keys of the token maps, which the token files emit as declarations.
+ * Specs, stories and comments define nothing.
  */
 export function definedTokens(sources) {
   const defined = new Set();
-  for (const { path, text } of sources) {
+  for (const { path, text: source } of sources) {
+    if (NOT_DEFINING.test(path)) {
+      continue;
+    }
+    const text = withoutComments(source);
     for (const [ , name ] of text.matchAll(/(--ui-[a-z0-9-]+)['"]?\s*:/g)) {
       defined.add(name);
     }
