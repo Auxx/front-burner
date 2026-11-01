@@ -7,7 +7,7 @@ const meta: Meta<CollapsibleComponent> = {
   title: 'Layout/Collapsible',
   component: CollapsibleComponent,
   render: props => ({
-    props: { ...props, toggle: () => (props.open = !props.open) },
+    props,
     moduleMetadata: { imports: [ ButtonComponent ] },
     template: `
       <button uiButton variant="ghost" size="small" type="button" aria-controls="details"
