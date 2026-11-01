@@ -137,8 +137,10 @@ images ([REQ-EDIT-003](preview-images.md)).
   button and with the platform's shortcut (`Ctrl+F` / `Cmd+F`). _(My call.)_ The
   find and replace panel floats over the top of the editor without moving the
   text; the replace field is shown with a button next to the find field, or with
-  the platform's replace shortcut (`Ctrl+H` / `Cmd+Option+F`). `Tab` inserts a
-  tab; `Esc` then `Tab` moves focus out of the editor (NF-13.3).
+  the platform's replace shortcut (`Ctrl+H` / `Cmd+Option+F`). The panel slides
+  in and out, and the replace field slides open and closed, at once when the
+  user asks for less motion. `Tab` inserts a tab; `Esc` then `Tab` moves focus
+  out of the editor (NF-13.3).
 - **ED-12** Saving keeps what the user did not change:
   - the line endings: a file that uses `\r\n` is saved with `\r\n`. A file with
     mixed line endings is saved with the one it uses most; _(My call.)_

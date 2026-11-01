@@ -4,7 +4,7 @@ import { EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { contentOf, createEditorState } from '../state/editor-state';
 import { type FindPanelLabels } from './find-labels';
-import { countMatches, MAX_COUNTED_MATCHES, openReplacePanel, RECOUNT_DELAY_MS } from './find-panel';
+import { countMatches, MAX_COUNTED_MATCHES, openReplacePanel, RECOUNT_DELAY_MS, SWAPPING_ATTRIBUTE } from './find-panel';
 
 const LABELS: FindPanelLabels = {
   find: 'L.find',
@@ -53,6 +53,9 @@ describe('the find panel', () => {
   const replaceField = () => named(LABELS.replace) as HTMLInputElement;
   const toggle = () => named(LABELS.toggleReplace) as HTMLButtonElement;
   const replaceRow = () => replaceField().closest('.fb-find-row') as HTMLElement;
+  /** The region the chevron opens: it slides, and is inert while closed. */
+  const replaceRegion = () => panel().querySelector(`#${toggle().getAttribute('aria-controls')}`) as HTMLElement;
+  const closingCopies = () => view.dom.querySelectorAll('.fb-find-closing');
   const counter = () => panel().querySelector('.fb-find-count')?.textContent;
   const matches = () => view.dom.querySelectorAll('.cm-searchMatch').length;
 
@@ -108,18 +111,40 @@ describe('the find panel', () => {
       }
     });
 
-    it('hides the replace row until the chevron shows it', () => {
+    it('keeps the replace row inert until the chevron opens it', () => {
       openSearchPanel(open());
 
-      expect(replaceRow().hidden).toBe(true);
+      expect(replaceRegion().contains(replaceRow())).toBe(true);
+      expect(replaceRegion().hasAttribute('inert')).toBe(true);
+      expect(replaceRow().hidden).toBe(false);
       expect(toggle().getAttribute('aria-expanded')).toBe('false');
-      expect(toggle().getAttribute('aria-controls')).toBe(replaceRow().id);
 
       toggle().click();
 
-      expect(replaceRow().hidden).toBe(false);
+      expect(replaceRegion().hasAttribute('inert')).toBe(false);
       expect(toggle().getAttribute('aria-expanded')).toBe('true');
-      expect(toggle().querySelector('use')?.getAttribute('href')).toBe('sprite.svg#chevron-down');
+      // One chevron, turned by CSS while expanded.
+      expect(toggle().querySelector('use')?.getAttribute('href')).toBe('sprite.svg#chevron-right');
+    });
+
+    it('ends in the state of the last click when the chevron is clicked quickly', () => {
+      openSearchPanel(open());
+
+      toggle().click();
+      toggle().click();
+      toggle().click();
+
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      expect(replaceRegion().hasAttribute('inert')).toBe(false);
+    });
+
+    it('gives the focus to the find field when the replace row closes around it', () => {
+      openReplacePanel(open());
+      expect(document.activeElement).toBe(replaceField());
+
+      toggle().click();
+
+      expect(document.activeElement).toBe(findField());
     });
 
     it('works in English without labels', () => {
@@ -323,7 +348,7 @@ describe('the find panel', () => {
     it('opens expanded with the replace field focused from the replace command and Ctrl-H', () => {
       openReplacePanel(open());
 
-      expect(replaceRow().hidden).toBe(false);
+      expect(replaceRegion().hasAttribute('inert')).toBe(false);
       expect(toggle().getAttribute('aria-expanded')).toBe('true');
       expect(document.activeElement).toBe(replaceField());
 
@@ -354,6 +379,57 @@ describe('the find panel', () => {
       expect(toggle().hidden).toBe(true);
       expect(replaceRow().hidden).toBe(true);
       expect(document.activeElement).toBe(findField());
+    });
+  });
+  describe('closing', () => {
+    function animated(duration: string): void {
+      const real = window.getComputedStyle.bind(window);
+      vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
+        const style = real(element, pseudo);
+        return (element as Element).classList?.contains('fb-find-closing')
+          ? ({ ...style, animationDuration: duration } as CSSStyleDeclaration)
+          : style;
+      });
+    }
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('leaves a sliding copy when the panel closes, removed when it has slid out', () => {
+      animated('0.16s');
+      openSearchPanel(open());
+
+      press(findField(), 'Escape');
+
+      expect(searchPanelOpen(view.state)).toBe(false);
+      expect(closingCopies()).toHaveLength(1);
+      const copy = closingCopies()[0] as HTMLElement;
+      expect(copy.classList.contains('cm-panels-top')).toBe(true);
+      expect(copy.hasAttribute('inert')).toBe(true);
+      expect(copy.getAttribute('aria-hidden')).toBe('true');
+      expect(copy.querySelectorAll('[id]')).toHaveLength(0);
+
+      copy.dispatchEvent(new Event('animationend'));
+
+      expect(closingCopies()).toHaveLength(0);
+    });
+
+    it('leaves no copy without motion', () => {
+      animated('0s');
+      openSearchPanel(open());
+
+      press(findField(), 'Escape');
+
+      expect(closingCopies()).toHaveLength(0);
+    });
+
+    it('leaves no copy while the editor swaps its state', () => {
+      animated('0.16s');
+      openSearchPanel(open());
+      view.dom.setAttribute(SWAPPING_ATTRIBUTE, '');
+
+      press(findField(), 'Escape');
+
+      expect(closingCopies()).toHaveLength(0);
     });
   });
 });

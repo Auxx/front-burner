@@ -325,6 +325,20 @@ test.describe('editor', () => {
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+f' : 'Control+h');
     await expect(panel.getByRole('textbox', { name: 'Replace' })).toBeFocused();
     await expect(panel.getByRole('button', { name: 'Toggle replace' })).toHaveAttribute('aria-expanded', 'true');
+
+    // Closing leaves an inert copy that slides out and then goes away.
+    await main(page).locator('.cm-editor').evaluate(element => {
+      new MutationObserver(records => {
+        if (records.some(record => [ ...record.addedNodes ].some(node => (node as Element).classList?.contains('fb-find-closing')))) {
+          element.setAttribute('data-saw-closing', '');
+        }
+      }).observe(element, { childList: true });
+    });
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(editor(page, 'README.md')).toBeFocused();
+    await expect(main(page).locator('.cm-editor')).toHaveAttribute('data-saw-closing', '');
+    await expect(main(page).locator('.fb-find-closing')).toHaveCount(0);
   });
 
   test('ED-10: scrolls a long line sideways inside the editor, not the page, once Wrap is off', async ({ page, instance }) => {

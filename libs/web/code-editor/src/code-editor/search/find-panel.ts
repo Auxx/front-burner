@@ -24,6 +24,36 @@ export const RECOUNT_DELAY_MS = 250;
 
 const SVG = 'http://www.w3.org/2000/svg';
 
+/**
+ * Set on the editor's DOM while it swaps in another file's state: the find
+ * panel then closes without sliding out over the new file's text.
+ */
+export const SWAPPING_ATTRIBUTE = 'data-fb-swapping';
+
+/**
+ * CodeMirror removes a closed panel's DOM at once, so a copy of the panel's
+ * container slides out in its place: inert, hidden from screen readers and
+ * without ids. Returns the copy, or null when there is no animation to wait
+ * for, as with reduced motion.
+ */
+export function leaveClosingCopy(container: HTMLElement, host: HTMLElement): HTMLElement | null {
+  const copy = container.cloneNode(true) as HTMLElement;
+  copy.classList.add('fb-find-closing');
+  copy.setAttribute('inert', '');
+  copy.setAttribute('aria-hidden', 'true');
+  for (const element of [ copy, ...copy.querySelectorAll('[id]') ]) {
+    element.removeAttribute('id');
+  }
+  host.append(copy);
+  const duration = getComputedStyle(copy).animationDuration;
+  if (!duration || parseFloat(duration) === 0) {
+    copy.remove();
+    return null;
+  }
+  copy.addEventListener('animationend', () => copy.remove(), { once: true });
+  return copy;
+}
+
 /** A match of the query in the text. */
 interface Match {
   from: number;
@@ -71,7 +101,6 @@ class FindPanel implements Panel {
   private readonly labels: FindPanelLabels;
   private readonly sprite: string;
   private readonly toggle: HTMLButtonElement;
-  private readonly chevron: SVGUseElement;
   private readonly findField: HTMLInputElement;
   readonly replaceField: HTMLInputElement;
   private readonly caseButton: HTMLButtonElement;
@@ -79,6 +108,7 @@ class FindPanel implements Panel {
   private readonly regexpButton: HTMLButtonElement;
   private readonly counter: HTMLElement;
   private readonly replaceRow: HTMLElement;
+  private readonly replaceRegion: HTMLElement;
   private query: SearchQuery;
   private expanded = false;
   private matches: Match[] = [];
@@ -96,7 +126,6 @@ class FindPanel implements Panel {
     this.toggle.classList.add('fb-find-toggle');
     this.toggle.setAttribute('aria-expanded', 'false');
     this.toggle.setAttribute('aria-controls', replaceRowId);
-    this.chevron = this.toggle.querySelector('use') as SVGUseElement;
 
     this.findField = this.field(labels.find, this.query.search);
     // `openSearchPanel` and CodeMirror's find commands look for this attribute.
@@ -126,12 +155,19 @@ class FindPanel implements Panel {
       this.iconButton('replace', labels.replaceOne, () => replaceNext(view)),
       this.iconButton('replace-all', labels.replaceAll, () => replaceAll(view))
     );
-    this.replaceRow.id = replaceRowId;
     this.replaceRow.classList.add('fb-find-replace');
+    // Slides open and closed as ui-collapsible does; inert while closed.
+    this.replaceRegion = document.createElement('div');
+    this.replaceRegion.className = 'fb-find-replace-region';
+    this.replaceRegion.id = replaceRowId;
+    const clip = document.createElement('div');
+    clip.className = 'fb-find-replace-clip';
+    clip.append(this.replaceRow);
+    this.replaceRegion.append(clip);
 
     const rows = document.createElement('div');
     rows.className = 'fb-find-rows';
-    rows.append(findRow, this.replaceRow);
+    rows.append(findRow, this.replaceRegion);
 
     this.dom = document.createElement('div');
     this.dom.className = 'fb-find';
@@ -179,6 +215,10 @@ class FindPanel implements Panel {
   destroy(): void {
     clearTimeout(this.recountTimer);
     panels.delete(this.view);
+    const container = this.dom.parentElement;
+    if (container && !this.view.dom.hasAttribute(SWAPPING_ATTRIBUTE)) {
+      leaveClosingCopy(container, this.view.dom);
+    }
   }
 
   /** Shows or hides the replace row. */
@@ -195,8 +235,8 @@ class FindPanel implements Panel {
     }
     this.toggle.hidden = readOnly;
     this.toggle.setAttribute('aria-expanded', String(shown));
-    this.chevron.setAttribute('href', `${this.sprite}#${shown ? 'chevron-down' : 'chevron-right'}`);
-    this.replaceRow.hidden = !shown;
+    this.replaceRow.hidden = readOnly;
+    this.replaceRegion.toggleAttribute('inert', !shown);
   }
 
   private keydown(event: KeyboardEvent): void {

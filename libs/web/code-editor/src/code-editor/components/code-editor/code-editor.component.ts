@@ -13,6 +13,7 @@ import {
 import { openSearchPanel } from '@codemirror/search';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { SWAPPING_ATTRIBUTE } from '../../search/find-panel';
 
 export interface EditorStateChange {
   state: EditorState;
@@ -112,7 +113,13 @@ export class CodeEditorComponent {
   private show(state: EditorState): void {
     this.view ??= this.createView();
     if (this.view.state !== state) {
-      this.view.setState(state);
+      // Another file's state closes the find panel, which then does not slide out over it.
+      this.view.dom.setAttribute(SWAPPING_ATTRIBUTE, '');
+      try {
+        this.view.setState(state);
+      } finally {
+        this.view.dom.removeAttribute(SWAPPING_ATTRIBUTE);
+      }
     }
   }
 
