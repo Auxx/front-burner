@@ -52,7 +52,15 @@ export function leaveClosingCopy(container: HTMLElement, host: HTMLElement): HTM
     copy.remove();
     return null;
   }
-  copy.addEventListener('animationend', () => copy.remove(), { once: true });
+  // Only the copy's own slide: an animation inside it must not remove it. A cancelled slide,
+  // as when the editor is hidden meanwhile, removes it too, so that it never slides again.
+  const done = (event: Event) => {
+    if (event.target === copy) {
+      copy.remove();
+    }
+  };
+  copy.addEventListener('animationend', done);
+  copy.addEventListener('animationcancel', done);
   return copy;
 }
 
@@ -200,6 +208,10 @@ class FindPanel implements Panel {
     this.showReplace();
     this.recount();
     panels.set(view, this);
+    // A panel opened again while the last one still slides out replaces it at once.
+    for (const copy of view.dom.querySelectorAll(':scope > .fb-find-closing')) {
+      copy.remove();
+    }
   }
 
   mount(): void {

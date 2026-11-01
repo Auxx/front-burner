@@ -431,6 +431,31 @@ describe('the find panel', () => {
       expect(closingCopies()).toHaveLength(0);
     });
 
+    it('removes the copy when the slide is cancelled, but not when an animation inside it ends', () => {
+      animated('0.16s');
+      openSearchPanel(open());
+      press(findField(), 'Escape');
+      const copy = closingCopies()[0] as HTMLElement;
+
+      copy.querySelector('button')?.dispatchEvent(new Event('animationend', { bubbles: true }));
+      expect(closingCopies()).toHaveLength(1);
+
+      copy.dispatchEvent(new Event('animationcancel'));
+      expect(closingCopies()).toHaveLength(0);
+    });
+
+    it('removes a copy still sliding out when the panel opens again', () => {
+      animated('0.16s');
+      openSearchPanel(open());
+      press(findField(), 'Escape');
+      expect(closingCopies()).toHaveLength(1);
+
+      openSearchPanel(view);
+
+      expect(closingCopies()).toHaveLength(0);
+      expect(panel()).not.toBeNull();
+    });
+
     it('leaves no copy without motion', () => {
       animated('0s');
       openSearchPanel(open());
