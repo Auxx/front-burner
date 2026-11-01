@@ -96,12 +96,30 @@ export function parseViewport(text) {
 }
 
 /**
+ * Parses `--set token=value` overrides into `[ '--ui-token', 'css value' ]`
+ * pairs. The value is another token's name (`neutral-30`, used as
+ * `var(--ui-neutral-30)`) or a CSS value without `;`, `{`, `}` or `<`.
+ */
+export function parseTokenOverrides(list = []) {
+  return list.map(text => {
+    const match = /^([a-z][a-z0-9-]*)=(.+)$/.exec(text);
+    if (!match || /[;{}<]/.test(match[2])) {
+      throw new Error(`Not a token override (token=value): ${text}`);
+    }
+    const [ , name, value ] = match;
+    return [ `--ui-${name}`, /^[a-z][a-z0-9-]*$/.test(value) ? `var(--ui-${value})` : value ];
+  });
+}
+
+/**
  * Opens a story in a new browser context with the variant's settings and
  * waits until Storybook has rendered it, the fonts have loaded and `wait`
  * more milliseconds have passed (for play functions and transitions). Throws
- * Storybook's error message when the story fails to render.
+ * Storybook's error message when the story fails to render. `overrides`, from
+ * `parseTokenOverrides`, are set on the root element, where they win over the
+ * token layer in every scheme and density.
  */
-export async function openStory(browser, baseUrl, id, variant, { wait = 300 } = {}) {
+export async function openStory(browser, baseUrl, id, variant, { wait = 300, overrides = [] } = {}) {
   const context = await browser.newContext({
     viewport: variant.viewport,
     colorScheme: variant.theme === 'dark' ? 'dark' : 'light',
@@ -122,6 +140,11 @@ export async function openStory(browser, baseUrl, id, variant, { wait = 300 } = 
     await context.close();
     throw new Error(`${id}: ${failure}`);
   }
+  await page.evaluate(pairs => {
+    for (const [ name, value ] of pairs) {
+      document.documentElement.style.setProperty(name, value);
+    }
+  }, overrides);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(wait);
   return { page, close: () => context.close() };
