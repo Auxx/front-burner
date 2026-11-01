@@ -177,7 +177,9 @@ file, only from the preview.
 
 - **SH-17** When the preview of the open file has removed HTML, the preview
   shows a single, quiet line at its top: "Some HTML isn't shown in the preview."
-  with **Details**. HTML comments (SH-10) do not count.
+  with **Details**. The line runs the full width of the preview on a shade of
+  its own, so that it does not read as part of the file. HTML comments (SH-10)
+  do not count.
 - **SH-18** **Details** expands a list of what was removed, grouped and counted,
   sliding it open and closed (at once with reduced motion), for example:
   - `<iframe>` × 2;

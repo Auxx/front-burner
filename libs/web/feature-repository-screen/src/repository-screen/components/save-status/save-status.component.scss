@@ -1,7 +1,8 @@
+// Quieter than the links next to it in the header: muted and a step smaller.
 :host {
   overflow: hidden;
-  color: var(--ui-color-text-muted);
-  font-size: var(--ui-font-size-sm);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-ui-small);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

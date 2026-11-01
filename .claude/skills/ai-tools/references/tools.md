@@ -59,6 +59,7 @@ dark))` maps of `_color.scss` and `_syntax.scss`. The contrast pairs come from
 | `resolve <token...>`   | Each token's final colour in each scheme, and the tokens it goes through   |
 | `pairs [filter]`       | Measures every contrast pair in both schemes; exits with 1 if one fails    |
 | `try <token=value...>` | The pairs that a change would affect, before and after; 1 if one fails     |
+| `unknown [folder...]`  | `var(--ui-*)` references to tokens nothing defines; 1 if there are any     |
 
 `pairs` takes `--failing` (failing pairs only), `--close` (close pairs only) and
 `--set token=value` (repeatable). An override is `token=value` for both schemes
@@ -71,7 +72,16 @@ tokens.mjs pairs --failing
 tokens.mjs pairs 'on surface-raised'
 tokens.mjs try text-subtle@light=neutral-50 border-strong=neutral-55
 tokens.mjs try toast-background=neutral-20 --json
+tokens.mjs unknown libs/web
 ```
+
+`unknown` reads the SCSS, TypeScript and HTML files under the folders (default
+`libs`). A token counts as defined by a declaration, a `$tokens` map key, a
+`[style.--ui-*]` binding or a `setProperty` call. References with a fallback
+(`var(--ui-x, transparent)`) and names built by interpolation are not checked.
+`unknown-tokens.spec.mjs` runs the same check on `libs` in the unit tests, so a
+renamed token that a component still reads fails them; `ai-tools` has implicit
+dependencies on `ui` and `web-*` for it.
 
 - Use it while choosing token values: try candidates, then edit the SCSS.
 - **The unit test.** `tools/ai-tools/src/lib/ui-contrast.spec.mjs` runs the same

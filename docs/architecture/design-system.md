@@ -318,7 +318,10 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
     `danger`;
   - an **inline banner** for a state that lasts, shown where it applies (NV-15,
     RC-15, GA-34, ED-24's question, SH-17). A banner is announced once when it
-    asks to be (`announce`), and its owner removes it when it is dismissed.
+    asks to be (`announce`), and its owner removes it when it is dismissed. Its
+    owner can set `--ui-inline-banner-radius` (0 for a full-width banner) and,
+    for a quiet banner that must stand apart from the content around it,
+    `--ui-inline-banner-background` (transparent by default).
 
   Neither takes the focus. When the toast that holds the focus goes away, the
   focus returns to where it was before it entered the toasts.
