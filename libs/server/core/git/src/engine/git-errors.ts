@@ -12,6 +12,8 @@ export const GIT_ERROR_CODES = [
   'host-key-unknown',
   'host-key-changed',
   'unsafe-repository-config',
+  /** A commit's paths name no change (plan 52). */
+  'nothing-to-commit',
   'failed'
 ] as const;
 
