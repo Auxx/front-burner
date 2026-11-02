@@ -6,13 +6,13 @@ import { PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-cor
 import { OpenableRepository, toFilesError, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
-import type { CommitResult, GitStatus } from '@front-burner/shared-contracts';
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
+import type { CommitResult, GitDiff, GitStatus } from '@front-burner/shared-contracts';
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { toGitApiError } from './git-api-errors';
-import { CommitRequestDto, CommitResultDto, GitStatusDto } from './git.dto';
+import { CommitRequestDto, CommitResultDto, GitDiffDto, GitDiffQueryDto, GitStatusDto } from './git.dto';
 
 /** How many paths are checked at once: enough to hide the file system's latency, few enough for its handles. */
 const PATH_CHECKS_AT_ONCE = 32;
@@ -61,6 +61,24 @@ export class GitController {
       this.engine.mergeInProgress(root)
     ]);
     return { ...status, mergeInProgress };
+  }
+
+  /**
+   * One changed file's difference from the last commit, or that it is binary
+   * or too large (GA-14 to GA-16). A deleted file has no entry on disk, so the
+   * path may be missing; a symbolic link is shown as the link itself.
+   */
+  @Get('diff')
+  @ApiOkResponse({ type: GitDiffDto })
+  @ZodSerializerDto(GitDiffDto)
+  async diff(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Query() query: GitDiffQueryDto
+  ): Promise<GitDiff> {
+    const root = this.repositories.root(authOf(req).userId, params.id);
+    await checkPath(root, query.path);
+    return this.engine.diff(root, query.path).catch(toGitApiError);
   }
 
   /**

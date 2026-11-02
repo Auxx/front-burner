@@ -144,6 +144,74 @@ describe('GitController', () => {
     });
   });
 
+  describe('diff', () => {
+    const diff = (path: string, id = READY) =>
+      request(app.getHttpServer()).get(`/repositories/${id}/git/diff`).query({ path });
+
+    it('answers a modified file\'s lines', async () => {
+      writeFileSync(join(root, 'notes.md'), 'changed\n');
+
+      const { body } = await diff('notes.md').expect(200);
+
+      expect(body).toEqual({
+        kind: 'text',
+        lines: [
+          { type: 'removed', oldLine: 1, newLine: null, text: 'base' },
+          { type: 'added', oldLine: null, newLine: 1, text: 'changed' }
+        ],
+        complete: true,
+        lineEndingsOnly: false
+      });
+    });
+
+    it('answers the diff of a deleted file', async () => {
+      mkdirSync(join(root, 'docs'));
+      writeFileSync(join(root, 'docs', 'a.md'), 'a\n');
+      git(root, 'add', 'docs');
+      git(root, 'commit', '-q', '-m', 'docs');
+      rmSync(join(root, 'notes.md'));
+      rmSync(join(root, 'docs'), { recursive: true });
+
+      expect((await diff('notes.md').expect(200)).body.lines).toEqual([
+        { type: 'removed', oldLine: 1, newLine: null, text: 'base' }
+      ]);
+      expect((await diff('docs/a.md').expect(200)).body.lines).toEqual([
+        { type: 'removed', oldLine: 1, newLine: null, text: 'a' }
+      ]);
+    });
+
+    it('refuses .git and a path through a symbolic link', async () => {
+      const inside = await diff('.git/config').expect(400);
+      expect(inside.body).toMatchObject({ code: 'path-refused', params: { reason: 'inside-git' } });
+
+      const outside = mkdtempSync(join(tmpdir(), 'fb-git-outside-'));
+      try {
+        writeFileSync(join(outside, 'secret.md'), 'secret\n');
+        symlinkSync(outside, join(root, 'linked'));
+        const through = await diff('linked/secret.md').expect(400);
+        expect(through.body).toMatchObject({ code: 'path-refused', params: { reason: 'symlink' } });
+
+        // The link itself is shown as a link: its target's name, not the files behind it.
+        const { body } = await diff('linked').expect(200);
+        expect(body.lines).toEqual([ { type: 'added', oldLine: null, newLine: 1, text: outside } ]);
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      const { body } = await diff('notes.md', 9).expect(404);
+
+      expect(body).toMatchObject({ code: 'not-found' });
+    });
+
+    it('needs a path', async () => {
+      const { body } = await diff('').expect(400);
+
+      expect(body).toMatchObject({ code: 'validation-failed' });
+    });
+  });
+
   describe('commits', () => {
     beforeEach(() => {
       writeFileSync(join(root, 'notes.md'), 'changed\n');

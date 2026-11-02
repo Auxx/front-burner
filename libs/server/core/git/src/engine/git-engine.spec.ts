@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs';
@@ -846,6 +847,19 @@ describe('GitEngine', () => {
 
       expect(added).toEqual([ 'four' ]);
       expect(existsSync(marker)).toBe(false);
+    });
+
+    it('shows a symbolic link as its target, never what it points to', async () => {
+      const outside = join(root, 'outside');
+      mkdirSync(outside);
+      writeFileSync(join(outside, 'secret.md'), 'secret\n');
+      symlinkSync(outside, join(work, 'folder-link'));
+      symlinkSync(join(outside, 'secret.md'), join(work, 'file-link'));
+
+      for (const link of [ 'folder-link', 'file-link' ]) {
+        const target = link === 'folder-link' ? outside : join(outside, 'secret.md');
+        expect((await textOf(link)).lines).toEqual([ { type: 'added', oldLine: null, newLine: 1, text: target } ]);
+      }
     });
 
     it('never writes the index', async () => {

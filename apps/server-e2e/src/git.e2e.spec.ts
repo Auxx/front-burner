@@ -91,6 +91,20 @@ describe('git status (REQ-GIT-002)', () => {
     expect(await response.json()).toMatchObject({ code: 'repository-not-openable' });
   });
 
+  it('answers the diff of a file before the first commit', async () => {
+    const response = await fetch(`${server.url}/api/v1/repositories/${handbook}/git/diff?path=README.md`, {
+      headers: { authorization: `Bearer ${aliceToken}` }
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      kind: 'text',
+      lines: [ { type: 'added', oldLine: null, newLine: 1, text: '# Handbook' } ],
+      complete: true,
+      lineEndingsOnly: false
+    });
+  });
+
   it('needs a login', async () => {
     expect((await status(handbook)).status).toBe(401);
   });

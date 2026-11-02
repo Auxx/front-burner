@@ -11,6 +11,7 @@ export * from './files/file-content.schema';
 export * from './files/folder-listing.schema';
 export * from './files/image.schema';
 export * from './git/git-commit.schema';
+export * from './git/git-diff.schema';
 export * from './git/git-status.schema';
 export * from './health/health-status.schema';
 export * from './onboarding/onboarding.schema';

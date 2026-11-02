@@ -1,7 +1,7 @@
 import type { CloneMode } from '@front-burner/shared-contracts';
 import { ParsedRemote, parseRemoteUrl } from '@front-burner/shared-util';
 import { BeforeApplicationShutdown, Inject, Injectable, Logger } from '@nestjs/common';
-import { access, lstat, mkdtemp, rename, rm } from 'node:fs/promises';
+import { access, lstat, mkdtemp, readlink, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Broker, GitCredentials, openBroker } from '../broker/broker';
 import { assertSafeRepositoryConfig, UnsafeRepositoryConfigError } from '../config/repository-config';
@@ -300,6 +300,16 @@ export class GitEngine implements BeforeApplicationShutdown {
       // Added to the index, then deleted: nothing to compare.
       return NO_DIFF;
     }
+    if (added && (await lstat(join(workingCopy, path))).isSymbolicLink()) {
+      // `--no-index` would read a linked folder; git stores a link as its target's name.
+      const text = await readlink(join(workingCopy, path));
+      return {
+        kind: 'text',
+        lines: [ { type: 'added', oldLine: null, newLine: 1, text } ],
+        complete: true,
+        lineEndingsOnly: false
+      };
+    }
     // An added file is compared with nothing: before the first commit there is no HEAD.
     const run = (extra: string[], maxOutputBytes: number) =>
       this.runDiff(workingCopy, path, added, extra, maxOutputBytes);
@@ -516,7 +526,9 @@ export class GitEngine implements BeforeApplicationShutdown {
     if (result.timedOut) {
       throw new GitOperationError('timeout', result.stderr);
     }
-    if (result.exitCode !== 0 && !(added && result.exitCode === 1)) {
+    // With --no-index, 1 means "differs", but it is also how an error ends.
+    const differs = added && result.exitCode === 1 && result.stdout !== '';
+    if (result.exitCode !== 0 && !differs) {
       throw new Error(`git diff failed: ${result.stderr.trim()}`);
     }
     return result.stdout;
