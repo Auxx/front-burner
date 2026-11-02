@@ -28,6 +28,12 @@ describe('PushEventSchema', () => {
     expect(PushEventSchema.safeParse({ ...plain, files: [ { path: 'docs/a.md' } ] }).success).toBe(false);
   });
 
+  it('the git.changed event parses', () => {
+    const event = { type: 'git.changed', repositoryId: 3 };
+    expect(PushEventSchema.parse(event)).toEqual(event);
+    expect(PushEventSchema.safeParse({ type: 'git.changed' }).success).toBe(false);
+  });
+
   it('refuses an unknown event type', () => {
     expect(PushEventSchema.safeParse({ type: 'repository.deleted', repositoryId: 1 }).success).toBe(false);
   });

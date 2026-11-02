@@ -116,6 +116,9 @@
       ],
       "@front-burner/web-feature-preferences": [
         "./libs/web/feature-preferences/src/index.ts"
+      ],
+      "@front-burner/server-feature-sync": [
+        "./libs/server/feature/sync/src/index.ts"
       ]
     }
   },

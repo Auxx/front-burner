@@ -36,6 +36,12 @@ A-3.11.
 - An unborn branch reports `branch: 'main'` and `noCommits: true`, whatever
   `HEAD` names, as GA-42 says; plan 52 points `HEAD` at `main` on the first
   commit.
+- Without commits, and on a detached `HEAD`, `upstream` is `null` and both
+  counts are 0, even when git reports the upstream of what `HEAD` names or of
+  the branch it left _(plan's call)_.
+- A file removed from the index but still on disk (`git rm --cached`) is one
+  `modified` entry, not a deleted and an added one with the same path _(plan's
+  call)_.
 
 ## Review Focus
 
@@ -113,7 +119,7 @@ A-3.11.
   - `GitStatusSchema` (`.meta({ id: 'GitStatus' })`): `WorkingCopyStatus` plus
     `mergeInProgress: boolean`. Plan 55 adds `lastCommit`, plan 57 adds
     `networkJob`.
-  - `GET /api/v1/repositories/:id/git/status` (`status`), tag `git`, client
+  - `GET /api/v1/repositories/:id/git/status` (`gitStatus`), tag `git`, client
     class `GitApi`.
   - The push event `{ type: 'git.changed', repositoryId: number }`.
 - `api.md` A-3.11 adds `git.changed` _(plan's call: an event of its own, since a

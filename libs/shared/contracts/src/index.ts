@@ -10,6 +10,7 @@ export * from './files/entry-actions.schema';
 export * from './files/file-content.schema';
 export * from './files/folder-listing.schema';
 export * from './files/image.schema';
+export * from './git/git-status.schema';
 export * from './health/health-status.schema';
 export * from './onboarding/onboarding.schema';
 export * from './preferences/commit-author.schema';

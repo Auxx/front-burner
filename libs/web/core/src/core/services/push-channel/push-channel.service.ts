@@ -21,7 +21,8 @@ const EVENT_TYPES: Record<PushEvent['type'], true> = {
   'repository.status': true,
   'job.progress': true,
   'job.finished': true,
-  'files.changed': true
+  'files.changed': true,
+  'git.changed': true
 };
 
 function toPushEvent(type: string, data: string): PushEvent | undefined {

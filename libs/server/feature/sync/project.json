@@ -1,0 +1,38 @@
+{
+  "name": "server-feature-sync",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/server/feature/sync/src",
+  "projectType": "library",
+  "tags": [
+    "scope:server",
+    "type:feature"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{workspaceRoot}/coverage/libs/server/feature/sync"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/server/feature/sync"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/server/feature/sync/tsconfig.lib.json",
+          "tsc --noEmit -p libs/server/feature/sync/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}

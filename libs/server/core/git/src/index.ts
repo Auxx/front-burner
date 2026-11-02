@@ -3,6 +3,7 @@ export * from './config/repository-config';
 export * from './egress/egress-proxy';
 export * from './engine/git-engine';
 export * from './engine/git-errors';
+export * from './engine/git-status';
 export * from './git.module';
 export * from './git.options';
 export * from './lock/working-tree-lock';

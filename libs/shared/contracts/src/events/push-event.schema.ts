@@ -34,6 +34,11 @@ export const PushEventSchema = z.discriminatedUnion('type', [
     repositoryId: z.number().int(),
     folders: z.union([ z.array(z.string()), z.literal('all') ]),
     files: z.array(z.object({ path: z.string(), hash: z.string() })).optional()
+  }),
+  /** Git state changed: a commit or a push changes no files, so `files.changed` does not cover it (A-3.11). */
+  z.object({
+    type: z.literal('git.changed'),
+    repositoryId: z.number().int()
   })
 ]);
 
