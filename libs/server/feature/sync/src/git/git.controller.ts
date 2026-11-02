@@ -19,7 +19,7 @@ export class GitController {
   @Get('status')
   @ApiOkResponse({ type: GitStatusDto })
   @ZodSerializerDto(GitStatusDto)
-  async status(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<GitStatus> {
+  async gitStatus(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<GitStatus> {
     const root = this.repositories.root(authOf(req).userId, params.id);
     const [ status, mergeInProgress ] = await Promise.all([
       this.engine.status(root),

@@ -1222,7 +1222,7 @@
     },
     "/api/v1/repositories/{id}/git/status": {
       "get": {
-        "operationId": "status",
+        "operationId": "gitStatus",
         "parameters": [
           {
             "name": "id",

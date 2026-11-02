@@ -9,7 +9,7 @@ import type { Observable } from 'rxjs';
 export class GitApi {
   private readonly http = inject(HttpClient);
 
-  status(id: number): Observable<GitStatus> {
+  gitStatus(id: number): Observable<GitStatus> {
     return this.http.get<GitStatus>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/status`
     );

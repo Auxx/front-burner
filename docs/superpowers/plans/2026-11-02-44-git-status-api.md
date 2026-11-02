@@ -119,7 +119,7 @@ A-3.11.
   - `GitStatusSchema` (`.meta({ id: 'GitStatus' })`): `WorkingCopyStatus` plus
     `mergeInProgress: boolean`. Plan 55 adds `lastCommit`, plan 57 adds
     `networkJob`.
-  - `GET /api/v1/repositories/:id/git/status` (`status`), tag `git`, client
+  - `GET /api/v1/repositories/:id/git/status` (`gitStatus`), tag `git`, client
     class `GitApi`.
   - The push event `{ type: 'git.changed', repositoryId: number }`.
 - `api.md` A-3.11 adds `git.changed` _(plan's call: an event of its own, since a
