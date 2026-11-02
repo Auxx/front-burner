@@ -1,13 +1,16 @@
-import { GitEngine, GitOptions, GitRunner } from '@front-burner/server-core-git';
+import { EventsHub } from '@front-burner/server-core-events';
+import { GitEngine, GitOptions, GitRunner, WorkingTreeLock } from '@front-burner/server-core-git';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
-import { OpenableRepository } from '@front-burner/server-feature-files';
+import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
+import { CommitAuthors } from '@front-burner/server-feature-preferences';
+import type { PushEvent, RepositoryCommitAuthor } from '@front-burner/shared-contracts';
 import { INestApplication } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import type { NextFunction, Request, Response } from 'express';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
@@ -23,7 +26,8 @@ const gitEnv = {
   GIT_COMMITTER_NAME: 'Fixture',
   GIT_COMMITTER_EMAIL: 'fixture@example.com'
 };
-const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, env: gitEnv, stdio: 'pipe' });
+const git = (cwd: string, ...args: string[]) =>
+  execFileSync('git', args, { cwd, env: gitEnv, stdio: 'pipe', encoding: 'utf8' });
 
 const options: GitOptions = {
   helpersDir: '/nonexistent',
@@ -37,11 +41,18 @@ const USER = 3;
 const READY = 7;
 const CLONING = 8;
 
+const ADA = { name: 'Ada Lovelace', email: 'ada@example.com' };
+
 describe('GitController', () => {
   let root: string;
   let app: INestApplication;
+  let commitAuthor: RepositoryCommitAuthor;
+  let published: PushEvent[];
 
   const status = (id = READY) => request(app.getHttpServer()).get(`/repositories/${id}/git/status`);
+  const commit = (body: object, id = READY) =>
+    request(app.getHttpServer()).post(`/repositories/${id}/git/commits`).send(body);
+  const authorOf = (rev = 'HEAD') => git(root, 'log', '-1', '--format=%an <%ae> / %cn <%ce>', rev).trim();
 
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'fb-git-controller-'));
@@ -49,6 +60,8 @@ describe('GitController', () => {
     writeFileSync(join(root, 'notes.md'), 'base\n');
     git(root, 'add', '.');
     git(root, 'commit', '-q', '-m', 'base');
+    commitAuthor = { author: ADA, source: 'default', confirmed: true };
+    published = [];
     const repositories = {
       root: (userId: number, id: number) => {
         if (userId !== USER || (id !== READY && id !== CLONING)) {
@@ -60,11 +73,21 @@ describe('GitController', () => {
         return root;
       }
     };
+    const commitAuthors = {
+      forRepository: (userId: number, id: number) => {
+        repositories.root(userId, id);
+        return commitAuthor;
+      }
+    };
+    const engine = new GitEngine(options, new GitRunner());
     const moduleRef = await Test.createTestingModule({
       controllers: [ GitController ],
       providers: [
-        { provide: GitEngine, useValue: new GitEngine(options, new GitRunner()) },
+        { provide: GitEngine, useValue: engine },
+        { provide: WorkingTreeGuard, useValue: new WorkingTreeGuard(new WorkingTreeLock(), engine) },
         { provide: OpenableRepository, useValue: repositories },
+        { provide: CommitAuthors, useValue: commitAuthors },
+        { provide: EventsHub, useValue: { publish: (_userId: number, event: PushEvent) => published.push(event) } },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
         { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor }
@@ -118,6 +141,134 @@ describe('GitController', () => {
     expect(body).toMatchObject({
       mergeInProgress: true,
       changes: [ { path: 'notes.md', state: 'modified' } ]
+    });
+  });
+
+  describe('commits', () => {
+    beforeEach(() => {
+      writeFileSync(join(root, 'notes.md'), 'changed\n');
+      writeFileSync(join(root, 'other.md'), 'other\n');
+    });
+
+    it('commits the listed changes as the commit author', async () => {
+      const { body } = await commit({ message: 'Update the notes', paths: [ 'notes.md' ] }).expect(201);
+
+      expect(body).toEqual({ oid: git(root, 'rev-parse', 'HEAD').trim() });
+      expect(git(root, 'log', '-1', '--format=%s').trim()).toBe('Update the notes');
+      expect(authorOf()).toBe('Ada Lovelace <ada@example.com> / Ada Lovelace <ada@example.com>');
+      expect(git(root, 'status', '--porcelain').trim()).toBe('?? other.md');
+    });
+
+    it('refuses a commit from a user who has not confirmed', async () => {
+      commitAuthor = { ...commitAuthor, confirmed: false };
+      const head = git(root, 'rev-parse', 'HEAD');
+
+      const { body } = await commit({ message: 'Update', paths: [ 'notes.md' ] }).expect(409);
+
+      expect(body).toMatchObject({ code: 'commit-author-not-confirmed' });
+      expect(git(root, 'rev-parse', 'HEAD')).toBe(head);
+    });
+
+    it('AC-GIT-001.8: changing the default does not change commits already made', async () => {
+      await commit({ message: 'First', paths: [ 'notes.md' ] }).expect(201);
+      commitAuthor = { ...commitAuthor, author: { name: 'Ada King', email: 'king@example.com' } };
+
+      await commit({ message: 'Second', paths: [ 'other.md' ] }).expect(201);
+
+      expect(authorOf('HEAD~1')).toBe('Ada Lovelace <ada@example.com> / Ada Lovelace <ada@example.com>');
+      expect(authorOf()).toBe('Ada King <king@example.com> / Ada King <king@example.com>');
+    });
+
+    it('uses the repository\'s override', async () => {
+      commitAuthor = { author: { name: 'Work Ada', email: 'ada@work.example' }, source: 'override', confirmed: true };
+
+      await commit({ message: 'Update', paths: [ 'notes.md' ] }).expect(201);
+
+      expect(authorOf()).toBe('Work Ada <ada@work.example> / Work Ada <ada@work.example>');
+    });
+
+    it('refuses an empty message and an empty list', async () => {
+      const empty = await commit({ message: ' \n ', paths: [ 'notes.md' ] }).expect(400);
+      expect(empty.body).toMatchObject({ code: 'validation-failed' });
+
+      const none = await commit({ message: 'Update', paths: [] }).expect(400);
+      expect(none.body).toMatchObject({ code: 'validation-failed' });
+    });
+
+    it('refuses .git and a path through a symbolic link', async () => {
+      const inside = await commit({ message: 'Update', paths: [ 'notes.md', '.git/config' ] }).expect(400);
+      expect(inside.body).toMatchObject({ code: 'path-refused', params: { reason: 'inside-git' } });
+
+      const outside = mkdtempSync(join(tmpdir(), 'fb-git-outside-'));
+      try {
+        writeFileSync(join(outside, 'secret.md'), 'secret\n');
+        symlinkSync(outside, join(root, 'linked'));
+        const through = await commit({ message: 'Update', paths: [ 'linked/secret.md' ] }).expect(400);
+        expect(through.body).toMatchObject({ code: 'path-refused', params: { reason: 'symlink' } });
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+      expect(git(root, 'log', '--format=%s').trim()).toBe('base');
+    });
+
+    it('commits a file of a deleted folder', async () => {
+      mkdirSync(join(root, 'docs'));
+      writeFileSync(join(root, 'docs', 'a.md'), 'a\n');
+      git(root, 'add', 'docs');
+      git(root, 'commit', '-q', '-m', 'docs');
+      rmSync(join(root, 'docs'), { recursive: true });
+
+      await commit({ message: 'Remove docs', paths: [ 'docs/a.md' ] }).expect(201);
+
+      expect(git(root, 'show', '--name-status', '--format=', 'HEAD').trim()).toBe('D\tdocs/a.md');
+    });
+
+    it('refuses a commit during a merge', async () => {
+      git(root, 'stash', '-q', '-u');
+      git(root, 'checkout', '-q', '-b', 'theirs');
+      writeFileSync(join(root, 'notes.md'), 'theirs\n');
+      git(root, 'commit', '-q', '-am', 'theirs');
+      git(root, 'checkout', '-q', 'main');
+      writeFileSync(join(root, 'notes.md'), 'ours\n');
+      git(root, 'commit', '-q', '-am', 'ours');
+      expect(() => git(root, 'merge', '-q', 'theirs')).toThrow();
+
+      const { body } = await commit({ message: 'Update', paths: [ 'notes.md' ] }).expect(409);
+
+      expect(body).toMatchObject({ code: 'merge-in-progress' });
+    });
+
+    it('refuses a commit on a detached HEAD', async () => {
+      git(root, 'checkout', '-q', '--detach');
+
+      const { body } = await commit({ message: 'Update', paths: [ 'notes.md' ] }).expect(409);
+
+      expect(body).toMatchObject({ code: 'detached-head' });
+      expect(git(root, 'log', '--format=%s').trim()).toBe('base');
+    });
+
+    it('a repeated request answers nothing-to-commit', async () => {
+      const sent = { message: 'Update', paths: [ 'notes.md' ] };
+
+      const [ first, second ] = await Promise.all([ commit(sent), commit(sent) ]);
+
+      expect([ first.status, second.status ].sort()).toEqual([ 201, 409 ]);
+      expect([ first, second ].find(response => response.status === 409)?.body).toMatchObject({
+        code: 'nothing-to-commit'
+      });
+      expect(git(root, 'log', '--format=%s').trim()).toBe('Update\nbase');
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      const { body } = await commit({ message: 'Update', paths: [ 'notes.md' ] }, 9).expect(404);
+
+      expect(body).toMatchObject({ code: 'not-found' });
+    });
+
+    it('publishes git.changed', async () => {
+      await commit({ message: 'Update', paths: [ 'notes.md' ] }).expect(201);
+
+      expect(published).toEqual([ { type: 'git.changed', repositoryId: READY } ]);
     });
   });
 });

@@ -39,6 +39,22 @@ export interface CloneRequest {
   knownHosts?: string[];
 }
 
+export interface CommitRequest {
+  /** Checked by the caller (A-7.6); duplicates and paths that are not changes are ignored. */
+  paths: string[];
+  /** As the user wrote it; git removes trailing spaces and trailing blank lines (GA-21). */
+  message: string;
+  /** Recorded as author and committer (CA-2). */
+  author: { name: string; email: string; };
+}
+
+interface LocalRunOptions {
+  stdin?: string;
+  env?: Record<string, string>;
+  /** `FRONT_BURNER_GIT_TIMEOUT` for commands that read whole files, such as `git add` (NF-11.8). */
+  timeoutMs?: number;
+}
+
 /** Commands that read only the working copy and its index. */
 const LOCAL_TIMEOUT_MS = 10_000;
 
@@ -146,7 +162,7 @@ export class GitEngine implements BeforeApplicationShutdown {
     const result = await this.runLocal(
       workingCopy,
       [ 'check-ignore', '--stdin', '-z' ],
-      paths.map(path => `./${path}\0`).join('')
+      { stdin: paths.map(path => `./${path}\0`).join('') }
     );
     // 1: none of the paths is ignored.
     if (result.exitCode !== 0 && result.exitCode !== 1) {
@@ -250,6 +266,67 @@ export class GitEngine implements BeforeApplicationShutdown {
   }
 
   /**
+   * Commits exactly the listed paths, as they are on disk, with their additions
+   * and deletions, as `author` (GA-19, CA-2). Paths that are not changes are
+   * ignored. Anything else in the index is left out, and on failure the index
+   * is emptied again, so that the working copy is as it was (GA-43). The
+   * caller has checked the paths and holds the working-tree lock.
+   *
+   * @throws GitOperationError `nothing-to-commit` when no path is a change.
+   */
+  async commit(workingCopy: string, request: CommitRequest): Promise<{ oid: string; }> {
+    const status = await this.status(workingCopy);
+    if (status.branch === null) {
+      // A commit on no branch is lost after the next switch (plan 52's review).
+      throw new GitOperationError('detached-head', 'HEAD is not on a branch.');
+    }
+    const changed = new Set(status.changes.map(change => change.path));
+    const paths = [ ...new Set(request.paths) ].filter(path => changed.has(path));
+    if (paths.length === 0) {
+      throw new GitOperationError('nothing-to-commit', 'None of the paths is a change.');
+    }
+    const emptyIndex = status.noCommits ? [ 'read-tree', '--empty' ] : [ 'reset', '-q' ];
+    // With no commits, HEAD may name any branch; it is put back if the commit fails (GA-43).
+    const unbornHead = status.noCommits ? await this.symbolicHead(workingCopy) : undefined;
+    try {
+      await this.runChecked(workingCopy, emptyIndex);
+      if (unbornHead !== undefined) {
+        // GA-42: whatever HEAD names in a new repository, the first commit makes `main`.
+        await this.runChecked(workingCopy, [ 'symbolic-ref', 'HEAD', 'refs/heads/main' ]);
+      }
+      await this.runChecked(
+        workingCopy,
+        [ '--literal-pathspecs', 'add', '-A', '--pathspec-from-file=-', '--pathspec-file-nul' ],
+        { stdin: paths.map(path => `${path}\0`).join(''), timeoutMs: this.options.gitTimeoutMs }
+      );
+      const { name, email } = request.author;
+      await this.runChecked(
+        workingCopy,
+        [ '-c', 'commit.gpgsign=false', 'commit', '--cleanup=whitespace', '--no-edit', '-F', '-' ],
+        {
+          stdin: request.message,
+          timeoutMs: this.options.gitTimeoutMs,
+          // These beat every git configuration, including the working copy's (CA-2).
+          env: {
+            GIT_AUTHOR_NAME: name,
+            GIT_AUTHOR_EMAIL: email,
+            GIT_COMMITTER_NAME: name,
+            GIT_COMMITTER_EMAIL: email
+          }
+        }
+      );
+    } catch (error) {
+      await this.undoCommit(workingCopy, emptyIndex, unbornHead, error);
+      throw error;
+    }
+    const head = await this.runLocal(workingCopy, [ 'rev-parse', 'HEAD' ]);
+    if (head.exitCode !== 0) {
+      throw new Error(`git rev-parse failed: ${head.stderr.trim()}`);
+    }
+    return { oid: head.stdout.trim() };
+  }
+
+  /**
    * The submodule (gitlink) that `path` is or lies inside, or `null`. Asks git
    * once, for the entries directly inside each folder on the path.
    */
@@ -347,8 +424,64 @@ export class GitEngine implements BeforeApplicationShutdown {
     return entries;
   }
 
-  private runLocal(cwd: string, args: string[], stdin?: string): Promise<GitResult> {
-    return this.runner.run(args, { cwd, timeoutMs: LOCAL_TIMEOUT_MS, stdin, maxOutputBytes: LOCAL_MAX_OUTPUT_BYTES });
+  /** The ref HEAD names, for example `refs/heads/trunk`. */
+  private async symbolicHead(workingCopy: string): Promise<string> {
+    const result = await this.runLocal(workingCopy, [ 'symbolic-ref', 'HEAD' ]);
+    if (result.exitCode !== 0) {
+      throw new Error(`git symbolic-ref failed: ${result.stderr.trim()}`);
+    }
+    return result.stdout.trim();
+  }
+
+  /**
+   * Leaves the working copy as it was before a failed commit (GA-43): nothing
+   * staged, and HEAD naming what it named. A git killed at its timeout cannot
+   * remove its `index.lock`; the caller holds the working-tree lock, so no other
+   * command of ours is using it, and it is removed.
+   */
+  private async undoCommit(
+    workingCopy: string,
+    emptyIndex: string[],
+    unbornHead: string | undefined,
+    failure: unknown
+  ): Promise<void> {
+    try {
+      if (failure instanceof GitOperationError && failure.code === 'timeout') {
+        await rm(join(workingCopy, '.git', 'index.lock'), { force: true });
+      }
+      await this.runChecked(workingCopy, emptyIndex);
+      if (unbornHead !== undefined) {
+        await this.runChecked(workingCopy, [ 'symbolic-ref', 'HEAD', unbornHead ]);
+      }
+    } catch (error) {
+      this.logger.warn(`Could not undo a failed commit in ${workingCopy}: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * A local command that must succeed.
+   *
+   * @throws GitOperationError `timeout` when it ran out of time.
+   */
+  private async runChecked(cwd: string, args: string[], options: LocalRunOptions = {}): Promise<void> {
+    const result = await this.runLocal(cwd, args, options);
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    if (result.exitCode !== 0) {
+      throw new Error(`git ${args.join(' ')} failed: ${result.stderr.trim()}`);
+    }
+  }
+
+  /** Runs with `LOCAL_TIMEOUT_MS` unless `options` says otherwise. */
+  private runLocal(cwd: string, args: string[], options: LocalRunOptions = {}): Promise<GitResult> {
+    return this.runner.run(args, {
+      cwd,
+      timeoutMs: options.timeoutMs ?? LOCAL_TIMEOUT_MS,
+      stdin: options.stdin,
+      env: options.env,
+      maxOutputBytes: LOCAL_MAX_OUTPUT_BYTES
+    });
   }
 
   private async runNetwork(

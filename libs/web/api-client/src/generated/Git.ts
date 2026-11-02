@@ -2,7 +2,7 @@
 
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import type { GitStatus } from '@front-burner/shared-contracts';
+import type { CommitRequest, CommitResult, GitStatus } from '@front-burner/shared-contracts';
 import type { Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -12,6 +12,12 @@ export class GitApi {
   gitStatus(id: number): Observable<GitStatus> {
     return this.http.get<GitStatus>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/status`
+    );
+  }
+  commit(id: number, data: CommitRequest): Observable<CommitResult> {
+    return this.http.post<CommitResult>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/commits`,
+      data
     );
   }
 }

@@ -37,7 +37,11 @@ const MESSAGES: Record<ErrorCode, string> = {
   'entry-not-editable': 'Only Markdown files can be opened in Front Burner.',
   'entry-exists': 'A file with this name exists again.',
   'image-format-unsupported': 'This image format isn\'t supported',
-  'image-too-large': 'This image is too large to preview'
+  'image-too-large': 'This image is too large to preview',
+  'commit-author-not-confirmed': 'Confirm your commit author before your first commit.',
+  'nothing-to-commit': 'There is nothing to commit. These files have no changes.',
+  'detached-head': 'HEAD is not on a branch. Switch to a branch before committing.',
+  'git-timeout': 'Git took too long. Try again.'
 };
 
 interface ZodIssueLike {

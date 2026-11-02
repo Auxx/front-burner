@@ -454,6 +454,225 @@ describe('GitEngine', () => {
     });
   });
 
+  describe('commit', () => {
+    const AUTHOR = { name: 'Ada Lovelace', email: 'ada@example.com' };
+    let work: string;
+
+    const commit = (paths: string[], message = 'Update', author = AUTHOR) =>
+      engine().commit(work, { paths, message, author });
+    const changedPaths = async () => (await engine().status(work)).changes.map(change => change.path);
+    const committedFiles = () => git(work, 'show', '--name-status', '--format=', 'HEAD').trim();
+    const staged = () => git(work, 'diff', '--cached', '--name-only').trim();
+
+    beforeEach(() => {
+      work = join(root, 'commit');
+      mkdirSync(work);
+      git(work, 'init', '-q', '-b', 'main');
+      writeFileSync(join(work, 'a.md'), 'a\n');
+      writeFileSync(join(work, 'b.md'), 'b\n');
+      writeFileSync(join(work, 'c.md'), 'c\n');
+      git(work, 'add', '.');
+      git(work, 'commit', '-q', '-m', 'base');
+    });
+
+    it('commits the listed files, and the others stay changed', async () => {
+      for (const name of [ 'a.md', 'b.md', 'c.md' ]) {
+        writeFileSync(join(work, name), 'changed\n');
+      }
+
+      const { oid } = await commit([ 'a.md', 'c.md' ]);
+
+      expect(oid).toBe(git(work, 'rev-parse', 'HEAD').trim());
+      expect(committedFiles()).toBe('M\ta.md\nM\tc.md');
+      expect(await changedPaths()).toEqual([ 'b.md' ]);
+      expect(staged()).toBe('');
+    });
+
+    it('AC-GIT-001.3: records the author as author and committer', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+
+      await commit([ 'a.md' ]);
+
+      expect(git(work, 'log', '-1', '--format=%an <%ae> / %cn <%ce>').trim()).toBe(
+        'Ada Lovelace <ada@example.com> / Ada Lovelace <ada@example.com>'
+      );
+    });
+
+    it('AC-GIT-001.4: a config that sets user.name and user.email does not decide the author', async () => {
+      git(work, 'config', 'user.name', 'Someone Else');
+      git(work, 'config', 'user.email', 'else@example.com');
+      git(work, 'config', 'author.name', 'Another');
+      git(work, 'config', 'committer.email', 'another@example.com');
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+
+      await commit([ 'a.md' ]);
+
+      expect(git(work, 'log', '-1', '--format=%an <%ae> / %cn <%ce>').trim()).toBe(
+        'Ada Lovelace <ada@example.com> / Ada Lovelace <ada@example.com>'
+      );
+    });
+
+    it('keeps a line starting with #', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+
+      await commit([ 'a.md' ], 'Update the handbook\n\n# Why\nBecause.');
+
+      expect(git(work, 'log', '-1', '--format=%B')).toBe('Update the handbook\n\n# Why\nBecause.\n\n');
+    });
+
+    it('removes trailing spaces and trailing blank lines from the message', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+
+      await commit([ 'a.md' ], 'Subject   \n\nBody line  \n\n\n');
+
+      expect(git(work, 'log', '-1', '--format=%B')).toBe('Subject\n\nBody line\n\n');
+    });
+
+    it('commits a deletion', async () => {
+      rmSync(join(work, 'b.md'));
+
+      await commit([ 'b.md' ]);
+
+      expect(committedFiles()).toBe('D\tb.md');
+      expect(await changedPaths()).toEqual([]);
+    });
+
+    it('commits an added file', async () => {
+      mkdirSync(join(work, 'docs'));
+      writeFileSync(join(work, 'docs', 'new.md'), 'new\n');
+      writeFileSync(join(work, 'other.md'), 'other\n');
+
+      await commit([ 'docs/new.md' ]);
+
+      expect(committedFiles()).toBe('A\tdocs/new.md');
+      expect(await changedPaths()).toEqual([ 'other.md' ]);
+    });
+
+    it('reads names as literal paths', async () => {
+      writeFileSync(join(work, ':!x'), 'magic\n');
+      writeFileSync(join(work, '*.md'), 'glob\n');
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+
+      await commit([ ':!x' ]);
+      expect(committedFiles()).toBe('A\t:!x');
+
+      await commit([ '*.md' ]);
+      expect(committedFiles()).toBe('A\t*.md');
+      expect(await changedPaths()).toEqual([ 'a.md' ]);
+    });
+
+    it('commits only the listed paths, even with something else in the index', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+      writeFileSync(join(work, 'b.md'), 'staged by a crash\n');
+      git(work, 'add', 'b.md');
+
+      await commit([ 'a.md' ]);
+
+      expect(committedFiles()).toBe('M\ta.md');
+      expect(await changedPaths()).toEqual([ 'b.md' ]);
+      expect(staged()).toBe('');
+    });
+
+    it('empties the index when the commit fails', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+      const head = git(work, 'rev-parse', 'HEAD');
+
+      await expect(commit([ 'a.md' ], 'Update', { name: '', email: 'ada@example.com' })).rejects.toThrow();
+
+      expect(git(work, 'rev-parse', 'HEAD')).toBe(head);
+      expect(staged()).toBe('');
+      expect(await changedPaths()).toEqual([ 'a.md' ]);
+    });
+
+    it('refuses paths that are not changes', async () => {
+      const failure = await failureOf(commit([ 'a.md', 'missing.md' ]));
+
+      expect(failure.code).toBe('nothing-to-commit');
+    });
+
+    it('creates main on the first commit', async () => {
+      const fresh = join(root, 'fresh');
+      mkdirSync(fresh);
+      git(fresh, 'init', '-q', '-b', 'trunk');
+      writeFileSync(join(fresh, 'a.md'), 'a\n');
+      writeFileSync(join(fresh, 'b.md'), 'b\n');
+      work = fresh;
+
+      await commit([ 'a.md' ]);
+
+      expect(git(fresh, 'symbolic-ref', 'HEAD').trim()).toBe('refs/heads/main');
+      expect(git(fresh, 'ls-tree', '--name-only', 'HEAD').trim()).toBe('a.md');
+      expect(await changedPaths()).toEqual([ 'b.md' ]);
+    });
+
+    it('puts HEAD back when the first commit fails', async () => {
+      const fresh = join(root, 'fresh');
+      mkdirSync(fresh);
+      git(fresh, 'init', '-q', '-b', 'trunk');
+      writeFileSync(join(fresh, 'a.md'), 'a\n');
+      work = fresh;
+
+      await expect(commit([ 'a.md' ], 'Update', { name: '', email: 'ada@example.com' })).rejects.toThrow();
+
+      expect(git(fresh, 'symbolic-ref', 'HEAD').trim()).toBe('refs/heads/trunk');
+      expect(staged()).toBe('');
+    });
+
+    it('refuses a commit on a detached HEAD', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+      git(work, 'checkout', '-q', '--detach');
+
+      const failure = await failureOf(commit([ 'a.md' ]));
+
+      expect(failure.code).toBe('detached-head');
+      expect(git(work, 'log', '--format=%s').trim()).toBe('base');
+    });
+
+    it('reports a timeout, and leaves no index lock and nothing staged', async () => {
+      // Larger than git can add in a millisecond.
+      writeFileSync(join(work, 'a.md'), 'x'.repeat(8 * 1024 * 1024));
+      writeFileSync(join(work, 'b.md'), 'changed\n');
+      git(work, 'add', 'b.md');
+
+      const failure = await failureOf(
+        engine({ gitTimeoutMs: 1 }).commit(work, {
+          paths: [ 'a.md' ],
+          message: 'Update',
+          author: AUTHOR
+        })
+      );
+
+      expect(failure.code).toBe('timeout');
+      expect(existsSync(join(work, '.git', 'index.lock'))).toBe(false);
+      expect(git(work, 'log', '--format=%s').trim()).toBe('base');
+      expect(staged()).toBe('');
+      expect(await changedPaths()).toEqual([ 'a.md', 'b.md' ]);
+    });
+
+    it('does not sign, even when the config asks to', async () => {
+      git(work, 'config', 'commit.gpgsign', 'true');
+      git(work, 'config', 'gpg.program', '/nonexistent/gpg');
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+
+      await commit([ 'a.md' ]);
+
+      expect(git(work, 'log', '-1', '--format=%G?').trim()).toBe('N');
+    });
+
+    it('does not run a hook of the repository', async () => {
+      const marker = join(root, 'hook-ran');
+      for (const hook of [ 'pre-commit', 'commit-msg', 'post-commit' ]) {
+        writeFileSync(join(work, '.git', 'hooks', hook), `#!/bin/sh\ntouch '${marker}'\nexit 1\n`, { mode: 0o755 });
+      }
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+
+      await commit([ 'a.md' ]);
+
+      expect(existsSync(marker)).toBe(false);
+      expect(committedFiles()).toBe('M\ta.md');
+    });
+  });
+
   describe('folder queries', () => {
     let work: string;
 

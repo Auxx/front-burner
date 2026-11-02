@@ -1253,6 +1253,49 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/commits": {
+      "post": {
+        "operationId": "commit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitResult"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/onboarding": {
       "get": {
         "operationId": "status",
@@ -2379,6 +2422,38 @@
           "behind",
           "changes",
           "mergeInProgress"
+        ]
+      },
+      "CommitRequest": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 65536
+          },
+          "paths": {
+            "minItems": 1,
+            "maxItems": 10000,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "message",
+          "paths"
+        ]
+      },
+      "CommitResult": {
+        "type": "object",
+        "properties": {
+          "oid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "oid"
         ]
       },
       "OnboardingStatus": {
