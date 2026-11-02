@@ -129,6 +129,16 @@ describe('PushChannelService', () => {
     expect(received).toEqual([ { type: 'job.progress', jobId: 1, percent: 50 }, finished ]);
   });
 
+  it('delivers git.changed', async () => {
+    const received = subscribe();
+    await settle();
+
+    streams[0]?.write(sse({ type: 'git.changed', repositoryId: 3 }));
+    await settle();
+
+    expect(received).toEqual([ { type: 'git.changed', repositoryId: 3 } ]);
+  });
+
   it('shares one stream between subscribers', async () => {
     const first: PushEvent[] = [];
     const second: PushEvent[] = [];

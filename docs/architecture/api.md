@@ -84,6 +84,8 @@ numbering conventions.
     (repository ID; RM-20), `repository.warning` (repository ID, the warnings of
     RM-8) and `key.unlocked` (key ID, to the streams of the session that
     unlocked it; RC-16).
+  - `git.changed` (repository ID) says that git state changed. It is an event of
+    its own, since a commit or a push changes no files. _(Plan's call.)_
   - The user's own saves also cause `files.changed`; the web client ignores a
     change to the open file whose content hash matches its last save (ED-24).
     _(My call.)_

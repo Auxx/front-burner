@@ -12,6 +12,7 @@ import { CredentialsModule } from '@front-burner/server-feature-credentials';
 import { FilesModule } from '@front-burner/server-feature-files';
 import { PreferencesModule } from '@front-burner/server-feature-preferences';
 import { RepositoriesModule } from '@front-burner/server-feature-repositories';
+import { SyncModule } from '@front-burner/server-feature-sync';
 import { DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
@@ -56,7 +57,8 @@ export class AppModule {
         CredentialsModule,
         RepositoriesModule,
         PreferencesModule,
-        FilesModule
+        FilesModule,
+        SyncModule
       ],
       providers: [
         { provide: APP_FILTER, useClass: ApiExceptionFilter },

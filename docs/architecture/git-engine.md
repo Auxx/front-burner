@@ -33,10 +33,10 @@ where git may connect. Lives in `server/git` (A-2). See
 ## A-5: One operation at a time per working copy
 
 - **A-5.3** An in-memory **working-tree lock** per repository serialises
-  everything that reads or changes the working tree or index: saves, uploads,
-  renames, deletes, status, commit, merge, rebase, branch switches and
-  resolutions (per-working-copy serialisation in decisions.md). It is in memory
-  because there is one process (NF-4.2). _(My call.)_
+  everything that changes the working tree or index: saves, uploads, renames,
+  deletes, commit, merge, rebase, branch switches and resolutions
+  (per-working-copy serialisation in decisions.md). It is in memory because
+  there is one process (NF-4.2). _(My call.)_
   - **Network steps do not hold it.** Fetch and push only touch the object store
     and refs, so they run outside the lock (one network operation per repository
     at a time); a pull is a fetch outside the lock followed by a merge inside
@@ -44,6 +44,9 @@ where git may connect. Lives in `server/git` (A-2). See
     a slow remote, which keeps NF-2.3.
   - Listing folders and reading files go straight to the file system and do not
     wait at all, so the file tree stays fast (NF-2.1).
+  - Read-only status and diff run with `--no-optional-locks`, which keeps git
+    from writing the index, and outside the lock, so a save never waits behind
+    them (NF-2.3). _(Plan's call.)_
   - While a resolution lock is held (D-3.5) or a merge or rebase is in progress
     (D-4.4), the queue refuses saves and operations that the lock does not
     allow, with an error code.
