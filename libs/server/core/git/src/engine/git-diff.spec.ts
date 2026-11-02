@@ -1,4 +1,4 @@
-import { parseUnifiedDiff } from './git-diff';
+import { onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 
 const HEADER = 'diff --git a/a.md b/a.md\nindex 1111111..2222222 100644\n--- a/a.md\n+++ b/a.md\n';
 
@@ -53,5 +53,37 @@ describe('parseUnifiedDiff', () => {
 
   it('answers no lines for an empty diff', () => {
     expect(parseUnifiedDiff('')).toEqual([]);
+  });
+});
+
+describe('onlyLineEndingsDiffer', () => {
+  const line = (type: 'context' | 'added' | 'removed', text: string) => ({
+    type,
+    oldLine: type === 'added' ? null : 1,
+    newLine: type === 'removed' ? null : 1,
+    text
+  });
+
+  it('is true when every change is a line ending', () => {
+    expect(onlyLineEndingsDiffer([
+      line('removed', 'one'),
+      line('removed', 'two'),
+      line('added', 'one\r'),
+      line('added', 'two\r'),
+      line('context', 'three')
+    ])).toBe(true);
+  });
+
+  it('is false when a line\'s text changed too', () => {
+    expect(onlyLineEndingsDiffer([ line('removed', 'one'), line('added', 'ONE\r') ])).toBe(false);
+  });
+
+  it('is false when a line was added or removed', () => {
+    expect(onlyLineEndingsDiffer([ line('context', 'one'), line('added', '') ])).toBe(false);
+  });
+
+  it('is false without changes', () => {
+    expect(onlyLineEndingsDiffer([ line('context', 'one') ])).toBe(false);
+    expect(onlyLineEndingsDiffer([])).toBe(false);
   });
 });

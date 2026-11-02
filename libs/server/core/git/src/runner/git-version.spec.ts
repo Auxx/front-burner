@@ -3,7 +3,7 @@ import { assertSupportedGit, gitVersion } from './git-version';
 
 const runnerAnswering = (result: Partial<GitResult>) =>
   ({
-    run: async () => ({ exitCode: 0, stdout: '', stderr: '', timedOut: false, ...result })
+    run: async () => ({ exitCode: 0, stdout: '', stdoutBytes: 0, stderr: '', timedOut: false, ...result })
   }) as unknown as GitRunner;
 
 describe('gitVersion', () => {

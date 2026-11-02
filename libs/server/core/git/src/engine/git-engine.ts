@@ -1,7 +1,8 @@
+import { lstatOrMissing } from '@front-burner/server-core-storage';
 import type { CloneMode } from '@front-burner/shared-contracts';
 import { ParsedRemote, parseRemoteUrl } from '@front-burner/shared-util';
 import { BeforeApplicationShutdown, Inject, Injectable, Logger } from '@nestjs/common';
-import { access, lstat, mkdtemp, readlink, rename, rm } from 'node:fs/promises';
+import { access, mkdtemp, readlink, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Broker, GitCredentials, openBroker } from '../broker/broker';
 import { assertSafeRepositoryConfig, UnsafeRepositoryConfigError } from '../config/repository-config';
@@ -9,7 +10,7 @@ import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult, GitRunner } from '../runner/git-runner';
 import { probeHostKey } from '../ssh/host-key-probe';
 import { hasHostEntry } from '../ssh/known-hosts';
-import { FileDiff, parseUnifiedDiff } from './git-diff';
+import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 import { classifyGitFailure, GitOperationError } from './git-errors';
 import { parseStatus, WorkingCopyStatus } from './git-status';
 
@@ -61,26 +62,27 @@ interface LocalRunOptions {
 /** GA-16: a diff larger than this, with 3 lines of context, is not shown. */
 const DIFF_LIMIT_BYTES = 1_000_000;
 
-/** Neither the repository's configuration nor its `.gitattributes` choose how a diff is made. */
+/** git's empty tree, which it knows without having the object. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
+/**
+ * Global options of every diff: attributes are read from the empty tree, so
+ * that a repository's `.gitattributes` (`-diff`, `binary`, `text`, `eol`) does
+ * not choose how a diff is made, and line ending changes are always shown (GA-16).
+ */
+const DIFF_GLOBALS = [ '--no-optional-locks', `--attr-source=${EMPTY_TREE}` ];
+
+/** Nor does the repository's configuration. */
 const DIFF_FLAGS = [ '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames' ];
+
+/** Room for a whole-file diff: both versions of a file at the limit, with a prefix per line. */
+const WHOLE_FILE_MAX_BYTES = 4 * DIFF_LIMIT_BYTES;
 
 /** More lines of context than any file has: the whole file. */
 const WHOLE_FILE_CONTEXT = '--unified=2147483647';
 
 /** A file's diff without changed lines. */
 const NO_DIFF: FileDiff = { kind: 'text', lines: [], complete: true, lineEndingsOnly: false };
-
-/** The entry's size without following a link, or `null` when it is missing. */
-async function sizeOnDisk(path: string): Promise<number | null> {
-  try {
-    return (await lstat(path)).size;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return null;
-    }
-    throw error;
-  }
-}
 
 /** Commands that read only the working copy and its index. */
 const LOCAL_TIMEOUT_MS = 10_000;
@@ -276,7 +278,7 @@ export class GitEngine implements BeforeApplicationShutdown {
    * Never writes the index, so it can run outside the working-tree lock (A-5.3).
    */
   async status(workingCopy: string): Promise<WorkingCopyStatus> {
-    return this.statusUnder(workingCopy, []);
+    return this.statusUnder(workingCopy, [], LOCAL_TIMEOUT_MS);
   }
 
   /**
@@ -286,21 +288,22 @@ export class GitEngine implements BeforeApplicationShutdown {
    * is not changed has no lines. Never writes the index (A-5.3).
    */
   async diff(workingCopy: string, path: string): Promise<FileDiff> {
-    const status = await this.statusUnder(workingCopy, [ '--', `:(literal)${path}` ]);
+    // Limited to one path, it can still walk a large working copy's index.
+    const status = await this.statusUnder(workingCopy, [ '--', `:(literal)${path}` ], this.options.gitTimeoutMs);
     const change = status.changes.find(entry => entry.path === path);
     if (change === undefined) {
       return NO_DIFF;
     }
     const added = change.state === 'added';
-    const [ oldSize, newSize ] = await Promise.all([
+    const [ oldSize, onDisk ] = await Promise.all([
       added ? null : this.committedSize(workingCopy, path),
-      change.state === 'deleted' ? null : sizeOnDisk(join(workingCopy, path))
+      change.state === 'deleted' ? undefined : lstatOrMissing(join(workingCopy, path))
     ]);
-    if (added && newSize === null) {
+    if (added && onDisk === undefined) {
       // Added to the index, then deleted: nothing to compare.
       return NO_DIFF;
     }
-    if (added && (await lstat(join(workingCopy, path))).isSymbolicLink()) {
+    if (added && onDisk?.isSymbolicLink()) {
       // `--no-index` would read a linked folder; git stores a link as its target's name.
       const text = await readlink(join(workingCopy, path));
       return {
@@ -310,28 +313,36 @@ export class GitEngine implements BeforeApplicationShutdown {
         lineEndingsOnly: false
       };
     }
+    const newSize = onDisk?.size ?? null;
     // An added file is compared with nothing: before the first commit there is no HEAD.
     const run = (extra: string[], maxOutputBytes: number) =>
       this.runDiff(workingCopy, path, added, extra, maxOutputBytes);
 
-    const short = await run([], DIFF_LIMIT_BYTES + 1);
-    if (Buffer.byteLength(short) > DIFF_LIMIT_BYTES) {
+    const short = await run([], DIFF_LIMIT_BYTES);
+    // Counted as git wrote them: decoding would turn each invalid byte into three.
+    if (short.bytes > DIFF_LIMIT_BYTES) {
       return { kind: 'too-large' };
     }
-    const headers = short.split('\n@@ ')[0]?.split('\n') ?? [];
+    const headers = short.text.split('\n@@ ')[0]?.split('\n') ?? [];
     if (headers.some(line => line.startsWith('Binary files '))) {
       return { kind: 'binary', oldSize, newSize };
     }
-    const complete = (oldSize ?? 0) + (newSize ?? 0) <= DIFF_LIMIT_BYTES;
-    // The whole file is at most its two versions plus a prefix per line.
-    const lines = parseUnifiedDiff(complete ? await run([ WHOLE_FILE_CONTEXT ], 4 * DIFF_LIMIT_BYTES) : short);
+    if ((oldSize ?? 0) + (newSize ?? 0) <= DIFF_LIMIT_BYTES) {
+      const whole = await run([ WHOLE_FILE_CONTEXT ], WHOLE_FILE_MAX_BYTES);
+      // The file can grow after its size was read: a cut-off diff is never shown as whole.
+      if (whole.bytes <= WHOLE_FILE_MAX_BYTES) {
+        const lines = parseUnifiedDiff(whole.text);
+        return { kind: 'text', lines, complete: true, lineEndingsOnly: onlyLineEndingsDiffer(lines) };
+      }
+    }
+    const lines = parseUnifiedDiff(short.text);
     const lineEndingsOnly = change.state === 'modified' && lines.some(line => line.type !== 'context')
       && await this.differsOnlyInLineEndings(workingCopy, path);
-    return { kind: 'text', lines, complete, lineEndingsOnly };
+    return { kind: 'text', lines, complete: false, lineEndingsOnly };
   }
 
   /** `git status` of the entries a pathspec names (`[]` for all), as `status` reads it. */
-  private async statusUnder(workingCopy: string, pathspec: string[]): Promise<WorkingCopyStatus> {
+  private async statusUnder(workingCopy: string, pathspec: string[], timeoutMs: number): Promise<WorkingCopyStatus> {
     const result = await this.runLocal(workingCopy, [
       '--no-optional-locks',
       'status',
@@ -342,7 +353,10 @@ export class GitEngine implements BeforeApplicationShutdown {
       '--no-renames',
       '--ignored=no',
       ...pathspec
-    ]);
+    ], { timeoutMs });
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
     if (result.exitCode !== 0) {
       throw new Error(`git status failed: ${result.stderr.trim()}`);
     }
@@ -510,7 +524,8 @@ export class GitEngine implements BeforeApplicationShutdown {
 
   /**
    * The diff text of one file: against the last commit, or, for an added file,
-   * against nothing (`--no-index`, where exit code 1 means "differs").
+   * against nothing (`--no-index`, where exit code 1 means "differs"), with
+   * how many bytes git wrote.
    */
   private async runDiff(
     workingCopy: string,
@@ -518,28 +533,28 @@ export class GitEngine implements BeforeApplicationShutdown {
     added: boolean,
     extra: string[],
     maxOutputBytes: number
-  ): Promise<string> {
+  ): Promise<{ text: string; bytes: number; }> {
     const args = added
-      ? [ '--no-optional-locks', 'diff', '--no-index', ...DIFF_FLAGS, ...extra, '--', '/dev/null', path ]
-      : [ '--no-optional-locks', '--literal-pathspecs', 'diff', ...DIFF_FLAGS, ...extra, 'HEAD', '--', path ];
+      ? [ ...DIFF_GLOBALS, 'diff', '--no-index', ...DIFF_FLAGS, ...extra, '--', '/dev/null', path ]
+      : [ ...DIFF_GLOBALS, '--literal-pathspecs', 'diff', ...DIFF_FLAGS, ...extra, 'HEAD', '--', path ];
     const result = await this.runLocal(workingCopy, args, { timeoutMs: this.options.gitTimeoutMs, maxOutputBytes });
     if (result.timedOut) {
       throw new GitOperationError('timeout', result.stderr);
     }
     // With --no-index, 1 means "differs", but it is also how an error ends.
-    const differs = added && result.exitCode === 1 && result.stdout !== '';
+    const differs = added && result.exitCode === 1 && result.stdoutBytes > 0;
     if (result.exitCode !== 0 && !differs) {
       throw new Error(`git diff failed: ${result.stderr.trim()}`);
     }
-    return result.stdout;
+    return { text: result.stdout, bytes: result.stdoutBytes };
   }
 
-  /** True when the file's only change is its line endings (GA-16). */
+  /** True when the file's only change is its line endings (GA-16), for a diff without every line. */
   private async differsOnlyInLineEndings(workingCopy: string, path: string): Promise<boolean> {
     const result = await this.runLocal(
       workingCopy,
       [
-        '--no-optional-locks',
+        ...DIFF_GLOBALS,
         '--literal-pathspecs',
         'diff',
         ...DIFF_FLAGS,
@@ -551,6 +566,9 @@ export class GitEngine implements BeforeApplicationShutdown {
       ],
       { timeoutMs: this.options.gitTimeoutMs }
     );
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
     // --quiet: 0 for no difference, 1 for a difference.
     if (result.exitCode !== 0 && result.exitCode !== 1) {
       throw new Error(`git diff failed: ${result.stderr.trim()}`);
@@ -558,10 +576,22 @@ export class GitEngine implements BeforeApplicationShutdown {
     return result.exitCode === 0;
   }
 
-  /** The size in bytes of the file in the last commit, or `null` when it has none. */
+  /**
+   * The size in bytes of the file in the last commit, or `null` when the last
+   * commit does not have it, as for a file of the other side of a merge.
+   */
   private async committedSize(workingCopy: string, path: string): Promise<number | null> {
     const result = await this.runLocal(workingCopy, [ 'cat-file', '-s', `HEAD:${path}` ]);
-    return result.exitCode === 0 ? Number(result.stdout.trim()) : null;
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    if (result.exitCode === 0) {
+      return Number(result.stdout.trim());
+    }
+    if (/does not exist in 'HEAD'|exists on disk, but not in 'HEAD'/.test(result.stderr)) {
+      return null;
+    }
+    throw new Error(`git cat-file failed: ${result.stderr.trim()}`);
   }
 
   /** The ref HEAD names, for example `refs/heads/trunk`. */

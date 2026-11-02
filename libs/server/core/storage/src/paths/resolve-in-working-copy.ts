@@ -31,7 +31,7 @@ const typeOf = (stats: Stats): EntryType =>
   stats.isSymbolicLink() ? 'symlink' : stats.isDirectory() ? 'folder' : stats.isFile() ? 'file' : 'other';
 
 /** The entry's stats without following a link, or `undefined` when it is missing. */
-async function lstatOrMissing(path: string): Promise<Stats | undefined> {
+export async function lstatOrMissing(path: string): Promise<Stats | undefined> {
   try {
     return await lstat(path);
   } catch (error) {

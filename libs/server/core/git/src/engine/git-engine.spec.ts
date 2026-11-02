@@ -849,6 +849,47 @@ describe('GitEngine', () => {
       expect(existsSync(marker)).toBe(false);
     });
 
+    it('ignores .gitattributes that mark Markdown as binary or normalise line endings', async () => {
+      writeFileSync(join(work, '.gitattributes'), '*.md -diff\ngone.md binary\n* text=auto\n');
+      git(work, 'add', '.gitattributes');
+      git(work, 'commit', '-q', '-m', 'attributes');
+      writeFileSync(join(work, 'a.md'), 'one\nTWO\nthree\n');
+      writeFileSync(join(work, 'gone.md'), 'first\r\nSECOND\r\n');
+
+      expect((await textOf('a.md')).lines.filter(line => line.type !== 'context').map(line => line.text)).toEqual([
+        'two',
+        'TWO'
+      ]);
+      expect((await textOf('gone.md')).lines.filter(line => line.type === 'added').map(line => line.text)).toEqual([
+        'first\r',
+        'SECOND\r'
+      ]);
+    });
+
+    it('reports a timeout', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+
+      const failure = await failureOf(engine({ gitTimeoutMs: 1 }).diff(work, 'a.md'));
+
+      expect(failure.code).toBe('timeout');
+    });
+
+    it('shows a file that both sides of a conflicting merge added', async () => {
+      git(work, 'checkout', '-q', '-b', 'theirs');
+      writeFileSync(join(work, 'both.md'), 'theirs\n');
+      git(work, 'add', 'both.md');
+      git(work, 'commit', '-q', '-m', 'theirs');
+      git(work, 'checkout', '-q', 'main');
+      writeFileSync(join(work, 'both.md'), 'mine\n');
+      git(work, 'add', 'both.md');
+      git(work, 'commit', '-q', '-m', 'mine');
+      expect(() => git(work, 'merge', '-q', 'theirs')).toThrow();
+
+      const result = await textOf('both.md');
+
+      expect(result.lines.some(line => line.text === '>>>>>>> theirs')).toBe(true);
+    });
+
     it('shows a symbolic link as its target, never what it points to', async () => {
       const outside = join(root, 'outside');
       mkdirSync(outside);

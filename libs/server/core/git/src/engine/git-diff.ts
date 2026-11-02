@@ -1,32 +1,7 @@
-export type DiffLineType = 'context' | 'added' | 'removed';
+import type { DiffLine, GitDiff } from '@front-burner/shared-contracts';
 
-export interface DiffLine {
-  type: DiffLineType;
-  /** In the last commit's version; `null` for an added line. */
-  oldLine: number | null;
-  /** In the working tree's version; `null` for a removed line. */
-  newLine: number | null;
-  /** Without git's prefix and the line break; a trailing `\r` is kept (GA-16). */
-  text: string;
-}
-
-/** One file's difference from the last commit (GA-14 to GA-16). */
-export type FileDiff =
-  | {
-    kind: 'text';
-    lines: DiffLine[];
-    /** Every unchanged line is included, so every fold can be opened. */
-    complete: boolean;
-    /** Only the line endings changed (GA-16). */
-    lineEndingsOnly: boolean;
-  }
-  | {
-    kind: 'binary';
-    /** In bytes; `null` when that side does not exist. */
-    oldSize: number | null;
-    newSize: number | null;
-  }
-  | { kind: 'too-large'; };
+/** One file's difference from the last commit (GA-14 to GA-16), as the API answers it. */
+export type FileDiff = GitDiff;
 
 /** `@@ -<old>[,<count>] +<new>[,<count>] @@`; a missing count is 1. */
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
@@ -69,4 +44,21 @@ export function parseUnifiedDiff(stdout: string): DiffLine[] {
     // `\` is the no-newline marker, inside a hunk when it follows a removed line.
   }
   return lines;
+}
+
+/** Strips the carriage return a CRLF line keeps. */
+const withoutCr = (text: string) => (text.endsWith('\r') ? text.slice(0, -1) : text);
+
+/**
+ * True when a whole-file diff changes lines, and the two versions it holds are
+ * the same once each line's trailing `\r` is ignored (GA-16), as git's
+ * `--ignore-cr-at-eol` compares them. Only for a diff with every line.
+ */
+export function onlyLineEndingsDiffer(lines: DiffLine[]): boolean {
+  if (lines.every(line => line.type === 'context')) {
+    return false;
+  }
+  const before = lines.filter(line => line.type !== 'added').map(line => withoutCr(line.text));
+  const after = lines.filter(line => line.type !== 'removed').map(line => withoutCr(line.text));
+  return before.length === after.length && before.every((text, index) => text === after[index]);
 }
