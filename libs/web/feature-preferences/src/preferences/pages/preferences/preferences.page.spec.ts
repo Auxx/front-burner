@@ -167,6 +167,26 @@ describe('PreferencesPage', () => {
     expect(live()).toBe(`${KEY}.saved`);
   });
 
+  it('keeps the form while it is saving, so that a failed save is seen', async () => {
+    await open(of(ada));
+    await click(button('edit'));
+    const answer = new Subject<CommitAuthorPreference>();
+    api.setCommitAuthor.mockReturnValue(answer);
+    await click(button('save'));
+
+    await click(button('cancel'));
+    expect(input('name')).toBeTruthy();
+
+    answer.error(
+      new HttpErrorResponse({
+        status: 500,
+        error: { code: 'internal', message: 'It broke', params: {}, requestId: 'req-1' }
+      })
+    );
+    await settle(fixture);
+    expect(page().querySelector('ui-inline-banner')?.textContent).toContain('It broke');
+  });
+
   it('sends nothing while the form breaks the rules, and shows why', async () => {
     await open(of(ada));
     await click(button('edit'));

@@ -32,7 +32,7 @@
               }
               <div class="actions">
                 <button uiButton variant="primary" type="submit" [busy]="saving()">{{ t('save') }}</button>
-                <button uiButton (click)="cancel()">{{ t('cancel') }}</button>
+                <button uiButton [unavailable]="saving()" (click)="cancel()">{{ t('cancel') }}</button>
               </div>
             </form>
           } @else {
