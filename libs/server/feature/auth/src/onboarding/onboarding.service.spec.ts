@@ -1,6 +1,6 @@
 import type { Config } from '@front-burner/server-core-config';
 import { SecretBox } from '@front-burner/server-core-crypto';
-import { Database, instanceState, systemSettings, users } from '@front-burner/server-core-database';
+import { Database, instanceState, systemSettings, userPreferences, users } from '@front-burner/server-core-database';
 import { NotFoundException } from '@nestjs/common';
 import { OIDC_CLIENT_SECRET_BINDING, OidcSettingsService } from '../oidc/oidc-settings.service';
 import { PasswordHasher } from '../passwords/password-hasher';
@@ -31,10 +31,18 @@ describe('OnboardingService', () => {
     database.sqlite.close();
   });
 
-  it('creates the administrator and completes onboarding', async () => {
+  it('AC-GIT-001.1: a new password user\'s default is their display name and email', async () => {
     await service.setUpPassword(request('alice@example.com'));
     expect(state.current()).toBe('completed');
     expect(database.db.select().from(users).all()).toHaveLength(1);
+    expect(database.db.select().from(userPreferences).all()).toEqual([
+      {
+        userId: 1,
+        commitAuthorName: 'Admin',
+        commitAuthorEmail: 'alice@example.com',
+        commitAuthorConfirmed: false
+      }
+    ]);
   });
 
   it('of two concurrent setups exactly one succeeds', async () => {

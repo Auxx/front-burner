@@ -5,7 +5,7 @@ import {
   REPOSITORY_ERRORS,
   REPOSITORY_STATUSES
 } from '@front-burner/shared-contracts';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -15,6 +15,7 @@ import {
   CLONE_MODES,
   ENCRYPTED_COLUMNS,
   GIT_LEVELS,
+  insertUserPreferences,
   instanceState,
   jobs,
   knownHosts,
@@ -27,6 +28,7 @@ import {
   savedCredentials,
   sessions,
   systemSettings,
+  userPreferences,
   users
 } from './index';
 
@@ -224,6 +226,80 @@ describe('schema', () => {
       database.db.delete(repositories).run();
 
       expect(database.db.select().from(jobs).all()).toEqual([]);
+    });
+    it('stores commit author overrides on repositories', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      database.db.insert(repositories).values({
+        ...handbook,
+        userId: id,
+        commitAuthorName: 'Bob',
+        commitAuthorEmail: 'bob@example.com'
+      }).run();
+
+      const saved = database.db.select().from(repositories).all()[0];
+      expect(saved?.commitAuthorName).toBe('Bob');
+      expect(saved?.commitAuthorEmail).toBe('bob@example.com');
+    });
+  });
+
+  describe('user_preferences', () => {
+    it('creates default preferences for a user', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      insertUserPreferences(database.db, { id, displayName: 'Alice', email: 'alice@x.io' });
+
+      expect(database.db.select().from(userPreferences).all()).toEqual([
+        {
+          userId: id,
+          commitAuthorName: 'Alice',
+          commitAuthorEmail: 'alice@x.io',
+          commitAuthorConfirmed: false
+        }
+      ]);
+    });
+
+    it('deletes preferences with the user', () => {
+      const { id } = database.db.insert(users).values(alice).returning().get();
+      insertUserPreferences(database.db, { id, displayName: 'Alice', email: 'alice@x.io' });
+
+      database.db.delete(users).run();
+
+      expect(database.db.select().from(userPreferences).all()).toEqual([]);
+    });
+
+    it('the migration gives existing users a row', () => {
+      const freshDir = mkdtempSync(join(tmpdir(), 'fb-backfill-'));
+      const freshDb = openDatabase(join(freshDir, 'test.db'));
+      const journalRaw = readFileSync(join(migrationsFolder, 'meta', '_journal.json'), 'utf-8');
+      const journal = JSON.parse(journalRaw);
+      const tempMigrationsDir = mkdtempSync(join(tmpdir(), 'fb-mig-'));
+      mkdirSync(join(tempMigrationsDir, 'meta'), { recursive: true });
+      const upTo7 = { ...journal, entries: journal.entries.slice(0, 8) };
+      writeFileSync(join(tempMigrationsDir, 'meta', '_journal.json'), JSON.stringify(upTo7));
+      for (let i = 0; i <= 7; i++) {
+        const tag = journal.entries[i].tag;
+        copyFileSync(join(migrationsFolder, `${tag}.sql`), join(tempMigrationsDir, `${tag}.sql`));
+      }
+      applyMigrations(freshDb, tempMigrationsDir);
+
+      freshDb.sqlite.prepare(
+        'INSERT INTO users (id, email, display_name, role, login_method, created_at) VALUES (1, \'legacy@example.com\', \'Legacy User\', \'user\', \'password\', 0)'
+      ).run();
+
+      applyMigrations(freshDb, migrationsFolder);
+
+      const prefs = freshDb.db.select().from(userPreferences).all();
+      expect(prefs).toEqual([
+        {
+          userId: 1,
+          commitAuthorName: 'Legacy User',
+          commitAuthorEmail: 'legacy@example.com',
+          commitAuthorConfirmed: false
+        }
+      ]);
+
+      freshDb.sqlite.close();
+      rmSync(freshDir, { recursive: true, force: true });
+      rmSync(tempMigrationsDir, { recursive: true, force: true });
     });
   });
 

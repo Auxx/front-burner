@@ -1,4 +1,11 @@
-import { DATABASE, Database, instanceState, systemSettings, users } from '@front-burner/server-core-database';
+import {
+  DATABASE,
+  Database,
+  insertUserPreferences,
+  instanceState,
+  systemSettings,
+  users
+} from '@front-burner/server-core-database';
 import type { PasswordSetupRequest } from '@front-burner/shared-contracts';
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -41,14 +48,15 @@ export class OnboardingService {
         oidcScopes: null,
         oidcRequireVerifiedEmail: null
       }).where(eq(systemSettings.id, 1)).run();
-      tx.insert(users).values({
+      const user = tx.insert(users).values({
         email: request.email,
         displayName: request.displayName,
         role: 'administrator',
         loginMethod: 'password',
         passwordHash,
         createdAt: new Date()
-      }).run();
+      }).returning().get();
+      insertUserPreferences(tx, user);
     });
     this.logger.log('Administrator onboarding completed');
   }

@@ -9,4 +9,5 @@ export * from './repositories';
 export * from './saved-credentials';
 export * from './sessions';
 export * from './system-settings';
+export * from './user-preferences';
 export * from './users';

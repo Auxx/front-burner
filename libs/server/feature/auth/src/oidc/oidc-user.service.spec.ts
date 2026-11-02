@@ -1,5 +1,13 @@
 import type { Config } from '@front-burner/server-core-config';
-import { Database, instanceState, NewUser, systemSettings, users } from '@front-burner/server-core-database';
+import {
+  Database,
+  instanceState,
+  NewUser,
+  systemSettings,
+  userPreferences,
+  users
+} from '@front-burner/server-core-database';
+import { eq } from 'drizzle-orm';
 import { OnboardingStateService } from '../onboarding/onboarding-state.service';
 import { createTestDatabase } from '../testing/test-database';
 import type { OidcSettings } from './oidc-settings.service';
@@ -100,6 +108,14 @@ describe('OidcUserService', () => {
         onboardingState: 'completed',
         pendingAdminEmail: null
       });
+      expect(database.db.select().from(userPreferences).all()).toEqual([
+        {
+          userId: (result as { user: { id: number; }; }).user.id,
+          commitAuthorName: 'Ada Admin',
+          commitAuthorEmail: 'ada@example.com',
+          commitAuthorConfirmed: false
+        }
+      ]);
     });
 
     it('accepts the pending administrator in another case', () => {
@@ -163,23 +179,66 @@ describe('OidcUserService', () => {
     expect(service.resolve(identity, settings)).toEqual({ ok: false, reason: 'password-user', userId: user.id });
   });
 
-  it('refuses an unknown email without automatic registration and creates it with', () => {
-    expect(service.resolve(identity, settings)).toEqual({ ok: false, reason: 'registration-disabled' });
-    expect(userCount()).toBe(0);
-
+  it('AC-GIT-001.1: a new OIDC user\'s is the name claim, then preferred_username, then the email\'s local part', () => {
     setAutomaticRegistration(true);
-    const result = service.resolve(identity, settings);
-    expect(result).toEqual({
-      ok: true,
-      completedOnboarding: false,
-      user: expect.objectContaining({
-        email: 'Ada@Example.com',
-        displayName: 'Ada Admin',
-        role: 'user',
-        loginMethod: 'oidc',
-        oidcIssuer: ISSUER,
-        oidcSubject: 'subject-1'
-      })
+
+    // 1. With name claim
+    const res1 = service.resolve({
+      ...identity,
+      name: 'Full Name',
+      preferredUsername: 'pusername',
+      email: 'user1@example.com'
+    }, settings);
+    expect((res1 as { ok: true; user: User; }).user.displayName).toBe('Full Name');
+    expect(
+      database.db.select().from(userPreferences).where(
+        eq(userPreferences.userId, (res1 as { ok: true; user: User; }).user.id)
+      ).get()
+    ).toEqual({
+      userId: (res1 as { ok: true; user: User; }).user.id,
+      commitAuthorName: 'Full Name',
+      commitAuthorEmail: 'user1@example.com',
+      commitAuthorConfirmed: false
+    });
+
+    // 2. Without name claim, with preferred_username
+    const res2 = service.resolve({
+      ...identity,
+      subject: 'subject-2',
+      name: undefined,
+      preferredUsername: 'pusername',
+      email: 'user2@example.com'
+    }, settings);
+    expect((res2 as { ok: true; user: User; }).user.displayName).toBe('pusername');
+    expect(
+      database.db.select().from(userPreferences).where(
+        eq(userPreferences.userId, (res2 as { ok: true; user: User; }).user.id)
+      ).get()
+    ).toEqual({
+      userId: (res2 as { ok: true; user: User; }).user.id,
+      commitAuthorName: 'pusername',
+      commitAuthorEmail: 'user2@example.com',
+      commitAuthorConfirmed: false
+    });
+
+    // 3. Without name or preferred_username, local part of email
+    const res3 = service.resolve({
+      ...identity,
+      subject: 'subject-3',
+      name: undefined,
+      preferredUsername: undefined,
+      email: 'localpart@example.com'
+    }, settings);
+    expect((res3 as { ok: true; user: User; }).user.displayName).toBe('localpart');
+    expect(
+      database.db.select().from(userPreferences).where(
+        eq(userPreferences.userId, (res3 as { ok: true; user: User; }).user.id)
+      ).get()
+    ).toEqual({
+      userId: (res3 as { ok: true; user: User; }).user.id,
+      commitAuthorName: 'localpart',
+      commitAuthorEmail: 'localpart@example.com',
+      commitAuthorConfirmed: false
     });
   });
 

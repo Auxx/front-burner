@@ -531,6 +531,175 @@
         ]
       }
     },
+    "/api/v1/preferences/commit-author": {
+      "get": {
+        "operationId": "commitAuthor",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitAuthorPreference"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "preferences"
+        ]
+      },
+      "put": {
+        "operationId": "setCommitAuthor",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitAuthor"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitAuthorPreference"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "preferences"
+        ]
+      }
+    },
+    "/api/v1/preferences/commit-author/confirm": {
+      "post": {
+        "operationId": "confirmCommitAuthor",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "The default commit author is confirmed"
+          }
+        },
+        "tags": [
+          "preferences"
+        ]
+      }
+    },
+    "/api/v1/repositories/{id}/commit-author": {
+      "get": {
+        "operationId": "repositoryCommitAuthor",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryCommitAuthor"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "preferences"
+        ]
+      },
+      "put": {
+        "operationId": "setRepositoryCommitAuthor",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitAuthor"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryCommitAuthor"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "preferences"
+        ]
+      },
+      "delete": {
+        "operationId": "removeRepositoryCommitAuthor",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryCommitAuthor"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "preferences"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/folder": {
       "get": {
         "operationId": "listFolder",
@@ -1800,6 +1969,59 @@
           "name",
           "credentials",
           "cloneMode"
+        ]
+      },
+      "CommitAuthor": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ]
+      },
+      "CommitAuthorPreference": {
+        "type": "object",
+        "properties": {
+          "author": {
+            "$ref": "#/components/schemas/CommitAuthor"
+          },
+          "confirmed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "author",
+          "confirmed"
+        ]
+      },
+      "RepositoryCommitAuthor": {
+        "type": "object",
+        "properties": {
+          "author": {
+            "$ref": "#/components/schemas/CommitAuthor"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "default",
+              "override"
+            ]
+          },
+          "confirmed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "author",
+          "source",
+          "confirmed"
         ]
       },
       "Entry": {
