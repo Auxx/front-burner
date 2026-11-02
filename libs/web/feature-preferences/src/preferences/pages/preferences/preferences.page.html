@@ -13,15 +13,18 @@
         @case ('failed') {
           <ui-inline-banner status="danger" announce>
             {{ t('loadFailed') }}
+            @if (current.failure.reference) {
+              <span class="reference">{{ t('reference') }} <code>{{ current.failure.reference }}</code></span>
+            }
             <div uiBannerActions>
-              <button uiButton size="small" [busy]="retrying()" (click)="retry()">{{ t('retry') }}</button>
+              <button uiButton size="small" (click)="retry()">{{ t('retry') }}</button>
             </div>
           </ui-inline-banner>
         }
         @case ('loaded') {
           @if (editing()) {
             <form class="form" novalidate (submit)="save($event)">
-              <dlg-commit-author-form [field]="model" [serverErrors]="serverErrors()" />
+              <dlg-commit-author-form [field]="model" [serverErrors]="refusals.errors()" />
               @if (failure(); as failure) {
                 <ui-inline-banner status="danger" announce>
                   {{ failure.text }}
@@ -31,15 +34,12 @@
                 </ui-inline-banner>
               }
               <div class="actions">
-                <button uiButton variant="primary" type="submit" [busy]="saving()">{{ t('save') }}</button>
-                <button uiButton [unavailable]="saving()" (click)="cancel()">{{ t('cancel') }}</button>
+                <button uiButton variant="primary" type="submit" [busy]="model().submitting()">{{ t('save') }}</button>
+                <button uiButton [unavailable]="model().submitting()" (click)="cancel()">{{ t('cancel') }}</button>
               </div>
             </form>
           } @else {
-            <dl uiKeyValueList>
-              <div uiKeyValue [label]="t('name')"><span class="value">{{ current.author.name }}</span></div>
-              <div uiKeyValue [label]="t('email')"><span class="value">{{ current.author.email }}</span></div>
-            </dl>
+            <dlg-commit-author-summary [author]="current.author" />
             <div class="actions">
               <button #editButton uiButton (click)="edit(current.author)">{{ t('edit') }}</button>
             </div>

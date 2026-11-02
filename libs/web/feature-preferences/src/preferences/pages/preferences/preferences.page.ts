@@ -2,7 +2,7 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
-  computed,
+  DestroyRef,
   ElementRef,
   inject,
   Injector,
@@ -11,28 +11,34 @@ import {
 } from '@angular/core';
 import { submit } from '@angular/forms/signals';
 import { RouterLink } from '@angular/router';
-import type { CommitAuthor, CommitAuthorPreference, FieldError } from '@front-burner/shared-contracts';
+import type { CommitAuthor, CommitAuthorPreference } from '@front-burner/shared-contracts';
 import {
   BreadcrumbDirective,
   ButtonComponent,
   InlineBannerComponent,
-  KeyValueComponent,
-  KeyValueListComponent,
   PageComponent,
   PageTitleDirective,
   SpinnerComponent
 } from '@front-burner/ui';
 import { PreferencesApi } from '@front-burner/web-api-client';
 import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
-import { commitAuthorForm, CommitAuthorFormComponent } from '@front-burner/web-repository-dialogs';
+import {
+  commitAuthorForm,
+  CommitAuthorFormComponent,
+  CommitAuthorRefusals,
+  CommitAuthorSummaryComponent
+} from '@front-burner/web-repository-dialogs';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 
-const FORM_FIELDS: readonly string[] = [ 'name', 'email' ] satisfies (keyof CommitAuthor)[];
+interface FailureText {
+  text: string;
+  reference: string | null;
+}
 
 type Author =
   | { kind: 'loading'; }
-  | { kind: 'failed'; }
+  | { kind: 'failed'; failure: FailureText; }
   | { kind: 'loaded'; author: CommitAuthor; };
 
 /**
@@ -50,10 +56,9 @@ type Author =
     BreadcrumbDirective,
     ButtonComponent,
     InlineBannerComponent,
-    KeyValueComponent,
-    KeyValueListComponent,
     SpinnerComponent,
-    CommitAuthorFormComponent
+    CommitAuthorFormComponent,
+    CommitAuthorSummaryComponent
   ],
   templateUrl: './preferences.page.html',
   styleUrl: './preferences.page.scss',
@@ -63,47 +68,35 @@ export class PreferencesPage {
   private readonly api = inject(PreferencesApi);
   private readonly errorText = inject(ApiErrorTextService);
   private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
 
   private readonly editButton = viewChild<unknown, ElementRef<HTMLElement>>('editButton', { read: ElementRef });
 
   protected readonly state = signal<Author>({ kind: 'loading' });
-  protected readonly retrying = signal(false);
   protected readonly editing = signal(false);
-  protected readonly saving = signal(false);
   protected readonly saved = signal(false);
   /** A failure that concerns no field, shown above the buttons. */
-  protected readonly failure = signal<{ text: string; reference: string | null; } | null>(null);
+  protected readonly failure = signal<FailureText | null>(null);
   protected readonly model = commitAuthorForm({ name: '', email: '' });
-  /** The backend's field errors of the last save, with the values it refused. */
-  private readonly refused = signal<{ value: CommitAuthor; fields: readonly FieldError[]; } | null>(null);
-  /** Each refusal stays on its field until that field changes. */
-  protected readonly serverErrors = computed<FieldError[]>(() => {
-    const refused = this.refused();
-    if (refused === null) {
-      return [];
-    }
-    const value = this.model().value();
-    const same = (path: string) => refused.value[path as keyof CommitAuthor] === value[path as keyof CommitAuthor];
-    return refused.fields.filter(field => same(field.path));
-  });
+  protected readonly refusals = new CommitAuthorRefusals(this.model);
 
   constructor() {
     void this.load();
   }
 
-  protected async retry(): Promise<void> {
-    this.retrying.set(true);
-    await this.load();
-    this.retrying.set(false);
+  /** Back to loading, so that a second failure brings a new banner, which is announced again. */
+  protected retry(): Promise<void> {
+    this.state.set({ kind: 'loading' });
+    return this.load();
   }
 
   protected edit(author: CommitAuthor): void {
     this.model().reset(author);
-    this.refused.set(null);
+    this.refusals.clear();
     this.failure.set(null);
     this.saved.set(false);
     this.editing.set(true);
-    afterNextRender(() => this.model.name().focusBoundControl(), { injector: this.injector });
+    this.afterRender(() => this.model.name().focusBoundControl());
   }
 
   protected cancel(): void {
@@ -112,32 +105,35 @@ export class PreferencesPage {
 
   protected async save(event: Event): Promise<void> {
     event.preventDefault();
-    if (this.saving()) {
+    await submit(this.model, {
+      action: async () => {
+        await this.send(this.model().value());
+        return undefined;
+      },
+      onInvalid: () => this.afterRender(() => this.refusals.focusFirstError())
+    });
+  }
+
+  private async send(value: CommitAuthor): Promise<void> {
+    this.failure.set(null);
+    this.refusals.clear();
+    let preference: CommitAuthorPreference;
+    try {
+      preference = await firstValueFrom(this.api.setCommitAuthor(value));
+    } catch (error) {
+      this.refusal(value, error);
       return;
     }
-    await submit(this.model, async () => {
-      const value = this.model().value();
-      this.saving.set(true);
-      this.failure.set(null);
-      this.refused.set(null);
-      try {
-        this.show(await firstValueFrom(this.api.setCommitAuthor(value)));
-        this.saved.set(true);
-        this.leaveForm();
-      } catch (error) {
-        this.refusal(value, error);
-      } finally {
-        this.saving.set(false);
-      }
-      return undefined;
-    });
+    this.show(preference);
+    this.saved.set(true);
+    this.leaveForm();
   }
 
   private async load(): Promise<void> {
     try {
       this.show(await firstValueFrom(this.api.commitAuthor()));
-    } catch {
-      this.state.set({ kind: 'failed' });
+    } catch (error) {
+      this.state.set({ kind: 'failed', failure: this.errorText.describe(toApiError(error)) });
     }
   }
 
@@ -147,17 +143,23 @@ export class PreferencesPage {
 
   private leaveForm(): void {
     this.editing.set(false);
-    afterNextRender(() => this.editButton()?.nativeElement.focus(), { injector: this.injector });
+    this.afterRender(() => this.editButton()?.nativeElement.focus());
   }
 
   /** Puts each field failure on its field; anything else goes above the buttons. */
   private refusal(value: CommitAuthor, error: unknown): void {
     const apiError = toApiError(error);
-    const fields = apiError.fields?.filter(field => FORM_FIELDS.includes(field.path)) ?? [];
-    if (fields.length > 0) {
-      this.refused.set({ value, fields });
+    if (this.refusals.record(value, apiError)) {
+      this.afterRender(() => this.refusals.focusFirstError());
     } else {
       this.failure.set(this.errorText.describe(apiError));
+    }
+  }
+
+  /** Runs `action` once the page has rendered, unless the user has left it by then. */
+  private afterRender(action: () => void): void {
+    if (!this.destroyRef.destroyed) {
+      afterNextRender(action, { injector: this.injector });
     }
   }
 }

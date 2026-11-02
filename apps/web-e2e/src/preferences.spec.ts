@@ -21,6 +21,16 @@ async function openFromUserMenu(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: 'Preferences' })).toBeVisible();
 }
 
+/** How far the commit author's section reaches below **Edit**: the place kept for "Saved" takes no room. */
+function emptyRoomBelowEdit(page: Page): Promise<number> {
+  return page.getByRole('button', { name: 'Edit' }).evaluate(button => {
+    const section = button.closest('section') as HTMLElement;
+    return Math.round(
+      section.getBoundingClientRect().bottom - (button.parentElement as HTMLElement).getBoundingClientRect().bottom
+    );
+  });
+}
+
 function fitsWidth(page: Page): Promise<boolean> {
   return page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 }
@@ -34,6 +44,7 @@ test.describe('Preferences', () => {
     await openFromUserMenu(page);
     await expect(page).toHaveTitle('Preferences · Front Burner');
     await expect(main(page).getByText(TEST_ADMIN.email)).toBeVisible();
+    expect(await emptyRoomBelowEdit(page)).toBe(0);
     expect(await axeViolations(page)).toEqual([]);
 
     await page.getByRole('button', { name: 'Edit' }).click();

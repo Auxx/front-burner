@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { submit } from '@angular/forms/signals';
 import type { FieldError } from '@front-burner/shared-contracts';
 
 import { settle } from '../../../testing/settle';
@@ -8,6 +9,7 @@ import { commitAuthorForm } from '../../models/commit-author-form.model';
 import { CommitAuthorFormComponent } from './commit-author-form.component';
 
 const KEY = 'web-repository-dialogs.CommitAuthorFormComponent';
+const LABELS = 'web-repository-dialogs.commitAuthor';
 const ERRORS = 'web-repository-dialogs.errors';
 
 @Component({
@@ -26,7 +28,7 @@ describe('CommitAuthorFormComponent', () => {
   const page = () => fixture.nativeElement as HTMLElement;
   const field = (label: string) => {
     const found = [ ...page().querySelectorAll<HTMLElement>('ui-field') ].find(
-      element => element.querySelector('.label')?.textContent?.trim() === `${KEY}.${label}`
+      element => element.querySelector('.label')?.textContent?.trim() === `${LABELS}.${label}`
     );
     if (!found) {
       throw new Error(`No field labelled ${label}`);
@@ -97,6 +99,26 @@ describe('CommitAuthorFormComponent', () => {
     await settle(fixture);
 
     expect(errorOf('name')).toBe(`${ERRORS}.invalid`);
+  });
+
+  it('makes the fields read-only while the form is being submitted', async () => {
+    const input = (label: string) => field(label).querySelector('input') as HTMLInputElement;
+    let finish!: () => void;
+    const done = submit(fixture.componentInstance.model, () =>
+      new Promise<undefined>(resolve => {
+        finish = () => resolve(undefined);
+      }));
+    await settle(fixture);
+
+    expect(input('name').readOnly).toBe(true);
+    expect(input('email').readOnly).toBe(true);
+
+    finish();
+    await done;
+    await settle(fixture);
+
+    expect(input('name').readOnly).toBe(false);
+    expect(input('email').readOnly).toBe(false);
   });
 
   it('explains the email, and only the email', () => {

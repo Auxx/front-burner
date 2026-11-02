@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import type { ApiError, CommitAuthorPreference } from '@front-burner/shared-contracts';
 import { PreferencesApi } from '@front-burner/web-api-client';
+import { ApiErrorTextService } from '@front-burner/web-core';
 import { NEVER, type Observable, of, Subject, throwError } from 'rxjs';
 
 import { settle } from '../../../testing/settle';
@@ -10,7 +11,7 @@ import { translocoTesting } from '../../../testing/transloco-testing';
 import { PreferencesPage } from './preferences.page';
 
 const KEY = 'web-feature-preferences.PreferencesPage';
-const FORM = 'web-repository-dialogs.CommitAuthorFormComponent';
+const LABELS = 'web-repository-dialogs.commitAuthor';
 const ERRORS = 'web-repository-dialogs.errors';
 
 const ada: CommitAuthorPreference = { author: { name: 'Ada', email: 'ada@example.com' }, confirmed: false };
@@ -30,7 +31,7 @@ describe('PreferencesPage', () => {
     [ ...page().querySelectorAll('button') ].find(element => element.textContent?.trim() === `${KEY}.${text}`);
   const input = (label: string) =>
     [ ...page().querySelectorAll<HTMLElement>('ui-field') ]
-      .find(field => field.querySelector('.label')?.textContent?.trim() === `${FORM}.${label}`)
+      .find(field => field.querySelector('.label')?.textContent?.trim() === `${LABELS}.${label}`)
       ?.querySelector('input') as HTMLInputElement;
   const errorOf = (label: string) => input(label).closest('ui-field')?.querySelector('.error')?.textContent?.trim();
   const live = () => page().querySelector('[aria-live="polite"]')?.textContent?.trim();
@@ -66,6 +67,7 @@ describe('PreferencesPage', () => {
     expect(page().querySelector('h1')?.textContent?.trim()).toBe(`${KEY}.heading`);
     expect(page().textContent).toContain('Ada');
     expect(page().textContent).toContain('ada@example.com');
+    expect(page().querySelector('dlg-commit-author-summary')).toBeTruthy();
     expect(button('edit')).toBeTruthy();
     expect(page().querySelector('input')).toBeNull();
   });
@@ -98,6 +100,33 @@ describe('PreferencesPage', () => {
     expect(api.commitAuthor).toHaveBeenCalledTimes(2);
     expect(page().textContent).toContain('ada@example.com');
     expect(page().textContent).not.toContain(`${KEY}.loadFailed`);
+  });
+
+  it('gives the reference of a failed load', async () => {
+    await open(refused(500, { code: 'internal', requestId: 'req-load-1' }));
+
+    expect(page().querySelector('ui-inline-banner')?.textContent).toContain('req-load');
+  });
+
+  it('shows the banner afresh after Try again fails again, so that it is announced again', async () => {
+    const again = new Subject<CommitAuthorPreference>();
+    await open(refused(500, { code: 'internal' }), again);
+    const first = page().querySelector('ui-inline-banner');
+
+    await click(button('retry'));
+    expect(page().querySelector('ui-inline-banner')).toBeNull();
+    expect(page().querySelector('ui-spinner')).toBeTruthy();
+
+    again.error(
+      new HttpErrorResponse({
+        status: 500,
+        error: { code: 'internal', message: 'Still broken', params: {}, requestId: 'req-2' }
+      })
+    );
+    await settle(fixture);
+
+    expect(page().querySelector('ui-inline-banner')).toBeTruthy();
+    expect(page().querySelector('ui-inline-banner')).not.toBe(first);
   });
 
   it('prefills the form with the author on Edit', async () => {
@@ -185,6 +214,59 @@ describe('PreferencesPage', () => {
     );
     await settle(fixture);
     expect(page().querySelector('ui-inline-banner')?.textContent).toContain('It broke');
+  });
+
+  it('keeps what the save sent: the fields can\'t be changed while it is saving', async () => {
+    await open(of(ada));
+    await click(button('edit'));
+    api.setCommitAuthor.mockReturnValue(new Subject<CommitAuthorPreference>());
+
+    await click(button('save'));
+
+    expect(input('name').readOnly).toBe(true);
+    expect(input('email').readOnly).toBe(true);
+  });
+
+  it('does not take leaving the page during a save for a refusal', async () => {
+    await open(of(ada));
+    await click(button('edit'));
+    const answer = new Subject<CommitAuthorPreference>();
+    api.setCommitAuthor.mockReturnValue(answer);
+    const describe = vi.spyOn(TestBed.inject(ApiErrorTextService), 'describe');
+    await click(button('save'));
+
+    fixture.destroy();
+    answer.next(edited);
+    answer.complete();
+    await new Promise(resolve => setTimeout(resolve));
+
+    expect(describe).not.toHaveBeenCalled();
+  });
+
+  it('moves the focus to the first field that breaks the rules, so that its reason is read out', async () => {
+    await open(of(ada));
+    document.body.append(page());
+    await click(button('edit'));
+
+    await enter('email', 'no-at-sign');
+    await click(button('save'));
+
+    expect(document.activeElement).toBe(input('email'));
+    page().remove();
+  });
+
+  it('moves the focus to the first field the backend refused', async () => {
+    await open(of(ada));
+    document.body.append(page());
+    await click(button('edit'));
+    api.setCommitAuthor.mockReturnValue(
+      refused(422, { fields: [ { path: 'email', code: 'email-invalid', params: {} } ] })
+    );
+
+    await click(button('save'));
+
+    expect(document.activeElement).toBe(input('email'));
+    page().remove();
   });
 
   it('sends nothing while the form breaks the rules, and shows why', async () => {
