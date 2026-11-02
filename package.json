@@ -107,7 +107,7 @@
     "@nx/webpack": "23.3.1",
     "@nx/workspace": "23.3.1",
     "@playwright/test": "1.64.1",
-    "@schematics/angular": "22.2.4",
+    "@schematics/angular": "22.2.5",
     "@storybook/addon-a11y": "10.6.5",
     "@storybook/addon-vitest": "10.6.5",
     "@storybook/angular-vite": "10.6.5",
