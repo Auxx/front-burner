@@ -10,6 +10,7 @@ import { GitResult, GitRunner } from '../runner/git-runner';
 import { probeHostKey } from '../ssh/host-key-probe';
 import { hasHostEntry } from '../ssh/known-hosts';
 import { classifyGitFailure, GitOperationError } from './git-errors';
+import { parseStatus, WorkingCopyStatus } from './git-status';
 
 /** AR-42. */
 const ACCESS_CHECK_TIMEOUT_MS = 30_000;
@@ -225,6 +226,27 @@ export class GitEngine implements BeforeApplicationShutdown {
       }
     }
     return count;
+  }
+
+  /**
+   * The branch, its counts against the upstream, and every changed file (GA-11).
+   * Never writes the index, so it can run outside the working-tree lock (A-5.3).
+   */
+  async status(workingCopy: string): Promise<WorkingCopyStatus> {
+    const result = await this.runLocal(workingCopy, [
+      '--no-optional-locks',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '-z',
+      '--untracked-files=all',
+      '--no-renames',
+      '--ignored=no'
+    ]);
+    if (result.exitCode !== 0) {
+      throw new Error(`git status failed: ${result.stderr.trim()}`);
+    }
+    return parseStatus(result.stdout);
   }
 
   /**

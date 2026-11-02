@@ -264,6 +264,196 @@ describe('GitEngine', () => {
     });
   });
 
+  describe('status', () => {
+    let work: string;
+
+    const changes = async () => (await engine().status(work)).changes;
+
+    /** A clone of the fixture on `main`, with a tracked file. */
+    const cloneFixture = () => {
+      git(root, 'clone', '-q', join(root, 'fixture.git'), work);
+      writeFileSync(join(work, 'notes.md'), 'base\n');
+      git(work, 'add', 'notes.md');
+      git(work, 'commit', '-q', '-m', 'notes');
+      git(work, 'push', '-q', 'origin', 'main');
+    };
+
+    beforeEach(() => {
+      work = join(root, 'status');
+    });
+
+    describe('in a repository with commits', () => {
+      beforeEach(() => {
+        mkdirSync(join(work, 'docs'), { recursive: true });
+        git(work, 'init', '-q', '-b', 'main');
+        writeFileSync(join(work, '.gitignore'), '*.log\n');
+        writeFileSync(join(work, 'b.md'), 'b\n');
+        writeFileSync(join(work, 'gone.md'), 'gone\n');
+        writeFileSync(join(work, 'docs', 'a.md'), 'a\n');
+        git(work, 'add', '.');
+        git(work, 'commit', '-q', '-m', 'base');
+      });
+
+      it('lists modified, added and deleted files, sorted by path', async () => {
+        writeFileSync(join(work, 'b.md'), 'changed\n');
+        writeFileSync(join(work, 'docs', 'a.md'), 'changed\n');
+        writeFileSync(join(work, 'docs', 'new.md'), 'new\n');
+        writeFileSync(join(work, 'a-new.png'), 'new\n');
+        rmSync(join(work, 'gone.md'));
+
+        expect(await changes()).toEqual([
+          { path: 'a-new.png', state: 'added' },
+          { path: 'b.md', state: 'modified' },
+          { path: 'docs/a.md', state: 'modified' },
+          { path: 'docs/new.md', state: 'added' },
+          { path: 'gone.md', state: 'deleted' }
+        ]);
+      });
+
+      it('has no changes in a clean working copy', async () => {
+        expect(await changes()).toEqual([]);
+      });
+
+      it('does not list an ignored file', async () => {
+        writeFileSync(join(work, 'out.log'), 'ignored\n');
+        expect(await changes()).toEqual([]);
+      });
+
+      it('reports a rename as one deleted and one added file', async () => {
+        git(work, 'mv', 'b.md', 'c.md');
+        expect(await changes()).toEqual([ { path: 'b.md', state: 'deleted' }, { path: 'c.md', state: 'added' } ]);
+      });
+
+      it('reads paths with special characters as they are', async () => {
+        const paths = [ '"quoted".md', 'line\nbreak.md', 'tab\there.md', 'файл é 😀.md', '? odd.md', '1 .M x.md' ];
+        for (const path of paths) {
+          writeFileSync(join(work, path), 'tracked\n');
+        }
+        git(work, 'add', '.');
+        git(work, 'commit', '-q', '-m', 'odd names');
+        for (const path of paths) {
+          writeFileSync(join(work, path), 'changed\n');
+          writeFileSync(join(work, `new ${path}`), 'new\n');
+        }
+
+        const expected = paths.flatMap(path => [
+          { path, state: 'modified' },
+          { path: `new ${path}`, state: 'added' }
+        ]);
+        expected.sort((a, b) => (a.path < b.path ? -1 : 1));
+        expect(await changes()).toEqual(expected);
+      });
+
+      it('leaves out a nested repository', async () => {
+        mkdirSync(join(work, 'drafts', 'old'), { recursive: true });
+        git(join(work, 'drafts', 'old'), 'init', '-q');
+        writeFileSync(join(work, 'drafts', 'old', 'a.md'), '\n');
+        writeFileSync(join(work, 'drafts', 'b.md'), '\n');
+
+        expect(await changes()).toEqual([ { path: 'drafts/b.md', state: 'added' } ]);
+      });
+
+      it('reports a conflict as modified', async () => {
+        git(work, 'checkout', '-q', '-b', 'other');
+        writeFileSync(join(work, 'b.md'), 'theirs\n');
+        git(work, 'commit', '-q', '-am', 'theirs');
+        git(work, 'checkout', '-q', 'main');
+        writeFileSync(join(work, 'b.md'), 'ours\n');
+        git(work, 'commit', '-q', '-am', 'ours');
+        expect(() => git(work, 'merge', '-q', 'other')).toThrow();
+
+        expect(await changes()).toEqual([ { path: 'b.md', state: 'modified' } ]);
+      });
+
+      it('does not touch the index file', async () => {
+        // A changed modification time makes git refresh the index, and write it when it may take the lock.
+        utimesSync(join(work, 'b.md'), new Date(2000, 0, 1), new Date(2000, 0, 1));
+        const before = readFileSync(join(work, '.git', 'index'));
+
+        await engine().status(work);
+
+        expect(readFileSync(join(work, '.git', 'index')).equals(before)).toBe(true);
+      });
+    });
+
+    it('reports the branch, upstream and counts', async () => {
+      cloneFixture();
+      git(work, 'reset', '-q', '--hard', 'HEAD~1');
+      git(work, 'commit', '-q', '--allow-empty', '-m', 'one');
+      git(work, 'commit', '-q', '--allow-empty', '-m', 'two');
+
+      expect(await engine().status(work)).toEqual({
+        branch: 'main',
+        noCommits: false,
+        upstream: 'origin/main',
+        ahead: 2,
+        behind: 1,
+        changes: []
+      });
+    });
+
+    it('reports an unpublished branch without an upstream', async () => {
+      cloneFixture();
+      git(work, 'checkout', '-q', '-b', 'topic');
+
+      expect(await engine().status(work)).toMatchObject({ branch: 'topic', upstream: null, ahead: 0, behind: 0 });
+    });
+
+    it('reports zero counts when the upstream is gone', async () => {
+      cloneFixture();
+      git(work, 'commit', '-q', '--allow-empty', '-m', 'local');
+      git(work, 'update-ref', '-d', 'refs/remotes/origin/main');
+
+      expect(await engine().status(work)).toMatchObject({
+        branch: 'main',
+        upstream: 'origin/main',
+        ahead: 0,
+        behind: 0
+      });
+    });
+
+    it('reports a detached HEAD as no branch', async () => {
+      cloneFixture();
+      git(work, 'commit', '-q', '--allow-empty', '-m', 'local');
+      git(work, 'checkout', '-q', '--detach', 'main');
+
+      expect(await engine().status(work)).toEqual({
+        branch: null,
+        noCommits: false,
+        upstream: null,
+        ahead: 0,
+        behind: 0,
+        changes: []
+      });
+    });
+
+    it('reports main and noCommits in a repository without commits', async () => {
+      mkdirSync(work);
+      git(work, 'init', '-q', '-b', 'trunk');
+      writeFileSync(join(work, 'a.md'), 'new\n');
+
+      expect(await engine().status(work)).toEqual({
+        branch: 'main',
+        noCommits: true,
+        upstream: null,
+        ahead: 0,
+        behind: 0,
+        changes: [ { path: 'a.md', state: 'added' } ]
+      });
+    });
+
+    it('reports main and noCommits in a clone of an empty remote', async () => {
+      git(root, 'clone', '-q', join(root, 'empty.git'), work);
+
+      expect(await engine().status(work)).toMatchObject({ branch: 'main', noCommits: true, upstream: null });
+    });
+
+    it('fails outside a repository', async () => {
+      mkdirSync(work);
+      await expect(engine().status(join(work, 'missing'))).rejects.toThrow();
+    });
+  });
+
   describe('folder queries', () => {
     let work: string;
 
