@@ -33,6 +33,11 @@ describe('i18n/en.json', () => {
     [ `${AUTH}.LoginPage.insecureHowTo`, 'How to set up HTTPS' ],
     [ `${SCREEN}.EditorPaneComponent.findPanel.count`, '{{ current }} of {{ total }}' ],
     [ 'web-shell.ShellLayoutComponent.skipToContent', 'Skip to content' ],
+    [
+      'web-repository-dialogs.CommitAuthorFormComponent.emailHint',
+      'Shown in the commit history to everyone who can read the repository. To keep your email private, use your '
+      + 'provider\'s noreply address.'
+    ],
     [ 'web-shell.UserMenuComponent.label', 'Account menu for {{ name }}' ],
     [ 'web-shell.UserMenuComponent.logout', 'Log out' ],
     [ 'web-shell.PageNotFoundPage.title', 'Page not found' ],

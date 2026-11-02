@@ -110,6 +110,9 @@
       ],
       "@front-burner/web-markdown": [
         "./libs/web/markdown/src/index.ts"
+      ],
+      "@front-burner/web-repository-dialogs": [
+        "./libs/web/repository-dialogs/src/index.ts"
       ]
     }
   },

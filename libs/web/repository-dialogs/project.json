@@ -1,0 +1,36 @@
+{
+  "name": "web-repository-dialogs",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/web/repository-dialogs/src",
+  "prefix": "dlg",
+  "projectType": "library",
+  "tags": [
+    "scope:web",
+    "type:domain"
+  ],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "libs/web/repository-dialogs"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "options": {
+        "commands": [
+          "tsc --noEmit -p libs/web/repository-dialogs/tsconfig.lib.json",
+          "tsc --noEmit -p libs/web/repository-dialogs/tsconfig.spec.json"
+        ]
+      }
+    }
+  }
+}
