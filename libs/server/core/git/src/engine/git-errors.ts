@@ -12,8 +12,11 @@ export const GIT_ERROR_CODES = [
   'host-key-unknown',
   'host-key-changed',
   'unsafe-repository-config',
-  /** A commit's paths name no change (plan 52). */
+  // Of local operations; classifyGitFailure never returns these.
+  /** A commit's paths name no change. */
   'nothing-to-commit',
+  /** HEAD is on no branch, so a commit would belong to none. */
+  'detached-head',
   'failed'
 ] as const;
 

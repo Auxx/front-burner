@@ -19,7 +19,7 @@ describe('CommitRequestSchema', () => {
     expect(accepts({ ...valid, message: 'x'.repeat(COMMIT_MESSAGE_MAX_LENGTH + 1) })).toBe(false);
   });
 
-  it('needs 1 to 50,000 paths', () => {
+  it('needs 1 to 10,000 paths', () => {
     expect(accepts({ ...valid, paths: [] })).toBe(false);
     expect(accepts({ ...valid, paths: Array.from({ length: COMMIT_MAX_PATHS }, (_, i) => `${i}.md`) })).toBe(true);
     expect(accepts({ ...valid, paths: Array.from({ length: COMMIT_MAX_PATHS + 1 }, (_, i) => `${i}.md`) })).toBe(

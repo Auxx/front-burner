@@ -45,7 +45,11 @@ export const ERROR_CODES = [
   /** 409; the user has not confirmed their commit author yet (CA-13). */
   'commit-author-not-confirmed',
   /** 409; none of a commit's paths is a change. */
-  'nothing-to-commit'
+  'nothing-to-commit',
+  /** 409; HEAD is on no branch, so a commit would belong to none. */
+  'detached-head',
+  /** 504; a local git command ran past `FRONT_BURNER_GIT_TIMEOUT` (NF-11.8). */
+  'git-timeout'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

@@ -238,6 +238,15 @@ describe('GitController', () => {
       expect(body).toMatchObject({ code: 'merge-in-progress' });
     });
 
+    it('refuses a commit on a detached HEAD', async () => {
+      git(root, 'checkout', '-q', '--detach');
+
+      const { body } = await commit({ message: 'Update', paths: [ 'notes.md' ] }).expect(409);
+
+      expect(body).toMatchObject({ code: 'detached-head' });
+      expect(git(root, 'log', '--format=%s').trim()).toBe('base');
+    });
+
     it('a repeated request answers nothing-to-commit', async () => {
       const sent = { message: 'Update', paths: [ 'notes.md' ] };
 

@@ -1,5 +1,5 @@
 import { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitOperationError } from '@front-burner/server-core-git';
+import { GitEngine } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { authOf } from '@front-burner/server-core-security';
 import { PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
@@ -11,7 +11,11 @@ import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
+import { toGitApiError } from './git-api-errors';
 import { CommitRequestDto, CommitResultDto, GitStatusDto } from './git.dto';
+
+/** How many paths are checked at once: enough to hide the file system's latency, few enough for its handles. */
+const PATH_CHECKS_AT_ONCE = 32;
 
 /**
  * Refuses a path that is malformed, inside `.git` or through a symbolic link
@@ -25,6 +29,12 @@ async function checkPath(root: string, path: string): Promise<void> {
     if (!(error instanceof PathRefusedError && error.reason === 'not-found')) {
       toFilesError(error);
     }
+  }
+}
+
+async function checkPaths(root: string, paths: string[]): Promise<void> {
+  for (let start = 0; start < paths.length; start += PATH_CHECKS_AT_ONCE) {
+    await Promise.all(paths.slice(start, start + PATH_CHECKS_AT_ONCE).map(path => checkPath(root, path)));
   }
 }
 
@@ -56,7 +66,8 @@ export class GitController {
   /**
    * Commits exactly the listed changes with the message, as the repository's
    * commit author (GA-19, GA-21, CA-1, CA-2, CA-6). Refused while the user has
-   * not confirmed their commit author (CA-13) and during a merge (GA-4).
+   * not confirmed their commit author (CA-13), during a merge (GA-4) and on a
+   * detached `HEAD`.
    */
   @Post('commits')
   @ApiCreatedResponse({ type: CommitResultDto })
@@ -72,18 +83,11 @@ export class GitController {
     if (!confirmed) {
       throw new ApiErrorException(409, 'commit-author-not-confirmed');
     }
-    for (const path of body.paths) {
-      await checkPath(root, path);
-    }
+    const paths = [ ...new Set(body.paths) ];
+    // Inside the lock and after its merge check: no file action of ours runs between the check and the commit.
     const result = await this.guard.change(params.id, root, async () => {
-      try {
-        return await this.engine.commit(root, { paths: body.paths, message: body.message, author });
-      } catch (error) {
-        if (error instanceof GitOperationError && error.code === 'nothing-to-commit') {
-          throw new ApiErrorException(409, 'nothing-to-commit');
-        }
-        throw error;
-      }
+      await checkPaths(root, paths);
+      return this.engine.commit(root, { paths, message: body.message, author }).catch(toGitApiError);
     });
     this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
     return result;

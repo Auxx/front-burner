@@ -605,6 +605,50 @@ describe('GitEngine', () => {
       expect(await changedPaths()).toEqual([ 'b.md' ]);
     });
 
+    it('puts HEAD back when the first commit fails', async () => {
+      const fresh = join(root, 'fresh');
+      mkdirSync(fresh);
+      git(fresh, 'init', '-q', '-b', 'trunk');
+      writeFileSync(join(fresh, 'a.md'), 'a\n');
+      work = fresh;
+
+      await expect(commit([ 'a.md' ], 'Update', { name: '', email: 'ada@example.com' })).rejects.toThrow();
+
+      expect(git(fresh, 'symbolic-ref', 'HEAD').trim()).toBe('refs/heads/trunk');
+      expect(staged()).toBe('');
+    });
+
+    it('refuses a commit on a detached HEAD', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+      git(work, 'checkout', '-q', '--detach');
+
+      const failure = await failureOf(commit([ 'a.md' ]));
+
+      expect(failure.code).toBe('detached-head');
+      expect(git(work, 'log', '--format=%s').trim()).toBe('base');
+    });
+
+    it('reports a timeout, and leaves no index lock and nothing staged', async () => {
+      // Larger than git can add in a millisecond.
+      writeFileSync(join(work, 'a.md'), 'x'.repeat(8 * 1024 * 1024));
+      writeFileSync(join(work, 'b.md'), 'changed\n');
+      git(work, 'add', 'b.md');
+
+      const failure = await failureOf(
+        engine({ gitTimeoutMs: 1 }).commit(work, {
+          paths: [ 'a.md' ],
+          message: 'Update',
+          author: AUTHOR
+        })
+      );
+
+      expect(failure.code).toBe('timeout');
+      expect(existsSync(join(work, '.git', 'index.lock'))).toBe(false);
+      expect(git(work, 'log', '--format=%s').trim()).toBe('base');
+      expect(staged()).toBe('');
+      expect(await changedPaths()).toEqual([ 'a.md', 'b.md' ]);
+    });
+
     it('does not sign, even when the config asks to', async () => {
       git(work, 'config', 'commit.gpgsign', 'true');
       git(work, 'config', 'gpg.program', '/nonexistent/gpg');

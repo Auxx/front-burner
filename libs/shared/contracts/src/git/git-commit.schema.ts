@@ -3,8 +3,11 @@ import { z } from 'zod';
 /** Long enough for any message a person writes, short enough to keep a request small. _(Plan 52's call.)_ */
 export const COMMIT_MESSAGE_MAX_LENGTH = 65_536;
 
-/** As many paths as a large working copy's changes. _(Plan 52's call.)_ */
-export const COMMIT_MAX_PATHS = 50_000;
+/**
+ * As many paths as fit, with long names, in the server's 2 MB limit on a
+ * request body. _(Plan 52's call.)_
+ */
+export const COMMIT_MAX_PATHS = 10_000;
 
 /**
  * Commits exactly `paths` (GA-19). The message is kept as written: git removes

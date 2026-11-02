@@ -39,7 +39,9 @@ const MESSAGES: Record<ErrorCode, string> = {
   'image-format-unsupported': 'This image format isn\'t supported',
   'image-too-large': 'This image is too large to preview',
   'commit-author-not-confirmed': 'Confirm your commit author before your first commit.',
-  'nothing-to-commit': 'There is nothing to commit. These files have no changes.'
+  'nothing-to-commit': 'There is nothing to commit. These files have no changes.',
+  'detached-head': 'HEAD is not on a branch. Switch to a branch before committing.',
+  'git-timeout': 'Git took too long. Try again.'
 };
 
 interface ZodIssueLike {
