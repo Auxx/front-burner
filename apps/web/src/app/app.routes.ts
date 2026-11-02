@@ -39,6 +39,11 @@ export const appRoutes: Route[] = [
             loadChildren: () => import('@front-burner/web-feature-repositories').then(m => m.repositoriesRoutes)
           },
           {
+            path: 'preferences',
+            canActivate: [ authGuard ],
+            loadChildren: () => import('@front-burner/web-feature-preferences').then(m => m.preferencesRoutes)
+          },
+          {
             // NV-3: with the app header when logged in, without it otherwise.
             path: '**',
             title: 'web-shell.PageNotFoundPage.title',

@@ -1,0 +1,48 @@
+:host {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+.section,
+.form {
+  display: grid;
+  gap: var(--ui-space-4);
+  min-inline-size: 0;
+}
+
+.heading,
+.explanation {
+  margin: 0;
+}
+
+.explanation {
+  color: var(--ui-text-muted);
+}
+
+.loading {
+  justify-self: center;
+}
+
+.value {
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
+
+.reference {
+  display: block;
+}
+
+// Takes no room in the section's gap until it has something to say.
+.status {
+  margin: 0;
+
+  &:empty {
+    margin-block-start: calc(-1 * var(--ui-space-4));
+  }
+}

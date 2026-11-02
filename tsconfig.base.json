@@ -113,6 +113,9 @@
       ],
       "@front-burner/web-repository-dialogs": [
         "./libs/web/repository-dialogs/src/index.ts"
+      ],
+      "@front-burner/web-feature-preferences": [
+        "./libs/web/feature-preferences/src/index.ts"
       ]
     }
   },
