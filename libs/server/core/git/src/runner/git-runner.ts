@@ -43,23 +43,33 @@ export interface GitResult {
   /** `null` when git was killed or could not be started. */
   exitCode: number | null;
   stdout: string;
+  /** How many bytes git wrote to stdout, including any past `maxOutputBytes`. */
+  stdoutBytes: number;
   /** With credentials removed from URLs (NF-10.5). */
   stderr: string;
   timedOut: boolean;
 }
 
+interface Collected {
+  text(): string;
+  /** Every byte the stream gave, kept or dropped. */
+  bytes(): number;
+}
+
 /** Collects a stream up to a number of bytes, and keeps draining it past them so the child never blocks. */
-function collect(stream: Readable | null, maxBytes: number): () => string {
+function collect(stream: Readable | null, maxBytes: number): Collected {
   const chunks: Buffer[] = [];
   let size = 0;
+  let total = 0;
   stream?.on('data', (chunk: Buffer) => {
+    total += chunk.length;
     if (size < maxBytes) {
       const kept = chunk.subarray(0, maxBytes - size);
       chunks.push(kept);
       size += kept.length;
     }
   });
-  return () => Buffer.concat(chunks).toString('utf8');
+  return { text: () => Buffer.concat(chunks).toString('utf8'), bytes: () => total };
 }
 
 /** Runs `git` with a clean environment and the hardening of A-5.1. Features use `GitEngine`, never this. */
@@ -132,8 +142,9 @@ export class GitRunner {
         this.running.delete(child);
         resolve({
           exitCode: spawnError ? null : code,
-          stdout: stdout(),
-          stderr: redactCredentials(spawnError ? spawnError.message : stderr()),
+          stdout: stdout.text(),
+          stdoutBytes: stdout.bytes(),
+          stderr: redactCredentials(spawnError ? spawnError.message : stderr.text()),
           timedOut
         });
       });

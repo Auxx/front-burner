@@ -5,6 +5,7 @@ import { classifyGitFailure, GitOperationError } from './git-errors';
 const failed = (stderr: string, timedOut = false): GitResult => ({
   exitCode: timedOut ? null : 128,
   stdout: '',
+  stdoutBytes: 0,
   stderr,
   timedOut
 });

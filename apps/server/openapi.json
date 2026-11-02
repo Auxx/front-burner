@@ -1253,6 +1253,49 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/diff": {
+      "get": {
+        "operationId": "diff",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 4096,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitDiff"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/commits": {
       "post": {
         "operationId": "commit",
@@ -2422,6 +2465,115 @@
           "behind",
           "changes",
           "mergeInProgress"
+        ]
+      },
+      "DiffLine": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "context",
+              "added",
+              "removed"
+            ]
+          },
+          "oldLine": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "nullable": true
+          },
+          "newLine": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "nullable": true
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "oldLine",
+          "newLine",
+          "text"
+        ]
+      },
+      "GitDiff": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "text"
+                ]
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DiffLine"
+                }
+              },
+              "complete": {
+                "type": "boolean"
+              },
+              "lineEndingsOnly": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "lines",
+              "complete",
+              "lineEndingsOnly"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "binary"
+                ]
+              },
+              "oldSize": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "nullable": true
+              },
+              "newSize": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "nullable": true
+              }
+            },
+            "required": [
+              "kind",
+              "oldSize",
+              "newSize"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "too-large"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
         ]
       },
       "CommitRequest": {

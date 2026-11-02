@@ -141,6 +141,7 @@ describe('GitRunner', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.length).toBe(1000);
+    expect(result.stdoutBytes).toBe(300_000);
   });
 
   it('writes stdin', async () => {
