@@ -30,6 +30,8 @@
   "errors.entry-exists": "A file with this name exists again.",
   "errors.image-format-unsupported": "This image format isn't supported",
   "errors.image-too-large": "This image is too large to preview",
+  "errors.commit-author-not-confirmed": "Confirm your commit author before your first commit.",
+  "errors.nothing-to-commit": "There is nothing to commit. These files have no changes.",
   "errors.network": "Could not reach the server. Check your connection.",
   "web-repository-dialogs.commitAuthor.name": "Name",
   "web-repository-dialogs.commitAuthor.email": "Email",

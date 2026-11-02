@@ -41,7 +41,11 @@ export const ERROR_CODES = [
   /** 415; a repository image whose format the preview doesn't show (IM-9). */
   'image-format-unsupported',
   /** 413; a repository image over the 10 MB limit; params `{ limit }` in bytes (IM-9). */
-  'image-too-large'
+  'image-too-large',
+  /** 409; the user has not confirmed their commit author yet (CA-13). */
+  'commit-author-not-confirmed',
+  /** 409; none of a commit's paths is a change. */
+  'nothing-to-commit'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
