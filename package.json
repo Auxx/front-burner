@@ -121,7 +121,7 @@
     "@types/proxy-addr": "2.0.3",
     "@types/ssh2": "1.15.6",
     "@types/supertest": "7.2.1",
-    "@typescript-eslint/utils": "8.72.0",
+    "@typescript-eslint/utils": "8.72.1",
     "@vitest/browser": "4.1.12",
     "@vitest/browser-playwright": "4.1.12",
     "@vitest/coverage-v8": "4.1.12",
