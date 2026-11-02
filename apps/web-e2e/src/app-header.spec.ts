@@ -139,6 +139,8 @@ test.describe('app header', () => {
 
     await accountButton(page).focus();
     await page.keyboard.press('Enter');
+    await expect(page.getByRole('menuitem', { name: 'Preferences' })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('menuitem', { name: 'Log out' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menu')).toBeHidden();

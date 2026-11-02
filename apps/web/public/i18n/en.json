@@ -176,6 +176,7 @@
   "web-shell.AppHeaderComponent.repositories": "Repositories",
   "web-shell.AppHeaderComponent.menu": "Menu",
   "web-shell.UserMenuComponent.label": "Account menu for {{ name }}",
+  "web-shell.UserMenuComponent.preferences": "Preferences",
   "web-shell.UserMenuComponent.logout": "Log out",
   "web-shell.RepositoryStatusComponent.status.needs-confirmation": "Needs your confirmation",
   "web-shell.RepositoryStatusComponent.status.cloning": "Cloning",
