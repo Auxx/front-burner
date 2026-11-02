@@ -109,7 +109,11 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   density tokens only and have no separate mobile variants.
 
 - **A-10.12** **Motion.** Durations are tokens, and the media query
-  `(prefers-reduced-motion: reduce)` sets them to zero (NF-13.7).
+  `(prefers-reduced-motion: reduce)` sets them to zero (NF-13.7). A region that
+  opens in place, such as **Details**, is a `ui-collapsible`: it slides open
+  with the standard easing and closed with the exit easing, and stays in the
+  document, inert while closed, so that its button's `aria-controls` always
+  names it.
 - **A-10.13** **Breakpoints** are SCSS variables, not custom properties, because
   custom properties cannot be used in media queries.
 - **A-10.14** **Syntax colours** are a fourth group of semantic tokens
@@ -162,25 +166,28 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
     contrast does not depend on what is behind them.
 - **A-10.19** **Semantic groups.** Besides syntax colours (A-10.14):
 
-  | Group     | Tokens                                                                                                                                                                                                                        |
-  | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | Surface   | `canvas`, `island`, `card` (a surface on an island: tiles, code blocks), `raised` (menus, popovers), `control` (secondary and icon buttons, lighter than the canvas), `sunken` (inputs), `scrim`; `hover`, `pressed` overlays |
-  | Selection | `selected-active` and `selected-inactive`: a list shows its selection differently when it does not have the focus                                                                                                             |
-  | Text      | `default`, `muted`, `subtle`, `disabled`, `inverse`, `link`, `on-accent`                                                                                                                                                      |
-  | Icon      | as text                                                                                                                                                                                                                       |
-  | Border    | `default`, `subtle`, `strong`, `focus`                                                                                                                                                                                        |
-  | Accent    | `accent`, `accent-hover`, `accent-pressed`                                                                                                                                                                                    |
-  | Status    | `info`, `success`, `warning`, `danger`, each with background, border, text and icon                                                                                                                                           |
-  | Preview   | `preview-code-background`: the tint behind inline code in the live preview (A-8.12)                                                                                                                                           |
-  | Git       | `added`, `modified`, `deleted`, `renamed`, `untracked`, `ignored`, `conflicted`                                                                                                                                               |
-  | Diff      | inserted and deleted line and word backgrounds, gutter                                                                                                                                                                        |
-  | Conflict  | mine, theirs and base block backgrounds, marker line                                                                                                                                                                          |
-  | Editor    | background, gutter, line number, active line, selection, cursor, match highlight                                                                                                                                              |
-  | Elevation | two shadows (popover, dialog); raised surfaces are also lighter and bordered, since shadows barely show in dark                                                                                                               |
-  | Shape     | radii for controls, islands, popovers and pills; the gap between islands                                                                                                                                                      |
-  | Motion    | `fast`, `base` and `slow` durations; two easings                                                                                                                                                                              |
-  | Focus     | ring width, offset and colour                                                                                                                                                                                                 |
+  | Group     | Tokens                                                                                                                                                                                                                                                                                                                             |
+  | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Surface   | `canvas`, `island`, `card` (a surface on an island: tiles, code blocks), `raised` (menus, popovers), `control` (secondary and icon buttons on islands; the canvas's own shade in dark, so a control on the canvas, such as the user menu button, is filled with `island`), `sunken` (inputs), `scrim`; `hover`, `pressed` overlays |
+  | Selection | `selected-active` and `selected-inactive`: a list shows its selection differently when it does not have the focus                                                                                                                                                                                                                  |
+  | Text      | `default`, `muted`, `subtle`, `disabled`, `inverse`, `link`, `on-accent`                                                                                                                                                                                                                                                           |
+  | Icon      | as text                                                                                                                                                                                                                                                                                                                            |
+  | Border    | `default`, `subtle`, `strong`, `focus`                                                                                                                                                                                                                                                                                             |
+  | Accent    | `accent`, `accent-hover`, `accent-pressed` for fills; `accent-indicator` for thin lines on the canvas and islands (the activity bar's marker, the selected tab, the split-pane handle), lighter in dark                                                                                                                            |
+  | Status    | `info`, `success`, `warning`, `danger`, each with background, border, text and icon                                                                                                                                                                                                                                                |
+  | Preview   | `preview-code-background`: the tint behind inline code in the live preview (A-8.12)                                                                                                                                                                                                                                                |
+  | Git       | `added`, `modified`, `deleted`, `renamed`, `untracked`, `ignored`, `conflicted`                                                                                                                                                                                                                                                    |
+  | Diff      | inserted and deleted line and word backgrounds, gutter                                                                                                                                                                                                                                                                             |
+  | Conflict  | mine, theirs and base block backgrounds, marker line                                                                                                                                                                                                                                                                               |
+  | Editor    | background, gutter, line number, active line, selection, cursor, match highlight                                                                                                                                                                                                                                                   |
+  | Elevation | two shadows (popover, dialog); raised surfaces are also lighter and bordered, since shadows barely show in dark                                                                                                                                                                                                                    |
+  | Shape     | radii for controls, islands, popovers and pills; the gap between islands                                                                                                                                                                                                                                                           |
+  | Motion    | `fast`, `base` and `slow` durations; two easings                                                                                                                                                                                                                                                                                   |
+  | Focus     | ring width, offset and colour                                                                                                                                                                                                                                                                                                      |
 
+  In dark, the canvas (`neutral-30`) is about 1.27:1 against the islands
+  (`neutral-22`), so that the islands stand out from the shell; later changes
+  keep that gap.
 - **A-10.20** **Type.** Inter for the UI, JetBrains Mono for code (A-10.36).
 
   | Context      | Compact | Touch | Why                                                                                      |
@@ -240,7 +247,9 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   HTML are not used.
 - **A-10.30** **Focus.** Every focusable element shows a 2 px focus ring from
   the `focus-ring()` mixin on `:focus-visible`, offset from the element and
-  meeting 3:1 against both the island and the canvas (NF-13.3).
+  meeting 3:1 against both the island and the canvas (NF-13.3). The code editor
+  has no ring: its caret and the active line's number show the focus, as in
+  IDEs.
 
 ## A-10: Components
 
@@ -252,7 +261,7 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
 
   | Group      | Components                                                                                               | Built on                                                |
   | ---------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-  | Layout     | `AppShell`, `Island`, `CentredIsland`, `Page`, `SplitPane`, `ActivityBar`, `StatusBar`                   | Own code, CDK `Breakpoints`                             |
+  | Layout     | `AppShell`, `Island`, `CentredIsland`, `Page`, `SplitPane`, `ActivityBar`, `StatusBar`, `Collapsible`    | Own code, CDK `Breakpoints`                             |
   | Navigation | `TabStrip`, `Tree`, `Menu`                                                                               | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
   | Controls   | `Button`, `IconButton`, `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements; Aria Combobox and Listbox; CDK Overlay |
   | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`               | CDK Overlay, Dialog and LiveAnnouncer                   |
@@ -312,7 +321,10 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
     `danger`;
   - an **inline banner** for a state that lasts, shown where it applies (NV-15,
     RC-15, GA-34, ED-24's question, SH-17). A banner is announced once when it
-    asks to be (`announce`), and its owner removes it when it is dismissed.
+    asks to be (`announce`), and its owner removes it when it is dismissed. Its
+    owner can set `--ui-inline-banner-radius` (0 for a full-width banner) and,
+    for a quiet banner that must stand apart from the content around it,
+    `--ui-inline-banner-background` (transparent by default).
 
   Neither takes the focus. When the toast that holds the focus goes away, the
   focus returns to where it was before it entered the toasts.

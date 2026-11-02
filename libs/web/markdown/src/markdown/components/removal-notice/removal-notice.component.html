@@ -1,12 +1,13 @@
 @if (!hidden() && items().length > 0) {
   <ui-inline-banner *transloco="let t; prefix: 'web-markdown.RemovalNoticeComponent'" quiet>
     {{ t('message') }}
-    <!-- Always in the document, so that the button's aria-controls names an element. -->
-    <ul class="details" [id]="listId" [hidden]="!expanded()">
-      @for (item of items(); track item.kind + item.name) {
-        <li><code>{{ item.name }}</code> {{ t('kinds.' + item.kind, { count: item.count }) }}</li>
-      }
-    </ul>
+    <ui-collapsible [id]="listId" [open]="expanded()">
+      <ul class="details">
+        @for (item of items(); track item.kind + item.name) {
+          <li><code>{{ item.name }}</code> {{ t('kinds.' + item.kind, { count: item.count }) }}</li>
+        }
+      </ul>
+    </ui-collapsible>
     <div uiBannerActions>
       <button
         uiButton

@@ -2,6 +2,9 @@
   :host {
     // A global banner below the app header sets it to 0 (NV-15).
     --ui-inline-banner-radius: var(--ui-radius-control);
+    // The quiet variant's background is transparent unless its owner sets
+    // `--ui-inline-banner-background`, for a quiet line that must stand apart
+    // from the content around it.
 
     box-sizing: border-box;
     display: block;
@@ -25,7 +28,7 @@
 
   :host([data-quiet='true']) {
     padding: var(--ui-space-1) var(--ui-space-2);
-    background: transparent;
+    background: var(--ui-inline-banner-background, transparent);
     color: var(--ui-text-muted);
     font-size: var(--ui-font-size-ui-small);
     border-color: transparent;

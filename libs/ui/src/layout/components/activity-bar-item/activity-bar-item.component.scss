@@ -24,7 +24,7 @@
 
   // The selected item has an accent bar, not only another colour. The bar is
   // drawn as a background, which forced colours would otherwise remove
-  // (A-10.22); `--ui-accent` is `Highlight` there.
+  // (A-10.22); `--ui-accent-indicator` is `Highlight` there.
   :host([aria-pressed='true']) {
     color: var(--ui-icon-default);
   }
@@ -35,7 +35,7 @@
     inset-block: var(--ui-space-1);
     inset-inline-start: 0;
     inline-size: var(--ui-focus-ring-width);
-    background: var(--ui-accent);
+    background: var(--ui-accent-indicator);
     border-radius: var(--ui-radius-pill);
     forced-color-adjust: none;
   }

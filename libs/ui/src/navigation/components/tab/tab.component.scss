@@ -25,7 +25,7 @@
   // The selected tab has an accent line, not another background (A-10.22).
   :host([aria-selected='true']) {
     color: var(--ui-text-default);
-    border-block-end-color: var(--ui-accent);
+    border-block-end-color: var(--ui-accent-indicator);
   }
 
   :host([aria-disabled='true']) {

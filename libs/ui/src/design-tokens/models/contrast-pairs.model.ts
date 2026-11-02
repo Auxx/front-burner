@@ -112,7 +112,10 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   ...[ 'surface-canvas', 'surface-island', 'surface-raised', 'surface-card', 'selected-active' ].map(bg =>
     graphic('border-focus', bg)
   ),
-  ...[ 'surface-canvas', 'surface-island' ].map(bg => graphic('accent', bg)),
+  // Accent fills, such as a checked checkbox on an island, and the thin accent lines on the
+  // canvas and islands: the activity bar's marker, the selected tab and the split-pane handle
+  graphic('accent', 'surface-island'),
+  ...[ 'surface-canvas', 'surface-island' ].map(bg => graphic('accent-indicator', bg)),
 
   // Icons on the canvas, such as the activity bar's, also when hovered
   ...[ 'icon-default', 'icon-muted' ].flatMap(fg => [

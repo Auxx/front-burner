@@ -2,7 +2,23 @@
   display: block;
 }
 
+// A full-width strip on its own shade at the top of the preview, so that it
+// does not read as part of the rendered file (SH-17).
+ui-inline-banner {
+  --ui-inline-banner-background: var(--ui-surface-canvas);
+  --ui-inline-banner-radius: 0;
+}
+
+// Backgrounds are removed in forced colours; a line keeps the strip apart.
+@media (forced-colors: active) {
+  ui-inline-banner {
+    border-block-end: var(--ui-border-width) solid CanvasText;
+  }
+}
+
 .details {
-  margin: var(--ui-space-1) 0 0;
+  // Padding, not margin, so that the closed region leaves no gap.
+  margin: 0;
+  padding-block-start: var(--ui-space-1);
   padding-inline-start: var(--ui-space-4);
 }

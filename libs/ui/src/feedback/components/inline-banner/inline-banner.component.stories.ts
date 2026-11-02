@@ -112,6 +112,38 @@ export const RemovedHtml: Story = {
   })
 };
 
+/**
+ * A quiet line on its own shade, as the removal notice sits at the top of the
+ * preview: the owner sets `--ui-inline-banner-background`.
+ */
+export const QuietOnAShade: Story = {
+  render: () => ({
+    styles: [
+      '.island { background: var(--ui-surface-island); padding-block-end: var(--ui-space-4); }',
+      'ui-inline-banner { --ui-inline-banner-background: var(--ui-surface-canvas); --ui-inline-banner-radius: 0; }',
+      'p { margin: var(--ui-space-3) var(--ui-space-4) 0; }'
+    ],
+    template: `
+      <div class="island">
+        <ui-inline-banner quiet>
+          Some HTML isn't shown in the preview.
+          <div uiBannerActions>
+            <button uiButton size="small" variant="ghost">Details</button>
+            <button uiButton size="small" variant="ghost">Hide</button>
+          </div>
+        </ui-inline-banner>
+        <p>The first paragraph of the preview.</p>
+      </div>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    const banner = canvasElement.querySelector('ui-inline-banner') as HTMLElement;
+    const island = canvasElement.querySelector('.island') as HTMLElement;
+    await expect(getComputedStyle(banner).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+    await expect(getComputedStyle(banner).backgroundColor).not.toBe(getComputedStyle(island).backgroundColor);
+  }
+};
+
 /** In the wide layout, actions stay beside the message's first line (plan 34, G6). */
 export const ActionsWithLongMessage: Story = {
   render: () => ({

@@ -1,9 +1,11 @@
 import { CSP_NONCE } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { undo } from '@codemirror/commands';
+import { openSearchPanel } from '@codemirror/search';
 import { EditorSelection, type EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 
+import { SWAPPING_ATTRIBUTE } from '../../search/find-panel';
 import { createEditorState } from '../../state/editor-state';
 import { CodeEditorComponent, type EditorStateChange } from './code-editor.component';
 
@@ -82,6 +84,26 @@ describe('CodeEditorComponent', () => {
     undo(view());
 
     expect(view().state.doc.toString()).toBe(NOTES);
+  });
+
+  it('switches files with the find panel open without sliding it out over the new file', async () => {
+    await setUp();
+    const real = window.getComputedStyle.bind(window);
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
+      const style = real(element, pseudo);
+      return (element as Element).classList?.contains('fb-find-closing')
+        ? ({ ...style, animationDuration: '0.16s' } as CSSStyleDeclaration)
+        : style;
+    });
+    openSearchPanel(view());
+    expect(fixture.nativeElement.querySelector('.fb-find')).not.toBeNull();
+
+    await show(stateOf(TODO, 'todo.md'));
+
+    expect(fixture.nativeElement.querySelector('.fb-find')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.fb-find-closing')).toBeNull();
+    expect(view().dom.hasAttribute(SWAPPING_ATTRIBUTE)).toBe(false);
+    vi.restoreAllMocks();
   });
 
   it('shows a new state while focused', async () => {

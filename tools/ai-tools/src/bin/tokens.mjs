@@ -10,6 +10,7 @@ import {
   resolveToken,
   SCHEMES
 } from '../lib/tokens.mjs';
+import { definedTokens, readSources, unknownTokens } from '../lib/unknown-tokens.mjs';
 
 // Importing contrast-pairs.model.ts makes Node warn that libs/ui/package.json
 // has no "type"; the import itself works. Other warnings are still printed.
@@ -168,6 +169,28 @@ ${OVERRIDE_HELP}`,
             ].join('\n')
         );
         return failing ? 1 : 0;
+      }
+    },
+    unknown: {
+      usage: '[folder...] [--json]',
+      summary:
+        'Lists var(--ui-*) references, without a fallback, to tokens that nothing defines; exits with 1 when there are any.',
+      help: `Reads the SCSS, TypeScript and HTML files under the folders (default: libs).
+A token counts as defined by a declaration, a token map key, a [style.--ui-*]
+binding or a setProperty call anywhere in those folders.`,
+      options: { json: { type: 'boolean' } },
+      run(options, folders) {
+        const sources = readSources(folders.length ? folders : [ 'libs' ]);
+        const found = unknownTokens(sources, definedTokens(sources));
+        print(
+          options.json,
+          found,
+          () =>
+            found.length
+              ? table([ [ 'file', 'line', 'token' ], ...found.map(f => [ f.file, f.line, f.name ]) ])
+              : 'No unknown tokens.'
+        );
+        return found.length ? 1 : 0;
       }
     }
   }

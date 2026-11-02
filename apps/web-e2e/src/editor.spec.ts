@@ -324,7 +324,50 @@ test.describe('editor', () => {
     await expect(panel.getByRole('textbox', { name: 'Replace' })).toBeHidden();
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+f' : 'Control+h');
     await expect(panel.getByRole('textbox', { name: 'Replace' })).toBeFocused();
-    await expect(panel.getByRole('button', { name: 'Toggle replace' })).toHaveAttribute('aria-expanded', 'true');
+    const toggle = panel.getByRole('button', { name: 'Toggle replace' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // The chevron keeps the height of the panel's other buttons once the replace row has slid open.
+    await expect.poll(() => panel.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+    expect((await toggle.boundingBox())!.height).toBe(
+      (await panel.getByRole('button', { name: 'Close' }).boundingBox())!.height
+    );
+
+    // Closing leaves an inert copy that slides out and then goes away.
+    await main(page).locator('.cm-editor').evaluate(element => {
+      new MutationObserver(records => {
+        if (
+          records.some(record =>
+            [ ...record.addedNodes ].some(node => (node as Element).classList?.contains('fb-find-closing'))
+          )
+        ) {
+          element.setAttribute('data-saw-closing', '');
+        }
+      }).observe(element, { childList: true });
+    });
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(editor(page, 'README.md')).toBeFocused();
+    await expect(main(page).locator('.cm-editor')).toHaveAttribute('data-saw-closing', '');
+    await expect(main(page).locator('.fb-find-closing')).toHaveCount(0);
+  });
+
+  test('A-10.30: the focused editor has no focus ring; the find panel\'s controls have one', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'the find panel is reached the same way on a phone');
+    const { id } = seedHandbook(instance.dataDir);
+    await openScreen(page, `/repositories/${id}/files/README.md`);
+    const text = editor(page, 'README.md');
+    const outline = (locator: Locator) => locator.evaluate(element => getComputedStyle(element).outlineStyle);
+
+    await text.click();
+    await expect(text).toBeFocused();
+    expect(await outline(main(page).locator('.cm-editor'))).toBe('none');
+    expect(await outline(text)).toBe('none');
+
+    await main(page).getByRole('button', { name: 'Find', exact: true }).click();
+    await page.keyboard.press('Tab');
+    const matchCase = main(page).getByRole('button', { name: 'Match case' });
+    await expect(matchCase).toBeFocused();
+    expect(await outline(matchCase)).toBe('solid');
   });
 
   test('ED-10: scrolls a long line sideways inside the editor, not the page, once Wrap is off', async ({ page, instance }) => {

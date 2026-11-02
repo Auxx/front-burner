@@ -130,8 +130,9 @@ that a repository is in an error status and a short label for the error.
   repository from an HTTPS or SSH URL", a **How it works** link and an **Add
   repository** button. On narrow screens the button goes below the text.
 - **DS-13** **How it works** shows the explanation and steps of the full guide
-  (DS-11) in place, and can hide them again. The full and compact guides use the
-  same text, so there is only one version to keep up to date.
+  (DS-11) in place, and can hide them again. They slide open and closed, at once
+  when the user asks for less motion. The full and compact guides use the same
+  text, so there is only one version to keep up to date.
 - **DS-14** **Add repository** starts the add-repository flow (separate
   requirement).
 
@@ -200,7 +201,7 @@ that a repository is in an error status and a short label for the error.
   section.
 - **AC-DASH-001.3** A user with one or more repositories sees the compact guide
   above the recent repositories list. **How it works** shows and hides the full
-  guide text in place.
+  guide text in place, sliding it open and closed (at once with reduced motion).
 - **AC-DASH-001.4** **Add repository** starts the add-repository flow, from both
   the full and the compact guide.
 - **AC-DASH-001.5** A user with 12 repositories sees exactly 10, ordered by last

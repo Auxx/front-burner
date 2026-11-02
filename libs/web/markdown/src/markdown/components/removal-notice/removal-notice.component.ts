@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, model, signal } from '@angular/core';
-import { BannerActionsComponent, ButtonComponent, InlineBannerComponent } from '@front-burner/ui';
+import { BannerActionsComponent, ButtonComponent, CollapsibleComponent, InlineBannerComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import type { RemovalReport } from '../../pipeline/collect-removals';
@@ -22,7 +22,7 @@ let nextId = 0;
  */
 @Component({
   selector: 'md-removal-notice',
-  imports: [ TranslocoDirective, BannerActionsComponent, ButtonComponent, InlineBannerComponent ],
+  imports: [ TranslocoDirective, BannerActionsComponent, ButtonComponent, CollapsibleComponent, InlineBannerComponent ],
   templateUrl: './removal-notice.component.html',
   styleUrl: './removal-notice.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush

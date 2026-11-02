@@ -8,7 +8,9 @@
     "type:util"
   ],
   "implicitDependencies": [
-    "ui"
+    "ui",
+    "web-*",
+    "!web-e2e"
   ],
   "targets": {
     "lint": {

@@ -1,7 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { ButtonComponent, IconComponent } from '@front-burner/ui';
+import { ButtonComponent, CollapsibleComponent, IconComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 let nextId = 0;
@@ -13,7 +13,7 @@ let nextId = 0;
  */
 @Component({
   selector: 'dash-add-repository-guide',
-  imports: [ TranslocoDirective, NgTemplateOutlet, RouterLink, ButtonComponent, IconComponent ],
+  imports: [ TranslocoDirective, NgTemplateOutlet, RouterLink, ButtonComponent, CollapsibleComponent, IconComponent ],
   templateUrl: './add-repository-guide.component.html',
   styleUrl: './add-repository-guide.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

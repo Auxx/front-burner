@@ -31,6 +31,22 @@ test.describe('app header', () => {
     await expect(banner.getByRole('button', { name: /^Account menu for / })).toHaveText('A');
   });
 
+  test('fills the user menu button with the island shade, so that it shows on the canvas in both schemes', async ({ page }) => {
+    await openDashboard(page);
+    for (const colorScheme of [ 'dark', 'light' ] as const) {
+      await page.emulateMedia({ colorScheme });
+      const shades = await accountButton(page).evaluate(button => {
+        const probe = document.createElement('div');
+        probe.style.background = 'var(--ui-surface-island)';
+        document.body.append(probe);
+        const island = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { button: getComputedStyle(button).backgroundColor, island };
+      });
+      expect(shades.button).toBe(shades.island);
+    }
+  });
+
   test('leads to the repositories, which are not built yet, and back', async ({ page, isMobile }) => {
     test.skip(isMobile, 'the phone layout has its own test');
     await openDashboard(page);

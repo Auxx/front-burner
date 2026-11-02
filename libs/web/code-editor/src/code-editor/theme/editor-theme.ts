@@ -13,11 +13,9 @@ export const editorTheme = EditorView.theme({
     // The find panel slides in from above the editor's top edge, not over what is above it.
     overflow: 'clip'
   },
-  // The focus ring (A-10.30), inside the editor so that the pane around it does not clip it.
-  '&.cm-focused': {
-    outline: 'var(--ui-focus-ring-width) solid var(--ui-border-focus)',
-    outlineOffset: 'calc(-1 * var(--ui-focus-ring-width))'
-  },
+  // No focus ring, as in IDEs: the caret and the active line's number show the focus
+  // (A-10.30). Set, not left out, since CodeMirror's base theme draws a dotted outline.
+  '&.cm-focused': { outline: 'none' },
   '.cm-scroller': { fontFamily: 'inherit', lineHeight: 'var(--ui-line-height-code)' },
   '.cm-content': { padding: 'var(--ui-space-3) 0', caretColor: 'var(--ui-editor-cursor)' },
   '.cm-gutters': {
@@ -65,15 +63,25 @@ export const editorTheme = EditorView.theme({
     from: { transform: 'translateY(-100%)' },
     to: { transform: 'none' }
   },
+  // The copy a closed panel leaves behind slides out the way it came (find-panel.ts).
+  '.cm-panels.cm-panels-top.fb-find-closing': {
+    pointerEvents: 'none',
+    animation: 'fb-find-slide-out var(--ui-duration-base) var(--ui-easing-exit) forwards'
+  },
+  '@keyframes fb-find-slide-out': {
+    from: { transform: 'none' },
+    to: { transform: 'translateY(-100%)' }
+  },
   '.fb-find': { display: 'flex', gap: 'var(--ui-space-1)', padding: 'var(--ui-space-1)' },
   '.fb-find [hidden]': { display: 'none' },
+  // The space above the replace row is inside its region, so a closed region leaves no gap.
   '.fb-find-rows': {
     display: 'flex',
     flex: '1',
     flexDirection: 'column',
-    gap: 'var(--ui-space-1)',
     minInlineSize: '0'
   },
+  '.fb-find-replace': { paddingBlockStart: 'var(--ui-space-1)' },
   // The rows wrap rather than overflow in a narrow editor.
   '.fb-find-row': { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--ui-space-1)' },
   '.fb-find-field': {
@@ -90,30 +98,32 @@ export const editorTheme = EditorView.theme({
     font: 'inherit',
     fontSize: 'var(--ui-font-size-input)'
   },
-  '.fb-find-button': {
-    display: 'inline-flex',
-    flex: 'none',
-    alignItems: 'center',
-    justifyContent: 'center',
-    inlineSize: 'var(--ui-control-height-small)',
-    blockSize: 'var(--ui-control-height-small)',
-    boxSizing: 'border-box',
-    margin: '0',
-    padding: '0',
-    color: 'var(--ui-text-default)',
-    backgroundColor: 'transparent',
-    border: 'var(--ui-border-width) solid transparent',
-    borderRadius: 'var(--ui-radius-control)',
-    cursor: 'pointer'
+  // The buttons are the ui library's small icon buttons (find-panel.ts). The chevron keeps
+  // their fixed size at the top of the panel and turns to point down while the replace row
+  // is open.
+  '.fb-find-toggle': { alignSelf: 'flex-start' },
+  '.fb-find-toggle .fb-find-icon': {
+    transition: 'transform var(--ui-duration-base) var(--ui-easing-standard)'
   },
-  '.fb-find-button:hover': { backgroundColor: 'var(--ui-surface-hover)' },
-  '.fb-find-button:active': { backgroundColor: 'var(--ui-surface-pressed)' },
-  '.fb-find-button[aria-pressed=true]': {
-    borderColor: 'var(--ui-border-strong)',
-    backgroundColor: 'var(--ui-selected-inactive)'
+  '.fb-find-toggle[aria-expanded=true] .fb-find-icon': { transform: 'rotate(90deg)' },
+  '.fb-find-toggle[aria-expanded=true] .fb-find-icon:dir(rtl)': { transform: 'rotate(-90deg)' },
+  // The replace row slides open and closed with the rules of ui-collapsible (A-10.12),
+  // repeated here because CodeMirror's theme cannot use the ui library's styles.
+  '.fb-find-replace-region': {
+    display: 'grid',
+    gridTemplateRows: '1fr',
+    opacity: '1',
+    transition: 'grid-template-rows var(--ui-duration-base) var(--ui-easing-standard), '
+      + 'opacity var(--ui-duration-base) var(--ui-easing-standard), visibility 0s'
   },
-  // The chevron spans both rows, as in VS Code.
-  '.fb-find-toggle': { blockSize: 'auto', minBlockSize: 'var(--ui-control-height-small)' },
+  '.fb-find-replace-region[inert]': {
+    gridTemplateRows: '0fr',
+    opacity: '0',
+    visibility: 'hidden',
+    transition: 'grid-template-rows var(--ui-duration-base) var(--ui-easing-exit), '
+      + 'opacity var(--ui-duration-base) var(--ui-easing-exit), visibility 0s var(--ui-duration-base)'
+  },
+  '.fb-find-replace-clip': { minBlockSize: '0', overflow: 'hidden' },
   '.fb-find-icon': { inlineSize: 'var(--ui-icon-size)', blockSize: 'var(--ui-icon-size)' },
   // Wide enough for "999 of 999", so that the buttons after it do not move while typing.
   '.fb-find-count': {
@@ -125,14 +135,15 @@ export const editorTheme = EditorView.theme({
     textAlign: 'center',
     whiteSpace: 'nowrap'
   },
-  '.fb-find-field:focus-visible, .fb-find-button:focus-visible': {
+  // The focus ring is drawn inside, since the editor and the replace row's region clip what
+  // is outside the panel's controls.
+  '.fb-find-field:focus-visible': {
     outline: 'var(--ui-focus-ring-width) solid var(--ui-border-focus)',
     outlineOffset: 'calc(-1 * var(--ui-focus-ring-width))'
   },
-  // Shadows are removed in forced colours, so the panel gets a border; the pressed background
-  // is `Highlight` (A-10.22).
+  '.fb-find-button:focus-visible': { outlineOffset: 'calc(-1 * var(--ui-focus-ring-width))' },
+  // Shadows are removed in forced colours, so the panel gets a border (A-10.22).
   '@media (forced-colors: active)': {
-    '.cm-panels.cm-panels-top': { border: 'var(--ui-border-width) solid var(--ui-border-default)' },
-    '.fb-find-button[aria-pressed=true]': { color: 'HighlightText' }
+    '.cm-panels.cm-panels-top': { border: 'var(--ui-border-width) solid var(--ui-border-default)' }
   }
 });

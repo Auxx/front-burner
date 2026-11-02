@@ -1,3 +1,4 @@
+import { ApplicationRef, type ComponentRef, createComponent, type EnvironmentInjector } from '@angular/core';
 import {
   closeSearchPanel,
   findNext,
@@ -11,6 +12,7 @@ import {
 } from '@codemirror/search';
 import { EditorSelection, type EditorState } from '@codemirror/state';
 import { type Command, EditorView, type Panel, runScopeHandlers, type ViewUpdate } from '@codemirror/view';
+import { IconButtonComponent } from '@front-burner/ui';
 import { findIconSprite, findLabels, type FindPanelLabels } from './find-labels';
 
 /** The counter stops counting here, so that a short query in a 1 MB file stays responsive. */
@@ -23,6 +25,44 @@ export const MAX_COUNTED_MATCHES = 1000;
 export const RECOUNT_DELAY_MS = 250;
 
 const SVG = 'http://www.w3.org/2000/svg';
+
+/**
+ * Set on the editor's DOM while it swaps in another file's state: the find
+ * panel then closes without sliding out over the new file's text.
+ */
+export const SWAPPING_ATTRIBUTE = 'data-fb-swapping';
+
+/**
+ * CodeMirror removes a closed panel's DOM at once, so a copy of the panel's
+ * container slides out in its place: inert, hidden from screen readers and
+ * without ids. Returns the copy, or null when there is no animation to wait
+ * for, as with reduced motion.
+ */
+export function leaveClosingCopy(container: HTMLElement, host: HTMLElement): HTMLElement | null {
+  const copy = container.cloneNode(true) as HTMLElement;
+  copy.classList.add('fb-find-closing');
+  copy.setAttribute('inert', '');
+  copy.setAttribute('aria-hidden', 'true');
+  for (const element of [ copy, ...copy.querySelectorAll('[id]') ]) {
+    element.removeAttribute('id');
+  }
+  host.append(copy);
+  const duration = getComputedStyle(copy).animationDuration;
+  if (!duration || parseFloat(duration) === 0) {
+    copy.remove();
+    return null;
+  }
+  // Only the copy's own slide: an animation inside it must not remove it. A cancelled slide,
+  // as when the editor is hidden meanwhile, removes it too, so that it never slides again.
+  const done = (event: Event) => {
+    if (event.target === copy) {
+      copy.remove();
+    }
+  };
+  copy.addEventListener('animationend', done);
+  copy.addEventListener('animationcancel', done);
+  return copy;
+}
 
 /** A match of the query in the text. */
 interface Match {
@@ -53,6 +93,17 @@ function firstMatchFrom(state: EditorState, query: SearchQuery, from: number): M
   return before.done ? null : before.value;
 }
 
+/** The injector each view's find panel creates its ui buttons with. */
+const injectors = new WeakMap<EditorView, EnvironmentInjector>();
+
+/**
+ * Gives the view's find panel the injector it creates the ui library's icon
+ * buttons with. The code editor component calls it for its view.
+ */
+export function setFindPanelInjector(view: EditorView, injector: EnvironmentInjector): void {
+  injectors.set(view, injector);
+}
+
 /** The panels on screen, so that `openReplacePanel` can reach the one it opened. */
 const panels = new WeakMap<EditorView, FindPanel>();
 
@@ -70,8 +121,10 @@ class FindPanel implements Panel {
 
   private readonly labels: FindPanelLabels;
   private readonly sprite: string;
+  private readonly injector: EnvironmentInjector;
+  /** The ui icon buttons of the panel, by their host element. */
+  private readonly buttons = new Map<HTMLButtonElement, ComponentRef<IconButtonComponent>>();
   private readonly toggle: HTMLButtonElement;
-  private readonly chevron: SVGUseElement;
   private readonly findField: HTMLInputElement;
   readonly replaceField: HTMLInputElement;
   private readonly caseButton: HTMLButtonElement;
@@ -79,6 +132,7 @@ class FindPanel implements Panel {
   private readonly regexpButton: HTMLButtonElement;
   private readonly counter: HTMLElement;
   private readonly replaceRow: HTMLElement;
+  private readonly replaceRegion: HTMLElement;
   private query: SearchQuery;
   private expanded = false;
   private matches: Match[] = [];
@@ -88,6 +142,11 @@ class FindPanel implements Panel {
   constructor(private readonly view: EditorView) {
     this.labels = view.state.facet(findLabels);
     this.sprite = view.state.facet(findIconSprite);
+    const injector = injectors.get(view);
+    if (!injector) {
+      throw new Error('The find panel needs setFindPanelInjector for its view');
+    }
+    this.injector = injector;
     this.query = getSearchQuery(view.state);
     const labels = this.labels;
     const replaceRowId = `fb-find-replace-${++ids}`;
@@ -96,7 +155,6 @@ class FindPanel implements Panel {
     this.toggle.classList.add('fb-find-toggle');
     this.toggle.setAttribute('aria-expanded', 'false');
     this.toggle.setAttribute('aria-controls', replaceRowId);
-    this.chevron = this.toggle.querySelector('use') as SVGUseElement;
 
     this.findField = this.field(labels.find, this.query.search);
     // `openSearchPanel` and CodeMirror's find commands look for this attribute.
@@ -126,12 +184,19 @@ class FindPanel implements Panel {
       this.iconButton('replace', labels.replaceOne, () => replaceNext(view)),
       this.iconButton('replace-all', labels.replaceAll, () => replaceAll(view))
     );
-    this.replaceRow.id = replaceRowId;
     this.replaceRow.classList.add('fb-find-replace');
+    // Slides open and closed as ui-collapsible does; inert while closed.
+    this.replaceRegion = document.createElement('div');
+    this.replaceRegion.className = 'fb-find-replace-region';
+    this.replaceRegion.id = replaceRowId;
+    const clip = document.createElement('div');
+    clip.className = 'fb-find-replace-clip';
+    clip.append(this.replaceRow);
+    this.replaceRegion.append(clip);
 
     const rows = document.createElement('div');
     rows.className = 'fb-find-rows';
-    rows.append(findRow, this.replaceRow);
+    rows.append(findRow, this.replaceRegion);
 
     this.dom = document.createElement('div');
     this.dom.className = 'fb-find';
@@ -143,6 +208,10 @@ class FindPanel implements Panel {
     this.showReplace();
     this.recount();
     panels.set(view, this);
+    // A panel opened again while the last one still slides out replaces it at once.
+    for (const copy of view.dom.querySelectorAll(':scope > .fb-find-closing')) {
+      copy.remove();
+    }
   }
 
   mount(): void {
@@ -179,6 +248,16 @@ class FindPanel implements Panel {
   destroy(): void {
     clearTimeout(this.recountTimer);
     panels.delete(this.view);
+    const container = this.dom.parentElement;
+    if (container && !this.view.dom.hasAttribute(SWAPPING_ATTRIBUTE)) {
+      leaveClosingCopy(container, this.view.dom);
+    }
+    const appRef = this.injector.get(ApplicationRef);
+    for (const button of this.buttons.values()) {
+      appRef.detachView(button.hostView);
+      button.destroy();
+    }
+    this.buttons.clear();
   }
 
   /** Shows or hides the replace row. */
@@ -195,8 +274,8 @@ class FindPanel implements Panel {
     }
     this.toggle.hidden = readOnly;
     this.toggle.setAttribute('aria-expanded', String(shown));
-    this.chevron.setAttribute('href', `${this.sprite}#${shown ? 'chevron-down' : 'chevron-right'}`);
-    this.replaceRow.hidden = !shown;
+    this.replaceRow.hidden = readOnly;
+    this.replaceRegion.toggleAttribute('inert', !shown);
   }
 
   private keydown(event: KeyboardEvent): void {
@@ -251,9 +330,9 @@ class FindPanel implements Panel {
     this.query = query;
     this.findField.value = query.search;
     this.replaceField.value = query.replace;
-    this.caseButton.setAttribute('aria-pressed', String(query.caseSensitive));
-    this.wordButton.setAttribute('aria-pressed', String(query.wholeWord));
-    this.regexpButton.setAttribute('aria-pressed', String(query.regexp));
+    this.setPressed(this.caseButton, query.caseSensitive);
+    this.setPressed(this.wordButton, query.wholeWord);
+    this.setPressed(this.regexpButton, query.regexp);
   }
 
   private recount(): void {
@@ -311,24 +390,41 @@ class FindPanel implements Panel {
     return input;
   }
 
+  /**
+   * A small `uiIconButton` of the ui library on a button of the panel's own,
+   * since CodeMirror panels are DOM: its label is its accessible name and its
+   * tooltip, and its size is the small control height.
+   */
   private iconButton(icon: string, label: string, run: () => void): HTMLButtonElement {
     const button = document.createElement('button');
-    button.type = 'button';
     button.className = 'fb-find-button';
-    button.setAttribute('aria-label', label);
-    button.title = label;
-    button.append(this.icon(icon));
+    const ref = createComponent(IconButtonComponent, {
+      environmentInjector: this.injector,
+      hostElement: button,
+      projectableNodes: [ [ this.icon(icon) ] ]
+    });
+    ref.setInput('label', label);
+    ref.setInput('size', 'small');
+    this.injector.get(ApplicationRef).attachView(ref.hostView);
+    ref.changeDetectorRef.detectChanges();
+    this.buttons.set(button, ref);
     button.addEventListener('click', run);
     return button;
   }
 
   private optionButton(icon: string, label: string, on: boolean): HTMLButtonElement {
     const button = this.iconButton(icon, label, () => {
-      button.setAttribute('aria-pressed', String(!pressed(button)));
+      this.setPressed(button, !pressed(button));
       this.commit();
     });
-    button.setAttribute('aria-pressed', String(on));
+    this.setPressed(button, on);
     return button;
+  }
+
+  private setPressed(button: HTMLButtonElement, on: boolean): void {
+    const ref = this.buttons.get(button);
+    ref?.setInput('pressed', on);
+    ref?.changeDetectorRef.detectChanges();
   }
 
   /** A Codicon from the sprite, as `ui-icon` draws it. */

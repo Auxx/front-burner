@@ -5,6 +5,7 @@ import {
   DestroyRef,
   effect,
   ElementRef,
+  EnvironmentInjector,
   inject,
   input,
   output,
@@ -13,6 +14,7 @@ import {
 import { openSearchPanel } from '@codemirror/search';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { setFindPanelInjector, SWAPPING_ATTRIBUTE } from '../../search/find-panel';
 
 export interface EditorStateChange {
   state: EditorState;
@@ -42,6 +44,7 @@ export class CodeEditorComponent {
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly nonce = inject(CSP_NONCE, { optional: true });
+  private readonly injector = inject(EnvironmentInjector);
   private view?: EditorView;
 
   constructor() {
@@ -112,7 +115,13 @@ export class CodeEditorComponent {
   private show(state: EditorState): void {
     this.view ??= this.createView();
     if (this.view.state !== state) {
-      this.view.setState(state);
+      // Another file's state closes the find panel, which then does not slide out over it.
+      this.view.dom.setAttribute(SWAPPING_ATTRIBUTE, '');
+      try {
+        this.view.setState(state);
+      } finally {
+        this.view.dom.removeAttribute(SWAPPING_ATTRIBUTE);
+      }
     }
   }
 
@@ -131,6 +140,8 @@ export class CodeEditorComponent {
       }
     });
     view.scrollDOM.addEventListener('scroll', () => this.scrolled.emit(this.topPlace()), { passive: true });
+    // The find panel's buttons are the ui library's icon buttons.
+    setFindPanelInjector(view, this.injector);
     return view;
   }
 }
