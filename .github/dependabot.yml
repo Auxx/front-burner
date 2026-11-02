@@ -29,6 +29,10 @@ updates:
         patterns:
           - playwright
           - "@playwright/*"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: github-actions
     # The composite actions pin actions too.
@@ -43,3 +47,7 @@ updates:
       github-actions:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
