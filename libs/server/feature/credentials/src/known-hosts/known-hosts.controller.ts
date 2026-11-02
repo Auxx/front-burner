@@ -1,7 +1,7 @@
+import { authOf } from '@front-burner/server-core-security';
 import { Body, Controller, HttpCode, Post, Req } from '@nestjs/common';
 import { ApiNoContentResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { authOf } from '../request-user';
 import { TrustHostRequestDto } from '../saved/credentials.dto';
 import { KnownHostsService } from './known-hosts.service';
 

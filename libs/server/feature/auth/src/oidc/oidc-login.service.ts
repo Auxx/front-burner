@@ -116,7 +116,10 @@ export class OidcLoginService {
         subject: claims.sub,
         email: typeof claims['email'] === 'string' ? claims['email'] : undefined,
         emailVerified: typeof claims['email_verified'] === 'boolean' ? claims['email_verified'] : undefined,
-        name: typeof claims['name'] === 'string' ? claims['name'] : undefined
+        name: typeof claims['name'] === 'string' ? claims['name'] : undefined,
+        preferredUsername: typeof claims['preferred_username'] === 'string'
+          ? claims['preferred_username']
+          : undefined
       };
     } catch (error) {
       return fail(providerFailureOf(error));

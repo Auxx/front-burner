@@ -1,3 +1,4 @@
+export * from './auth/auth-of';
 export * from './auth/public.decorator';
 export * from './auth/request-auth';
 export * from './auth/session-lifecycle';

@@ -1,5 +1,4 @@
-// For the `req.auth` declaration.
-import '@front-burner/server-core-security';
+import { authOf } from '@front-burner/server-core-security';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
 import type {
   EntryPath,
@@ -19,7 +18,6 @@ import { FileContents } from '../content/file-contents';
 import { FolderLister } from '../listing/folder-lister';
 import { OpenableRepository } from '../repository/openable-repository';
 import { EntrySummaries } from '../summary/entry-summaries';
-import { authOf } from './auth-of';
 import { toFilesError } from './files-errors';
 import {
   CreateEntryRequestDto,

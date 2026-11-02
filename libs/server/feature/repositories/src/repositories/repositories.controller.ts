@@ -1,8 +1,6 @@
-// For the `req.auth` declaration.
-import '@front-burner/server-core-security';
 import type { Repository } from '@front-burner/server-core-database';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { RateLimitGroup, type RequestAuth } from '@front-burner/server-core-security';
+import { authOf, RateLimitGroup } from '@front-burner/server-core-security';
 import type {
   AccessCheckResult,
   RecentRepositories,
@@ -25,14 +23,6 @@ import {
   RepositorySummaryDto
 } from './repositories.dto';
 import { RepositoryQueries, toSummary } from './repository-queries';
-
-/** The logged-in user and session; the global auth guard has checked `req.auth`. */
-function authOf(req: Request): RequestAuth {
-  if (req.auth === undefined) {
-    throw new Error('RepositoriesController reached without req.auth');
-  }
-  return req.auth;
-}
 
 /** The repository as clients see it, or `404 not-found`. */
 function found(row: Repository | undefined): RepositorySummary {

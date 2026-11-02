@@ -1,3 +1,4 @@
+import { authOf } from '@front-burner/server-core-security';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
 import { Controller, Get, Logger, Param, Query, Req, Res } from '@nestjs/common';
 import {
@@ -9,7 +10,6 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { pipeline } from 'node:stream';
-import { authOf } from '../files/auth-of';
 import { toFilesError } from '../files/files-errors';
 import { ImageQueryDto } from '../files/files.dto';
 import { OpenableRepository } from '../repository/openable-repository';

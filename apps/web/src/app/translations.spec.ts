@@ -1,4 +1,4 @@
-import { ERROR_CODES, PASSWORD_RULES } from '@front-burner/shared-contracts';
+import { COMMIT_AUTHOR_FIELD_CODES, ERROR_CODES, PASSWORD_RULES } from '@front-burner/shared-contracts';
 
 import en from '../../public/i18n/en.json';
 
@@ -10,6 +10,11 @@ const SCREEN = 'web-feature-repository-screen';
 describe('i18n/en.json', () => {
   it.each([ ...ERROR_CODES, 'network' ])('has the text errors.%s', code => {
     expect(texts[`errors.${code}`]).toEqual(expect.any(String));
+  });
+
+  it.each(COMMIT_AUTHOR_FIELD_CODES)('has the commit author field text %s', code => {
+    const field = code.startsWith('name') ? 'name' : 'email';
+    expect(texts[`web-repository-dialogs.errors.${field}.${code}`]).toEqual(expect.any(String));
   });
 
   it.each([ 'logged-out', 'session-expired', 'password-reset' ])('has the login message %s', message => {

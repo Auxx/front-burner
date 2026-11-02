@@ -38,6 +38,9 @@ export const repositories = sqliteTable(
     status: text('status', { enum: REPOSITORY_STATUS_VALUES }).notNull(),
     /** Set only in the `error` status (RM-6). */
     errorCode: text('error_code', { enum: REPOSITORY_ERROR_VALUES }),
+    /** Per-repository author override (REQ-GIT-001, CA-8). */
+    commitAuthorName: text('commit_author_name'),
+    commitAuthorEmail: text('commit_author_email'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     /** DS-6 to DS-9. */
     lastAccessedAt: integer('last_accessed_at', { mode: 'timestamp_ms' }).notNull()

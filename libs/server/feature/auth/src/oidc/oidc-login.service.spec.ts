@@ -157,6 +157,13 @@ describe('OidcLoginService', () => {
     expect(await service.complete(callbackUrl, state, info)).toEqual({ ok: false, reason: 'invalid-id-token' });
   });
 
+  it('takes preferred_username from the ID token when it has no name', async () => {
+    provider.setClaims({ name: undefined, preferred_username: 'ada' });
+    const { callbackUrl, state } = await authorize();
+    expect(await service.complete(callbackUrl, state, info)).toEqual({ ok: true, code: expect.any(String) });
+    expect(database.db.select().from(users).get()?.displayName).toBe('ada');
+  });
+
   it('audits a refused user with the identity', async () => {
     provider.setClaims({ email: 'eve@example.com' });
     const { callbackUrl, state } = await authorize();

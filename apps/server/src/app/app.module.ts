@@ -10,6 +10,7 @@ import { StorageModule } from '@front-burner/server-core-storage';
 import { AuthModule } from '@front-burner/server-feature-auth';
 import { CredentialsModule } from '@front-burner/server-feature-credentials';
 import { FilesModule } from '@front-burner/server-feature-files';
+import { PreferencesModule } from '@front-burner/server-feature-preferences';
 import { RepositoriesModule } from '@front-burner/server-feature-repositories';
 import { DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
@@ -54,6 +55,7 @@ export class AppModule {
         AuthModule,
         CredentialsModule,
         RepositoriesModule,
+        PreferencesModule,
         FilesModule
       ],
       providers: [

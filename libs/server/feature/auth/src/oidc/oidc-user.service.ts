@@ -1,6 +1,7 @@
 import {
   DATABASE,
   Database,
+  insertUserPreferences,
   instanceState,
   LoginAuditReason,
   systemSettings,
@@ -19,6 +20,7 @@ export interface OidcIdentity {
   email: string | undefined;
   emailVerified: boolean | undefined;
   name: string | undefined;
+  preferredUsername?: string | undefined;
 }
 
 export type OidcUserResult =
@@ -78,7 +80,9 @@ export class OidcUserService {
       if (closed.changes !== 1) {
         return undefined;
       }
-      return tx.insert(users).values(this.newUser(identity, email, 'administrator')).returning().get();
+      const user = tx.insert(users).values(this.newUser(identity, email, 'administrator')).returning().get();
+      insertUserPreferences(tx, user);
+      return user;
     });
   }
 
@@ -114,9 +118,11 @@ export class OidcUserService {
       if (byEmail || !automaticRegistration) {
         return { ok: false, reason: 'registration-disabled' };
       }
+      const user = tx.insert(users).values(this.newUser(identity, identity.email, 'user')).returning().get();
+      insertUserPreferences(tx, user);
       return {
         ok: true,
-        user: tx.insert(users).values(this.newUser(identity, identity.email, 'user')).returning().get()
+        user
       };
     });
   }
@@ -124,7 +130,7 @@ export class OidcUserService {
   private newUser(identity: OidcIdentity, email: string, role: User['role']) {
     return {
       email,
-      displayName: identity.name?.trim() || email.split('@')[0] || email,
+      displayName: identity.name?.trim() || identity.preferredUsername?.trim() || email.split('@')[0] || email,
       role,
       loginMethod: 'oidc' as const,
       passwordHash: null,

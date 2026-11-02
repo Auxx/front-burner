@@ -213,14 +213,22 @@ export function seed(
       `INSERT INTO users (email, display_name, role, login_method, password_hash, created_at)
        VALUES (?, ?, 'user', 'password', ?, ?)`
     );
+    const insertPreferences = sqlite.prepare(
+      `INSERT INTO user_preferences (user_id, commit_author_name, commit_author_email, commit_author_confirmed)
+       VALUES (?, ?, ?, 0)`
+    );
     const insertRepository = sqlite.prepare(
       `INSERT INTO repositories
          (user_id, name, remote_url, clone_mode, git_level, status, error_code, created_at, last_accessed_at)
        VALUES (?, ?, ?, 'full', 'advanced', ?, ?, ?, ?)`
     );
-    const userIds = (rows.users ?? []).map(user =>
-      Number(insertUser.run(user.email, user.displayName ?? user.email, passwordHash, Date.now()).lastInsertRowid)
-    );
+    const userIds = (rows.users ?? []).map(user => {
+      const id = Number(
+        insertUser.run(user.email, user.displayName ?? user.email, passwordHash, Date.now()).lastInsertRowid
+      );
+      insertPreferences.run(id, user.displayName ?? user.email, user.email);
+      return id;
+    });
     const repositoryIds = (rows.repositories ?? []).map(repository => {
       const at = (repository.lastAccessedAt ?? new Date()).getTime();
       const id = Number(

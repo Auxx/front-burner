@@ -1,10 +1,10 @@
-import { RateLimitGroup } from '@front-burner/server-core-security';
+import { authOf, RateLimitGroup } from '@front-burner/server-core-security';
 import type { GeneratedSshKey, SavedCredentials } from '@front-burner/shared-contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Req } from '@nestjs/common';
 import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
-import { authOf, parseId } from '../request-user';
+import { parseId } from '../request-user';
 import {
   GeneratedSshKeyDto,
   GenerateSshKeyRequestDto,

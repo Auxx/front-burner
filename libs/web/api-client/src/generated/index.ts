@@ -6,4 +6,5 @@ export * from './KnownHosts';
 export * from './Me';
 export * from './Oidc';
 export * from './Onboarding';
+export * from './Preferences';
 export * from './Repositories';
