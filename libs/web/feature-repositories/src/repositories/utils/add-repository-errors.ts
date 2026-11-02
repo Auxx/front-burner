@@ -1,7 +1,6 @@
 import type { FieldTree, ValidationError } from '@angular/forms/signals';
 import type { ApiError } from '@front-burner/shared-contracts';
-
-import { fieldErrorCode } from './field-error-code';
+import { fieldErrorCode } from '@front-burner/web-core';
 
 /**
  * The codes each field of the form has a text for, under

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { type FieldTree, FormField, type ValidationError } from '@angular/forms/signals';
 import { COMMIT_AUTHOR_FIELD_CODES, type CommitAuthor, type FieldError } from '@front-burner/shared-contracts';
 import { FieldComponent, InputComponent } from '@front-burner/ui';
+import { fieldErrorCode } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 const KNOWN_CODES: readonly string[] = COMMIT_AUTHOR_FIELD_CODES;
@@ -39,10 +40,6 @@ export class CommitAuthorFormComponent {
   private ownCode(name: keyof CommitAuthor): string | undefined {
     const state = this.field()[name]();
     const error: ValidationError | undefined = state.touched() ? state.errors()[0] : undefined;
-    if (error === undefined) {
-      return undefined;
-    }
-    const code = (error as { issue?: { params?: { code?: unknown; }; }; }).issue?.params?.code;
-    return typeof code === 'string' ? code : error.kind;
+    return error === undefined ? undefined : fieldErrorCode(error);
   }
 }

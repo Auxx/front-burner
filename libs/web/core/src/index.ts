@@ -14,5 +14,6 @@ export { CurrentUserService } from './core/services/current-user/current-user.se
 export { OnboardingStateService, type OnboardingView } from './core/services/onboarding-state/onboarding-state.service';
 export { ownsTitle, PageTitleService } from './core/services/page-title/page-title.service';
 export { PushChannelService } from './core/services/push-channel/push-channel.service';
+export { fieldErrorCode } from './core/utils/field-error-code/field-error-code';
 export { relativeTime } from './core/utils/relative-time/relative-time';
 export { safeReturnUrl } from './core/utils/safe-return-url/safe-return-url';
