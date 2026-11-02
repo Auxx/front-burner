@@ -38,12 +38,10 @@ import {
   ToastService
 } from '@front-burner/ui';
 import { OnboardingApi } from '@front-burner/web-api-client';
-import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
+import { ApiErrorTextService, fieldErrorCode, toApiError } from '@front-burner/web-core';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 import { z } from 'zod';
-
-import { fieldErrorCode } from '../../utils/field-error-code';
 
 const KEY = 'web-feature-auth.OidcSetupStepComponent';
 /** The backend's callback route (plan 4); the operator registers it with the provider (AO-22). */

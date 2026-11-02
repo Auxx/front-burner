@@ -21,11 +21,9 @@ import {
   PasswordRevealDirective
 } from '@front-burner/ui';
 import { OnboardingApi } from '@front-burner/web-api-client';
-import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
+import { ApiErrorTextService, fieldErrorCode, toApiError } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
-
-import { fieldErrorCode } from '../../utils/field-error-code';
 
 /**
  * Asks for the setup token and checks it with the backend before the login

@@ -23,7 +23,7 @@ import {
   ToastService
 } from '@front-burner/ui';
 import { OnboardingApi } from '@front-burner/web-api-client';
-import { ApiErrorTextService, OnboardingStateService, toApiError } from '@front-burner/web-core';
+import { ApiErrorTextService, fieldErrorCode, OnboardingStateService, toApiError } from '@front-burner/web-core';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 import { z } from 'zod';
@@ -32,7 +32,6 @@ import {
   type PasswordStrength,
   PasswordStrengthService
 } from '../../services/password-strength/password-strength.service';
-import { fieldErrorCode } from '../../utils/field-error-code';
 import { PasswordPolicyComponent } from '../password-policy/password-policy.component';
 
 const KEY = 'web-feature-auth.PasswordSetupStepComponent';

@@ -1,0 +1,57 @@
+<ng-container *transloco="let t; prefix: 'web-feature-preferences.PreferencesPage'">
+  <ui-page [breadcrumbsLabel]="t('breadcrumbs')" column="40rem">
+    <a *uiBreadcrumb routerLink="/">{{ t('dashboard') }}</a>
+    <h1 uiPageTitle>{{ t('heading') }}</h1>
+    <section class="section" aria-labelledby="commit-author-heading">
+      <h2 id="commit-author-heading" class="heading">{{ t('commitAuthor') }}</h2>
+      <p class="explanation">{{ t('explanation') }}</p>
+      @let current = state();
+      @switch (current.kind) {
+        @case ('loading') {
+          <ui-spinner class="loading" [label]="t('loading')" />
+        }
+        @case ('failed') {
+          <ui-inline-banner status="danger" announce>
+            {{ t('loadFailed') }}
+            @if (current.failure.reference) {
+              <span class="reference">{{ t('reference') }} <code>{{ current.failure.reference }}</code></span>
+            }
+            <div uiBannerActions>
+              <button uiButton size="small" (click)="retry()">{{ t('retry') }}</button>
+            </div>
+          </ui-inline-banner>
+        }
+        @case ('loaded') {
+          @if (editing()) {
+            <form class="form" novalidate (submit)="save($event)">
+              <dlg-commit-author-form [field]="model" [serverErrors]="refusals.errors()" />
+              @if (failure(); as failure) {
+                <ui-inline-banner status="danger" announce>
+                  {{ failure.text }}
+                  @if (failure.reference) {
+                    <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+                  }
+                </ui-inline-banner>
+              }
+              <div class="actions">
+                <button uiButton variant="primary" type="submit" [busy]="model().submitting()">{{ t('save') }}</button>
+                <button uiButton [unavailable]="model().submitting()" (click)="cancel()">{{ t('cancel') }}</button>
+              </div>
+            </form>
+          } @else {
+            <dlg-commit-author-summary [author]="current.author" />
+            <div class="actions">
+              <button #editButton uiButton (click)="edit(current.author)">{{ t('edit') }}</button>
+            </div>
+          }
+        }
+      }
+      <!-- Always in the page: a live region added together with its text may not be announced. -->
+      <p class="status" aria-live="polite">
+        @if (saved()) {
+          {{ t('saved') }}
+        }
+      </p>
+    </section>
+  </ui-page>
+</ng-container>

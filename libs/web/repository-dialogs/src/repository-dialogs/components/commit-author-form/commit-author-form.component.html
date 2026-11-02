@@ -1,0 +1,20 @@
+<ng-container *transloco="let t; prefix: 'web-repository-dialogs.CommitAuthorFormComponent'">
+  <ng-container *transloco="let e; prefix: 'web-repository-dialogs.errors'">
+    <ng-container *transloco="let l; prefix: 'web-repository-dialogs.commitAuthor'">
+    @let nameError = error('name');
+    @let emailError = error('email');
+    <ui-field [label]="l('name')" [error]="nameError ? e(nameError) : undefined">
+      <input uiInput autocomplete="name" spellcheck="false" [formField]="field().name" />
+    </ui-field>
+    <div class="email">
+      <ui-field [label]="l('email')" [hint]="t('emailHint')" [error]="emailError ? e(emailError) : undefined">
+        <input uiInput autocomplete="email" inputmode="email" spellcheck="false" [formField]="field().email" />
+      </ui-field>
+      <p class="help">
+        <a [href]="githubHelp" target="_blank" rel="noopener noreferrer">{{ t('githubHelp') }}</a>
+        <a [href]="bitbucketHelp" target="_blank" rel="noopener noreferrer">{{ t('bitbucketHelp') }}</a>
+      </p>
+    </div>
+    </ng-container>
+  </ng-container>
+</ng-container>

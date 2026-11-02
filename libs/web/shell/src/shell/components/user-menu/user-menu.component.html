@@ -12,6 +12,7 @@
         <span class="name">{{ user().displayName }}</span>
         <span class="email">{{ user().email }}</span>
       </div>
+      <a uiMenuItem="preferences" routerLink="/preferences">{{ t('preferences') }}</a>
       <button uiMenuItem="logout">{{ t('logout') }}</button>
     </div>
   </ui-menu>

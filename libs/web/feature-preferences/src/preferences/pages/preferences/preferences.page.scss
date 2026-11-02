@@ -1,0 +1,48 @@
+:host {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+.form {
+  display: grid;
+  gap: var(--ui-space-4);
+  min-inline-size: 0;
+}
+
+// Spaced by margins, not a gap: an empty live region must take no room.
+.section {
+  display: grid;
+  min-inline-size: 0;
+
+  > :not(:first-child, :empty) {
+    margin-block-start: var(--ui-space-4);
+  }
+}
+
+.heading,
+.explanation {
+  margin: 0;
+}
+
+.explanation {
+  color: var(--ui-text-muted);
+}
+
+.loading {
+  justify-self: center;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
+
+.reference {
+  display: block;
+}
+
+.status {
+  margin: 0;
+}
