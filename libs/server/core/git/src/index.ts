@@ -1,6 +1,7 @@
 export * from './broker/broker';
 export * from './config/repository-config';
 export * from './egress/egress-proxy';
+export * from './engine/git-diff';
 export * from './engine/git-engine';
 export * from './engine/git-errors';
 export * from './engine/git-status';

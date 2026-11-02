@@ -673,6 +673,191 @@ describe('GitEngine', () => {
     });
   });
 
+  describe('diff', () => {
+    let work: string;
+
+    const diff = (path: string) => engine().diff(work, path);
+    const textOf = async (path: string) => {
+      const result = await diff(path);
+      if (result.kind !== 'text') {
+        throw new Error(`expected a text diff, got ${result.kind}`);
+      }
+      return result;
+    };
+    const numbered = (lines: number) => Array.from({ length: lines }, (_, index) => `line ${index + 1}`).join('\n');
+
+    beforeEach(() => {
+      work = join(root, 'diff');
+      mkdirSync(work);
+      git(work, 'init', '-q', '-b', 'main');
+      writeFileSync(join(work, 'a.md'), 'one\ntwo\nthree\n');
+      writeFileSync(join(work, 'gone.md'), 'first\nsecond\n');
+      git(work, 'add', '.');
+      git(work, 'commit', '-q', '-m', 'base');
+    });
+
+    it('shows a modified file\'s lines with both line numbers', async () => {
+      writeFileSync(join(work, 'a.md'), 'one\nTWO\nthree\nfour\n');
+
+      expect((await textOf('a.md')).lines).toEqual([
+        { type: 'context', oldLine: 1, newLine: 1, text: 'one' },
+        { type: 'removed', oldLine: 2, newLine: null, text: 'two' },
+        { type: 'added', oldLine: null, newLine: 2, text: 'TWO' },
+        { type: 'context', oldLine: 3, newLine: 3, text: 'three' },
+        { type: 'added', oldLine: null, newLine: 4, text: 'four' }
+      ]);
+    });
+
+    it('shows an added file\'s lines as added, and a deleted file\'s as removed', async () => {
+      writeFileSync(join(work, 'new.md'), 'hello\nworld\n');
+      rmSync(join(work, 'gone.md'));
+
+      expect((await textOf('new.md')).lines).toEqual([
+        { type: 'added', oldLine: null, newLine: 1, text: 'hello' },
+        { type: 'added', oldLine: null, newLine: 2, text: 'world' }
+      ]);
+      expect((await textOf('gone.md')).lines).toEqual([
+        { type: 'removed', oldLine: 1, newLine: null, text: 'first' },
+        { type: 'removed', oldLine: 2, newLine: null, text: 'second' }
+      ]);
+    });
+
+    it('shows every line as added before the first commit', async () => {
+      const fresh = join(root, 'fresh');
+      mkdirSync(fresh);
+      git(fresh, 'init', '-q', '-b', 'main');
+      writeFileSync(join(fresh, 'a.md'), 'a\nb\n');
+      work = fresh;
+
+      expect(await diff('a.md')).toEqual({
+        kind: 'text',
+        lines: [
+          { type: 'added', oldLine: null, newLine: 1, text: 'a' },
+          { type: 'added', oldLine: null, newLine: 2, text: 'b' }
+        ],
+        complete: true,
+        lineEndingsOnly: false
+      });
+    });
+
+    it('gives a small file the whole file as context', async () => {
+      writeFileSync(join(work, 'long.md'), `${numbered(50)}\n`);
+      git(work, 'add', 'long.md');
+      git(work, 'commit', '-q', '-m', 'long');
+      writeFileSync(join(work, 'long.md'), `${numbered(50).replace('line 25', 'LINE 25')}\n`);
+
+      const result = await textOf('long.md');
+
+      expect(result.complete).toBe(true);
+      expect(result.lines).toHaveLength(51);
+      expect(result.lines[0]).toEqual({ type: 'context', oldLine: 1, newLine: 1, text: 'line 1' });
+      expect(result.lines.at(-1)).toEqual({ type: 'context', oldLine: 50, newLine: 50, text: 'line 50' });
+    });
+
+    it('keeps 3 lines of context for a file over 1 MB, not complete', async () => {
+      const big = numbered(100_000);
+      expect(big.length).toBeGreaterThan(1_000_000);
+      writeFileSync(join(work, 'big.md'), `${big}\n`);
+      git(work, 'add', 'big.md');
+      git(work, 'commit', '-q', '-m', 'big');
+      writeFileSync(join(work, 'big.md'), `${big.replace('line 50000\n', 'LINE 50000\n')}\n`);
+
+      const result = await textOf('big.md');
+
+      expect(result.complete).toBe(false);
+      expect(result.lines.map(line => line.type)).toEqual([
+        'context',
+        'context',
+        'context',
+        'removed',
+        'added',
+        'context',
+        'context',
+        'context'
+      ]);
+      expect(result.lines[3]).toEqual({ type: 'removed', oldLine: 50000, newLine: null, text: 'line 50000' });
+    });
+
+    it('reports a changed PNG as binary, with both sizes', async () => {
+      const png = Buffer.from([ 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0 ]);
+      writeFileSync(join(work, 'image.png'), png);
+      git(work, 'add', 'image.png');
+      git(work, 'commit', '-q', '-m', 'image');
+      writeFileSync(join(work, 'image.png'), Buffer.concat([ png, Buffer.from([ 0, 1, 2, 3 ]) ]));
+      writeFileSync(join(work, 'new.png'), png);
+
+      expect(await diff('image.png')).toEqual({ kind: 'binary', oldSize: 12, newSize: 16 });
+      expect(await diff('new.png')).toEqual({ kind: 'binary', oldSize: null, newSize: 12 });
+    });
+
+    it('reports a diff over 1 MB as too large', async () => {
+      writeFileSync(join(work, 'a.md'), `${numbered(100_000)}\n`);
+
+      expect(await diff('a.md')).toEqual({ kind: 'too-large' });
+    });
+
+    it('says when only the line endings changed', async () => {
+      writeFileSync(join(work, 'a.md'), 'one\r\ntwo\r\nthree\r\n');
+
+      const result = await textOf('a.md');
+
+      expect(result.lineEndingsOnly).toBe(true);
+      expect(result.lines.filter(line => line.type === 'added').map(line => line.text)).toEqual([
+        'one\r',
+        'two\r',
+        'three\r'
+      ]);
+
+      writeFileSync(join(work, 'a.md'), 'one\r\nTWO\r\nthree\r\n');
+      expect((await textOf('a.md')).lineEndingsOnly).toBe(false);
+    });
+
+    it('answers no lines for an unchanged file', async () => {
+      expect(await diff('a.md')).toEqual({ kind: 'text', lines: [], complete: true, lineEndingsOnly: false });
+      expect(await diff('missing.md')).toEqual({ kind: 'text', lines: [], complete: true, lineEndingsOnly: false });
+    });
+
+    it('does not show git\'s no-newline marker as a line', async () => {
+      writeFileSync(join(work, 'a.md'), 'one\ntwo\nthree');
+
+      expect((await textOf('a.md')).lines).toEqual([
+        { type: 'context', oldLine: 1, newLine: 1, text: 'one' },
+        { type: 'context', oldLine: 2, newLine: 2, text: 'two' },
+        { type: 'removed', oldLine: 3, newLine: null, text: 'three' },
+        { type: 'added', oldLine: null, newLine: 3, text: 'three' }
+      ]);
+    });
+
+    it('reads content lines that look like headers', async () => {
+      writeFileSync(join(work, 'a.md'), '---\ntitle: x\n---\n--- a\n+++ b\n@@ -1 +1 @@\n');
+
+      const added = (await textOf('a.md')).lines.filter(line => line.type === 'added').map(line => line.text);
+
+      expect(added).toEqual([ '---', 'title: x', '---', '--- a', '+++ b', '@@ -1 +1 @@' ]);
+    });
+
+    it('ignores a textconv driver named by .gitattributes', async () => {
+      const marker = join(root, 'textconv-ran');
+      writeFileSync(join(work, '.gitattributes'), '*.md diff=upper\n');
+      git(work, 'config', 'diff.upper.textconv', `sh -c 'touch "${marker}"; tr a-z A-Z < "$1"' -`);
+      writeFileSync(join(work, 'a.md'), 'one\ntwo\nthree\nfour\n');
+
+      const added = (await textOf('a.md')).lines.filter(line => line.type === 'added').map(line => line.text);
+
+      expect(added).toEqual([ 'four' ]);
+      expect(existsSync(marker)).toBe(false);
+    });
+
+    it('never writes the index', async () => {
+      utimesSync(join(work, 'a.md'), new Date(2000, 0, 1), new Date(2000, 0, 1));
+      const before = readFileSync(join(work, '.git', 'index'));
+
+      await diff('a.md');
+
+      expect(readFileSync(join(work, '.git', 'index')).equals(before)).toBe(true);
+    });
+  });
+
   describe('folder queries', () => {
     let work: string;
 
