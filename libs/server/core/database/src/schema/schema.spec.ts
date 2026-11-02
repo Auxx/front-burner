@@ -281,9 +281,12 @@ describe('schema', () => {
       }
       applyMigrations(freshDb, tempMigrationsDir);
 
-      freshDb.sqlite.prepare(
-        'INSERT INTO users (id, email, display_name, role, login_method, created_at) VALUES (1, \'legacy@example.com\', \'Legacy User\', \'user\', \'password\', 0)'
-      ).run();
+      const insertLegacy = freshDb.sqlite.prepare(
+        'INSERT INTO users (id, email, display_name, role, login_method, created_at) VALUES (?, ?, ?, \'user\', \'password\', 0)'
+      );
+      insertLegacy.run(1, 'legacy@example.com', 'Legacy User');
+      insertLegacy.run(2, 'carol@example.com', 'Carol <Ops>\nTeam');
+      insertLegacy.run(3, 'nameless@example.com', '<>');
 
       applyMigrations(freshDb, migrationsFolder);
 
@@ -293,6 +296,18 @@ describe('schema', () => {
           userId: 1,
           commitAuthorName: 'Legacy User',
           commitAuthorEmail: 'legacy@example.com',
+          commitAuthorConfirmed: false
+        },
+        {
+          userId: 2,
+          commitAuthorName: 'Carol Ops Team',
+          commitAuthorEmail: 'carol@example.com',
+          commitAuthorConfirmed: false
+        },
+        {
+          userId: 3,
+          commitAuthorName: 'nameless',
+          commitAuthorEmail: 'nameless@example.com',
           commitAuthorConfirmed: false
         }
       ]);

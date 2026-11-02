@@ -4,10 +4,12 @@ import {
   COMMIT_AUTHOR_SOURCES,
   CommitAuthorPreferenceSchema,
   CommitAuthorSchema,
-  RepositoryCommitAuthorSchema
+  defaultCommitAuthorName,
+  RepositoryCommitAuthorSchema,
+  StoredCommitAuthorSchema
 } from './commit-author.schema';
 
-const codeOf = (result: z.SafeParseReturnType<unknown, unknown>, path: string) => {
+const codeOf = (result: z.ZodSafeParseResult<unknown>, path: string) => {
   if (result.success) {
     return null;
   }
@@ -99,6 +101,20 @@ describe('CommitAuthorSchema', () => {
     expect(codeOf(resEmail, 'email')).toBe('email-too-long');
   });
 
+  it('refuses control characters and a name git would refuse', () => {
+    expect(codeOf(CommitAuthorSchema.safeParse({ name: 'A\u0000B', email: 'a@b' }), 'name')).toBe('name-invalid');
+    expect(codeOf(CommitAuthorSchema.safeParse({ name: ',;:', email: 'a@b' }), 'name')).toBe('name-invalid');
+    expect(codeOf(CommitAuthorSchema.safeParse({ name: 'Alice', email: 'a\u0000@b' }), 'email')).toBe('email-invalid');
+    expect(CommitAuthorSchema.safeParse({ name: 'O\'Neil, Jr.', email: 'a@b' }).success).toBe(true);
+    expect(CommitAuthorSchema.safeParse({ name: '...', email: 'a@b' }).success).toBe(true);
+  });
+
+  it('gives a missing field the required code', () => {
+    const result = CommitAuthorSchema.safeParse({});
+    expect(codeOf(result, 'name')).toBe('name-required');
+    expect(codeOf(result, 'email')).toBe('email-required');
+  });
+
   it('trims the name', () => {
     expect(CommitAuthorSchema.parse({ name: '  Alice  ', email: 'alice@example.com' })).toEqual({
       name: 'Alice',
@@ -121,12 +137,46 @@ describe('CommitAuthorPreferenceSchema and RepositoryCommitAuthorSchema', () => 
   });
 });
 
+describe('stored authors', () => {
+  it('reads a stored author that breaks CA-10', () => {
+    const pref = { author: { name: 'Carol <Ops>', email: 'not an email' }, confirmed: false };
+    expect(CommitAuthorPreferenceSchema.parse(pref)).toEqual(pref);
+    expect(RepositoryCommitAuthorSchema.parse({ ...pref, source: 'default' }).author).toEqual(pref.author);
+  });
+});
+
+describe('defaultCommitAuthorName', () => {
+  it('keeps a valid display name', () => {
+    expect(defaultCommitAuthorName('Ann Lee', 'ann@x.io')).toBe('Ann Lee');
+  });
+
+  it('leaves out what CA-10 refuses and cuts the length', () => {
+    expect(defaultCommitAuthorName('Carol <Ops>', 'c@x.io')).toBe('Carol Ops');
+    expect(defaultCommitAuthorName('Carol\nOps\u0000', 'c@x.io')).toBe('Carol Ops');
+    expect(defaultCommitAuthorName('a'.repeat(300), 'c@x.io')).toBe('a'.repeat(255));
+  });
+
+  it('every result of a usable name passes CA-10', () => {
+    for (const name of [ 'Carol <Ops>', 'x\ny', ` ${'b'.repeat(300)} ` ]) {
+      const result = defaultCommitAuthorName(name, 'c@x.io');
+      expect(CommitAuthorSchema.safeParse({ name: result, email: 'c@x.io' }).success).toBe(true);
+    }
+  });
+
+  it('falls back to the email\'s local part, then the email', () => {
+    expect(defaultCommitAuthorName('<>', 'carol@x.io')).toBe('carol');
+    expect(defaultCommitAuthorName(',;:', 'carol@x.io')).toBe('carol');
+    expect(defaultCommitAuthorName('<>', ';;@x.io')).toBe(';;@x.io');
+  });
+});
+
 describe('registry and constants', () => {
   it.each(
     [
       [ CommitAuthorSchema, 'CommitAuthor' ],
       [ CommitAuthorPreferenceSchema, 'CommitAuthorPreference' ],
-      [ RepositoryCommitAuthorSchema, 'RepositoryCommitAuthor' ]
+      [ RepositoryCommitAuthorSchema, 'RepositoryCommitAuthor' ],
+      [ StoredCommitAuthorSchema, 'StoredCommitAuthor' ]
     ] as const
   )('registers %p', (schema, id) => {
     expect(z.globalRegistry.get(schema as z.ZodType)?.id).toBe(id);

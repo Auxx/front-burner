@@ -88,9 +88,14 @@ level's automatic commits. Commits are not signed.
   - **email**: the user's email address (the username of a password user, the
     email from the ID token for an OIDC user).
 
-  These are copied into the user preferences when the account is created. Later
-  changes to the account's display name or email do not change the default
-  commit author once it has been confirmed (CA-12) or edited. _(My call.)_
+  These are copied into the user preferences when the account is created. A
+  display name can break CA-10, so the copy leaves out `<`, `>` and line breaks
+  and control characters, and is cut to 255 characters; if nothing usable is
+  left, the name is the part of the email before `@`. An email is copied as it
+  is. A default that still breaks CA-10 can be read and changed, but not
+  confirmed (CA-12). Later changes to the account's display name or email do not
+  change the default commit author once it has been confirmed (CA-12) or edited.
+  _(My call.)_
 - **CA-8** A repository has no override until the user sets one. Removing the
   override makes the repository use the default commit author again.
 
@@ -109,11 +114,13 @@ level's automatic commits. Commits are not signed.
     call.)_
 - **CA-10** A name and an email are both required. The backend refuses, with the
   reason shown next to the field:
-  - a name that is empty after trimming spaces, longer than 255 characters, or
-    that contains `<`, `>` or a line break;
+  - a name that is empty after trimming spaces, longer than 255 characters, that
+    contains `<`, `>`, a line break or another control character, or that has
+    only the characters git refuses as a whole name (`,`, `:`, `;`, `"`, `'`,
+    `\`);
   - an email that is empty, longer than 254 characters, contains `<`, `>`,
-    spaces or a line break, or does not have the form `local@domain` with
-    something on both sides of a single `@`.
+    spaces, a line break or another control character, or does not have the form
+    `local@domain` with something on both sides of a single `@`.
 
   Any domain is allowed, including ones without a dot (internal servers) and
   providers' noreply addresses. _(My call: git accepts almost anything; these
@@ -136,7 +143,8 @@ level's automatic commits. Commits are not signed.
 
   Cancelling cancels the commit. Once confirmed, the question is not asked
   again, in any repository. Editing the default commit author on the Preferences
-  page also counts as confirming it. _(My call.)_
+  page also counts as confirming it. The backend refuses to confirm a default
+  that breaks CA-10, with the reason next to the field. _(My call.)_
 - **CA-13** The confirmation applies to the user, not to a repository or a
   device, and is stored by the backend. The backend refuses a commit, with an
   error code, while the user has not confirmed, so that every client asks

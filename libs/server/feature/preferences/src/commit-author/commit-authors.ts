@@ -1,9 +1,28 @@
-import { DATABASE, Database, repositories, userPreferences } from '@front-burner/server-core-database';
+import {
+  DATABASE,
+  Database,
+  repositories,
+  type UserPreferences,
+  userPreferences
+} from '@front-burner/server-core-database';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { RepositoryQueries } from '@front-burner/server-feature-repositories';
-import type { CommitAuthor, CommitAuthorPreference, RepositoryCommitAuthor } from '@front-burner/shared-contracts';
+import {
+  type CommitAuthor,
+  type CommitAuthorPreference,
+  CommitAuthorSchema,
+  type RepositoryCommitAuthor
+} from '@front-burner/shared-contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
+import { ZodValidationException } from 'nestjs-zod';
+
+function toPreference(row: UserPreferences): CommitAuthorPreference {
+  return {
+    author: { name: row.commitAuthorName, email: row.commitAuthorEmail },
+    confirmed: row.commitAuthorConfirmed
+  };
+}
 
 /**
  * Manages user-level default commit authors and repository-level overrides
@@ -18,14 +37,7 @@ export class CommitAuthors {
 
   /** The default commit author and its confirmation state (CA-7, CA-12, CA-13). */
   preference(userId: number): CommitAuthorPreference {
-    const pref = this.loadPreferences(userId);
-    return {
-      author: {
-        name: pref.commitAuthorName,
-        email: pref.commitAuthorEmail
-      },
-      confirmed: Boolean(pref.commitAuthorConfirmed)
-    };
+    return toPreference(this.loadPreferences(userId));
   }
 
   /**
@@ -45,24 +57,24 @@ export class CommitAuthors {
     if (updated === undefined) {
       throw new ApiErrorException(404, 'not-found');
     }
-    return {
-      author: {
-        name: updated.commitAuthorName,
-        email: updated.commitAuthorEmail
-      },
-      confirmed: Boolean(updated.commitAuthorConfirmed)
-    };
+    return toPreference(updated);
   }
 
-  /** Confirms the default commit author before first commit (CA-12, CA-13). */
+  /**
+   * Confirms the default commit author before first commit (CA-12, CA-13). A
+   * default that breaks CA-10 is refused next to its field, as it could not be
+   * used for a commit; the user has to change it first.
+   */
   confirm(userId: number): void {
-    const updated = this.database.db.update(userPreferences)
+    const { author } = this.preference(userId);
+    const checked = CommitAuthorSchema.safeParse(author);
+    if (!checked.success) {
+      throw new ZodValidationException(checked.error);
+    }
+    this.database.db.update(userPreferences)
       .set({ commitAuthorConfirmed: true })
       .where(eq(userPreferences.userId, userId))
       .run();
-    if (updated.changes === 0) {
-      throw new ApiErrorException(404, 'not-found');
-    }
   }
 
   /**
@@ -74,25 +86,15 @@ export class CommitAuthors {
     if (repo === undefined) {
       throw new ApiErrorException(404, 'not-found');
     }
-    const pref = this.loadPreferences(userId);
+    const { author, confirmed } = this.preference(userId);
     if (repo.commitAuthorName !== null && repo.commitAuthorEmail !== null) {
       return {
-        author: {
-          name: repo.commitAuthorName,
-          email: repo.commitAuthorEmail
-        },
+        author: { name: repo.commitAuthorName, email: repo.commitAuthorEmail },
         source: 'override',
-        confirmed: Boolean(pref.commitAuthorConfirmed)
+        confirmed
       };
     }
-    return {
-      author: {
-        name: pref.commitAuthorName,
-        email: pref.commitAuthorEmail
-      },
-      source: 'default',
-      confirmed: Boolean(pref.commitAuthorConfirmed)
-    };
+    return { author, source: 'default', confirmed };
   }
 
   /**
@@ -100,55 +102,31 @@ export class CommitAuthors {
    * confirmed (CA-12).
    */
   setOverride(userId: number, repositoryId: number, author: CommitAuthor): RepositoryCommitAuthor {
-    const repo = this.repositoryQueries.find(userId, repositoryId);
-    if (repo === undefined) {
-      throw new ApiErrorException(404, 'not-found');
-    }
-    this.database.db.update(repositories)
-      .set({
-        commitAuthorName: author.name,
-        commitAuthorEmail: author.email
-      })
-      .where(and(eq(repositories.id, repositoryId), eq(repositories.userId, userId)))
-      .run();
-    const pref = this.loadPreferences(userId);
-    return {
-      author: {
-        name: author.name,
-        email: author.email
-      },
-      source: 'override',
-      confirmed: Boolean(pref.commitAuthorConfirmed)
-    };
+    return this.writeOverride(userId, repositoryId, author.name, author.email);
   }
 
-  /**
-   * Clears a repository override, reverting to the default author (CA-8, CA-9).
-   */
+  /** Clears a repository override, reverting to the default author (CA-8, CA-9). */
   removeOverride(userId: number, repositoryId: number): RepositoryCommitAuthor {
-    const repo = this.repositoryQueries.find(userId, repositoryId);
-    if (repo === undefined) {
-      throw new ApiErrorException(404, 'not-found');
-    }
-    this.database.db.update(repositories)
-      .set({
-        commitAuthorName: null,
-        commitAuthorEmail: null
-      })
-      .where(and(eq(repositories.id, repositoryId), eq(repositories.userId, userId)))
-      .run();
-    const pref = this.loadPreferences(userId);
-    return {
-      author: {
-        name: pref.commitAuthorName,
-        email: pref.commitAuthorEmail
-      },
-      source: 'default',
-      confirmed: Boolean(pref.commitAuthorConfirmed)
-    };
+    return this.writeOverride(userId, repositoryId, null, null);
   }
 
-  private loadPreferences(userId: number) {
+  private writeOverride(
+    userId: number,
+    repositoryId: number,
+    commitAuthorName: string | null,
+    commitAuthorEmail: string | null
+  ): RepositoryCommitAuthor {
+    const updated = this.database.db.update(repositories)
+      .set({ commitAuthorName, commitAuthorEmail })
+      .where(and(eq(repositories.id, repositoryId), eq(repositories.userId, userId)))
+      .run();
+    if (updated.changes === 0) {
+      throw new ApiErrorException(404, 'not-found');
+    }
+    return this.forRepository(userId, repositoryId);
+  }
+
+  private loadPreferences(userId: number): UserPreferences {
     const pref = this.database.db.select().from(userPreferences)
       .where(eq(userPreferences.userId, userId))
       .get();

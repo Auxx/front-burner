@@ -46,6 +46,9 @@ CA-12's storage, CA-13's storage; criteria 1, 11; the API half of 7 and 12);
   next name in CA-7's order, never an empty one → Task 2 test `AC-GIT-001.1`.
 - **Another user's repository ID on the override endpoints** is answered like a
   missing one → Task 3 test `AC-GIT-001.11`.
+- **An account name that breaks CA-10** (`Carol <Ops>`) must not make the reads
+  fail → Task 3 test `reads a stored default that breaks CA-10`; it is cleaned
+  when copied, and a default that is still bad cannot be confirmed.
 
 ---
 

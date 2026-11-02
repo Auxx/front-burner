@@ -1,24 +1,12 @@
-import '@front-burner/server-core-security';
-import type { RequestAuth } from '@front-burner/server-core-security';
+import { authOf } from '@front-burner/server-core-security';
+import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
 import type { CommitAuthorPreference, RepositoryCommitAuthor } from '@front-burner/shared-contracts';
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Req } from '@nestjs/common';
 import { ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
-import {
-  CommitAuthorDto,
-  CommitAuthorPreferenceDto,
-  RepositoryCommitAuthorDto,
-  RepositoryParamsDto
-} from './commit-author.dto';
+import { CommitAuthorDto, CommitAuthorPreferenceDto, RepositoryCommitAuthorDto } from './commit-author.dto';
 import { CommitAuthors } from './commit-authors';
-
-function authOf(req: Request): RequestAuth {
-  if (req.auth === undefined) {
-    throw new Error('CommitAuthorController reached without req.auth');
-  }
-  return req.auth;
-}
 
 @ApiTags('preferences')
 @Controller()

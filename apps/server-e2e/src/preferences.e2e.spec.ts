@@ -61,7 +61,7 @@ describe('preferences API (REQ-GIT-001)', () => {
       headers: authorized(authToken)
     });
     expect(afterConfirmRes.status).toBe(200);
-    expect((await afterConfirmRes.json()).confirmed).toBe(true);
+    expect(((await afterConfirmRes.json()) as { confirmed: boolean; }).confirmed).toBe(true);
 
     // 3. Update default author
     const putRes = await fetch(`${server.url}/api/v1/preferences/commit-author`, {
@@ -114,7 +114,7 @@ describe('preferences API (REQ-GIT-001)', () => {
       headers: authorized(adminToken)
     });
     expect(repoPrefRes.status).toBe(200);
-    expect((await repoPrefRes.json()).source).toBe('default');
+    expect(((await repoPrefRes.json()) as { source: string; }).source).toBe('default');
 
     // 2. Admin sets override on own repo
     const overrideRes = await fetch(`${server.url}/api/v1/repositories/${adminRepoId}/commit-author`, {
@@ -141,7 +141,7 @@ describe('preferences API (REQ-GIT-001)', () => {
       headers: authorized(adminToken)
     });
     expect(deleteRes.status).toBe(200);
-    expect((await deleteRes.json()).source).toBe('default');
+    expect(((await deleteRes.json()) as { source: string; }).source).toBe('default');
 
     // 4. Isolation: Admin cannot access Bob's repo commit author
     const crossRes = await fetch(`${server.url}/api/v1/repositories/${bobRepoId}/commit-author`, {

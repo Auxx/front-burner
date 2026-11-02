@@ -4,6 +4,7 @@ import {
   instanceState,
   NewUser,
   systemSettings,
+  type User,
   userPreferences,
   users
 } from '@front-burner/server-core-database';
@@ -177,6 +178,33 @@ describe('OidcUserService', () => {
   it('refuses a password user\'s email', () => {
     const user = addUser({ email: 'ada@example.com', loginMethod: 'password', passwordHash: 'x' });
     expect(service.resolve(identity, settings)).toEqual({ ok: false, reason: 'password-user', userId: user.id });
+  });
+
+  it('refuses an unknown email without automatic registration and creates it with', () => {
+    expect(service.resolve(identity, settings)).toEqual({ ok: false, reason: 'registration-disabled' });
+    expect(userCount()).toBe(0);
+
+    setAutomaticRegistration(true);
+    const result = service.resolve(identity, settings);
+    expect(result).toEqual({
+      ok: true,
+      completedOnboarding: false,
+      user: expect.objectContaining({
+        email: 'Ada@Example.com',
+        displayName: 'Ada Admin',
+        role: 'user',
+        loginMethod: 'oidc',
+        oidcIssuer: ISSUER,
+        oidcSubject: 'subject-1'
+      })
+    });
+  });
+
+  it('cleans a name claim that breaks CA-10 for the default commit author only', () => {
+    setAutomaticRegistration(true);
+    const result = service.resolve({ ...identity, name: 'Ada <Ops>' }, settings);
+    expect(result).toMatchObject({ ok: true, user: { displayName: 'Ada <Ops>' } });
+    expect(database.db.select().from(userPreferences).get()?.commitAuthorName).toBe('Ada Ops');
   });
 
   it('AC-GIT-001.1: a new OIDC user\'s is the name claim, then preferred_username, then the email\'s local part', () => {

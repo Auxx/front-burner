@@ -1,9 +1,10 @@
+import { defaultCommitAuthorName } from '@front-burner/shared-contracts';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import type { Tx } from '../database/open-database';
+import type { Database, Tx } from '../database/open-database';
 import { users } from './users';
 
 /**
- * User-level preferences (A-4.4, REQ-REPO-007).
+ * User-level preferences (A-4.4, REQ-GIT-001).
  *
  * Each user has one row, created in the same transaction as the account.
  */
@@ -25,12 +26,12 @@ export type NewUserPreferences = typeof userPreferences.$inferInsert;
  * Inserts the default preferences for a newly created user (CA-7).
  */
 export function insertUserPreferences(
-  tx: Tx,
+  tx: Tx | Database['db'],
   user: { id: number; displayName: string; email: string; }
 ): void {
   tx.insert(userPreferences).values({
     userId: user.id,
-    commitAuthorName: user.displayName,
+    commitAuthorName: defaultCommitAuthorName(user.displayName, user.email),
     commitAuthorEmail: user.email,
     commitAuthorConfirmed: false
   }).run();

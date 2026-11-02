@@ -1971,7 +1971,7 @@
           "cloneMode"
         ]
       },
-      "CommitAuthor": {
+      "StoredCommitAuthor": {
         "type": "object",
         "properties": {
           "name": {
@@ -1990,7 +1990,7 @@
         "type": "object",
         "properties": {
           "author": {
-            "$ref": "#/components/schemas/CommitAuthor"
+            "$ref": "#/components/schemas/StoredCommitAuthor"
           },
           "confirmed": {
             "type": "boolean"
@@ -2001,11 +2001,28 @@
           "confirmed"
         ]
       },
+      "CommitAuthor": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "default": "",
+            "type": "string"
+          },
+          "email": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ]
+      },
       "RepositoryCommitAuthor": {
         "type": "object",
         "properties": {
           "author": {
-            "$ref": "#/components/schemas/CommitAuthor"
+            "$ref": "#/components/schemas/StoredCommitAuthor"
           },
           "source": {
             "type": "string",

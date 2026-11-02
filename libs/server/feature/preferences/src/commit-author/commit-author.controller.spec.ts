@@ -5,6 +5,7 @@ import {
   DatabaseModule,
   insertUserPreferences,
   repositories,
+  userPreferences,
   users
 } from '@front-burner/server-core-database';
 import { EventsModule } from '@front-burner/server-core-events';
@@ -17,6 +18,7 @@ import { RepositoriesModule } from '@front-burner/server-feature-repositories';
 import { CanActivate, ExecutionContext, INestApplication, Injectable } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
+import { eq } from 'drizzle-orm';
 import type { NextFunction, Request, Response } from 'express';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import request from 'supertest';
@@ -163,10 +165,72 @@ describe('CommitAuthorController', () => {
     expect(res.body.code).toBe('validation-failed');
     expect(res.body.fields).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'name' }),
-        expect.objectContaining({ path: 'email' })
+        expect.objectContaining({ path: 'name', code: 'name-invalid' }),
+        expect.objectContaining({ path: 'email', code: 'email-invalid' })
       ])
     );
+  });
+
+  it('answers a missing field with its required code', async () => {
+    const res = await http()
+      .put('/api/v1/preferences/commit-author')
+      .set('x-test-user', String(aliceId))
+      .send({})
+      .expect(400);
+
+    expect(res.body.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'name', code: 'name-required' }),
+        expect.objectContaining({ path: 'email', code: 'email-required' })
+      ])
+    );
+  });
+
+  describe('a stored default that breaks CA-10', () => {
+    const bad = { name: 'Carol <Ops>', email: 'not an email' };
+
+    beforeEach(() => {
+      database.db.update(userPreferences)
+        .set({ commitAuthorName: bad.name, commitAuthorEmail: bad.email })
+        .where(eq(userPreferences.userId, aliceId))
+        .run();
+    });
+
+    it('reads a stored default that breaks CA-10', async () => {
+      const user = String(aliceId);
+      const preference = await http().get('/api/v1/preferences/commit-author').set('x-test-user', user).expect(200);
+      expect(preference.body).toEqual({ author: bad, confirmed: false });
+
+      const url = `/api/v1/repositories/${aliceRepoId}/commit-author`;
+      const repository = await http().get(url).set('x-test-user', user).expect(200);
+      expect(repository.body).toEqual({ author: bad, source: 'default', confirmed: false });
+
+      const removed = await http().delete(url).set('x-test-user', user).expect(200);
+      expect(removed.body).toEqual({ author: bad, source: 'default', confirmed: false });
+    });
+
+    it('refuses to confirm it, next to the fields, until it is changed', async () => {
+      const user = String(aliceId);
+      const refused = await http().post('/api/v1/preferences/commit-author/confirm').set('x-test-user', user).expect(
+        400
+      );
+      expect(refused.body.code).toBe('validation-failed');
+      expect(refused.body.fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: 'name', code: 'name-invalid' }),
+          expect.objectContaining({ path: 'email', code: 'email-invalid' })
+        ])
+      );
+      const after = await http().get('/api/v1/preferences/commit-author').set('x-test-user', user).expect(200);
+      expect(after.body.confirmed).toBe(false);
+
+      await http()
+        .put('/api/v1/preferences/commit-author')
+        .set('x-test-user', user)
+        .send({ name: 'Carol', email: 'carol@example.com' })
+        .expect(200);
+      await http().post('/api/v1/preferences/commit-author/confirm').set('x-test-user', user).expect(204);
+    });
   });
 
   it('AC-GIT-001.11: another user can neither read nor change a commit author', async () => {
