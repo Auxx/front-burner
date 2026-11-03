@@ -310,9 +310,11 @@ this section in the same change, without being asked:
   `docs/wiki/typing-test.md`) found typing in large files too slow for NF-2.4,
   because of syntax highlighting. Files over 100 KB therefore open without
   highlighting on narrow screens, with a button that turns it on (ED-9a).
-- **Large repositories.** Spike 4 (git at 100,000 files, A-5.14) is still to do.
-  The file browser's lazy loading and the status call are the parts most at
-  risk.
+- **Large repositories.** Spike 4 (A-5.14) found status at 100,000 files fast
+  enough without any git setting: about 100 ms warm and 1.4 s with a cold cache,
+  on a machine that stands in for the reference host, so the release checks
+  repeat it. After a restore, status could take longer than its 10 s timeout, so
+  recovery on start refreshes each index (A-5.15, NF-9.4).
 
 ## Open questions
 

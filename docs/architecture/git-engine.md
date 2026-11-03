@@ -244,14 +244,23 @@ Confirmed by spike 2 (spikes.md).
   git's garbage collection keeps it while it may be needed. _(My call.)_
 - **A-5.13** Clones are made in `tmp/` and moved into place with one rename when
   they succeed (NF-5.3).
-- **A-5.14** Status at 100,000 files (NF-1.4) may need git's
-  `core.untrackedCache` or `core.fsmonitor`, or limiting status to the paths
-  that changed. It also sets how often **Changes** can refresh after saves
-  (GA-12). **Pending spike 4.**
+- **A-5.14** Status at 100,000 files (NF-1.4) needs no git setting: about 100 ms
+  warm and 1.4 s with a cold cache (spike 4, not yet on the reference host).
+  `core.untrackedCache` gains nothing, and `core.fsmonitor` is not supported by
+  the git of the image. **Changes** reads status again 2,000 ms after the last
+  `files.changed` (`STATUS_REFRESH_MS`, GA-12).
+  - A stale index, as after a restore (NF-6.5), makes every status hash every
+    file, 14 s with a cold cache, past `LOCAL_TIMEOUT_MS`, until something
+    writes the index. Recovery therefore refreshes the index (A-5.15).
 
 ## A-5: Recovery
 
 - **A-5.15** On start, each working copy is checked and returned to a known
   state as NF-9.4 and NF-9.5 describe: stale `index.lock` files removed, an
   interrupted automatic merge aborted, an interrupted user merge reset to the
-  recorded commit, a merge or rebase waiting for resolution left alone.
+  recorded commit, a merge or rebase waiting for resolution left alone. Each
+  index is then refreshed with `git update-index -q --refresh`, under
+  `FRONT_BURNER_GIT_TIMEOUT`, as it can take as long as hashing every file. It
+  costs about one status when nothing is stale. A refresh that fails is logged
+  and does not stop the start, since status still works, only slowly. _(My
+  call.)_
