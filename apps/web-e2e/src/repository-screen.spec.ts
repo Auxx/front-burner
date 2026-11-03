@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -21,6 +21,9 @@ const ADMIN_ID = 1;
 const heading = (page: Page, name: string) => page.getByRole('heading', { name, exact: true });
 const filesButton = (page: Page) =>
   page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files', exact: true });
+const changesButton = (page: Page, name: string | RegExp = /^Changes/) =>
+  page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name });
+const changesPane = (page: Page) => page.getByRole('region', { name: 'Changes', exact: true });
 const tree = (page: Page) => page.getByRole('region', { name: 'Files', exact: true });
 const editor = (page: Page) => page.getByRole('main', { name: 'Editor' });
 /** The editor, labelled with the open file's name (ED-37). */
@@ -155,6 +158,17 @@ async function pointAt(target: Locator, isMobile: boolean): Promise<void> {
 function fitsWidth(page: Page): Promise<boolean> {
   return page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 }
+
+/** Shows **Changes**: beside the editor on wide screens, and a drawer on phones (GA-10). */
+async function showChanges(page: Page): Promise<void> {
+  if (await changesButton(page).getAttribute('aria-pressed') === 'false') {
+    await changesButton(page).click();
+  }
+  await expect(changesPane(page)).toBeVisible();
+}
+
+/** The working copy of a repository seeded for the administrator. */
+const workingCopyOf = (dataDir: string, id: number) => join(dataDir, 'repos', String(ADMIN_ID), String(id));
 
 test.describe('repository screen', () => {
   test('AC-FILE-001.1: opens a repository from the dashboard and moves it to the top', async ({ page, instance }) => {
@@ -915,6 +929,94 @@ test.describe('repository screen, kept up to date', () => {
     }
     // The editor's check of the file gone elsewhere (ED-21).
     drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/file/state`);
+  });
+
+  test('AC-GIT-002.2: lists two modified files and one deleted file, and not an ignored file', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    writeFileSync(join(dir, 'README.md'), '# Changed\n');
+    writeFileSync(join(dir, 'docs/guide.md'), '# Changed\n');
+    rmSync(join(dir, 'logo.png'));
+
+    await openScreen(page, `/repositories/${handbook}`);
+    await expect(changesButton(page, 'Changes (3)')).toBeVisible();
+    await showChanges(page);
+
+    const rows = changesPane(page).getByRole('listitem');
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(0)).toContainText('README.md');
+    await expect(rows.nth(0)).toContainText('Modified');
+    await expect(rows.nth(1)).toContainText('guide.md');
+    await expect(rows.nth(1)).toContainText('docs');
+    await expect(rows.nth(1)).toContainText('Modified');
+    await expect(rows.nth(2)).toContainText('logo.png');
+    await expect(rows.nth(2)).toContainText('Deleted');
+    // `debug.log` and `build/` are ignored, and differ from no commit.
+    await expect(changesPane(page).getByText('debug.log')).toHaveCount(0);
+    await expect(changesPane(page).getByText('site.html')).toHaveCount(0);
+  });
+
+  test('says No changes since the last commit, and has no axe violations with changes', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}`);
+    await showChanges(page);
+    await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
+    await expect(changesButton(page, 'Changes')).toBeVisible();
+    expect((await axe(page, isMobile).analyze()).violations).toEqual([]);
+
+    writeFileSync(join(workingCopyOf(instance.dataDir, handbook), 'new.md'), '# New\n');
+    await page.reload();
+    // This device remembers the tool window, but a phone starts with the drawer closed.
+    if (isMobile) {
+      await changesButton(page).click();
+    }
+    await expect(changesPane(page).getByRole('listitem')).toHaveCount(1);
+    expect((await axe(page, isMobile).analyze()).violations).toEqual([]);
+  });
+
+  test('updates after a save without a reload', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    await expect(editorOf(page, 'README.md')).toBeVisible();
+    await expect(changesButton(page, 'Changes')).toBeVisible();
+
+    await editorOf(page, 'README.md').click();
+    await page.keyboard.type('More. ');
+
+    await expect(changesButton(page, 'Changes (1)')).toBeVisible();
+    await showChanges(page);
+    await expect(changesPane(page).getByRole('listitem')).toContainText('README.md');
+    if (isMobile) {
+      await changesButton(page).click();
+      await expect(changesPane(page)).toBeHidden();
+    }
+  });
+
+  test('shortens a long path without scrolling sideways, with the whole path available', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const folder = 'a-rather-long-folder-name/'.repeat(6);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    mkdirSync(join(dir, folder), { recursive: true });
+    writeFileSync(join(dir, folder, 'a-file-with-a-rather-long-name-of-its-own.md'), '# Long\n');
+    await page.setViewportSize({ width: 320, height: 640 });
+
+    await openScreen(page, `/repositories/${handbook}`);
+    // On this width the pane is a drawer, on any device.
+    await showChanges(page);
+    const row = changesPane(page).getByRole('listitem');
+    await expect(row).toHaveCount(1);
+    expect(await fitsWidth(page)).toBe(true);
+    const name = row.locator('.name');
+    expect(await name.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+
+    // The drawer has the focus now, so the next tab stop is the entry.
+    if (isMobile) {
+      await pointAt(row.getByRole('button'), isMobile);
+    } else {
+      await page.keyboard.press('Tab');
+      await expect(row.getByRole('button')).toBeFocused();
+    }
+    await expect(tooltip(page)).toContainText(`${folder}a-file-with-a-rather-long-name-of-its-own.md`);
   });
 
   test.describe('with a git server', () => {

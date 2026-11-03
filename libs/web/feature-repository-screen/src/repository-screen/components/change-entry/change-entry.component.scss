@@ -1,0 +1,76 @@
+// One row of a virtual list: `ChangesPaneComponent` scrolls by this height. The
+// list's content wrapper is as wide as its widest row, so a row's width must not
+// depend on its text, or a long path would push the state out of view.
+:host {
+  display: block;
+  block-size: 3rem;
+  contain: inline-size;
+}
+
+.entry {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  inline-size: 100%;
+  block-size: 100%;
+  padding-inline: var(--ui-space-2);
+  background: none;
+  color: var(--ui-text-default);
+  font: inherit;
+  font-size: var(--ui-font-size-ui-small);
+  text-align: start;
+  border: 0;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--ui-surface-hover);
+  }
+
+  &:focus-visible {
+    outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
+    outline-offset: calc(-1 * var(--ui-focus-ring-width));
+  }
+
+  // An accent bar as well, not only another colour.
+  &[aria-current='true'] {
+    background: var(--ui-selected-active);
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset-block: var(--ui-space-1);
+      inset-inline-start: 0;
+      inline-size: var(--ui-focus-ring-width);
+      background: var(--ui-accent-indicator);
+      forced-color-adjust: none;
+    }
+  }
+}
+
+.path {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.name,
+.folder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder {
+  color: var(--ui-text-muted);
+}
+
+.state {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--ui-space-1);
+  color: var(--ui-text-muted);
+}

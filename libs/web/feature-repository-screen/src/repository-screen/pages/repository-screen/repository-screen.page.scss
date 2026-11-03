@@ -9,6 +9,27 @@
   min-block-size: 100dvh;
 }
 
+// The count of the Changes item (GA-10), which on a phone has no tooltip to say
+// it. Generated content: the item's name says the exact count, so "99+" is not
+// part of its name.
+.change-count::before {
+  content: attr(data-count);
+}
+
+.change-count {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  padding-inline: var(--ui-space-0-5);
+  background: var(--ui-surface-sunken);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-ui-small);
+  font-weight: var(--ui-font-weight-medium);
+  line-height: 1;
+  border: var(--ui-border-width) solid var(--ui-border-default);
+  border-radius: var(--ui-radius-pill);
+}
+
 .reference {
   display: block;
 }

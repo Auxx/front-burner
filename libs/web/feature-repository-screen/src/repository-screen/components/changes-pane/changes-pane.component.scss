@@ -1,0 +1,22 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.failed {
+  flex: none;
+  margin: var(--ui-space-2);
+}
+
+.loading {
+  display: grid;
+  flex: 1;
+  place-items: center;
+}
+
+.list {
+  flex: 1;
+  min-block-size: 0;
+}
