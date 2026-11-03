@@ -9,6 +9,33 @@
   min-block-size: 100dvh;
 }
 
+// The count of the Changes item (GA-10), which on a phone has no tooltip to say
+// it. Generated content, not text: axe's label-content-name-mismatch refuses text
+// in a button that its accessible name does not repeat, even with `aria-hidden`.
+.change-count::before {
+  content: attr(data-count);
+}
+
+.change-count {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  padding-inline: var(--ui-space-0-5);
+  background: var(--ui-surface-sunken);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-ui-small);
+  font-weight: var(--ui-font-weight-medium);
+  line-height: 1;
+  border: var(--ui-border-width) solid var(--ui-border-default);
+  border-radius: var(--ui-radius-pill);
+}
+
+// Their hosts set `display`, which would beat the browser's rule for `hidden`.
+rs-file-tree[hidden],
+rs-changes-pane[hidden] {
+  display: none;
+}
+
 .reference {
   display: block;
 }

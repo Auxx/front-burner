@@ -57,6 +57,23 @@ describe('PaneMemoryService', () => {
     expect(second.sideOpen()).toBe(false);
   });
 
+  it('remembers the selected tool window', () => {
+    const first = create();
+    expect(first.sideTool()).toBe('files');
+
+    first.sideTool.set('changes');
+    TestBed.tick();
+    expect(localStorage.getItem('fb.4.sideTool')).toBe('changes');
+
+    expect(create().sideTool()).toBe('changes');
+  });
+
+  it('ignores a tool window it does not know', () => {
+    localStorage.setItem('fb.4.sideTool', 'terminal');
+
+    expect(create().sideTool()).toBe('files');
+  });
+
   it('keeps each user\'s memory apart', () => {
     localStorage.setItem('fb.5.repositoryScreen.sideSize', '50');
 

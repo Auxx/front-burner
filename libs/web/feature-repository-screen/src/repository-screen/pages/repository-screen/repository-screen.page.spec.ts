@@ -2,17 +2,20 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type {
   CurrentUser,
   FileContent,
   FolderListing,
+  GitChange,
+  GitStatus,
   PushEvent,
   RepositorySummary
 } from '@front-burner/shared-contracts';
 import { ToastService } from '@front-burner/ui';
-import { FilesApi, RepositoriesApi } from '@front-burner/web-api-client';
+import { FilesApi, GitApi, RepositoriesApi } from '@front-burner/web-api-client';
 import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { BehaviorSubject, map, Observable, of, Subject, throwError } from 'rxjs';
@@ -24,7 +27,9 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
 import { routes } from '../../repository-screen.routes';
+import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
+import { RepositoryScreenPage } from './repository-screen.page';
 
 const KEY = 'web-feature-repository-screen.RepositoryScreenPage';
 
@@ -73,6 +78,10 @@ describe('RepositoryScreenPage', () => {
   let drafts: MemoryDraftStore;
   /** The files `fileState` does not find. */
   let gone: Set<string>;
+  /** What `GitApi.gitStatus` answers. */
+  let changes: GitChange[];
+  /** In place of `changes`, such as a failure. */
+  let gitStatusAnswer: Observable<GitStatus> | undefined;
 
   const page = () => harness.fixture.nativeElement as HTMLElement;
   const button = (text: string) =>
@@ -85,6 +94,21 @@ describe('RepositoryScreenPage', () => {
       providers: [
         provideRouter([ { path: 'repositories/:id', children: routes } ]),
         { provide: RepositoriesApi, useValue: { open } },
+        {
+          provide: GitApi,
+          useValue: {
+            gitStatus: (): Observable<GitStatus> =>
+              gitStatusAnswer ?? of({
+                branch: 'main',
+                noCommits: false,
+                upstream: null,
+                ahead: 0,
+                behind: 0,
+                changes,
+                mergeInProgress: false
+              })
+          }
+        },
         {
           provide: FilesApi,
           useValue: {
@@ -153,6 +177,8 @@ describe('RepositoryScreenPage', () => {
     createEntry = vi.fn((_id: number, request: { name: string; }) => of({ path: `${request.name}.md` }));
     readFile = vi.fn((path: string) => of(fileContent(path)));
     gone = new Set();
+    changes = [];
+    gitStatusAnswer = undefined;
     saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
     recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
     document.title = '';
@@ -659,12 +685,169 @@ describe('RepositoryScreenPage', () => {
       expect(side).not.toBe(editor);
     });
 
+    describe('Changes', () => {
+      const changesItem = () =>
+        page().querySelector('ui-activity-bar button[uiActivityBarItem="changes"]') as HTMLButtonElement;
+      /** Which tool window is shown; the other one stays in place, hidden. */
+      const shownOnly = () => {
+        const treeHidden = (page().querySelector('rs-file-tree') as HTMLElement).hidden;
+        const paneHidden = (page().querySelector('rs-changes-pane') as HTMLElement).hidden;
+        expect(treeHidden).not.toBe(paneHidden);
+        return treeHidden ? 'changes' : 'files';
+      };
+      const THREE: GitChange[] = [
+        { path: 'README.md', state: 'modified' },
+        { path: 'docs/guide.md', state: 'modified' },
+        { path: 'logo.png', state: 'deleted' }
+      ];
+
+      it('AC-GIT-002.2: lists two modified files and one deleted file, and says Changes (3)', async () => {
+        changes = THREE;
+        localStorage.setItem('fb.4.sideTool', 'changes');
+        await visit('/repositories/12');
+
+        expect(changesItem().getAttribute('aria-label')).toBe(`${KEY}.changesCount`);
+        expect(changesItem().querySelector('.change-count')?.getAttribute('data-count')).toBe('3');
+        expect([ ...page().querySelectorAll('rs-change-entry .word') ].map(word => word.textContent)).toEqual([
+          'web-feature-repository-screen.ChangeEntryComponent.modified',
+          'web-feature-repository-screen.ChangeEntryComponent.modified',
+          'web-feature-repository-screen.ChangeEntryComponent.deleted'
+        ]);
+      });
+
+      it('says plain Changes when there are none', async () => {
+        await visit('/repositories/12');
+
+        expect(changesItem().getAttribute('aria-label')).toBe(`${KEY}.changes`);
+        expect(changesItem().querySelector('.change-count')).toBeNull();
+      });
+
+      it('shortens a very large count, which the label says in full', async () => {
+        changes = Array.from({ length: 120 }, (_, index) => ({ path: `f${index}.md`, state: 'added' as const }));
+        await visit('/repositories/12');
+
+        expect(changesItem().querySelector('.change-count')?.getAttribute('data-count')).toBe('99+');
+      });
+
+      it('switches between Files and Changes, and collapses with the selected one', async () => {
+        await visit('/repositories/12');
+        expect(shownOnly()).toBe('files');
+
+        changesItem().click();
+        await settle(harness.fixture);
+        expect(shownOnly()).toBe('changes');
+        expect(shown(tree())).toBe(true);
+        expect(tree().getAttribute('aria-label')).toBe(`${KEY}.changes`);
+        expect(changesItem().getAttribute('aria-pressed')).toBe('true');
+        expect(pressed()).toBe('false');
+        expect(localStorage.getItem('fb.4.sideTool')).toBe('changes');
+
+        changesItem().click();
+        await settle(harness.fixture);
+        expect(shown(tree())).toBe(false);
+        expect(changesItem().getAttribute('aria-pressed')).toBe('false');
+        expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('false');
+
+        files().click();
+        await settle(harness.fixture);
+        expect(shown(tree())).toBe(true);
+        expect(shownOnly()).toBe('files');
+        expect(pressed()).toBe('true');
+        expect(tree().getAttribute('aria-label')).toBe(`${KEY}.files`);
+      });
+
+      it('switches between Files and Changes in the drawer on narrow screens', async () => {
+        narrow = true;
+        await visit('/repositories/12');
+
+        changesItem().click();
+        await settle(harness.fixture);
+        expect(shown(tree())).toBe(true);
+        expect(shownOnly()).toBe('changes');
+        expect(changesItem().getAttribute('aria-pressed')).toBe('true');
+
+        files().click();
+        await settle(harness.fixture);
+        expect(shown(tree())).toBe(true);
+        expect(shownOnly()).toBe('files');
+        expect(pressed()).toBe('true');
+
+        files().click();
+        await settle(harness.fixture);
+        expect(shown(tree())).toBe(false);
+        expect(pressed()).toBe('false');
+        // The drawer does not collapse the pane of wide screens.
+        expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('true');
+      });
+
+      it('says so on the item when a read failed', async () => {
+        gitStatusAnswer = throwError(() => new HttpErrorResponse({ status: 500 }));
+        await visit('/repositories/12');
+
+        expect(changesItem().getAttribute('aria-label')).toBe(`${KEY}.changesFailed`);
+        expect(changesItem().querySelector('.change-count')?.getAttribute('data-count')).toBe('!');
+      });
+
+      it('goes to a selected change and closes the drawer', async () => {
+        changes = [ { path: 'docs/guide.md', state: 'modified' } ];
+        narrow = true;
+        await visit('/repositories/12');
+        changesItem().click();
+        await settle(harness.fixture);
+
+        (page().querySelector('rs-change-entry button') as HTMLButtonElement).click();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(TestBed.inject(Router).url).toBe('/repositories/12/files/docs/guide.md');
+        expect(shown(tree())).toBe(false);
+        expect(page().querySelector('rs-change-entry button[aria-current="true"]')).not.toBeNull();
+      });
+
+      it('meets a focus request of the tree while Changes is shown, not later', async () => {
+        await visit('/repositories/12');
+        changesItem().click();
+        await settle(harness.fixture);
+        const store = harness.fixture.debugElement.query(By.directive(RepositoryScreenPage)).injector
+          .get(FileTreeStoreService);
+
+        store.focusRequest.set('README.md');
+        await settle(harness.fixture);
+
+        expect(store.focusRequest()).toBeNull();
+      });
+
+      it('keeps the expanded folders when the tree comes back', async () => {
+        await visit('/repositories/12/files/docs/guide.md');
+
+        changesItem().click();
+        await settle(harness.fixture);
+        files().click();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        const names = [ ...page().querySelectorAll('rs-file-tree [role="treeitem"]') ].map(row => row.textContent);
+        expect(names.some(name => name?.includes('guide.md'))).toBe(true);
+      });
+
+      it('updates the count without a reload', async () => {
+        await visit('/repositories/12');
+        expect(changesItem().querySelector('.change-count')).toBeNull();
+
+        changes = THREE;
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+
+        expect(changesItem().querySelector('.change-count')?.getAttribute('data-count')).toBe('3');
+      });
+    });
+
     it('has one pressed Files item with a folder icon in the activity bar', async () => {
       await visit('/repositories/12');
 
       const bar = page().querySelector('ui-activity-bar') as HTMLElement;
       expect(bar.getAttribute('aria-label')).toBe(`${KEY}.toolWindows`);
-      expect(bar.querySelectorAll('button')).toHaveLength(1);
+      expect(bar.querySelectorAll('button')).toHaveLength(2);
       expect(files().getAttribute('aria-label')).toBe(`${KEY}.files`);
       expect(files().querySelector('ui-icon[name="folder"]')).not.toBeNull();
       expect(pressed()).toBe('true');

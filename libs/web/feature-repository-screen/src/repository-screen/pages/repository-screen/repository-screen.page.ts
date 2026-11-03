@@ -32,6 +32,7 @@ import { AppHeaderComponent, PageNotFoundPage, RouteAnnouncerComponent } from '@
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { map, take } from 'rxjs';
 
+import { ChangesPaneComponent } from '../../components/changes-pane/changes-pane.component';
 import { EditorAreaComponent } from '../../components/editor-area/editor-area.component';
 import { FileTreeComponent } from '../../components/file-tree/file-tree.component';
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
@@ -40,13 +41,17 @@ import { DiskChangesService } from '../../services/disk-changes/disk-changes.ser
 import { EntryCommandsService } from '../../services/entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../../services/first-file/first-file.service';
+import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
-import { PaneMemoryService } from '../../services/pane-memory/pane-memory.service';
+import { PaneMemoryService, type SideTool } from '../../services/pane-memory/pane-memory.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 import { fileName } from '../../utils/file-name/file-name';
+
+/** A larger count shows as `99+`; the item's accessible name says it in full. */
+const MAX_BADGE_COUNT = 99;
 
 /**
  * The repository screen (REQ-FILE-001) at `/repositories/<id>` and
@@ -73,6 +78,11 @@ import { fileName } from '../../utils/file-name/file-name';
  * again (ED-7, ED-20). `DiskChangesService` follows changes to the open file
  * on disk (ED-21, ED-24); a file opened again from its kept entry is checked
  * for them, since events about it were not followed while another was open.
+ * The activity bar switches the side pane between the file tree and **Changes**
+ * (GA-10), whose count and list come from `GitStatusStore`. Both stay in place
+ * while the other is shown, so that each keeps its scroll position and active
+ * row, and the tree still meets a focus request. Until the diff view exists,
+ * selecting a change goes to its path, like a tree selection.
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -91,6 +101,7 @@ import { fileName } from '../../utils/file-name/file-name';
     AppHeaderComponent,
     PageNotFoundPage,
     RouteAnnouncerComponent,
+    ChangesPaneComponent,
     EditorAreaComponent,
     FileTreeComponent,
     NotOpenableComponent,
@@ -106,6 +117,7 @@ import { fileName } from '../../utils/file-name/file-name';
     TreeSyncService,
     OpenFilesService,
     DiskChangesService,
+    GitStatusStore,
     // One per screen, so that switching files or tabs loads no image again (IM-10).
     ImageCache
   ],
@@ -125,18 +137,19 @@ export class RepositoryScreenPage {
   private readonly sync = inject(TreeSyncService);
   protected readonly openFiles = inject(OpenFilesService);
   private readonly diskChanges = inject(DiskChangesService);
+  protected readonly gitStatus = inject(GitStatusStore);
 
   protected readonly user = this.currentUser.user;
-  /** The file tree's size and whether it is collapsed, as this device last left them (FB-8). */
+  /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
   protected readonly panes = inject(PaneMemoryService);
-  /** Whether the file tree is open as the drawer of narrow screens (FB-9). */
+  /** Whether the side pane is open as the drawer of narrow screens (FB-9). */
   protected readonly drawerOpen = signal(false);
   /** The page's app shell, once there is one; it knows whether the layout is narrow. */
   private readonly shell = viewChild(AppShellComponent);
-  /** The activity bar's selected item: **Files** while the tree is shown, beside the editor or as the drawer (FB-7, FB-9). */
-  protected readonly filesSelected = computed(() => {
+  /** The activity bar's selected item: the tool window shown, beside the editor or as the drawer (FB-7, FB-9, GA-10). */
+  protected readonly sideTool = computed(() => {
     const narrow = this.shell()?.narrow() ?? false;
-    return (narrow ? this.drawerOpen() : this.panes.sideOpen()) ? 'files' : null;
+    return (narrow ? this.drawerOpen() : this.panes.sideOpen()) ? this.panes.sideTool() : null;
   });
   /**
    * The route's path, and whether the navigation to it closed the open file
@@ -149,10 +162,21 @@ export class RepositoryScreenPage {
     }))),
     { requireSync: true }
   );
+  /** What the count of the **Changes** item shows, if anything; `!` when the last read failed. */
+  protected readonly changesBadge = computed(() => {
+    const count = this.gitStatus.changeCount();
+    if (this.gitStatus.failed()) {
+      return '!';
+    }
+    if (count === 0) {
+      return null;
+    }
+    return count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : String(count);
+  });
   /** The open file's path in the working copy, or `''` (FB-1). */
   protected readonly path = computed(() => this.target().path);
 
-  /** The entry highlighted in the tree. */
+  /** The entry highlighted in the tree and in **Changes**. */
   protected readonly selectedPath = computed(() => this.path() || null);
   /** The heading of the open file to show in its preview (ED-31). */
   protected readonly fragment = toSignal(this.route.fragment, { initialValue: null });
@@ -204,6 +228,7 @@ export class RepositoryScreenPage {
         void this.openFiles.flushAll();
         this.session.start(id);
         this.sync.start(id);
+        this.gitStatus.start(id);
       });
     // The app header's loader is not on this screen (NV-9).
     this.currentUser.load().catch(() => undefined);
@@ -211,12 +236,19 @@ export class RepositoryScreenPage {
     this.flushWhenLeft();
   }
 
-  /** **Files** collapses the tree on wide screens and opens it as a drawer on narrow ones. */
-  protected toggleFiles(narrow: boolean): void {
+  /**
+   * An item of the activity bar: another item switches the side pane to it;
+   * the selected item, which arrives as `null`, collapses the pane on wide
+   * screens and closes the drawer on narrow ones.
+   */
+  protected selectSideTool(tool: string | null, narrow: boolean): void {
+    if (tool !== null) {
+      this.panes.sideTool.set(tool as SideTool);
+    }
     if (narrow) {
-      this.drawerOpen.update(open => !open);
+      this.drawerOpen.set(tool !== null);
     } else {
-      this.panes.sideOpen.update(open => !open);
+      this.panes.sideOpen.set(tool !== null);
     }
   }
 

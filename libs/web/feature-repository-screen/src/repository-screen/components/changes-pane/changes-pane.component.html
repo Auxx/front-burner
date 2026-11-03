@@ -1,0 +1,30 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ChangesPaneComponent'">
+  @if (store.failed()) {
+    <ui-inline-banner class="failed" status="warning" announce>
+      {{ t('failed') }}
+      <div uiBannerActions>
+        <button uiButton size="small" (click)="store.refresh()">{{ t('retry') }}</button>
+      </div>
+    </ui-inline-banner>
+  }
+  @let changes = store.status()?.changes;
+  @if (changes === undefined) {
+    @if (!store.failed()) {
+      <ui-spinner class="loading" [label]="t('loading')" />
+    }
+  } @else if (changes.length === 0) {
+    <ui-empty-state icon="check">{{ t('empty') }}</ui-empty-state>
+  } @else {
+    <cdk-virtual-scroll-viewport class="list" role="list" [attr.aria-label]="t('label')" [itemSize]="rowHeight()">
+      <rs-change-entry
+        *cdkVirtualFor="let change of changes; let index = index; trackBy: trackChange"
+        [change]="change"
+        [selected]="change.path === selected()"
+        [attr.aria-posinset]="index + 1"
+        [attr.aria-setsize]="changes.length"
+        (selectPath)="selectPath.emit($event)"
+      />
+    </cdk-virtual-scroll-viewport>
+  }
+  <div #rowProbe class="row-probe" aria-hidden="true"></div>
+</ng-container>

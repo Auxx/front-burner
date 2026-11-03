@@ -1,0 +1,21 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ChangeEntryComponent'">
+  <button
+    type="button"
+    class="entry"
+    uiTooltipLongPress
+    [uiTooltip]="change().path"
+    [attr.aria-current]="selected() ? 'true' : null"
+    (click)="selectPath.emit(change().path)"
+  >
+    <span class="path">
+      <span class="name">{{ name() }}</span>
+      @if (folder(); as folder) {
+        <span class="folder">{{ folder }}</span>
+      }
+    </span>
+    <span class="state">
+      <span class="word">{{ t(change().state) }}</span>
+      <span uiBadge class="letter" aria-hidden="true" [status]="status()">{{ t(change().state + 'Letter') }}</span>
+    </span>
+  </button>
+</ng-container>

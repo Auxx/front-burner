@@ -1,0 +1,33 @@
+:host {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.failed {
+  flex: none;
+  margin: var(--ui-space-2);
+}
+
+.loading {
+  display: grid;
+  flex: 1;
+  place-items: center;
+}
+
+.list {
+  flex: 1;
+  min-block-size: 0;
+}
+
+// One row high, as `ChangeEntryComponent`'s style sheet sets it.
+.row-probe {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 0;
+  block-size: 3rem;
+  visibility: hidden;
+}
