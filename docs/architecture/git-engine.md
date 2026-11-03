@@ -249,14 +249,18 @@ Confirmed by spike 2 (spikes.md).
   `core.untrackedCache` gains nothing, and `core.fsmonitor` is not supported by
   the git of the image. **Changes** reads status again 2,000 ms after the last
   `files.changed` (`STATUS_REFRESH_MS`, GA-12).
-  - **Open:** a stale index, as after a restore (NF-6.5), makes every status
-    hash every file, 14 s with a cold cache, past `LOCAL_TIMEOUT_MS`, until
-    something writes the index. Refreshing it in recovery (A-5.15) is the
-    proposed fix; see `docs/wiki/todo.md`.
+  - A stale index, as after a restore (NF-6.5), makes every status hash every
+    file, 14 s with a cold cache, past `LOCAL_TIMEOUT_MS`, until something
+    writes the index. Recovery therefore refreshes the index (A-5.15).
 
 ## A-5: Recovery
 
 - **A-5.15** On start, each working copy is checked and returned to a known
   state as NF-9.4 and NF-9.5 describe: stale `index.lock` files removed, an
   interrupted automatic merge aborted, an interrupted user merge reset to the
-  recorded commit, a merge or rebase waiting for resolution left alone.
+  recorded commit, a merge or rebase waiting for resolution left alone. Each
+  index is then refreshed with `git update-index -q --refresh`, under
+  `FRONT_BURNER_GIT_TIMEOUT`, as it can take as long as hashing every file. It
+  costs about one status when nothing is stale. A refresh that fails is logged
+  and does not stop the start, since status still works, only slowly. _(My
+  call.)_

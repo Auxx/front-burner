@@ -230,7 +230,8 @@ sees the result.
 
 - **NF-9.4** Every working copy is brought back to a known state. Stale
   `index.lock` files are removed, since only the backend uses the working
-  copies.
+  copies. Each index is refreshed, so that status stays fast after a restore
+  (NF-6.5, A-5.14).
 - **NF-9.5** Interrupted jobs:
 
   | Interrupted job                                | On start                                                                                                                   |

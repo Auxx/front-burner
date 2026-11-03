@@ -288,4 +288,5 @@ they are built. See [overview.md](overview.md) for the numbering conventions.
     runs, which read the files from the disk. It does not get better by itself,
     since `--no-optional-locks` keeps status from writing what it learned. One
     `git update-index -q --refresh` fixes it, and takes 3.2 s warm and 14 s
-    cold, one run each (A-5.14).
+    cold, one run each. **Decision:** recovery on start refreshes each index
+    (A-5.15, NF-9.4).

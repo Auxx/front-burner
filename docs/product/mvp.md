@@ -313,8 +313,8 @@ this section in the same change, without being asked:
 - **Large repositories.** Spike 4 (A-5.14) found status at 100,000 files fast
   enough without any git setting: about 100 ms warm and 1.4 s with a cold cache,
   on a machine that stands in for the reference host, so the release checks
-  repeat it. Still open: after a restore, status can take longer than its 10 s
-  timeout until the index is refreshed.
+  repeat it. After a restore, status could take longer than its 10 s timeout, so
+  recovery on start refreshes each index (A-5.15, NF-9.4).
 
 ## Open questions
 
