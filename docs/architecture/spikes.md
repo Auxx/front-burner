@@ -228,4 +228,64 @@ they are built. See [overview.md](overview.md) for the numbering conventions.
   `core.untrackedCache`, `core.fsmonitor` and path-limited status.
 - **Passes when:** saves, automatic commits and status checks are fast enough
   for NF-2.3 and NF-2.6, and the findings say which settings are needed.
-- **Findings:** _pending._
+- **Findings:** passed on 2026-11-03, with no git setting needed and one problem
+  found: a stale index (below). Measured with a throwaway harness outside the
+  workspace (plan 45), not kept, so there is no `spike/` branch.
+  - **Machine: not the reference host.** Two threads of one core of an Intel
+    i7-12700K and a 4 GB memory limit stood in for 2 vCPU and 4 GB; the disk was
+    a Crucial P310 NVMe SSD in a USB enclosure, with btrfs (zstd). This core is
+    probably faster than a typical vCPU, and git 2.56 was used, not the 2.47 of
+    the image in spike 1, so **the numbers are re-checked with the release
+    checks** (`docs/wiki/todo.md`).
+  - **Method:** a shallow clone of Linux 7.4-rc1, with the engine's exact
+    command lines and environment. Five runs each, three for the stale index;
+    the median and the worst. Warm runs had 97,348 files. Cold runs had exactly
+    100,000 (2,652 small files added), which adds about 8 ms to a warm clean
+    status (105 ms against 97 ms). Cold means `drop_caches` before each run; a
+    status then read about 126 MB from the disk. The clone has one commit, so a
+    long history is not covered, and pull and push were not timed.
+
+    | Command                                  | Warm, median / worst | Cold, median / worst |
+    | ---------------------------------------- | -------------------- | -------------------- |
+    | Status, clean                            | 97 / 99 ms           | 1,389 / 1,410 ms     |
+    | Status, 10 changed files                 | 98 / 98 ms           | 1,449 / 1,668 ms     |
+    | Status, 10,000 new files in one folder   | 112 / 113 ms         | 1,425 / 1,475 ms     |
+    | Status limited to one file, clean        | 15 / 16 ms           | 95 / 173 ms          |
+    | `git diff HEAD` of one file              | 10 / 11 ms           | 94 / 180 ms          |
+    | The `git ls-files` of a save             | 10 / 11 ms           | 90 / 118 ms          |
+    | A whole save of 50 KB, with its fsyncs   | 26 / 34 ms           | not taken            |
+    | Commit of 2 files, all of plan 52's git  | 298 / 298 ms         | 1,665 / 1,760 ms     |
+    | Status, stale index                      | 3,215 / 12,444 ms    | 13,993 / 13,997 ms   |
+    | The same, after one refresh of the index | 98 / 98 ms           | 1,315 / 1,351 ms     |
+
+  - **`core.untrackedCache`:** no gain, warm or cold, even with an index written
+    with it first. Not needed.
+  - **`core.fsmonitor`:** not usable. Debian trixie's git 2.47.3 refuses with
+    `fsmonitor--daemon not supported on this platform`. With git 2.56 it took a
+    warm status from 97 ms to 56 ms, for a daemon per repository of 4–6 MB,
+    which the targets do not need. Its true cold time was not taken.
+  - **Path-limited status** is about six times faster warm and about fifteen
+    times faster cold, but it cannot replace the full status, which has to find
+    changes anywhere. `GitEngine.diff` uses it already. No other use is needed.
+  - **NF-2.3:** a save stays well inside 200 ms, except one that arrives during
+    a commit, because both hold the working-tree lock: it waits up to 298 ms
+    warm and 1.7 s cold. Accepted: typing is not blocked, the browser draft
+    holds the edits, plan 53 flushes saves before a commit, and an automatic
+    commit follows a minute without changes.
+  - **NF-2.6:** not timed, since nothing here uses the network. A full cold
+    status alone takes more than its 1 s, so nothing should run one on the way
+    to a pull or a push without measuring it; plan 56's push plans none.
+  - **NF-2.8:** a cold status and a cold commit (worst 1.76 s) are close to
+    "about 2 seconds" on this machine, and may pass it on a slower host. The
+    release checks decide.
+  - **`STATUS_REFRESH_MS` is 2,000 ms:** warm status × 2 is about 200 ms, well
+    under the default. A-5.14 records it.
+  - **A stale index is the problem found.** After a restore (NF-6.5) every
+    file's stat differs from the index, so git must read and hash every file. It
+    was simulated by changing every file's modification time; a real restore was
+    not tried. Status then takes 3.2 s warm and 14 s cold, **past the 10 s
+    `LOCAL_TIMEOUT_MS`**. The warm worst of 12.4 s is the first of the three
+    runs, which read the files from the disk. It does not get better by itself,
+    since `--no-optional-locks` keeps status from writing what it learned. One
+    `git update-index -q --refresh` fixes it, and takes 3.2 s warm and 14 s
+    cold, one run each (A-5.14).

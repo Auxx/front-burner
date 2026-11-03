@@ -45,5 +45,10 @@ documents:
 
 - Check typing in a 1 MB file on a real mid-range phone (NF-2.4): spike 3
   measured 40–56 ms per keystroke in emulation, at the limit (A-8.11).
-- Spike 4: Git at 100,000 files (A-5.14). Needs a Linux kernel clone on hardware
-  close to the reference host.
+- Spike 4 (A-5.14) is done on a stand-in machine. Release checks: repeat its
+  timings on a real 2 vCPU, 4 GB host with the image's git, including whether a
+  cold status or commit stays under NF-2.8's 2 seconds.
+- Decide how to fix a stale index after a restore (spike 4, A-5.14). Proposed:
+  `git update-index -q --refresh` for each working copy in recovery on start
+  (A-5.15, NF-9.4). It costs about a status when nothing is stale, and needs the
+  longer `FRONT_BURNER_GIT_TIMEOUT`, as it can take 14 s.
