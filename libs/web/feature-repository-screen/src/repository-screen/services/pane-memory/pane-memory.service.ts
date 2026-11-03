@@ -7,8 +7,8 @@ const DEFAULT_SIDE_SIZE = 20;
 export type SideTool = 'files' | 'changes';
 
 /**
- * The repository screen's panes as this device last left them (FB-8): the file
- * tree's share of the width and whether it is collapsed, under
+ * The repository screen's panes as this device last left them (FB-8): the side
+ * pane's share of the width and whether it is collapsed, under
  * `fb.<userId>.repositoryScreen.<key>`. Read once the user is known, then
  * written back on every change, and which tool window is selected, under
  * `fb.<userId>.sideTool`. Storage that is missing or refuses access only loses
@@ -16,9 +16,9 @@ export type SideTool = 'files' | 'changes';
  */
 @Injectable()
 export class PaneMemoryService {
-  /** The file tree's share of the width, in percent. */
+  /** The side pane's share of the width, in percent. */
   readonly sideSize = signal(DEFAULT_SIDE_SIZE);
-  /** Whether the file tree is beside the editor on wide screens. */
+  /** Whether the side pane is beside the editor on wide screens. */
   readonly sideOpen = signal(true);
   /** The tool window in the side pane, also while the pane is collapsed. */
   readonly sideTool = signal<SideTool>('files');

@@ -7,7 +7,7 @@ import { PushChannelService } from '@front-burner/web-core';
 import { type Observable, of, Subject, throwError } from 'rxjs';
 
 import { RepositorySessionService } from '../repository-session/repository-session.service';
-import { GitStatusStore, STATUS_REFRESH_MS } from './git-status-store.service';
+import { GitStatusStore, STATUS_REFRESH_MAX_MS, STATUS_REFRESH_MS, STATUS_RETRY_MS } from './git-status-store.service';
 
 function status(...paths: string[]): GitStatus {
   return {
@@ -118,9 +118,9 @@ describe('GitStatusStore', () => {
     await start();
 
     filesChanged();
-    await vi.advanceTimersByTimeAsync(STATUS_REFRESH_MS - 1);
+    await vi.advanceTimersByTimeAsync(1000);
     filesChanged();
-    await vi.advanceTimersByTimeAsync(STATUS_REFRESH_MS - 1);
+    await vi.advanceTimersByTimeAsync(1000);
     filesChanged();
     await vi.advanceTimersByTimeAsync(STATUS_REFRESH_MS - 1);
     expect(gitStatus).not.toHaveBeenCalled();
@@ -130,6 +130,28 @@ describe('GitStatusStore', () => {
 
     await vi.advanceTimersByTimeAsync(STATUS_REFRESH_MS * 2);
     expect(gitStatus).toHaveBeenCalledOnce();
+  });
+
+  it('reads no later than the longest wait while files.changed keeps coming', async () => {
+    await start();
+
+    for (let waited = 0; waited < STATUS_REFRESH_MAX_MS - 1000; waited += 1000) {
+      filesChanged();
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    filesChanged();
+    await vi.advanceTimersByTimeAsync(999);
+    expect(gitStatus).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(gitStatus).toHaveBeenCalledOnce();
+
+    // The next event starts a new wait.
+    filesChanged();
+    await vi.advanceTimersByTimeAsync(STATUS_REFRESH_MS - 1);
+    expect(gitStatus).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(gitStatus).toHaveBeenCalledTimes(2);
   });
 
   it('waits no longer once a read has been asked for', async () => {
@@ -166,6 +188,40 @@ describe('GitStatusStore', () => {
 
     expect(store.status()?.changes).toEqual([]);
     expect(store.failed()).toBe(false);
+  });
+
+  it('tries a read that failed again, until one is answered', async () => {
+    await start();
+    gitStatus.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+    await store.refresh();
+    gitStatus.mockClear();
+
+    await vi.advanceTimersByTimeAsync(STATUS_RETRY_MS - 1);
+    expect(gitStatus).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(gitStatus).toHaveBeenCalledOnce();
+
+    gitStatus.mockReturnValue(of(status()));
+    await vi.advanceTimersByTimeAsync(STATUS_RETRY_MS);
+    expect(gitStatus).toHaveBeenCalledTimes(2);
+    expect(store.failed()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(STATUS_RETRY_MS * 2);
+    expect(gitStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels a read that a newer one replaces', async () => {
+    await start();
+    const older = new Subject<GitStatus>();
+    gitStatus.mockReturnValueOnce(older).mockReturnValueOnce(new Subject());
+
+    const first = store.refresh();
+    expect(older.observed).toBe(true);
+    void store.refresh();
+
+    expect(older.observed).toBe(false);
+    // Whoever waited for the cancelled read is not left waiting.
+    await first;
   });
 
   it('ignores an answer older than the last one asked for', async () => {

@@ -952,8 +952,8 @@ test.describe('repository screen, kept up to date', () => {
     await expect(rows.nth(2)).toContainText('logo.png');
     await expect(rows.nth(2)).toContainText('Deleted');
     // `debug.log` and `build/` are ignored, and differ from no commit.
-    await expect(changesPane(page).getByText('debug.log')).toHaveCount(0);
-    await expect(changesPane(page).getByText('site.html')).toHaveCount(0);
+    await expect(rows.filter({ hasText: 'debug.log' })).toHaveCount(0);
+    await expect(rows.filter({ hasText: 'site.html' })).toHaveCount(0);
   });
 
   test('says No changes since the last commit, and has no axe violations with changes', async ({ page, instance, isMobile }) => {
@@ -961,7 +961,7 @@ test.describe('repository screen, kept up to date', () => {
     await openScreen(page, `/repositories/${handbook}`);
     await showChanges(page);
     await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
-    await expect(changesButton(page, 'Changes')).toBeVisible();
+    await expect(changesButton(page, /^Changes$/)).toBeVisible();
     expect((await axe(page, isMobile).analyze()).violations).toEqual([]);
 
     writeFileSync(join(workingCopyOf(instance.dataDir, handbook), 'new.md'), '# New\n');
@@ -978,7 +978,7 @@ test.describe('repository screen, kept up to date', () => {
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
     await openScreen(page, `/repositories/${handbook}/files/README.md`);
     await expect(editorOf(page, 'README.md')).toBeVisible();
-    await expect(changesButton(page, 'Changes')).toBeVisible();
+    await expect(changesButton(page, /^Changes$/)).toBeVisible();
 
     await editorOf(page, 'README.md').click();
     await page.keyboard.type('More. ');
@@ -990,6 +990,57 @@ test.describe('repository screen, kept up to date', () => {
       await changesButton(page).click();
       await expect(changesPane(page)).toBeHidden();
     }
+  });
+
+  test('opens a selected change, and says a deleted one is gone', async ({ page, instance, isMobile, monitor }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    writeFileSync(join(dir, 'docs/guide.md'), '# Changed\n');
+    rmSync(join(dir, '2-setup.md'));
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    await expect(editorOf(page, 'README.md')).toBeVisible();
+    await showChanges(page);
+
+    await changesPane(page).getByRole('button', { name: /^guide\.md/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/guide.md$`));
+    await expect(editorOf(page, 'guide.md')).toBeVisible();
+    if (isMobile) {
+      await expect(changesPane(page)).toBeHidden();
+    }
+
+    await showChanges(page);
+    await changesPane(page).getByRole('button', { name: /^2-setup\.md/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/2-setup.md$`));
+    await expect(editor(page).getByText('2-setup.md')).toBeVisible();
+    drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/file`);
+  });
+
+  test('keeps each tool window\'s scroll position when switching', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    for (let index = 0; index < 300; index++) {
+      writeFileSync(join(dir, `new-${String(index).padStart(3, '0')}.md`), '# New\n');
+    }
+    await openScreen(page, `/repositories/${handbook}`);
+    await expect(changesButton(page, 'Changes (300)')).toBeVisible();
+    await showTree(page);
+    const scroller = (region: Locator) => region.locator('cdk-virtual-scroll-viewport:visible');
+    const scrollTo = (region: Locator, top: number) =>
+      scroller(region).evaluate((element, value) => {
+        element.scrollTop = value;
+      }, top);
+    const scrolled = (region: Locator) => scroller(region).evaluate(element => element.scrollTop);
+
+    await scrollTo(tree(page), 1500);
+    await showChanges(page);
+    await scrollTo(changesPane(page), 2500);
+
+    await filesButton(page).click();
+    await expect(tree(page)).toBeVisible();
+    expect(await scrolled(tree(page))).toBe(1500);
+    await changesButton(page).click();
+    await expect(changesPane(page)).toBeVisible();
+    expect(await scrolled(changesPane(page))).toBe(2500);
   });
 
   test('shortens a long path without scrolling sideways, with the whole path available', async ({ page, instance, isMobile }) => {

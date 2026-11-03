@@ -50,6 +50,9 @@ import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 import { fileName } from '../../utils/file-name/file-name';
 
+/** A larger count shows as `99+`; the item's accessible name says it in full. */
+const MAX_BADGE_COUNT = 99;
+
 /**
  * The repository screen (REQ-FILE-001) at `/repositories/<id>` and
  * `/repositories/<id>/files/<path>`: the combined bar (NV-9), the file tree
@@ -76,7 +79,10 @@ import { fileName } from '../../utils/file-name/file-name';
  * on disk (ED-21, ED-24); a file opened again from its kept entry is checked
  * for them, since events about it were not followed while another was open.
  * The activity bar switches the side pane between the file tree and **Changes**
- * (GA-10), whose count and list come from `GitStatusStore`.
+ * (GA-10), whose count and list come from `GitStatusStore`. Both stay in place
+ * while the other is shown, so that each keeps its scroll position and active
+ * row, and the tree still meets a focus request. Until the diff view exists,
+ * selecting a change goes to its path, like a tree selection.
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -134,7 +140,7 @@ export class RepositoryScreenPage {
   protected readonly gitStatus = inject(GitStatusStore);
 
   protected readonly user = this.currentUser.user;
-  /** The file tree's size and whether it is collapsed, as this device last left them (FB-8). */
+  /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
   protected readonly panes = inject(PaneMemoryService);
   /** Whether the side pane is open as the drawer of narrow screens (FB-9). */
   protected readonly drawerOpen = signal(false);
@@ -156,10 +162,21 @@ export class RepositoryScreenPage {
     }))),
     { requireSync: true }
   );
+  /** What the count of the **Changes** item shows, if anything; `!` when the last read failed. */
+  protected readonly changesBadge = computed(() => {
+    const count = this.gitStatus.changeCount();
+    if (this.gitStatus.failed()) {
+      return '!';
+    }
+    if (count === 0) {
+      return null;
+    }
+    return count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : String(count);
+  });
   /** The open file's path in the working copy, or `''` (FB-1). */
   protected readonly path = computed(() => this.target().path);
 
-  /** The entry highlighted in the tree. */
+  /** The entry highlighted in the tree and in **Changes**. */
   protected readonly selectedPath = computed(() => this.path() || null);
   /** The heading of the open file to show in its preview (ED-31). */
   protected readonly fragment = toSignal(this.route.fragment, { initialValue: null });

@@ -2,6 +2,7 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type {
@@ -26,7 +27,9 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
 import { routes } from '../../repository-screen.routes';
+import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
+import { RepositoryScreenPage } from './repository-screen.page';
 
 const KEY = 'web-feature-repository-screen.RepositoryScreenPage';
 
@@ -77,6 +80,8 @@ describe('RepositoryScreenPage', () => {
   let gone: Set<string>;
   /** What `GitApi.gitStatus` answers. */
   let changes: GitChange[];
+  /** In place of `changes`, such as a failure. */
+  let gitStatusAnswer: Observable<GitStatus> | undefined;
 
   const page = () => harness.fixture.nativeElement as HTMLElement;
   const button = (text: string) =>
@@ -93,7 +98,7 @@ describe('RepositoryScreenPage', () => {
           provide: GitApi,
           useValue: {
             gitStatus: (): Observable<GitStatus> =>
-              of({
+              gitStatusAnswer ?? of({
                 branch: 'main',
                 noCommits: false,
                 upstream: null,
@@ -173,6 +178,7 @@ describe('RepositoryScreenPage', () => {
     readFile = vi.fn((path: string) => of(fileContent(path)));
     gone = new Set();
     changes = [];
+    gitStatusAnswer = undefined;
     saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
     recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
     document.title = '';
@@ -682,8 +688,13 @@ describe('RepositoryScreenPage', () => {
     describe('Changes', () => {
       const changesItem = () =>
         page().querySelector('ui-activity-bar button[uiActivityBarItem="changes"]') as HTMLButtonElement;
-      const pane = () => page().querySelector('rs-changes-pane');
-      const fileTree = () => page().querySelector('rs-file-tree');
+      /** Which tool window is shown; the other one stays in place, hidden. */
+      const shownOnly = () => {
+        const treeHidden = (page().querySelector('rs-file-tree') as HTMLElement).hidden;
+        const paneHidden = (page().querySelector('rs-changes-pane') as HTMLElement).hidden;
+        expect(treeHidden).not.toBe(paneHidden);
+        return treeHidden ? 'changes' : 'files';
+      };
       const THREE: GitChange[] = [
         { path: 'README.md', state: 'modified' },
         { path: 'docs/guide.md', state: 'modified' },
@@ -720,13 +731,11 @@ describe('RepositoryScreenPage', () => {
 
       it('switches between Files and Changes, and collapses with the selected one', async () => {
         await visit('/repositories/12');
-        expect(fileTree()).not.toBeNull();
-        expect(pane()).toBeNull();
+        expect(shownOnly()).toBe('files');
 
         changesItem().click();
         await settle(harness.fixture);
-        expect(pane()).not.toBeNull();
-        expect(fileTree()).toBeNull();
+        expect(shownOnly()).toBe('changes');
         expect(shown(tree())).toBe(true);
         expect(tree().getAttribute('aria-label')).toBe(`${KEY}.changes`);
         expect(changesItem().getAttribute('aria-pressed')).toBe('true');
@@ -742,7 +751,7 @@ describe('RepositoryScreenPage', () => {
         files().click();
         await settle(harness.fixture);
         expect(shown(tree())).toBe(true);
-        expect(fileTree()).not.toBeNull();
+        expect(shownOnly()).toBe('files');
         expect(pressed()).toBe('true');
         expect(tree().getAttribute('aria-label')).toBe(`${KEY}.files`);
       });
@@ -754,13 +763,13 @@ describe('RepositoryScreenPage', () => {
         changesItem().click();
         await settle(harness.fixture);
         expect(shown(tree())).toBe(true);
-        expect(pane()).not.toBeNull();
+        expect(shownOnly()).toBe('changes');
         expect(changesItem().getAttribute('aria-pressed')).toBe('true');
 
         files().click();
         await settle(harness.fixture);
         expect(shown(tree())).toBe(true);
-        expect(fileTree()).not.toBeNull();
+        expect(shownOnly()).toBe('files');
         expect(pressed()).toBe('true');
 
         files().click();
@@ -769,6 +778,43 @@ describe('RepositoryScreenPage', () => {
         expect(pressed()).toBe('false');
         // The drawer does not collapse the pane of wide screens.
         expect(localStorage.getItem('fb.4.repositoryScreen.sideOpen')).toBe('true');
+      });
+
+      it('says so on the item when a read failed', async () => {
+        gitStatusAnswer = throwError(() => new HttpErrorResponse({ status: 500 }));
+        await visit('/repositories/12');
+
+        expect(changesItem().getAttribute('aria-label')).toBe(`${KEY}.changesFailed`);
+        expect(changesItem().querySelector('.change-count')?.getAttribute('data-count')).toBe('!');
+      });
+
+      it('goes to a selected change and closes the drawer', async () => {
+        changes = [ { path: 'docs/guide.md', state: 'modified' } ];
+        narrow = true;
+        await visit('/repositories/12');
+        changesItem().click();
+        await settle(harness.fixture);
+
+        (page().querySelector('rs-change-entry button') as HTMLButtonElement).click();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(TestBed.inject(Router).url).toBe('/repositories/12/files/docs/guide.md');
+        expect(shown(tree())).toBe(false);
+        expect(page().querySelector('rs-change-entry button[aria-current="true"]')).not.toBeNull();
+      });
+
+      it('meets a focus request of the tree while Changes is shown, not later', async () => {
+        await visit('/repositories/12');
+        changesItem().click();
+        await settle(harness.fixture);
+        const store = harness.fixture.debugElement.query(By.directive(RepositoryScreenPage)).injector
+          .get(FileTreeStoreService);
+
+        store.focusRequest.set('README.md');
+        await settle(harness.fixture);
+
+        expect(store.focusRequest()).toBeNull();
       });
 
       it('keeps the expanded folders when the tree comes back', async () => {

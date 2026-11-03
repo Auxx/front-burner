@@ -2,7 +2,7 @@ import { computed, DestroyRef, effect, inject, Injectable, signal, untracked } f
 import type { GitStatus } from '@front-burner/shared-contracts';
 import { GitApi } from '@front-burner/web-api-client';
 import { PushChannelService } from '@front-burner/web-core';
-import { firstValueFrom, Subscription } from 'rxjs';
+import { finalize, Subscription } from 'rxjs';
 
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 
@@ -14,15 +14,26 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
 export const STATUS_REFRESH_MS = 2000;
 
 /**
+ * The longest a read waits behind `files.changed` events that keep coming, such
+ * as saves of several files, which are less than `STATUS_REFRESH_MS` apart: GA-12's
+ * "within a few seconds".
+ */
+export const STATUS_REFRESH_MAX_MS = 5000;
+
+/** The wait before a read that failed is tried again, since an idle repository sends no event. */
+export const STATUS_RETRY_MS = 30_000;
+
+/**
  * The open repository's git status, for everything on the repository screen
  * that shows it, so that they never disagree. Provided by the page.
  *
  * It reads the status when the repository is ready, at once on `git.changed`,
  * `STATUS_REFRESH_MS` after the last `files.changed`, so that a burst of saves
- * causes one read, and after every (re)connect, since events are never
- * replayed (A-3.11). Only the answer to the latest read counts, and a read that
- * fails keeps the last status, with `failed` set: an empty list would look like
- * "no changes".
+ * causes one read, but no later than `STATUS_REFRESH_MAX_MS` after the first, and
+ * after every (re)connect, since events are never replayed (A-3.11). A new read
+ * cancels the one still running. A read that fails keeps the last status, with
+ * `failed` set, since an empty list would look like "no changes", and is tried
+ * again after `STATUS_RETRY_MS`.
  */
 @Injectable()
 export class GitStatusStore {
@@ -49,8 +60,9 @@ export class GitStatusStore {
 
   private subscription: Subscription | undefined;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Counts the reads asked for, so that only the latest one's answer counts. */
-  private asked = 0;
+  /** When the first `files.changed` of the current wait came, or `null` without a wait. */
+  private waitingSince: number | null = null;
+  private request: Subscription | undefined;
 
   constructor() {
     effect(() => {
@@ -61,7 +73,7 @@ export class GitStatusStore {
     inject(DestroyRef).onDestroy(() => {
       this.subscription?.unsubscribe();
       this.cancelWait();
-      this.asked++;
+      this.request?.unsubscribe();
     });
   }
 
@@ -76,31 +88,36 @@ export class GitStatusStore {
     }
     this.repositoryId.set(repositoryId);
     this.cancelWait();
-    this.asked++;
+    this.request?.unsubscribe();
     this.current.set(null);
     this.readFailed.set(false);
     this.subscription ??= this.follow();
   }
 
-  /** Reads the status at once, such as after an action of this tab; nothing happens while it cannot be read. */
-  async refresh(): Promise<void> {
+  /**
+   * Reads the status at once, such as after an action of this tab; nothing
+   * happens while it cannot be read. Settles when this read has ended, also
+   * when a newer one cancelled it.
+   */
+  refresh(): Promise<void> {
     this.cancelWait();
     const id = this.readable();
     if (id === null) {
-      return;
+      return Promise.resolve();
     }
-    const asked = ++this.asked;
-    try {
-      const status = await firstValueFrom(this.api.gitStatus(id));
-      if (asked === this.asked) {
-        this.current.set(status);
-        this.readFailed.set(false);
-      }
-    } catch {
-      if (asked === this.asked) {
-        this.readFailed.set(true);
-      }
-    }
+    return new Promise(resolve => {
+      this.request?.unsubscribe();
+      this.request = this.api.gitStatus(id).pipe(finalize(resolve)).subscribe({
+        next: status => {
+          this.current.set(status);
+          this.readFailed.set(false);
+        },
+        error: () => {
+          this.readFailed.set(true);
+          this.refreshTimer = setTimeout(() => void this.refresh(), STATUS_RETRY_MS);
+        }
+      });
+    });
   }
 
   private follow(): Subscription {
@@ -113,14 +130,23 @@ export class GitStatusStore {
       if (event.type === 'git.changed') {
         void this.refresh();
       } else if (event.type === 'files.changed') {
-        this.cancelWait();
-        this.refreshTimer = setTimeout(() => void this.refresh(), STATUS_REFRESH_MS);
+        this.waitAfterFilesChanged();
       }
     }));
     return subscription;
   }
 
+  private waitAfterFilesChanged(): void {
+    const now = Date.now();
+    const since = this.waitingSince ?? now;
+    this.cancelWait();
+    this.waitingSince = since;
+    const wait = Math.min(STATUS_REFRESH_MS, since + STATUS_REFRESH_MAX_MS - now);
+    this.refreshTimer = setTimeout(() => void this.refresh(), wait);
+  }
+
   private cancelWait(): void {
     clearTimeout(this.refreshTimer);
+    this.waitingSince = null;
   }
 }

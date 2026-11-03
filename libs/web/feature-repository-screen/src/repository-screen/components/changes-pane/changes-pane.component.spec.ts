@@ -72,6 +72,15 @@ describe('ChangesPaneComponent', () => {
     expect(rows()[0].getAttribute('aria-setsize')).toBe('20000');
   });
 
+  it('scrolls by the height a row really has', async () => {
+    const measured = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ height: 60 } as DOMRect);
+    await render();
+    await settle(fixture);
+    measured.mockRestore();
+
+    expect((host().querySelector('.cdk-virtual-scroll-spacer') as HTMLElement).style.height).toBe('180px');
+  });
+
   it('says No changes since the last commit', async () => {
     status.set(statusOf([]));
     await render();

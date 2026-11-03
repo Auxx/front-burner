@@ -248,7 +248,8 @@ Confirmed by spike 2 (spikes.md).
   warm and 1.4 s with a cold cache (spike 4, not yet on the reference host).
   `core.untrackedCache` gains nothing, and `core.fsmonitor` is not supported by
   the git of the image. **Changes** reads status again 2,000 ms after the last
-  `files.changed` (`STATUS_REFRESH_MS`, GA-12).
+  `files.changed` (`STATUS_REFRESH_MS`, GA-12), and no later than 5,000 ms after
+  the first while they keep coming.
   - A stale index, as after a restore (NF-6.5), makes every status hash every
     file, 14 s with a cold cache, past `LOCAL_TIMEOUT_MS`, until something
     writes the index. Recovery therefore refreshes the index (A-5.15).

@@ -15,7 +15,7 @@
   } @else if (changes.length === 0) {
     <ui-empty-state icon="check">{{ t('empty') }}</ui-empty-state>
   } @else {
-    <cdk-virtual-scroll-viewport class="list" role="list" [attr.aria-label]="t('label')" [itemSize]="rowHeight">
+    <cdk-virtual-scroll-viewport class="list" role="list" [attr.aria-label]="t('label')" [itemSize]="rowHeight()">
       <rs-change-entry
         *cdkVirtualFor="let change of changes; let index = index; trackBy: trackChange"
         [change]="change"
@@ -26,4 +26,5 @@
       />
     </cdk-virtual-scroll-viewport>
   }
+  <div #rowProbe class="row-probe" aria-hidden="true"></div>
 </ng-container>

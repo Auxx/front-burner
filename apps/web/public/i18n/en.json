@@ -371,6 +371,7 @@
   "web-feature-repository-screen.RepositoryScreenPage.files": "Files",
   "web-feature-repository-screen.RepositoryScreenPage.changes": "Changes",
   "web-feature-repository-screen.RepositoryScreenPage.changesCount": "Changes ({count})",
+  "web-feature-repository-screen.RepositoryScreenPage.changesFailed": "Changes (could not be read)",
   "web-feature-repository-screen.RepositoryScreenPage.resizeChanges": "Resize changes",
   "web-feature-repository-screen.RepositoryScreenPage.toolWindows": "Tool windows",
   "web-feature-repository-screen.RepositoryScreenPage.resizeFiles": "Resize file tree",

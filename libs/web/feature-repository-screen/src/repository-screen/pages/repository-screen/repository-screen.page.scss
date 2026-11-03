@@ -10,8 +10,8 @@
 }
 
 // The count of the Changes item (GA-10), which on a phone has no tooltip to say
-// it. Generated content: the item's name says the exact count, so "99+" is not
-// part of its name.
+// it. Generated content, not text: axe's label-content-name-mismatch refuses text
+// in a button that its accessible name does not repeat, even with `aria-hidden`.
 .change-count::before {
   content: attr(data-count);
 }
@@ -28,6 +28,12 @@
   line-height: 1;
   border: var(--ui-border-width) solid var(--ui-border-default);
   border-radius: var(--ui-radius-pill);
+}
+
+// Their hosts set `display`, which would beat the browser's rule for `hidden`.
+rs-file-tree[hidden],
+rs-changes-pane[hidden] {
+  display: none;
 }
 
 .reference {
