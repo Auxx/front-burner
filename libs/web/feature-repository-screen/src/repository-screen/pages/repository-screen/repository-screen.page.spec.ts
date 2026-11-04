@@ -769,6 +769,37 @@ describe('RepositoryScreenPage', () => {
           expect(editorArea().hidden).toBe(false);
         });
 
+        it('stays when the open file is deleted, which only closes it', async () => {
+          await visit('/repositories/12/files/README.md');
+          await select('guide.md');
+
+          await TestBed.inject(Router).navigate([ '/repositories', 12 ], { replaceUrl: true, state: { closed: true } });
+          await settle(harness.fixture);
+
+          expect(diffView()).not.toBeNull();
+          expect(editorArea().hidden).toBe(true);
+        });
+
+        it('stays when the open file is renamed, which replaces the URL', async () => {
+          await visit('/repositories/12/files/README.md');
+          await select('guide.md');
+
+          await TestBed.inject(Router).navigate([ '/repositories', 12, 'files', 'logo.png' ], { replaceUrl: true });
+          await settle(harness.fixture);
+
+          expect(diffView()).not.toBeNull();
+        });
+
+        it('ends when another repository opens, even with a replaced URL', async () => {
+          await visit('/repositories/12/files/README.md');
+          await select('guide.md');
+
+          await TestBed.inject(Router).navigate([ '/repositories', 13 ], { replaceUrl: true });
+          await settle(harness.fixture);
+
+          expect(diffView()).toBeNull();
+        });
+
         it('ends when the open file is selected again in the tree', async () => {
           localStorage.setItem('fb.4.sideTool', 'files');
           await visit('/repositories/12/files/README.md');
@@ -1175,6 +1206,28 @@ describe('RepositoryScreenPage', () => {
       await settle(harness.fixture);
 
       expect(savedPaths()).toEqual([ 'README.md' ]);
+    });
+
+    it('reads the diff only after the waiting save has been answered', async () => {
+      changes = [ { path: 'README.md', state: 'modified' } ];
+      localStorage.setItem('fb.4.sideTool', 'changes');
+      const answer = new Subject<{ hash: string; size: number; }>();
+      saveFile.mockReturnValue(answer);
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      (page().querySelector('rs-change-entry button') as HTMLButtonElement).click();
+      await settle(harness.fixture);
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+      expect(page().querySelector('rs-diff-view')).not.toBeNull();
+      expect(gitDiff).not.toHaveBeenCalled();
+
+      answer.next({ hash: 'b'.repeat(64), size: 10 });
+      answer.complete();
+      await settle(harness.fixture);
+
+      expect(gitDiff).toHaveBeenCalledWith('README.md');
     });
 
     it('flushes when the screen is left', async () => {

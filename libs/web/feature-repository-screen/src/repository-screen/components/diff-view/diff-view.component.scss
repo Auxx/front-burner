@@ -154,3 +154,16 @@ mark {
   inset-inline-start: 0;
   inline-size: max-content;
 }
+
+// Finding text in the page only reaches the rows rendered, so the count says how far they go.
+.more {
+  position: sticky;
+  inset-inline-start: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  inline-size: max-content;
+  padding: var(--ui-space-2) var(--ui-space-3);
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-family-sans);
+}

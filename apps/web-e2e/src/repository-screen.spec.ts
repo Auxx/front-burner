@@ -1084,6 +1084,27 @@ test.describe('repository screen, kept up to date', () => {
     await expect(page.getByRole('button', { name: 'Open in editor' })).toHaveCount(0);
   });
 
+  test('says a new empty file is empty, and shows a long diff in batches', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    writeFileSync(join(dir, 'empty.md'), '');
+    writeFileSync(join(dir, 'long.md'), 'row\n'.repeat(2500));
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    await expect(editorOf(page, 'README.md')).toBeVisible();
+
+    await selectChange(page, /^empty\.md/);
+    await expect(editor(page).getByText('This file is empty.')).toBeVisible();
+
+    await selectChange(page, /^long\.md/);
+    await expect(diffLines(page).locator('.row')).toHaveCount(2000);
+    await expect(editor(page).getByText('Showing 2000 of 2500 rows')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Show 500 more rows' }).click();
+
+    await expect(diffLines(page).locator('.row')).toHaveCount(2500);
+    await expect(page.getByRole('button', { name: /more rows/ })).toHaveCount(0);
+  });
+
   test('opens a fold in place, and keeps a long line inside the diff at 320 px', async ({ page, instance }) => {
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
     const lines = Array.from({ length: 48 }, (_, index) => `line ${index + 1}`);

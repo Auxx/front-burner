@@ -156,13 +156,15 @@ export class RepositoryScreenPage {
     return (narrow ? this.drawerOpen() : this.panes.sideOpen()) ? this.panes.sideTool() : null;
   });
   /**
-   * The route's path, and whether the navigation to it closed the open file
-   * (FB-39), read while that navigation runs.
+   * The route's repository and path, whether the navigation to it closed the
+   * open file (FB-39), and whether it replaced the URL, read while it runs.
    */
   private readonly target = toSignal(
     this.route.paramMap.pipe(map(params => ({
+      repositoryId: Number(params.get('id')),
       path: params.get('path') ?? '',
-      closed: this.router.currentNavigation()?.extras.state?.['closed'] === true
+      closed: this.router.currentNavigation()?.extras.state?.['closed'] === true,
+      replaced: this.router.currentNavigation()?.extras.replaceUrl === true
     }))),
     { requireSync: true }
   );
@@ -184,6 +186,8 @@ export class RepositoryScreenPage {
   protected readonly selectedPath = computed(() => this.path() || null);
   /** The change whose diff the editor area shows, as it was selected; `null` shows the open file (GA-14). */
   private readonly selectedChange = signal<GitChange | null>(null);
+  /** Whether the diff waits for the waiting saves, so that it has them. */
+  protected readonly diffWaiting = signal(false);
   /** That change, with its state as of the last status: the file can be deleted while its diff is shown. */
   protected readonly diffChange = computed(() => {
     const selected = this.selectedChange();
@@ -220,17 +224,15 @@ export class RepositoryScreenPage {
   /** Whether the open file has unsaved edits (NV-13). */
   private readonly unsaved = computed(() => this.openFiles.current()?.saver.unsaved() ?? false);
 
+  /** Counts the diffs selected, so that only the latest one's wait for a save counts. */
+  private diffsSelected = 0;
   /** Counts the paths shown, so that only the latest one's answer counts. */
   private showing = 0;
   /** Whether the path shown could not be found because a folder could not be listed. */
   private failed = false;
 
   constructor() {
-    // Another file or repository through the route ends the diff (GA-14).
-    effect(() => {
-      this.target();
-      untracked(() => this.selectedChange.set(null));
-    });
+    this.endDiffWhenFileOpens();
     effect(() => {
       const state = this.session.state();
       const repository = state === 'ready' ? this.session.repository() : null;
@@ -293,17 +295,23 @@ export class RepositoryScreenPage {
 
   /**
    * Shows the diff of the selected change (GA-14) and closes the drawer of
-   * narrow screens (FB-9). The open file's waiting save is sent at once, so that
-   * the diff has it.
+   * narrow screens (FB-9). The diff is read once the waiting saves have been
+   * answered, so that it has them; a save that failed is left to its retries and
+   * says so in the save status.
    */
-  protected openDiff(path: string): void {
+  protected async openDiff(path: string): Promise<void> {
     const change = this.gitStatus.status()?.changes.find(item => item.path === path);
     if (!change) {
       return;
     }
+    const selected = ++this.diffsSelected;
     this.drawerOpen.set(false);
     this.selectedChange.set(change);
-    void this.openFiles.current()?.saver.flush();
+    this.diffWaiting.set(this.openFiles.anyUnsaved());
+    await this.openFiles.flushAll();
+    if (selected === this.diffsSelected) {
+      this.diffWaiting.set(false);
+    }
   }
 
   /**
@@ -423,6 +431,23 @@ export class RepositoryScreenPage {
         this.openError.set(error as ApiError);
       }
     }
+  }
+
+  /**
+   * Opening a file through the route ends the diff, and so does another
+   * repository (GA-14). A navigation that only replaces the URL does not open
+   * anything: it goes to the first file, or follows the open file being renamed
+   * or deleted.
+   */
+  private endDiffWhenFileOpens(): void {
+    let repositoryId: number | null = null;
+    effect(() => {
+      const target = this.target();
+      if (!target.replaced || target.repositoryId !== repositoryId) {
+        untracked(() => this.selectedChange.set(null));
+      }
+      repositoryId = target.repositoryId;
+    });
   }
 
   /**

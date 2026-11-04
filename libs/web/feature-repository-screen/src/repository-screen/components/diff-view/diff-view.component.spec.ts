@@ -18,7 +18,7 @@ const STATUS: GitStatus = {
   upstream: null,
   ahead: 0,
   behind: 0,
-  changes: [],
+  changes: [ 'README.md', 'a.md', 'b.md', 'logo.png' ].map(path => ({ path, state: 'modified' as const })),
   mergeInProgress: false
 };
 
@@ -211,7 +211,7 @@ describe('DiffViewComponent', () => {
 
     // `GitStatusStore` reads the status at once on `git.changed`.
     diff.mockReturnValue(of(textDiff([])));
-    status.set({ ...STATUS });
+    status.set({ ...STATUS, changes: [] });
     await settle(fixture);
 
     expect(diff).toHaveBeenCalledTimes(2);
@@ -261,6 +261,218 @@ describe('DiffViewComponent', () => {
 
     expect(rows()).toEqual([]);
     expect(host().querySelector('ui-spinner')).not.toBeNull();
+  });
+
+  it('says an added or deleted file is empty, while the status still lists it', async () => {
+    diff.mockReturnValue(of(textDiff([])));
+    await render('README.md', 'added');
+
+    expect(text()).toContain(`${KEY}.emptyFile`);
+    expect(text()).not.toContain(`${KEY}.noChanges`);
+  });
+
+  it('says the content has not changed for a modified file without lines, such as a new file mode', async () => {
+    diff.mockReturnValue(of(textDiff([])));
+    await render();
+
+    expect(text()).toContain(`${KEY}.noContentChanges`);
+    expect(text()).not.toContain(`${KEY}.noChanges`);
+  });
+
+  it('does not offer Open in editor once the status no longer lists the file', async () => {
+    await render();
+    expect(button(`${KEY}.openInEditor`)).toBeDefined();
+
+    status.set({ ...STATUS, changes: [] });
+    await settle(fixture);
+
+    expect(button(`${KEY}.openInEditor`)).toBeUndefined();
+  });
+
+  it('does not rebuild the rows when a new read answers the same diff', async () => {
+    await render();
+    const component = fixture.componentInstance;
+    const before = component['rows']();
+
+    status.set({ ...STATUS });
+    await settle(fixture);
+
+    expect(diff).toHaveBeenCalledTimes(2);
+    expect(component['rows']()).toBe(before);
+  });
+
+  it('does not show one file\'s failure on another file that is still loaded', async () => {
+    await render('a.md');
+
+    diff.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+    fixture.componentRef.setInput('path', 'b.md');
+    await settle(fixture);
+    expect(text()).toContain(`${KEY}.failed`);
+
+    diff.mockReturnValue(new Subject<GitDiff>());
+    fixture.componentRef.setInput('path', 'a.md');
+    await settle(fixture);
+
+    expect(text()).not.toContain(`${KEY}.failed`);
+    expect(rows()).toHaveLength(3);
+  });
+
+  it('waits for the go-ahead before it reads, and shows that it is loading', async () => {
+    TestBed.configureTestingModule({
+      imports: [ DiffViewComponent, translocoTesting() ],
+      providers: [
+        { provide: GitApi, useValue: { diff } },
+        { provide: GitStatusStore, useValue: { status } }
+      ]
+    });
+    fixture = TestBed.createComponent(DiffViewComponent);
+    fixture.componentRef.setInput('repositoryId', 12);
+    fixture.componentRef.setInput('path', 'README.md');
+    fixture.componentRef.setInput('state', 'modified');
+    fixture.componentRef.setInput('waiting', true);
+    await settle(fixture);
+
+    expect(diff).not.toHaveBeenCalled();
+    expect(host().querySelector('ui-spinner')).not.toBeNull();
+
+    fixture.componentRef.setInput('waiting', false);
+    await settle(fixture);
+
+    expect(diff).toHaveBeenCalledTimes(1);
+    expect(rows()).toHaveLength(3);
+  });
+
+  describe('a long diff', () => {
+    const added = (count: number): DiffLine[] =>
+      Array.from({ length: count }, (_, index) => ({
+        type: 'added' as const,
+        oldLine: null,
+        newLine: index + 1,
+        text: `line ${index + 1}`
+      }));
+
+    it('renders the first rows, and more on request', async () => {
+      diff.mockReturnValue(of(textDiff(added(4500))));
+      await render('README.md', 'added', {
+        [`${KEY}.rowsShown`]: '{{ shown }} of {{ total }}',
+        [`${KEY}.showNextRows`]: 'Show {{ count }} more rows'
+      });
+
+      expect(rows()).toHaveLength(2000);
+      expect(text()).toContain('2000 of 4500');
+
+      button('Show 2000 more rows')?.click();
+      await settle(fixture);
+      expect(rows()).toHaveLength(4000);
+
+      button('Show 500 more rows')?.click();
+      await settle(fixture);
+      expect(rows()).toHaveLength(4500);
+      expect(host().querySelector('.more')).toBeNull();
+    }, 30_000);
+
+    it('keeps the focus in the diff when the last rows are shown', async () => {
+      diff.mockReturnValue(of(textDiff(added(2500))));
+      await render('README.md', 'added');
+      document.body.append(host());
+
+      button(`${KEY}.showNextRows`)?.click();
+      await settle(fixture);
+
+      expect(document.activeElement).toBe(host().querySelector('.scroller'));
+      host().remove();
+    });
+
+    it('offers nothing more for a diff that fits', async () => {
+      diff.mockReturnValue(of(textDiff(added(2000))));
+      await render('README.md', 'added');
+
+      expect(rows()).toHaveLength(2000);
+      expect(host().querySelector('.more')).toBeNull();
+    });
+
+    it('starts again from the first rows for another file, and keeps its rows on a new read', async () => {
+      diff.mockReturnValue(of(textDiff(added(4500))));
+      await render('a.md', 'added');
+      button(`${KEY}.showNextRows`)?.click();
+      await settle(fixture);
+      expect(rows()).toHaveLength(4000);
+
+      status.set({ ...STATUS });
+      await settle(fixture);
+      expect(rows()).toHaveLength(4000);
+
+      fixture.componentRef.setInput('path', 'b.md');
+      await settle(fixture);
+      expect(rows()).toHaveLength(2000);
+    });
+  });
+
+  describe('opened folds and new reads', () => {
+    /** A change on line 1, and unchanged lines to line 50; `extra` more changed lines move the fold's start. */
+    function changedAtTop(extra: number): GitDiff {
+      const changed = Array.from({ length: 1 + extra }, (_, index): DiffLine[] => [
+        { type: 'removed', oldLine: index + 1, newLine: null, text: 'old' },
+        { type: 'added', oldLine: null, newLine: index + 1, text: 'new' }
+      ]).flat();
+      return textDiff([ ...changed, ...context(49 - extra, 2 + extra) ]);
+    }
+
+    const showMore = () => button(`${KEY}.showMore`);
+
+    it('keeps a fold open when changes above it move its start', async () => {
+      diff.mockReturnValue(of(changedAtTop(0)));
+      await render();
+      showMore()?.click();
+      await settle(fixture);
+      expect(showMore()).toBeUndefined();
+
+      diff.mockReturnValue(of(changedAtTop(2)));
+      status.set({ ...STATUS });
+      await settle(fixture);
+
+      expect(showMore()).toBeUndefined();
+    });
+
+    it('leaves closed a fold that shares no lines with an opened one', async () => {
+      const twoFolds = (changeAt: number): GitDiff =>
+        textDiff([
+          ...context(changeAt - 1),
+          { type: 'removed', oldLine: changeAt, newLine: null, text: 'old' },
+          { type: 'added', oldLine: null, newLine: changeAt, text: 'new' },
+          ...context(60 - changeAt, changeAt + 1)
+        ]);
+      diff.mockReturnValue(of(twoFolds(30)));
+      await render();
+      // The first of the two folds, lines 4 to 26.
+      showMore()?.click();
+      await settle(fixture);
+      expect(host().querySelectorAll('.open-fold')).toHaveLength(1);
+
+      diff.mockReturnValue(of(twoFolds(31)));
+      status.set({ ...STATUS });
+      await settle(fixture);
+
+      expect(host().querySelectorAll('.open-fold')).toHaveLength(1);
+      expect(rows().some(row => row.querySelector('.old')?.textContent === '10')).toBe(true);
+      expect(rows().some(row => row.querySelector('.old')?.textContent === '45')).toBe(false);
+    });
+
+    it('forgets an opened fold that a new read no longer has', async () => {
+      diff.mockReturnValue(of(changedAtTop(0)));
+      await render();
+      showMore()?.click();
+      await settle(fixture);
+
+      diff.mockReturnValue(of(textDiff(CHANGED)));
+      status.set({ ...STATUS });
+      await settle(fixture);
+      diff.mockReturnValue(of(changedAtTop(0)));
+      status.set({ ...STATUS });
+      await settle(fixture);
+
+      expect(showMore()).toBeDefined();
+    });
   });
 
   it('offers Try again when loading fails', async () => {

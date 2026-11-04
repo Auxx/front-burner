@@ -27,7 +27,7 @@
       }
       @case ('text') {
         @if (diff.lines.length === 0) {
-          <p class="note">{{ t('noChanges') }}</p>
+          <p class="note">{{ t(noLinesMessage()) }}</p>
         } @else {
           @if (diff.lineEndingsOnly) {
             <p class="line-endings">{{ t('lineEndingsOnly') }}</p>
@@ -54,12 +54,18 @@
                   </div>
                 }
               }
+              @if (nextRows() > 0) {
+                <div class="more">
+                  <span class="rows-shown">{{ t('rowsShown', { shown: rows().length, total: totalRows() }) }}</span>
+                  <button uiButton size="small" (click)="showNextRows()">{{ t('showNextRows', { count: nextRows() }) }}</button>
+                </div>
+              }
             </div>
           </div>
         }
       }
     }
-  } @else if (!failed()) {
+  } @else if (!failed() || waiting()) {
     <ui-spinner class="note" [label]="t('loading')" />
   }
 </ng-container>

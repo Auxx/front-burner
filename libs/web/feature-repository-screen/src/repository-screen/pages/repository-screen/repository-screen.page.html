@@ -93,6 +93,7 @@
               [repositoryId]="session.repository()!.id"
               [path]="change.path"
               [state]="change.state"
+              [waiting]="diffWaiting()"
               (openInEditor)="openEntryAt($event)"
             />
           }

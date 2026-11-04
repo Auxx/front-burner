@@ -1,6 +1,6 @@
-import type { DiffLine } from '@front-burner/shared-contracts';
+import type { DiffLine, GitDiff } from '@front-burner/shared-contracts';
 
-import { type DiffRow, diffRows, wholeLineRow } from './diff-rows';
+import { type DiffRow, diffRows, foldsOverlap, sameDiff, wholeLineRow } from './diff-rows';
 
 /** `count` unchanged lines, numbered from `from` on both sides. */
 function context(count: number, from = 1): DiffLine[] {
@@ -42,6 +42,19 @@ describe('diffRows', () => {
 
   it('marks the lines before the first hunk of an incomplete diff the same way', () => {
     expect(kinds(diffRows(context(1, 40)))).toEqual([ 'fold', 'line' ]);
+  });
+
+  it('marks the unchanged lines that may follow the last hunk of an incomplete diff', () => {
+    const lines = [ ...context(3), removed('old', 4), added('new', 4), ...context(3, 5) ];
+
+    expect(kinds(diffRows(lines, false)).at(-1)).toBe('fold');
+    expect(kinds(diffRows(lines)).at(-1)).toBe('line');
+  });
+
+  it('marks nothing after a last hunk that reaches the end of the file', () => {
+    const lines = [ ...context(3), removed('old', 4), added('new', 4), ...context(2, 5) ];
+
+    expect(kinds(diffRows(lines, false)).at(-1)).toBe('line');
   });
 
   it('marks the changed words of a pair of lines', () => {
@@ -93,6 +106,23 @@ describe('diffRows', () => {
     expect(rows.some(row => row.parts.some(part => part.changed))).toBe(false);
   });
 
+  it('stops word highlighting once a diff has spent its budget, so that long lines cannot freeze the tab', () => {
+    const line = (word: string) => Array.from({ length: 300 }, (_, index) => `${word}${index}`).join(' ');
+    const lines = Array.from({ length: 40 }, (_, index) => [
+      removed(line('old'), index + 1),
+      added(line('new'), index + 1)
+    ]).flat();
+
+    const rows = lineRows(diffRows(lines));
+    const highlighted = rows.filter(row => row.parts.some(part => part.changed)).length;
+
+    expect(highlighted).toBeGreaterThan(0);
+    expect(highlighted).toBeLessThan(rows.length);
+    // The first ones, top to bottom.
+    expect(rows[0].parts.some(part => part.changed)).toBe(true);
+    expect(rows.at(-1)?.parts).toEqual([ { text: line('new'), changed: false } ]);
+  });
+
   it('still highlights a run of 500 lines', () => {
     const lines = [
       ...Array.from({ length: 250 }, (_, index) => removed(`old ${index}`, index + 1)),
@@ -116,5 +146,36 @@ describe('diffRows', () => {
 
   it('leaves an empty line without parts', () => {
     expect(wholeLineRow({ ...context(1)[0], text: '' }).parts).toEqual([]);
+  });
+});
+
+describe('sameDiff', () => {
+  const text = (lines: DiffLine[]): GitDiff => ({ kind: 'text', lines, complete: true, lineEndingsOnly: false });
+
+  it('is true for equal diffs', () => {
+    expect(sameDiff(text(context(3)), text(context(3)))).toBe(true);
+    expect(sameDiff({ kind: 'too-large' }, { kind: 'too-large' })).toBe(true);
+    expect(sameDiff({ kind: 'binary', oldSize: 1, newSize: 2 }, { kind: 'binary', oldSize: 1, newSize: 2 })).toBe(true);
+  });
+
+  it('is false for any difference', () => {
+    expect(sameDiff(text(context(3)), text(context(4)))).toBe(false);
+    expect(sameDiff(text([ removed('a') ]), text([ removed('b') ]))).toBe(false);
+    expect(sameDiff(text(context(1)), { ...text(context(1)), complete: false })).toBe(false);
+    expect(sameDiff({ kind: 'binary', oldSize: 1, newSize: 2 }, { kind: 'binary', oldSize: 1, newSize: 3 })).toBe(
+      false
+    );
+    expect(sameDiff({ kind: 'too-large' }, text([]))).toBe(false);
+  });
+});
+
+describe('foldsOverlap', () => {
+  it('is true when the two share an old line', () => {
+    expect(foldsOverlap({ from: 14, to: 40 }, { from: 16, to: 50 })).toBe(true);
+    expect(foldsOverlap({ from: 14, to: 40 }, { from: 40, to: 41 })).toBe(true);
+  });
+
+  it('is false for folds apart', () => {
+    expect(foldsOverlap({ from: 14, to: 40 }, { from: 41, to: 60 })).toBe(false);
   });
 });
