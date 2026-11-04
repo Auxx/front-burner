@@ -43,6 +43,7 @@ export {
 export { ToastOutletComponent } from './feedback/components/toast-outlet/toast-outlet.component';
 export { PopoverTriggerDirective } from './feedback/directives/popover-trigger/popover-trigger.directive';
 export { TooltipDirective } from './feedback/directives/tooltip/tooltip.directive';
+export { TruncatedTooltipDirective } from './feedback/directives/truncated-tooltip/truncated-tooltip.directive';
 export { type Status } from './feedback/models/status.model';
 export { DialogRef } from './feedback/services/dialog/dialog-ref';
 export { type ConfirmOptions, DIALOG_DATA, type DialogOptions } from './feedback/services/dialog/dialog.model';

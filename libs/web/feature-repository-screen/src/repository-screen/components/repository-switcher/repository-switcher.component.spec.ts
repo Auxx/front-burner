@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import type { RecentRepositories, RepositorySummary } from '@front-burner/shared-contracts';
+import { TruncatedTooltipDirective } from '@front-burner/ui';
 import { RepositoriesApi } from '@front-burner/web-api-client';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
@@ -150,17 +152,21 @@ describe('RepositorySwitcherComponent', () => {
       callback?.([], {} as ResizeObserver);
       await settle(fixture);
     };
-    const description = () => document.getElementById(trigger().getAttribute('aria-describedby') ?? '');
+    const tooltip = () =>
+      fixture.debugElement.query(By.directive(TruncatedTooltipDirective)).injector.get(TruncatedTooltipDirective);
 
     try {
       await show();
-      expect(trigger().hasAttribute('aria-describedby')).toBe(false);
+      expect(tooltip().truncated()).toBe(false);
 
       await resize(200);
-      expect(description()?.textContent).toBe('handbook');
+      expect(tooltip().truncated()).toBe(true);
+      expect(tooltip().text()).toBe('handbook');
+      // Its text is the button's name already.
+      expect(trigger().hasAttribute('aria-describedby')).toBe(false);
 
       await resize(80);
-      expect(trigger().hasAttribute('aria-describedby')).toBe(false);
+      expect(tooltip().truncated()).toBe(false);
     } finally {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();

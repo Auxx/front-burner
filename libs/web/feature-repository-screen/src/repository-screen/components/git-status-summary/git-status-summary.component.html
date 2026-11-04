@@ -1,0 +1,21 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.GitStatusSummaryComponent'">
+  @if (status(); as status) {
+    @if (status.branch; as branch) {
+      <!-- Focusable while shortened, so that the keyboard reaches the full name (NV-11). -->
+      <span
+        #tip="uiTruncatedTooltip"
+        class="branch"
+        uiTruncatedTooltipLongPress
+        uiTruncatedTooltipShowOnClick
+        [uiTruncatedTooltip]="branch"
+        [attr.tabindex]="tip.truncated() ? 0 : null"
+      >{{ branch }}</span>
+      @if (detail(); as detail) {
+        <!-- Spaces for the text when copied; the flex layout leaves them out. -->
+        &ngsp;<span class="separator" aria-hidden="true">·</span>&ngsp;<span class="detail">{{ t(detail.key, detail.params) }}</span>
+      }
+    } @else {
+      <span class="branch">{{ t('noBranch') }}</span>
+    }
+  }
+</ng-container>

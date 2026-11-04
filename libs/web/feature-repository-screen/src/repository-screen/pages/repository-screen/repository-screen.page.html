@@ -18,6 +18,7 @@
           [user]="user()"
           [withFiles]="state === 'ready'"
           [narrow]="shell.narrow()"
+          [gitStatus]="gitStatus.status()"
           [saveStatus]="saveStatus()"
         />
       } @else if (user(); as user) {

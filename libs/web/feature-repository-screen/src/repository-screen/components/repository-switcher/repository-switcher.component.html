@@ -2,11 +2,10 @@
   @let repository = this.repository();
   <h1 class="heading">
     <button
-      #nameButton
       class="name"
       [uiMenuTrigger]="switcher.aria"
-      [uiTooltip]="shortened() ? repository.name : ''"
-      uiTooltipLongPress
+      [uiTruncatedTooltip]="repository.name"
+      uiTruncatedTooltipLongPress
     >
       {{ repository.name }}
     </button>

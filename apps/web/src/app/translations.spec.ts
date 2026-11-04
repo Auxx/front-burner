@@ -1,4 +1,5 @@
 import { COMMIT_AUTHOR_FIELD_CODES, ERROR_CODES, PASSWORD_RULES } from '@front-burner/shared-contracts';
+import { IntlMessageFormat } from 'intl-messageformat';
 
 import en from '../../public/i18n/en.json';
 
@@ -153,6 +154,20 @@ describe('i18n/en.json', () => {
   it.each(PASSWORD_RULES)('has the policy rule and the field error for %s', rule => {
     expect(texts[`${AUTH}.PasswordPolicyComponent.rules.${rule}`]).toEqual(expect.any(String));
     expect(texts[`${AUTH}.PasswordSetupStepComponent.fieldErrors.password.${rule}`]).toEqual(expect.any(String));
+  });
+
+  // As `IcuTranspiler` formats them (GA-7, GA-42).
+  it.each<[ string, Record<string, number>, string ]>([
+    [ 'toPush', { ahead: 1 }, '1 to push' ],
+    [ 'toPull', { behind: 3 }, '3 to pull' ],
+    [ 'toPushAndPull', { ahead: 2, behind: 3 }, '2 to push, 3 to pull' ],
+    [ 'notPublished', {}, 'Not published' ],
+    [ 'noCommits', {}, 'no commits yet' ],
+    [ 'noBranch', {}, 'No branch' ]
+  ])('formats the git status text %s', (key, values, text) => {
+    const message = texts[`${SCREEN}.GitStatusSummaryComponent.${key}`] as string;
+
+    expect(new IntlMessageFormat(message, 'en').format(values)).toBe(text);
   });
 
   it.each([ 0, 1, 2, 3, 4 ])('has the strength text for score %i', score => {
