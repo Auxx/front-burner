@@ -14,6 +14,7 @@ watch out for. The rules shared by all tools are in [SKILL.md](../SKILL.md).
 | [`doc-ids`](#doc-ids)         | Checking and renumbering IDs such as A-10.38 or REQ-EDIT-002       |
 | [`nx-tags`](#nx-tags)         | Checking that every Nx project has a scope and a type tag          |
 | [`typing-test`](#typing-test) | The page for checking typing speed on a real phone (NF-2.4)        |
+| [`mem-profile`](#mem-profile) | The memory of a test run: peak, per kind of process, over time     |
 
 ## `colour`
 
@@ -343,3 +344,57 @@ typing-test.mjs serve
   context.
 - Check it in emulation first (Chromium, Pixel 7, CPU slowed 4×): the 1 MB file
   measured a median of 30 ms and a maximum of 43 ms on 2026-10-28.
+
+## `mem-profile`
+
+Runs a test scenario and samples the memory of every process it starts, to find
+what fills the machine's memory during test runs and to compare settings
+(workers, `--parallel`, browsers). Each run writes three files to
+`tmp/ai-tools/mem-profile/<scenario>/<time>[-<label>]`: a Markdown report
+(`.md`), the data (`.json`) and the command's output (`.log`), each line of it
+prefixed with the seconds since the start, as the report's timeline is.
+
+| Command                                                           | Does                                                             |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `list [--json]`                                                   | The scenarios and what they run                                  |
+| `run <scenario> [--interval 1000] [--label x] [--quiet] [--json]` | Runs the scenario and writes the report; 1 if the command failed |
+
+The scenarios, in `SCENARIOS` of `src/lib/mem-profile.mjs`: `unit`, `unit-web`,
+`unit-server`, `storybook`, `e2e-server`, `e2e-web`, `e2e-web-chromium` and
+`all`. Every one runs Nx with `--skipNxCache` (a cached task runs nothing) and
+`--outputStyle=stream` (log lines name their project). The e2e scenarios build
+first with a `prepare` command that is not measured, and then run the e2e target
+with `--excludeTaskDependencies`. Arguments after `--` are appended to the
+command, and `--label` tells the runs apart:
+
+```shell
+mem-profile.mjs run unit --quiet
+mem-profile.mjs run unit --quiet --label parallel-1 -- --parallel=1
+mem-profile.mjs run e2e-web-chromium --quiet --label workers-4 -- --workers=4
+```
+
+- **What it measures.** The process tree of the command, found by parent PID.
+  Processes whose parent has exited are still found through the parent's PID; a
+  PID that the system reuses (another start time) is left out. A process is
+  known by PID and start time, not by name, since `sh -c` execs its command. On
+  Windows a long-lived PowerShell lists the processes (`Win32_Process`) and the
+  peak is measured by **private** (committed) memory, which is what runs out;
+  the working set is reported beside it but counts shared pages once per
+  process. Elsewhere `ps` gives RSS only, and the peak is RSS.
+- **System memory in use** is the whole machine's, so close what you can before
+  a run, and compare runs made in the same conditions.
+- **The e2e scenarios need Linux.** The server's git runner, credential broker
+  and SSH agent only run there, so on Windows the built server stops at its
+  `git` startup step. Run them in a Linux container from a snapshot of the
+  working tree (`node:24` on Debian 13 for git ≥ 2.47, `npx playwright install
+  --with-deps chromium firefox`), with `--ipc=host`, and `--out` a folder that
+  is bind-mounted, but not under `tmp/` (Docker would create `tmp/` as root, and
+  the builds write there). The system memory is then the Docker VM's.
+- **Categories** come from process names and command lines: `vitest` (runners
+  and their workers), `browser`, `server instance` (the e2e servers),
+  `playwright`, `angular`, `webpack`, `nx`, `npm`, `shell`, `node (other)`, and
+  other programs by name.
+- Extra arguments run in a shell, so the tool refuses quotes, spaces and other
+  characters the shell would read; `%` is allowed only at the end
+  (`--maxWorkers=50%`).
+- Ctrl+C stops the command, and the report of what ran so far is still written.

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { definedTokens, readSources, unknownTokens } from './unknown-tokens.mjs';
-import { WORKSPACE_ROOT } from './workspace.mjs';
+import { WORKSPACE_ROOT, workspacePath } from './workspace.mjs';
 
 const source = (path, text) => ({ path, text });
 
@@ -81,7 +81,7 @@ describe('unknown tokens', () => {
     afterAll(() => rmSync(fixture, { recursive: true, force: true }));
 
     it('reads SCSS, TypeScript and HTML files, without node_modules or symbolic links', () => {
-      const relative = fixture.slice(WORKSPACE_ROOT.length + 1);
+      const relative = workspacePath(fixture);
       const paths = readSources([ relative ]).map(found => found.path).sort();
 
       expect(paths).toEqual([ `${relative}/src/a.scss`, `${relative}/src/b.ts` ]);
