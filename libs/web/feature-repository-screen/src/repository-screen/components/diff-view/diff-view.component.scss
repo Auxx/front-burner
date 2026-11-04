@@ -1,0 +1,156 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border-block-end: var(--ui-border-width) solid var(--ui-border-subtle);
+}
+
+.path {
+  min-inline-size: 0;
+  margin: 0;
+  font-size: var(--ui-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.head button {
+  flex: none;
+}
+
+.message {
+  margin: var(--ui-space-2) var(--ui-space-3);
+}
+
+.note {
+  margin: var(--ui-space-4);
+  color: var(--ui-text-muted);
+  text-align: center;
+}
+
+.sizes {
+  display: block;
+  margin-block-start: var(--ui-space-1);
+  font-size: var(--ui-font-size-sm);
+}
+
+.line-endings {
+  margin: 0;
+  padding: var(--ui-space-2) var(--ui-space-3);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
+
+// Long lines scroll here, not the page.
+.scroller {
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+
+  &:focus-visible {
+    outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
+    outline-offset: calc(-1 * var(--ui-focus-ring-width));
+  }
+}
+
+// As wide as the longest line, so that every row's background reaches the end.
+.lines {
+  inline-size: max-content;
+  min-inline-size: 100%;
+  font-family: var(--ui-font-family-mono);
+  font-size: var(--ui-font-size-sm);
+  line-height: 1.5;
+}
+
+.row {
+  display: flex;
+
+  &.added {
+    background: var(--ui-diff-inserted-line);
+
+    mark {
+      background: var(--ui-diff-inserted-word);
+    }
+  }
+
+  &.removed {
+    background: var(--ui-diff-deleted-line);
+
+    mark {
+      background: var(--ui-diff-deleted-word);
+    }
+  }
+}
+
+.old,
+.new {
+  flex: none;
+  box-sizing: content-box;
+  inline-size: 6ch;
+  padding-inline-end: var(--ui-space-2);
+  color: var(--ui-text-muted);
+  text-align: end;
+  user-select: none;
+}
+
+.sign {
+  flex: none;
+  inline-size: 2ch;
+  user-select: none;
+}
+
+.text {
+  flex: 1;
+  padding-inline-end: var(--ui-space-3);
+  white-space: pre;
+}
+
+// Not only another colour (NF-13.7).
+mark {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.fold {
+  background: var(--ui-surface-sunken);
+}
+
+.open-fold,
+.not-shown {
+  display: block;
+  padding: var(--ui-space-1) var(--ui-space-3);
+  color: var(--ui-text-muted);
+  font: inherit;
+}
+
+.open-fold {
+  // Stays in view while a long line is scrolled sideways.
+  position: sticky;
+  inset-inline-start: 0;
+  min-block-size: 2.75rem;
+  background: none;
+  border: 0;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--ui-text-default);
+  }
+
+  &:focus-visible {
+    outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
+    outline-offset: calc(-1 * var(--ui-focus-ring-width));
+  }
+}
+
+.not-shown {
+  position: sticky;
+  inset-inline-start: 0;
+  inline-size: max-content;
+}

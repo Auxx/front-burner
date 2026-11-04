@@ -1,6 +1,6 @@
 import type { DiffLine } from '@front-burner/shared-contracts';
 
-import { diffRows, type DiffRow, wholeLineRow } from './diff-rows';
+import { type DiffRow, diffRows, wholeLineRow } from './diff-rows';
 
 /** `count` unchanged lines, numbered from `from` on both sides. */
 function context(count: number, from = 1): DiffLine[] {
@@ -15,7 +15,7 @@ function context(count: number, from = 1): DiffLine[] {
 const removed = (text: string, oldLine = 1): DiffLine => ({ type: 'removed', oldLine, newLine: null, text });
 const added = (text: string, newLine = 1): DiffLine => ({ type: 'added', oldLine: null, newLine, text });
 
-type LineRow = Extract<DiffRow, { kind: 'line' }>;
+type LineRow = Extract<DiffRow, { kind: 'line'; }>;
 const lineRows = (rows: DiffRow[]) => rows.filter((row): row is LineRow => row.kind === 'line');
 const kinds = (rows: DiffRow[]) => rows.map(row => row.kind);
 
@@ -24,7 +24,7 @@ describe('diffRows', () => {
     const rows = diffRows(context(9));
 
     expect(kinds(rows)).toEqual([ 'line', 'line', 'line', 'fold', 'line', 'line', 'line' ]);
-    const fold = rows[3] as Extract<DiffRow, { kind: 'fold' }>;
+    const fold = rows[3] as Extract<DiffRow, { kind: 'fold'; }>;
     expect(fold.hidden.map(line => line.oldLine)).toEqual([ 4, 5, 6 ]);
     expect(lineRows(rows).map(row => row.line.oldLine)).toEqual([ 1, 2, 3, 7, 8, 9 ]);
   });

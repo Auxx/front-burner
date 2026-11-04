@@ -23,13 +23,13 @@ export interface DiffLinePart {
  * it hides; it holds none where the response has a gap between its hunks.
  */
 export type DiffRow =
-  | { kind: 'line'; line: DiffLine; parts: DiffLinePart[] }
-  | { kind: 'fold'; hidden: DiffLine[] };
+  | { kind: 'line'; line: DiffLine; parts: DiffLinePart[]; }
+  | { kind: 'fold'; hidden: DiffLine[]; };
 
 const visibleText = (text: string) => text.endsWith('\r') ? `${text.slice(0, -1)}${CARRIAGE_RETURN_MARK}` : text;
 
 /** A line whose text has no changed words, such as an unchanged line or one without a partner. */
-export function wholeLineRow(line: DiffLine): DiffRow & { kind: 'line' } {
+export function wholeLineRow(line: DiffLine): DiffRow & { kind: 'line'; } {
   const text = visibleText(line.text);
   return { kind: 'line', line, parts: text === '' ? [] : [ { text, changed: false } ] };
 }
@@ -47,7 +47,9 @@ export function diffRows(lines: DiffLine[]): DiffRow[] {
   while (index < lines.length) {
     const first = lines[index];
     const type = first.type;
-    if ((first.oldLine !== null && first.oldLine !== nextOld) || (first.newLine !== null && first.newLine !== nextNew)) {
+    if (
+      (first.oldLine !== null && first.oldLine !== nextOld) || (first.newLine !== null && first.newLine !== nextNew)
+    ) {
       rows.push({ kind: 'fold', hidden: [] });
     }
     let end = index + 1;
@@ -68,7 +70,8 @@ export function diffRows(lines: DiffLine[]): DiffRow[] {
 /** Whether `line` carries on the block of `type` that ended with `previous`, in the same hunk. */
 function sameBlock(type: DiffLine['type'], line: DiffLine, previous: DiffLine): boolean {
   if (type === 'context') {
-    return line.type === 'context' && line.oldLine === previous.oldLine! + 1 && line.newLine === previous.newLine! + 1;
+    return line.type === 'context' && line.oldLine === (previous.oldLine ?? 0) + 1
+      && line.newLine === (previous.newLine ?? 0) + 1;
   }
   return line.type !== 'context' && (line.type === previous.type || line.type === 'added');
 }
@@ -104,7 +107,7 @@ function changedRows(block: DiffLine[]): DiffRow[] {
 }
 
 /** The two lines' text in parts, with the words that differ marked; whole lines when a line is too long. */
-function changedWords(before: string, after: string): [DiffLinePart[], DiffLinePart[]] {
+function changedWords(before: string, after: string): [ DiffLinePart[], DiffLinePart[] ] {
   const oldText = visibleText(before);
   const newText = visibleText(after);
   if (oldText.length > MAX_WORD_DIFF_CHARS || newText.length > MAX_WORD_DIFF_CHARS) {
