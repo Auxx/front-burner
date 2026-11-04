@@ -47,9 +47,14 @@ const HANDBOOK_FILES: Record<string, string | Buffer> = {
   'media/photo.png': PNG
 };
 
+/** Runs git in `dir` as the fixtures' author, such as to change a seeded working copy in a test. */
+export function gitIn(dir: string, ...args: string[]): string {
+  return execFileSync('git', args, { cwd: dir, env: gitEnv, encoding: 'utf8' });
+}
+
 /** Creates the working copy of a seeded repository at `dir`, as a clone would have left it. */
 export function createWorkingCopy(dir: string, fixture: WorkingCopyFixture): void {
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, env: gitEnv });
+  const git = (...args: string[]) => gitIn(dir, ...args);
   mkdirSync(dir, { recursive: true });
   git('init', '-q', '-b', 'main');
   if (fixture === 'empty') {

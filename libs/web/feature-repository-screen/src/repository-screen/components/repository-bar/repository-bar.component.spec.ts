@@ -63,10 +63,30 @@ describe('RepositoryBarComponent', () => {
     );
   });
 
+  it('shows the branch between the repository name and the save status (NV-9)', async () => {
+    await show();
+    fixture.componentRef.setInput('gitStatus', {
+      branch: 'main',
+      noCommits: false,
+      upstream: 'origin/main',
+      ahead: 0,
+      behind: 0,
+      changes: [],
+      mergeInProgress: false
+    });
+    fixture.componentRef.setInput('saveStatus', { kind: 'saved' });
+    await settle(fixture);
+
+    const parts = [ ...bar().querySelectorAll('h1, rs-git-status-summary, rs-save-status') ];
+    expect(parts.map(part => part.localName)).toEqual([ 'h1', 'rs-git-status-summary', 'rs-save-status' ]);
+    expect(bar().querySelector('rs-git-status-summary')?.textContent?.trim()).toBe('main');
+  });
+
   it('shows no save status for a repository that cannot be opened', async () => {
     await show({ withFiles: false });
 
     expect(bar().querySelector('rs-save-status')).toBeNull();
+    expect(bar().querySelector('rs-git-status-summary')).toBeNull();
   });
 
   it('shows the bar\'s parts in order', async () => {

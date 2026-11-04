@@ -1,0 +1,31 @@
+// Between the repository name and the save status, as quiet as the save
+// status. The counts never shrink, so that they stay visible on narrow
+// screens; the branch name gives up its room first (GA-7, NV-11).
+:host {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  min-inline-size: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-ui-small);
+  white-space: nowrap;
+}
+
+// A long press shows the tooltip, not the platform's text selection or callout.
+.branch {
+  min-inline-size: 0;
+  overflow: hidden;
+  color: var(--ui-text-default);
+  text-overflow: ellipsis;
+  -webkit-touch-callout: none;
+
+  &:focus-visible {
+    border-radius: var(--ui-radius-control);
+    outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
+  }
+}
+
+.separator,
+.detail {
+  flex: none;
+}

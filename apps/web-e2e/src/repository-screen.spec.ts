@@ -12,6 +12,7 @@ import {
   TEST_CERTIFICATE_FILE
 } from './support/git-http-server';
 import { logIn, seed, type SeedRepository } from './support/instance';
+import { gitIn } from './support/working-copy';
 
 test.use({ instanceOptions: { onboarded: true } });
 
@@ -1201,6 +1202,55 @@ test.describe('repository screen, kept up to date', () => {
     await pointAt(switcherButton(page), isMobile);
     await expect(tooltip(page)).toHaveText(name);
     await expect(switcher(page)).toBeHidden();
+  });
+
+  test('shows the branch and Not published in the bar (GA-7)', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}`);
+
+    const bar = page.getByRole('banner');
+    await expect(bar.getByText('main', { exact: true })).toBeVisible();
+    await expect(bar.getByText('Not published', { exact: true })).toBeVisible();
+  });
+
+  test('the branch and counts stay in the one bar', async ({ page, instance, isMobile }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    // A 200-character branch with 2 commits to push and 3 to pull against its upstream.
+    const branch = `notes/${'a-long-branch-name-'.repeat(11)}`.slice(0, 200);
+    gitIn(dir, 'checkout', '-q', '-b', branch);
+    for (let index = 0; index < 3; index++) {
+      gitIn(dir, 'commit', '-q', '--allow-empty', '-m', `theirs ${index}`);
+    }
+    gitIn(dir, 'remote', 'add', 'origin', 'https://git.example.com/handbook.git');
+    gitIn(dir, 'update-ref', `refs/remotes/origin/${branch}`, 'HEAD');
+    gitIn(dir, 'reset', '-q', '--soft', 'main');
+    for (let index = 0; index < 2; index++) {
+      gitIn(dir, 'commit', '-q', '--allow-empty', '-m', `mine ${index}`);
+    }
+    gitIn(dir, 'branch', '-q', `--set-upstream-to=origin/${branch}`);
+
+    await openScreen(page, `/repositories/${handbook}`);
+
+    const bar = page.getByRole('banner');
+    const counts = bar.getByText('2 to push, 3 to pull', { exact: true });
+    await expect(counts).toBeInViewport({ ratio: 1 });
+    await expect(bar.getByRole('button', { name: /^Account menu for / })).toBeInViewport({ ratio: 1 });
+    await expect(switcherButton(page)).toBeInViewport({ ratio: 1 });
+    expect(await fitsWidth(page)).toBe(true);
+    const name = bar.getByText(branch, { exact: true });
+    expect(await name.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+    // One bar: the counts do not wrap below it.
+    expect(
+      await counts.evaluate(element =>
+        element.getBoundingClientRect().bottom <= (element.closest('header')?.getBoundingClientRect().bottom ?? 0)
+      )
+    ).toBe(true);
+
+    // The full name, on a long press on a phone and on hover otherwise (NV-11).
+    await pointAt(name, isMobile);
+    await expect(tooltip(page)).toHaveText(branch);
   });
 
   test('has no axe violations with the switcher open', async ({ page, instance, isMobile }) => {

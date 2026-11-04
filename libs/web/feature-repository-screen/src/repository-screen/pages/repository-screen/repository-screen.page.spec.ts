@@ -842,6 +842,31 @@ describe('RepositoryScreenPage', () => {
       });
     });
 
+    describe('the branch in the bar', () => {
+      const summary = () =>
+        page().querySelector('rs-repository-bar rs-git-status-summary')?.textContent?.replace(/\s+/g, ' ').trim();
+
+      it('shows the branch from the status', async () => {
+        await visit('/repositories/12');
+
+        expect(summary()).toBe(
+          'main · web-feature-repository-screen.GitStatusSummaryComponent.notPublished'
+        );
+      });
+
+      it('keeps showing the last status', async () => {
+        await visit('/repositories/12');
+        const before = summary();
+
+        gitStatusAnswer = throwError(() => new HttpErrorResponse({ status: 500 }));
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+
+        expect(summary()).toBe(before);
+        expect(before).toContain('main');
+      });
+    });
+
     it('has one pressed Files item with a folder icon in the activity bar', async () => {
       await visit('/repositories/12');
 

@@ -11,6 +11,11 @@
   min-inline-size: 0;
 }
 
+// The branch gives up its room before the counts and the save status (NV-11).
+.git {
+  flex-shrink: 1;
+}
+
 .status {
   min-inline-size: 0;
 }
