@@ -1,19 +1,3 @@
-import angular from '@analogjs/vite-plugin-angular';
-import { defineConfig } from 'vitest/config';
+import { angularConfig } from '../../../vitest.shared.mjs';
 
-export default defineConfig({
-  root: import.meta.dirname,
-  cacheDir: '../../../node_modules/.vite/libs/web/feature-preferences',
-  plugins: [ angular() ],
-  // Vite 8 resolves the aliases of tsconfig.base.json natively.
-  resolve: { tsconfigPaths: true },
-  test: {
-    name: 'web-feature-preferences',
-    watch: false,
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: [ 'src/test-setup.ts' ],
-    include: [ 'src/**/*.spec.ts' ],
-    reporters: [ 'default' ]
-  }
-});
+export default angularConfig(import.meta.dirname);

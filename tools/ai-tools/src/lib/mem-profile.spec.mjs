@@ -8,6 +8,7 @@ import {
   findScenario,
   formatBytes,
   formatSeconds,
+  parseEnv,
   parsePosixProcesses,
   parseWindowsProcesses,
   renderReport,
@@ -69,6 +70,22 @@ describe('mem-profile', () => {
     it('refuses arguments with characters the shell would read', () => {
       for (const arg of [ '--a=b c', '--a;rm', '--a="b"', '--a=\'b\'', '--a=$(x)', '--a=%PATH%', '--a&b', '--a|b' ]) {
         expect(() => commandLine(scenario, [ arg ], 'win32'), arg).toThrow(/characters the shell would read/);
+      }
+    });
+  });
+
+  describe('parseEnv', () => {
+    it('reads NAME=value settings, keeping = in the value', () => {
+      expect(parseEnv([ 'VITEST_MAX_WORKERS=4', 'E2E_BROWSERS=chromium', 'A_B=x=y' ])).toEqual({
+        VITEST_MAX_WORKERS: '4',
+        E2E_BROWSERS: 'chromium',
+        A_B: 'x=y'
+      });
+    });
+
+    it('refuses a setting without a name in capitals', () => {
+      for (const setting of [ 'vitest=4', '=4', 'NO_VALUE', '1A=2' ]) {
+        expect(() => parseEnv([ setting ]), setting).toThrow(/NAME=value/);
       }
     });
   });

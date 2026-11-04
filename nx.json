@@ -24,7 +24,10 @@
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
       "!{projectRoot}/tsconfig.spec.json"
     ],
-    "sharedGlobals": []
+    "sharedGlobals": [
+      "{workspaceRoot}/vitest.shared.mts",
+      "{workspaceRoot}/vitest-base.config.mts"
+    ]
   },
   "targetDefaults": {
     "@nx/angular:ng-packagr-lite": {
@@ -42,7 +45,10 @@
       "inputs": [
         "default",
         "^production"
-      ]
+      ],
+      "options": {
+        "runnerConfig": true
+      }
     },
     "@nx/eslint:lint": {
       "cache": true,
@@ -78,7 +84,10 @@
       "inputs": [
         "default",
         "^production"
-      ]
+      ],
+      "options": {
+        "runnerConfig": true
+      }
     },
     "typecheck": {
       "executor": "nx:run-commands",

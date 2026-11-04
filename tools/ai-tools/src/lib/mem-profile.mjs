@@ -83,6 +83,21 @@ export function commandLine(scenario, extraArgs = [], platform = process.platfor
   return [ scenario.command, ...quoted ].join(' ');
 }
 
+/**
+ * `NAME=value` settings, such as `VITEST_MAX_WORKERS=4`, as an object. They
+ * reach the command through its environment, not the shell, so any value is
+ * safe; the names are checked so that a typo fails loudly.
+ */
+export function parseEnv(settings) {
+  return Object.fromEntries(settings.map(setting => {
+    const match = /^([A-Z_][A-Z0-9_]*)=(.*)$/.exec(setting);
+    if (!match) {
+      throw new UsageError(`An environment setting is NAME=value, with NAME in capitals: ${setting}`);
+    }
+    return [ match[1], match[2] ];
+  }));
+}
+
 const LABEL = /^[a-z0-9][a-z0-9-]{0,39}$/i;
 
 /** A file-name-safe local timestamp, such as `2026-11-04T14-03-22`. */
@@ -574,6 +589,7 @@ export async function runProfile({
   scenario,
   definition = findScenario(scenario),
   extraArgs = [],
+  extraEnv = [],
   label,
   intervalMs = 1000,
   out = DEFAULT_OUT,
@@ -581,10 +597,10 @@ export async function runProfile({
   now = new Date()
 }) {
   const command = commandLine(definition, extraArgs);
+  const env = { ...definition.env, ...parseEnv(extraEnv) };
   const files = reportPaths({ out, scenario, stamp: timestamp(now), label });
   mkdirSync(files.dir, { recursive: true });
   const log = createWriteStream(files.log);
-  const env = definition.env ?? {};
   let started = Date.now();
 
   try {

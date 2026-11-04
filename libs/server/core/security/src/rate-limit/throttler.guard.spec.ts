@@ -69,7 +69,10 @@ describe('AppThrottlerGuard', () => {
       }
       next();
     });
-    await app.init();
+    // Listening once: given a server that is not listening, supertest starts
+    // and stops it for every request, which made the 1,200 requests here
+    // outlast the test timeout on a busy machine.
+    await app.listen(0, '127.0.0.1');
   });
 
   afterEach(async () => {

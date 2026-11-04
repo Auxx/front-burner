@@ -20,7 +20,8 @@ main({
       }
     },
     run: {
-      usage: '<scenario> [--interval 1000] [--label name] [--out dir] [--quiet] [--json] [-- extra args]',
+      usage:
+        '<scenario> [--interval 1000] [--label name] [--env NAME=value] [--out dir] [--quiet] [--json] [-- extra args]',
       summary:
         'Runs the scenario, samples its process tree and writes <out>/<scenario>/<time>[-label].md, .json and .log.',
       help: [
@@ -29,6 +30,7 @@ main({
         '',
         `--interval  milliseconds between samples (250 or more; default 1000)`,
         `--label     added to the report's file name, to tell runs apart`,
+        `--env       NAME=value for the command's environment, such as VITEST_MAX_WORKERS=4; repeatable`,
         `--out       folder in the workspace for the reports (default ${DEFAULT_OUT})`,
         `--quiet     write the command's output only to the log, not to the terminal`,
         `--json      print the run's summary as JSON (the command's output goes to stderr)`
@@ -36,6 +38,7 @@ main({
       options: {
         interval: { type: 'string', default: '1000' },
         label: { type: 'string' },
+        env: { type: 'string', multiple: true },
         out: { type: 'string', default: DEFAULT_OUT },
         quiet: { type: 'boolean' },
         json: { type: 'boolean' }
@@ -51,6 +54,7 @@ main({
         const run = await runProfile({
           scenario,
           extraArgs,
+          extraEnv: options.env ?? [],
           label: options.label,
           intervalMs,
           out: options.out,
