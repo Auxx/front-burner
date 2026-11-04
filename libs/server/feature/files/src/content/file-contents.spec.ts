@@ -121,7 +121,8 @@ describe('FileContents', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it('reads a file with its line ending, BOM and hash', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('reads a file with its line ending, BOM and hash', async () => {
     const bytes = Buffer.concat([ BOM, Buffer.from('# A\r\nb\r\n') ]);
     writeFileSync(join(root, 'docs', 'a.md'), bytes);
 
@@ -136,7 +137,8 @@ describe('FileContents', () => {
     expect(await contents.state(root, 'docs/a.md')).toEqual({ hash: hashBytes(bytes), size: bytes.length });
   });
 
-  it('AC-FILE-001.10: refuses a 2 MB file and a Latin-1 file', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('AC-FILE-001.10: refuses a 2 MB file and a Latin-1 file', async () => {
     writeFileSync(join(root, 'big.md'), Buffer.alloc(2 * EDITABLE_FILE_LIMIT, 'a'));
     writeFileSync(join(root, 'latin.md'), Buffer.from([ 0x63, 0x61, 0x66, 0xe9 ]));
 
@@ -145,7 +147,8 @@ describe('FileContents', () => {
       .toEqual({ status: 422, code: 'file-not-utf8', params: {} });
   });
 
-  it('AC-FILE-001.11: refuses to read through a symbolic link', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('AC-FILE-001.11: refuses to read through a symbolic link', async () => {
     const outside = join(dataDir, 'outside.md');
     writeFileSync(outside, 'secret\n');
     symlinkSync(outside, join(root, 'link.md'));
@@ -158,7 +161,8 @@ describe('FileContents', () => {
     expect(readFileSync(outside, 'utf8')).toBe('secret\n');
   });
 
-  it('refuses a non-Markdown file', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses a non-Markdown file', async () => {
     writeFileSync(join(root, 'notes.txt'), 'text\n');
     mkdirSync(join(root, 'folder.md'));
 
@@ -172,7 +176,8 @@ describe('FileContents', () => {
     expect(readFileSync(join(root, 'notes.txt'), 'utf8')).toBe('text\n');
   });
 
-  it('refuses a name with a NUL as malformed', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses a name with a NUL as malformed', async () => {
     const malformed = { status: 400, code: 'path-refused', params: { reason: 'malformed' } };
     const request: SaveFileRequest = { path: 'a\u0000.md', content: 'x', lineEnding: 'lf', bom: false };
 
@@ -181,7 +186,8 @@ describe('FileContents', () => {
     expect(await refusal(recreate(request))).toEqual(malformed);
   });
 
-  it('saves and returns the new hash', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('saves and returns the new hash', async () => {
     const state = await save({ path: 'docs/readme.md', content: '# New\n', lineEnding: 'crlf', bom: false });
 
     expect(bytesOf('docs/readme.md')).toEqual(Buffer.from('# New\r\n'));
@@ -189,7 +195,8 @@ describe('FileContents', () => {
     expect(readdirSync(layout.tmpDir)).toEqual([]);
   });
 
-  it('measures the limit on the bytes written', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('measures the limit on the bytes written', async () => {
     // One character short of the limit as text; the CR makes it exactly the limit, the BOM goes over.
     const content = 'a'.repeat(EDITABLE_FILE_LIMIT - 2) + '\n';
 
@@ -200,7 +207,8 @@ describe('FileContents', () => {
       .toMatchObject({ size: EDITABLE_FILE_LIMIT });
   });
 
-  it('refuses to save a missing file', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses to save a missing file', async () => {
     unlinkSync(join(root, 'docs', 'readme.md'));
 
     expect(await refusal(save({ path: 'docs/readme.md', content: 'x', lineEnding: 'lf', bom: false })))
@@ -210,7 +218,8 @@ describe('FileContents', () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it('keeps the old file when the rename fails', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('keeps the old file when the rename fails', async () => {
     failRename.on = true;
 
     expect(await refusal(save({ path: 'docs/readme.md', content: 'new\n', lineEnding: 'lf', bom: false })))
@@ -219,7 +228,8 @@ describe('FileContents', () => {
     expect(readdirSync(layout.tmpDir)).toEqual([]);
   });
 
-  it('keeps the file mode', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('keeps the file mode', async () => {
     chmodSync(join(root, 'docs', 'readme.md'), 0o755);
 
     await save({ path: 'docs/readme.md', content: 'new\n', lineEnding: 'lf', bom: false });
@@ -250,7 +260,8 @@ describe('FileContents', () => {
     expect(existsSync(join(root, 'docs', 'new.md'))).toBe(false);
   });
 
-  it('recreates a deleted file and refuses an existing one', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('recreates a deleted file and refuses an existing one', async () => {
     unlinkSync(join(root, 'docs', 'readme.md'));
     const request: SaveFileRequest = { path: 'docs/readme.md', content: 'back\n', lineEnding: 'crlf', bom: true };
 
@@ -269,42 +280,51 @@ describe('FileContents', () => {
     expect(readdirSync(layout.tmpDir)).toEqual([]);
   });
 
-  it('AC-EDIT-001.11: recreates the folders on its path that are gone', async () => {
-    rmSync(join(root, 'docs'), { recursive: true });
-    const request: SaveFileRequest = { path: 'docs/deep/er/a.md', content: 'back\n', lineEnding: 'lf', bom: false };
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'AC-EDIT-001.11: recreates the folders on its path that are gone',
+    async () => {
+      rmSync(join(root, 'docs'), { recursive: true });
+      const request: SaveFileRequest = { path: 'docs/deep/er/a.md', content: 'back\n', lineEnding: 'lf', bom: false };
 
-    await recreate(request);
+      await recreate(request);
 
-    expect(readFileSync(join(root, 'docs', 'deep', 'er', 'a.md'), 'utf8')).toBe('back\n');
-    expect(publish).toHaveBeenCalledWith(
-      USER,
-      expect.objectContaining({
-        folders: [ '', 'docs', 'docs/deep', 'docs/deep/er' ]
-      })
-    );
-  });
+      expect(readFileSync(join(root, 'docs', 'deep', 'er', 'a.md'), 'utf8')).toBe('back\n');
+      expect(publish).toHaveBeenCalledWith(
+        USER,
+        expect.objectContaining({
+          folders: [ '', 'docs', 'docs/deep', 'docs/deep/er' ]
+        })
+      );
+    }
+  );
 
-  it('refuses to recreate folders through a link, onto a file, inside .git or with a clashing name', async () => {
-    const outside = join(dataDir, 'outside');
-    mkdirSync(outside);
-    symlinkSync(outside, join(root, 'linked'));
-    mkdirSync(join(root, 'Notes'));
-    const request = (path: string): SaveFileRequest => ({ path, content: 'x', lineEnding: 'lf', bom: false });
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'refuses to recreate folders through a link, onto a file, inside .git or with a clashing name',
+    async () => {
+      const outside = join(dataDir, 'outside');
+      mkdirSync(outside);
+      symlinkSync(outside, join(root, 'linked'));
+      mkdirSync(join(root, 'Notes'));
+      const request = (path: string): SaveFileRequest => ({ path, content: 'x', lineEnding: 'lf', bom: false });
 
-    expect(await refusal(recreate(request('linked/new/a.md')))).toEqual(symlinkRefused);
-    expect(await refusal(recreate(request('docs/readme.md/a.md')))).toEqual(missing);
-    expect(await refusal(recreate(request('.git/new/a.md'))))
-      .toEqual({ status: 400, code: 'path-refused', params: { reason: 'inside-git' } });
-    expect(await refusal(recreate(request('notes/a.md'))))
-      .toEqual({ status: 409, code: 'entry-exists', params: {} });
-    expect(await refusal(recreate(request(' edge/a.md'))))
-      .toEqual({ status: 400, code: 'path-refused', params: { reason: 'malformed' } });
-    expect(readdirSync(outside)).toEqual([]);
-    expect(readdirSync(root).sort()).toEqual([ '.git', 'Notes', 'docs', 'linked' ]);
-    expect(publish).not.toHaveBeenCalled();
-  });
+      expect(await refusal(recreate(request('linked/new/a.md')))).toEqual(symlinkRefused);
+      expect(await refusal(recreate(request('docs/readme.md/a.md')))).toEqual(missing);
+      expect(await refusal(recreate(request('.git/new/a.md'))))
+        .toEqual({ status: 400, code: 'path-refused', params: { reason: 'inside-git' } });
+      expect(await refusal(recreate(request('notes/a.md'))))
+        .toEqual({ status: 409, code: 'entry-exists', params: {} });
+      expect(await refusal(recreate(request(' edge/a.md'))))
+        .toEqual({ status: 400, code: 'path-refused', params: { reason: 'malformed' } });
+      expect(readdirSync(outside)).toEqual([]);
+      expect(readdirSync(root).sort()).toEqual([ '.git', 'Notes', 'docs', 'linked' ]);
+      expect(publish).not.toHaveBeenCalled();
+    }
+  );
 
-  it('refuses to recreate a folder where a submodule is', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses to recreate a folder where a submodule is', async () => {
     const sha = git(root, 'rev-parse', 'HEAD').trim();
     git(root, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
     mkdirSync(join(root, 'vendor'));
@@ -314,7 +334,8 @@ describe('FileContents', () => {
     expect(readdirSync(join(root, 'vendor'))).toEqual([]);
   });
 
-  it('publishes files.changed with the saved hash', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('publishes files.changed with the saved hash', async () => {
     const saved = await save({ path: 'docs/readme.md', content: 'new\n', lineEnding: 'lf', bom: false });
     unlinkSync(join(root, 'docs', 'readme.md'));
     const recreated = await recreate({ path: 'docs/readme.md', content: 'back\n', lineEnding: 'lf', bom: false });
@@ -335,7 +356,8 @@ describe('FileContents', () => {
     ]);
   });
 
-  it('does not stage or commit', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('does not stage or commit', async () => {
     const head = git(root, 'rev-parse', 'HEAD');
 
     await save({ path: 'docs/readme.md', content: '# Changed\n', lineEnding: 'lf', bom: false });

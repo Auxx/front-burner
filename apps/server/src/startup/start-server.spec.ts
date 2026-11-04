@@ -54,7 +54,8 @@ describe('startServer', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('closes the database when the application closes', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('closes the database when the application closes', async () => {
     app = await start();
     const database = app.get<Database>(DATABASE);
     expect(database.sqlite.open).toBe(true);
@@ -64,7 +65,8 @@ describe('startServer', () => {
     expect(database.sqlite.open).toBe(false);
   });
 
-  it('serves the health endpoints outside /api/v1', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('serves the health endpoints outside /api/v1', async () => {
     app = await start();
 
     const response = await request(app.getHttpServer()).get('/api/health/live');
@@ -74,7 +76,8 @@ describe('startServer', () => {
     expect(response.headers['x-content-type-options']).toBe('nosniff');
   });
 
-  it('prefixes other routes with /api/v1', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('prefixes other routes with /api/v1', async () => {
     app = await start();
 
     const response = await request(app.getHttpServer()).get('/api/v1/nope');
@@ -83,7 +86,8 @@ describe('startServer', () => {
     expect(response.body.code).toBe('not-found');
   });
 
-  it('rate-limits requests that the auth guard refuses (A-1.12)', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('rate-limits requests that the auth guard refuses (A-1.12)', async () => {
     app = await start();
 
     for (let i = 0; i < 60; i++) {
@@ -92,7 +96,8 @@ describe('startServer', () => {
     expect((await request(app.getHttpServer()).get('/api/v1/me')).status).toBe(429);
   });
 
-  it('limits JSON bodies to 2 MB', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('limits JSON bodies to 2 MB', async () => {
     app = await start();
 
     const response = await request(app.getHttpServer())
@@ -106,22 +111,27 @@ describe('startServer', () => {
   const logEntries = () =>
     logs.flatMap(chunk => chunk.split('\n').filter(Boolean)).map(line => JSON.parse(line) as Record<string, any>);
 
-  it('logs the request ID of a rejected oversized body (NF-10.6, A-1.12)', async () => {
-    app = await start();
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'logs the request ID of a rejected oversized body (NF-10.6, A-1.12)',
+    async () => {
+      app = await start();
 
-    const response = await request(app.getHttpServer())
-      .post('/api/v1/nope')
-      .send({ text: 'x'.repeat(3 * 1024 * 1024) });
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/nope')
+        .send({ text: 'x'.repeat(3 * 1024 * 1024) });
 
-    expect(response.status).toBe(413);
-    expect(response.headers['x-request-id']).toBe(response.body.requestId);
-    const completed = logEntries().filter(e =>
-      e['requestId'] === response.body.requestId && e['message'] === 'request completed'
-    );
-    expect(completed).toHaveLength(1);
-  });
+      expect(response.status).toBe(413);
+      expect(response.headers['x-request-id']).toBe(response.body.requestId);
+      const completed = logEntries().filter(e =>
+        e['requestId'] === response.body.requestId && e['message'] === 'request completed'
+      );
+      expect(completed).toHaveLength(1);
+    }
+  );
 
-  it('logs the request ID of malformed JSON', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('logs the request ID of malformed JSON', async () => {
     app = await start();
 
     const response = await request(app.getHttpServer())
@@ -134,22 +144,27 @@ describe('startServer', () => {
       .toBe(true);
   });
 
-  it('gives web client pages and static assets a request ID and logs them once', async () => {
-    writeFileSync(join(webRoot, 'index.html'), '<html><script nonce="__CSP_NONCE__"></script></html>');
-    writeFileSync(join(webRoot, 'main.js'), 'console.log(1);');
-    mkdirSync(join(webRoot, 'assets'));
-    app = await start();
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'gives web client pages and static assets a request ID and logs them once',
+    async () => {
+      writeFileSync(join(webRoot, 'index.html'), '<html><script nonce="__CSP_NONCE__"></script></html>');
+      writeFileSync(join(webRoot, 'main.js'), 'console.log(1);');
+      mkdirSync(join(webRoot, 'assets'));
+      app = await start();
 
-    for (const path of [ '/login', '/main.js', '/assets/missing.png' ]) {
-      const response = await request(app.getHttpServer()).get(path);
-      const id = response.headers['x-request-id'];
-      expect(id, path).toBeTruthy();
-      expect(logEntries().filter(e => e['requestId'] === id && e['message'] === 'request completed'), path)
-        .toHaveLength(1);
+      for (const path of [ '/login', '/main.js', '/assets/missing.png' ]) {
+        const response = await request(app.getHttpServer()).get(path);
+        const id = response.headers['x-request-id'];
+        expect(id, path).toBeTruthy();
+        expect(logEntries().filter(e => e['requestId'] === id && e['message'] === 'request completed'), path)
+          .toHaveLength(1);
+      }
     }
-  });
+  );
 
-  it('starts without a web client build', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('starts without a web client build', async () => {
     app = await start();
 
     const response = await request(app.getHttpServer()).get('/api/health/live');
@@ -158,7 +173,8 @@ describe('startServer', () => {
     expect(logs.filter(line => line.includes('serving the API only'))).toHaveLength(1);
   });
 
-  it('serves the web client when built', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('serves the web client when built', async () => {
     writeFileSync(join(webRoot, 'index.html'), '<html><script nonce="__CSP_NONCE__"></script></html>');
     app = await start();
 
@@ -169,7 +185,8 @@ describe('startServer', () => {
     expect(logs.filter(line => line.includes('serving the API only'))).toHaveLength(0);
   });
 
-  it('keeps img-src as IM-23 says', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('keeps img-src as IM-23 says', async () => {
     writeFileSync(join(webRoot, 'index.html'), '<html><script nonce="__CSP_NONCE__"></script></html>');
     app = await start();
 
@@ -217,7 +234,8 @@ describe('startServer', () => {
     expect((failure as StartupError).step).toBe('database');
   });
 
-  it('stops at encryption-key with another key', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('stops at encryption-key with another key', async () => {
     app = await start();
     await app.close();
     app = undefined;
@@ -242,7 +260,8 @@ describe('startServer', () => {
     expect((failure as StartupError).message).toContain('askpass.cjs');
   });
 
-  it('warns about a reset that the matching key made unnecessary', async () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('warns about a reset that the matching key made unnecessary', async () => {
     app = await start();
     await app.close();
 
@@ -253,16 +272,21 @@ describe('startServer', () => {
     expect(warnings[0]['level']).toBe('warn');
   });
 
-  it('logs the configuration warnings once, before Nest exists (A-1.11)', async () => {
-    app = await start({ FRONT_BURNER_PROT: '1' });
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'logs the configuration warnings once, before Nest exists (A-1.11)',
+    async () => {
+      app = await start({ FRONT_BURNER_PROT: '1' });
 
-    const warnings = logEntries().filter(e => String(e['message']).includes('FRONT_BURNER_PROT'));
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]['level']).toBe('warn');
-    expect(logEntries()[0]['message']).toContain('FRONT_BURNER_PROT');
-  });
+      const warnings = logEntries().filter(e => String(e['message']).includes('FRONT_BURNER_PROT'));
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]['level']).toBe('warn');
+      expect(logEntries()[0]['message']).toContain('FRONT_BURNER_PROT');
+    }
+  );
 
-  describe('trust proxy', () => {
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  describe.skipIf(process.platform === 'win32')('trust proxy', () => {
     const hsts = async (trusted: string) => {
       app = await start({ FRONT_BURNER_TRUSTED_PROXIES: trusted });
       const response = await request(app.getHttpServer()).get('/api/health/live').set('X-Forwarded-Proto', 'https');

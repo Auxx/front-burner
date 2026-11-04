@@ -56,9 +56,13 @@ describe('ReadinessService', () => {
     expect(new ReadinessService(config, database, false).check()).toBe('fail');
   });
 
-  it.skipIf(process.getuid?.() === 0)('fails when the data directory is not writable', () => {
-    const readOnly = join(dir, 'ro');
-    mkdirSync(readOnly, { mode: 0o500 });
-    expect(new ReadinessService({ ...config, dataDir: readOnly }, database, true).check()).toBe('fail');
-  });
+  // Mode bits do not make a folder unwritable on Windows, nor for root.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'fails when the data directory is not writable',
+    () => {
+      const readOnly = join(dir, 'ro');
+      mkdirSync(readOnly, { mode: 0o500 });
+      expect(new ReadinessService({ ...config, dataDir: readOnly }, database, true).check()).toBe('fail');
+    }
+  );
 });

@@ -26,7 +26,8 @@ describe('gitVersion', () => {
       .toThrow(/git is not installed/);
   });
 
-  it('runs the real git', async () => {
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('runs the real git', async () => {
     const { GitRunner: Runner } = await import('./git-runner');
 
     await expect(assertSupportedGit(new Runner())).resolves.toBeUndefined();

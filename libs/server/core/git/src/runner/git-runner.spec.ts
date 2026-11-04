@@ -22,7 +22,8 @@ function processesRunning(...parts: string[]): number[] {
   return found;
 }
 
-describe('GitRunner', () => {
+// Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+describe.skipIf(process.platform === 'win32')('GitRunner', () => {
   const runner = new GitRunner();
   const savedEnv = { ...process.env };
   let dir: string;
@@ -111,7 +112,8 @@ describe('GitRunner', () => {
     expect(env.stdout).not.toContain('SSL_CERT_DIR=');
   });
 
-  it('kills the whole process group at the timeout', async () => {
+  // Reads /proc, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('kills the whole process group at the timeout', async () => {
     const started = Date.now();
 
     const result = await runner.run([ '-c', 'alias.slow=!sleep 31.7', 'slow' ], { timeoutMs: 200 });
@@ -122,7 +124,8 @@ describe('GitRunner', () => {
     expect(processesRunning('sleep', '31.7')).toEqual([]);
   });
 
-  it('kills every running git on killAll', async () => {
+  // Reads /proc, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('kills every running git on killAll', async () => {
     const run = runner.run([ '-c', 'alias.slow=!sleep 32.3', 'slow' ], { timeoutMs: 60_000 });
     await new Promise(resolve => setTimeout(resolve, 200));
 

@@ -149,19 +149,22 @@ describe('GitEngine', () => {
   });
 
   describe('accessCheck', () => {
-    it('lists the branches and the default branch', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('lists the branches and the default branch', async () => {
       const result = await engine().accessCheck(`${server.url}/fixture.git`, NONE);
 
       expect(result).toEqual({ branches: [ 'feature/x', 'main' ], defaultBranch: 'main' });
     });
 
-    it('checks an empty remote', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('checks an empty remote', async () => {
       const result = await engine().accessCheck(`${server.url}/empty.git`, NONE);
 
       expect(result).toEqual({ branches: [], defaultBranch: undefined });
     });
 
-    it('checks access with a username and token', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('checks access with a username and token', async () => {
       const running = await serve({ [USER]: TOKEN });
 
       const result = await engine().accessCheck(`${running.url}/fixture.git`, HTTPS);
@@ -169,7 +172,8 @@ describe('GitEngine', () => {
       expect(result.branches).toEqual([ 'feature/x', 'main' ]);
     });
 
-    it('reports wrong credentials as auth-failed', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('reports wrong credentials as auth-failed', async () => {
       const running = await serve({ [USER]: TOKEN });
 
       const error = await failureOf(
@@ -179,21 +183,27 @@ describe('GitEngine', () => {
       expect(error.code).toBe('auth-failed');
     });
 
-    it('reports a private repository without credentials as auth-failed', async () => {
-      const running = await serve({ [USER]: TOKEN });
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')(
+      'reports a private repository without credentials as auth-failed',
+      async () => {
+        const running = await serve({ [USER]: TOKEN });
 
-      const error = await failureOf(engine().accessCheck(`${running.url}/fixture.git`, NONE));
+        const error = await failureOf(engine().accessCheck(`${running.url}/fixture.git`, NONE));
 
-      expect(error.code).toBe('auth-failed');
-    });
+        expect(error.code).toBe('auth-failed');
+      }
+    );
 
-    it('reports a missing repository as repository-not-found', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('reports a missing repository as repository-not-found', async () => {
       const error = await failureOf(engine().accessCheck(`${server.url}/missing.git`, NONE));
 
       expect(error.code).toBe('repository-not-found');
     });
 
-    it('reports an untrusted certificate', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('reports an untrusted certificate', async () => {
       delete process.env['GIT_SSL_CAINFO'];
 
       const error = await failureOf(engine().accessCheck(`${server.url}/fixture.git`, NONE));
@@ -201,7 +211,8 @@ describe('GitEngine', () => {
       expect(error.code).toBe('tls-untrusted');
     });
 
-    it('reports a closed port as host-unreachable', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('reports a closed port as host-unreachable', async () => {
       const closed = createServer();
       await new Promise<void>(resolve => closed.listen(0, '127.0.0.1', resolve));
       const { port } = closed.address() as AddressInfo;
@@ -213,7 +224,8 @@ describe('GitEngine', () => {
       expect(error.params).toEqual({ host: '127.0.0.1' });
     });
 
-    it('refuses loopback with the switch as host-unreachable', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('refuses loopback with the switch as host-unreachable', async () => {
       const error = await failureOf(
         engine({ egress: { blockPrivateNetworks: true } }).accessCheck(`${server.url}/fixture.git`, NONE)
       );
@@ -221,7 +233,8 @@ describe('GitEngine', () => {
       expect(error.code).toBe('host-unreachable');
     });
 
-    it('refuses a redirect to a blocked address', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('refuses a redirect to a blocked address', async () => {
       const redirecting = await startHttpsTestServer((_request, response) => {
         response.writeHead(302, { Location: 'https://169.254.169.254/x' });
         response.end();
@@ -265,7 +278,8 @@ describe('GitEngine', () => {
     });
   });
 
-  describe('status', () => {
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  describe.skipIf(process.platform === 'win32')('status', () => {
     let work: string;
 
     const changes = async () => (await engine().status(work)).changes;
@@ -455,7 +469,8 @@ describe('GitEngine', () => {
     });
   });
 
-  describe('commit', () => {
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  describe.skipIf(process.platform === 'win32')('commit', () => {
     const AUTHOR = { name: 'Ada Lovelace', email: 'ada@example.com' };
     let work: string;
 
@@ -674,7 +689,8 @@ describe('GitEngine', () => {
     });
   });
 
-  describe('diff', () => {
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  describe.skipIf(process.platform === 'win32')('diff', () => {
     let work: string;
 
     const diff = (path: string) => engine().diff(work, path);
@@ -931,12 +947,14 @@ describe('GitEngine', () => {
       git(work, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
     });
 
-    it('reports ignored untracked paths', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('reports ignored untracked paths', async () => {
       const ignored = await engine().ignoredAmong(work, [ 'out.log', 'build', 'notes.md', '.gitignore' ]);
       expect([ ...ignored ].sort()).toEqual([ 'build', 'out.log' ]);
     });
 
-    it('does not report tracked files', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('does not report tracked files', async () => {
       expect(await engine().ignoredAmong(work, [ 'keep.log' ])).toEqual(new Set());
     });
 
@@ -944,7 +962,8 @@ describe('GitEngine', () => {
       expect(await engine().ignoredAmong(join(root, 'missing'), [])).toEqual(new Set());
     });
 
-    it('handles names with newlines and quotes', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('handles names with newlines and quotes', async () => {
       const names = [ 'a\nb.log', 'say "hi".log', 'café\t.log', 'plain.md' ];
       for (const name of names) {
         writeFileSync(join(work, name), '\n');
@@ -953,7 +972,8 @@ describe('GitEngine', () => {
       expect([ ...ignored ].sort()).toEqual([ 'a\nb.log', 'café\t.log', 'say "hi".log' ]);
     });
 
-    it('takes names that look like pathspec magic literally', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('takes names that look like pathspec magic literally', async () => {
       const names = [ ':!draft.md', ':^notes.md', ':x.log', ':(glob)*.md' ];
       for (const name of names) {
         writeFileSync(join(work, name), '\n');
@@ -962,7 +982,8 @@ describe('GitEngine', () => {
       expect(await engine().ignoredIn(work, '')).toEqual(new Set([ ':x.log', 'build', 'out.log' ]));
     });
 
-    it('lists the ignored entries directly inside a folder', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('lists the ignored entries directly inside a folder', async () => {
       git(work, 'add', '-f', 'build/app.js');
       writeFileSync(join(work, 'build', 'other.js'), '\n');
       mkdirSync(join(work, 'logs', 'deep'), { recursive: true });
@@ -979,35 +1000,43 @@ describe('GitEngine', () => {
       await expect(engine().ignoredAmong(work, [ '../outside' ])).rejects.toThrow();
     });
 
-    it('lists gitlinks directly inside a folder', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('lists gitlinks directly inside a folder', async () => {
       expect(await engine().gitlinksIn(work, 'vendor')).toEqual(new Set([ 'lib' ]));
       expect(await engine().gitlinksIn(work, '')).toEqual(new Set());
     });
 
-    it('does not report a tracked file inside an ignored folder', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('does not report a tracked file inside an ignored folder', async () => {
       git(work, 'add', '-f', 'build/app.js');
       writeFileSync(join(work, 'build', 'other.js'), '\n');
       const ignored = await engine().ignoredAmong(work, [ 'build/app.js', 'build/other.js' ]);
       expect([ ...ignored ]).toEqual([ 'build/other.js' ]);
     });
 
-    it('treats glob characters in the folder name literally', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('treats glob characters in the folder name literally', async () => {
       const sha = git(work, 'rev-parse', 'HEAD').trim();
       git(work, 'update-index', '--add', '--cacheinfo', `160000,${sha},v[e]ndor*/mod`);
       expect(await engine().gitlinksIn(work, 'v[e]ndor*')).toEqual(new Set([ 'mod' ]));
       expect(await engine().gitlinksIn(work, 'vendor')).toEqual(new Set([ 'lib' ]));
     });
 
-    it('counts untracked and ignored files but not modified tracked ones', async () => {
-      writeFileSync(join(work, 'keep.log'), 'changed\n');
-      // out.log and build/app.js are ignored, notes.md untracked.
-      expect(await engine().uncommittedUnder(work, '')).toBe(3);
-      expect(await engine().uncommittedUnder(work, 'build')).toBe(1);
-      expect(await engine().uncommittedUnder(work, 'keep.log')).toBe(0);
-      expect(await engine().uncommittedUnder(work, 'notes.md')).toBe(1);
-    });
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')(
+      'counts untracked and ignored files but not modified tracked ones',
+      async () => {
+        writeFileSync(join(work, 'keep.log'), 'changed\n');
+        // out.log and build/app.js are ignored, notes.md untracked.
+        expect(await engine().uncommittedUnder(work, '')).toBe(3);
+        expect(await engine().uncommittedUnder(work, 'build')).toBe(1);
+        expect(await engine().uncommittedUnder(work, 'keep.log')).toBe(0);
+        expect(await engine().uncommittedUnder(work, 'notes.md')).toBe(1);
+      }
+    );
 
-    it('counts files in untracked folders one by one', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('counts files in untracked folders one by one', async () => {
       mkdirSync(join(work, 'drafts', 'deep'), { recursive: true });
       writeFileSync(join(work, 'drafts', 'a.md'), '\n');
       writeFileSync(join(work, 'drafts', 'deep', 'b.md'), '\n');
@@ -1016,13 +1045,15 @@ describe('GitEngine', () => {
       expect(await engine().uncommittedUnder(work, 'build')).toBe(2);
     });
 
-    it('takes a path that looks like pathspec magic literally', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('takes a path that looks like pathspec magic literally', async () => {
       mkdirSync(join(work, ':(glob)*'));
       writeFileSync(join(work, ':(glob)*', 'a.md'), '\n');
       expect(await engine().uncommittedUnder(work, ':(glob)*')).toBe(1);
     });
 
-    it('does not write the index while counting', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('does not write the index while counting', async () => {
       // A changed modification time makes git refresh the index, and write it when it may take the lock.
       utimesSync(join(work, 'keep.log'), new Date(2000, 0, 1), new Date(2000, 0, 1));
       const before = readFileSync(join(work, '.git', 'index'));
@@ -1032,7 +1063,8 @@ describe('GitEngine', () => {
       expect(readFileSync(join(work, '.git', 'index')).equals(before)).toBe(true);
     });
 
-    it('counts nothing in a nested repository', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('counts nothing in a nested repository', async () => {
       mkdirSync(join(work, 'drafts', 'old'), { recursive: true });
       git(join(work, 'drafts', 'old'), 'init', '-q');
       writeFileSync(join(work, 'drafts', 'old', 'a.md'), '\n');
@@ -1040,7 +1072,8 @@ describe('GitEngine', () => {
       expect(await engine().uncommittedUnder(work, 'drafts')).toBe(1);
     });
 
-    it('skips the source path of a rename in the working tree', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('skips the source path of a rename in the working tree', async () => {
       writeFileSync(join(work, '?? old.md'), 'old\n');
       git(work, 'add', '?? old.md');
       git(work, 'commit', '-q', '-m', 'old');
@@ -1053,7 +1086,8 @@ describe('GitEngine', () => {
       expect(await engine().uncommittedUnder(work, '')).toBe(3);
     });
 
-    it('finds the submodule on a path', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('finds the submodule on a path', async () => {
       expect(await engine().submoduleOn(work, 'vendor/lib/docs/a.md')).toBe('vendor/lib');
       expect(await engine().submoduleOn(work, 'vendor/lib')).toBe('vendor/lib');
       expect(await engine().submoduleOn(work, 'vendor')).toBeNull();
@@ -1062,7 +1096,8 @@ describe('GitEngine', () => {
       expect(await engine().submoduleOn(work, '')).toBeNull();
     });
 
-    it('finds whether a folder holds a submodule', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('finds whether a folder holds a submodule', async () => {
       const sha = git(work, 'rev-parse', 'HEAD').trim();
       git(work, 'update-index', '--add', '--cacheinfo', `160000,${sha},d[o]cs*/deep/mod`);
 
@@ -1074,13 +1109,18 @@ describe('GitEngine', () => {
       expect(await engine().holdsSubmodule(work, 'vendor/lib')).toBe(false);
     });
 
-    it('checks a folder path that does not exist yet against a folder rule', async () => {
-      const ignored = await engine().ignoredAmong(work, [ 'sub/build/', 'sub/build' ]);
-      expect([ ...ignored ]).toEqual([ 'sub/build/' ]);
-    });
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')(
+      'checks a folder path that does not exist yet against a folder rule',
+      async () => {
+        const ignored = await engine().ignoredAmong(work, [ 'sub/build/', 'sub/build' ]);
+        expect([ ...ignored ]).toEqual([ 'sub/build/' ]);
+      }
+    );
   });
 
-  describe('clone', () => {
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  describe.skipIf(process.platform === 'win32')('clone', () => {
     const clone = (overrides: Partial<Parameters<GitEngine['clone']>[0]> = {}, gitOptions?: Partial<GitOptions>) =>
       engine(gitOptions).clone({
         remoteUrl: `${server.url}/fixture.git`,
@@ -1154,59 +1194,63 @@ describe('GitEngine', () => {
       }
     });
 
-    it('keeps the password out of git\'s arguments, environment and files', async () => {
-      const running = await serve({ [USER]: TOKEN }, 300);
-      const encoded = [
-        TOKEN,
-        Buffer.from(`${USER}:${TOKEN}`).toString('base64'),
-        encodeURIComponent(TOKEN)
-      ];
-      const leaks: string[] = [];
-      const seen = new Set<string>();
-      const brokerFiles: string[] = [];
-      let sampling = true;
-      const sampler = (async () => {
-        while (sampling) {
-          for (const sample of sampleProcesses()) {
-            if (/git/.test(sample.cmdline) && sample.environ.includes('FB_BROKER_TOKEN')) {
-              seen.add(sample.cmdline.split('\0')[0] ?? '');
-            }
-            for (const text of encoded) {
-              if (sample.cmdline.includes(text) || sample.environ.includes(text)) {
-                leaks.push(`${sample.pid}: ${sample.cmdline.replace(/\0/g, ' ')}`);
+    // Reads /proc, which only Linux has, and runs git.
+    it.skipIf(process.platform !== 'linux')(
+      'keeps the password out of git\'s arguments, environment and files',
+      async () => {
+        const running = await serve({ [USER]: TOKEN }, 300);
+        const encoded = [
+          TOKEN,
+          Buffer.from(`${USER}:${TOKEN}`).toString('base64'),
+          encodeURIComponent(TOKEN)
+        ];
+        const leaks: string[] = [];
+        const seen = new Set<string>();
+        const brokerFiles: string[] = [];
+        let sampling = true;
+        const sampler = (async () => {
+          while (sampling) {
+            for (const sample of sampleProcesses()) {
+              if (/git/.test(sample.cmdline) && sample.environ.includes('FB_BROKER_TOKEN')) {
+                seen.add(sample.cmdline.split('\0')[0] ?? '');
+              }
+              for (const text of encoded) {
+                if (sample.cmdline.includes(text) || sample.environ.includes(text)) {
+                  leaks.push(`${sample.pid}: ${sample.cmdline.replace(/\0/g, ' ')}`);
+                }
               }
             }
-          }
-          for (const dir of readdirSync(tmpdir()).filter(name => name.startsWith('fb-broker-'))) {
-            try {
-              brokerFiles.push(...filesUnder(join(tmpdir(), dir)));
-            } catch {
-              // Removed meanwhile.
+            for (const dir of readdirSync(tmpdir()).filter(name => name.startsWith('fb-broker-'))) {
+              try {
+                brokerFiles.push(...filesUnder(join(tmpdir(), dir)));
+              } catch {
+                // Removed meanwhile.
+              }
             }
+            await new Promise(resolve => setTimeout(resolve, 5));
           }
-          await new Promise(resolve => setTimeout(resolve, 5));
-        }
-      })();
+        })();
 
-      try {
-        await clone({ remoteUrl: `${running.url}/fixture.git`, credentials: HTTPS });
-      } finally {
-        sampling = false;
-        await sampler;
-      }
+        try {
+          await clone({ remoteUrl: `${running.url}/fixture.git`, credentials: HTTPS });
+        } finally {
+          sampling = false;
+          await sampler;
+        }
 
-      expect(leaks).toEqual([]);
-      // The sampler did see git and its HTTPS helper while they ran.
-      expect([ ...seen ].some(name => name.endsWith('git'))).toBe(true);
-      expect([ ...seen ].some(name => name.includes('remote-https'))).toBe(true);
-      expect(brokerFiles).toEqual([]);
-      for (const file of filesUnder(join(root, 'repos', 'one'))) {
-        const content = readFileSync(file, 'latin1');
-        for (const text of encoded) {
-          expect(content.includes(text), file).toBe(false);
+        expect(leaks).toEqual([]);
+        // The sampler did see git and its HTTPS helper while they ran.
+        expect([ ...seen ].some(name => name.endsWith('git'))).toBe(true);
+        expect([ ...seen ].some(name => name.includes('remote-https'))).toBe(true);
+        expect(brokerFiles).toEqual([]);
+        for (const file of filesUnder(join(root, 'repos', 'one'))) {
+          const content = readFileSync(file, 'latin1');
+          for (const text of encoded) {
+            expect(content.includes(text), file).toBe(false);
+          }
         }
       }
-    });
+    );
   });
 
   describe('over SSH', () => {
@@ -1244,19 +1288,22 @@ describe('GitEngine', () => {
       await ssh.close();
     });
 
-    it('checks access over SSH with an unlocked key', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('checks access over SSH with an unlocked key', async () => {
       const result = await engine().accessCheck(url(), SSH, [ ssh.hostKeyLine ]);
 
       expect(result).toEqual({ branches: [ 'feature/x', 'main' ], defaultBranch: 'main' });
     });
 
-    it('trusts the instance-wide known hosts', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('trusts the instance-wide known hosts', async () => {
       const result = await engine({ knownHosts: [ ssh.hostKeyLine ] }).accessCheck(url(), SSH);
 
       expect(result.defaultBranch).toBe('main');
     });
 
-    it('clones every branch over SSH', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('clones every branch over SSH', async () => {
       await clone();
       const destination = join(root, 'repos', 'one');
 
@@ -1266,7 +1313,8 @@ describe('GitEngine', () => {
       expect(git(destination, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('main');
     });
 
-    it('clones a single branch over SSH', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('clones a single branch over SSH', async () => {
       await clone({ mode: 'single-branch', branch: 'feature/x' });
       const destination = join(root, 'repos', 'one');
 
@@ -1274,7 +1322,8 @@ describe('GitEngine', () => {
       expect(git(destination, 'branch', '-r').trim()).toBe('origin/feature/x');
     });
 
-    it('reports an unknown host key with its fingerprint', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('reports an unknown host key with its fingerprint', async () => {
       const error = await failureOf(engine().accessCheck(url(), SSH, []));
       const [ , type, key ] = ssh.hostKeyLine.split(' ');
 
@@ -1289,7 +1338,8 @@ describe('GitEngine', () => {
       expect(ssh.refusedLogins).toBe(0);
     });
 
-    it('tells a changed host key from an unknown one', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('tells a changed host key from an unknown one', async () => {
       const other = keyText('ed25519-passphrase.pub').trim().split(' ');
       const error = await failureOf(
         engine().accessCheck(url(), SSH, [ `[127.0.0.1]:${ssh.port} ${other[0]} ${other[1]}` ])
@@ -1298,16 +1348,21 @@ describe('GitEngine', () => {
       expect(error.code).toBe('host-key-changed');
     });
 
-    it('reports a host key of another type than the known one as changed', async () => {
-      const other = keyText('rsa-2048.pub').trim().split(' ');
-      const error = await failureOf(
-        engine().accessCheck(url(), SSH, [ `[127.0.0.1]:${ssh.port} ${other[0]} ${other[1]}` ])
-      );
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')(
+      'reports a host key of another type than the known one as changed',
+      async () => {
+        const other = keyText('rsa-2048.pub').trim().split(' ');
+        const error = await failureOf(
+          engine().accessCheck(url(), SSH, [ `[127.0.0.1]:${ssh.port} ${other[0]} ${other[1]}` ])
+        );
 
-      expect(error.code).toBe('host-key-changed');
-    });
+        expect(error.code).toBe('host-key-changed');
+      }
+    );
 
-    it('does not trust the same host on another port', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('does not trust the same host on another port', async () => {
       const [ , type, key ] = ssh.hostKeyLine.split(' ');
       const error = await failureOf(
         engine().accessCheck(url(), SSH, [ `[127.0.0.1]:${ssh.port + 1} ${type} ${key}` ])
@@ -1316,14 +1371,16 @@ describe('GitEngine', () => {
       expect(error.code).toBe('host-key-unknown');
     });
 
-    it('reports a key the server does not accept as auth-failed', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('reports a key the server does not accept as auth-failed', async () => {
       const other: GitCredentials = { kind: 'ssh', key: unlockPrivateKey(keyText('ecdsa-p256')) };
       const error = await failureOf(engine().accessCheck(url(), other, [ ssh.hostKeyLine ]));
 
       expect(error.code).toBe('auth-failed');
     });
 
-    it('refuses a blocked address over SSH', async () => {
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('refuses a blocked address over SSH', async () => {
       const error = await failureOf(
         engine({ egress: { blockPrivateNetworks: true } }).accessCheck(url(), SSH, [ ssh.hostKeyLine ])
       );
@@ -1337,7 +1394,8 @@ describe('GitEngine', () => {
       expect(error.code).toBe('failed');
     });
 
-    it('keeps the private key out of files and the environment', async () => {
+    // Reads /proc, which only Linux has, and runs git.
+    it.skipIf(process.platform !== 'linux')('keeps the private key out of files and the environment', async () => {
       await startSsh(300);
       // The base64 lines of the private key file, and the key's private part.
       const secrets = keyText('ed25519').split('\n').filter(line => /^[A-Za-z0-9+/=]{40,}$/.test(line));

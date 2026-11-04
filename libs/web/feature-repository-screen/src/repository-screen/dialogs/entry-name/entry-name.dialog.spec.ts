@@ -37,7 +37,12 @@ describe('EntryNameDialog', () => {
       banner.textContent?.trim()
     ]);
   const selection = () => [ nameInput().selectionStart, nameInput().selectionEnd ];
-  const waitForIgnoreCheck = () => new Promise(resolve => setTimeout(resolve, IGNORE_CHECK_DELAY + 20));
+  // The answer comes after the debounce, and the dialog renders it after that:
+  // with timers as coarse as Windows' (15.6 ms) the two can miss a fixed margin.
+  const waitForIgnoreCheck = async () => {
+    await new Promise(resolve => setTimeout(resolve, IGNORE_CHECK_DELAY + 20));
+    await settleDialog();
+  };
 
   async function open(data: NewEntryData | RenameEntryData): Promise<void> {
     ref = TestBed.inject(DialogService).open<EntryNameDialog, NewEntryData | RenameEntryData, EntryPath>(

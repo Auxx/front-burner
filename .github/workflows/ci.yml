@@ -50,6 +50,9 @@ jobs:
       - name: Project tags
         run: npm run check:tags
 
+      - name: Shared Vitest settings
+        run: npm run check:vitest
+
       - name: Type check, lint
         run: npx nx affected -t typecheck lint --parallel=3
 
@@ -71,8 +74,12 @@ jobs:
       # One project at a time: each runs its own pool of workers, and with
       # several at once the timing tests (AC-FILE-001.7) miss their limits on
       # the runner's four cores. The job still ends well before the build job.
+      # The configs give each project 30% of the cores, for 3 projects at once;
+      # one at a time takes all but one, as Vitest's own default does.
       - name: Test
         run: npx nx affected -t test --parallel=1
+        env:
+          VITEST_MAX_WORKERS: 3
 
   build:
     name: Build
