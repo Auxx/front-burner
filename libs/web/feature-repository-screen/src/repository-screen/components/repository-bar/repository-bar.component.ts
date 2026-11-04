@@ -11,8 +11,8 @@ import { SaveStatusComponent } from '../save-status/save-status.component';
  * The repository screen's one bar, the app header and the repository's header
  * in one (NV-9, FB-10): the product's icon as a link to the dashboard, the
  * repository name, which opens the repository switcher (NV-10), the current
- * branch and its counts (GA-7), the open file's save status (ED-18), and the user menu. The **Files** toggle is in
- * the activity bar (FB-7, FB-9).
+ * branch and its counts (GA-7), the open file's save status (ED-18), and the
+ * user menu. The **Files** toggle is in the activity bar (FB-7, FB-9).
  */
 @Component({
   selector: 'rs-repository-bar',

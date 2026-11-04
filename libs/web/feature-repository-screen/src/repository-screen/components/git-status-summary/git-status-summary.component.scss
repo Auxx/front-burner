@@ -1,23 +1,26 @@
 // Between the repository name and the save status, as quiet as the save
 // status. The counts never shrink, so that they stay visible on narrow
-// screens; the branch name gives up its room first (GA-7, NV-11).
+// screens; the branch name gives up its room first (GA-7, NV-11). No
+// `min-inline-size: 0`: the bar shrinks this before anything else, and its
+// smallest is a few characters of the branch and the counts.
 :host {
   display: flex;
   align-items: center;
   gap: var(--ui-space-1);
-  min-inline-size: 0;
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-ui-small);
   white-space: nowrap;
 }
 
 // A long press shows the tooltip, not the platform's text selection or callout.
+// At least a few characters stay before the ellipsis.
 .branch {
-  min-inline-size: 0;
+  min-inline-size: 4ch;
   overflow: hidden;
   color: var(--ui-text-default);
   text-overflow: ellipsis;
   -webkit-touch-callout: none;
+  user-select: none;
 
   &:focus-visible {
     border-radius: var(--ui-radius-control);

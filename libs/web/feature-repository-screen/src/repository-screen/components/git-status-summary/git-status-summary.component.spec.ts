@@ -1,7 +1,7 @@
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import type { GitStatus } from '@front-burner/shared-contracts';
-import { TooltipDirective } from '@front-burner/ui';
+import { TruncatedTooltipDirective } from '@front-burner/ui';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -100,28 +100,49 @@ describe('GitStatusSummaryComponent', () => {
     expect(host().querySelector('.separator')?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('puts the full name of a shortened branch in a tooltip that a tap or long press shows', async () => {
+  describe('a branch too long for the bar', () => {
     const branch = 'feature/'.repeat(25);
-    await show({ ...published, branch });
-    const element = host().querySelector('.branch') as HTMLElement;
-    // No layout in the test environment: the end-to-end test checks the width on a phone.
-    Object.defineProperty(element, 'scrollWidth', { value: 500 });
-    Object.defineProperty(element, 'clientWidth', { value: 100 });
-    await show({ ...published, branch, ahead: 1 });
+    const tooltip = () =>
+      fixture.debugElement.query(By.directive(TruncatedTooltipDirective)).injector.get(TruncatedTooltipDirective);
 
-    const tooltip = fixture.debugElement.query(By.directive(TooltipDirective));
-    expect(tooltip.nativeElement).toBe(element);
-    expect(tooltip.injector.get(TooltipDirective).text()).toBe(branch);
-    expect(tooltip.injector.get(TooltipDirective).longPress()).toBe(true);
-    expect(element.getAttribute('tabindex')).toBe('0');
-  });
+    beforeEach(() => {
+      // No layout in jsdom: a name is shortened when it is long. The end-to-end
+      // test checks the width on a phone.
+      vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function(this: HTMLElement) {
+        return (this.textContent?.length ?? 0) * 10;
+      });
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(100);
+    });
 
-  it('has no tooltip for a branch that fits', async () => {
-    await show(published);
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
 
-    const element = host().querySelector('.branch') as HTMLElement;
-    expect(fixture.debugElement.query(By.directive(TooltipDirective)).injector.get(TooltipDirective).text())
-      .toBe('');
-    expect(element.getAttribute('tabindex')).toBeNull();
+    it('puts its full name in a tooltip that a tap or long press shows, and lets the keyboard reach it', async () => {
+      await show({ ...published, branch });
+
+      const element = host().querySelector('.branch') as HTMLElement;
+      expect(tooltip().text()).toBe(branch);
+      expect(tooltip().truncated()).toBe(true);
+      expect(tooltip().longPress()).toBe(true);
+      expect(tooltip().showOnClick()).toBe(true);
+      expect(element.getAttribute('tabindex')).toBe('0');
+    });
+
+    it('is not focusable for a branch that fits', async () => {
+      await show(published);
+
+      expect(tooltip().truncated()).toBe(false);
+      expect(host().querySelector('.branch')?.getAttribute('tabindex')).toBeNull();
+    });
+
+    it('keeps nothing of a long branch after a detached HEAD', async () => {
+      await show({ ...published, branch });
+      await show({ ...published, branch: null, upstream: null });
+      await show(published);
+
+      expect(tooltip().truncated()).toBe(false);
+      expect(host().querySelector('.branch')?.getAttribute('tabindex')).toBeNull();
+    });
   });
 });

@@ -1,12 +1,9 @@
 import {
-  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
   effect,
-  ElementRef,
   inject,
-  Injector,
   input,
   signal,
   untracked,
@@ -20,7 +17,7 @@ import {
   MenuItemComponent,
   MenuSeparatorComponent,
   MenuTriggerDirective,
-  TooltipDirective
+  TruncatedTooltipDirective
 } from '@front-burner/ui';
 import { RepositoriesApi } from '@front-burner/web-api-client';
 import { RepositoryStatusComponent } from '@front-burner/web-shell';
@@ -53,7 +50,7 @@ type OtherRepositories =
     MenuItemComponent,
     MenuSeparatorComponent,
     MenuTriggerDirective,
-    TooltipDirective,
+    TruncatedTooltipDirective,
     RepositoryStatusComponent
   ],
   templateUrl: './repository-switcher.component.html',
@@ -69,33 +66,14 @@ export class RepositorySwitcherComponent {
   // In the translated view, which renders once the texts have loaded.
   private readonly menu = viewChild(MenuComponent);
   private readonly trigger = viewChild(MenuTriggerDirective);
-  private readonly nameButton = viewChild<ElementRef<HTMLButtonElement>>('nameButton');
-  private readonly injector = inject(Injector);
   private loading?: Subscription;
 
   protected readonly others = signal<OtherRepositories>({ kind: 'loading' });
-  /** Whether the name is shortened, so that its full name is in the tooltip. */
-  protected readonly shortened = signal(false);
 
   constructor() {
     effect(() => {
       if (this.menu()?.aria.visible()) {
         untracked(() => this.load());
-      }
-    });
-    effect(onCleanup => {
-      const button = this.nameButton()?.nativeElement;
-      // Measured again for another repository's name, and as the bar resizes.
-      this.repository();
-      if (!button) {
-        return;
-      }
-      const measure = () => this.shortened.set(button.scrollWidth > button.clientWidth);
-      afterNextRender(measure, { injector: this.injector });
-      if (typeof ResizeObserver === 'function') {
-        const observer = new ResizeObserver(measure);
-        observer.observe(button);
-        onCleanup(() => observer.disconnect());
       }
     });
     inject(DestroyRef).onDestroy(() => this.loading?.unsubscribe());

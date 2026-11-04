@@ -1,18 +1,6 @@
-import {
-  afterNextRender,
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  ElementRef,
-  inject,
-  Injector,
-  input,
-  signal,
-  viewChild
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import type { GitStatus } from '@front-burner/shared-contracts';
-import { TooltipDirective } from '@front-burner/ui';
+import { TruncatedTooltipDirective } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /** What follows the branch: a message key and its parameters, or nothing. */
@@ -30,7 +18,7 @@ type Detail = { key: string; params: Record<string, number>; } | null;
  */
 @Component({
   selector: 'rs-git-status-summary',
-  imports: [ TranslocoDirective, TooltipDirective ],
+  imports: [ TranslocoDirective, TruncatedTooltipDirective ],
   templateUrl: './git-status-summary.component.html',
   styleUrl: './git-status-summary.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -38,12 +26,6 @@ type Detail = { key: string; params: Record<string, number>; } | null;
 export class GitStatusSummaryComponent {
   /** The last status read; `null` until one has been read. */
   readonly status = input.required<GitStatus | null>();
-
-  private readonly branchElement = viewChild<ElementRef<HTMLElement>>('branchName');
-  private readonly injector = inject(Injector);
-
-  /** Whether the branch name is shortened, so that its full name is in the tooltip. */
-  protected readonly shortened = signal(false);
 
   protected readonly detail = computed((): Detail => {
     const status = this.status();
@@ -65,22 +47,4 @@ export class GitStatusSummaryComponent {
     }
     return behind ? { key: 'toPull', params: { behind } } : null;
   });
-
-  constructor() {
-    effect(onCleanup => {
-      const element = this.branchElement()?.nativeElement;
-      // Measured again for another branch, and as the bar resizes.
-      this.status();
-      if (!element) {
-        return;
-      }
-      const measure = () => this.shortened.set(element.scrollWidth > element.clientWidth);
-      afterNextRender(measure, { injector: this.injector });
-      if (typeof ResizeObserver === 'function') {
-        const observer = new ResizeObserver(measure);
-        observer.observe(element);
-        onCleanup(() => observer.disconnect());
-      }
-    });
-  }
 }
