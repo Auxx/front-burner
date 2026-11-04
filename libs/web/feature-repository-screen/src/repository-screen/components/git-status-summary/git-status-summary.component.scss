@@ -1,20 +1,20 @@
 // Between the repository name and the save status, as quiet as the save
-// status. The counts never shrink, so that they stay visible on narrow
-// screens; the branch name gives up its room first (GA-7, NV-11). No
-// `min-inline-size: 0`: the bar shrinks this before anything else, and its
-// smallest is a few characters of the branch and the counts.
+// status. Its parts are the bar's own flex items, so that the bar shrinks the
+// branch name first and never the counts (GA-7, NV-11). In a box of its own,
+// the branch could only shrink as far as the box's smallest width, which is the
+// whole name, since it never wraps.
 :host {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-1);
+  display: contents;
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-ui-small);
   white-space: nowrap;
 }
 
+// Gives up its room before the repository name and the save status, which
+// shrink in proportion only once it is as short as it gets: a few characters.
 // A long press shows the tooltip, not the platform's text selection or callout.
-// At least a few characters stay before the ellipsis.
 .branch {
+  flex-shrink: 1000;
   min-inline-size: 4ch;
   overflow: hidden;
   color: var(--ui-text-default);
@@ -28,7 +28,12 @@
   }
 }
 
-.separator,
+// The bar's gap is wider than the one the separator needs on each side.
+.separator {
+  flex: none;
+  margin-inline: calc(var(--ui-space-1) - var(--ui-space-2));
+}
+
 .detail {
   flex: none;
 }

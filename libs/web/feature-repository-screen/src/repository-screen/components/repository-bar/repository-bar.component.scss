@@ -11,13 +11,6 @@
   min-inline-size: 0;
 }
 
-// The branch gives up its room before the repository name and the save status,
-// which shrink in proportion only once it is as short as it gets (NV-11). Its
-// counts never shrink.
-.git {
-  flex-shrink: 1000;
-}
-
 .status {
   min-inline-size: 0;
 }
