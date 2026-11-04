@@ -52,7 +52,8 @@ describe('EntrySummaries', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('summarises a file', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('summarises a file', async () => {
     write(join(root, 'docs', 'notes.md'));
     write(join(root, 'docs', 'debug.log'));
 
@@ -62,19 +63,24 @@ describe('EntrySummaries', () => {
     expect(await summaries.summary(root, 'docs/debug.log')).toEqual({ files: 1, nonMarkdown: 1, uncommitted: 1 });
   });
 
-  it('counts files, non-Markdown files and uncommitted files in a folder', async () => {
-    write(join(root, 'docs', 'guide.md'), 'changed\n');
-    write(join(root, 'docs', 'drafts', 'a.md'));
-    write(join(root, 'docs', 'drafts', 'b.png'));
-    write(join(root, 'docs', 'trace.log'));
-    symlinkSync('guide.md', join(root, 'docs', 'link.md'));
-    mkdirSync(join(root, 'docs', 'empty'));
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'counts files, non-Markdown files and uncommitted files in a folder',
+    async () => {
+      write(join(root, 'docs', 'guide.md'), 'changed\n');
+      write(join(root, 'docs', 'drafts', 'a.md'));
+      write(join(root, 'docs', 'drafts', 'b.png'));
+      write(join(root, 'docs', 'trace.log'));
+      symlinkSync('guide.md', join(root, 'docs', 'link.md'));
+      mkdirSync(join(root, 'docs', 'empty'));
 
-    // guide.md, logo.png, a.md, b.png, trace.log and the link; the modified guide.md can be brought back.
-    expect(await summaries.summary(root, 'docs')).toEqual({ files: 6, nonMarkdown: 4, uncommitted: 4 });
-  });
+      // guide.md, logo.png, a.md, b.png, trace.log and the link; the modified guide.md can be brought back.
+      expect(await summaries.summary(root, 'docs')).toEqual({ files: 6, nonMarkdown: 4, uncommitted: 4 });
+    }
+  );
 
-  it('does not walk through a symbolic link folder', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('does not walk through a symbolic link folder', async () => {
     write(join(root, 'outside', 'a.md'));
     write(join(root, 'outside', 'b.md'));
     symlinkSync('../outside', join(root, 'docs', 'linked'));
@@ -84,7 +90,8 @@ describe('EntrySummaries', () => {
     expect(await refusal(summaries.summary(root, 'docs/linked/a.md'))).toBe('symlink');
   });
 
-  it('counts nothing inside a submodule or .git', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('counts nothing inside a submodule or .git', async () => {
     write(join(root, 'docs', 'vendor', 'lib', '.git'), 'gitdir: ../../.git/modules/lib\n');
     write(join(root, 'docs', 'vendor', 'lib', 'inside.md'));
 
@@ -92,19 +99,24 @@ describe('EntrySummaries', () => {
     expect(await refusal(summaries.summary(root, '.git'))).toBe('inside-git');
   });
 
-  it('refuses a path inside a submodule and counts nothing for the submodule itself', async () => {
-    write(join(root, 'vendor', 'lib', 'docs', 'a.md'));
-    const sha = git(root, 'rev-parse', 'HEAD').trim();
-    git(root, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'refuses a path inside a submodule and counts nothing for the submodule itself',
+    async () => {
+      write(join(root, 'vendor', 'lib', 'docs', 'a.md'));
+      const sha = git(root, 'rev-parse', 'HEAD').trim();
+      git(root, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
 
-    expect(await summaries.summary(root, 'vendor/lib')).toEqual({ files: 0, nonMarkdown: 0, uncommitted: 0 });
-    expect(await refusal(summaries.summary(root, 'vendor/lib/docs'))).toBe('not-found');
-    expect(await refusal(summaries.summary(root, 'vendor/lib/docs/a.md'))).toBe('not-found');
-    expect(await refusal(summaries.ignored(root, 'vendor/lib/docs/b.md', 'file'))).toBe('not-found');
-    expect(await refusal(summaries.ignored(root, 'vendor/lib/b.md', 'file'))).toBe('not-found');
-  });
+      expect(await summaries.summary(root, 'vendor/lib')).toEqual({ files: 0, nonMarkdown: 0, uncommitted: 0 });
+      expect(await refusal(summaries.summary(root, 'vendor/lib/docs'))).toBe('not-found');
+      expect(await refusal(summaries.summary(root, 'vendor/lib/docs/a.md'))).toBe('not-found');
+      expect(await refusal(summaries.ignored(root, 'vendor/lib/docs/b.md', 'file'))).toBe('not-found');
+      expect(await refusal(summaries.ignored(root, 'vendor/lib/b.md', 'file'))).toBe('not-found');
+    }
+  );
 
-  it('agrees with git on a nested repository', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('agrees with git on a nested repository', async () => {
     write(join(root, 'notes', 'old', 'a.md'));
     git(join(root, 'notes', 'old'), 'init', '-q');
 
@@ -115,19 +127,25 @@ describe('EntrySummaries', () => {
     expect(await refusal(summaries.summary(root, 'docs/gone.md'))).toBe('not-found');
   });
 
-  it('counts uncommitted files beyond 1 MiB of git output', { timeout: 60_000 }, async () => {
-    const folder = join(root, 'many');
-    mkdirSync(folder);
-    const name = (index: number) =>
-      `a-rather-long-file-name-to-fill-the-git-output-${String(index).padStart(5, '0')}.md`;
-    for (let index = 0; index < 20_000; index++) {
-      writeFileSync(join(folder, name(index)), '');
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'counts uncommitted files beyond 1 MiB of git output',
+    { timeout: 60_000 },
+    async () => {
+      const folder = join(root, 'many');
+      mkdirSync(folder);
+      const name = (index: number) =>
+        `a-rather-long-file-name-to-fill-the-git-output-${String(index).padStart(5, '0')}.md`;
+      for (let index = 0; index < 20_000; index++) {
+        writeFileSync(join(folder, name(index)), '');
+      }
+
+      expect(await summaries.summary(root, 'many')).toEqual({ files: 20_000, nonMarkdown: 0, uncommitted: 20_000 });
     }
+  );
 
-    expect(await summaries.summary(root, 'many')).toEqual({ files: 20_000, nonMarkdown: 0, uncommitted: 20_000 });
-  });
-
-  it('says a new name inside an ignored folder is ignored', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('says a new name inside an ignored folder is ignored', async () => {
     mkdirSync(join(root, 'build'));
 
     expect(await summaries.ignored(root, 'build/new.md', 'file')).toBe(true);

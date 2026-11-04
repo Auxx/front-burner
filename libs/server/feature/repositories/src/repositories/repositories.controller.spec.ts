@@ -253,7 +253,8 @@ describe('RepositoriesController', () => {
     expect(response.body).toEqual({ repositories: [ { name: 'Handbook', remoteKey: 'github.com/acme/handbook' } ] });
   });
 
-  it('lists the branches of a remote', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('lists the branches of a remote', async () => {
     const alice = insertUser(database, 'alice@example.com');
 
     const response = await http().post('/api/v1/repositories/access-check').set('x-test-user', String(alice))
@@ -263,7 +264,8 @@ describe('RepositoriesController', () => {
     expect(response.body).toEqual({ branches: [ 'draft', 'main' ], defaultBranch: 'main' });
   });
 
-  it('adds a repository and answers with its summary', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('adds a repository and answers with its summary', async () => {
     const alice = insertUser(database, 'alice@example.com');
 
     const response = await http().post('/api/v1/repositories').set('x-test-user', String(alice))

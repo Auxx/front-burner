@@ -107,7 +107,8 @@ describe('GitController', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('answers only for the owner\'s ready repository', async () => {
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('answers only for the owner\'s ready repository', async () => {
     writeFileSync(join(root, 'notes.md'), 'changed\n');
 
     const ready = await status().expect(200);
@@ -128,7 +129,8 @@ describe('GitController', () => {
     expect(other.body).toMatchObject({ code: 'not-found' });
   });
 
-  it('reports a merge in progress', async () => {
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('reports a merge in progress', async () => {
     git(root, 'checkout', '-q', '-b', 'other');
     writeFileSync(join(root, 'notes.md'), 'theirs\n');
     git(root, 'commit', '-q', '-am', 'theirs');
@@ -148,7 +150,8 @@ describe('GitController', () => {
     const diff = (path: string, id = READY) =>
       request(app.getHttpServer()).get(`/repositories/${id}/git/diff`).query({ path });
 
-    it('answers a modified file\'s lines', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('answers a modified file\'s lines', async () => {
       writeFileSync(join(root, 'notes.md'), 'changed\n');
 
       const { body } = await diff('notes.md').expect(200);
@@ -164,7 +167,8 @@ describe('GitController', () => {
       });
     });
 
-    it('answers the diff of a deleted file', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('answers the diff of a deleted file', async () => {
       mkdirSync(join(root, 'docs'));
       writeFileSync(join(root, 'docs', 'a.md'), 'a\n');
       git(root, 'add', 'docs');
@@ -180,7 +184,8 @@ describe('GitController', () => {
       ]);
     });
 
-    it('refuses .git and a path through a symbolic link', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('refuses .git and a path through a symbolic link', async () => {
       const inside = await diff('.git/config').expect(400);
       expect(inside.body).toMatchObject({ code: 'path-refused', params: { reason: 'inside-git' } });
 
@@ -218,7 +223,8 @@ describe('GitController', () => {
       writeFileSync(join(root, 'other.md'), 'other\n');
     });
 
-    it('commits the listed changes as the commit author', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('commits the listed changes as the commit author', async () => {
       const { body } = await commit({ message: 'Update the notes', paths: [ 'notes.md' ] }).expect(201);
 
       expect(body).toEqual({ oid: git(root, 'rev-parse', 'HEAD').trim() });
@@ -237,17 +243,22 @@ describe('GitController', () => {
       expect(git(root, 'rev-parse', 'HEAD')).toBe(head);
     });
 
-    it('AC-GIT-001.8: changing the default does not change commits already made', async () => {
-      await commit({ message: 'First', paths: [ 'notes.md' ] }).expect(201);
-      commitAuthor = { ...commitAuthor, author: { name: 'Ada King', email: 'king@example.com' } };
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')(
+      'AC-GIT-001.8: changing the default does not change commits already made',
+      async () => {
+        await commit({ message: 'First', paths: [ 'notes.md' ] }).expect(201);
+        commitAuthor = { ...commitAuthor, author: { name: 'Ada King', email: 'king@example.com' } };
 
-      await commit({ message: 'Second', paths: [ 'other.md' ] }).expect(201);
+        await commit({ message: 'Second', paths: [ 'other.md' ] }).expect(201);
 
-      expect(authorOf('HEAD~1')).toBe('Ada Lovelace <ada@example.com> / Ada Lovelace <ada@example.com>');
-      expect(authorOf()).toBe('Ada King <king@example.com> / Ada King <king@example.com>');
-    });
+        expect(authorOf('HEAD~1')).toBe('Ada Lovelace <ada@example.com> / Ada Lovelace <ada@example.com>');
+        expect(authorOf()).toBe('Ada King <king@example.com> / Ada King <king@example.com>');
+      }
+    );
 
-    it('uses the repository\'s override', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('uses the repository\'s override', async () => {
       commitAuthor = { author: { name: 'Work Ada', email: 'ada@work.example' }, source: 'override', confirmed: true };
 
       await commit({ message: 'Update', paths: [ 'notes.md' ] }).expect(201);
@@ -279,7 +290,8 @@ describe('GitController', () => {
       expect(git(root, 'log', '--format=%s').trim()).toBe('base');
     });
 
-    it('commits a file of a deleted folder', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('commits a file of a deleted folder', async () => {
       mkdirSync(join(root, 'docs'));
       writeFileSync(join(root, 'docs', 'a.md'), 'a\n');
       git(root, 'add', 'docs');
@@ -306,7 +318,8 @@ describe('GitController', () => {
       expect(body).toMatchObject({ code: 'merge-in-progress' });
     });
 
-    it('refuses a commit on a detached HEAD', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('refuses a commit on a detached HEAD', async () => {
       git(root, 'checkout', '-q', '--detach');
 
       const { body } = await commit({ message: 'Update', paths: [ 'notes.md' ] }).expect(409);
@@ -315,7 +328,8 @@ describe('GitController', () => {
       expect(git(root, 'log', '--format=%s').trim()).toBe('base');
     });
 
-    it('a repeated request answers nothing-to-commit', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('a repeated request answers nothing-to-commit', async () => {
       const sent = { message: 'Update', paths: [ 'notes.md' ] };
 
       const [ first, second ] = await Promise.all([ commit(sent), commit(sent) ]);
@@ -333,7 +347,8 @@ describe('GitController', () => {
       expect(body).toMatchObject({ code: 'not-found' });
     });
 
-    it('publishes git.changed', async () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('publishes git.changed', async () => {
       await commit({ message: 'Update', paths: [ 'notes.md' ] }).expect(201);
 
       expect(published).toEqual([ { type: 'git.changed', repositoryId: READY } ]);

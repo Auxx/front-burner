@@ -3,6 +3,7 @@ import { DATABASE } from '@front-burner/server-core-database';
 import { HealthStatusSchema } from '@front-burner/shared-contracts';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { tmpdir } from 'node:os';
 import request from 'supertest';
 import { HealthModule } from './health.module';
 
@@ -10,7 +11,7 @@ async function createApp(migrationsApplied: boolean): Promise<INestApplication> 
   const moduleRef = await Test.createTestingModule({ imports: [ HealthModule.forRoot({ migrationsApplied }) ] })
     .useMocker(token => {
       if (token === CONFIG) {
-        return { dataDir: '/tmp' };
+        return { dataDir: tmpdir() };
       }
       if (token === DATABASE) {
         return { sqlite: { prepare: () => ({ get: () => ({}) }) } };

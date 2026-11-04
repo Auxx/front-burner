@@ -120,7 +120,8 @@ describe('AddRepositoryService', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('lists branches for the form', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('lists branches for the form', async () => {
     expect(await service.accessCheck(alice, { remoteUrl: handbookUrl(), credentials: { mode: 'none' } })).toEqual({
       branches: [ 'draft', 'main' ],
       defaultBranch: 'main'
@@ -129,14 +130,16 @@ describe('AddRepositoryService', () => {
       .toEqual({ branches: [], defaultBranch: null });
   });
 
-  it('reports a missing repository on the URL', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('reports a missing repository on the URL', async () => {
     const error = await rejectionOf(
       service.accessCheck(alice, { remoteUrl: `${server.url}/missing.git`, credentials: { mode: 'none' } })
     );
     expect(error).toEqual(fieldError('remoteUrl', 'repository-not-found'));
   });
 
-  it('adds a public repository with no credentials', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('adds a public repository with no credentials', async () => {
     const summary = await service.add(alice, request());
 
     const { repositories: [ row ], credentials, jobs: [ job ] } = all();
@@ -164,7 +167,8 @@ describe('AddRepositoryService', () => {
     expect(summary).toMatchObject({ id: row?.id, name: 'Handbook', status: 'cloning', error: null });
   });
 
-  it('saves new HTTPS credentials with the repository', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('saves new HTTPS credentials with the repository', async () => {
     await serve({ alice: TOKEN });
 
     await service.add(
@@ -179,7 +183,8 @@ describe('AddRepositoryService', () => {
     expect(row?.credentialId).toBe(credential?.id);
   });
 
-  it('saves nothing when the access check fails', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('saves nothing when the access check fails', async () => {
     await serve({ alice: TOKEN });
 
     const error = await rejectionOf(service.add(
@@ -193,12 +198,14 @@ describe('AddRepositoryService', () => {
     expect(all()).toEqual({ repositories: [], credentials: [], jobs: [] });
   });
 
-  it('asks for credentials for a private repository added without', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('asks for credentials for a private repository added without', async () => {
     await serve({ alice: TOKEN });
     expect(await rejectionOf(service.add(alice, request()))).toEqual(fieldError('credentials', 'credentials-required'));
   });
 
-  it('defaults to the highest allowed level', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('defaults to the highest allowed level', async () => {
     database.db.update(users).set({ allowedGitLevels: [ 'guided', 'simple' ] }).where(eq(users.id, alice.id)).run();
     await service.add(alice, request());
     expect(all().repositories[0]?.gitLevel).toBe('guided');
@@ -218,13 +225,15 @@ describe('AddRepositoryService', () => {
     );
   });
 
-  it('accepts a remote the user already has under a new name', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('accepts a remote the user already has under a new name', async () => {
     insertRepository(database, alice.id, { name: 'Handbook', remoteUrl: handbookUrl() });
     await service.add(alice, request({ name: 'Handbook 2' }));
     expect(all().repositories.map(row => row.name)).toEqual([ 'Handbook', 'Handbook 2' ]);
   });
 
-  it('creates one repository for two quick submits', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('creates one repository for two quick submits', async () => {
     await serve({ alice: TOKEN });
     const submit = () =>
       service.add(
@@ -242,7 +251,8 @@ describe('AddRepositoryService', () => {
     expect(all().jobs).toHaveLength(1);
   });
 
-  it('checks that the single branch exists', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('checks that the single branch exists', async () => {
     expect(await rejectionOf(service.add(alice, request({ cloneMode: 'single-branch', branch: 'gone' })))).toEqual(
       fieldError('branch', 'branch-not-found')
     );
@@ -252,12 +262,14 @@ describe('AddRepositoryService', () => {
     expect(all().repositories[0]).toMatchObject({ cloneMode: 'single-branch', branch: 'draft' });
   });
 
-  it('ignores the branch of a full clone', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('ignores the branch of a full clone', async () => {
     await service.add(alice, request({ branch: 'draft' }));
     expect(all().repositories[0]?.branch).toBeNull();
   });
 
-  it('refuses a single-branch clone of an empty remote', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('refuses a single-branch clone of an empty remote', async () => {
     const error = await rejectionOf(service.add(
       alice,
       request({
@@ -269,7 +281,8 @@ describe('AddRepositoryService', () => {
     expect(error).toEqual(fieldError('branch', 'no-branches'));
   });
 
-  it('adds an empty remote as a full clone', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('adds an empty remote as a full clone', async () => {
     await service.add(alice, request({ remoteUrl: `${server.url}/empty.git` }));
     expect(all().repositories).toHaveLength(1);
   });

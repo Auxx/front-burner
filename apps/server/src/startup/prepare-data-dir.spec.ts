@@ -47,10 +47,14 @@ describe('prepareDataDir', () => {
     expect(readdirSync(join(dataDir, 'repos', '1', '2'))).toEqual([ 'README.md' ]);
   });
 
-  it.skipIf(process.getuid?.() === 0)('throws naming the path when the directory is not writable', () => {
-    chmodSync(root, 0o500);
-    const dataDir = join(root, 'data');
+  // Mode bits do not make a folder unwritable on Windows, nor for root.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'throws naming the path when the directory is not writable',
+    () => {
+      chmodSync(root, 0o500);
+      const dataDir = join(root, 'data');
 
-    expect(() => prepareDataDir(dataDir)).toThrow(dataDir);
-  });
+      expect(() => prepareDataDir(dataDir)).toThrow(dataDir);
+    }
+  );
 });

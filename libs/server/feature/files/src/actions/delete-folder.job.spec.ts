@@ -73,7 +73,8 @@ describe('DeleteFolderJob', () => {
     expect(readdirSync(join(dataDir, 'repos', '3'))).toEqual([ '7' ]);
   });
 
-  it('logs a failed removal without failing the delete', async () => {
+  // Mode bits do not make a folder unwritable on Windows.
+  it.skipIf(process.platform === 'win32')('logs a failed removal without failing the delete', async () => {
     const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     // An unwritable tmp/ keeps the trashed folder from being unlinked from it.
     chmodSync(layout.tmpDir, 0o555);

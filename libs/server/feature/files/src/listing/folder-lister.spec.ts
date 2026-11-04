@@ -52,7 +52,8 @@ describe('FolderLister', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('AC-FILE-001.7: sorts folders first in natural order', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('AC-FILE-001.7: sorts folders first in natural order', async () => {
     for (const name of [ '10-deploy.md', '2-setup.md', 'B.md', 'a.md' ]) {
       write(join(root, name));
     }
@@ -65,7 +66,8 @@ describe('FolderLister', () => {
     );
   });
 
-  it('AC-FILE-001.8: lists .github and .claude but never .git', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('AC-FILE-001.8: lists .github and .claude but never .git', async () => {
     mkdirSync(join(root, '.github'));
     mkdirSync(join(root, '.claude'));
     write(join(root, '.env'));
@@ -77,20 +79,25 @@ describe('FolderLister', () => {
     expect(await refusal('.git')).toBe('inside-git');
   });
 
-  it('AC-FILE-001.11: lists a symbolic link as such without following it', async () => {
-    symlinkSync('/etc', join(root, 'etc'));
-    symlinkSync('/etc/passwd', join(root, 'passwd.md'));
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'AC-FILE-001.11: lists a symbolic link as such without following it',
+    async () => {
+      symlinkSync('/etc', join(root, 'etc'));
+      symlinkSync('/etc/passwd', join(root, 'passwd.md'));
 
-    const listing = await lister.list(root, '');
+      const listing = await lister.list(root, '');
 
-    expect(listing.entries).toEqual([
-      { name: 'etc', kind: 'symlink', size: null, markdown: false, ignored: false, empty: false },
-      { name: 'passwd.md', kind: 'symlink', size: null, markdown: false, ignored: false, empty: false }
-    ]);
-    expect(await refusal('etc')).toBe('symlink');
-  });
+      expect(listing.entries).toEqual([
+        { name: 'etc', kind: 'symlink', size: null, markdown: false, ignored: false, empty: false },
+        { name: 'passwd.md', kind: 'symlink', size: null, markdown: false, ignored: false, empty: false }
+      ]);
+      expect(await refusal('etc')).toBe('symlink');
+    }
+  );
 
-  it('lists a gitlink as a submodule', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('lists a gitlink as a submodule', async () => {
     git(root, [ 'commit', '-q', '--allow-empty', '-m', 'base' ]);
     const sha = git(root, [ 'rev-parse', 'HEAD' ]).trim();
     git(root, [ 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib` ]);
@@ -103,7 +110,8 @@ describe('FolderLister', () => {
     ]);
   });
 
-  it('marks ignored entries, but never a tracked file', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('marks ignored entries, but never a tracked file', async () => {
     write(join(root, '.gitignore'), 'build/\n*.log\n');
     write(join(root, 'keep.log'), 'kept\n');
     git(root, [ 'add', '-f', '.gitignore', 'keep.log' ]);
@@ -122,7 +130,8 @@ describe('FolderLister', () => {
     });
   });
 
-  it('marks everything inside an ignored folder as ignored', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('marks everything inside an ignored folder as ignored', async () => {
     write(join(root, '.gitignore'), 'build/\n');
     write(join(root, 'build', 'app.js'));
     write(join(root, 'build', 'nested', 'deep.md'));
@@ -139,7 +148,8 @@ describe('FolderLister', () => {
     expect(nested.entries.map(entry => entry.ignored)).toEqual([ true ]);
   });
 
-  it('does not mark a tracked file inside an ignored folder', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('does not mark a tracked file inside an ignored folder', async () => {
     write(join(root, '.gitignore'), 'build/\n');
     write(join(root, 'build', 'keep.js'));
     write(join(root, 'build', 'out.js'));
@@ -156,7 +166,8 @@ describe('FolderLister', () => {
     expect((await lister.list(root, 'dist')).entries.map(entry => entry.ignored)).toEqual([ true ]);
   });
 
-  it('marks empty folders', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('marks empty folders', async () => {
     mkdirSync(join(root, 'empty'));
     mkdirSync(join(root, 'only-git', '.git'), { recursive: true });
     write(join(root, 'full', 'a.md'));
@@ -166,7 +177,8 @@ describe('FolderLister', () => {
     expect(empty).toEqual({ empty: true, full: false, 'only-git': true });
   });
 
-  it('flags Markdown files in any case and gives file sizes', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('flags Markdown files in any case and gives file sizes', async () => {
     write(join(root, 'A.MD'), '12345');
     write(join(root, 'b.Markdown'));
     write(join(root, 'c.mdx'));
@@ -182,7 +194,8 @@ describe('FolderLister', () => {
     ]);
   });
 
-  it('handles names with newlines and quotes', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('handles names with newlines and quotes', async () => {
     write(join(root, '.gitignore'), '*.log\n');
     write(join(root, 'a\nb.log'));
     write(join(root, 'say "hi".md'));
@@ -194,7 +207,8 @@ describe('FolderLister', () => {
     );
   });
 
-  it('handles names that look like pathspec magic', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('handles names that look like pathspec magic', async () => {
     write(join(root, '.gitignore'), '*.log\n');
     for (const name of [ ':!draft.md', ':^notes.md', ':x.log' ]) {
       write(join(root, name));
@@ -207,7 +221,8 @@ describe('FolderLister', () => {
     );
   });
 
-  it('refuses to list a submodule', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses to list a submodule', async () => {
     git(root, [ 'commit', '-q', '--allow-empty', '-m', 'base' ]);
     const sha = git(root, [ 'rev-parse', 'HEAD' ]).trim();
     git(root, [ 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib` ]);
@@ -216,7 +231,8 @@ describe('FolderLister', () => {
     expect(await refusal('vendor/lib')).toBe('not-found');
   });
 
-  it('refuses to list a folder inside a submodule', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses to list a folder inside a submodule', async () => {
     git(root, [ 'commit', '-q', '--allow-empty', '-m', 'base' ]);
     const sha = git(root, [ 'rev-parse', 'HEAD' ]).trim();
     git(root, [ 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib` ]);
@@ -233,21 +249,26 @@ describe('FolderLister', () => {
     expect(await refusal('../x')).toBe('malformed');
   });
 
-  it('AC-FILE-001.24: lists the first 5,000 of 6,000 entries and counts the rest', async () => {
-    mkdirSync(join(root, 'many'));
-    for (let i = 0; i < 6000; i++) {
-      writeFileSync(join(root, 'many', `f${i}.md`), '');
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'AC-FILE-001.24: lists the first 5,000 of 6,000 entries and counts the rest',
+    async () => {
+      mkdirSync(join(root, 'many'));
+      for (let i = 0; i < 6000; i++) {
+        writeFileSync(join(root, 'many', `f${i}.md`), '');
+      }
+
+      const listing = await lister.list(root, 'many');
+
+      expect(listing.entries).toHaveLength(5000);
+      expect(listing.more).toBe(1000);
+      expect(listing.entries[0]?.name).toBe('f0.md');
+      expect(listing.entries[4999]?.name).toBe('f4999.md');
     }
+  );
 
-    const listing = await lister.list(root, 'many');
-
-    expect(listing.entries).toHaveLength(5000);
-    expect(listing.more).toBe(1000);
-    expect(listing.entries[0]?.name).toBe('f0.md');
-    expect(listing.entries[4999]?.name).toBe('f4999.md');
-  });
-
-  it('keeps few descriptors open while it checks 5,000 sub-folders', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('keeps few descriptors open while it checks 5,000 sub-folders', async () => {
     for (let i = 0; i < 5000; i++) {
       mkdirSync(join(root, `d${i}`));
     }
@@ -270,7 +291,8 @@ describe('FolderLister', () => {
     expect(peak).toBeLessThan(400);
   }, 60_000);
 
-  describe('in a repository of 100,000 files', () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  describe.skipIf(process.platform !== 'linux')('in a repository of 100,000 files', () => {
     let big: string;
 
     beforeAll(() => {

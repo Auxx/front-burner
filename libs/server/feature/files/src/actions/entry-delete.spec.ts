@@ -122,7 +122,8 @@ describe('EntryDelete', () => {
     });
   };
 
-  it('deletes a committed file and an untracked file', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('deletes a committed file and an untracked file', async () => {
     writeFileSync(join(root, 'docs', 'notes.txt'), 'notes\n');
 
     await remove('docs/readme.md');
@@ -133,39 +134,48 @@ describe('EntryDelete', () => {
     expect(enqueue).not.toHaveBeenCalled();
   });
 
-  it('AC-FILE-001.11: deleting a symbolic link removes only the link', async () => {
-    symlinkSync('/etc/passwd', join(root, 'passwd'));
-    symlinkSync(outside, join(root, 'linked'));
-    symlinkSync('docs', join(root, 'docs-link'));
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'AC-FILE-001.11: deleting a symbolic link removes only the link',
+    async () => {
+      symlinkSync('/etc/passwd', join(root, 'passwd'));
+      symlinkSync(outside, join(root, 'linked'));
+      symlinkSync('docs', join(root, 'docs-link'));
 
-    await remove('passwd');
-    await remove('linked');
-    await remove('docs-link');
+      await remove('passwd');
+      await remove('linked');
+      await remove('docs-link');
 
-    expect(names()).toEqual([ 'docs' ]);
-    expect(existsSync('/etc/passwd')).toBe(true);
-    expect(readdirSync(outside)).toEqual([ 'secret.txt' ]);
-    expect(names('docs')).toEqual([ 'deep', 'readme.md' ]);
-    expect(enqueue).not.toHaveBeenCalled();
-  });
+      expect(names()).toEqual([ 'docs' ]);
+      expect(existsSync('/etc/passwd')).toBe(true);
+      expect(readdirSync(outside)).toEqual([ 'secret.txt' ]);
+      expect(names('docs')).toEqual([ 'deep', 'readme.md' ]);
+      expect(enqueue).not.toHaveBeenCalled();
+    }
+  );
 
-  it('moves a folder out of the working copy at once and queues its removal', async () => {
-    await remove('docs');
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'moves a folder out of the working copy at once and queues its removal',
+    async () => {
+      await remove('docs');
 
-    expect(names()).toEqual([]);
-    const trashed = readdirSync(layout.tmpDir);
-    expect(trashed).toHaveLength(1);
-    const name = trashed[0] ?? '';
-    expect(name).toMatch(/^delete-7-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-    expect(readFileSync(join(layout.tmpDir, name, 'deep', 'a.md'), 'utf8')).toBe('a\n');
-    expect(enqueue).toHaveBeenCalledExactlyOnceWith({
-      type: DELETE_FOLDER_JOB_TYPE,
-      repositoryId: REPO,
-      payload: { name }
-    });
-  });
+      expect(names()).toEqual([]);
+      const trashed = readdirSync(layout.tmpDir);
+      expect(trashed).toHaveLength(1);
+      const name = trashed[0] ?? '';
+      expect(name).toMatch(/^delete-7-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(readFileSync(join(layout.tmpDir, name, 'deep', 'a.md'), 'utf8')).toBe('a\n');
+      expect(enqueue).toHaveBeenCalledExactlyOnceWith({
+        type: DELETE_FOLDER_JOB_TYPE,
+        repositoryId: REPO,
+        payload: { name }
+      });
+    }
+  );
 
-  it('refuses a submodule', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses a submodule', async () => {
     mkdirSync(join(root, 'vendor', 'lib'), { recursive: true });
     writeFileSync(join(root, 'vendor', 'lib', 'README.md'), 'lib\n');
     const sha = git(root, 'rev-parse', 'HEAD').trim();
@@ -177,7 +187,8 @@ describe('EntryDelete', () => {
     expect(readdirSync(layout.tmpDir)).toEqual([]);
   });
 
-  it('refuses a folder that holds a submodule', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses a folder that holds a submodule', async () => {
     mkdirSync(join(root, 'vendor', 'lib'), { recursive: true });
     writeFileSync(join(root, 'vendor', 'lib', 'README.md'), 'lib\n');
     const sha = git(root, 'rev-parse', 'HEAD').trim();
@@ -188,29 +199,38 @@ describe('EntryDelete', () => {
     expect(readdirSync(layout.tmpDir)).toEqual([]);
   });
 
-  it('never acts outside the working copy when a parent is swapped for a link after the check', async () => {
-    mkdirSync(join(outside, 'deep'));
-    writeFileSync(join(outside, 'deep', 'a.md'), 'outside\n');
-    writeFileSync(join(outside, 'readme.md'), 'outside\n');
-    swapDocsAfterCheck();
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'never acts outside the working copy when a parent is swapped for a link after the check',
+    async () => {
+      mkdirSync(join(outside, 'deep'));
+      writeFileSync(join(outside, 'deep', 'a.md'), 'outside\n');
+      writeFileSync(join(outside, 'readme.md'), 'outside\n');
+      swapDocsAfterCheck();
 
-    const symlink = { status: 400, code: 'path-refused', params: { reason: 'symlink' } };
-    expect(await refusal(remove('docs/deep'))).toEqual(symlink);
-    expect(readdirSync(outside).sort()).toEqual([ 'deep', 'readme.md', 'secret.txt' ]);
-    expect(readdirSync(join(outside, 'deep'))).toEqual([ 'a.md' ]);
-    expect(readdirSync(layout.tmpDir)).toEqual([]);
-  });
+      const symlink = { status: 400, code: 'path-refused', params: { reason: 'symlink' } };
+      expect(await refusal(remove('docs/deep'))).toEqual(symlink);
+      expect(readdirSync(outside).sort()).toEqual([ 'deep', 'readme.md', 'secret.txt' ]);
+      expect(readdirSync(join(outside, 'deep'))).toEqual([ 'a.md' ]);
+      expect(readdirSync(layout.tmpDir)).toEqual([]);
+    }
+  );
 
-  it('never unlinks outside the working copy when a parent is swapped for a link after the check', async () => {
-    writeFileSync(join(outside, 'readme.md'), 'outside\n');
-    swapDocsAfterCheck();
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'never unlinks outside the working copy when a parent is swapped for a link after the check',
+    async () => {
+      writeFileSync(join(outside, 'readme.md'), 'outside\n');
+      swapDocsAfterCheck();
 
-    expect(await refusal(remove('docs/readme.md')))
-      .toEqual({ status: 400, code: 'path-refused', params: { reason: 'symlink' } });
-    expect(readFileSync(join(outside, 'readme.md'), 'utf8')).toBe('outside\n');
-  });
+      expect(await refusal(remove('docs/readme.md')))
+        .toEqual({ status: 400, code: 'path-refused', params: { reason: 'symlink' } });
+      expect(readFileSync(join(outside, 'readme.md'), 'utf8')).toBe('outside\n');
+    }
+  );
 
-  it('keeps a folder\'s delete when its job cannot be queued', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('keeps a folder\'s delete when its job cannot be queued', async () => {
     const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     enqueue.mockImplementation(() => {
       throw new Error('database is locked');
@@ -278,13 +298,17 @@ describe('EntryDelete', () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it('publishes files.changed with the parent folder, and a deleted folder\'s own path', async () => {
-    await remove('docs/deep/a.md');
-    await remove('docs/deep');
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'publishes files.changed with the parent folder, and a deleted folder\'s own path',
+    async () => {
+      await remove('docs/deep/a.md');
+      await remove('docs/deep');
 
-    expect(publish.mock.calls).toEqual([
-      [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ 'docs/deep' ] } ],
-      [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ 'docs', 'docs/deep' ] } ]
-    ]);
-  });
+      expect(publish.mock.calls).toEqual([
+        [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ 'docs/deep' ] } ],
+        [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ 'docs', 'docs/deep' ] } ]
+      ]);
+    }
+  );
 });

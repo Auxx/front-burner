@@ -121,7 +121,8 @@ async function loginThroughAgent(socketPath: string, authorized: string): Promis
   return hash ?? 'none';
 }
 
-describe('openSshAgent', () => {
+// Listens on a Unix socket: not on Windows.
+describe.skipIf(process.platform === 'win32')('openSshAgent', () => {
   it('lists the one identity', async () => {
     const socketPath = await open(unlockPrivateKey(fixture('ed25519')));
 

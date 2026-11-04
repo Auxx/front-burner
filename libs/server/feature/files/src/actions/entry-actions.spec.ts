@@ -111,35 +111,43 @@ describe('EntryActions', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('creates notes as an empty untracked notes.md', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('creates notes as an empty untracked notes.md', async () => {
     expect(await create({ folder: 'docs', name: 'notes', kind: 'file' })).toEqual({ path: 'docs/notes.md' });
 
     expect(statSync(join(root, 'docs', 'notes.md')).size).toBe(0);
     expect(git(root, 'status', '--porcelain', '--', 'docs/notes.md')).toBe('?? docs/notes.md\n');
   });
 
-  it('creates an empty folder', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('creates an empty folder', async () => {
     expect(await create({ folder: '', name: 'drafts', kind: 'folder' })).toEqual({ path: 'drafts' });
 
     expect(statSync(join(root, 'drafts')).isDirectory()).toBe(true);
     expect(readdirSync(join(root, 'drafts'))).toEqual([]);
   });
 
-  it('keeps a Markdown extension and does not add .md to a folder', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('keeps a Markdown extension and does not add .md to a folder', async () => {
     expect(await create({ folder: '', name: 'Guide.MDX', kind: 'file' })).toEqual({ path: 'Guide.MDX' });
     expect(await create({ folder: '', name: 'v1.0', kind: 'folder' })).toEqual({ path: 'v1.0' });
   });
 
-  it('AC-FILE-001.14: refuses a case-only clash but allows a case-only rename', async () => {
-    expect(await refusal(create({ folder: 'docs', name: 'README.md', kind: 'file' }))).toEqual(nameTaken);
-    expect(await refusal(create({ folder: 'docs', name: 'README.md', kind: 'folder' }))).toEqual(nameTaken);
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'AC-FILE-001.14: refuses a case-only clash but allows a case-only rename',
+    async () => {
+      expect(await refusal(create({ folder: 'docs', name: 'README.md', kind: 'file' }))).toEqual(nameTaken);
+      expect(await refusal(create({ folder: 'docs', name: 'README.md', kind: 'folder' }))).toEqual(nameTaken);
 
-    expect(await rename({ path: 'docs/readme.md', name: 'README.md' })).toEqual({ path: 'docs/README.md' });
-    expect(names('docs')).toEqual([ 'README.md' ]);
-    expect(readFileSync(join(root, 'docs', 'README.md'), 'utf8')).toBe('# Docs\n');
-  });
+      expect(await rename({ path: 'docs/readme.md', name: 'README.md' })).toEqual({ path: 'docs/README.md' });
+      expect(names('docs')).toEqual([ 'README.md' ]);
+      expect(readFileSync(join(root, 'docs', 'README.md'), 'utf8')).toBe('# Docs\n');
+    }
+  );
 
-  it('refuses to rename onto another entry', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses to rename onto another entry', async () => {
     writeFileSync(join(root, 'docs', 'other.md'), 'other\n');
 
     expect(await refusal(rename({ path: 'docs/readme.md', name: 'OTHER.md' }))).toEqual(nameTaken);
@@ -147,7 +155,8 @@ describe('EntryActions', () => {
     expect(readFileSync(join(root, 'docs', 'other.md'), 'utf8')).toBe('other\n');
   });
 
-  it('AC-FILE-001.25: stores names in NFC', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('AC-FILE-001.25: stores names in NFC', async () => {
     const decomposed = 'café';
 
     expect(await create({ folder: '', name: decomposed, kind: 'file' })).toEqual({ path: 'café.md' });
@@ -157,14 +166,16 @@ describe('EntryActions', () => {
     expect(await refusal(create({ folder: '', name: `${decomposed}.md`, kind: 'folder' }))).toEqual(nameTaken);
   });
 
-  it('renames guide.md to guide.txt as guide.txt.md', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('renames guide.md to guide.txt as guide.txt.md', async () => {
     writeFileSync(join(root, 'docs', 'guide.md'), 'guide\n');
 
     expect(await rename({ path: 'docs/guide.md', name: 'guide.txt' })).toEqual({ path: 'docs/guide.txt.md' });
     expect(names('docs')).toEqual([ 'guide.txt.md', 'readme.md' ]);
   });
 
-  it('renames a folder with what it holds', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('renames a folder with what it holds', async () => {
     expect(await rename({ path: 'docs', name: 'manual' })).toEqual({ path: 'manual' });
     expect(names('manual')).toEqual([ 'readme.md' ]);
     expect(existsSync(join(root, 'docs'))).toBe(false);
@@ -175,21 +186,26 @@ describe('EntryActions', () => {
     expect(answer).toMatchObject({ code: 'validation-failed', fields: [ { path: 'name', code: 'too-long' } ] });
   });
 
-  it('refuses to rename a non-Markdown file, a symbolic link or a submodule', async () => {
-    writeFileSync(join(root, 'logo.png'), 'png');
-    symlinkSync('docs/readme.md', join(root, 'link.md'));
-    mkdirSync(join(root, 'vendor', 'lib'), { recursive: true });
-    const sha = git(root, 'rev-parse', 'HEAD').trim();
-    git(root, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'refuses to rename a non-Markdown file, a symbolic link or a submodule',
+    async () => {
+      writeFileSync(join(root, 'logo.png'), 'png');
+      symlinkSync('docs/readme.md', join(root, 'link.md'));
+      mkdirSync(join(root, 'vendor', 'lib'), { recursive: true });
+      const sha = git(root, 'rev-parse', 'HEAD').trim();
+      git(root, 'update-index', '--add', '--cacheinfo', `160000,${sha},vendor/lib`);
 
-    for (const path of [ 'logo.png', 'link.md', 'vendor/lib', '' ]) {
-      expect(await refusal(rename({ path, name: 'other.md' }))).toEqual(notRenamable);
+      for (const path of [ 'logo.png', 'link.md', 'vendor/lib', '' ]) {
+        expect(await refusal(rename({ path, name: 'other.md' }))).toEqual(notRenamable);
+      }
+      expect(names()).toEqual([ 'docs', 'link.md', 'logo.png', 'vendor' ]);
+      expect(names('vendor')).toEqual([ 'lib' ]);
     }
-    expect(names()).toEqual([ 'docs', 'link.md', 'logo.png', 'vendor' ]);
-    expect(names('vendor')).toEqual([ 'lib' ]);
-  });
+  );
 
-  it('refuses to rename a symbolic link', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses to rename a symbolic link', async () => {
     mkdirSync(join(root, 'target'));
     writeFileSync(join(root, 'target', 'a.md'), 'a\n');
     symlinkSync('target', join(root, 'linked'));
@@ -203,7 +219,8 @@ describe('EntryActions', () => {
     expect(names('target')).toEqual([ 'a.md' ]);
   });
 
-  it('refuses changes during a merge', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses changes during a merge', async () => {
     writeFileSync(join(root, 'docs', 'readme.md'), 'main\n');
     git(root, 'commit', '-q', '-am', 'main');
     git(root, 'checkout', '-q', '-b', 'other', 'HEAD~1');
@@ -235,7 +252,8 @@ describe('EntryActions', () => {
       .toEqual({ status: 400, code: 'path-refused', params: { reason: 'inside-git' } });
   });
 
-  it('refuses changes inside a submodule', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses changes inside a submodule', async () => {
     mkdirSync(join(root, 'vendor', 'lib', 'docs'), { recursive: true });
     writeFileSync(join(root, 'vendor', 'lib', 'README.md'), 'lib\n');
     const sha = git(root, 'rev-parse', 'HEAD').trim();
@@ -250,15 +268,19 @@ describe('EntryActions', () => {
     expect(readdirSync(join(root, 'vendor', 'lib', 'docs'))).toEqual([]);
   });
 
-  it('publishes files.changed with the parent folder, and a renamed folder\'s old path', async () => {
-    await create({ folder: 'docs', name: 'notes', kind: 'file' });
-    await rename({ path: 'docs/notes.md', name: 'ideas' });
-    await rename({ path: 'docs', name: 'manual' });
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'publishes files.changed with the parent folder, and a renamed folder\'s old path',
+    async () => {
+      await create({ folder: 'docs', name: 'notes', kind: 'file' });
+      await rename({ path: 'docs/notes.md', name: 'ideas' });
+      await rename({ path: 'docs', name: 'manual' });
 
-    expect(publish.mock.calls).toEqual([
-      [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ 'docs' ] } ],
-      [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ 'docs' ] } ],
-      [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ '', 'docs' ] } ]
-    ]);
-  });
+      expect(publish.mock.calls).toEqual([
+        [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ 'docs' ] } ],
+        [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ 'docs' ] } ],
+        [ USER, { type: 'files.changed', repositoryId: REPO, folders: [ '', 'docs' ] } ]
+      ]);
+    }
+  );
 });

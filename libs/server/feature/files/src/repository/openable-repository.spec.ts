@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { Repository } from '@front-burner/server-core-database';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { DataLayout } from '@front-burner/server-core-storage';
@@ -23,7 +25,7 @@ describe('OpenableRepository', () => {
 
   it('gives the working copy of a ready repository', () => {
     const { openable: subject, queries } = openable(row('ready'));
-    expect(subject.root(3, 7)).toBe('/data/repos/3/7');
+    expect(subject.root(3, 7)).toBe(join('/data', 'repos', '3', '7'));
     expect(queries.find).toHaveBeenCalledWith(3, 7);
   });
 

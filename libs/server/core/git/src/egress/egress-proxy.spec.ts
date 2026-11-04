@@ -29,7 +29,8 @@ function connectThrough(
   });
 }
 
-describe('openEgressProxy', () => {
+// Listens on a Unix socket: not on Windows.
+describe.skipIf(process.platform === 'win32')('openEgressProxy', () => {
   let dir: string;
   let socketPath: string;
   let echo: Server;

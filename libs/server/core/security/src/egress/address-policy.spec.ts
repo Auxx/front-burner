@@ -118,7 +118,8 @@ describe('resolveAllowed', () => {
     expect(lookup.calls).toEqual([]);
   });
 
-  it('resolves a numeric host form', async () => {
+  // Only glibc's resolver reads a single number as an IPv4 address: not on Windows.
+  it.skipIf(process.platform === 'win32')('resolves a numeric host form', async () => {
     // 2852039166 is 169.254.169.254 written as one number.
     expect((await refusalOf(resolveAllowed('2852039166', OPEN))).reason).toBe('blocked');
   });

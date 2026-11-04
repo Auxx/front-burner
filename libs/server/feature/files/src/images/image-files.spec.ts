@@ -57,7 +57,8 @@ describe('ImageFiles', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('takes the content type from the extension, ignoring case', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('takes the content type from the extension, ignoring case', async () => {
     for (const [ extension, type ] of Object.entries(IMAGE_TYPES)) {
       writeFileSync(join(root, 'img', `a${extension.toUpperCase()}`), '<html>not an image</html>');
 
@@ -67,30 +68,36 @@ describe('ImageFiles', () => {
     expect(IMAGE_TYPES['.jxl']).toBe('image/jxl');
   });
 
-  it('AC-EDIT-003.7: refuses a missing image, a 12 MB PNG and a .tiff with their codes', async () => {
-    writeFileSync(join(root, 'big.png'), '');
-    truncateSync(join(root, 'big.png'), 12 * 1024 * 1024);
-    writeFileSync(join(root, 'photo.tiff'), 'x');
-    writeFileSync(join(root, 'limit.png'), '');
-    truncateSync(join(root, 'limit.png'), IMAGE_SIZE_LIMIT);
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')(
+    'AC-EDIT-003.7: refuses a missing image, a 12 MB PNG and a .tiff with their codes',
+    async () => {
+      writeFileSync(join(root, 'big.png'), '');
+      truncateSync(join(root, 'big.png'), 12 * 1024 * 1024);
+      writeFileSync(join(root, 'photo.tiff'), 'x');
+      writeFileSync(join(root, 'limit.png'), '');
+      truncateSync(join(root, 'limit.png'), IMAGE_SIZE_LIMIT);
 
-    expect(await refusal(images.open(root, 'missing.png')))
-      .toEqual({ status: 404, code: 'entry-not-found', params: {} });
-    expect(await refusal(images.open(root, 'big.png')))
-      .toEqual({ status: 413, code: 'image-too-large', params: { limit: IMAGE_SIZE_LIMIT } });
-    expect(await refusal(images.open(root, 'photo.tiff')))
-      .toEqual({ status: 415, code: 'image-format-unsupported', params: {} });
-    expect(await open('limit.png')).toMatchObject({ size: IMAGE_SIZE_LIMIT });
-  });
+      expect(await refusal(images.open(root, 'missing.png')))
+        .toEqual({ status: 404, code: 'entry-not-found', params: {} });
+      expect(await refusal(images.open(root, 'big.png')))
+        .toEqual({ status: 413, code: 'image-too-large', params: { limit: IMAGE_SIZE_LIMIT } });
+      expect(await refusal(images.open(root, 'photo.tiff')))
+        .toEqual({ status: 415, code: 'image-format-unsupported', params: {} });
+      expect(await open('limit.png')).toMatchObject({ size: IMAGE_SIZE_LIMIT });
+    }
+  );
 
-  it('answers a folder named like an image as missing', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('answers a folder named like an image as missing', async () => {
     mkdirSync(join(root, 'folder.png'));
 
     expect(await refusal(images.open(root, 'folder.png')))
       .toEqual({ status: 404, code: 'entry-not-found', params: {} });
   });
 
-  it('refuses an image through a symbolic link', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('refuses an image through a symbolic link', async () => {
     writeFileSync(join(dir, 'outside.png'), 'secret');
     symlinkSync('/etc/passwd', join(root, 'logo.png'));
     symlinkSync(join(dir, 'outside.png'), join(root, 'img', 'outside.png'));

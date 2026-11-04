@@ -4,6 +4,7 @@
 // instead of silently eating code.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const upstreamHeader = [
   '/* eslint-disable */',
@@ -43,7 +44,7 @@ export function replaceHeaders(dir) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const dir = process.argv[2];
   if (!dir) {
     console.error('usage: replace-header.mjs <generated-dir>');

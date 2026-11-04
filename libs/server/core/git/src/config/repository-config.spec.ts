@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { GitRunner } from '../runner/git-runner';
 import { assertHelpersExecutable, assertSafeRepositoryConfig, UnsafeRepositoryConfigError } from './repository-config';
 
-describe('assertSafeRepositoryConfig', () => {
+// Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+describe.skipIf(process.platform === 'win32')('assertSafeRepositoryConfig', () => {
   const runner = new GitRunner();
   let dir: string;
 
@@ -98,7 +99,8 @@ describe('assertHelpersExecutable', () => {
     expect(() => assertHelpersExecutable(dir)).toThrow(/askpass\.cjs/);
   });
 
-  it('refuses a helper that is not executable', () => {
+  // Mode bits do not make a file unexecutable on Windows.
+  it.skipIf(process.platform === 'win32')('refuses a helper that is not executable', () => {
     for (const name of [ 'askpass.cjs', 'proxy-connect.cjs' ]) {
       copyFileSync(join(helpers, name), join(dir, name));
     }

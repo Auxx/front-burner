@@ -39,7 +39,8 @@ const helperEnv = (broker: Broker) => ({
   FB_BROKER_TOKEN: broker.env['FB_BROKER_TOKEN'] ?? ''
 });
 
-describe('openBroker', () => {
+// The broker listens on a Unix socket in a POSIX path: not on Windows.
+describe.skipIf(process.platform === 'win32')('openBroker', () => {
   let broker: Broker | undefined;
 
   const open = async (credentials: GitCredentials = HTTPS, remote: ParsedRemote = REMOTE) => {
@@ -169,7 +170,8 @@ describe('openBroker over SSH', () => {
     broker = undefined;
   });
 
-  it('writes the ssh config, the public key and the known hosts', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('writes the ssh config, the public key and the known hosts', async () => {
     const opened = await open('ssh://git.example.com:2222/o/r.git');
     const { path, text } = configOf(opened);
     const dir = dirname(path);
@@ -208,14 +210,16 @@ describe('openBroker over SSH', () => {
     expect(opened.env['FB_BROKER_TOKEN']).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
-  it('targets port 22 for the scp-like form', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('targets port 22 for the scp-like form', async () => {
     const opened = await open('git@example.com:x.git');
 
     expect(opened.env['FB_EGRESS_TARGET']).toBe('example.com:22');
     expect(configOf(opened).text).not.toMatch(/^\s*User /m);
   });
 
-  it('serves the key on the agent socket', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('serves the key on the agent socket', async () => {
     const opened = await open('git@example.com:x.git');
     const socket = join(dirname(configOf(opened).path), 's');
 
@@ -224,7 +228,8 @@ describe('openBroker over SSH', () => {
     expect(stdout.trim()).toBe(readFileSync(join(KEYS, 'ed25519.pub'), 'utf8').trim());
   });
 
-  it('runs ssh without an agent and without credentials', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('runs ssh without an agent and without credentials', async () => {
     const opened = await open('git@example.com:x.git', { kind: 'none' });
     const { path, text } = configOf(opened);
 
@@ -232,7 +237,8 @@ describe('openBroker over SSH', () => {
     expect(text).toMatch(/^\s*IdentityAgent none$/m);
   });
 
-  it('writes no remote value into the ssh config', async () => {
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('writes no remote value into the ssh config', async () => {
     const opened = await open('ssh://evil-host.example:2222/x;$(touch pwned)');
     const { text } = configOf(opened);
 

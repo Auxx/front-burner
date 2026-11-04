@@ -42,7 +42,8 @@ async function waitFor(check: () => boolean): Promise<void> {
   }
 }
 
-describe('CloneJob', () => {
+// The broker listens on a Unix socket in a POSIX path: not on Windows.
+describe.skipIf(process.platform === 'win32')('CloneJob', () => {
   let restoreCa: () => void;
   let root: string;
   let remotes: { handbook: string; empty: string; };

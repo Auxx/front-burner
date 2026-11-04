@@ -93,7 +93,8 @@ describe('ImagesController', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('AC-EDIT-003.3: serves an image that is not committed', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('AC-EDIT-003.3: serves an image that is not committed', async () => {
     writeFileSync(join(root, 'img', 'new.png'), PNG);
 
     const res = await image('img/new.png').expect(200);
@@ -103,7 +104,8 @@ describe('ImagesController', () => {
     expect(res.body).toEqual(PNG);
   });
 
-  it('serves an ignored image', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('serves an ignored image', async () => {
     mkdirSync(join(root, 'build'));
     writeFileSync(join(root, 'build', 'chart.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
 
@@ -113,7 +115,8 @@ describe('ImagesController', () => {
     expect(res.body.toString()).toBe('<svg xmlns="http://www.w3.org/2000/svg"/>');
   });
 
-  it('serves an empty image', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('serves an empty image', async () => {
     writeFileSync(join(root, 'empty.gif'), '');
 
     const res = await image('empty.gif').expect(200);
@@ -122,7 +125,8 @@ describe('ImagesController', () => {
     expect(res.body).toEqual(Buffer.alloc(0));
   });
 
-  it('takes the content type from the extension only', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('takes the content type from the extension only', async () => {
     writeFileSync(join(root, 'x.png'), '<!doctype html><script>alert(1)</script>');
 
     const res = await image('x.png').expect(200);
@@ -131,7 +135,8 @@ describe('ImagesController', () => {
     expect(res.headers['x-content-type-options']).toBe('nosniff');
   });
 
-  it('sends the sandbox headers on every answer', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('sends the sandbox headers on every answer', async () => {
     writeFileSync(join(root, 'evil.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
     const ok = await image('evil.svg').expect(200);
     const notModified = await image('evil.svg').set('If-None-Match', ok.headers['etag'] as string).expect(304);
@@ -146,7 +151,8 @@ describe('ImagesController', () => {
     expect(IMAGE_CSP).toBe('default-src \'none\'; sandbox');
   });
 
-  it('answers 304 to a matching If-None-Match', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('answers 304 to a matching If-None-Match', async () => {
     const first = await image('img/committed.png').expect(200);
     const { size, mtimeMs } = statSync(join(root, 'img', 'committed.png'));
 
@@ -159,7 +165,8 @@ describe('ImagesController', () => {
     await image('img/committed.png').set('If-None-Match', '"other"').expect(200);
   });
 
-  it('changes the ETag when the file is replaced', async () => {
+  // Runs git and reads /proc/self/fd, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('changes the ETag when the file is replaced', async () => {
     const path = join(root, 'img', 'committed.png');
     utimesSync(path, new Date(1_700_000_000_000), new Date(1_700_000_000_000));
     const before = await image('img/committed.png').expect(200);

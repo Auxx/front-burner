@@ -8,7 +8,8 @@ import { writeOpenApi } from './write-openapi';
 // The real migrations: the application needs its tables.
 const MIGRATIONS = join(__dirname, '..', '..', '..', '..', 'libs', 'server', 'core', 'database', 'migrations');
 
-describe('writeOpenApi', () => {
+// Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+describe.skipIf(process.platform === 'win32')('writeOpenApi', () => {
   let root: string;
   let app: INestApplication;
 
