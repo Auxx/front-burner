@@ -294,5 +294,9 @@ test.describe('the commit author', () => {
     const box = await button.boundingBox();
     expect(box?.x).toBeGreaterThanOrEqual(0);
     expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(320);
+    const summary = question(page).locator('dlg-commit-author-summary');
+    await expect(summary).toContainText(email);
+    expect((await summary.boundingBox())?.width ?? Infinity).toBeLessThanOrEqual(320);
+    expect(await summary.evaluate(fits)).toBe(true);
   });
 });
