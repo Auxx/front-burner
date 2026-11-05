@@ -25,6 +25,11 @@ describe('classifyGitFailure', () => {
       'fatal: unable to access \'https://h/r/\': SSL: no alternative certificate subject name matches target host name',
       'tls-untrusted'
     ],
+    // Git built with GnuTLS, as in Debian.
+    [
+      'fatal: unable to access \'https://h/r/\': server verification failed: certificate signer not trusted. (CAfile: none)',
+      'tls-untrusted'
+    ],
     [ 'fatal: unable to access \'https://h/r/\': Could not resolve host: h', 'host-unreachable' ],
     [ 'fatal: unable to access \'https://h/r/\': Failed to connect to h port 443', 'host-unreachable' ],
     [ 'fatal: unable to access \'https://h/r/\': Connection refused', 'host-unreachable' ],

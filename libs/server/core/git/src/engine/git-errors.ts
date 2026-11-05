@@ -44,7 +44,7 @@ const PATTERNS: [ RegExp, GitErrorCode ][] = [
   // From proxy-connect.cjs.
   [ /egress proxy refused/, 'host-unreachable' ],
   [
-    /SSL certificate (problem|OpenSSL verify result)|server certificate verification failed|SSL: no alternative certificate subject name/,
+    /SSL certificate (problem|OpenSSL verify result)|server (certificate )?verification failed|SSL: no alternative certificate subject name/,
     'tls-untrusted'
   ],
   [ /Could not resolve host|Failed to connect|Connection refused|Couldn't connect to server/, 'host-unreachable' ],
