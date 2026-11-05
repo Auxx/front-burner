@@ -168,6 +168,31 @@ describe('classifyPushFailure', () => {
     );
   });
 
+  it('does not take words in the remote\'s URL for a reason', () => {
+    const url = 'https://h/team/read-only-docs.git';
+
+    expect(code(`fatal: unable to access '${url}/': Could not resolve host: h\n`)).toBe('host-unreachable');
+    expect(code(`fatal: Authentication failed for '${url}/'\n`)).toBe('auth-failed');
+    expect(
+      code(
+        `remote: Nope.\n${failedToPush}`,
+        `To ${url}\n!\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)\n`
+      )
+    )
+      .toBe('push-rejected');
+    expect(code('fatal: unable to access \'ssh://git@h/protected branch/r.git\': x\n')).toBe('failed');
+  });
+
+  it('does not take a sign-off or other words for a refusal of unsigned commits', () => {
+    const rejected = status('[remote rejected] (pre-receive hook declined)');
+
+    expect(code(`remote: commit abc123 is missing Signed-off-by\n${failedToPush}`, rejected)).toBe('push-rejected');
+    expect(code(`remote: the issue must be assigned first\n${failedToPush}`, rejected)).toBe('push-rejected');
+    expect(code(`remote: GL-HOOK-ERR: Commit must be signed with a GPG key\n${failedToPush}`, rejected)).toBe(
+      'push-unsigned'
+    );
+  });
+
   it('collects the remote lines, without credentials and at most 64 KB', () => {
     // git pads each line with spaces, to clear any progress shown before.
     const stderr = 'remote: First        \r\nremote:\nremote: see https://u:token@h/x\nerror: failed\n';

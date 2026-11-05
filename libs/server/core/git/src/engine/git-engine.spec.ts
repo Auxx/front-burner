@@ -1925,6 +1925,46 @@ describe('GitEngine', () => {
         expect(git(join(root, 'empty.git'), 'for-each-ref')).toBe('');
       });
 
+      it('refuses an origin with another URL besides the stored remote', async () => {
+        await cloneIt();
+        commitIn('third');
+        // git pushes to every URL of a remote; `--get` reads only the last.
+        git(work(), 'config', 'remote.origin.url', `${server.url}/empty.git`);
+        git(work(), 'config', '--add', 'remote.origin.url', remoteUrl());
+
+        const failure = await failureOf(push());
+
+        expect(failure.code).toBe('unsafe-repository-config');
+        expect(git(join(root, 'empty.git'), 'for-each-ref')).toBe('');
+        expect(remoteLog()).toBe('second\nfirst');
+      });
+
+      it('leaves what a single-branch clone fetches as it was when the push fails', async () => {
+        await cloneIt('single-branch');
+        git(work(), 'checkout', '-q', '-b', 'topic');
+        commitIn('topic work');
+        refuseWithHook('echo "No new branches." >&2');
+
+        const failure = await failureOf(push({ branch: 'topic', singleBranch: true }));
+
+        expect(failure.code).toBe('push-rejected');
+        expect(git(work(), 'config', '--get-all', 'remote.origin.fetch').trim()).toBe(
+          '+refs/heads/main:refs/remotes/origin/main'
+        );
+      });
+
+      it('does not report a config it cannot read as unsafe', async () => {
+        await cloneIt();
+        commitIn('third');
+        writeFileSync(join(work(), '.git', 'config'), '[[[ not a config\n');
+
+        const error = await push().catch((caught: unknown) => caught);
+
+        expect(error).toBeInstanceOf(Error);
+        expect(error).not.toBeInstanceOf(GitOperationError);
+        expect(remoteLog()).toBe('second\nfirst');
+      });
+
       it('refuses when origin is not the stored remote', async () => {
         await cloneIt();
         commitIn('third');

@@ -70,7 +70,7 @@ export interface PushResult {
 interface NetworkRunOptions {
   /** Values for the user's message besides `host`. */
   params?: Record<string, string>;
-  /** A working copy to run in; its config is checked first (A-5.7). */
+  /** A working copy to run in; its config and `origin` are checked first (A-5.7). */
   cwd?: string;
   /** Classifies a failure as a push's, with the remote's own lines. */
   push?: boolean;
@@ -722,47 +722,63 @@ export class GitEngine implements BeforeApplicationShutdown {
    */
   async push(workingCopy: string, request: PushRequest): Promise<PushResult> {
     const { branch } = request;
-    const origin = await this.runLocal(workingCopy, [ 'config', '--get', 'remote.origin.url' ]);
-    if (origin.exitCode !== 0 || origin.stdout.trim() !== request.remoteUrl) {
-      // The broker's credentials are for the stored remote only.
-      throw new GitOperationError('unsafe-repository-config', 'origin is not the repository\'s remote.');
-    }
+    // Before anything is written; runNetwork checks again, as for every network command.
+    await this.assertSafeWorkingCopy(workingCopy, request.remoteUrl);
     const source = `refs/heads/${branch}`;
     const target = await this.upstreamOf(workingCopy, branch);
     const commits = await this.commitsToPush(workingCopy, source, target);
-    if (target === null && request.singleBranch) {
-      await this.fetchAlso(workingCopy, branch);
-    }
+    const addedRefspec = target === null && request.singleBranch
+      ? await this.fetchAlso(workingCopy, branch)
+      : undefined;
     const destination = target ?? source;
-    await this.runNetwork(
-      'push',
-      request.remoteUrl,
-      request.credentials,
-      request.knownHosts,
-      () => [
+    try {
+      await this.runNetwork(
         'push',
-        '--porcelain',
-        '--no-follow-tags',
-        '--no-recurse-submodules',
-        ...(target === null ? [ '--set-upstream' ] : []),
-        'origin',
-        // Full names: a branch named like an option stays a ref, and nothing is forced.
-        `${source}:${destination}`
-      ],
-      this.options.gitTimeoutMs,
-      { cwd: workingCopy, push: true, params: { branch } }
-    );
+        request.remoteUrl,
+        request.credentials,
+        request.knownHosts,
+        () => [
+          'push',
+          '--porcelain',
+          '--no-follow-tags',
+          '--no-recurse-submodules',
+          ...(target === null ? [ '--set-upstream' ] : []),
+          'origin',
+          // Full names: a branch named like an option stays a ref, and nothing is forced.
+          `${source}:${destination}`
+        ],
+        this.options.gitTimeoutMs,
+        { cwd: workingCopy, push: true, params: { branch } }
+      );
+    } catch (error) {
+      if (addedRefspec !== undefined) {
+        // A failed push leaves the working copy as it was (GA-43).
+        await this.runChecked(workingCopy, [
+          'config',
+          '--unset',
+          '--fixed-value',
+          'remote.origin.fetch',
+          addedRefspec
+        ])
+          // The push's failure is what the user needs to hear about.
+          .catch((undo: unknown) =>
+            this.logger.warn(`Could not remove the fetch refspec ${addedRefspec}: ${String(undo)}`)
+          );
+      }
+      throw error;
+    }
     return { commits, upstream: `origin/${destination.slice('refs/heads/'.length)}` };
   }
 
   /** The ref the branch's upstream has on `origin`, such as `refs/heads/main`, or `null` when it has none there. */
   private async upstreamOf(workingCopy: string, branch: string): Promise<string | null> {
     const [ remote, merge ] = await Promise.all([
-      this.runLocal(workingCopy, [ 'config', '--get', `branch.${branch}.remote` ]),
-      this.runLocal(workingCopy, [ 'config', '--get', `branch.${branch}.merge` ])
+      this.configValues(workingCopy, `branch.${branch}.remote`),
+      this.configValues(workingCopy, `branch.${branch}.merge`)
     ]);
-    const ref = merge.stdout.trim();
-    return remote.stdout.trim() === 'origin' && ref.startsWith('refs/heads/') ? ref : null;
+    // As git reads them: the last value wins.
+    const ref = merge.at(-1) ?? '';
+    return remote.at(-1) === 'origin' && ref.startsWith('refs/heads/') ? ref : null;
   }
 
   /** What the remote-tracking branch of `target` lacks, or what no remote branch has. */
@@ -787,12 +803,44 @@ export class GitEngine implements BeforeApplicationShutdown {
     return Number.parseInt(result.stdout.trim(), 10);
   }
 
-  /** Adds the branch to what a single-branch clone fetches, so that its upstream ref exists (GA-41). */
-  private async fetchAlso(workingCopy: string, branch: string): Promise<void> {
+  /**
+   * Adds the branch to what a single-branch clone fetches, so that its upstream
+   * ref exists (GA-41). Returns the refspec when it added it.
+   */
+  private async fetchAlso(workingCopy: string, branch: string): Promise<string | undefined> {
     const refspec = `+refs/heads/${branch}:refs/remotes/origin/${branch}`;
-    const fetched = await this.runLocal(workingCopy, [ 'config', '--get-all', 'remote.origin.fetch' ]);
-    if (!fetched.stdout.split('\n').includes(refspec)) {
-      await this.runChecked(workingCopy, [ 'config', '--add', 'remote.origin.fetch', refspec ]);
+    if ((await this.configValues(workingCopy, 'remote.origin.fetch')).includes(refspec)) {
+      return undefined;
+    }
+    await this.runChecked(workingCopy, [ 'config', '--add', 'remote.origin.fetch', refspec ]);
+    return refspec;
+  }
+
+  /** Every value of a config key, in order; none when it is not set. */
+  private async configValues(cwd: string, key: string): Promise<string[]> {
+    const result = await this.runLocal(cwd, [ 'config', '--get-all', key ]);
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    if (result.exitCode === 1) {
+      return [];
+    }
+    if (result.exitCode !== 0) {
+      throw new Error(`git config --get-all ${key} failed: ${result.stderr.trim()}`);
+    }
+    return result.stdout.split('\n').filter(line => line !== '');
+  }
+
+  /**
+   * Refuses a working copy whose config could bypass the egress proxy, or
+   * whose `origin` has any URL but the stored remote: git pushes to every URL
+   * of a remote, and the broker's credentials are for the stored one (A-5.7).
+   */
+  private async assertSafeWorkingCopy(cwd: string, remoteUrl: string): Promise<void> {
+    await this.assertSafeConfig(cwd);
+    const urls = await this.configValues(cwd, 'remote.origin.url');
+    if (urls.length !== 1 || urls[0] !== remoteUrl) {
+      throw new GitOperationError('unsafe-repository-config', 'origin is not the repository\'s remote alone.');
     }
   }
 
@@ -998,7 +1046,7 @@ export class GitEngine implements BeforeApplicationShutdown {
       );
     }
     if (cwd !== undefined) {
-      await this.assertSafeConfig(cwd);
+      await this.assertSafeWorkingCopy(cwd, remoteUrl);
     }
     const knownHosts = [ ...this.options.knownHosts, ...userKnownHosts ];
     let broker: Broker | undefined;

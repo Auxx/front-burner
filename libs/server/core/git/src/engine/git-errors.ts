@@ -96,8 +96,12 @@ const PUSH_PATTERNS: [ RegExp, GitErrorCode ][] = [
   [ /protected branch/, 'push-protected-branch' ],
   [ /\[remote rejected\]|pre-receive hook declined/, 'push-rejected' ]
 ];
-// Only the remote says why it wants signed commits.
-const UNSIGNED = /signed|signature/i;
+// Only the remote says why it wants signed commits. Whole words: a hook's
+// "Signed-off-by" or "assigned" is about something else.
+const UNSIGNED = /\b(signed commits?|unsigned|must be signed|signatures?)\b/i;
+// The remote's URL is in git's own lines, and its words are not git's.
+const QUOTED_URL = /'[a-z][a-z0-9+.-]*:\/\/[^']*'/gi;
+const URL = /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi;
 
 /**
  * Maps a failed `git push --porcelain` to an error code, and collects the
@@ -123,7 +127,7 @@ export function classifyPushFailure(
     }
   }
   const remoteMessages = limitBytes(redactCredentials(remote.join('\n')), REMOTE_MESSAGES_MAX_BYTES);
-  const ownText = own.join('\n');
+  const ownText = own.join('\n').replace(QUOTED_URL, '\'<remote>\'').replace(URL, '<remote>');
   return { code: pushCode(result, refusals, ownText, remote.join('\n')), remoteMessages };
 }
 
