@@ -63,7 +63,10 @@ describe('ChangesPaneComponent', () => {
             commit: vi.fn()
           }
         },
-        { provide: CommitAuthorGate, useValue: { author: signal(null), change: vi.fn() } },
+        {
+          provide: CommitAuthorGate,
+          useValue: { author: signal(null), readFailed: signal(false), change: vi.fn(), refresh: vi.fn() }
+        },
         { provide: CurrentUserService, useValue: { user: signal({ id: 4 } as CurrentUser) } },
         { provide: GitStatusStore, useValue: { status, failed, refresh, followed: signal(1) } }
       ]
