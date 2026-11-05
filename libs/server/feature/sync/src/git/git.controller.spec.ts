@@ -10,7 +10,7 @@ import { Test } from '@nestjs/testing';
 import type { NextFunction, Request, Response } from 'express';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
@@ -52,6 +52,8 @@ describe('GitController', () => {
   const status = (id = READY) => request(app.getHttpServer()).get(`/repositories/${id}/git/status`);
   const commit = (body: object, id = READY) =>
     request(app.getHttpServer()).post(`/repositories/${id}/git/commits`).send(body);
+  const discard = (body: object, id = READY) =>
+    request(app.getHttpServer()).post(`/repositories/${id}/git/discard`).send(body);
   const authorOf = (rev = 'HEAD') => git(root, 'log', '-1', '--format=%an <%ae> / %cn <%ce>', rev).trim();
 
   beforeEach(async () => {
@@ -212,6 +214,101 @@ describe('GitController', () => {
 
     it('needs a path', async () => {
       const { body } = await diff('').expect(400);
+
+      expect(body).toMatchObject({ code: 'validation-failed' });
+    });
+  });
+
+  describe('discard', () => {
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('discards a modified, an added and a deleted file', async () => {
+      writeFileSync(join(root, 'gone.md'), 'gone\n');
+      git(root, 'add', 'gone.md');
+      git(root, 'commit', '-q', '-m', 'gone');
+      writeFileSync(join(root, 'notes.md'), 'changed\n');
+      writeFileSync(join(root, 'new.md'), 'new\n');
+      rmSync(join(root, 'gone.md'));
+
+      await discard({ paths: [ 'notes.md', 'new.md', 'gone.md' ] }).expect(204);
+
+      expect(readFileSync(join(root, 'notes.md'), 'utf8')).toBe('base\n');
+      expect(existsSync(join(root, 'new.md'))).toBe(false);
+      expect(readFileSync(join(root, 'gone.md'), 'utf8')).toBe('gone\n');
+      expect(git(root, 'status', '--porcelain').trim()).toBe('');
+    });
+
+    it('refuses .git and a path through a symbolic link, and discards nothing', async () => {
+      writeFileSync(join(root, 'notes.md'), 'changed\n');
+      const config = readFileSync(join(root, '.git', 'config'), 'utf8');
+
+      const inside = await discard({ paths: [ 'notes.md', '.git/config' ] }).expect(400);
+      expect(inside.body).toMatchObject({ code: 'path-refused', params: { reason: 'inside-git' } });
+
+      const outside = mkdtempSync(join(tmpdir(), 'fb-git-outside-'));
+      try {
+        writeFileSync(join(outside, 'secret.md'), 'secret\n');
+        symlinkSync(outside, join(root, 'linked'));
+        const through = await discard({ paths: [ 'notes.md', 'linked/secret.md' ] }).expect(400);
+        expect(through.body).toMatchObject({ code: 'path-refused', params: { reason: 'symlink' } });
+        expect(readFileSync(join(outside, 'secret.md'), 'utf8')).toBe('secret\n');
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+      expect(readFileSync(join(root, 'notes.md'), 'utf8')).toBe('changed\n');
+      expect(readFileSync(join(root, '.git', 'config'), 'utf8')).toBe(config);
+      expect(published).toEqual([]);
+    });
+
+    it('refuses a discard during a merge', async () => {
+      git(root, 'checkout', '-q', '-b', 'theirs');
+      writeFileSync(join(root, 'notes.md'), 'theirs\n');
+      git(root, 'commit', '-q', '-am', 'theirs');
+      git(root, 'checkout', '-q', 'main');
+      writeFileSync(join(root, 'notes.md'), 'ours\n');
+      git(root, 'commit', '-q', '-am', 'ours');
+      expect(() => git(root, 'merge', '-q', 'theirs')).toThrow();
+      const conflicted = readFileSync(join(root, 'notes.md'), 'utf8');
+
+      const { body } = await discard({ paths: [ 'notes.md' ] }).expect(409);
+
+      expect(body).toMatchObject({ code: 'merge-in-progress' });
+      expect(readFileSync(join(root, 'notes.md'), 'utf8')).toBe(conflicted);
+      expect(published).toEqual([]);
+    });
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('refuses to replace a file that is not being discarded', async () => {
+      rmSync(join(root, 'notes.md'));
+      mkdirSync(join(root, 'notes.md'));
+      writeFileSync(join(root, 'notes.md', 'keep.md'), 'keep\n');
+
+      const { body } = await discard({ paths: [ 'notes.md' ] }).expect(409);
+
+      expect(body).toMatchObject({ code: 'discard-blocked' });
+      expect(readFileSync(join(root, 'notes.md', 'keep.md'), 'utf8')).toBe('keep\n');
+      expect(published).toEqual([]);
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      const { body } = await discard({ paths: [ 'notes.md' ] }, 9).expect(404);
+
+      expect(body).toMatchObject({ code: 'not-found' });
+    });
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('publishes files.changed and git.changed', async () => {
+      writeFileSync(join(root, 'notes.md'), 'changed\n');
+
+      await discard({ paths: [ 'notes.md' ] }).expect(204);
+
+      expect(published).toEqual([
+        { type: 'files.changed', repositoryId: READY, folders: 'all' },
+        { type: 'git.changed', repositoryId: READY }
+      ]);
+    });
+
+    it('refuses an empty list', async () => {
+      const { body } = await discard({ paths: [] }).expect(400);
 
       expect(body).toMatchObject({ code: 'validation-failed' });
     });

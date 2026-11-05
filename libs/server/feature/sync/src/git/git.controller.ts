@@ -7,12 +7,12 @@ import { OpenableRepository, toFilesError, WorkingTreeGuard } from '@front-burne
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
 import type { CommitResult, GitDiff, GitStatus } from '@front-burner/shared-contracts';
-import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
-import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
+import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { toGitApiError } from './git-api-errors';
-import { CommitRequestDto, CommitResultDto, GitDiffDto, GitDiffQueryDto, GitStatusDto } from './git.dto';
+import { CommitRequestDto, CommitResultDto, GitDiffDto, GitDiffQueryDto, GitPathsDto, GitStatusDto } from './git.dto';
 
 /** How many paths are checked at once: enough to hide the file system's latency, few enough for its handles. */
 const PATH_CHECKS_AT_ONCE = 32;
@@ -79,6 +79,27 @@ export class GitController {
     const root = this.repositories.root(authOf(req).userId, params.id);
     await checkPath(root, query.path);
     return this.engine.diff(root, query.path).catch(toGitApiError);
+  }
+
+  /**
+   * Discards the changes to the listed files (GA-23), which are the ones the
+   * client showed. Refused during a merge (GA-4), and with `discard-blocked` when
+   * a deleted file cannot come back without replacing something else.
+   */
+  @Post('discard')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  async discard(@Req() req: Request, @Param() params: RepositoryParamsDto, @Body() body: GitPathsDto): Promise<void> {
+    const { userId } = authOf(req);
+    const root = this.repositories.root(userId, params.id);
+    const paths = [ ...new Set(body.paths) ];
+    // Inside the lock: no file action of ours runs between the checks and the discard.
+    await this.guard.change(params.id, root, async () => {
+      await checkPaths(root, paths);
+      await this.engine.discard(root, paths).catch(toGitApiError);
+    });
+    this.events.publish(userId, { type: 'files.changed', repositoryId: params.id, folders: 'all' });
+    this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
   }
 
   /**

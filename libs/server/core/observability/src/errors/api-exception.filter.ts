@@ -41,6 +41,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'commit-author-not-confirmed': 'Confirm your commit author before your first commit.',
   'nothing-to-commit': 'There is nothing to commit. These files have no changes.',
   'detached-head': 'HEAD is not on a branch. Switch to a branch before committing.',
+  'discard-blocked': 'Another new file or folder is where this file goes. Discard that one too, or move it first.',
   'git-timeout': 'Git took too long. Try again.'
 };
 

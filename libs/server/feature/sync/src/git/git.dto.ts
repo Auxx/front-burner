@@ -3,6 +3,7 @@ import {
   CommitResultSchema,
   GitDiffQuerySchema,
   GitDiffSchema,
+  GitPathsSchema,
   GitStatusSchema
 } from '@front-burner/shared-contracts';
 import { ApiSchema } from '@nestjs/swagger';
@@ -28,3 +29,6 @@ export class CommitRequestDto extends createZodDto(z.object(CommitRequestSchema.
 
 @ApiSchema({ name: 'CommitResult' })
 export class CommitResultDto extends createZodDto(z.object(CommitResultSchema.shape)) {}
+
+@ApiSchema({ name: 'GitPaths' })
+export class GitPathsDto extends createZodDto(z.object(GitPathsSchema.shape)) {}

@@ -2,7 +2,7 @@
 
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import type { CommitRequest, CommitResult, GitDiff, GitStatus } from '@front-burner/shared-contracts';
+import type { CommitRequest, CommitResult, GitDiff, GitPaths, GitStatus } from '@front-burner/shared-contracts';
 import type { Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -27,6 +27,12 @@ export class GitApi {
     return this.http.get<GitDiff>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/diff`,
       { params: query }
+    );
+  }
+  discard(id: number, data: GitPaths): Observable<void> {
+    return this.http.post<void>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/discard`,
+      data
     );
   }
   commit(id: number, data: CommitRequest): Observable<CommitResult> {

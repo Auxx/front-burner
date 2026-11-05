@@ -1296,6 +1296,42 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/discard": {
+      "post": {
+        "operationId": "discard",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitPaths"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/commits": {
       "post": {
         "operationId": "commit",
@@ -2574,6 +2610,24 @@
               "kind"
             ]
           }
+        ]
+      },
+      "GitPaths": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "minItems": 1,
+            "maxItems": 50000,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          }
+        },
+        "required": [
+          "paths"
         ]
       },
       "CommitRequest": {
