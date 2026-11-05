@@ -27,6 +27,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
 import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
 import { ChangeEntryComponent } from '../change-entry/change-entry.component';
+import { CommitFormComponent } from '../commit-form/commit-form.component';
 
 /** Until the probe has been measured: 3 rem at the usual font size. */
 const FALLBACK_ROW_HEIGHT = 48;
@@ -53,7 +54,8 @@ const FALLBACK_ROW_HEIGHT = 48;
     EmptyStateComponent,
     InlineBannerComponent,
     SpinnerComponent,
-    ChangeEntryComponent
+    ChangeEntryComponent,
+    CommitFormComponent
   ],
   templateUrl: './changes-pane.component.html',
   styleUrl: './changes-pane.component.scss',

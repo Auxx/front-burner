@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { computed, DestroyRef, inject, Injectable, type Signal, signal, type WritableSignal } from '@angular/core';
 import type { ApiError, FileContent, FileState } from '@front-burner/shared-contracts';
 import { injectNarrowViewport } from '@front-burner/ui';
@@ -314,6 +315,25 @@ export class OpenFilesService {
     return (file.gone() || file.changed() !== null) && file.saver.unsaved()
       ? NOT_SAVED
       : file.saver.status();
+  }
+
+  /**
+   * Why the newest edits of the first of `paths` that has any did not reach the
+   * disk, after a flush: its save failed, or it waits for the user (GA-20). A file
+   * that is only being typed in does not count, as its edits came after the flush.
+   */
+  notSaved(paths: readonly string[]): { error: ApiError; retry: boolean; } | null {
+    for (const path of paths) {
+      const file = this.get(path);
+      const status = file && this.statusOf(file);
+      if (status?.kind === 'refused') {
+        return { error: status.error, retry: false };
+      }
+      if (status?.kind === 'offline') {
+        return { error: toApiError(new HttpErrorResponse({ status: 0 })), retry: true };
+      }
+    }
+    return null;
   }
 
   /**

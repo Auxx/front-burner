@@ -13,7 +13,7 @@
       <ui-spinner class="loading" [label]="t('loading')" />
     }
   } @else if (changes.length === 0) {
-    <ui-empty-state icon="check">{{ t('empty') }}</ui-empty-state>
+    <ui-empty-state class="empty" icon="check">{{ t('empty') }}</ui-empty-state>
   } @else {
     <div class="actions">
       @let allState = ticks.allState();
@@ -45,6 +45,9 @@
         (discard)="discard.emit([ $event ])"
       />
     </cdk-virtual-scroll-viewport>
+  }
+  @if (changes !== undefined) {
+    <rs-commit-form />
   }
   <div #rowProbe class="row-probe" aria-hidden="true"></div>
 </ng-container>

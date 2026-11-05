@@ -7,6 +7,7 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
 import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
+import { CommitService } from '../../services/commit/commit.service';
 import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
 import { ChangesPaneComponent } from './changes-pane.component';
 
@@ -51,6 +52,10 @@ describe('ChangesPaneComponent', () => {
       imports: [ ChangesPaneComponent, translocoTesting() ],
       providers: [
         CommitTicksService,
+        {
+          provide: CommitService,
+          useValue: { message: signal(''), busy: signal(false), error: signal(null), commit: vi.fn() }
+        },
         { provide: CurrentUserService, useValue: { user: signal({ id: 4 } as CurrentUser) } },
         { provide: GitStatusStore, useValue: { status, failed, refresh, followed: signal(1) } }
       ]
@@ -124,6 +129,19 @@ describe('ChangesPaneComponent', () => {
 
     (host().querySelector('ui-inline-banner button') as HTMLButtonElement).click();
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('has the commit form below the list and without changes, but not before the first status', async () => {
+    await render();
+    expect(host().querySelector('[role="list"] ~ rs-commit-form')).not.toBeNull();
+
+    status.set(statusOf([]));
+    await settle(fixture);
+    expect(host().querySelector('rs-commit-form')).not.toBeNull();
+
+    status.set(null);
+    await settle(fixture);
+    expect(host().querySelector('rs-commit-form')).toBeNull();
   });
 
   describe('ticking', () => {

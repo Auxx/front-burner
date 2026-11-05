@@ -27,6 +27,10 @@
   padding: var(--ui-space-1) var(--ui-space-2);
 }
 
+.empty {
+  flex: 1;
+}
+
 .list {
   flex: 1;
   min-block-size: 0;

@@ -1365,11 +1365,13 @@ test.describe('repository screen, kept up to date', () => {
     const name = row.locator('.name');
     expect(await name.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
 
-    // The drawer has the focus now, so the entry is the tab stop after Discard all.
+    // The drawer has the focus now: All files, Discard all and the entry's checkbox come before the entry.
     const entryButton = row.getByRole('button', { name: /^a-file-with/ });
     if (isMobile) {
       await pointAt(entryButton, isMobile);
     } else {
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
       await page.keyboard.press('Tab');
       await page.keyboard.press('Tab');
       await expect(entryButton).toBeFocused();
