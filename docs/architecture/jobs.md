@@ -13,10 +13,12 @@ See [overview.md](overview.md) for the numbering conventions.
   when there is one), JSON payload, status (`queued`, `running`, `done`,
   `failed`, `cancelled`), time to run, attempts, progress, result or error code,
   and an optional **dedupe key** that is unique among unfinished jobs.
-- **A-6.3** Payloads never contain secrets. A clone that uses an unlocked key
-  (AR-49) keeps its copy of the key in an in-memory map keyed by job ID, removed
-  when the job ends. It is lost on restart, which is fine: an interrupted clone
-  fails (AR-54).
+- **A-6.3** Payloads never contain secrets. A clone, fetch, pull or push that
+  uses an unlocked key (AR-49, RC-19) keeps its copy of the key in an in-memory
+  map keyed by job ID (`JobKeys`), removed whenever the job ends. It is lost on
+  restart, which is fine: an interrupted clone or push fails (AR-54). Other
+  credentials are read when the job runs, so credentials replaced meanwhile are
+  used.
 - **A-6.4** A loop in the backend process claims due jobs atomically (`UPDATE …
   RETURNING`). Enqueuing wakes the loop at once; otherwise it checks for
   scheduled jobs every second.

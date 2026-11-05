@@ -280,6 +280,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     const running: RunningJob = {
       id: job.id,
       userId: job.userId,
+      repositoryId: job.repositoryId,
       payload: JSON.parse(job.payload) as unknown,
       attempt: job.attempts,
       signal: controller.signal,

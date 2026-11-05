@@ -45,7 +45,21 @@ const MESSAGES: Record<ErrorCode, string> = {
     'The last commit can\'t be amended: it was pushed, it\'s a merge commit, or there isn\'t one yet.',
   'discard-blocked':
     'Another file or folder is where this file goes. Move or remove it first, or discard it too if it is in Changes.',
-  'git-timeout': 'Git took too long. Try again.'
+  'git-timeout': 'Git took too long. Try again.',
+  'no-branch': 'You\'re not on a branch. Switch to a branch before you push.',
+  'no-commits': 'This branch has no commits yet. Commit before you push.',
+  'nothing-to-push': 'There is nothing to push.',
+  'no-credentials': 'This repository has no credentials. Add credentials to push.',
+  'credentials-refused': 'The remote refused your credentials.',
+  'push-not-allowed': 'Your credentials can read this repository but not push to it.',
+  'push-non-fast-forward': 'The remote has new commits. Pull first.',
+  'push-protected-branch': 'The remote refused the push to a protected branch.',
+  'push-unsigned': 'The remote accepts only signed commits.',
+  'push-rejected': 'The remote refused the push.',
+  'host-unreachable': 'The remote can\'t be reached.',
+  'tls-untrusted': 'The remote\'s certificate isn\'t trusted.',
+  'repository-not-found': 'The remote repository wasn\'t found.',
+  interrupted: 'This was interrupted by a restart. Try again.'
 };
 
 interface ZodIssueLike {

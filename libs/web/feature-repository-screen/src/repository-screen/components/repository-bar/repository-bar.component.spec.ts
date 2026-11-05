@@ -73,7 +73,8 @@ describe('RepositoryBarComponent', () => {
       ahead: 0,
       behind: 0,
       changes: [],
-      mergeInProgress: false
+      mergeInProgress: false,
+      networkJob: null
     });
     fixture.componentRef.setInput('saveStatus', { kind: 'saved' });
     await settle(fixture);

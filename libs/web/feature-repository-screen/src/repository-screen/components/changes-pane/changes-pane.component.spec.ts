@@ -23,6 +23,7 @@ function statusOf(changes: GitChange[]): GitStatus {
     behind: 0,
     changes,
     mergeInProgress: false,
+    networkJob: null,
     lastCommit: null
   };
 }

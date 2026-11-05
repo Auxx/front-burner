@@ -1375,6 +1375,83 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/push": {
+      "post": {
+        "operationId": "push",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitJobStarted"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/v1/repositories/{id}/git/jobs/{jobId}": {
+      "get": {
+        "operationId": "gitJob",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitJobState"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/onboarding": {
       "get": {
         "operationId": "status",
@@ -2477,6 +2554,27 @@
           "message"
         ]
       },
+      "GitNetworkJob": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991,
+            "minimum": 0
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "push"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ]
+      },
       "GitStatus": {
         "type": "object",
         "properties": {
@@ -2521,6 +2619,14 @@
               }
             ],
             "nullable": true
+          },
+          "networkJob": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GitNetworkJob"
+              }
+            ],
+            "nullable": true
           }
         },
         "required": [
@@ -2531,7 +2637,8 @@
           "behind",
           "changes",
           "mergeInProgress",
-          "lastCommit"
+          "lastCommit",
+          "networkJob"
         ]
       },
       "DiffLine": {
@@ -2693,6 +2800,106 @@
         },
         "required": [
           "oid"
+        ]
+      },
+      "GitJobStarted": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "integer",
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "jobId"
+        ]
+      },
+      "GitJobOutcome": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/GitPushed"
+          },
+          {
+            "$ref": "#/components/schemas/GitJobFailed"
+          }
+        ]
+      },
+      "GitPushed": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pushed"
+            ]
+          },
+          "commits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "upstream": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "commits",
+          "upstream"
+        ]
+      },
+      "GitJobFailed": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "failed"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "code",
+          "params"
+        ]
+      },
+      "GitJobState": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "outcome": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GitJobOutcome"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "status",
+          "outcome"
         ]
       },
       "OnboardingStatus": {

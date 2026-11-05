@@ -17,7 +17,8 @@ const published: GitStatus = {
   ahead: 0,
   behind: 0,
   changes: [],
-  mergeInProgress: false
+  mergeInProgress: false,
+  networkJob: null
 };
 
 describe('GitStatusSummaryComponent', () => {

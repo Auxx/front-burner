@@ -3,6 +3,9 @@ import {
   CommitResultSchema,
   GitDiffQuerySchema,
   GitDiffSchema,
+  GitJobParamsSchema,
+  GitJobStartedSchema,
+  GitJobStateSchema,
   GitPathsSchema,
   GitStatusSchema,
   hasPathsUnlessAmending
@@ -35,3 +38,12 @@ export class CommitResultDto extends createZodDto(z.object(CommitResultSchema.sh
 
 @ApiSchema({ name: 'GitPaths' })
 export class GitPathsDto extends createZodDto(z.object(GitPathsSchema.shape)) {}
+
+@ApiSchema({ name: 'GitJobStarted' })
+export class GitJobStartedDto extends createZodDto(z.object(GitJobStartedSchema.shape)) {}
+
+@ApiSchema({ name: 'GitJobParams' })
+export class GitJobParamsDto extends createZodDto(z.object(GitJobParamsSchema.shape)) {}
+
+@ApiSchema({ name: 'GitJobState' })
+export class GitJobStateDto extends createZodDto(z.object(GitJobStateSchema.shape)) {}

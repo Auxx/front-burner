@@ -12,7 +12,8 @@ describe('GitStatusSchema', () => {
       path: 'c.md',
       state: 'deleted'
     } ],
-    lastCommit: { oid: '0123456789abcdef0123456789abcdef01234567', amendable: true, message: 'Subject\n\nBody' }
+    lastCommit: { oid: '0123456789abcdef0123456789abcdef01234567', amendable: true, message: 'Subject\n\nBody' },
+    networkJob: null
   };
 
   it('parses a status', () => {
@@ -38,6 +39,13 @@ describe('GitStatusSchema', () => {
   it('refuses an unknown state', () => {
     const renamed = { ...status, changes: [ { path: 'a.md', state: 'renamed' } ] };
     expect(GitStatusSchema.safeParse(renamed).success).toBe(false);
+  });
+
+  it('parses the running push', () => {
+    const pushing = { ...status, networkJob: { id: 4, type: 'push' } };
+    expect(GitStatusSchema.parse(pushing)).toEqual(pushing);
+    const { networkJob: _networkJob, ...without } = status;
+    expect(GitStatusSchema.safeParse(without).success).toBe(false);
   });
 
   it('refuses a negative count', () => {

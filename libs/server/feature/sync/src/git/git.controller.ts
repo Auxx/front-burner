@@ -6,13 +6,24 @@ import { inBatches, PathRefusedError, resolveInWorkingCopy } from '@front-burner
 import { OpenableRepository, toFilesError, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
-import type { CommitResult, GitDiff, GitStatus } from '@front-burner/shared-contracts';
+import type { CommitResult, GitDiff, GitJobStarted, GitJobState, GitStatus } from '@front-burner/shared-contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
-import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiAcceptedResponse, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
+import { PushService } from '../push/push.service';
 import { toGitApiError } from './git-api-errors';
-import { CommitRequestDto, CommitResultDto, GitDiffDto, GitDiffQueryDto, GitPathsDto, GitStatusDto } from './git.dto';
+import {
+  CommitRequestDto,
+  CommitResultDto,
+  GitDiffDto,
+  GitDiffQueryDto,
+  GitJobParamsDto,
+  GitJobStartedDto,
+  GitJobStateDto,
+  GitPathsDto,
+  GitStatusDto
+} from './git.dto';
 
 /**
  * Refuses a path that is malformed, inside `.git` or through a symbolic link
@@ -58,24 +69,27 @@ export class GitController {
     private readonly engine: GitEngine,
     private readonly guard: WorkingTreeGuard,
     private readonly commitAuthors: CommitAuthors,
-    private readonly events: EventsHub
+    private readonly events: EventsHub,
+    private readonly pushes: PushService
   ) {}
 
   /**
-   * The branch, its counts against the upstream, every changed file, and whether
-   * the last commit can be amended (GA-7, GA-11, GA-22, GA-42).
+   * The branch, its counts against the upstream, every changed file, whether
+   * the last commit can be amended, and the push under way (GA-7, GA-9, GA-11,
+   * GA-22, GA-42).
    */
   @Get('status')
   @ApiOkResponse({ type: GitStatusDto })
   @ZodSerializerDto(GitStatusDto)
   async gitStatus(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<GitStatus> {
-    const root = this.repositories.root(authOf(req).userId, params.id);
+    const { userId } = authOf(req);
+    const root = this.repositories.root(userId, params.id);
     const [ status, mergeInProgress, lastCommit ] = await Promise.all([
       this.engine.status(root),
       this.engine.mergeInProgress(root),
       this.engine.lastCommit(root)
     ]);
-    return { ...status, mergeInProgress, lastCommit };
+    return { ...status, mergeInProgress, lastCommit, networkJob: this.pushes.networkJob(userId, params.id) };
   }
 
   /**
@@ -161,5 +175,31 @@ export class GitController {
     });
     this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
     return result;
+  }
+
+  /**
+   * Pushes the current branch to its upstream, or publishes it, as a job
+   * (GA-3, GA-29). A second request while it waits or runs gets the same job.
+   * Refused during a merge (GA-4), on a detached `HEAD`, without commits, with
+   * nothing to push, and for a key that is not unlocked in this session (RC-4).
+   * Follow the job with `job.finished`, then read it with `gitJob`.
+   */
+  @Post('push')
+  @HttpCode(202)
+  @ApiAcceptedResponse({ type: GitJobStartedDto })
+  @ZodSerializerDto(GitJobStartedDto)
+  async push(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<GitJobStarted> {
+    return { jobId: await this.pushes.start(authOf(req), params.id) };
+  }
+
+  /**
+   * How one of the repository's git jobs stands, and how it ended: a push's
+   * commits and upstream (GA-32), or why it failed (GA-30, GA-31, RC-4).
+   */
+  @Get('jobs/:jobId')
+  @ApiOkResponse({ type: GitJobStateDto })
+  @ZodSerializerDto(GitJobStateDto)
+  gitJob(@Req() req: Request, @Param() params: GitJobParamsDto): GitJobState {
+    return this.pushes.state(authOf(req).userId, params.id, params.jobId);
   }
 }

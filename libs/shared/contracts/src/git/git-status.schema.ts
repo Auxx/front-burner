@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { GitNetworkJobSchema } from './git-push.schema';
 
 export const GIT_CHANGE_STATES = [ 'modified', 'added', 'deleted' ] as const;
 export type GitChangeState = (typeof GIT_CHANGE_STATES)[number];
@@ -39,7 +40,9 @@ export const GitStatusSchema = z
     changes: z.array(GitChangeSchema),
     mergeInProgress: z.boolean(),
     /** `null` without commits. */
-    lastCommit: GitLastCommitSchema.nullable()
+    lastCommit: GitLastCommitSchema.nullable(),
+    /** The unfinished push, or `null` (GA-9). */
+    networkJob: GitNetworkJobSchema.nullable()
   })
   .meta({ id: 'GitStatus' });
 

@@ -35,7 +35,8 @@ function statusOf(...paths: string[]): GitStatus {
     ahead: 0,
     behind: 0,
     changes: paths.map(path => ({ path, state: 'modified' as const })),
-    mergeInProgress: false
+    mergeInProgress: false,
+    networkJob: null
   };
 }
 
