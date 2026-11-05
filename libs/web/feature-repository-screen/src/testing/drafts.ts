@@ -10,7 +10,15 @@ import { type Draft, type DraftKey, DraftStore } from '@front-burner/web-core';
 export class MemoryDraftStore implements
   Pick<
     DraftStore,
-    'put' | 'get' | 'delete' | 'deleteUnclaimed' | 'move' | 'clearAll' | 'claim' | 'claimedElsewhere'
+    | 'put'
+    | 'get'
+    | 'delete'
+    | 'deleteUnclaimed'
+    | 'move'
+    | 'clearAll'
+    | 'claim'
+    | 'claimedElsewhere'
+    | 'claimedByAnotherTab'
   > {
   readonly drafts = new Map<string, Draft>();
   readonly claimed = new Set<string>();
@@ -66,6 +74,10 @@ export class MemoryDraftStore implements
   }
 
   async claimedElsewhere(key: DraftKey): Promise<boolean> {
+    return this.elsewhere.has(keyOf(key));
+  }
+
+  async claimedByAnotherTab(key: DraftKey): Promise<boolean> {
     return this.elsewhere.has(keyOf(key));
   }
 }

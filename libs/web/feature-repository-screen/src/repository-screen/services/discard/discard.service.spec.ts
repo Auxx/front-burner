@@ -454,6 +454,35 @@ describe('DiscardService', () => {
     expect(navigate).toHaveBeenCalledTimes(1);
   });
 
+  it('leaves a navigation the user made alone, when an added file was discarded meanwhile', async () => {
+    routePath = 'new.md';
+    await opened('new.md');
+    refresh.mockReturnValue(new Promise(() => undefined));
+    const { done } = await confirm([ added('new.md') ]);
+
+    routePath = 'other.md';
+    TestBed.inject(DialogService).closeAll();
+    await done;
+
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('leaves another tab\'s draft of a file open in both, through its reload and its closing', async () => {
+    const draft = { content: 'theirs', savedAt: new Date().toISOString() };
+    const key = (path: string) => ({ userId: 4, repositoryId: 12, path });
+    drafts.elsewhere.add('4/12/README.md');
+    drafts.elsewhere.add('4/12/new.md');
+    await opened('README.md');
+    await opened('new.md');
+    await drafts.put(key('README.md'), draft);
+    await drafts.put(key('new.md'), draft);
+
+    await (await confirm([ modified('README.md'), added('new.md') ])).done;
+
+    expect(drafts.at('README.md')).toEqual(draft);
+    expect(drafts.at('new.md')).toEqual(draft);
+  });
+
   it('runs one discard at a time', async () => {
     const first = service.discard([ modified('a.md') ]);
     await settleDialog();

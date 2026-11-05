@@ -78,7 +78,8 @@ export class DiscardService {
       const discarded = await firstValueFrom(ref.closed) === true;
       open = false;
       // After the dialog, since a navigation closes it. Also when a later request failed.
-      if (route !== '' && added.has(route) && !batches.flat().includes(route)) {
+      const stayed = this.routePath() === route && this.session.repository()?.id === repositoryId;
+      if (stayed && route !== '' && added.has(route) && !batches.flat().includes(route)) {
         // The page shows the empty state for this navigation, not the README (FB-39).
         void this.router.navigate([ '/repositories', repositoryId ], { replaceUrl: true, state: { closed: true } });
       }
@@ -114,7 +115,7 @@ export class DiscardService {
       const release = own.get(path) as () => void;
       let reloaded = true;
       if (added.has(path)) {
-        this.openFiles.close(path, { dropPending: true });
+        this.openFiles.close(path, { dropPending: true, keepDraft: true });
         this.firstFile.deleted(repositoryId, path);
       } else {
         reloaded = await this.reload(path);
@@ -136,7 +137,7 @@ export class DiscardService {
    */
   private async reload(path: string): Promise<boolean> {
     try {
-      await this.openFiles.reload(path, { discard: true });
+      await this.openFiles.reload(path, { discard: true, keepDraft: true });
       return true;
     } catch {
       const file = this.openFiles.get(path);

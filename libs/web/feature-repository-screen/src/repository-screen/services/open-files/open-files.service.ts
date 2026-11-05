@@ -265,7 +265,8 @@ export class OpenFilesService {
     file.saver.discard();
     await file.saver.settled();
     const key = this.keyAt(repositoryId, file.path());
-    if (key) {
+    // With nothing of its own to drop, a draft here is another tab's, still being saved there (D-1.3).
+    if (key && (unsaved || offered !== null || !(await this.drafts.claimedByAnotherTab(key)))) {
       await this.drafts.delete(key);
     }
     return {
@@ -280,7 +281,7 @@ export class OpenFilesService {
         if (unsaved) {
           file.saver.edit(file.preview.read);
           if (this.waits.has(file)) {
-            this.wait(file);
+            this.wait(file, repositoryId);
           } else {
             void file.saver.flush();
           }
@@ -321,9 +322,10 @@ export class OpenFilesService {
    * their browser draft are dropped. Without `discard`, nothing changes when
    * the file has unsaved edits once it is read, such as when the user typed
    * meanwhile, and it resolves `false`. A file not found is marked gone.
-   * Rejects with the `ApiError` of any other failure.
+   * Rejects with the `ApiError` of any other failure. With `keepDraft`, the
+   * browser draft is left as it is, as `dropForDiscard` has dealt with it.
    */
-  async reload(path: string, options: { discard: boolean; }): Promise<boolean> {
+  async reload(path: string, options: { discard: boolean; keepDraft?: boolean; }): Promise<boolean> {
     const file = this.get(path);
     if (!file) {
       return false;
@@ -347,7 +349,7 @@ export class OpenFilesService {
     file.saver.rebase(content.content, content.hash);
     file.file = content;
     file.size = content.size;
-    this.settle(file, repositoryId, content);
+    this.settle(file, repositoryId, content, options.keepDraft);
     file.revision.update(revision => revision + 1);
     return true;
   }
@@ -477,12 +479,13 @@ export class OpenFilesService {
    * Forgets the entry at `path`, or every entry under the folder at `path`,
    * such as after a delete; with `dropPending` its waiting save is dropped and
    * the browser drafts at `path` are deleted, also those of files not opened
-   * (FB-39); otherwise the waiting save is sent first.
+   * (FB-39); otherwise the waiting save is sent first. With `keepDraft`, the
+   * browser drafts are left as they are, as `dropForDiscard` has dealt with them.
    */
-  close(path: string, options: { dropPending: boolean; }): void {
+  close(path: string, options: { dropPending: boolean; keepDraft?: boolean; }): void {
     const repositoryId = this.repositoryId();
     const draftKey = this.keyAt(repositoryId, path);
-    if (options.dropPending && draftKey) {
+    if (options.dropPending && !options.keepDraft && draftKey) {
       void this.drafts.delete(draftKey);
     }
     const files = this.byPath(repositoryId);
@@ -512,13 +515,13 @@ export class OpenFilesService {
   }
 
   /** Holds the saver of `file` until the user chooses, keeping its waiting content as its browser draft. */
-  private wait(file: OpenFile): void {
+  private wait(file: OpenFile, repositoryId = this.repositoryId()): void {
     if (!this.waits.has(file)) {
       this.waits.set(file, file.saver.hold());
     }
     const waiting = file.saver.waiting();
     if (waiting !== null) {
-      this.putDraft(file, this.repositoryId(), waiting);
+      this.putDraft(file, repositoryId, waiting);
     }
   }
 
@@ -528,14 +531,14 @@ export class OpenFilesService {
   }
 
   /** After a reload or a recreate: the disk holds `state`, and nothing waits for the user any more. */
-  private settle(file: OpenFile, repositoryId: number, state: FileState): void {
+  private settle(file: OpenFile, repositoryId: number, state: FileState, keepDraft = false): void {
     file.hash.set(state.hash);
     file.changed.set(null);
     file.gone.set(false);
     file.recreateError.set(null);
     this.endWait(file);
     const key = this.keyAt(repositoryId, file.path());
-    if (key) {
+    if (key && !keepDraft) {
       void this.drafts.delete(key);
     }
   }

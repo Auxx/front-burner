@@ -50,7 +50,7 @@ import { RepositorySessionService } from '../../services/repository-session/repo
 import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import type { EntryAction } from '../../utils/entry-actions/entry-actions';
-import { fileName, parentPath } from '../../utils/file-name/file-name';
+import { ancestors, fileName } from '../../utils/file-name/file-name';
 
 /** A larger count shows as `99+`; the item's accessible name says it in full. */
 const MAX_BADGE_COUNT = 99;
@@ -322,21 +322,27 @@ export class RepositoryScreenPage {
 
   /**
    * **Discard** or **Discard all** (GA-23): the diff of a discarded file ends, and
-   * a file that comes back at the route's path, but was not open, is shown.
+   * a file that comes back at the route's path, but was not shown, is shown. A
+   * discard the user cancelled after a failure may still have discarded some
+   * files, the ones no longer in the status.
    */
   protected async discardChanges(changes: readonly GitChange[]): Promise<void> {
-    if (!(await this.discards.discard(changes))) {
+    const finished = await this.discards.discard(changes);
+    const status = this.gitStatus.status();
+    const left = new Set(status?.changes.map(change => change.path));
+    const discarded = finished ? changes : status ? changes.filter(change => !left.has(change.path)) : [];
+    if (discarded.length === 0) {
       return;
     }
-    const inChanges = (path: string | undefined) => changes.some(change => change.path === path);
-    if (inChanges(this.selectedChange()?.path)) {
+    if (discarded.some(change => change.path === this.selectedChange()?.path)) {
       this.selectedChange.set(null);
     }
     const path = this.path();
     const repository = this.session.repository();
-    const cameBack = changes.some(change => change.path === path && change.state === 'deleted');
-    if (cameBack && repository && !this.openFiles.get(path)) {
-      await this.tree.load(parentPath(path));
+    const cameBack = discarded.some(change => change.path === path && change.state === 'deleted');
+    if (cameBack && repository && this.openFiles.current()?.path() !== path) {
+      // Its folders may have gone with it, from the listings of the ones above them.
+      await Promise.all(ancestors(path).map(folder => this.tree.load(folder)));
       void this.show(repository.id, path, false);
     }
     this.changesPane()?.focusAfterDiscard();

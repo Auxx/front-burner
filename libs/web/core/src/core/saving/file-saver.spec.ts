@@ -415,4 +415,28 @@ describe('FileSaver', () => {
     expect(sent).toHaveLength(0);
     expect(saver.unsaved()).toBe(false);
   });
+
+  it('says saved once a save in flight when the edits were dropped is answered', async () => {
+    type('mine');
+    void saver.flush();
+    saver.discard();
+    expect(saver.status()).toEqual({ kind: 'saving' });
+
+    sent[0].resolve({ hash: 'h' });
+    await settle();
+
+    expect(saver.status()).toEqual({ kind: 'saved' });
+  });
+
+  it('keeps saying saving when new edits wait behind a save whose edits were dropped', async () => {
+    type('mine');
+    void saver.flush();
+    saver.discard();
+    type('newer');
+
+    sent[0].resolve({ hash: 'h' });
+    await settle();
+
+    expect(saver.status()).toEqual({ kind: 'saving' });
+  });
 });

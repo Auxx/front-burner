@@ -80,7 +80,9 @@ describe('DiscardChangesDialog', () => {
   it.each(
     [
       [ 'network', new HttpErrorResponse({ status: 0 }) ],
-      [ 'server', apiError(500, 'internal') ]
+      [ 'server', apiError(500, 'internal') ],
+      [ 'rate limit', apiError(429, 'too-many-requests') ],
+      [ 'timeout', apiError(408, 'timeout') ]
     ] as const
   )('stays open with the error and offers Try again after a %s error', async (_name, error) => {
     discard.mockRejectedValueOnce(error);

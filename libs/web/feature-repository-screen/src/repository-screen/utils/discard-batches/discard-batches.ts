@@ -20,7 +20,10 @@ function bytesOf(path: string): number {
  * them together: `a-b` comes between `a` and `a/b`.
  *
  * A group too long for one request is still sent in order, with the entry on the
- * way first: once that is gone, nothing blocks the rest.
+ * way first. Once an added entry on the way is gone, nothing blocks the rest. A
+ * deleted one, whose place is taken by more added files than fit in a request, is
+ * refused with `discard-blocked`, and nothing is discarded; those files can be
+ * discarded on their own first.
  */
 export function discardBatches(
   paths: readonly string[],

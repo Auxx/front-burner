@@ -1,3 +1,4 @@
+export { isRefusal } from './core/errors/is-refusal';
 export { toApiError } from './core/errors/to-api-error';
 export { authGuard, guestGuard } from './core/guards/auth/auth.guard';
 export { onboardingDestination, onboardingGuard } from './core/guards/onboarding/onboarding.guard';

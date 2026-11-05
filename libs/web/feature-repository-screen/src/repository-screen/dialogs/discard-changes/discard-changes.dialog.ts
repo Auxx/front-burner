@@ -1,4 +1,3 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
@@ -17,7 +16,7 @@ import {
   DialogRef,
   InlineBannerComponent
 } from '@front-burner/ui';
-import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
+import { ApiErrorTextService, isRefusal, toApiError } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /** **Discard** or **Discard all** of `count` files (GA-23). */
@@ -31,20 +30,15 @@ export interface DiscardChangesData {
 interface Failure {
   readonly text: string;
   readonly reference: string | null;
-  /** Whether it was a network or server error, so that **Try again** can help. */
+  /** Whether it was passing, so that **Try again** can help (GA-43). */
   readonly retry: boolean;
-}
-
-/** A network error, or the server's own: another try can go differently (GA-43). */
-function canRetry(error: unknown): boolean {
-  return !(error instanceof HttpErrorResponse) || error.status === 0 || error.status >= 500;
 }
 
 /**
  * Asks before discarding (GA-23), saying how many files and that the changes
  * cannot be recovered, with the focus on **Cancel**. It closes with `true` once
- * they are discarded. A failure keeps it open with the reason; a network or
- * server error offers **Try again**, and a refusal, which another try would not
+ * they are discarded. A failure keeps it open with the reason; a passing one,
+ * such as a network or server error, offers **Try again**, and a refusal, which another try would not
  * change, leaves only **Cancel**, which then takes the focus.
  */
 @Component({
@@ -76,7 +70,7 @@ export class DiscardChangesDialog {
       await this.data.discard();
       this.ref.close(true);
     } catch (error) {
-      this.failure.set({ ...this.errorText.describe(toApiError(error)), retry: canRetry(error) });
+      this.failure.set({ ...this.errorText.describe(toApiError(error)), retry: !isRefusal(error) });
       afterNextRender({
         read: () => ((this.action() ?? this.cancel()).nativeElement as HTMLElement).focus()
       }, { injector: this.injector });

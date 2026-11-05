@@ -1,15 +1,12 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { type Signal, signal } from '@angular/core';
 import { type Observable, Subject } from 'rxjs';
 
+import { isRefusal } from '../errors/is-refusal';
 import { toApiError } from '../errors/to-api-error';
 import type { SaveResult, SaveStatus } from './save-status.model';
 
 /** How long after the last edit a save is sent (A-8.9, ED-16). */
 export const SAVE_DELAY_MS = 1500;
-
-/** The `4xx` answers that are passing, retried as a save that did not reach the backend. */
-const RETRIED_STATUSES = new Set([ 408, 429 ]);
 
 /** The waits before each retry of a save that did not reach the backend; the last one repeats (NF-3.2). */
 export const SAVE_RETRY_DELAYS_MS = [ 1000, 2000, 4000, 8000, 16_000, 30_000 ] as const;
@@ -201,6 +198,8 @@ export class FileSaver {
       result => {
         if (generation === this.generation) {
           this.succeeded(content, result);
+        } else if (this.pending === null) {
+          this.currentStatus.set({ kind: 'saved' });
         }
       },
       (error: unknown) => {
@@ -237,10 +236,7 @@ export class FileSaver {
   }
 
   private failed(content: string, error: unknown): void {
-    if (
-      error instanceof HttpErrorResponse && error.status >= 400 && error.status < 500
-      && !RETRIED_STATUSES.has(error.status)
-    ) {
+    if (isRefusal(error)) {
       this.failures = 0;
       if (this.pending === null) {
         const apiError = toApiError(error);

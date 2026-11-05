@@ -68,6 +68,21 @@ describe('DraftStore', () => {
     }
   });
 
+  it('tells a file claimed by another tab from one claimed only by this tab', async () => {
+    const lock = { name: 'front-burner.draft:1/12/a.md', mode: 'shared' };
+    const query = vi.fn(() => Promise.resolve({ held: [ lock ] }));
+    vi.stubGlobal('navigator', { locks: { query } });
+    try {
+      expect(await store.claimedByAnotherTab(key('a.md'))).toBe(false);
+
+      query.mockResolvedValue({ held: [ lock, lock ] });
+      expect(await store.claimedByAnotherTab(key('a.md'))).toBe(true);
+      expect(await store.claimedByAnotherTab(key('b.md'))).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('keeps drafts of users, repositories and paths apart', async () => {
     await store.put(key('a.md', 12, 1), draft('user 1'));
     await store.put(key('a.md', 12, 2), draft('user 2'));
