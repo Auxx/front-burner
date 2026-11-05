@@ -5,7 +5,7 @@ description: |
   workspace: new features, bug fixes, refactors, or edits to existing files.
   Use before making the first edit. Covers exploring the workspace,
   scaffolding new artefacts with generators, implementing the change,
-  verifying it with lint/test/build, formatting, and reporting back.
+  verifying it with typecheck/lint/test/build, formatting, and reporting back.
 ---
 
 Follow these steps for every code change in this workspace. Each step points to
