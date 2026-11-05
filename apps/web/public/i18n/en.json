@@ -436,6 +436,8 @@
   "web-feature-repository-screen.CommitFormComponent.authorFailed": "Couldn't read your commit author.",
   "web-feature-repository-screen.CommitFormComponent.message": "Commit message",
   "web-feature-repository-screen.CommitFormComponent.longSubject": "The first line is longer than {{ length }} characters.",
+  "web-feature-repository-screen.CommitFormComponent.amendLast": "Amend last commit",
+  "web-feature-repository-screen.CommitFormComponent.amend": "Amend",
   "web-feature-repository-screen.CommitFormComponent.commitOne": "Commit 1 file",
   "web-feature-repository-screen.CommitFormComponent.commitMany": "Commit {{ count }} files",
   "web-feature-repository-screen.CommitFormComponent.needsMessage": "Write a commit message first.",

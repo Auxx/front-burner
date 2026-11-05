@@ -23,6 +23,8 @@ describe('CommitFormComponent', () => {
   let change: ReturnType<typeof vi.fn>;
   let readFailed: ReturnType<typeof signal<boolean>>;
   let refresh: ReturnType<typeof vi.fn>;
+  let canAmend: ReturnType<typeof signal<boolean>>;
+  let amending: ReturnType<typeof signal<boolean>>;
 
   const host = () => fixture.nativeElement as HTMLElement;
   const field = () => host().querySelector('textarea') as HTMLTextAreaElement;
@@ -54,17 +56,21 @@ describe('CommitFormComponent', () => {
     change = vi.fn(() => Promise.resolve());
     readFailed = signal(false);
     refresh = vi.fn();
+    canAmend = signal(false);
+    amending = signal(false);
     TestBed.configureTestingModule({
       imports: [
         CommitFormComponent,
         translocoTesting({
           [`${KEY}.commitOne`]: 'Commit 1 file',
           [`${KEY}.commitMany`]: 'Commit {{ count }} files',
-          [`${KEY}.committingAs`]: 'Committing as {{ name }} <{{ email }}>'
+          [`${KEY}.committingAs`]: 'Committing as {{ name }} <{{ email }}>',
+          [`${KEY}.amendLast`]: 'Amend last commit',
+          [`${KEY}.amend`]: 'Amend'
         })
       ],
       providers: [
-        { provide: CommitService, useValue: { paths, message, busy, error, commit } },
+        { provide: CommitService, useValue: { paths, message, busy, error, commit, canAmend, amending } },
         { provide: CommitAuthorGate, useValue: { author, change, readFailed, refresh } }
       ]
     });
@@ -154,6 +160,69 @@ describe('CommitFormComponent', () => {
       changeButton()?.click();
 
       expect(change).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Amend last commit', () => {
+    const option = () => host().querySelector('.amend input') as HTMLInputElement | null;
+
+    it('is there only when the last commit can be amended', async () => {
+      await render();
+      expect(option()).toBeNull();
+
+      canAmend.set(true);
+      await settle(fixture);
+      expect(host().querySelector('.amend')?.textContent?.trim()).toBe('Amend last commit');
+      expect(option()?.checked).toBe(false);
+
+      canAmend.set(false);
+      await settle(fixture);
+      expect(option()).toBeNull();
+    });
+
+    it('ticking and unticking it sets amending', async () => {
+      canAmend.set(true);
+      await render();
+
+      option()?.click();
+      expect(amending()).toBe(true);
+      await settle(fixture);
+      expect(option()?.checked).toBe(true);
+
+      option()?.click();
+      expect(amending()).toBe(false);
+    });
+
+    it('the button says Amend and works with no ticked files', async () => {
+      canAmend.set(true);
+      amending.set(true);
+      paths.set([]);
+      await render();
+      await type('Better');
+
+      expect(button().textContent?.trim()).toBe('Amend');
+      expect(button().getAttribute('aria-disabled')).toBeNull();
+      button().click();
+
+      expect(commit).toHaveBeenCalledExactlyOnceWith('Better');
+    });
+
+    it('still needs a message', async () => {
+      canAmend.set(true);
+      amending.set(true);
+      paths.set([]);
+      await render();
+
+      expect(button().getAttribute('aria-disabled')).toBe('true');
+      expect(reason()).toBe(`${KEY}.needsMessage`);
+    });
+
+    it('can\'t change while a commit runs', async () => {
+      canAmend.set(true);
+      busy.set(true);
+      await render();
+
+      expect(option()?.disabled).toBe(true);
     });
   });
 

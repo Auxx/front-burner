@@ -67,6 +67,8 @@ describe('ChangesPaneComponent', () => {
           useValue: {
             paths: signal([]),
             message: signal(''),
+            canAmend: signal(false),
+            amending: signal(false),
             busy: signal(false),
             error: signal(null),
             commit: vi.fn()

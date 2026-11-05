@@ -3,6 +3,8 @@ import { COMMIT_MAX_PATHS, COMMIT_MESSAGE_MAX_LENGTH } from '@front-burner/share
 import {
   BannerActionsComponent,
   ButtonComponent,
+  CheckboxComponent,
+  ChoiceComponent,
   FieldComponent,
   InlineBannerComponent,
   TextareaComponent,
@@ -19,9 +21,10 @@ const SUBJECT_HINT_LENGTH = 72;
 /**
  * The commit form below the list of **Changes** (GA-18, GA-19): the message, with
  * a hint for a long first line, who commits with **Change** (CA-9), or a warning
- * if that can't be read, and a button that says how many files it commits. While it can't commit, the button keeps the focus and says why on
- * hover, focus or tap. It stays when no change is left, so that the focus is not
- * lost with it.
+ * if that can't be read, **Amend last commit** when the last commit can be
+ * amended (GA-22), and a button that says how many files it commits. While it
+ * can't commit, the button keeps the focus and says why on hover, focus or tap.
+ * It stays when no change is left, so that the focus is not lost with it.
  */
 @Component({
   selector: 'rs-commit-form',
@@ -29,6 +32,8 @@ const SUBJECT_HINT_LENGTH = 72;
     TranslocoDirective,
     BannerActionsComponent,
     ButtonComponent,
+    CheckboxComponent,
+    ChoiceComponent,
     FieldComponent,
     InlineBannerComponent,
     TextareaComponent,
@@ -57,7 +62,7 @@ export class CommitFormComponent {
     if (this.commit.message().length > COMMIT_MESSAGE_MAX_LENGTH) {
       return 'messageTooLong';
     }
-    if (this.count() === 0) {
+    if (this.count() === 0 && !this.commit.amending()) {
       return 'needsFile';
     }
     return this.count() > COMMIT_MAX_PATHS ? 'tooManyFiles' : null;

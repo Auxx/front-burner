@@ -37,6 +37,18 @@
       </div>
     </ui-inline-banner>
   }
+  @if (commit.canAmend()) {
+    <label uiChoice class="amend">
+      <input
+        type="checkbox"
+        uiCheckbox
+        [checked]="commit.amending()"
+        [disabled]="commit.busy()"
+        (change)="commit.amending.set(!commit.amending())"
+      />
+      {{ t('amendLast') }}
+    </label>
+  }
   @let reason = blocked();
   <button
     #commitButton
@@ -49,6 +61,6 @@
     [uiTooltip]="reason ? t(reason, { count: maxPaths, length: maxMessageLength }) : ''"
     (click)="submit()"
   >
-    {{ t(count() === 1 ? 'commitOne' : 'commitMany', { count: count() }) }}
+    {{ commit.amending() ? t('amend') : t(count() === 1 ? 'commitOne' : 'commitMany', { count: count() }) }}
   </button>
 </ng-container>

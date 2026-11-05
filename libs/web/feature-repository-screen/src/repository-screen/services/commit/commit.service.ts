@@ -36,6 +36,11 @@ export interface CommitFailure extends ApiErrorText {
  * which may fail or wait behind another read. A failure is shown until the
  * message, the files or what stopped their saves change, as it may no longer be
  * true then.
+ *
+ * **Amend last commit** (GA-22) is on offer while the status says the last commit
+ * can be amended. Ticking it fills in that commit's message, and unticking it,
+ * by hand or because the option went away, puts back what the field held, unless
+ * the user changed the text, so that the old message is not committed by accident.
  */
 @Injectable()
 export class CommitService {
@@ -52,9 +57,15 @@ export class CommitService {
   private readonly failure = signal<{ shown: CommitFailure; state: string; } | null>(null);
   /** The last commit's files, and the status that still lists them. */
   private readonly committed = signal<{ status: GitStatus | null; paths: ReadonlySet<string>; } | null>(null);
+  /** What ticking Amend put in the message field, and what it replaced. */
+  private amendFill: { filled: string; replaced: string; } | null = null;
 
   /** The text of the message field. */
   readonly message = signal('');
+  /** Whether **Amend last commit** is ticked. */
+  readonly amending = signal(false);
+  /** Whether **Amend last commit** is on offer (GA-22). */
+  readonly canAmend = computed(() => this.store.status()?.lastCommit?.amendable === true);
   /** The files a commit would contain now. */
   readonly paths = computed(() => {
     const committed = this.committed();
@@ -81,7 +92,7 @@ export class CommitService {
     const repositoryId = this.session.repository()?.id;
     const paths = this.paths();
     const notSaved = repositoryId === undefined ? null : this.openFiles.notSaved(repositoryId, paths);
-    return JSON.stringify([ this.message(), paths, notSaved?.error.code ?? null ]);
+    return JSON.stringify([ this.message(), this.amending(), paths, notSaved?.error.code ?? null ]);
   });
 
   constructor() {
@@ -92,8 +103,20 @@ export class CommitService {
         followed = repositoryId;
         untracked(() => {
           this.message.set('');
+          this.amendFill = null;
+          this.amending.set(false);
           this.failure.set(null);
         });
+      }
+    });
+    let amended = false;
+    effect(() => {
+      const amending = this.amending();
+      if (amending && !this.canAmend()) {
+        this.amending.set(false);
+      } else if (amending !== amended) {
+        amended = amending;
+        untracked(() => (amending ? this.fillIn() : this.undoFillIn()));
       }
     });
     effect(() => {
@@ -106,12 +129,14 @@ export class CommitService {
 
   /**
    * Resolves `true` when the commit was made. Nothing happens, and it resolves
-   * `false`, while another runs in this repository, or without a message or a file.
+   * `false`, while another runs in this repository, or without a message, or
+   * without a file unless amending.
    */
   async commit(message: string): Promise<boolean> {
     const repositoryId = this.session.repository()?.id;
     const paths = this.paths();
-    if (repositoryId === undefined || this.busy() || message.trim() === '' || paths.length === 0) {
+    const amend = this.amending();
+    if (repositoryId === undefined || this.busy() || message.trim() === '' || (paths.length === 0 && !amend)) {
       return false;
     }
     const stayed = () => this.session.repository()?.id === repositoryId;
@@ -129,10 +154,14 @@ export class CommitService {
         }
         return false;
       }
-      await firstValueFrom(this.api.commit(repositoryId, { message, paths: [ ...paths ] }));
+      await firstValueFrom(
+        this.api.commit(repositoryId, { message, paths: [ ...paths ], ...(amend ? { amend } : {}) })
+      );
       if (stayed()) {
         this.committed.set({ status: this.store.status(), paths: new Set(paths) });
         this.message.set('');
+        this.amendFill = null;
+        this.amending.set(false);
         await this.store.refresh();
       }
       return true;
@@ -142,12 +171,31 @@ export class CommitService {
         if (apiError.code === 'commit-author-not-confirmed') {
           this.gate.refresh();
         }
+        if (apiError.code === 'amend-not-allowed') {
+          // Before `fail`: the failure stays when the form has already changed.
+          this.undoFillIn();
+          this.amending.set(false);
+          void this.store.refresh();
+        }
         this.fail(apiError, !isRefusal(error));
       }
       return false;
     } finally {
       this.setRunning(repositoryId, false);
     }
+  }
+
+  private fillIn(): void {
+    const filled = this.store.status()?.lastCommit?.message ?? '';
+    this.amendFill = { filled, replaced: this.message() };
+    this.message.set(filled);
+  }
+
+  private undoFillIn(): void {
+    if (this.amendFill?.filled === this.message()) {
+      this.message.set(this.amendFill.replaced);
+    }
+    this.amendFill = null;
   }
 
   private setRunning(repositoryId: number, running: boolean): void {
