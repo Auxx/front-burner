@@ -17,6 +17,8 @@ export const GIT_ERROR_CODES = [
   'nothing-to-commit',
   /** HEAD is on no branch, so a commit would belong to none. */
   'detached-head',
+  /** Restoring a deleted file would replace a file or folder that is not being discarded. */
+  'discard-blocked',
   'failed'
 ] as const;
 

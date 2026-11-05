@@ -1,9 +1,9 @@
-import { lstatOrMissing } from '@front-burner/server-core-storage';
+import { lstatOrMissing, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
 import type { CloneMode } from '@front-burner/shared-contracts';
 import { ParsedRemote, parseRemoteUrl } from '@front-burner/shared-util';
 import { BeforeApplicationShutdown, Inject, Injectable, Logger } from '@nestjs/common';
-import { access, mkdtemp, readlink, rename, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { access, mkdtemp, readdir, readlink, rename, rm, unlink } from 'node:fs/promises';
+import { join, relative, sep } from 'node:path';
 import { Broker, GitCredentials, openBroker } from '../broker/broker';
 import { assertSafeRepositoryConfig, UnsafeRepositoryConfigError } from '../config/repository-config';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
@@ -13,6 +13,9 @@ import { hasHostEntry } from '../ssh/known-hosts';
 import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 import { classifyGitFailure, GitOperationError } from './git-errors';
 import { parseStatus, WorkingCopyStatus } from './git-status';
+
+/** How many added files are deleted at once: enough to hide the file system's latency, few enough for its handles. */
+const DISCARD_DELETES_AT_ONCE = 32;
 
 /** AR-42. */
 const ACCESS_CHECK_TIMEOUT_MS = 30_000;
@@ -422,6 +425,116 @@ export class GitEngine implements BeforeApplicationShutdown {
       throw new Error(`git rev-parse failed: ${head.stderr.trim()}`);
     }
     return { oid: head.stdout.trim() };
+  }
+
+  /**
+   * Discards the changes to the listed paths (GA-23): a modified or deleted file
+   * comes back from the last commit, and an added one is deleted, as a symbolic
+   * link and not what it points to. A path that is not a change is skipped, and
+   * empty folders stay. The caller has checked the paths and holds the
+   * working-tree lock, so that the states cannot change meanwhile.
+   *
+   * @throws GitOperationError `discard-blocked`, before anything has changed,
+   *   when restoring a deleted file would replace a file or folder that is not
+   *   being discarded: git would remove it without asking.
+   */
+  async discard(workingCopy: string, paths: string[]): Promise<void> {
+    const { changes } = await this.status(workingCopy);
+    const listed = new Set(paths);
+    const chosen = changes.filter(change => listed.has(change.path));
+    const added = chosen.filter(change => change.state === 'added').map(change => change.path);
+    const tracked = chosen.filter(change => change.state !== 'added').map(change => change.path);
+    const deleted = chosen.filter(change => change.state === 'deleted').map(change => change.path);
+    await this.assertNothingInTheWay(workingCopy, deleted, new Set(added));
+    const onStdin = (list: string[]) => ({
+      stdin: list.map(path => `${path}\0`).join(''),
+      timeoutMs: this.options.gitTimeoutMs
+    });
+    try {
+      if (added.length > 0) {
+        await this.deleteAdded(workingCopy, added);
+        // Takes exact names: `git rm --cached docs` would also mean the files in a folder `docs`.
+        await this.runChecked(workingCopy, [ 'update-index', '--force-remove', '-z', '--stdin' ], onStdin(added));
+      }
+      // Added files first: one may stand where a deleted file comes back.
+      if (tracked.length > 0) {
+        await this.runChecked(
+          workingCopy,
+          [
+            '--literal-pathspecs',
+            'restore',
+            '--source=HEAD',
+            '--staged',
+            '--worktree',
+            '--pathspec-from-file=-',
+            '--pathspec-file-nul'
+          ],
+          onStdin(tracked)
+        );
+      }
+    } catch (error) {
+      if (error instanceof GitOperationError && error.code === 'timeout') {
+        // A git killed at its timeout cannot remove its lock, and the caller holds the working-tree lock.
+        await rm(join(workingCopy, '.git', 'index.lock'), { force: true });
+      }
+      throw error;
+    }
+  }
+
+  /** Deletes added files, as the entries they are; one that is already gone is fine. */
+  private async deleteAdded(workingCopy: string, paths: string[]): Promise<void> {
+    const deleteOne = async (path: string) => {
+      try {
+        const { absolute } = await resolveInWorkingCopy(workingCopy, path, { symlinkLeaf: true });
+        await unlink(absolute);
+      } catch (error) {
+        const missing = error instanceof PathRefusedError && error.reason === 'not-found';
+        if (!missing && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
+      }
+    };
+    for (let start = 0; start < paths.length; start += DISCARD_DELETES_AT_ONCE) {
+      await Promise.all(paths.slice(start, start + DISCARD_DELETES_AT_ONCE).map(deleteOne));
+    }
+  }
+
+  /**
+   * Refuses when a deleted file cannot come back without replacing something
+   * other than the added files being discarded: a file where a folder on the way
+   * to it must be, or a folder holding other files where it must be. `git
+   * restore` would remove them without asking, and status lists them as changes
+   * of their own, which the user may not have selected.
+   */
+  private async assertNothingInTheWay(workingCopy: string, deleted: string[], added: Set<string>): Promise<void> {
+    const blocked = (path: string) => new GitOperationError('discard-blocked', `Something stands where ${path} goes.`);
+    for (const path of deleted) {
+      const segments = path.split('/');
+      let parentsAreFolders = true;
+      for (let depth = 1; depth < segments.length && parentsAreFolders; depth++) {
+        const parent = segments.slice(0, depth).join('/');
+        const entry = await lstatOrMissing(join(workingCopy, parent));
+        if (entry !== undefined && !entry.isDirectory() && !added.has(parent)) {
+          throw blocked(path);
+        }
+        parentsAreFolders = entry?.isDirectory() === true;
+      }
+      if (!parentsAreFolders) {
+        continue;
+      }
+      const leaf = join(workingCopy, path);
+      if ((await lstatOrMissing(leaf))?.isDirectory() !== true) {
+        continue;
+      }
+      const entries = await readdir(leaf, { recursive: true, withFileTypes: true });
+      const others = entries.filter(entry => {
+        const inside = relative(workingCopy, join(entry.parentPath, entry.name)).split(sep).join('/');
+        return !entry.isDirectory() && !added.has(inside);
+      });
+      if (others.length > 0) {
+        throw blocked(path);
+      }
+    }
   }
 
   /**
