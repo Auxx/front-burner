@@ -129,6 +129,16 @@ describe('PushChannelService', () => {
     expect(received).toEqual([ { type: 'job.progress', jobId: 1, percent: 50 }, finished ]);
   });
 
+  it('delivers commit-author.changed', async () => {
+    const received = subscribe();
+    await settle();
+
+    streams[0]?.write(sse({ type: 'commit-author.changed' }));
+    await settle();
+
+    expect(received).toEqual([ { type: 'commit-author.changed' } ]);
+  });
+
   it('delivers git.changed', async () => {
     const received = subscribe();
     await settle();

@@ -1,10 +1,12 @@
 import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import type { RepositoryCommitAuthor } from '@front-burner/shared-contracts';
 import { TooltipDirective } from '@front-burner/ui';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { CommitAuthorGate } from '../../services/commit-author-gate/commit-author-gate.service';
 import { type CommitFailure, CommitService } from '../../services/commit/commit.service';
 import { CommitFormComponent } from './commit-form.component';
 
@@ -17,6 +19,10 @@ describe('CommitFormComponent', () => {
   let busy: ReturnType<typeof signal<boolean>>;
   let error: ReturnType<typeof signal<CommitFailure | null>>;
   let commit: ReturnType<typeof vi.fn>;
+  let author: ReturnType<typeof signal<RepositoryCommitAuthor | null>>;
+  let change: ReturnType<typeof vi.fn>;
+  let readFailed: ReturnType<typeof signal<boolean>>;
+  let refresh: ReturnType<typeof vi.fn>;
 
   const host = () => fixture.nativeElement as HTMLElement;
   const field = () => host().querySelector('textarea') as HTMLTextAreaElement;
@@ -40,17 +46,114 @@ describe('CommitFormComponent', () => {
     busy = signal(false);
     error = signal<CommitFailure | null>(null);
     commit = vi.fn(() => Promise.resolve(true));
+    author = signal<RepositoryCommitAuthor | null>({
+      author: { name: 'Ada', email: 'ada@example.com' },
+      source: 'default',
+      confirmed: true
+    });
+    change = vi.fn(() => Promise.resolve());
+    readFailed = signal(false);
+    refresh = vi.fn();
     TestBed.configureTestingModule({
       imports: [
         CommitFormComponent,
         translocoTesting({
           [`${KEY}.commitOne`]: 'Commit 1 file',
-          [`${KEY}.commitMany`]: 'Commit {{ count }} files'
+          [`${KEY}.commitMany`]: 'Commit {{ count }} files',
+          [`${KEY}.committingAs`]: 'Committing as {{ name }} <{{ email }}>'
         })
       ],
       providers: [
-        { provide: CommitService, useValue: { paths, message, busy, error, commit } }
+        { provide: CommitService, useValue: { paths, message, busy, error, commit } },
+        { provide: CommitAuthorGate, useValue: { author, change, readFailed, refresh } }
       ]
+    });
+  });
+
+  describe('the commit author', () => {
+    const line = () => host().querySelector('.author-text')?.textContent?.trim();
+    const changeButton = () => host().querySelector('.change') as HTMLButtonElement | null;
+
+    it('shows Committing as, and Change opens the dialog', async () => {
+      await render();
+
+      expect(line()).toBe('Committing as Ada <ada@example.com>');
+      changeButton()?.click();
+
+      expect(change).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the author as text', async () => {
+      author.set({ author: { name: 'O\'Brien & "Sons" <b>', email: 'a@b' }, source: 'override', confirmed: true });
+      await render();
+
+      expect(line()).toBe('Committing as O\'Brien & "Sons" <b> <a@b>');
+      expect(host().querySelector('.author-text b')).toBeNull();
+    });
+
+    it('follows the author', async () => {
+      await render();
+
+      author.set({ author: { name: 'Ada L', email: 'a@work' }, source: 'override', confirmed: true });
+      await settle(fixture);
+
+      expect(line()).toBe('Committing as Ada L <a@work>');
+    });
+
+    it('warns, with Try again, instead of the line when the author can\'t be read', async () => {
+      author.set(null);
+      readFailed.set(true);
+      await render();
+
+      const warning = host().querySelector('.author-failed');
+      expect(warning?.getAttribute('status')).toBe('warning');
+      expect(warning?.textContent).toContain(`${KEY}.authorFailed`);
+      expect(line()).toBeUndefined();
+      expect(changeButton()).toBeNull();
+
+      (host().querySelector('.author-retry') as HTMLButtonElement).click();
+
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('moves the focus before Try again removes the warning', async () => {
+      author.set(null);
+      readFailed.set(true);
+      await render();
+      const retry = host().querySelector('.author-retry') as HTMLButtonElement;
+      retry.focus();
+
+      retry.click();
+
+      expect(document.activeElement).toBe(button());
+    });
+
+    it('still lets the user commit while warning', async () => {
+      author.set(null);
+      readFailed.set(true);
+      message.set('Subject');
+      await render();
+
+      button().click();
+
+      expect(commit).toHaveBeenCalledExactlyOnceWith('Subject');
+    });
+
+    it('shows nothing until the author is known', async () => {
+      author.set(null);
+      await render();
+
+      expect(line()).toBeUndefined();
+      expect(changeButton()).toBeNull();
+    });
+
+    it('can\'t change it while a commit runs', async () => {
+      busy.set(true);
+      await render();
+
+      changeButton()?.click();
+
+      expect(change).not.toHaveBeenCalled();
     });
   });
 

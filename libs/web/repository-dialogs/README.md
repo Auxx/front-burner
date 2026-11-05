@@ -10,6 +10,9 @@ What several web features share about a repository's git setup (A-2.4).
   makes it read-only while it is submitted.
 - `CommitAuthorRefusals`: the backend's field errors of the last request, kept
   until their field changes, and focusing the first field with an error.
+- `ChangeCommitAuthorDialog`: **Change** on the commit form, as the default or
+  for this repository.
+- `ConfirmCommitAuthorDialog`: the question before a user's first commit.
 
 ## Running unit tests
 

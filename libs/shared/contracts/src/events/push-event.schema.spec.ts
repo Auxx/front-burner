@@ -34,6 +34,11 @@ describe('PushEventSchema', () => {
     expect(PushEventSchema.safeParse({ type: 'git.changed' }).success).toBe(false);
   });
 
+  it('the commit-author.changed event parses', () => {
+    const event = { type: 'commit-author.changed' };
+    expect(PushEventSchema.parse(event)).toEqual(event);
+  });
+
   it('refuses an unknown event type', () => {
     expect(PushEventSchema.safeParse({ type: 'repository.deleted', repositoryId: 1 }).success).toBe(false);
   });

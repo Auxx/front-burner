@@ -1,0 +1,21 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+  min-inline-size: 0;
+
+  p {
+    margin: 0;
+  }
+}
+
+.reference {
+  display: block;
+}
+
+.help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-1) var(--ui-space-4);
+  font-size: var(--ui-font-size-ui-small);
+}

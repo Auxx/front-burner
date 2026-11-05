@@ -4,6 +4,7 @@ import { GitApi } from '@front-burner/web-api-client';
 import { type ApiErrorText, ApiErrorTextService, isRefusal, toApiError } from '@front-burner/web-core';
 import { firstValueFrom } from 'rxjs';
 
+import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
 import { CommitTicksService } from '../commit-ticks/commit-ticks.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
@@ -20,6 +21,11 @@ export interface CommitFailure extends ApiErrorText {
  * so that the message stays while the user moves between Files and Changes; a
  * repository starts with an empty form.
  *
+ * It first asks `CommitAuthorGate` (CA-12); cancelling there cancels the commit,
+ * with the message kept. If the API still refuses a user who has not confirmed
+ * (CA-13), the refusal is shown and the gate reads again, so that the next press
+ * asks.
+ *
  * The files are those the button named when it was pressed: the ticked ones, and
  * an open file with unsaved edits that the list does not show yet, since a status
  * is read only seconds after a save. The waiting saves are sent first (GA-20), and
@@ -34,6 +40,7 @@ export interface CommitFailure extends ApiErrorText {
 @Injectable()
 export class CommitService {
   private readonly api = inject(GitApi);
+  private readonly gate = inject(CommitAuthorGate);
   private readonly store = inject(GitStatusStore);
   private readonly ticks = inject(CommitTicksService);
   private readonly openFiles = inject(OpenFilesService);
@@ -111,6 +118,9 @@ export class CommitService {
     this.setRunning(repositoryId, true);
     this.failure.set(null);
     try {
+      if (!await this.gate.ready() || !stayed()) {
+        return false;
+      }
       await this.openFiles.flushAll();
       const notSaved = this.openFiles.notSaved(repositoryId, paths);
       if (notSaved !== null) {
@@ -128,7 +138,11 @@ export class CommitService {
       return true;
     } catch (error) {
       if (stayed()) {
-        this.fail(toApiError(error), !isRefusal(error));
+        const apiError = toApiError(error);
+        if (apiError.code === 'commit-author-not-confirmed') {
+          this.gate.refresh();
+        }
+        this.fail(apiError, !isRefusal(error));
       }
       return false;
     } finally {

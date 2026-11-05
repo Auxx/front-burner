@@ -134,4 +134,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
+  :host([data-wrap]) {
+    padding-block: var(--ui-space-1);
+  }
+
+  :host([data-wrap]) .label {
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+  }
 }

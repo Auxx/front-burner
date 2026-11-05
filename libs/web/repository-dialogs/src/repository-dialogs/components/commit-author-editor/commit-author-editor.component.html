@@ -1,0 +1,38 @@
+<ng-container *transloco="let t; prefix: 'web-repository-dialogs.CommitAuthorEditorComponent'">
+  <ui-dialog [heading]="t('heading')">
+    <form class="form" novalidate [id]="formId" (submit)="save($event)">
+      @if (failure(); as failure) {
+        <ui-inline-banner status="danger" announce>
+          {{ failure.text }}
+          @if (partlySaved(); as saved) {
+            <span class="partly-saved">{{ t(saved) }}</span>
+          }
+          @if (failure.reference) {
+            <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+          }
+        </ui-inline-banner>
+      }
+      @if (fixingDefault()) {
+        <ui-inline-banner status="warning" announce>{{ t('fixDefault') }}</ui-inline-banner>
+      }
+      <dlg-commit-author-form [field]="model" [serverErrors]="refusals.errors()" />
+      @if (!fixingDefault()) {
+        <ui-segmented-control
+          [label]="t('scope')"
+          [options]="scopes()"
+          [disabled]="model().submitting()"
+          [(value)]="scope"
+        />
+      }
+      @if (dropsOverride()) {
+        <p class="note">{{ t('dropsOverride') }}</p>
+      }
+    </form>
+    <div uiDialogFooter>
+      <button uiButton [unavailable]="model().submitting()" (click)="cancel()">{{ t('cancel') }}</button>
+      <button uiButton variant="primary" type="submit" [attr.form]="formId" [busy]="model().submitting()">
+        {{ confirming() ? t('saveAndCommit') : t('save') }}
+      </button>
+    </div>
+  </ui-dialog>
+</ng-container>

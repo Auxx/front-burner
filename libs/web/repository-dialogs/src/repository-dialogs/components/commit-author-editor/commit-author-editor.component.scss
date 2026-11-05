@@ -1,0 +1,16 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+  min-inline-size: 0;
+}
+
+.reference,
+.partly-saved {
+  display: block;
+}
+
+.note {
+  margin: 0;
+  font-size: var(--ui-font-size-ui-small);
+}

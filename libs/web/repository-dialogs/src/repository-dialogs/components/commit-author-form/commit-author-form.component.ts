@@ -5,6 +5,8 @@ import { FieldComponent, InputComponent } from '@front-burner/ui';
 import { fieldErrorCode } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 
+import { COMMIT_EMAIL_HELP } from '../../models/commit-author-help';
+
 const KNOWN_CODES: readonly string[] = COMMIT_AUTHOR_FIELD_CODES;
 
 /**
@@ -23,9 +25,8 @@ export class CommitAuthorFormComponent {
   readonly field = input.required<FieldTree<CommitAuthor>>();
   readonly serverErrors = input<FieldError[]>([]);
 
-  protected readonly githubHelp = 'https://docs.github.com/en/account-and-profile/reference/email-addresses-reference';
-  protected readonly bitbucketHelp =
-    'https://support.atlassian.com/bitbucket-cloud/docs/configure-your-dvcs-username-for-commits/';
+  protected readonly githubHelp = COMMIT_EMAIL_HELP.github;
+  protected readonly bitbucketHelp = COMMIT_EMAIL_HELP.bitbucket;
 
   /** The key, relative to `web-repository-dialogs.errors`, of the reason to show next to the field. */
   protected error(name: keyof CommitAuthor): string | undefined {

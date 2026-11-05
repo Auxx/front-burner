@@ -1,3 +1,4 @@
+import { EventsHub } from '@front-burner/server-core-events';
 import { authOf } from '@front-burner/server-core-security';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
 import type { CommitAuthorPreference, RepositoryCommitAuthor } from '@front-burner/shared-contracts';
@@ -11,7 +12,10 @@ import { CommitAuthors } from './commit-authors';
 @ApiTags('preferences')
 @Controller()
 export class CommitAuthorController {
-  constructor(private readonly commitAuthors: CommitAuthors) {}
+  constructor(
+    private readonly commitAuthors: CommitAuthors,
+    private readonly events: EventsHub
+  ) {}
 
   @Get('preferences/commit-author')
   @ApiOkResponse({ type: CommitAuthorPreferenceDto })
@@ -27,14 +31,19 @@ export class CommitAuthorController {
     @Req() req: Request,
     @Body() body: CommitAuthorDto
   ): CommitAuthorPreference {
-    return this.commitAuthors.setDefault(authOf(req).userId, body);
+    const { userId } = authOf(req);
+    const preference = this.commitAuthors.setDefault(userId, body);
+    this.published(userId);
+    return preference;
   }
 
   @Post('preferences/commit-author/confirm')
   @HttpCode(204)
   @ApiNoContentResponse({ description: 'The default commit author is confirmed' })
   confirmCommitAuthor(@Req() req: Request): void {
-    this.commitAuthors.confirm(authOf(req).userId);
+    const { userId } = authOf(req);
+    this.commitAuthors.confirm(userId);
+    this.published(userId);
   }
 
   @Get('repositories/:id/commit-author')
@@ -55,7 +64,10 @@ export class CommitAuthorController {
     @Param() params: RepositoryParamsDto,
     @Body() body: CommitAuthorDto
   ): RepositoryCommitAuthor {
-    return this.commitAuthors.setOverride(authOf(req).userId, params.id, body);
+    const { userId } = authOf(req);
+    const author = this.commitAuthors.setOverride(userId, params.id, body);
+    this.published(userId);
+    return author;
   }
 
   @Delete('repositories/:id/commit-author')
@@ -65,6 +77,14 @@ export class CommitAuthorController {
     @Req() req: Request,
     @Param() params: RepositoryParamsDto
   ): RepositoryCommitAuthor {
-    return this.commitAuthors.removeOverride(authOf(req).userId, params.id);
+    const { userId } = authOf(req);
+    const author = this.commitAuthors.removeOverride(userId, params.id);
+    this.published(userId);
+    return author;
+  }
+
+  /** Every tab of the user reads the author again, as a change of the default concerns all their repositories. */
+  private published(userId: number): void {
+    this.events.publish(userId, { type: 'commit-author.changed' });
   }
 }

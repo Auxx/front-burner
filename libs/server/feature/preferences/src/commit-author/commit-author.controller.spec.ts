@@ -8,7 +8,7 @@ import {
   userPreferences,
   users
 } from '@front-burner/server-core-database';
-import { EventsModule } from '@front-burner/server-core-events';
+import { EventsHub, EventsModule } from '@front-burner/server-core-events';
 import { GitModule } from '@front-burner/server-core-git';
 import { JobsModule } from '@front-burner/server-core-jobs';
 import { ApiExceptionFilter } from '@front-burner/server-core-observability';
@@ -293,6 +293,36 @@ describe('CommitAuthorController', () => {
       },
       confirmed: true
     });
+  });
+
+  it('publishes commit-author.changed after every change, so that every tab shows who commits', async () => {
+    const publish = vi.spyOn(app.get(EventsHub), 'publish');
+    const author = { name: 'Alice Work', email: 'alice@work.example' };
+    const user = String(aliceId);
+    const changes = [
+      () => http().put('/api/v1/preferences/commit-author').set('x-test-user', user).send(author).expect(200),
+      () => http().post('/api/v1/preferences/commit-author/confirm').set('x-test-user', user).expect(204),
+      () =>
+        http().put(`/api/v1/repositories/${aliceRepoId}/commit-author`).set('x-test-user', user).send(author).expect(
+          200
+        ),
+      () => http().delete(`/api/v1/repositories/${aliceRepoId}/commit-author`).set('x-test-user', user).expect(200)
+    ];
+
+    for (const change of changes) {
+      publish.mockClear();
+      await change();
+      expect(publish).toHaveBeenCalledExactlyOnceWith(aliceId, { type: 'commit-author.changed' });
+    }
+  });
+
+  it('publishes nothing when another user\'s override is refused', async () => {
+    const publish = vi.spyOn(app.get(EventsHub), 'publish');
+
+    await http().put(`/api/v1/repositories/${aliceRepoId}/commit-author`)
+      .set('x-test-user', String(bobId)).send({ name: 'Bob', email: 'bob@example.com' }).expect(404);
+
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it('manages repository overrides over the API', async () => {

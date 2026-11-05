@@ -15,6 +15,28 @@
   <ui-field [label]="t('message')" [hint]="longSubject() ? t('longSubject', { length: subjectHintLength }) : undefined">
     <textarea uiTextarea rows="3" [readOnly]="commit.busy()" [value]="commit.message()" (input)="typed($event)"></textarea>
   </ui-field>
+  @if (gate.author(); as current) {
+    <div class="author">
+      <span class="author-text">{{ t('committingAs', current.author) }}</span>
+      <button
+        uiButton
+        size="small"
+        class="change"
+        [attr.aria-label]="t('changeLabel')"
+        [unavailable]="commit.busy()"
+        (click)="changeAuthor()"
+      >
+        {{ t('change') }}
+      </button>
+    </div>
+  } @else if (gate.readFailed()) {
+    <ui-inline-banner class="author-failed" status="warning" announce>
+      {{ t('authorFailed') }}
+      <div uiBannerActions>
+        <button uiButton size="small" class="author-retry" (click)="retryAuthor()">{{ t('retry') }}</button>
+      </div>
+    </ui-inline-banner>
+  }
   @let reason = blocked();
   <button
     #commitButton

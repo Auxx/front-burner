@@ -17,6 +17,7 @@ import { of, Subject, throwError } from 'rxjs';
 import { provideMemoryDrafts } from '../../../testing/drafts';
 import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
 import { CommitTicksService } from '../commit-ticks/commit-ticks.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
@@ -53,6 +54,7 @@ describe('CommitService', () => {
   let status: ReturnType<typeof signal<GitStatus | null>>;
   let followed: ReturnType<typeof signal<number | null>>;
   let repository: ReturnType<typeof signal<{ id: number; }>>;
+  let gate: { ready: ReturnType<typeof vi.fn>; refresh: ReturnType<typeof vi.fn>; };
 
   beforeEach(() => {
     localStorage.clear();
@@ -63,6 +65,7 @@ describe('CommitService', () => {
     status = signal<GitStatus | null>(statusOf('a.md', 'b.md'));
     followed = signal<number | null>(12);
     repository = signal({ id: 12 });
+    gate = { ready: vi.fn(() => Promise.resolve(true)), refresh: vi.fn() };
     refresh = vi.fn(() => {
       requests.push('status');
       return Promise.resolve();
@@ -80,6 +83,7 @@ describe('CommitService', () => {
         CommitTicksService,
         OpenFilesService,
         provideMemoryDrafts(),
+        { provide: CommitAuthorGate, useValue: gate },
         { provide: GitStatusStore, useValue: { refresh, status, followed } },
         { provide: RepositorySessionService, useValue: { repository } },
         {
@@ -295,6 +299,77 @@ describe('CommitService', () => {
     file.saver.discard();
   });
 
+  describe('the commit author', () => {
+    it('asks before anything else', async () => {
+      const file = await openFiles.open('a.md');
+      file.saver.edit(() => 'the last edit');
+      let answer!: (ready: boolean) => void;
+      gate.ready.mockReturnValueOnce(new Promise(resolve => (answer = resolve)));
+
+      const done = service.commit('Subject');
+      await new Promise(resolve => setTimeout(resolve));
+      expect(requests).toEqual([]);
+      expect(service.busy()).toBe(true);
+
+      answer(false);
+
+      expect(await done).toBe(false);
+      expect(requests).toEqual([]);
+    });
+
+    it('cancelling the question makes no commit, and keeps the message, with no error', async () => {
+      gate.ready.mockResolvedValueOnce(false);
+      service.message.set('Subject');
+
+      expect(await service.commit('Subject')).toBe(false);
+
+      expect(commits).toEqual([]);
+      expect(service.message()).toBe('Subject');
+      expect(service.error()).toBeNull();
+      expect(service.busy()).toBe(false);
+    });
+
+    it('shows an error when the author can\'t be read, and offers another try', async () => {
+      gate.ready.mockRejectedValueOnce(new HttpErrorResponse({ status: 0 }));
+
+      expect(await service.commit('Subject')).toBe(false);
+
+      expect(commits).toEqual([]);
+      expect(service.error()?.retry).toBe(true);
+    });
+
+    it('shows the API\'s refusal and reads the author again, so that the next press asks', async () => {
+      commitAnswer = () => throwError(() => refusal('commit-author-not-confirmed'));
+
+      expect(await service.commit('Subject')).toBe(false);
+
+      expect(commits).toHaveLength(1);
+      expect(gate.refresh).toHaveBeenCalledTimes(1);
+      expect(service.error()?.retry).toBe(false);
+    });
+
+    it('does not read the author again after any other failure', async () => {
+      commitAnswer = () => throwError(() => refusal('nothing-to-commit'));
+
+      await service.commit('Subject');
+
+      expect(gate.refresh).not.toHaveBeenCalled();
+    });
+
+    it('makes no commit in the next repository when the user left during the question', async () => {
+      let answer!: (ready: boolean) => void;
+      gate.ready.mockReturnValueOnce(new Promise(resolve => (answer = resolve)));
+
+      const done = service.commit('Subject');
+      await new Promise(resolve => setTimeout(resolve));
+      repository.set({ id: 13 });
+      answer(true);
+
+      expect(await done).toBe(false);
+      expect(commits).toEqual([]);
+    });
+  });
+
   it('two quick clicks make one commit', async () => {
     const answer = new Subject<CommitResult>();
     commitAnswer = () => answer;
@@ -328,7 +403,7 @@ describe('CommitService', () => {
   it('keeps the message and the ticks when the commit fails', async () => {
     ticks.setTicked('b.md', false);
     service.message.set('Subject');
-    commitAnswer = () => throwError(() => refusal('commit-author-not-confirmed'));
+    commitAnswer = () => throwError(() => refusal('nothing-to-commit'));
 
     expect(await service.commit('Subject')).toBe(false);
 
@@ -424,7 +499,7 @@ describe('CommitService', () => {
 
   it('leaves nothing of the last repository', async () => {
     service.message.set('For the last repository');
-    commitAnswer = () => throwError(() => refusal('commit-author-not-confirmed'));
+    commitAnswer = () => throwError(() => refusal('nothing-to-commit'));
     await service.commit('For the last repository');
 
     followed.set(13);
