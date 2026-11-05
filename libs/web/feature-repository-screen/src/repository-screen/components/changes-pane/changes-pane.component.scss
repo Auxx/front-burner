@@ -1,5 +1,6 @@
 :host {
   position: relative;
+  outline: none;
   display: flex;
   flex-direction: column;
   block-size: 100%;
@@ -15,6 +16,13 @@
   display: grid;
   flex: 1;
   place-items: center;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  padding: var(--ui-space-1) var(--ui-space-2);
 }
 
 .list {

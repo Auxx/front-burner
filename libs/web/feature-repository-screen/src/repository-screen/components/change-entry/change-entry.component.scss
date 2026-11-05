@@ -2,18 +2,33 @@
 // list's content wrapper is as wide as its widest row, so a row's width must not
 // depend on its text, or a long path would push the state out of view.
 :host {
-  display: block;
+  display: flex;
+  align-items: center;
   block-size: 3rem;
+  padding-inline-end: var(--ui-space-1);
   contain: inline-size;
+
+  &:hover {
+    background: var(--ui-surface-hover);
+  }
+
+  &:has(.entry[aria-current='true']) {
+    background: var(--ui-selected-active);
+  }
+}
+
+.discard {
+  flex: none;
 }
 
 .entry {
   position: relative;
   box-sizing: border-box;
   display: flex;
+  flex: 1;
   align-items: center;
   gap: var(--ui-space-2);
-  inline-size: 100%;
+  min-inline-size: 0;
   block-size: 100%;
   padding-inline: var(--ui-space-2);
   background: none;
@@ -24,10 +39,6 @@
   border: 0;
   cursor: pointer;
 
-  &:hover {
-    background: var(--ui-surface-hover);
-  }
-
   &:focus-visible {
     outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
     outline-offset: calc(-1 * var(--ui-focus-ring-width));
@@ -35,8 +46,6 @@
 
   // An accent bar as well, not only another colour.
   &[aria-current='true'] {
-    background: var(--ui-selected-active);
-
     &::before {
       content: '';
       position: absolute;

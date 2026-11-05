@@ -87,6 +87,153 @@ describe('OpenFilesService', () => {
     expect(service.get('docs/guide.md')).toBe(file);
   });
 
+  describe('dropForDiscard', () => {
+    const saved = { hash: 'b'.repeat(64), size: 4 };
+
+    it('finds nothing to do for a file that is not open', async () => {
+      expect(await service.dropForDiscard('docs/guide.md')).toBeNull();
+    });
+
+    it('drops the waiting save and the browser draft, and holds the saver', async () => {
+      const file = await service.open('docs/guide.md');
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, { content: 'x', savedAt: '' });
+      file.saver.edit(() => 'mine');
+
+      const dropped = await service.dropForDiscard('docs/guide.md');
+
+      expect(file.saver.unsaved()).toBe(false);
+      expect(drafts.at('docs/guide.md')).toBeUndefined();
+      file.saver.edit(() => 'typed');
+      void file.saver.flush();
+      expect(saves).toEqual([]);
+      dropped?.release();
+      expect(saves.map(save => save.request.content)).toEqual([ 'typed' ]);
+    });
+
+    it('resolves once a save in flight has been answered', async () => {
+      const file = await service.open('docs/guide.md');
+      file.saver.edit(() => 'mine');
+      void file.saver.flush();
+      let done = false;
+
+      const dropped = service.dropForDiscard('docs/guide.md').then(result => {
+        done = true;
+        return result;
+      });
+      await Promise.resolve();
+      expect(done).toBe(false);
+
+      saves[0].answer.next(saved);
+      saves[0].answer.complete();
+      await dropped;
+      expect(done).toBe(true);
+    });
+
+    it('restore saves the editor\'s content again', async () => {
+      const file = await service.open('docs/guide.md');
+      file.preview.read = () => 'mine';
+      file.saver.edit(() => 'mine');
+
+      const dropped = await service.dropForDiscard('docs/guide.md');
+      dropped?.restore();
+
+      expect(file.saver.unsaved()).toBe(true);
+      expect(saves.map(save => save.request.content)).toEqual([ 'mine' ]);
+    });
+
+    it('restore does not save a file without edits', async () => {
+      await service.open('docs/guide.md');
+
+      const dropped = await service.dropForDiscard('docs/guide.md');
+      dropped?.restore();
+
+      expect(saves).toEqual([]);
+    });
+
+    it('restore offers the draft again', async () => {
+      const draft = { content: 'draft', savedAt: '2026-10-29T10:00:00.000Z' };
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, draft);
+      const file = await service.open('docs/guide.md');
+
+      const dropped = await service.dropForDiscard('docs/guide.md');
+      expect(file.draft()).toBeNull();
+      dropped?.restore();
+
+      expect(file.draft()).toEqual(draft);
+      expect(drafts.at('docs/guide.md')).toEqual(draft);
+    });
+
+    it('restore writes the draft under the file\'s repository after a switch to another', async () => {
+      const file = await service.open('docs/guide.md');
+      file.preview.read = () => 'mine';
+      file.saver.edit(() => 'mine');
+      service.changedOnDisk('docs/guide.md', 'c'.repeat(64));
+      const dropped = await service.dropForDiscard('docs/guide.md');
+
+      repository.set({ id: 13 } as RepositorySummary);
+      dropped?.restore();
+
+      expect(drafts.at('docs/guide.md', 12)?.content).toBe('mine');
+      expect(drafts.at('docs/guide.md', 13)).toBeUndefined();
+    });
+
+    it('restore does not throw with no repository open', async () => {
+      const file = await service.open('docs/guide.md');
+      file.preview.read = () => 'mine';
+      file.saver.edit(() => 'mine');
+      service.changedOnDisk('docs/guide.md', 'c'.repeat(64));
+      const dropped = await service.dropForDiscard('docs/guide.md');
+
+      repository.set(null);
+
+      expect(() => dropped?.restore()).not.toThrow();
+    });
+
+    it('keeps the draft of another tab, when this tab has written none', async () => {
+      const draft = { content: 'theirs', savedAt: '2026-10-29T10:00:00.000Z' };
+      drafts.elsewhere.add('4/12/docs/guide.md');
+      await service.open('docs/guide.md');
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, draft);
+
+      await service.dropForDiscard('docs/guide.md');
+
+      expect(drafts.at('docs/guide.md')).toEqual(draft);
+    });
+
+    it('deletes this tab\'s draft even when another tab has the file open', async () => {
+      drafts.elsewhere.add('4/12/docs/guide.md');
+      const file = await service.open('docs/guide.md');
+      file.saver.edit(() => 'mine');
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, { content: 'mine', savedAt: '' });
+
+      await service.dropForDiscard('docs/guide.md');
+
+      expect(drafts.at('docs/guide.md')).toBeUndefined();
+    });
+
+    it('deletes a leftover draft when no other tab has the file open', async () => {
+      await service.open('docs/guide.md');
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, { content: 'old', savedAt: '' });
+
+      await service.dropForDiscard('docs/guide.md');
+
+      expect(drafts.at('docs/guide.md')).toBeUndefined();
+    });
+
+    it('restore keeps a file waiting for the user as its browser draft, without saving', async () => {
+      const file = await service.open('docs/guide.md');
+      file.preview.read = () => 'mine';
+      file.saver.edit(() => 'mine');
+      service.changedOnDisk('docs/guide.md', 'c'.repeat(64));
+
+      const dropped = await service.dropForDiscard('docs/guide.md');
+      dropped?.restore();
+
+      expect(saves).toEqual([]);
+      expect(drafts.at('docs/guide.md')?.content).toBe('mine');
+    });
+  });
+
   it('keeps a file\'s entry when another file is opened and back', async () => {
     const guide = await service.open('docs/guide.md');
     guide.editorState = { kept: true };

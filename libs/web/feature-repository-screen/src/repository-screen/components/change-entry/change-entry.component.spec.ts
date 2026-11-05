@@ -78,6 +78,21 @@ describe('ChangeEntryComponent', () => {
     expect(selected).toEqual([ 'docs/guide.md' ]);
   });
 
+  it('offers Discard, named after the file, without selecting the entry', async () => {
+    await show({ path: 'docs/guide.md', state: 'modified' });
+    const selected: string[] = [];
+    const discarded: GitChange[] = [];
+    fixture.componentInstance.selectPath.subscribe(path => selected.push(path));
+    fixture.componentInstance.discard.subscribe(change => discarded.push(change));
+
+    const discard = host().querySelector('.discard') as HTMLButtonElement;
+    expect(discard.getAttribute('aria-label')).toBe(`${KEY}.discard`);
+    discard.click();
+
+    expect(discarded).toEqual([ { path: 'docs/guide.md', state: 'modified' } ]);
+    expect(selected).toEqual([]);
+  });
+
   it('marks the selected entry, not only with a colour', async () => {
     await show({ path: 'README.md', state: 'added' });
     expect(entry().getAttribute('aria-current')).toBeNull();

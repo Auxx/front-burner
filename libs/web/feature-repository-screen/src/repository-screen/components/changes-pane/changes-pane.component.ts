@@ -1,10 +1,12 @@
 import { CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import {
+  afterNextRender,
   afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
   inject,
+  Injector,
   input,
   output,
   signal,
@@ -30,7 +32,8 @@ const FALLBACK_ROW_HEIGHT = 48;
  * The **Changes** tool window (GA-10 to GA-13): every change of the working
  * copy, sorted by path, in a virtual list, so that 20,000 changes stay usable.
  * A read that failed says so above the last list, and never looks like "No
- * changes".
+ * changes". **Discard** on an entry and **Discard all** ask the page, with the
+ * changes shown (GA-23).
  */
 @Component({
   selector: 'rs-changes-pane',
@@ -48,7 +51,9 @@ const FALLBACK_ROW_HEIGHT = 48;
   ],
   templateUrl: './changes-pane.component.html',
   styleUrl: './changes-pane.component.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  // To take the focus once a discard has left no change to act on.
+  host: { tabindex: '-1' }
 })
 export class ChangesPaneComponent {
   protected readonly store = inject(GitStatusStore);
@@ -56,7 +61,12 @@ export class ChangesPaneComponent {
   /** The path of the entry to mark as selected. */
   readonly selected = input<string | null>(null);
   readonly selectPath = output<string>();
+  /** The changes to discard, which are the ones the list shows. */
+  readonly discard = output<readonly GitChange[]>();
 
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  private readonly discardAll = viewChild('discardAll', { read: ElementRef<HTMLElement> });
   private readonly viewport = viewChild(CdkVirtualScrollViewport);
   private readonly rowProbe = viewChild.required<ElementRef<HTMLElement>>('rowProbe');
 
@@ -85,6 +95,13 @@ export class ChangesPaneComponent {
       }
       onCleanup(() => observer.disconnect());
     });
+  }
+
+  /** Where the focus goes after a discard, since the button that asked for it may be gone with its row. */
+  focusAfterDiscard(): void {
+    afterNextRender({
+      read: () => ((this.discardAll() ?? this.host).nativeElement as HTMLElement).focus()
+    }, { injector: this.injector });
   }
 
   /** While hidden, the probe measures 0: the last known height is kept. */

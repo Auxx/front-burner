@@ -18,4 +18,13 @@
       <span uiBadge class="letter" aria-hidden="true" [status]="status()">{{ t(change().state + 'Letter') }}</span>
     </span>
   </button>
+  <button
+    uiIconButton
+    class="discard"
+    size="small"
+    [label]="t('discard', { name: name() })"
+    (click)="discard.emit(change())"
+  >
+    <ui-icon name="discard" />
+  </button>
 </ng-container>

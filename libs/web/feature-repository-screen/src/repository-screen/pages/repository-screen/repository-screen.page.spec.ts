@@ -21,6 +21,7 @@ import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { BehaviorSubject, map, Observable, of, Subject, throwError } from 'rxjs';
 
+import { dialogButton, settleDialog } from '../../../testing/dialog-testing';
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { entry, folder, listing } from '../../../testing/listings';
 import { fileContent } from '../../../testing/open-files';
@@ -29,7 +30,9 @@ import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
 import { routes } from '../../repository-screen.routes';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
+import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
+
 import { RepositoryScreenPage } from './repository-screen.page';
 
 const KEY = 'web-feature-repository-screen.RepositoryScreenPage';
@@ -80,6 +83,9 @@ describe('RepositoryScreenPage', () => {
   let drafts: MemoryDraftStore;
   /** The files `fileState` does not find. */
   let gone: Set<string>;
+  /** The paths of each `GitApi.discard`. */
+  let discards: string[][];
+  let discardAnswer: (paths: string[]) => Observable<void>;
   /** What `GitApi.gitStatus` answers. */
   let changes: GitChange[];
   /** In place of `changes`, such as a failure. */
@@ -100,6 +106,10 @@ describe('RepositoryScreenPage', () => {
           provide: GitApi,
           useValue: {
             diff: (_id: number, query: { path: string; }) => gitDiff(query.path),
+            discard: (_id: number, body: { paths: string[]; }) => {
+              discards.push(body.paths);
+              return discardAnswer(body.paths);
+            },
             gitStatus: (): Observable<GitStatus> =>
               gitStatusAnswer ?? of({
                 branch: 'main',
@@ -182,6 +192,8 @@ describe('RepositoryScreenPage', () => {
     gone = new Set();
     changes = [];
     gitStatusAnswer = undefined;
+    discards = [];
+    discardAnswer = () => of(undefined);
     gitDiff = vi.fn(() => of<GitDiff>({ kind: 'text', lines: [], complete: true, lineEndingsOnly: false }));
     saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
     recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
@@ -736,6 +748,131 @@ describe('RepositoryScreenPage', () => {
         beforeEach(() => {
           changes = THREE;
           localStorage.setItem('fb.4.sideTool', 'changes');
+        });
+
+        describe('discarding', () => {
+          const K = 'web-feature-repository-screen.DiscardChangesDialog';
+
+          async function discard(name: string): Promise<void> {
+            entryButton(name).closest('rs-change-entry')?.querySelector<HTMLButtonElement>('.discard')?.click();
+            await settleDialog();
+            dialogButton(`${K}.discard`)?.click();
+            await settleDialog();
+            await settle(harness.fixture);
+          }
+
+          it('closes the diff of a discarded file', async () => {
+            await visit('/repositories/12/files/README.md');
+            await select('guide.md');
+            expect(diffView()).not.toBeNull();
+
+            await discard('guide.md');
+
+            expect(discards).toEqual([ [ 'docs/guide.md' ] ]);
+            expect(diffView()).toBeNull();
+            expect(editorArea().hidden).toBe(false);
+          });
+
+          it('keeps the diff of another file', async () => {
+            await visit('/repositories/12/files/README.md');
+            await select('guide.md');
+
+            await discard('README.md');
+
+            expect(diffView()).not.toBeNull();
+          });
+
+          it('shows a file again when it comes back, as it could not be opened', async () => {
+            changes = [ { path: 'docs/guide.md', state: 'deleted' } ];
+            const docs = folders['docs'];
+            folders['docs'] = listing('docs', []);
+            await visit('/repositories/12/files/docs/guide.md');
+            expect(page().querySelector('rs-editor-pane')).toBeNull();
+            folders['docs'] = docs;
+
+            await discard('guide.md');
+
+            expect(page().querySelector('rs-editor-pane')).not.toBeNull();
+          });
+
+          it('shows a file again when its folder comes back with it', async () => {
+            changes = [ { path: 'docs/guide.md', state: 'deleted' } ];
+            const { '': root, docs } = folders;
+            folders[''] = listing('', [ entry('README.md') ]);
+            delete folders['docs'];
+            await visit('/repositories/12/files/docs/guide.md');
+            expect(page().querySelector('rs-editor-pane')).toBeNull();
+            folders[''] = root;
+            folders['docs'] = docs;
+
+            await discard('guide.md');
+
+            expect(page().querySelector('rs-editor-pane')).not.toBeNull();
+          });
+
+          it('shows a file again when its entry was kept but it no longer showed', async () => {
+            await visit('/repositories/12/files/docs/guide.md');
+            const injector = harness.routeDebugElement?.injector;
+            await harness.navigateByUrl('/repositories/12/files/README.md');
+            await settle(harness.fixture);
+            const docs = folders['docs'];
+            folders['docs'] = listing('docs', []);
+            await injector?.get(FileTreeStoreService).load('docs');
+            await harness.navigateByUrl('/repositories/12/files/docs/guide.md');
+            await settle(harness.fixture);
+            expect(page().querySelector('rs-editor-pane')).toBeNull();
+            folders['docs'] = docs;
+            changes = [ { path: 'docs/guide.md', state: 'deleted' } ];
+            await injector?.get(GitStatusStore).refresh();
+            await settle(harness.fixture);
+
+            await discard('guide.md');
+
+            expect(page().querySelector('rs-editor-pane')).not.toBeNull();
+          });
+
+          it('keeps the diff when the discard is cancelled', async () => {
+            await visit('/repositories/12/files/README.md');
+            await select('guide.md');
+
+            entryButton('guide.md').closest('rs-change-entry')?.querySelector<HTMLButtonElement>('.discard')?.click();
+            await settleDialog();
+            dialogButton(`${K}.cancel`)?.click();
+            await settleDialog();
+            await settle(harness.fixture);
+
+            expect(diffView()).not.toBeNull();
+          });
+
+          it('ends the diff of a file discarded by an earlier request, when a later one failed and was cancelled', async () => {
+            const many = Array.from({ length: 10_001 }, (_, index) => ({
+              path: `f${String(index).padStart(5, '0')}.md`,
+              state: 'modified' as const
+            }));
+            changes = many;
+            let answers = 0;
+            discardAnswer = () => {
+              if (++answers === 2) {
+                return throwError(() => new HttpErrorResponse({ status: 503 }));
+              }
+              changes = many.slice(10_000);
+              return of(undefined);
+            };
+            await visit('/repositories/12/files/README.md');
+            await select('f00000.md');
+            expect(diffView()).not.toBeNull();
+
+            page().querySelector<HTMLButtonElement>('.discard-all')?.click();
+            await settleDialog();
+            dialogButton(`${K}.discard`)?.click();
+            await settleDialog();
+            dialogButton(`${K}.cancel`)?.click();
+            await settleDialog();
+            await settle(harness.fixture);
+
+            expect(discards).toHaveLength(2);
+            expect(diffView()).toBeNull();
+          });
         });
 
         it('shows its diff in place of the open file, and the URL keeps naming the file', async () => {

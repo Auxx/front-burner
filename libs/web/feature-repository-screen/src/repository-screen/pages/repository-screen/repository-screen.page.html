@@ -83,7 +83,7 @@
             (retry)="retry($event)"
             (action)="runAction($event.action, $event.path)"
           />
-          <rs-changes-pane [hidden]="!changesShown" [selected]="selectedChangePath()" (selectPath)="openDiff($event)" />
+          <rs-changes-pane [hidden]="!changesShown" [selected]="selectedChangePath()" (selectPath)="openDiff($event)" (discard)="discardChanges($event)" />
         </ui-island>
       }
       @if (state === 'ready') {

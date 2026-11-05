@@ -122,6 +122,22 @@ export class DraftStore {
   }
 
   /**
+   * Deletes the drafts at exactly `keys`, of files not open in this tab, at one
+   * go, however many they are. A file another tab has open keeps its draft, which
+   * is still being saved there (D-1.3).
+   */
+  async deleteUnclaimed(keys: readonly DraftKey[]): Promise<void> {
+    const claimed = new Set(await this.heldLocks());
+    await this.write(store => {
+      for (const key of keys) {
+        if (!claimed.has(lockOf(key))) {
+          store.delete(keyOf(key));
+        }
+      }
+    });
+  }
+
+  /**
    * Moves the draft at `from`, or every draft under the folder at `from`'s
    * path, to its path under `to`, such as after a rename (FB-36).
    */
@@ -161,12 +177,21 @@ export class DraftStore {
 
   /** Whether another tab has claimed the file at `key`; asked before this tab claims it. */
   async claimedElsewhere(key: DraftKey): Promise<boolean> {
+    return (await this.heldLocks()).includes(lockOf(key));
+  }
+
+  /** Whether another tab has claimed the file at `key` as well, when this tab has claimed it, once. */
+  async claimedByAnotherTab(key: DraftKey): Promise<boolean> {
+    return (await this.heldLocks()).filter(name => name === lockOf(key)).length > 1;
+  }
+
+  /** The name of each lock held, by any tab; none without Web Locks. */
+  private async heldLocks(): Promise<(string | undefined)[]> {
     const locks = globalThis.navigator?.locks as LockManager | undefined;
     try {
-      const { held = [] } = (await locks?.query()) ?? {};
-      return held.some(lock => lock.name === lockOf(key));
+      return ((await locks?.query())?.held ?? []).map(lock => lock.name);
     } catch {
-      return false;
+      return [];
     }
   }
 

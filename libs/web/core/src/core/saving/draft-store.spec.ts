@@ -37,6 +37,52 @@ describe('DraftStore', () => {
     expect(await store.get(key('README.md'))).toBeNull();
   });
 
+  it('deletes the drafts at exactly the given paths', async () => {
+    await store.put(key('a.md'), draft('a'));
+    await store.put(key('a.md/under'), draft('under'));
+    await store.put(key('b.md'), draft('b'));
+    await store.put(key('c.md'), draft('c'));
+
+    await store.deleteUnclaimed([ key('a.md'), key('b.md'), key('missing.md') ]);
+
+    expect(await store.get(key('a.md'))).toBeNull();
+    expect(await store.get(key('b.md'))).toBeNull();
+    expect(await store.get(key('a.md/under'))).toEqual(draft('under'));
+    expect(await store.get(key('c.md'))).toEqual(draft('c'));
+  });
+
+  it('keeps the draft of a file claimed by a tab when deleting many', async () => {
+    const query = vi.fn(() => Promise.resolve({ held: [ { name: `front-burner.draft:1/12/a.md` } ] }));
+    vi.stubGlobal('navigator', { locks: { query } });
+    try {
+      await store.put(key('a.md'), draft('a'));
+      await store.put(key('b.md'), draft('b'));
+
+      await store.deleteUnclaimed([ key('a.md'), key('b.md') ]);
+
+      expect(await store.get(key('a.md'))).toEqual(draft('a'));
+      expect(await store.get(key('b.md'))).toBeNull();
+      expect(query).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('tells a file claimed by another tab from one claimed only by this tab', async () => {
+    const lock = { name: 'front-burner.draft:1/12/a.md', mode: 'shared' };
+    const query = vi.fn(() => Promise.resolve({ held: [ lock ] }));
+    vi.stubGlobal('navigator', { locks: { query } });
+    try {
+      expect(await store.claimedByAnotherTab(key('a.md'))).toBe(false);
+
+      query.mockResolvedValue({ held: [ lock, lock ] });
+      expect(await store.claimedByAnotherTab(key('a.md'))).toBe(true);
+      expect(await store.claimedByAnotherTab(key('b.md'))).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('keeps drafts of users, repositories and paths apart', async () => {
     await store.put(key('a.md', 12, 1), draft('user 1'));
     await store.put(key('a.md', 12, 2), draft('user 2'));
