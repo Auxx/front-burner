@@ -70,4 +70,9 @@ describe('resolveInWorkingCopy', () => {
     expect(await refusal('nope/new.md', { mayBeMissing: true })).toBe('not-found');
     expect(await refusal('README.md/new.md', { mayBeMissing: true })).toBe('not-found');
   });
+
+  it('treats a name too long for the file system as missing, since it cannot exist', async () => {
+    expect(await refusal('a'.repeat(300))).toBe('not-found');
+    expect(await refusal(`docs/${'a'.repeat(300)}/b.md`)).toBe('not-found');
+  });
 });

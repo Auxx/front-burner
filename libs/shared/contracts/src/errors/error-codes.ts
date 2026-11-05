@@ -46,6 +46,7 @@ export const ERROR_CODES = [
   'commit-author-not-confirmed',
   /** 409; none of a commit's paths is a change. */
   'nothing-to-commit',
+  'discard-blocked',
   /** 409; HEAD is on no branch, so a commit would belong to none. */
   'detached-head',
   /** 504; a local git command ran past `FRONT_BURNER_GIT_TIMEOUT` (NF-11.8). */

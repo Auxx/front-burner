@@ -16,6 +16,7 @@ describe('toGitApiError', () => {
     [
       [ 'nothing-to-commit', 409, 'nothing-to-commit' ],
       [ 'detached-head', 409, 'detached-head' ],
+      [ 'discard-blocked', 409, 'discard-blocked' ],
       [ 'timeout', 504, 'git-timeout' ]
     ] as const
   )('answers %s with %i %s', (code, status, apiCode) => {

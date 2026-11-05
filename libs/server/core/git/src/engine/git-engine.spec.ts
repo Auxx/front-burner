@@ -1,7 +1,9 @@
 import { startHttpsTestServer, TEST_CERTIFICATE_FILES } from '@front-burner/server-core-security/testing';
+import { PathRefusedError } from '@front-burner/server-core-storage';
 import { execFileSync } from 'node:child_process';
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -564,7 +566,8 @@ describe('GitEngine', () => {
       expect(await changedPaths()).toEqual([ 'other.md' ]);
     });
 
-    it('reads names as literal paths', async () => {
+    // Neither name can exist on Windows.
+    it.skipIf(process.platform === 'win32')('reads names as literal paths', async () => {
       writeFileSync(join(work, ':!x'), 'magic\n');
       writeFileSync(join(work, '*.md'), 'glob\n');
       writeFileSync(join(work, 'a.md'), 'changed\n');
@@ -926,6 +929,302 @@ describe('GitEngine', () => {
       await diff('a.md');
 
       expect(readFileSync(join(work, '.git', 'index')).equals(before)).toBe(true);
+    });
+  });
+
+  describe('discard', () => {
+    let work: string;
+    const statusOf = () => git(work, 'status', '--porcelain', '--untracked-files=all').trim();
+
+    beforeEach(() => {
+      work = join(root, 'discard');
+      mkdirSync(join(work, 'docs'), { recursive: true });
+      git(work, 'init', '-q', '-b', 'main');
+      writeFileSync(join(work, 'a.md'), 'a\n');
+      writeFileSync(join(work, 'b.md'), 'b\n');
+      writeFileSync(join(work, 'docs', 'c.md'), 'c\n');
+      git(work, 'add', '.');
+      git(work, 'commit', '-q', '-m', 'base');
+    });
+
+    it('restores a modified file', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+
+      await engine().discard(work, [ 'a.md' ]);
+
+      expect(readFileSync(join(work, 'a.md'), 'utf8')).toBe('a\n');
+      expect(statusOf()).toBe('');
+    });
+
+    it('restores a modified file that is staged', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+      git(work, 'add', 'a.md');
+
+      await engine().discard(work, [ 'a.md' ]);
+
+      expect(readFileSync(join(work, 'a.md'), 'utf8')).toBe('a\n');
+      expect(statusOf()).toBe('');
+    });
+
+    it('deletes an added file', async () => {
+      writeFileSync(join(work, 'new.md'), 'new\n');
+
+      await engine().discard(work, [ 'new.md' ]);
+
+      expect(existsSync(join(work, 'new.md'))).toBe(false);
+      expect(statusOf()).toBe('');
+    });
+
+    it('deletes an added file that is staged, and takes it out of the index', async () => {
+      writeFileSync(join(work, 'new.md'), 'new\n');
+      git(work, 'add', 'new.md');
+
+      await engine().discard(work, [ 'new.md' ]);
+
+      expect(existsSync(join(work, 'new.md'))).toBe(false);
+      expect(statusOf()).toBe('');
+    });
+
+    it('takes a staged file that is gone from disk out of the index', async () => {
+      writeFileSync(join(work, 'new.md'), 'new\n');
+      git(work, 'add', 'new.md');
+      rmSync(join(work, 'new.md'));
+
+      await engine().discard(work, [ 'new.md' ]);
+
+      expect(statusOf()).toBe('');
+    });
+
+    it('leaves the empty folder of a deleted added file', async () => {
+      mkdirSync(join(work, 'fresh'));
+      writeFileSync(join(work, 'fresh', 'new.md'), 'new\n');
+
+      await engine().discard(work, [ 'fresh/new.md' ]);
+
+      expect(existsSync(join(work, 'fresh', 'new.md'))).toBe(false);
+      expect(existsSync(join(work, 'fresh'))).toBe(true);
+    });
+
+    it('restores a deleted file', async () => {
+      rmSync(join(work, 'docs'), { recursive: true });
+
+      await engine().discard(work, [ 'docs/c.md' ]);
+
+      expect(readFileSync(join(work, 'docs', 'c.md'), 'utf8')).toBe('c\n');
+      expect(statusOf()).toBe('');
+    });
+
+    it('leaves other changes alone', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+      writeFileSync(join(work, 'b.md'), 'changed too\n');
+      writeFileSync(join(work, 'other.md'), 'new\n');
+
+      await engine().discard(work, [ 'a.md' ]);
+
+      expect(statusOf().split('\n').map(line => line.trim())).toEqual([ 'M b.md', '?? other.md' ]);
+    });
+
+    it('skips a path that is no longer changed', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+
+      await engine().discard(work, [ 'b.md', 'missing.md', 'a.md' ]);
+
+      expect(readFileSync(join(work, 'a.md'), 'utf8')).toBe('a\n');
+      expect(readFileSync(join(work, 'b.md'), 'utf8')).toBe('b\n');
+    });
+
+    it('does nothing when no path is a change', async () => {
+      await expect(engine().discard(work, [ 'b.md' ])).resolves.toBeUndefined();
+    });
+
+    it('deletes an added symbolic link, not its target', async () => {
+      const outside = join(root, 'outside');
+      mkdirSync(outside);
+      writeFileSync(join(outside, 'keep.md'), 'keep\n');
+      symlinkSync(outside, join(work, 'linked'));
+
+      await engine().discard(work, [ 'linked' ]);
+
+      expect(lstatSync(join(work, 'linked'), { throwIfNoEntry: false })).toBeUndefined();
+      expect(readFileSync(join(outside, 'keep.md'), 'utf8')).toBe('keep\n');
+    });
+
+    // Neither name can exist on Windows.
+    it.skipIf(process.platform === 'win32')('reads names as literal paths', async () => {
+      writeFileSync(join(work, ':!a.md'), 'new\n');
+      writeFileSync(join(work, '*.md'), 'new\n');
+      writeFileSync(join(work, 'b.md'), 'changed\n');
+
+      await engine().discard(work, [ '*.md' ]);
+
+      expect(existsSync(join(work, '*.md'))).toBe(false);
+      expect(existsSync(join(work, ':!a.md'))).toBe(true);
+      expect(readFileSync(join(work, 'b.md'), 'utf8')).toBe('changed\n');
+
+      await engine().discard(work, [ ':!a.md' ]);
+
+      expect(existsSync(join(work, ':!a.md'))).toBe(false);
+      expect(readFileSync(join(work, 'b.md'), 'utf8')).toBe('changed\n');
+    });
+
+    it.skipIf(process.platform === 'win32')(
+      'restores a tracked file with a pathspec character in its name',
+      async () => {
+        writeFileSync(join(work, '*.md'), 'star\n');
+        git(work, 'add', '--', ':(literal)*.md');
+        git(work, 'commit', '-q', '-m', 'star');
+        writeFileSync(join(work, '*.md'), 'changed\n');
+        writeFileSync(join(work, 'a.md'), 'changed\n');
+
+        await engine().discard(work, [ '*.md' ]);
+
+        expect(readFileSync(join(work, '*.md'), 'utf8')).toBe('star\n');
+        expect(readFileSync(join(work, 'a.md'), 'utf8')).toBe('changed\n');
+      }
+    );
+
+    it('deletes added files before the first commit', async () => {
+      const fresh = join(root, 'fresh-repository');
+      mkdirSync(fresh);
+      git(fresh, 'init', '-q', '-b', 'main');
+      writeFileSync(join(fresh, 'one.md'), 'one\n');
+      writeFileSync(join(fresh, 'two.md'), 'two\n');
+      git(fresh, 'add', 'two.md');
+      writeFileSync(join(fresh, 'three.md'), 'three\n');
+
+      await engine().discard(fresh, [ 'one.md', 'two.md' ]);
+
+      expect(git(fresh, 'status', '--porcelain', '--untracked-files=all').trim()).toBe('?? three.md');
+      expect(existsSync(join(fresh, 'one.md'))).toBe(false);
+      expect(existsSync(join(fresh, 'two.md'))).toBe(false);
+    });
+
+    it('takes a staged file that a folder replaced out of the index, and leaves the folder', async () => {
+      writeFileSync(join(work, 'y.md'), 'y\n');
+      git(work, 'add', 'y.md');
+      rmSync(join(work, 'y.md'));
+      mkdirSync(join(work, 'y.md'));
+      writeFileSync(join(work, 'y.md', 'keep.md'), 'keep\n');
+      writeFileSync(join(work, 'new.md'), 'new\n');
+
+      await engine().discard(work, [ 'y.md', 'new.md' ]);
+
+      expect(readFileSync(join(work, 'y.md', 'keep.md'), 'utf8')).toBe('keep\n');
+      expect(existsSync(join(work, 'new.md'))).toBe(false);
+      expect(statusOf()).toBe('?? y.md/keep.md');
+    });
+
+    it('takes a staged submodule out of the index, and leaves its folder', async () => {
+      mkdirSync(join(work, 'nested'));
+      writeFileSync(join(work, 'nested', 'keep.md'), 'keep\n');
+      const head = git(work, 'rev-parse', 'HEAD').trim();
+      git(work, 'update-index', '--add', '--cacheinfo', `160000,${head},nested`);
+
+      await engine().discard(work, [ 'nested' ]);
+
+      expect(readFileSync(join(work, 'nested', 'keep.md'), 'utf8')).toBe('keep\n');
+      expect(git(work, 'ls-files', '--stage', 'nested').trim()).toBe('');
+    });
+
+    // Only Linux keeps a file name's bytes as they are.
+    it.runIf(process.platform === 'linux')(
+      'refuses a name that is not valid UTF-8, which git cannot be told, before changing anything',
+      async () => {
+        writeFileSync(Buffer.concat([ Buffer.from(`${work}/caf`), Buffer.from([ 0xe9 ]), Buffer.from('.md') ]), 'x\n');
+        writeFileSync(join(work, 'new.md'), 'new\n');
+        const { changes } = await engine().status(work);
+        const mangled = changes.map(change => change.path).filter(path => path.includes('�'));
+        expect(mangled).toHaveLength(1);
+
+        const failure = await engine().discard(work, [ 'new.md', ...mangled ]).catch((error: unknown) => error);
+
+        expect(failure).toBeInstanceOf(PathRefusedError);
+        expect((failure as PathRefusedError).reason).toBe('malformed');
+        expect(existsSync(join(work, 'new.md'))).toBe(true);
+      }
+    );
+
+    it('says when it starts to change something', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+      const changing = vi.fn();
+
+      await engine().discard(work, [ 'a.md' ], changing);
+
+      expect(changing).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not say so when no path is a change', async () => {
+      const changing = vi.fn();
+
+      await engine().discard(work, [ 'b.md' ], changing);
+
+      expect(changing).not.toHaveBeenCalled();
+    });
+
+    it('does not say so when it is blocked', async () => {
+      rmSync(join(work, 'b.md'));
+      mkdirSync(join(work, 'b.md'));
+      writeFileSync(join(work, 'b.md', 'keep.md'), 'keep\n');
+      const changing = vi.fn();
+
+      await failureOf(engine().discard(work, [ 'b.md' ], changing));
+
+      expect(changing).not.toHaveBeenCalled();
+    });
+
+    describe('when a new file or folder stands where a deleted file comes back', () => {
+      it('refuses to replace a folder with files in it that are not being discarded, and changes nothing', async () => {
+        writeFileSync(join(work, 'a.md'), 'changed\n');
+        rmSync(join(work, 'b.md'));
+        mkdirSync(join(work, 'b.md'));
+        writeFileSync(join(work, 'b.md', 'keep.md'), 'keep\n');
+
+        const failure = await failureOf(engine().discard(work, [ 'a.md', 'b.md' ]));
+
+        expect(failure.code).toBe('discard-blocked');
+        expect(readFileSync(join(work, 'b.md', 'keep.md'), 'utf8')).toBe('keep\n');
+        expect(readFileSync(join(work, 'a.md'), 'utf8')).toBe('changed\n');
+      });
+
+      it('refuses to replace a file on the way to it that is not being discarded', async () => {
+        rmSync(join(work, 'docs'), { recursive: true });
+        writeFileSync(join(work, 'docs'), 'keep\n');
+
+        const failure = await failureOf(engine().discard(work, [ 'docs/c.md' ]));
+
+        expect(failure.code).toBe('discard-blocked');
+        expect(readFileSync(join(work, 'docs'), 'utf8')).toBe('keep\n');
+      });
+
+      it('restores it when the folder\'s files are discarded with it', async () => {
+        rmSync(join(work, 'b.md'));
+        mkdirSync(join(work, 'b.md'));
+        writeFileSync(join(work, 'b.md', 'new.md'), 'new\n');
+
+        await engine().discard(work, [ 'b.md', 'b.md/new.md' ]);
+
+        expect(readFileSync(join(work, 'b.md'), 'utf8')).toBe('b\n');
+        expect(statusOf()).toBe('');
+      });
+
+      it('restores it when the file on the way is discarded with it', async () => {
+        rmSync(join(work, 'docs'), { recursive: true });
+        writeFileSync(join(work, 'docs'), 'new\n');
+
+        await engine().discard(work, [ 'docs/c.md', 'docs' ]);
+
+        expect(readFileSync(join(work, 'docs', 'c.md'), 'utf8')).toBe('c\n');
+        expect(statusOf()).toBe('');
+      });
+
+      it('restores it over an empty folder', async () => {
+        rmSync(join(work, 'b.md'));
+        mkdirSync(join(work, 'b.md'));
+
+        await engine().discard(work, [ 'b.md' ]);
+
+        expect(readFileSync(join(work, 'b.md'), 'utf8')).toBe('b\n');
+      });
     });
   });
 

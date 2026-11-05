@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -163,6 +163,48 @@ describe('git status (REQ-GIT-002)', () => {
       const response = await commit(notes, { message: 'Theirs', paths: [ 'b.md' ] }, bobToken);
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('discard', () => {
+    const discard = (id: number, paths: string[], token?: string) =>
+      fetch(`${server.url}/api/v1/repositories/${id}/git/discard`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(token === undefined ? {} : { authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({ paths })
+      });
+
+    it('restores a modified file and deletes an added one, leaving a file it was not given', async () => {
+      const committed = readFileSync(join(notesRoot, 'a.md'), 'utf8');
+      writeFileSync(join(notesRoot, 'a.md'), 'changed\n');
+      writeFileSync(join(notesRoot, 'added.md'), 'added\n');
+      writeFileSync(join(notesRoot, 'other.md'), 'other\n');
+
+      const response = await discard(notes, [ 'a.md', 'added.md' ], aliceToken);
+
+      expect(response.status).toBe(204);
+      expect(readFileSync(join(notesRoot, 'a.md'), 'utf8')).toBe(committed);
+      expect(existsSync(join(notesRoot, 'added.md'))).toBe(false);
+      expect(existsSync(join(notesRoot, 'other.md'))).toBe(true);
+    });
+
+    it('refuses a path in .git', async () => {
+      const response = await discard(notes, [ '.git/config' ], aliceToken);
+
+      expect(response.status).toBe(400);
+      expect(existsSync(join(notesRoot, '.git', 'config'))).toBe(true);
+    });
+
+    it('answers another user like a missing repository', async () => {
+      expect((await discard(notes, [ 'other.md' ], bobToken)).status).toBe(404);
+      expect(existsSync(join(notesRoot, 'other.md'))).toBe(true);
+    });
+
+    it('needs a login', async () => {
+      expect((await discard(notes, [ 'other.md' ])).status).toBe(401);
     });
   });
 });

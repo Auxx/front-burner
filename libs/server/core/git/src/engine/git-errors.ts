@@ -17,6 +17,8 @@ export const GIT_ERROR_CODES = [
   'nothing-to-commit',
   /** HEAD is on no branch, so a commit would belong to none. */
   'detached-head',
+  /** Restoring a deleted file would replace a file or folder that is not being discarded. */
+  'discard-blocked',
   'failed'
 ] as const;
 
@@ -42,7 +44,7 @@ const PATTERNS: [ RegExp, GitErrorCode ][] = [
   // From proxy-connect.cjs.
   [ /egress proxy refused/, 'host-unreachable' ],
   [
-    /SSL certificate (problem|OpenSSL verify result)|server certificate verification failed|SSL: no alternative certificate subject name/,
+    /SSL certificate (problem|OpenSSL verify result)|server (certificate )?verification failed|SSL: no alternative certificate subject name/,
     'tls-untrusted'
   ],
   [ /Could not resolve host|Failed to connect|Connection refused|Couldn't connect to server/, 'host-unreachable' ],

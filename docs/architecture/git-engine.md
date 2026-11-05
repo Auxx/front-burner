@@ -226,13 +226,15 @@ Confirmed by spike 2 (spikes.md).
     `host-unreachable` (AR-57). _(My call.)_
   - The MVP requirements add: which entries of a folder are ignored (`git
     check-ignore`, FB-16); the diff of one file against the last commit (GA-14
-    to GA-16); discarding selected files (GA-23); committing exactly a list of
-    paths, and amending (GA-19, GA-22); whether a commit is on any remote branch
-    (GA-22, GC-25, RM-18); creating a local branch that tracks a remote branch
-    (GA-37); adding a pushed branch to a single-branch clone's fetch refspec
-    (GA-41); starting a conflicting file over (`git checkout -m`, GC-18);
-    undoing a merge by resetting to the recorded commit (GC-26); and recognising
-    credential problems in git's and the server's messages (RC-5).
+    to GA-16); discarding selected files (GA-23), refused as `discard-blocked`
+    when restoring a deleted file would replace a file or folder that is not
+    being discarded, which `git restore` does without asking; committing exactly
+    a list of paths, and amending (GA-19, GA-22); whether a commit is on any
+    remote branch (GA-22, GC-25, RM-18); creating a local branch that tracks a
+    remote branch (GA-37); adding a pushed branch to a single-branch clone's
+    fetch refspec (GA-41); starting a conflicting file over (`git checkout -m`,
+    GC-18); undoing a merge by resetting to the recorded commit (GC-26); and
+    recognising credential problems in git's and the server's messages (RC-5).
   - Every operation that writes a commit sets the commit author itself (CA-2),
     and every merge sets `merge.conflictStyle=merge` (GC-5), so the working
     copy's own configuration decides neither.
