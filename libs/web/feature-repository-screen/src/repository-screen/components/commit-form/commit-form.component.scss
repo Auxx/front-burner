@@ -11,6 +11,23 @@
   display: block;
 }
 
+.author {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-1) var(--ui-space-2);
+  align-items: center;
+  justify-content: space-between;
+  min-inline-size: 0;
+  font-size: var(--ui-font-size-ui-small);
+}
+
+// A long name or email wraps instead of widening the pane at 320 px.
+.author-text {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
 .commit {
   align-self: stretch;
 }

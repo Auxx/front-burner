@@ -22,7 +22,11 @@ const COMMIT_AS = 'Commit as Ada <ada@example.com>';
 describe('ConfirmCommitAuthorDialog', () => {
   let ref: DialogRef<CommitAuthorConfirmed>;
   let api: Record<
-    'commitAuthor' | 'setCommitAuthor' | 'setRepositoryCommitAuthor' | 'removeRepositoryCommitAuthor' | 'confirmCommitAuthor',
+    | 'commitAuthor'
+    | 'setCommitAuthor'
+    | 'setRepositoryCommitAuthor'
+    | 'removeRepositoryCommitAuthor'
+    | 'confirmCommitAuthor',
     ReturnType<typeof vi.fn>
   >;
 
@@ -32,7 +36,9 @@ describe('ConfirmCommitAuthorDialog', () => {
   const input = (label: string) => field(label).querySelector('input') as HTMLInputElement;
   const radio = (label: string) =>
     [ ...overlay().querySelectorAll<HTMLLabelElement>('ui-segmented-control label') ]
-      .find(element => element.textContent?.trim() === `${EDITOR}.${label}`)?.querySelector('input') as HTMLInputElement;
+      .find(element => element.textContent?.trim() === `${EDITOR}.${label}`)?.querySelector(
+        'input'
+      ) as HTMLInputElement;
 
   async function open(current = unconfirmed): Promise<void> {
     ref = TestBed.inject(DialogService).open<ConfirmCommitAuthorDialog, CommitAuthorDialogData, CommitAuthorConfirmed>(
@@ -180,9 +186,9 @@ describe('ConfirmCommitAuthorDialog', () => {
   it('shows a default that breaks CA-10 in the form, with the reason next to the field', async () => {
     const broken = { name: 'Ada', email: 'not an email' };
     api['commitAuthor'].mockReturnValue(of({ author: broken, confirmed: false }));
-    api['confirmCommitAuthor'].mockReturnValueOnce(throwError(() =>
-      apiError(400, 'validation-failed', [ { path: 'email', code: 'email-invalid' } ])
-    ));
+    api['confirmCommitAuthor'].mockReturnValueOnce(
+      throwError(() => apiError(400, 'validation-failed', [ { path: 'email', code: 'email-invalid' } ]))
+    );
     await open({ author: broken, source: 'default', confirmed: false });
 
     dialogButton('Commit as Ada <not an email>')?.click();
@@ -199,9 +205,9 @@ describe('ConfirmCommitAuthorDialog', () => {
     const broken = { name: 'Ada', email: 'not an email' };
     api['commitAuthor'].mockReturnValue(of({ author: broken, confirmed: false }));
     api['setRepositoryCommitAuthor'].mockReturnValue(of({ author: work, source: 'override', confirmed: false }));
-    api['confirmCommitAuthor'].mockReturnValue(throwError(() =>
-      apiError(400, 'validation-failed', [ { path: 'email', code: 'email-invalid' } ])
-    ));
+    api['confirmCommitAuthor'].mockReturnValue(
+      throwError(() => apiError(400, 'validation-failed', [ { path: 'email', code: 'email-invalid' } ]))
+    );
     await open({ author: work, source: 'override', confirmed: false });
     dialogButton(`${KEY}.change`)?.click();
     await settleDialog();

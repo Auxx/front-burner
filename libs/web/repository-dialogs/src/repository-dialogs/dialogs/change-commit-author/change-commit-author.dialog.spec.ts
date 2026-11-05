@@ -21,7 +21,11 @@ const usingOverride: RepositoryCommitAuthor = { author: work, source: 'override'
 describe('ChangeCommitAuthorDialog', () => {
   let ref: DialogRef<RepositoryCommitAuthor>;
   let api: Record<
-    'commitAuthor' | 'setCommitAuthor' | 'setRepositoryCommitAuthor' | 'removeRepositoryCommitAuthor' | 'confirmCommitAuthor',
+    | 'commitAuthor'
+    | 'setCommitAuthor'
+    | 'setRepositoryCommitAuthor'
+    | 'removeRepositoryCommitAuthor'
+    | 'confirmCommitAuthor',
     ReturnType<typeof vi.fn>
   >;
 
@@ -128,9 +132,9 @@ describe('ChangeCommitAuthorDialog', () => {
   });
 
   it('shows a refusal next to the field, and stays open', async () => {
-    api['setCommitAuthor'].mockReturnValueOnce(throwError(() =>
-      apiError(400, 'validation-failed', [ { path: 'email', code: 'email-invalid' } ])
-    ));
+    api['setCommitAuthor'].mockReturnValueOnce(
+      throwError(() => apiError(400, 'validation-failed', [ { path: 'email', code: 'email-invalid' } ]))
+    );
     await open(usingDefault);
 
     await save();

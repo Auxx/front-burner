@@ -14,7 +14,8 @@ export type ButtonType = 'button' | 'submit' | 'reset';
  * A button is `type="button"` unless `type` says otherwise, so that a button in
  * a form, such as Cancel, does not submit it. While `busy`, a spinner replaces
  * the icon. While `busy` or `unavailable`, the button is `aria-disabled`: it
- * keeps the focus, and its clicks are swallowed.
+ * keeps the focus, and its clicks are swallowed. A label stays on one line, cut
+ * off if it has to be, unless `wrap` is set, for a label that must be read whole.
  */
 @Component({
   selector: 'button[uiButton], a[uiButton]',
@@ -33,6 +34,7 @@ export type ButtonType = 'button' | 'submit' | 'reset';
     '[attr.data-variant]': 'variant()',
     '[attr.data-size]': 'size()',
     '[attr.data-busy]': 'busy() || null',
+    '[attr.data-wrap]': 'wrap() || null',
     '[attr.aria-disabled]': 'busy() || unavailable() ? "true" : null'
   }
 })
@@ -41,6 +43,7 @@ export class ButtonComponent {
   readonly size = input<ButtonSize>('default');
   readonly type = input<ButtonType>('button');
   readonly busy = input(false, { transform: booleanAttribute });
+  readonly wrap = input(false, { transform: booleanAttribute });
   /** Unavailable but focusable, to explain why with a tooltip (GA-8). Use instead of `aria-disabled`. */
   readonly unavailable = input(false, { transform: booleanAttribute });
 

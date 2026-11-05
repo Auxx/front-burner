@@ -6,6 +6,7 @@ import { CurrentUserService } from '@front-burner/web-core';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
+import { CommitAuthorGate } from '../../services/commit-author-gate/commit-author-gate.service';
 import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
 import { CommitService } from '../../services/commit/commit.service';
 import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
@@ -62,6 +63,7 @@ describe('ChangesPaneComponent', () => {
             commit: vi.fn()
           }
         },
+        { provide: CommitAuthorGate, useValue: { author: signal(null), change: vi.fn() } },
         { provide: CurrentUserService, useValue: { user: signal({ id: 4 } as CurrentUser) } },
         { provide: GitStatusStore, useValue: { status, failed, refresh, followed: signal(1) } }
       ]

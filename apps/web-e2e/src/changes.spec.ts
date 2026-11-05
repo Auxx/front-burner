@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { expect, test } from './support/fixtures';
-import { confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
+import { adminAuthToken, confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
 import { gitIn } from './support/working-copy';
 
 test.use({ instanceOptions: { onboarded: true } });
@@ -24,8 +24,13 @@ const commitButton = (page: Page, name: string) => changesPane(page).getByRole('
 /** A repository of the handbook fixture, with the admin's commit author confirmed; returns its working copy. */
 async function handbook(instance: { url: string; dataDir: string; }): Promise<{ id: number; dir: string; }> {
   await confirmCommitAuthor(instance.url);
+  return unconfirmedHandbook(instance);
+}
+
+/** As `handbook`, for an admin who has not confirmed their commit author yet. */
+function unconfirmedHandbook(instance: { dataDir: string; }, name = 'handbook'): { id: number; dir: string; } {
   const [ id ] = seed(instance.dataDir, {
-    repositories: [ { userId: ADMIN_ID, name: 'handbook', workingCopy: 'handbook' } ]
+    repositories: [ { userId: ADMIN_ID, name, workingCopy: 'handbook' } ]
   }).repositoryIds;
   return { id, dir: join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)) };
 }
@@ -139,5 +144,155 @@ test.describe('committing', () => {
     await expect(tick(page, 'new.md')).not.toBeChecked();
     await expect(tick(page, 'README.md')).toBeChecked();
     await expect(tick(page, 'later.md')).toBeChecked();
+  });
+});
+
+test.describe('the commit author', () => {
+  const ADMIN_AUTHOR = `${TEST_ADMIN.displayName} <${TEST_ADMIN.email}>`;
+  const question = (page: Page) => page.getByRole('dialog', { name: 'Confirm your commit author' });
+  const commitAs = (page: Page, author = ADMIN_AUTHOR) =>
+    question(page).getByRole('button', { name: `Commit as ${author}`, exact: true });
+  const committingAs = (page: Page, author: string) =>
+    changesPane(page).getByText(`Committing as ${author}`, { exact: true });
+  const changeDialog = (page: Page) => page.getByRole('dialog', { name: 'Change the commit author' });
+
+  /** One changed file with a message written, ready for **Commit 1 file**. */
+  async function readyToCommit(page: Page, url: string, dir: string, text: string): Promise<void> {
+    writeFileSync(join(dir, 'README.md'), `# ${text}\n`);
+    if (page.url() === 'about:blank') {
+      await openScreen(page, url);
+    } else {
+      await page.goto(url);
+    }
+    await expect(changesButton(page, 'Changes (1)')).toBeVisible();
+    await showChanges(page);
+    await message(page).fill(text);
+  }
+
+  test('AC-GIT-001.2: the first commit asks, and cancelling makes no commit; the second commit, in any repository, does not ask', async ({ page, instance }) => {
+    const first = unconfirmedHandbook(instance);
+    const second = unconfirmedHandbook(instance, 'second');
+    const before = gitIn(first.dir, 'rev-parse', 'HEAD');
+    await readyToCommit(page, `/repositories/${first.id}`, first.dir, 'First commit');
+
+    await commitButton(page, 'Commit 1 file').click();
+    await expect(commitAs(page)).toBeVisible();
+    await expect(question(page).getByRole('link', { name: 'GitHub\'s help on noreply addresses' })).toBeVisible();
+    expect((await new AxeBuilder({ page }).include('dlg-confirm-commit-author').analyze()).violations).toEqual([]);
+    await question(page).getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(question(page)).toBeHidden();
+    await expect(message(page)).toHaveValue('First commit');
+    await expect(commitButton(page, 'Commit 1 file')).toBeFocused();
+    expect(gitIn(first.dir, 'rev-parse', 'HEAD')).toBe(before);
+
+    await commitButton(page, 'Commit 1 file').click();
+    await commitAs(page).click();
+    await expect(message(page)).toHaveValue('');
+    expect(gitIn(first.dir, 'log', '-1', '--format=%s %an <%ae>').trim()).toBe(`First commit ${ADMIN_AUTHOR}`);
+
+    await readyToCommit(page, `/repositories/${second.id}`, second.dir, 'Second commit');
+    await commitButton(page, 'Commit 1 file').click();
+    await expect(message(page)).toHaveValue('');
+    await expect(question(page)).toBeHidden();
+    expect(gitIn(second.dir, 'log', '-1', '--format=%s').trim()).toBe('Second commit');
+  });
+
+  test('AC-GIT-001.6: the form shows Committing as, and Change updates it, as the default or for this repository', async ({ page, instance }) => {
+    const { id, dir } = await handbook(instance);
+    const other = unconfirmedHandbook(instance, 'other');
+    await readyToCommit(page, `/repositories/${id}`, dir, 'For this repository');
+    await expect(committingAs(page, ADMIN_AUTHOR)).toBeVisible();
+
+    await changesPane(page).getByRole('button', { name: 'Change commit author' }).click();
+    await changeDialog(page).getByRole('textbox', { name: 'Name' }).fill('Ada Work');
+    await changeDialog(page).getByRole('textbox', { name: 'Email' }).fill('ada@work.example');
+    await changeDialog(page).getByText('For this repository').click();
+    expect((await new AxeBuilder({ page }).include('dlg-change-commit-author').analyze()).violations).toEqual([]);
+    await changeDialog(page).getByRole('button', { name: 'Save' }).click();
+
+    await expect(committingAs(page, 'Ada Work <ada@work.example>')).toBeVisible();
+    await commitButton(page, 'Commit 1 file').click();
+    await expect(message(page)).toHaveValue('');
+    expect(gitIn(dir, 'log', '-1', '--format=%an <%ae>').trim()).toBe('Ada Work <ada@work.example>');
+
+    await changesPane(page).getByRole('button', { name: 'Change commit author' }).click();
+    await expect(changeDialog(page).getByRole('radio', { name: 'For this repository' })).toBeChecked();
+    await changeDialog(page).getByText('As my default').click();
+    await expect(changeDialog(page).getByText('This repository will stop using its own author')).toBeVisible();
+    await changeDialog(page).getByRole('textbox', { name: 'Name' }).fill('Ada Default');
+    await changeDialog(page).getByRole('button', { name: 'Save' }).click();
+
+    await expect(committingAs(page, 'Ada Default <ada@work.example>')).toBeVisible();
+    await readyToCommit(page, `/repositories/${other.id}`, other.dir, 'Elsewhere');
+    await expect(committingAs(page, 'Ada Default <ada@work.example>')).toBeVisible();
+  });
+
+  test('AC-GIT-001.10: the API refuses a user who has not confirmed, and the web client asks', async ({ page, instance }) => {
+    const { id, dir } = unconfirmedHandbook(instance);
+    writeFileSync(join(dir, 'README.md'), '# Changed\n');
+
+    const answer = await fetch(`${instance.url}/api/v1/repositories/${id}/git/commits`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${await adminAuthToken(instance.url)}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({ message: 'Refused', paths: [ 'README.md' ] })
+    });
+    expect(answer.status).toBe(409);
+    expect((await answer.json() as { code: string; }).code).toBe('commit-author-not-confirmed');
+
+    await readyToCommit(page, `/repositories/${id}`, dir, 'Asked');
+    await commitButton(page, 'Commit 1 file').click();
+    await commitAs(page).click();
+
+    await expect(message(page)).toHaveValue('');
+    expect(gitIn(dir, 'log', '-1', '--format=%s').trim()).toBe('Asked');
+  });
+
+  test('AC-GIT-001.12: editing the default before the first commit means the first commit does not ask', async ({ page, instance }) => {
+    const { id, dir } = unconfirmedHandbook(instance);
+    await page.goto('/preferences');
+    await logIn(page);
+    await page.getByRole('button', { name: 'Edit' }).click();
+    await page.getByRole('textbox', { name: 'Name' }).fill('Ada Edited');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
+
+    await readyToCommit(page, `/repositories/${id}`, dir, 'Not asked');
+    await commitButton(page, 'Commit 1 file').click();
+
+    await expect(message(page)).toHaveValue('');
+    await expect(question(page)).toBeHidden();
+    expect(gitIn(dir, 'log', '-1', '--format=%an').trim()).toBe('Ada Edited');
+  });
+
+  test('a very long name and email wrap and stay readable at 320 px', async ({ page, instance }) => {
+    const { id, dir } = unconfirmedHandbook(instance);
+    const name = 'Ada'.repeat(60);
+    const email = `${'a'.repeat(120)}@${'b'.repeat(120)}`;
+    await page.setViewportSize({ width: 320, height: 640 });
+    await readyToCommit(page, `/repositories/${id}`, dir, 'Long');
+
+    await changesPane(page).getByRole('button', { name: 'Change commit author' }).click();
+    await changeDialog(page).getByRole('textbox', { name: 'Name' }).fill(name);
+    await changeDialog(page).getByRole('textbox', { name: 'Email' }).fill(email);
+    await changeDialog(page).getByText('For this repository').click();
+    await changeDialog(page).getByRole('button', { name: 'Save' }).click();
+
+    const line = committingAs(page, `${name} <${email}>`);
+    await expect(line).toBeVisible();
+    const fits = (element: HTMLElement | SVGElement) => element.scrollWidth <= element.clientWidth + 1;
+    expect(await line.evaluate(fits)).toBe(true);
+    expect((await line.boundingBox())?.width).toBeLessThanOrEqual(320);
+
+    await commitButton(page, 'Commit 1 file').click();
+    const button = commitAs(page, `${name} <${email}>`);
+    await expect(button).toBeVisible();
+    expect(await button.evaluate(fits)).toBe(true);
+    const box = await button.boundingBox();
+    expect(box?.x).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(320);
   });
 });

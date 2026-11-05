@@ -1,3 +1,4 @@
+import { EventsHub } from '@front-burner/server-core-events';
 import { authOf } from '@front-burner/server-core-security';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
 import type { CommitAuthorPreference, RepositoryCommitAuthor } from '@front-burner/shared-contracts';
@@ -11,7 +12,10 @@ import { CommitAuthors } from './commit-authors';
 @ApiTags('preferences')
 @Controller()
 export class CommitAuthorController {
-  constructor(private readonly commitAuthors: CommitAuthors) {}
+  constructor(
+    private readonly commitAuthors: CommitAuthors,
+    private readonly events: EventsHub
+  ) {}
 
   @Get('preferences/commit-author')
   @ApiOkResponse({ type: CommitAuthorPreferenceDto })
@@ -55,7 +59,10 @@ export class CommitAuthorController {
     @Param() params: RepositoryParamsDto,
     @Body() body: CommitAuthorDto
   ): RepositoryCommitAuthor {
-    return this.commitAuthors.setOverride(authOf(req).userId, params.id, body);
+    const { userId } = authOf(req);
+    const author = this.commitAuthors.setOverride(userId, params.id, body);
+    this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
+    return author;
   }
 
   @Delete('repositories/:id/commit-author')
@@ -65,6 +72,9 @@ export class CommitAuthorController {
     @Req() req: Request,
     @Param() params: RepositoryParamsDto
   ): RepositoryCommitAuthor {
-    return this.commitAuthors.removeOverride(authOf(req).userId, params.id);
+    const { userId } = authOf(req);
+    const author = this.commitAuthors.removeOverride(userId, params.id);
+    this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
+    return author;
   }
 }

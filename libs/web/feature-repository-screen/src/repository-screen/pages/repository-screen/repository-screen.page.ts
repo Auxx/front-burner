@@ -38,6 +38,7 @@ import { EditorAreaComponent } from '../../components/editor-area/editor-area.co
 import { FileTreeComponent } from '../../components/file-tree/file-tree.component';
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
+import { CommitAuthorGate } from '../../services/commit-author-gate/commit-author-gate.service';
 import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
 import { CommitService } from '../../services/commit/commit.service';
 import { DiscardService } from '../../services/discard/discard.service';
@@ -128,6 +129,7 @@ const MAX_BADGE_COUNT = 99;
     DiskChangesService,
     GitStatusStore,
     CommitTicksService,
+    CommitAuthorGate,
     CommitService,
     DiscardService,
     // One per screen, so that switching files or tabs loads no image again (IM-10).

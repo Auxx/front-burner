@@ -184,19 +184,24 @@ export async function logIn(page: Page, email = TEST_ADMIN.email): Promise<void>
  * already answered the question before their first commit (CA-12).
  */
 export async function confirmCommitAuthor(url: string): Promise<void> {
+  const confirm = await fetch(`${url}/api/v1/preferences/commit-author/confirm`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${await adminAuthToken(url)}` }
+  });
+  if (!confirm.ok) {
+    throw new Error(`Confirming the commit author answered ${confirm.status}: ${await confirm.text()}`);
+  }
+}
+
+/** An auth token of `TEST_ADMIN`, for what a test asks the API directly. */
+export async function adminAuthToken(url: string): Promise<string> {
   const login = await fetch(`${url}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email: TEST_ADMIN.email, password: TEST_ADMIN.password })
   });
   const { authToken } = await login.json() as { authToken: string; };
-  const confirm = await fetch(`${url}/api/v1/preferences/commit-author/confirm`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${authToken}` }
-  });
-  if (!confirm.ok) {
-    throw new Error(`Confirming the commit author answered ${confirm.status}: ${await confirm.text()}`);
-  }
+  return authToken;
 }
 
 export interface SeedUser {

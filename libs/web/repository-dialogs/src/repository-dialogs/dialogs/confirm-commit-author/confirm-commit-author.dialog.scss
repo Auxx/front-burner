@@ -19,11 +19,3 @@
   gap: var(--ui-space-1) var(--ui-space-4);
   font-size: var(--ui-font-size-ui-small);
 }
-
-// A long name or email wraps instead of leaving the dialog at 320 px.
-.commit-as {
-  min-inline-size: 0;
-  max-inline-size: 100%;
-  overflow-wrap: anywhere;
-  white-space: normal;
-}

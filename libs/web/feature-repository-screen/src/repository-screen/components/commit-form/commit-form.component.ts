@@ -10,6 +10,7 @@ import {
 } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
+import { CommitAuthorGate } from '../../services/commit-author-gate/commit-author-gate.service';
 import { CommitService } from '../../services/commit/commit.service';
 
 /** Longer first lines get a hint; nothing is refused (GA-18). */
@@ -17,8 +18,8 @@ const SUBJECT_HINT_LENGTH = 72;
 
 /**
  * The commit form below the list of **Changes** (GA-18, GA-19): the message, with
- * a hint for a long first line, and a button that says how many files it
- * commits. While it can't commit, the button keeps the focus and says why on
+ * a hint for a long first line, who commits with **Change** (CA-9), and a button
+ * that says how many files it commits. While it can't commit, the button keeps the focus and says why on
  * hover, focus or tap. It stays when no change is left, so that the focus is not
  * lost with it.
  */
@@ -39,6 +40,7 @@ const SUBJECT_HINT_LENGTH = 72;
 })
 export class CommitFormComponent {
   protected readonly commit = inject(CommitService);
+  protected readonly gate = inject(CommitAuthorGate);
   private readonly commitButton = viewChild.required('commitButton', { read: ElementRef<HTMLElement> });
 
   protected readonly count = computed(() => this.commit.paths().length);
@@ -64,6 +66,12 @@ export class CommitFormComponent {
   protected submit(): void {
     if (this.blocked() === null) {
       void this.commit.commit(this.commit.message());
+    }
+  }
+
+  protected changeAuthor(): void {
+    if (!this.commit.busy()) {
+      void this.gate.change();
     }
   }
 

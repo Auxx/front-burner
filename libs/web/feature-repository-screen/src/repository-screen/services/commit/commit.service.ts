@@ -1,9 +1,10 @@
 import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
-import type { ApiError, GitStatus } from '@front-burner/shared-contracts';
+import type { ApiError, CommitRequest, GitStatus } from '@front-burner/shared-contracts';
 import { GitApi } from '@front-burner/web-api-client';
 import { type ApiErrorText, ApiErrorTextService, isRefusal, toApiError } from '@front-burner/web-core';
 import { firstValueFrom } from 'rxjs';
 
+import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
 import { CommitTicksService } from '../commit-ticks/commit-ticks.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
@@ -20,6 +21,10 @@ export interface CommitFailure extends ApiErrorText {
  * so that the message stays while the user moves between Files and Changes; a
  * repository starts with an empty form.
  *
+ * It first asks `CommitAuthorGate` (CA-12); cancelling there cancels the commit,
+ * with the message kept. The API's refusal of a user who has not confirmed
+ * (CA-13) leads to the same place, and the commit is then tried once more.
+ *
  * The files are those the button named when it was pressed: the ticked ones, and
  * an open file with unsaved edits that the list does not show yet, since a status
  * is read only seconds after a save. The waiting saves are sent first (GA-20), and
@@ -34,6 +39,7 @@ export interface CommitFailure extends ApiErrorText {
 @Injectable()
 export class CommitService {
   private readonly api = inject(GitApi);
+  private readonly gate = inject(CommitAuthorGate);
   private readonly store = inject(GitStatusStore);
   private readonly ticks = inject(CommitTicksService);
   private readonly openFiles = inject(OpenFilesService);
@@ -111,6 +117,9 @@ export class CommitService {
     this.setRunning(repositoryId, true);
     this.failure.set(null);
     try {
+      if (!await this.gate.ready() || !stayed()) {
+        return false;
+      }
       await this.openFiles.flushAll();
       const notSaved = this.openFiles.notSaved(repositoryId, paths);
       if (notSaved !== null) {
@@ -119,7 +128,9 @@ export class CommitService {
         }
         return false;
       }
-      await firstValueFrom(this.api.commit(repositoryId, { message, paths: [ ...paths ] }));
+      if (!await this.send(repositoryId, { message, paths: [ ...paths ] }, stayed)) {
+        return false;
+      }
       if (stayed()) {
         this.committed.set({ status: this.store.status(), paths: new Set(paths) });
         this.message.set('');
@@ -134,6 +145,23 @@ export class CommitService {
     } finally {
       this.setRunning(repositoryId, false);
     }
+  }
+
+  /** Resolves `false` when the user, asked after the API's refusal, did not go on. */
+  private async send(repositoryId: number, request: CommitRequest, stayed: () => boolean): Promise<boolean> {
+    try {
+      await firstValueFrom(this.api.commit(repositoryId, request));
+      return true;
+    } catch (error) {
+      if (toApiError(error).code !== 'commit-author-not-confirmed') {
+        throw error;
+      }
+    }
+    if (!await this.gate.recheck() || !stayed()) {
+      return false;
+    }
+    await firstValueFrom(this.api.commit(repositoryId, request));
+    return true;
   }
 
   private setRunning(repositoryId: number, running: boolean): void {

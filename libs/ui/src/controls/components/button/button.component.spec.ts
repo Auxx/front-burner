@@ -12,6 +12,7 @@ import { ButtonComponent } from './button.component';
       <button uiButton>Cancel</button>
       <button uiButton variant="primary" type="submit">Add repository</button>
       <button uiButton variant="danger" size="small" [disabled]="true">Remove</button>
+      <button uiButton wrap>Commit as a very long name</button>
     </form>
     <a uiButton href="/repositories/new">Add repository</a>
   `
@@ -65,6 +66,11 @@ describe('ButtonComponent', () => {
     expect(button('Remove').dataset['variant']).toBe('danger');
     expect(button('Remove').dataset['size']).toBe('small');
     expect(button('Cancel').dataset['variant']).toBe('secondary');
+  });
+
+  it('wraps its label only when asked to', () => {
+    expect(button('Commit as a very long name').getAttribute('data-wrap')).toBe('true');
+    expect(button('Cancel').getAttribute('data-wrap')).toBeNull();
   });
 
   it('keeps the native disabled state', () => {

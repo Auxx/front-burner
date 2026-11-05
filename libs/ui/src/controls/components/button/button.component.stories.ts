@@ -85,6 +85,24 @@ export const LongLabel: Story = {
   }
 };
 
+/** A label that must be read whole wraps, also a long word without any breaks. */
+export const WrappedLabel: Story = {
+  render: () => ({
+    styles: [ '.narrow { inline-size: 20rem; }' ],
+    template: `
+      <div class="narrow">
+        <button uiButton wrap>Commit as a-very-long-name-without-any-breaks-that-is-longer-than-the-line &lt;a&#64;b&gt;</button>
+      </div>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    const wrapper = canvasElement.querySelector('.narrow') as HTMLElement;
+    await expect(wrapper.scrollWidth).toBeLessThanOrEqual(wrapper.clientWidth);
+    const label = canvasElement.querySelector('.label') as HTMLElement;
+    await expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
+  }
+};
+
 /** A button whose operation runs: a spinner replaces its icon (GA-9). */
 export const Busy: Story = {
   render: () => ({
