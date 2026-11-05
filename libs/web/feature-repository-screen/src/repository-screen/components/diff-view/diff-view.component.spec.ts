@@ -342,7 +342,8 @@ describe('DiffViewComponent', () => {
     expect(rows()).toHaveLength(3);
   });
 
-  describe('a long diff', () => {
+  // Thousands of rows are slow to render without a browser, above all with other projects' tests running.
+  describe('a long diff', { timeout: 30_000 }, () => {
     const added = (count: number): DiffLine[] =>
       Array.from({ length: count }, (_, index) => ({
         type: 'added' as const,
@@ -369,7 +370,7 @@ describe('DiffViewComponent', () => {
       await settle(fixture);
       expect(rows()).toHaveLength(4500);
       expect(host().querySelector('.more')).toBeNull();
-    }, 30_000);
+    });
 
     it('keeps the focus in the diff when the last rows are shown', async () => {
       diff.mockReturnValue(of(textDiff(added(2500))));
