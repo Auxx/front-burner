@@ -12,6 +12,7 @@ const K = 'web-feature-repository-screen.GitStatusSummaryComponent';
 const published: GitStatus = {
   branch: 'main',
   noCommits: false,
+  lastCommit: null,
   upstream: 'origin/main',
   ahead: 0,
   behind: 0,

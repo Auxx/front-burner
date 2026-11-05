@@ -11,11 +11,23 @@ describe('GitStatusSchema', () => {
     changes: [ { path: 'docs/a.md', state: 'modified' }, { path: 'b.md', state: 'added' }, {
       path: 'c.md',
       state: 'deleted'
-    } ]
+    } ],
+    lastCommit: { oid: '0123456789abcdef0123456789abcdef01234567', amendable: true, message: 'Subject\n\nBody' }
   };
 
   it('parses a status', () => {
     expect(GitStatusSchema.parse(status)).toEqual(status);
+  });
+
+  it('parses no commits, and a last commit that cannot be amended', () => {
+    expect(GitStatusSchema.parse({ ...status, lastCommit: null }).lastCommit).toBeNull();
+    const pushed = { oid: '0123456789abcdef0123456789abcdef01234567', amendable: false, message: null };
+    expect(GitStatusSchema.parse({ ...status, lastCommit: pushed }).lastCommit).toEqual(pushed);
+  });
+
+  it('needs the last commit', () => {
+    const { lastCommit: _lastCommit, ...without } = status;
+    expect(GitStatusSchema.safeParse(without).success).toBe(false);
   });
 
   it('parses a detached HEAD and an unpublished branch', () => {

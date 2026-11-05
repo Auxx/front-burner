@@ -30,6 +30,7 @@ function statusOf(...paths: string[]): GitStatus {
   return {
     branch: 'main',
     noCommits: false,
+    lastCommit: null,
     upstream: null,
     ahead: 0,
     behind: 0,
@@ -139,6 +140,185 @@ describe('CommitService', () => {
     expect(commits).toEqual([ { message: '  Subject\n\n# kept\n', paths: [ 'a.md' ] } ]);
     expect(requests).toEqual([ 'commit', 'status' ]);
     expect(service.busy()).toBe(false);
+  });
+
+  describe('amending', () => {
+    const amendable = (message = 'Last commit\n\nBody', oid = 'last'): GitStatus => ({
+      ...statusOf('a.md', 'b.md'),
+      lastCommit: { oid, amendable: true, message }
+    });
+
+    function tickAmend(on = true): void {
+      service.amending.set(on);
+      TestBed.tick();
+    }
+
+    beforeEach(() => {
+      status.set(amendable());
+      TestBed.tick();
+    });
+
+    it('offers it only for a commit that can be amended', () => {
+      expect(service.canAmend()).toBe(true);
+
+      status.set({ ...statusOf(), lastCommit: { oid: 'last', amendable: false, message: null } });
+      expect(service.canAmend()).toBe(false);
+
+      status.set({ ...statusOf(), lastCommit: null });
+      expect(service.canAmend()).toBe(false);
+
+      status.set(null);
+      expect(service.canAmend()).toBe(false);
+    });
+
+    it('ticking Amend fills in the last commit\'s message', () => {
+      tickAmend();
+
+      expect(service.message()).toBe('Last commit\n\nBody');
+    });
+
+    it('unticking Amend clears a message it filled in, and keeps one the user changed', () => {
+      tickAmend();
+      tickAmend(false);
+      expect(service.message()).toBe('');
+
+      tickAmend();
+      service.message.set('Last commit, better');
+      tickAmend(false);
+      expect(service.message()).toBe('Last commit, better');
+    });
+
+    it('unticking Amend brings back what the user had written before ticking it', () => {
+      service.message.set('Written first');
+
+      tickAmend();
+      expect(service.message()).toBe('Last commit\n\nBody');
+
+      tickAmend(false);
+      expect(service.message()).toBe('Written first');
+    });
+
+    it('the option goes away when the commit can no longer be amended, with the old message', () => {
+      tickAmend();
+
+      status.set({ ...statusOf('a.md'), lastCommit: { oid: 'last', amendable: false, message: null } });
+      TestBed.tick();
+
+      expect(service.canAmend()).toBe(false);
+      expect(service.amending()).toBe(false);
+      expect(service.message()).toBe('');
+    });
+
+    it('keeps a message the user changed when the option goes away', () => {
+      tickAmend();
+      service.message.set('Mine');
+
+      status.set({ ...statusOf('a.md'), lastCommit: { oid: 'last', amendable: false, message: null } });
+      TestBed.tick();
+
+      expect(service.amending()).toBe(false);
+      expect(service.message()).toBe('Mine');
+    });
+
+    it('stays ticked while the status changes, with the same last commit', () => {
+      tickAmend();
+
+      status.set(amendable());
+      TestBed.tick();
+
+      expect(service.amending()).toBe(true);
+      expect(service.message()).toBe('Last commit\n\nBody');
+    });
+
+    it('is unticked when the last commit was replaced, so that its old message does not replace the new one', () => {
+      service.message.set('Written first');
+      tickAmend();
+
+      status.set(amendable('Amended elsewhere', 'other'));
+      TestBed.tick();
+
+      expect(service.canAmend()).toBe(true);
+      expect(service.amending()).toBe(false);
+      expect(service.message()).toBe('Written first');
+
+      tickAmend();
+      expect(service.message()).toBe('Amended elsewhere');
+    });
+
+    it('sends amend with the ticked files, then starts over', async () => {
+      ticks.setTicked('b.md', false);
+      tickAmend();
+
+      expect(await service.commit('Better')).toBe(true);
+      TestBed.tick();
+
+      expect(commits).toEqual([ { message: 'Better', paths: [ 'a.md' ], amend: true } ]);
+      expect(requests).toEqual([ 'commit', 'status' ]);
+      expect(service.amending()).toBe(false);
+      expect(service.message()).toBe('');
+    });
+
+    it('works with no ticked files', async () => {
+      ticks.setAll(false);
+      tickAmend();
+
+      expect(await service.commit('Better')).toBe(true);
+
+      expect(commits).toEqual([ { message: 'Better', paths: [], amend: true } ]);
+    });
+
+    it('a commit without Amend still needs a ticked file, and does not send amend', async () => {
+      ticks.setAll(false);
+      expect(await service.commit('Subject')).toBe(false);
+      expect(commits).toEqual([]);
+
+      ticks.setAll(true);
+      expect(await service.commit('Subject')).toBe(true);
+      expect(commits).toEqual([ { message: 'Subject', paths: [ 'a.md', 'b.md' ] } ]);
+    });
+
+    it('refuses an amend of a commit that was pushed meanwhile', async () => {
+      commitAnswer = () => throwError(() => refusal('amend-not-allowed'));
+      tickAmend();
+
+      expect(await service.commit('Last commit\n\nBody')).toBe(false);
+      TestBed.tick();
+
+      // The user is told, and the old message can't be committed by accident.
+      expect(service.error()?.text).toBe('amend-not-allowed');
+      expect(service.error()?.retry).toBe(false);
+      expect(service.amending()).toBe(false);
+      expect(service.message()).toBe('');
+      expect(requests).toEqual([ 'commit', 'status' ]);
+
+      // The status that follows does not take the message away.
+      status.set({ ...statusOf('a.md', 'b.md'), lastCommit: { oid: 'last', amendable: false, message: null } });
+      TestBed.tick();
+      expect(service.error()?.text).toBe('amend-not-allowed');
+    });
+
+    it('a failure goes away when Amend is ticked', async () => {
+      commitAnswer = () => throwError(() => refusal('nothing-to-commit'));
+      service.message.set('Subject');
+      await service.commit('Subject');
+      TestBed.tick();
+      expect(service.error()).not.toBeNull();
+
+      tickAmend();
+
+      expect(service.error()).toBeNull();
+    });
+
+    it('starts over in another repository', () => {
+      tickAmend();
+
+      followed.set(13);
+      repository.set({ id: 13 });
+      TestBed.tick();
+
+      expect(service.amending()).toBe(false);
+      expect(service.message()).toBe('');
+    });
   });
 
   it('clears the message after a commit, and the committed files leave the list', async () => {

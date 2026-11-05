@@ -61,17 +61,21 @@ export class GitController {
     private readonly events: EventsHub
   ) {}
 
-  /** The branch, its counts against the upstream, and every changed file (GA-7, GA-11, GA-42). */
+  /**
+   * The branch, its counts against the upstream, every changed file, and whether
+   * the last commit can be amended (GA-7, GA-11, GA-22, GA-42).
+   */
   @Get('status')
   @ApiOkResponse({ type: GitStatusDto })
   @ZodSerializerDto(GitStatusDto)
   async gitStatus(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<GitStatus> {
     const root = this.repositories.root(authOf(req).userId, params.id);
-    const [ status, mergeInProgress ] = await Promise.all([
+    const [ status, mergeInProgress, lastCommit ] = await Promise.all([
       this.engine.status(root),
-      this.engine.mergeInProgress(root)
+      this.engine.mergeInProgress(root),
+      this.engine.lastCommit(root)
     ]);
-    return { ...status, mergeInProgress };
+    return { ...status, mergeInProgress, lastCommit };
   }
 
   /**
@@ -132,7 +136,8 @@ export class GitController {
    * Commits exactly the listed changes with the message, as the repository's
    * commit author (GA-19, GA-21, CA-1, CA-2, CA-6). Refused while the user has
    * not confirmed their commit author (CA-13), during a merge (GA-4) and on a
-   * detached `HEAD`.
+   * detached `HEAD`. With `amend`, replaces the last commit, and needs no paths;
+   * refused when that commit cannot be amended (GA-22).
    */
   @Post('commits')
   @ApiCreatedResponse({ type: CommitResultDto })
@@ -152,7 +157,7 @@ export class GitController {
     // Inside the lock and after its merge check: no file action of ours runs between the check and the commit.
     const result = await this.guard.change(params.id, root, async () => {
       await checkPaths(root, paths);
-      return this.engine.commit(root, { paths, message: body.message, author }).catch(toGitApiError);
+      return this.engine.commit(root, { paths, message: body.message, author, amend: body.amend }).catch(toGitApiError);
     });
     this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
     return result;

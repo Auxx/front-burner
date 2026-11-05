@@ -68,6 +68,7 @@ describe('RepositoryBarComponent', () => {
     fixture.componentRef.setInput('gitStatus', {
       branch: 'main',
       noCommits: false,
+      lastCommit: null,
       upstream: 'origin/main',
       ahead: 0,
       behind: 0,

@@ -12,6 +12,8 @@ export function toGitApiError(error: unknown): never {
         throw new ApiErrorException(409, 'nothing-to-commit');
       case 'detached-head':
         throw new ApiErrorException(409, 'detached-head');
+      case 'amend-not-allowed':
+        throw new ApiErrorException(409, 'amend-not-allowed');
       case 'discard-blocked':
         throw new ApiErrorException(409, 'discard-blocked');
       case 'timeout':

@@ -12,6 +12,7 @@ function statusOf(...paths: string[]): GitStatus {
   return {
     branch: 'main',
     noCommits: false,
+    lastCommit: null,
     upstream: null,
     ahead: 0,
     behind: 0,

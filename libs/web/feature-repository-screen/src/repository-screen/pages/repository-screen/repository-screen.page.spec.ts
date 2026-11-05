@@ -114,6 +114,7 @@ describe('RepositoryScreenPage', () => {
               gitStatusAnswer ?? of({
                 branch: 'main',
                 noCommits: false,
+                lastCommit: null,
                 upstream: null,
                 ahead: 0,
                 behind: 0,

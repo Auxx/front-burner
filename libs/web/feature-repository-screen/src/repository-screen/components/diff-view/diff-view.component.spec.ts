@@ -15,6 +15,7 @@ const KEY = 'web-feature-repository-screen.DiffViewComponent';
 const STATUS: GitStatus = {
   branch: 'main',
   noCommits: false,
+  lastCommit: null,
   upstream: null,
   ahead: 0,
   behind: 0,

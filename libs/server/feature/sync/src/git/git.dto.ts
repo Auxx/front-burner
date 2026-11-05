@@ -4,7 +4,8 @@ import {
   GitDiffQuerySchema,
   GitDiffSchema,
   GitPathsSchema,
-  GitStatusSchema
+  GitStatusSchema,
+  hasPathsUnlessAmending
 } from '@front-burner/shared-contracts';
 import { ApiSchema } from '@nestjs/swagger';
 import { createZodDto } from 'nestjs-zod';
@@ -24,8 +25,10 @@ export class GitDiffQueryDto extends createZodDto(z.object(GitDiffQuerySchema.sh
 export const GitDiffDto = createZodDto(z.discriminatedUnion('kind', GitDiffSchema.options));
 ApiSchema({ name: 'GitDiff' })(GitDiffDto);
 
+// The shape does not carry the rule across its fields, so it is applied again.
 @ApiSchema({ name: 'CommitRequest' })
-export class CommitRequestDto extends createZodDto(z.object(CommitRequestSchema.shape)) {}
+export class CommitRequestDto
+  extends createZodDto(z.object(CommitRequestSchema.shape).refine(hasPathsUnlessAmending, { path: [ 'paths' ] })) {}
 
 @ApiSchema({ name: 'CommitResult' })
 export class CommitResultDto extends createZodDto(z.object(CommitResultSchema.shape)) {}

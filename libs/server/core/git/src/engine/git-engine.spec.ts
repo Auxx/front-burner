@@ -647,6 +647,196 @@ describe('GitEngine', () => {
       expect(git(work, 'log', '--format=%s').trim()).toBe('base');
     });
 
+    describe('amend', () => {
+      const amend = (paths: string[], message = 'Amended', author = AUTHOR) =>
+        engine().commit(work, { paths, message, author, amend: true });
+      const lastCommit = () => engine().lastCommit(work);
+      const head = () => git(work, 'rev-parse', 'HEAD').trim();
+      const subjects = () => git(work, 'log', '--format=%s').trim();
+
+      beforeEach(() => {
+        writeFileSync(join(work, 'a.md'), 'local\n');
+        git(work, 'commit', '-q', '-am', 'Local');
+      });
+
+      it('amends with no paths, changing only the message', async () => {
+        writeFileSync(join(work, 'b.md'), 'not ticked\n');
+        writeFileSync(join(work, 'new.md'), 'not ticked\n');
+
+        const { oid } = await amend([]);
+
+        expect(oid).toBe(git(work, 'rev-parse', 'HEAD').trim());
+        expect(subjects()).toBe('Amended\nbase');
+        expect(committedFiles()).toBe('M\ta.md');
+        expect(await changedPaths()).toEqual([ 'b.md', 'new.md' ]);
+      });
+
+      it('ignores listed paths that are not changes', async () => {
+        writeFileSync(join(work, 'b.md'), 'not ticked\n');
+
+        await amend([ 'c.md' ]);
+
+        expect(committedFiles()).toBe('M\ta.md');
+        expect(await changedPaths()).toEqual([ 'b.md' ]);
+      });
+
+      it('adds the listed paths to the last commit', async () => {
+        writeFileSync(join(work, 'b.md'), 'changed\n');
+        writeFileSync(join(work, 'c.md'), 'changed\n');
+
+        await amend([ 'b.md' ]);
+
+        expect(subjects()).toBe('Amended\nbase');
+        expect(committedFiles()).toBe('M\ta.md\nM\tb.md');
+        expect(await changedPaths()).toEqual([ 'c.md' ]);
+        expect(staged()).toBe('');
+      });
+
+      it('amends a commit that ends up with no files of its own', async () => {
+        git(work, 'commit', '-q', '--allow-empty', '-m', 'Empty');
+
+        await amend([]);
+
+        expect(subjects()).toBe('Amended\nLocal\nbase');
+        expect(committedFiles()).toBe('');
+      });
+
+      it('amending records the current author as author and committer', async () => {
+        await amend([], 'Amended', { name: 'Ada King', email: 'king@example.com' });
+
+        expect(git(work, 'log', '-1', '--format=%an <%ae> / %cn <%ce>').trim()).toBe(
+          'Ada King <king@example.com> / Ada King <king@example.com>'
+        );
+      });
+
+      it('leaves the last commit and an empty index when the amend fails', async () => {
+        const head = git(work, 'rev-parse', 'HEAD');
+        writeFileSync(join(work, 'b.md'), 'changed\n');
+
+        await expect(amend([ 'b.md' ], 'Amended', { name: '', email: 'ada@example.com' })).rejects.toThrow();
+
+        expect(git(work, 'rev-parse', 'HEAD')).toBe(head);
+        expect(staged()).toBe('');
+        expect(await changedPaths()).toEqual([ 'b.md' ]);
+      });
+
+      it('still needs a path without amend', async () => {
+        const failure = await failureOf(commit([]));
+
+        expect(failure.code).toBe('nothing-to-commit');
+      });
+
+      it('refuses an amend of a commit that was pushed meanwhile', async () => {
+        const head = git(work, 'rev-parse', 'HEAD');
+        git(work, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+
+        const failure = await failureOf(amend([]));
+
+        expect(failure.code).toBe('amend-not-allowed');
+        expect(git(work, 'rev-parse', 'HEAD')).toBe(head);
+      });
+
+      it('refuses an amend before the first commit', async () => {
+        const fresh = join(root, 'fresh');
+        mkdirSync(fresh);
+        git(fresh, 'init', '-q', '-b', 'main');
+        writeFileSync(join(fresh, 'a.md'), 'a\n');
+        work = fresh;
+
+        const failure = await failureOf(amend([ 'a.md' ]));
+
+        expect(failure.code).toBe('amend-not-allowed');
+      });
+
+      it('refuses an amend on a detached HEAD', async () => {
+        git(work, 'checkout', '-q', '--detach');
+
+        const failure = await failureOf(amend([]));
+
+        expect(failure.code).toBe('detached-head');
+      });
+
+      describe('lastCommit', () => {
+        it('gives the message of a commit that can be amended, without a trailing line break', async () => {
+          git(work, 'commit', '-q', '--amend', '-m', 'Subject', '-m', 'Body');
+
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: true, message: 'Subject\n\nBody' });
+        });
+
+        it('is null without commits', async () => {
+          const fresh = join(root, 'fresh');
+          mkdirSync(fresh);
+          git(fresh, 'init', '-q', '-b', 'main');
+          work = fresh;
+
+          expect(await lastCommit()).toBeNull();
+        });
+
+        it('a pushed commit cannot be amended', async () => {
+          git(work, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: false, message: null });
+        });
+
+        it('a commit on any remote branch cannot be amended', async () => {
+          git(work, 'update-ref', 'refs/remotes/fork/feature/other', 'HEAD');
+
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: false, message: null });
+        });
+
+        it('a commit newer than the remote branch can be amended', async () => {
+          git(work, 'update-ref', 'refs/remotes/origin/main', 'HEAD~1');
+
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: true, message: 'Local' });
+        });
+
+        it('a merge commit cannot be amended', async () => {
+          git(work, 'checkout', '-q', '-b', 'other', 'HEAD~1');
+          writeFileSync(join(work, 'b.md'), 'other\n');
+          git(work, 'commit', '-q', '-am', 'Other');
+          git(work, 'checkout', '-q', 'main');
+          git(work, 'merge', '-q', '--no-edit', 'other');
+
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: false, message: null });
+        });
+
+        it('a root commit can be amended', async () => {
+          const fresh = join(root, 'fresh');
+          mkdirSync(fresh);
+          git(fresh, 'init', '-q', '-b', 'main');
+          writeFileSync(join(fresh, 'a.md'), 'a\n');
+          git(fresh, 'add', '.');
+          git(fresh, 'commit', '-q', '-m', 'First');
+          work = fresh;
+
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: true, message: 'First' });
+
+          await amend([]);
+
+          expect(subjects()).toBe('Amended');
+          expect(git(fresh, 'rev-list', '--parents', '-1', 'HEAD').trim().split(' ')).toHaveLength(1);
+        });
+
+        it('a detached HEAD cannot be amended', async () => {
+          git(work, 'checkout', '-q', '--detach');
+
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: false, message: null });
+        });
+
+        it('is not confused by a file named HEAD', async () => {
+          writeFileSync(join(work, 'HEAD'), 'a file\n');
+
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: true, message: 'Local' });
+        });
+
+        it('fails, rather than saying there is no commit, when git cannot read it', async () => {
+          writeFileSync(join(work, '.git', 'refs', 'heads', 'main'), `${'1'.repeat(40)}\n`);
+
+          await expect(lastCommit()).rejects.toThrow();
+        });
+      });
+    });
+
     it('reports a timeout, and leaves no index lock and nothing staged', async () => {
       // Larger than git can add in a millisecond.
       writeFileSync(join(work, 'a.md'), 'x'.repeat(8 * 1024 * 1024));

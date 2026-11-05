@@ -147,6 +147,44 @@ test.describe('committing', () => {
   });
 });
 
+test.describe('amending', () => {
+  const amend = (page: Page) => changesPane(page).getByRole('checkbox', { name: 'Amend last commit', exact: true });
+
+  test('AC-GIT-002.7: Amend is offered after a local commit and not after it is pushed; amending with no ticked files changes only the message', async ({ page, instance }) => {
+    const { id, dir } = await handbook(instance);
+    writeFileSync(join(dir, 'README.md'), '# Changed\n');
+    writeFileSync(join(dir, 'new.md'), '# New\n');
+    await openScreen(page, `/repositories/${id}`);
+    await expect(changesButton(page, 'Changes (2)')).toBeVisible();
+    await showChanges(page);
+
+    await tick(page, 'new.md').click();
+    await message(page).fill('First message');
+    await commitButton(page, 'Commit 1 file').click();
+    await expect(changesButton(page, 'Changes (1)')).toBeVisible();
+    const parent = gitIn(dir, 'rev-parse', 'HEAD~1').trim();
+
+    await amend(page).check();
+    await expect(message(page)).toHaveValue('First message');
+    await message(page).fill('Better message');
+    await commitButton(page, 'Amend').click();
+
+    await expect(message(page)).toHaveValue('');
+    await expect(amend(page)).not.toBeChecked();
+    expect(gitIn(dir, 'log', '-1', '--format=%s').trim()).toBe('Better message');
+    expect(gitIn(dir, 'rev-parse', 'HEAD~1').trim()).toBe(parent);
+    expect(gitIn(dir, 'show', '--name-only', '--format=', 'HEAD').trim()).toBe('README.md');
+    expect(gitIn(dir, 'status', '--porcelain').trim()).toBe('?? new.md');
+
+    // The remote ref a push would leave behind.
+    gitIn(dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    await page.reload();
+    await showChanges(page);
+    await expect(commitButton(page, 'Commit 0 files')).toBeVisible();
+    await expect(amend(page)).toHaveCount(0);
+  });
+});
+
 test.describe('the commit author', () => {
   const ADMIN_AUTHOR = `${TEST_ADMIN.displayName} <${TEST_ADMIN.email}>`;
   const question = (page: Page) => page.getByRole('dialog', { name: 'Confirm your commit author' });
