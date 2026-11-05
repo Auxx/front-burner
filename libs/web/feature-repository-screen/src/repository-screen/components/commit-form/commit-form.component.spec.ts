@@ -21,6 +21,8 @@ describe('CommitFormComponent', () => {
   let commit: ReturnType<typeof vi.fn>;
   let author: ReturnType<typeof signal<RepositoryCommitAuthor | null>>;
   let change: ReturnType<typeof vi.fn>;
+  let readFailed: ReturnType<typeof signal<boolean>>;
+  let refresh: ReturnType<typeof vi.fn>;
 
   const host = () => fixture.nativeElement as HTMLElement;
   const field = () => host().querySelector('textarea') as HTMLTextAreaElement;
@@ -50,6 +52,8 @@ describe('CommitFormComponent', () => {
       confirmed: true
     });
     change = vi.fn(() => Promise.resolve());
+    readFailed = signal(false);
+    refresh = vi.fn();
     TestBed.configureTestingModule({
       imports: [
         CommitFormComponent,
@@ -61,7 +65,7 @@ describe('CommitFormComponent', () => {
       ],
       providers: [
         { provide: CommitService, useValue: { paths, message, busy, error, commit } },
-        { provide: CommitAuthorGate, useValue: { author, change } }
+        { provide: CommitAuthorGate, useValue: { author, change, readFailed, refresh } }
       ]
     });
   });
@@ -94,6 +98,33 @@ describe('CommitFormComponent', () => {
       await settle(fixture);
 
       expect(line()).toBe('Committing as Ada L <a@work>');
+    });
+
+    it('warns, with Try again, instead of the line when the author can\'t be read', async () => {
+      author.set(null);
+      readFailed.set(true);
+      await render();
+
+      const warning = host().querySelector('.author-failed');
+      expect(warning?.getAttribute('status')).toBe('warning');
+      expect(warning?.textContent).toContain(`${KEY}.authorFailed`);
+      expect(line()).toBeUndefined();
+      expect(changeButton()).toBeNull();
+
+      (host().querySelector('.author-retry') as HTMLButtonElement).click();
+
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('still lets the user commit while warning', async () => {
+      author.set(null);
+      readFailed.set(true);
+      message.set('Subject');
+      await render();
+
+      button().click();
+
+      expect(commit).toHaveBeenCalledExactlyOnceWith('Subject');
     });
 
     it('shows nothing until the author is known', async () => {

@@ -22,7 +22,8 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
  * It reads the author when the repository is ready, on `git.changed`, which a
  * change of an override publishes, and after every (re)connect, since a change of
  * the default publishes nothing and events are never replayed (A-3.11). A read
- * that fails keeps what is shown.
+ * that fails keeps what is shown, and `readFailed` says when that is nothing, so
+ * that the form can warn instead of hiding who commits (CA-9).
  *
  * What it knows may be old, as the confirmation applies to the user and can be
  * given in another tab. So it reads again before it asks, and the API's refusal
@@ -38,11 +39,14 @@ export class CommitAuthorGate {
   private readonly store = inject(GitStatusStore);
 
   private readonly current = signal<RepositoryCommitAuthor | null>(null);
+  private readonly lastReadFailed = signal(false);
   /** The latest read: only that one may change what is shown. */
   private latestRead = 0;
 
   /** The author that the next commit would use; `null` until it has been read. */
   readonly author = this.current.asReadonly();
+  /** Whether no author can be shown, because the latest read failed. */
+  readonly readFailed = computed(() => this.lastReadFailed() && this.current() === null);
 
   private readonly repositoryId = computed(() => {
     const id = this.store.followed();
@@ -55,6 +59,7 @@ export class CommitAuthorGate {
       untracked(() => {
         this.latestRead++;
         this.current.set(null);
+        this.lastReadFailed.set(false);
         if (id !== null) {
           this.refresh();
         }
@@ -123,7 +128,8 @@ export class CommitAuthorGate {
     }
   }
 
-  private refresh(): void {
+  /** Reads the author again, such as for **Try again**. */
+  refresh(): void {
     const repositoryId = this.repositoryId();
     if (repositoryId !== null) {
       void this.settle(repositoryId);
@@ -141,10 +147,19 @@ export class CommitAuthorGate {
 
   private async read(repositoryId: number): Promise<RepositoryCommitAuthor> {
     const read = ++this.latestRead;
-    const author = await firstValueFrom(this.api.repositoryCommitAuthor(repositoryId));
-    if (read === this.latestRead && this.repositoryId() === repositoryId) {
-      this.current.set(author);
+    const isLatest = () => read === this.latestRead && this.repositoryId() === repositoryId;
+    try {
+      const author = await firstValueFrom(this.api.repositoryCommitAuthor(repositoryId));
+      if (isLatest()) {
+        this.current.set(author);
+        this.lastReadFailed.set(false);
+      }
+      return author;
+    } catch (error) {
+      if (isLatest()) {
+        this.lastReadFailed.set(true);
+      }
+      throw error;
     }
-    return author;
   }
 }

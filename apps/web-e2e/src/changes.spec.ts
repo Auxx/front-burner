@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { expect, test } from './support/fixtures';
+import { drainFailedRequests, expect, test } from './support/fixtures';
 import { adminAuthToken, confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
 import { gitIn } from './support/working-copy';
 
@@ -266,6 +266,29 @@ test.describe('the commit author', () => {
     await expect(message(page)).toHaveValue('');
     await expect(question(page)).toBeHidden();
     expect(gitIn(dir, 'log', '-1', '--format=%an').trim()).toBe('Ada Edited');
+  });
+
+  test('warns when the author can\'t be read, and Try again brings the line back', async ({ page, instance, monitor }) => {
+    const { id, dir } = await handbook(instance);
+    let refuse = true;
+    await page.route(
+      `**/api/v1/repositories/${id}/commit-author`,
+      route =>
+        refuse
+          ? route.fulfill({ status: 500, json: { code: 'internal', params: {}, requestId: 'r', message: 'x' } })
+          : route.continue()
+    );
+    await readyToCommit(page, `/repositories/${id}`, dir, 'Warned');
+
+    await expect(changesPane(page).getByText('Couldn\'t read your commit author.')).toBeVisible();
+    await expect(changesPane(page).getByText(/^Committing as/)).toBeHidden();
+
+    refuse = false;
+    await changesPane(page).getByRole('button', { name: 'Try again', exact: true }).click();
+
+    await expect(committingAs(page, ADMIN_AUTHOR)).toBeVisible();
+    await expect(changesPane(page).getByText('Couldn\'t read your commit author.')).toBeHidden();
+    drainFailedRequests(monitor, `/api/v1/repositories/${id}/commit-author`);
   });
 
   test('a very long name and email wrap and stay readable at 320 px', async ({ page, instance }) => {

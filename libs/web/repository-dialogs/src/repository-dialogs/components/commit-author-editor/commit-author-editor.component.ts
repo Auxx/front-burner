@@ -15,6 +15,7 @@ import { submit } from '@angular/forms/signals';
 import type { ApiError, CommitAuthor, RepositoryCommitAuthor } from '@front-burner/shared-contracts';
 import {
   ButtonComponent,
+  type ChoiceOption,
   DIALOG_DATA,
   DialogComponent,
   DialogFooterComponent,
@@ -24,7 +25,7 @@ import {
 } from '@front-burner/ui';
 import { PreferencesApi } from '@front-burner/web-api-client';
 import { type ApiErrorText, ApiErrorTextService, toApiError } from '@front-burner/web-core';
-import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 
 import type { CommitAuthorDialogData } from '../../models/commit-author-dialog.model';
@@ -34,6 +35,8 @@ import { CommitAuthorFormComponent } from '../commit-author-form/commit-author-f
 
 /** What **Change** edits (CA-9). */
 type Scope = 'default' | 'repository';
+
+const KEY = 'web-repository-dialogs.CommitAuthorEditorComponent';
 
 let nextId = 0;
 
@@ -82,11 +85,22 @@ export class CommitAuthorEditorComponent implements OnInit {
   private readonly api = inject(PreferencesApi);
   private readonly errorText = inject(ApiErrorTextService);
   private readonly injector = inject(Injector);
+  private readonly transloco = inject(TranslocoService);
 
   protected readonly formId = `dlg-commit-author-editor-${nextId++}`;
   protected readonly model = commitAuthorForm(this.data.current.author);
   protected readonly refusals = new CommitAuthorRefusals(this.model);
-  protected readonly scope = signal<Scope>(this.data.current.source === 'override' ? 'repository' : 'default');
+  protected readonly scope = signal<Scope | undefined>(
+    this.data.current.source === 'override' ? 'repository' : 'default'
+  );
+  protected readonly scopes = computed<readonly ChoiceOption<Scope>[]>(() => {
+    // Re-evaluated when the language changes.
+    this.transloco.activeLang();
+    return [
+      { value: 'default', label: this.transloco.translate(`${KEY}.asDefault`) },
+      { value: 'repository', label: this.transloco.translate(`${KEY}.forRepository`) }
+    ];
+  });
   protected readonly failure = signal<ApiErrorText | null>(null);
   /** Whether the form shows a default that the backend refused to confirm. */
   protected readonly fixingDefault = signal(false);

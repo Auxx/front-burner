@@ -246,6 +246,69 @@ describe('CommitAuthorGate', () => {
     expect(gate.author()).toEqual(work);
   });
 
+  describe('readFailed', () => {
+    async function startFailing(): Promise<void> {
+      api['repositoryCommitAuthor'].mockReturnValueOnce(throwError(() => apiError(500, 'internal')));
+      gate = TestBed.inject(CommitAuthorGate);
+      TestBed.tick();
+      await settleDialog();
+    }
+
+    it('says so when the first read fails', async () => {
+      await startFailing();
+
+      expect(gate.author()).toBeNull();
+      expect(gate.readFailed()).toBe(true);
+    });
+
+    it('goes when a read succeeds, as with Try again', async () => {
+      await startFailing();
+
+      gate.refresh();
+      await settleDialog();
+
+      expect(gate.author()).toEqual(confirmed);
+      expect(gate.readFailed()).toBe(false);
+    });
+
+    it('stays false while the last author is shown, when a later read fails', async () => {
+      start(work);
+      await settleDialog();
+      api['repositoryCommitAuthor'].mockReturnValueOnce(throwError(() => apiError(500, 'internal')));
+
+      gate.refresh();
+      await settleDialog();
+
+      expect(gate.author()).toEqual(work);
+      expect(gate.readFailed()).toBe(false);
+    });
+
+    it('starts again in the next repository', async () => {
+      await startFailing();
+      api['repositoryCommitAuthor'].mockReturnValueOnce(new Subject());
+
+      followed.set(99);
+      TestBed.tick();
+      await settleDialog();
+
+      expect(gate.readFailed()).toBe(false);
+    });
+
+    it('ignores a failure that a newer read has overtaken', async () => {
+      const late = new Subject<RepositoryCommitAuthor>();
+      api['repositoryCommitAuthor'].mockReturnValueOnce(late);
+      gate = TestBed.inject(CommitAuthorGate);
+      TestBed.tick();
+
+      gate.refresh();
+      late.error(apiError(500, 'internal'));
+      await settleDialog();
+
+      expect(gate.readFailed()).toBe(false);
+      expect(gate.author()).toEqual(confirmed);
+    });
+  });
+
   it('change does nothing before an author is known', async () => {
     api['repositoryCommitAuthor'].mockReturnValueOnce(new Subject());
     gate = TestBed.inject(CommitAuthorGate);

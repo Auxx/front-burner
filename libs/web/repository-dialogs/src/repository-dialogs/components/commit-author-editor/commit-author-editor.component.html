@@ -16,13 +16,9 @@
       @if (!fixingDefault()) {
         <ui-segmented-control
           [label]="t('scope')"
-          [options]="[
-            { value: 'default', label: t('asDefault') },
-            { value: 'repository', label: t('forRepository') }
-          ]"
+          [options]="scopes()"
           [disabled]="model().submitting()"
-          [value]="scope()"
-          (valueChange)="scope.set($any($event))"
+          [(value)]="scope"
         />
       }
       @if (dropsOverride()) {
