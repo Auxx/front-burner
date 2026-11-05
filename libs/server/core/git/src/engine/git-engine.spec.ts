@@ -1,4 +1,5 @@
 import { startHttpsTestServer, TEST_CERTIFICATE_FILES } from '@front-burner/server-core-security/testing';
+import { PathRefusedError } from '@front-burner/server-core-storage';
 import { execFileSync } from 'node:child_process';
 import {
   existsSync,
@@ -1096,6 +1097,79 @@ describe('GitEngine', () => {
       expect(git(fresh, 'status', '--porcelain', '--untracked-files=all').trim()).toBe('?? three.md');
       expect(existsSync(join(fresh, 'one.md'))).toBe(false);
       expect(existsSync(join(fresh, 'two.md'))).toBe(false);
+    });
+
+    it('takes a staged file that a folder replaced out of the index, and leaves the folder', async () => {
+      writeFileSync(join(work, 'y.md'), 'y\n');
+      git(work, 'add', 'y.md');
+      rmSync(join(work, 'y.md'));
+      mkdirSync(join(work, 'y.md'));
+      writeFileSync(join(work, 'y.md', 'keep.md'), 'keep\n');
+      writeFileSync(join(work, 'new.md'), 'new\n');
+
+      await engine().discard(work, [ 'y.md', 'new.md' ]);
+
+      expect(readFileSync(join(work, 'y.md', 'keep.md'), 'utf8')).toBe('keep\n');
+      expect(existsSync(join(work, 'new.md'))).toBe(false);
+      expect(statusOf()).toBe('?? y.md/keep.md');
+    });
+
+    it('takes a staged submodule out of the index, and leaves its folder', async () => {
+      mkdirSync(join(work, 'nested'));
+      writeFileSync(join(work, 'nested', 'keep.md'), 'keep\n');
+      const head = git(work, 'rev-parse', 'HEAD').trim();
+      git(work, 'update-index', '--add', '--cacheinfo', `160000,${head},nested`);
+
+      await engine().discard(work, [ 'nested' ]);
+
+      expect(readFileSync(join(work, 'nested', 'keep.md'), 'utf8')).toBe('keep\n');
+      expect(git(work, 'ls-files', '--stage', 'nested').trim()).toBe('');
+    });
+
+    // Only Linux keeps a file name's bytes as they are.
+    it.runIf(process.platform === 'linux')(
+      'refuses a name that is not valid UTF-8, which git cannot be told, before changing anything',
+      async () => {
+        writeFileSync(Buffer.concat([ Buffer.from(`${work}/caf`), Buffer.from([ 0xe9 ]), Buffer.from('.md') ]), 'x\n');
+        writeFileSync(join(work, 'new.md'), 'new\n');
+        const { changes } = await engine().status(work);
+        const mangled = changes.map(change => change.path).filter(path => path.includes('�'));
+        expect(mangled).toHaveLength(1);
+
+        const failure = await engine().discard(work, [ 'new.md', ...mangled ]).catch((error: unknown) => error);
+
+        expect(failure).toBeInstanceOf(PathRefusedError);
+        expect((failure as PathRefusedError).reason).toBe('malformed');
+        expect(existsSync(join(work, 'new.md'))).toBe(true);
+      }
+    );
+
+    it('says when it starts to change something', async () => {
+      writeFileSync(join(work, 'a.md'), 'changed\n');
+      const changing = vi.fn();
+
+      await engine().discard(work, [ 'a.md' ], changing);
+
+      expect(changing).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not say so when no path is a change', async () => {
+      const changing = vi.fn();
+
+      await engine().discard(work, [ 'b.md' ], changing);
+
+      expect(changing).not.toHaveBeenCalled();
+    });
+
+    it('does not say so when it is blocked', async () => {
+      rmSync(join(work, 'b.md'));
+      mkdirSync(join(work, 'b.md'));
+      writeFileSync(join(work, 'b.md', 'keep.md'), 'keep\n');
+      const changing = vi.fn();
+
+      await failureOf(engine().discard(work, [ 'b.md' ], changing));
+
+      expect(changing).not.toHaveBeenCalled();
     });
 
     describe('when a new file or folder stands where a deleted file comes back', () => {

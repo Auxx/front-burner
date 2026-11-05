@@ -30,13 +30,13 @@ export interface ResolveOptions {
 const typeOf = (stats: Stats): EntryType =>
   stats.isSymbolicLink() ? 'symlink' : stats.isDirectory() ? 'folder' : stats.isFile() ? 'file' : 'other';
 
-/** The entry's stats without following a link, or `undefined` when it is missing. */
+/** The entry's stats without following a link, or `undefined` when it is missing or its name is too long to exist. */
 export async function lstatOrMissing(path: string): Promise<Stats | undefined> {
   try {
     return await lstat(path);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
+    if (code === 'ENOENT' || code === 'ENAMETOOLONG') {
       return undefined;
     }
     throw error;

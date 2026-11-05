@@ -1,4 +1,4 @@
-import { lstatOrMissing, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
+import { inBatches, lstatOrMissing, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
 import type { CloneMode } from '@front-burner/shared-contracts';
 import { ParsedRemote, parseRemoteUrl } from '@front-burner/shared-util';
 import { BeforeApplicationShutdown, Inject, Injectable, Logger } from '@nestjs/common';
@@ -14,8 +14,11 @@ import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 import { classifyGitFailure, GitOperationError } from './git-errors';
 import { parseStatus, WorkingCopyStatus } from './git-status';
 
-/** How many added files are deleted at once: enough to hide the file system's latency, few enough for its handles. */
-const DISCARD_DELETES_AT_ONCE = 32;
+/** What `git status` shows for a byte of a name that is not valid UTF-8. */
+const UNDECODABLE = '\uFFFD';
+
+/** Paths for a git command that reads NUL-terminated names from its standard input. */
+const nulTerminated = (paths: readonly string[]) => paths.map(path => `${path}\0`).join('');
 
 /** AR-42. */
 const ACCESS_CHECK_TIMEOUT_MS = 30_000;
@@ -398,7 +401,7 @@ export class GitEngine implements BeforeApplicationShutdown {
       await this.runChecked(
         workingCopy,
         [ '--literal-pathspecs', 'add', '-A', '--pathspec-from-file=-', '--pathspec-file-nul' ],
-        { stdin: paths.map(path => `${path}\0`).join(''), timeoutMs: this.options.gitTimeoutMs }
+        { stdin: nulTerminated(paths), timeoutMs: this.options.gitTimeoutMs }
       );
       const { name, email } = request.author;
       await this.runChecked(
@@ -431,28 +434,35 @@ export class GitEngine implements BeforeApplicationShutdown {
    * Discards the changes to the listed paths (GA-23): a modified or deleted file
    * comes back from the last commit, and an added one is deleted, as a symbolic
    * link and not what it points to. A path that is not a change is skipped, and
-   * empty folders stay. The caller has checked the paths and holds the
-   * working-tree lock, so that the states cannot change meanwhile.
+   * folders stay. The caller has checked the paths and holds the working-tree
+   * lock, so that the states cannot change meanwhile. `changing` is called once,
+   * just before the first change, so that a caller knows what a failure left.
    *
    * @throws GitOperationError `discard-blocked`, before anything has changed,
    *   when restoring a deleted file would replace a file or folder that is not
    *   being discarded: git would remove it without asking.
+   * @throws PathRefusedError `malformed`, before anything has changed, for a
+   *   name that is not valid UTF-8: status cannot say it, so git cannot be told it.
    */
-  async discard(workingCopy: string, paths: string[]): Promise<void> {
+  async discard(workingCopy: string, paths: string[], changing?: () => void): Promise<void> {
     const { changes } = await this.status(workingCopy);
     const listed = new Set(paths);
     const chosen = changes.filter(change => listed.has(change.path));
+    if (chosen.length === 0) {
+      return;
+    }
+    if (chosen.some(change => change.path.includes(UNDECODABLE))) {
+      throw new PathRefusedError('malformed');
+    }
     const added = chosen.filter(change => change.state === 'added').map(change => change.path);
     const tracked = chosen.filter(change => change.state !== 'added').map(change => change.path);
     const deleted = chosen.filter(change => change.state === 'deleted').map(change => change.path);
     await this.assertNothingInTheWay(workingCopy, deleted, new Set(added));
-    const onStdin = (list: string[]) => ({
-      stdin: list.map(path => `${path}\0`).join(''),
-      timeoutMs: this.options.gitTimeoutMs
-    });
+    changing?.();
+    const onStdin = (list: string[]) => ({ stdin: nulTerminated(list), timeoutMs: this.options.gitTimeoutMs });
     try {
       if (added.length > 0) {
-        await this.deleteAdded(workingCopy, added);
+        await inBatches(added, path => this.deleteAdded(workingCopy, path));
         // Takes exact names: `git rm --cached docs` would also mean the files in a folder `docs`.
         await this.runChecked(workingCopy, [ 'update-index', '--force-remove', '-z', '--stdin' ], onStdin(added));
       }
@@ -473,29 +483,27 @@ export class GitEngine implements BeforeApplicationShutdown {
         );
       }
     } catch (error) {
-      if (error instanceof GitOperationError && error.code === 'timeout') {
-        // A git killed at its timeout cannot remove its lock, and the caller holds the working-tree lock.
-        await rm(join(workingCopy, '.git', 'index.lock'), { force: true });
-      }
+      await this.removeStaleIndexLock(workingCopy, error);
       throw error;
     }
   }
 
-  /** Deletes added files, as the entries they are; one that is already gone is fine. */
-  private async deleteAdded(workingCopy: string, paths: string[]): Promise<void> {
-    const deleteOne = async (path: string) => {
-      try {
-        const { absolute } = await resolveInWorkingCopy(workingCopy, path, { symlinkLeaf: true });
+  /**
+   * Deletes an added file, as the entry it is; one that is already gone is fine.
+   * A folder stays: a staged submodule's, or one that replaced a staged file, whose
+   * files are changes of their own.
+   */
+  private async deleteAdded(workingCopy: string, path: string): Promise<void> {
+    try {
+      const { absolute, type } = await resolveInWorkingCopy(workingCopy, path, { symlinkLeaf: true });
+      if (type !== 'folder') {
         await unlink(absolute);
-      } catch (error) {
-        const missing = error instanceof PathRefusedError && error.reason === 'not-found';
-        if (!missing && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw error;
-        }
       }
-    };
-    for (let start = 0; start < paths.length; start += DISCARD_DELETES_AT_ONCE) {
-      await Promise.all(paths.slice(start, start + DISCARD_DELETES_AT_ONCE).map(deleteOne));
+    } catch (error) {
+      const missing = error instanceof PathRefusedError && error.reason === 'not-found';
+      if (!missing && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
     }
   }
 
@@ -503,38 +511,43 @@ export class GitEngine implements BeforeApplicationShutdown {
    * Refuses when a deleted file cannot come back without replacing something
    * other than the added files being discarded: a file where a folder on the way
    * to it must be, or a folder holding other files where it must be. `git
-   * restore` would remove them without asking, and status lists them as changes
-   * of their own, which the user may not have selected.
+   * restore` would remove them without asking, and they may be changes the user
+   * did not select, or ignored files. Each folder on the way is looked at once.
    */
   private async assertNothingInTheWay(workingCopy: string, deleted: string[], added: Set<string>): Promise<void> {
-    const blocked = (path: string) => new GitOperationError('discard-blocked', `Something stands where ${path} goes.`);
-    for (const path of deleted) {
+    const entries = new Map<string, ReturnType<typeof lstatOrMissing>>();
+    const entryAt = (path: string) => {
+      let entry = entries.get(path);
+      if (entry === undefined) {
+        entry = lstatOrMissing(join(workingCopy, path));
+        entries.set(path, entry);
+      }
+      return entry;
+    };
+    const holdsOthers = async (folder: string) => {
+      const inside = await readdir(join(workingCopy, folder), { recursive: true, withFileTypes: true });
+      return inside.some(entry =>
+        !entry.isDirectory()
+        && !added.has(relative(workingCopy, join(entry.parentPath, entry.name)).split(sep).join('/'))
+      );
+    };
+    const isBlocked = async (path: string) => {
       const segments = path.split('/');
-      let parentsAreFolders = true;
-      for (let depth = 1; depth < segments.length && parentsAreFolders; depth++) {
+      for (let depth = 1; depth < segments.length; depth++) {
         const parent = segments.slice(0, depth).join('/');
-        const entry = await lstatOrMissing(join(workingCopy, parent));
-        if (entry !== undefined && !entry.isDirectory() && !added.has(parent)) {
-          throw blocked(path);
+        const entry = await entryAt(parent);
+        if (entry?.isDirectory() !== true) {
+          return entry !== undefined && !added.has(parent);
         }
-        parentsAreFolders = entry?.isDirectory() === true;
       }
-      if (!parentsAreFolders) {
-        continue;
+      const leaf = await lstatOrMissing(join(workingCopy, path));
+      return leaf?.isDirectory() === true && await holdsOthers(path);
+    };
+    await inBatches(deleted, async path => {
+      if (await isBlocked(path)) {
+        throw new GitOperationError('discard-blocked', `Something stands where ${path} goes.`);
       }
-      const leaf = join(workingCopy, path);
-      if ((await lstatOrMissing(leaf))?.isDirectory() !== true) {
-        continue;
-      }
-      const entries = await readdir(leaf, { recursive: true, withFileTypes: true });
-      const others = entries.filter(entry => {
-        const inside = relative(workingCopy, join(entry.parentPath, entry.name)).split(sep).join('/');
-        return !entry.isDirectory() && !added.has(inside);
-      });
-      if (others.length > 0) {
-        throw blocked(path);
-      }
-    }
+    });
   }
 
   /**
@@ -718,9 +731,7 @@ export class GitEngine implements BeforeApplicationShutdown {
 
   /**
    * Leaves the working copy as it was before a failed commit (GA-43): nothing
-   * staged, and HEAD naming what it named. A git killed at its timeout cannot
-   * remove its `index.lock`; the caller holds the working-tree lock, so no other
-   * command of ours is using it, and it is removed.
+   * staged, and HEAD naming what it named.
    */
   private async undoCommit(
     workingCopy: string,
@@ -729,15 +740,23 @@ export class GitEngine implements BeforeApplicationShutdown {
     failure: unknown
   ): Promise<void> {
     try {
-      if (failure instanceof GitOperationError && failure.code === 'timeout') {
-        await rm(join(workingCopy, '.git', 'index.lock'), { force: true });
-      }
+      await this.removeStaleIndexLock(workingCopy, failure);
       await this.runChecked(workingCopy, emptyIndex);
       if (unbornHead !== undefined) {
         await this.runChecked(workingCopy, [ 'symbolic-ref', 'HEAD', unbornHead ]);
       }
     } catch (error) {
       this.logger.warn(`Could not undo a failed commit in ${workingCopy}: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * A git killed at its timeout cannot remove its `index.lock`; the caller holds
+   * the working-tree lock, so no other command of ours is using it, and it is removed.
+   */
+  private async removeStaleIndexLock(workingCopy: string, failure: unknown): Promise<void> {
+    if (failure instanceof GitOperationError && failure.code === 'timeout') {
+      await rm(join(workingCopy, '.git', 'index.lock'), { force: true });
     }
   }
 

@@ -2617,7 +2617,7 @@
         "properties": {
           "paths": {
             "minItems": 1,
-            "maxItems": 50000,
+            "maxItems": 10000,
             "type": "array",
             "items": {
               "type": "string",

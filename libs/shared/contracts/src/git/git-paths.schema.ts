@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
-/** Enough for **Discard all** at the 20,000 changes that **Changes** is built for, and more. _(Plan 50's call.)_ */
-export const GIT_PATHS_MAX = 50_000;
+/**
+ * As many paths as fit, at about 190 characters each, in the server's 2 MB limit
+ * on a request body. A client sends a longer list in several requests.
+ */
+export const GIT_PATHS_MAX = 10_000;
 /** As `GitDiffQuerySchema`. */
 export const GIT_PATH_MAX_LENGTH = 4096;
 

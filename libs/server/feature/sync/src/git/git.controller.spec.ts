@@ -3,14 +3,23 @@ import { GitEngine, GitOptions, GitRunner, WorkingTreeLock } from '@front-burner
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
-import type { PushEvent, RepositoryCommitAuthor } from '@front-burner/shared-contracts';
+import type { GitStatus, PushEvent, RepositoryCommitAuthor } from '@front-burner/shared-contracts';
 import { INestApplication } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import type { NextFunction, Request, Response } from 'express';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
@@ -305,6 +314,102 @@ describe('GitController', () => {
         { type: 'files.changed', repositoryId: READY, folders: 'all' },
         { type: 'git.changed', repositoryId: READY }
       ]);
+    });
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')(
+      'publishes the events also when it fails after changing files',
+      async () => {
+        writeFileSync(join(root, 'notes.md'), 'changed\n');
+        writeFileSync(join(root, 'new.md'), 'new\n');
+        // Another git at work: the added file goes, then the index cannot be written.
+        writeFileSync(join(root, '.git', 'index.lock'), '');
+
+        await discard({ paths: [ 'notes.md', 'new.md' ] }).expect(500);
+
+        expect(existsSync(join(root, 'new.md'))).toBe(false);
+        expect(published).toEqual([
+          { type: 'files.changed', repositoryId: READY, folders: 'all' },
+          { type: 'git.changed', repositoryId: READY }
+        ]);
+      }
+    );
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('publishes nothing when no path was a change', async () => {
+      await discard({ paths: [ 'notes.md' ] }).expect(204);
+
+      expect(published).toEqual([]);
+    });
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('skips a name too long to exist', async () => {
+      await discard({ paths: [ 'a'.repeat(300) ] }).expect(204);
+    });
+
+    // Only Linux keeps a file name's bytes as they are.
+    it.runIf(process.platform === 'linux')('refuses a name that is not valid UTF-8', async () => {
+      writeFileSync(Buffer.concat([ Buffer.from(`${root}/caf`), Buffer.from([ 0xe9 ]), Buffer.from('.md') ]), 'x\n');
+      const { body: listed } = await status().expect(200);
+      const mangled = (listed as GitStatus).changes[0].path;
+
+      const { body } = await discard({ paths: [ mangled ] }).expect(400);
+
+      expect(body).toMatchObject({ code: 'path-refused', params: { reason: 'malformed' } });
+    });
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')(
+      'restores a file whose folder a new symbolic link replaced, when the link goes too',
+      async () => {
+        mkdirSync(join(root, 'docs'));
+        writeFileSync(join(root, 'docs', 'a.md'), 'a\n');
+        git(root, 'add', 'docs');
+        git(root, 'commit', '-q', '-m', 'docs');
+        rmSync(join(root, 'docs'), { recursive: true });
+        const outside = mkdtempSync(join(tmpdir(), 'fb-git-outside-'));
+        try {
+          writeFileSync(join(outside, 'a.md'), 'outside\n');
+          symlinkSync(outside, join(root, 'docs'));
+
+          await discard({ paths: [ 'docs', 'docs/a.md' ] }).expect(204);
+
+          expect(readFileSync(join(root, 'docs', 'a.md'), 'utf8')).toBe('a\n');
+          expect(readFileSync(join(outside, 'a.md'), 'utf8')).toBe('outside\n');
+        } finally {
+          rmSync(outside, { recursive: true, force: true });
+        }
+      }
+    );
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('touches nothing behind a listed symbolic link', async () => {
+      const outside = mkdtempSync(join(tmpdir(), 'fb-git-outside-'));
+      try {
+        writeFileSync(join(outside, 'secret.md'), 'secret\n');
+        symlinkSync(outside, join(root, 'linked'));
+
+        await discard({ paths: [ 'linked', 'linked/secret.md' ] }).expect(204);
+
+        expect(lstatSync(join(root, 'linked'), { throwIfNoEntry: false })).toBeUndefined();
+        expect(readFileSync(join(outside, 'secret.md'), 'utf8')).toBe('secret\n');
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+    });
+
+    it('still refuses a path through a symbolic link that only shares a folder with a listed path', async () => {
+      const outside = mkdtempSync(join(tmpdir(), 'fb-git-outside-'));
+      try {
+        writeFileSync(join(outside, 'secret.md'), 'secret\n');
+        symlinkSync(outside, join(root, 'linked'));
+
+        const { body } = await discard({ paths: [ 'other', 'linked/secret.md' ] }).expect(400);
+
+        expect(body).toMatchObject({ code: 'path-refused', params: { reason: 'symlink' } });
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
     });
 
     it('refuses an empty list', async () => {

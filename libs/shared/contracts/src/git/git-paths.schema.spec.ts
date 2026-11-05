@@ -12,6 +12,12 @@ describe('GitPathsSchema', () => {
     expect(accepts(Array.from({ length: GIT_PATHS_MAX + 1 }, () => 'a.md'))).toBe(false);
   });
 
+  it('allows a list of ordinary paths that fits in the server\'s 2 MB limit on a request body', () => {
+    const body = JSON.stringify({ paths: Array.from({ length: GIT_PATHS_MAX }, () => 'a'.repeat(190)) });
+
+    expect(body.length).toBeLessThan(2 * 1024 * 1024);
+  });
+
   it('refuses an empty list', () => {
     expect(accepts([])).toBe(false);
   });
