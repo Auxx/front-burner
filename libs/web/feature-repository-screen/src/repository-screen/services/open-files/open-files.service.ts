@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { computed, DestroyRef, inject, Injectable, type Signal, signal, type WritableSignal } from '@angular/core';
 import type { ApiError, FileContent, FileState } from '@front-burner/shared-contracts';
 import { injectNarrowViewport } from '@front-burner/ui';
@@ -314,6 +315,48 @@ export class OpenFilesService {
     return (file.gone() || file.changed() !== null) && file.saver.unsaved()
       ? NOT_SAVED
       : file.saver.status();
+  }
+
+  /** The paths of the repository's files with edits the backend has not confirmed. */
+  unsavedPaths(repositoryId: number): string[] {
+    this.all();
+    return [ ...this.files.get(repositoryId)?.values() ?? [] ]
+      .filter(file => file.saver.unsaved())
+      .map(file => file.path());
+  }
+
+  /**
+   * Why the newest edits of the first of `paths` that has any did not reach the
+   * disk, after a flush: its save failed, it waits for the user, or it is held,
+   * as during a rename (GA-20). A file that is only being typed in does not count,
+   * as its edits came after the flush.
+   */
+  notSaved(repositoryId: number, paths: readonly string[]): { error: ApiError; retry: boolean; } | null {
+    this.all();
+    const named = (code: string, path: string): ApiError => ({ code, params: { path }, requestId: '', message: code });
+    for (const path of paths) {
+      const file = this.files.get(repositoryId)?.get(path);
+      if (file === undefined) {
+        continue;
+      }
+      if (file.gone() && file.saver.unsaved()) {
+        return { error: named('file-gone', path), retry: false };
+      }
+      if (file.changed() !== null && file.saver.unsaved()) {
+        return { error: named('changed-on-disk', path), retry: false };
+      }
+      if (file.saver.held()) {
+        return { error: named('file-held', path), retry: true };
+      }
+      const status = file.saver.status();
+      if (status.kind === 'refused') {
+        return { error: status.error, retry: false };
+      }
+      if (status.kind === 'offline') {
+        return { error: toApiError(new HttpErrorResponse({ status: 0 })), retry: true };
+      }
+    }
+    return null;
   }
 
   /**

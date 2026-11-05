@@ -1,0 +1,16 @@
+:host {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-2);
+  border-block-start: 1px solid var(--ui-border-default);
+}
+
+.reference {
+  display: block;
+}
+
+.commit {
+  align-self: stretch;
+}

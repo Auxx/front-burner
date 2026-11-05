@@ -1,0 +1,32 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.CommitFormComponent'">
+  @if (commit.error(); as error) {
+    <ui-inline-banner status="danger" announce>
+      {{ error.text }}
+      @if (error.reference) {
+        <span class="reference">{{ t('reference') }} <code>{{ error.reference }}</code></span>
+      }
+      @if (error.retry) {
+        <div uiBannerActions>
+          <button uiButton size="small" class="retry" (click)="retry()">{{ t('retry') }}</button>
+        </div>
+      }
+    </ui-inline-banner>
+  }
+  <ui-field [label]="t('message')" [hint]="longSubject() ? t('longSubject', { length: subjectHintLength }) : undefined">
+    <textarea uiTextarea rows="3" [readOnly]="commit.busy()" [value]="commit.message()" (input)="typed($event)"></textarea>
+  </ui-field>
+  @let reason = blocked();
+  <button
+    #commitButton
+    uiButton
+    uiTooltipLongPress
+    class="commit"
+    variant="primary"
+    [busy]="commit.busy()"
+    [unavailable]="reason !== null"
+    [uiTooltip]="reason ? t(reason, { count: maxPaths, length: maxMessageLength }) : ''"
+    (click)="submit()"
+  >
+    {{ t(count() === 1 ? 'commitOne' : 'commitMany', { count: count() }) }}
+  </button>
+</ng-container>

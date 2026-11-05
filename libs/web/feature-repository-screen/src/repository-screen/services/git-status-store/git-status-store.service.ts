@@ -45,6 +45,8 @@ export class GitStatusStore {
   private readonly readFailed = signal(false);
   private readonly repositoryId = signal<number | null>(null);
 
+  /** The repository followed, which changes together with `status`. */
+  readonly followed = this.repositoryId.asReadonly();
   /** The last status read; `null` until one has been read for this repository. */
   readonly status = this.current.asReadonly();
   /** Whether the latest read failed. */

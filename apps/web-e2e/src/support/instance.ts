@@ -179,6 +179,26 @@ export async function logIn(page: Page, email = TEST_ADMIN.email): Promise<void>
   await page.waitForURL(url => url.pathname !== '/login');
 }
 
+/**
+ * Confirms the commit author of `TEST_ADMIN` through the API, as someone who has
+ * already answered the question before their first commit (CA-12).
+ */
+export async function confirmCommitAuthor(url: string): Promise<void> {
+  const login = await fetch(`${url}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: TEST_ADMIN.email, password: TEST_ADMIN.password })
+  });
+  const { authToken } = await login.json() as { authToken: string; };
+  const confirm = await fetch(`${url}/api/v1/preferences/commit-author/confirm`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${authToken}` }
+  });
+  if (!confirm.ok) {
+    throw new Error(`Confirming the commit author answered ${confirm.status}: ${await confirm.text()}`);
+  }
+}
+
 export interface SeedUser {
   email: string;
   displayName?: string;

@@ -398,6 +398,21 @@ describe('FileSaver', () => {
     await expect(saver.settled()).resolves.toBe(false);
   });
 
+  it('says when it is held with content waiting, which a flush can not send', async () => {
+    const release = saver.hold();
+    expect(saver.held()).toBe(false);
+
+    type('edited');
+    await saver.flush();
+    expect(sent).toHaveLength(0);
+    expect(saver.held()).toBe(true);
+
+    release();
+    await settle();
+    expect(sent).toHaveLength(1);
+    expect(saver.held()).toBe(false);
+  });
+
   it('after a rebase without content, sends the next edit whatever it holds', async () => {
     saver.rebase(null, 'h9');
     type('start');

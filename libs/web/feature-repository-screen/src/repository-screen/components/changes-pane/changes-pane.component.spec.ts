@@ -1,10 +1,13 @@
 import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import type { GitChange, GitStatus } from '@front-burner/shared-contracts';
+import type { CurrentUser, GitChange, GitStatus } from '@front-burner/shared-contracts';
+import { CurrentUserService } from '@front-burner/web-core';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-layout';
+import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
+import { CommitService } from '../../services/commit/commit.service';
 import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
 import { ChangesPaneComponent } from './changes-pane.component';
 
@@ -44,9 +47,24 @@ describe('ChangesPaneComponent', () => {
     status = signal<GitStatus | null>(statusOf(THREE));
     failed = signal(false);
     refresh = vi.fn(() => Promise.resolve());
+    localStorage.clear();
     TestBed.configureTestingModule({
       imports: [ ChangesPaneComponent, translocoTesting() ],
-      providers: [ { provide: GitStatusStore, useValue: { status, failed, refresh } } ]
+      providers: [
+        CommitTicksService,
+        {
+          provide: CommitService,
+          useValue: {
+            paths: signal([]),
+            message: signal(''),
+            busy: signal(false),
+            error: signal(null),
+            commit: vi.fn()
+          }
+        },
+        { provide: CurrentUserService, useValue: { user: signal({ id: 4 } as CurrentUser) } },
+        { provide: GitStatusStore, useValue: { status, failed, refresh, followed: signal(1) } }
+      ]
     });
   });
 
@@ -117,6 +135,60 @@ describe('ChangesPaneComponent', () => {
 
     (host().querySelector('ui-inline-banner button') as HTMLButtonElement).click();
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('has the commit form below the list and without changes, but not before the first status', async () => {
+    await render();
+    expect(host().querySelector('[role="list"] ~ rs-commit-form')).not.toBeNull();
+
+    status.set(statusOf([]));
+    await settle(fixture);
+    expect(host().querySelector('rs-commit-form')).not.toBeNull();
+
+    status.set(null);
+    await settle(fixture);
+    expect(host().querySelector('rs-commit-form')).toBeNull();
+  });
+
+  describe('ticking', () => {
+    const all = () => host().querySelector<HTMLInputElement>('.all input');
+    const boxes = () => rows().map(row => row.querySelector('input') as HTMLInputElement);
+
+    afterEach(() => localStorage.clear());
+
+    it('has every entry ticked, and the top checkbox with them', async () => {
+      await render();
+
+      expect(boxes().map(box => box.checked)).toEqual([ true, true, true ]);
+      expect(all()?.checked).toBe(true);
+      expect(all()?.getAttribute('aria-checked')).toBeNull();
+      expect(boxes()[1].getAttribute('aria-label')).toBe(`web-feature-repository-screen.ChangeEntryComponent.tick`);
+    });
+
+    it('shows the top checkbox as mixed when only some are ticked', async () => {
+      await render();
+
+      boxes()[1].click();
+      await settle(fixture);
+
+      expect(all()?.indeterminate).toBe(true);
+      expect(all()?.getAttribute('aria-checked')).toBe('mixed');
+      expect(TestBed.inject(CommitTicksService).ticked()).toEqual([ 'README.md', 'logo.png' ]);
+    });
+
+    it('clears and ticks all with the top checkbox', async () => {
+      await render();
+
+      all()?.click();
+      await settle(fixture);
+      expect(boxes().map(box => box.checked)).toEqual([ false, false, false ]);
+      expect(all()?.checked).toBe(false);
+      expect(all()?.indeterminate).toBe(false);
+
+      all()?.click();
+      await settle(fixture);
+      expect(boxes().map(box => box.checked)).toEqual([ true, true, true ]);
+    });
   });
 
   describe('discarding', () => {
