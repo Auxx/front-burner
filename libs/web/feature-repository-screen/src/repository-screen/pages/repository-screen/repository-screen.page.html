@@ -83,12 +83,22 @@
             (retry)="retry($event)"
             (action)="runAction($event.action, $event.path)"
           />
-          <rs-changes-pane [hidden]="!changesShown" [selected]="selectedPath()" (selectPath)="openEntryAt($event)" />
+          <rs-changes-pane [hidden]="!changesShown" [selected]="selectedChangePath()" (selectPath)="openDiff($event)" />
         </ui-island>
       }
       @if (state === 'ready') {
         <ui-island [scrollable]="false">
+          @if (diffChange(); as change) {
+            <rs-diff-view
+              [repositoryId]="session.repository()!.id"
+              [path]="change.path"
+              [state]="change.state"
+              [waiting]="diffWaiting()"
+              (openInEditor)="openEntryAt($event)"
+            />
+          }
           <rs-editor-area
+            [hidden]="diffChange() !== null"
             [path]="openPath()"
             [entry]="openEntry()"
             [file]="openFiles.current()"

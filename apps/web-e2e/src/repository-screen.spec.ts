@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -158,6 +159,15 @@ async function pointAt(target: Locator, isMobile: boolean): Promise<void> {
 
 function fitsWidth(page: Page): Promise<boolean> {
   return page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+}
+
+const diffScroller = (page: Page) => page.locator('rs-diff-view .scroller');
+const diffLines = (page: Page) => page.locator('rs-diff-view .lines');
+
+/** Selects an entry of **Changes**, to show its diff (GA-14). */
+async function selectChange(page: Page, name: RegExp): Promise<void> {
+  await showChanges(page);
+  await changesPane(page).getByRole('button', { name }).click();
 }
 
 /** Shows **Changes**: beside the editor on wide screens, and a drawer on phones (GA-10). */
@@ -993,27 +1003,143 @@ test.describe('repository screen, kept up to date', () => {
     }
   });
 
-  test('opens a selected change, and says a deleted one is gone', async ({ page, instance, isMobile, monitor }) => {
+  test('AC-GIT-002.3: shows the diff of a selected change, and Open in editor opens the file', async ({ page, instance, isMobile }) => {
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
-    const dir = workingCopyOf(instance.dataDir, handbook);
-    writeFileSync(join(dir, 'docs/guide.md'), '# Changed\n');
-    rmSync(join(dir, '2-setup.md'));
+    writeFileSync(join(workingCopyOf(instance.dataDir, handbook), 'docs/guide.md'), '# Manual\n');
     await openScreen(page, `/repositories/${handbook}/files/README.md`);
     await expect(editorOf(page, 'README.md')).toBeVisible();
-    await showChanges(page);
 
-    await changesPane(page).getByRole('button', { name: /^guide\.md/ }).click();
-    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/guide.md$`));
-    await expect(editorOf(page, 'guide.md')).toBeVisible();
+    await selectChange(page, /^guide\.md/);
+
+    await expect(diffLines(page).locator('mark')).toHaveText([ 'Guide', 'Manual' ]);
+    // The URL keeps naming the open file.
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/README.md$`));
     if (isMobile) {
       await expect(changesPane(page)).toBeHidden();
     }
+    expect((await axe(page, isMobile).analyze()).violations).toEqual([]);
 
-    await showChanges(page);
-    await changesPane(page).getByRole('button', { name: /^2-setup\.md/ }).click();
-    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/2-setup.md$`));
-    await expect(editor(page).getByText('2-setup.md')).toBeVisible();
-    drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/file`);
+    await page.getByRole('button', { name: 'Open in editor' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/guide.md$`));
+    await expect(editorOf(page, 'guide.md')).toBeVisible();
+    await expect(diffLines(page)).toHaveCount(0);
+  });
+
+  test('shows the open file again, as it was, on Open in editor of its own diff', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    writeFileSync(join(workingCopyOf(instance.dataDir, handbook), 'README.md'), '# Changed\n');
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    await expect(editorOf(page, 'README.md')).toBeVisible();
+
+    await selectChange(page, /^README\.md/);
+    await expect(diffLines(page).locator('mark')).toHaveText([ 'Handbook', 'Changed' ]);
+    await expect(editorOf(page, 'README.md')).toBeHidden();
+
+    await page.getByRole('button', { name: 'Open in editor' }).click();
+
+    await expect(editorOf(page, 'README.md')).toBeVisible();
+    await expect(editorOf(page, 'README.md')).toContainText('# Changed');
+  });
+
+  test('AC-GIT-002.3: shows Binary file changed for a changed image, without Open in editor', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    writeFileSync(join(workingCopyOf(instance.dataDir, handbook), 'logo.png'), Buffer.alloc(2048));
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    await expect(editorOf(page, 'README.md')).toBeVisible();
+
+    await selectChange(page, /^logo\.png/);
+
+    await expect(editor(page).getByText('Binary file changed')).toBeVisible();
+    await expect(editor(page).getByText(/Old size: \d+ B\. New size: 2 KB\./)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open in editor' })).toHaveCount(0);
+  });
+
+  test('AC-GIT-002.22: says a diff is too large, or that only the line endings changed', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    writeFileSync(join(dir, 'big.md'), 'a line of some length\n'.repeat(60_000));
+    writeFileSync(join(dir, 'README.md'), '# Handbook\r\n');
+    await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
+    await expect(editorOf(page, 'guide.md')).toBeVisible();
+
+    await selectChange(page, /^big\.md/);
+    await expect(editor(page).getByText('This diff is too large to show')).toBeVisible();
+
+    await selectChange(page, /^README\.md/);
+    await expect(editor(page).getByText('Only the line endings changed')).toBeVisible();
+    await expect(diffLines(page).locator('mark')).toHaveText('␍');
+  });
+
+  test('shows a deleted file\'s lines as removed, without Open in editor', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    rmSync(join(workingCopyOf(instance.dataDir, handbook), '2-setup.md'));
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    await expect(editorOf(page, 'README.md')).toBeVisible();
+
+    await selectChange(page, /^2-setup\.md/);
+
+    await expect(diffLines(page)).toContainText('# Setup');
+    await expect(diffLines(page).locator('.row.removed')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Open in editor' })).toHaveCount(0);
+  });
+
+  test('says a new empty file is empty, and shows a long diff in batches', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    writeFileSync(join(dir, 'empty.md'), '');
+    writeFileSync(join(dir, 'long.md'), 'row\n'.repeat(2500));
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    await expect(editorOf(page, 'README.md')).toBeVisible();
+
+    await selectChange(page, /^empty\.md/);
+    await expect(editor(page).getByText('This file is empty.')).toBeVisible();
+
+    await selectChange(page, /^long\.md/);
+    await expect(diffLines(page).locator('.row')).toHaveCount(2000);
+    await expect(editor(page).getByText('Showing 2000 of 2500 rows')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Show 500 more rows' }).click();
+
+    await expect(diffLines(page).locator('.row')).toHaveCount(2500);
+    await expect(page.getByRole('button', { name: /more rows/ })).toHaveCount(0);
+  });
+
+  test('opens a fold in place, and keeps a long line inside the diff at 320 px', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const lines = Array.from({ length: 48 }, (_, index) => `line ${index + 1}`);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    writeFileSync(join(dir, 'README.md'), `# Handbook\n${lines.join('\n')}\n`);
+    execFileSync('git', [ 'commit', '-qam', 'longer' ], {
+      cwd: dir,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'A',
+        GIT_AUTHOR_EMAIL: 'a@example.com',
+        GIT_COMMITTER_NAME: 'A',
+        GIT_COMMITTER_EMAIL: 'a@example.com'
+      }
+    });
+    writeFileSync(join(dir, 'README.md'), `# Handbook ${'long '.repeat(400)}\n${lines.join('\n')}\n`);
+    await page.setViewportSize({ width: 320, height: 640 });
+    await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
+    await expect(editorOf(page, 'guide.md')).toBeVisible();
+
+    await selectChange(page, /^README\.md/);
+
+    await expect(diffLines(page).getByText('line 3', { exact: true })).toBeVisible();
+    await expect(diffLines(page).getByText('line 20', { exact: true })).toHaveCount(0);
+    const widths = await page.evaluate(() => ({
+      page: document.documentElement.scrollWidth,
+      view: window.innerWidth
+    }));
+    expect(widths.page).toBeLessThanOrEqual(widths.view);
+    await expect(diffScroller(page)).toHaveJSProperty('tabIndex', 0);
+    expect(await diffScroller(page).evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+
+    await page.getByRole('button', { name: 'Show 42 more lines' }).click();
+
+    await expect(diffLines(page).getByText('line 20', { exact: true })).toBeVisible();
   });
 
   test('keeps each tool window\'s scroll position when switching', async ({ page, instance }) => {

@@ -1,0 +1,71 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.DiffViewComponent'">
+  <div class="head">
+    <p class="path">{{ path() }}</p>
+    @if (canOpen()) {
+      <button uiButton size="small" (click)="openInEditor.emit(path())">{{ t('openInEditor') }}</button>
+    }
+  </div>
+  @if (failed()) {
+    <ui-inline-banner class="message" status="danger" announce>
+      {{ t('failed') }}
+      <div uiBannerActions>
+        <button uiButton size="small" (click)="retry()">{{ t('retry') }}</button>
+      </div>
+    </ui-inline-banner>
+  }
+  @if (diff(); as diff) {
+    @switch (diff.kind) {
+      @case ('binary') {
+        @let sizes = binarySizes();
+        <p class="note">
+          {{ t('binary') }}
+          <span class="sizes">{{ t('binarySizes', { old: sizes?.old ?? t('noFile'), new: sizes?.new ?? t('noFile') }) }}</span>
+        </p>
+      }
+      @case ('too-large') {
+        <p class="note">{{ t('tooLarge') }}</p>
+      }
+      @case ('text') {
+        @if (diff.lines.length === 0) {
+          <p class="note">{{ t(noLinesMessage()) }}</p>
+        } @else {
+          @if (diff.lineEndingsOnly) {
+            <p class="line-endings">{{ t('lineEndingsOnly') }}</p>
+          }
+          <div #scroller class="scroller" tabindex="0" role="region" [attr.aria-label]="t('label')">
+            <div class="lines">
+              @for (row of rows(); track $index) {
+                @if (row.kind === 'line') {
+                  <div class="row" [class.added]="row.line.type === 'added'" [class.removed]="row.line.type === 'removed'">
+                    <span class="old">{{ row.line.oldLine }}</span>
+                    <span class="new">{{ row.line.newLine }}</span>
+                    <span class="sign">{{ row.line.type === 'added' ? '+' : row.line.type === 'removed' ? '-' : '' }}</span>
+                    <span class="text">@for (part of row.parts; track $index) {@if (part.changed) {<mark>{{ part.text }}</mark>} @else {{{ part.text }}}}</span>
+                  </div>
+                } @else {
+                  <div class="fold">
+                    @if (diff.complete && row.hidden.length > 0) {
+                      <button type="button" class="open-fold" (click)="openFold(row)">
+                        {{ t('showMore', { count: row.hidden.length }) }}
+                      </button>
+                    } @else {
+                      <span class="not-shown">{{ t('notShown') }}</span>
+                    }
+                  </div>
+                }
+              }
+              @if (nextRows() > 0) {
+                <div class="more">
+                  <span class="rows-shown">{{ t('rowsShown', { shown: rows().length, total: totalRows() }) }}</span>
+                  <button uiButton size="small" (click)="showNextRows()">{{ t('showNextRows', { count: nextRows() }) }}</button>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      }
+    }
+  } @else if (!failed() || waiting()) {
+    <ui-spinner class="note" [label]="t('loading')" />
+  }
+</ng-container>

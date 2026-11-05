@@ -12,7 +12,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
-import type { ApiError, Entry } from '@front-burner/shared-contracts';
+import type { ApiError, Entry, GitChange } from '@front-burner/shared-contracts';
 import {
   ActivityBarComponent,
   ActivityBarItemComponent,
@@ -33,6 +33,7 @@ import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { map, take } from 'rxjs';
 
 import { ChangesPaneComponent } from '../../components/changes-pane/changes-pane.component';
+import { DiffViewComponent } from '../../components/diff-view/diff-view.component';
 import { EditorAreaComponent } from '../../components/editor-area/editor-area.component';
 import { FileTreeComponent } from '../../components/file-tree/file-tree.component';
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
@@ -81,8 +82,10 @@ const MAX_BADGE_COUNT = 99;
  * The activity bar switches the side pane between the file tree and **Changes**
  * (GA-10), whose count and list come from `GitStatusStore`. Both stay in place
  * while the other is shown, so that each keeps its scroll position and active
- * row, and the tree still meets a focus request. Until the diff view exists,
- * selecting a change goes to its path, like a tree selection.
+ * row, and the tree still meets a focus request. Selecting a change shows its
+ * diff in place of the editor until a file is opened again (GA-14). It is not in
+ * the URL, which keeps naming the open file, so that a reload opens the file; the
+ * editor stays in place, hidden, so that it keeps its scroll position and undo.
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -102,6 +105,7 @@ const MAX_BADGE_COUNT = 99;
     PageNotFoundPage,
     RouteAnnouncerComponent,
     ChangesPaneComponent,
+    DiffViewComponent,
     EditorAreaComponent,
     FileTreeComponent,
     NotOpenableComponent,
@@ -152,13 +156,15 @@ export class RepositoryScreenPage {
     return (narrow ? this.drawerOpen() : this.panes.sideOpen()) ? this.panes.sideTool() : null;
   });
   /**
-   * The route's path, and whether the navigation to it closed the open file
-   * (FB-39), read while that navigation runs.
+   * The route's repository and path, whether the navigation to it closed the
+   * open file (FB-39), and whether it replaced the URL, read while it runs.
    */
   private readonly target = toSignal(
     this.route.paramMap.pipe(map(params => ({
+      repositoryId: Number(params.get('id')),
       path: params.get('path') ?? '',
-      closed: this.router.currentNavigation()?.extras.state?.['closed'] === true
+      closed: this.router.currentNavigation()?.extras.state?.['closed'] === true,
+      replaced: this.router.currentNavigation()?.extras.replaceUrl === true
     }))),
     { requireSync: true }
   );
@@ -176,8 +182,22 @@ export class RepositoryScreenPage {
   /** The open file's path in the working copy, or `''` (FB-1). */
   protected readonly path = computed(() => this.target().path);
 
-  /** The entry highlighted in the tree and in **Changes**. */
+  /** The entry highlighted in the tree. */
   protected readonly selectedPath = computed(() => this.path() || null);
+  /** The change whose diff the editor area shows, as it was selected; `null` shows the open file (GA-14). */
+  private readonly selectedChange = signal<GitChange | null>(null);
+  /** Whether the diff waits for the waiting saves, so that it has them. */
+  protected readonly diffWaiting = signal(false);
+  /** That change, with its state as of the last status: the file can be deleted while its diff is shown. */
+  protected readonly diffChange = computed(() => {
+    const selected = this.selectedChange();
+    if (selected === null) {
+      return null;
+    }
+    return this.gitStatus.status()?.changes.find(change => change.path === selected.path) ?? selected;
+  });
+  /** The entry highlighted in **Changes**. */
+  protected readonly selectedChangePath = computed(() => this.diffChange()?.path ?? this.selectedPath());
   /** The heading of the open file to show in its preview (ED-31). */
   protected readonly fragment = toSignal(this.route.fragment, { initialValue: null });
   /** What the editor area shows: no file (`null`), or a path, `''` while the first file is picked. */
@@ -204,12 +224,15 @@ export class RepositoryScreenPage {
   /** Whether the open file has unsaved edits (NV-13). */
   private readonly unsaved = computed(() => this.openFiles.current()?.saver.unsaved() ?? false);
 
+  /** Counts the diffs selected, so that only the latest one's wait for a save counts. */
+  private diffsSelected = 0;
   /** Counts the paths shown, so that only the latest one's answer counts. */
   private showing = 0;
   /** Whether the path shown could not be found because a folder could not be listed. */
   private failed = false;
 
   constructor() {
+    this.endDiffWhenFileOpens();
     effect(() => {
       const state = this.session.state();
       const repository = state === 'ready' ? this.session.repository() : null;
@@ -263,9 +286,32 @@ export class RepositoryScreenPage {
       return;
     }
     this.drawerOpen.set(false);
+    // The route may already name it, when its diff replaced it (GA-14).
+    this.selectedChange.set(null);
     void this.router.navigate([ '/repositories', repository.id, 'files', ...path.split('/') ], {
       fragment: fragment ?? undefined
     });
+  }
+
+  /**
+   * Shows the diff of the selected change (GA-14) and closes the drawer of
+   * narrow screens (FB-9). The diff is read once the waiting saves have been
+   * answered, so that it has them; a save that failed is left to its retries and
+   * says so in the save status.
+   */
+  protected async openDiff(path: string): Promise<void> {
+    const change = this.gitStatus.status()?.changes.find(item => item.path === path);
+    if (!change) {
+      return;
+    }
+    const selected = ++this.diffsSelected;
+    this.drawerOpen.set(false);
+    this.selectedChange.set(change);
+    this.diffWaiting.set(this.openFiles.anyUnsaved());
+    await this.openFiles.flushAll();
+    if (selected === this.diffsSelected) {
+      this.diffWaiting.set(false);
+    }
   }
 
   /**
@@ -385,6 +431,23 @@ export class RepositoryScreenPage {
         this.openError.set(error as ApiError);
       }
     }
+  }
+
+  /**
+   * Opening a file through the route ends the diff, and so does another
+   * repository (GA-14). A navigation that only replaces the URL does not open
+   * anything: it goes to the first file, or follows the open file being renamed
+   * or deleted.
+   */
+  private endDiffWhenFileOpens(): void {
+    let repositoryId: number | null = null;
+    effect(() => {
+      const target = this.target();
+      if (!target.replaced || target.repositoryId !== repositoryId) {
+        untracked(() => this.selectedChange.set(null));
+      }
+      repositoryId = target.repositoryId;
+    });
   }
 
   /**

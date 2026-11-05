@@ -10,6 +10,7 @@ import type {
   FileContent,
   FolderListing,
   GitChange,
+  GitDiff,
   GitStatus,
   PushEvent,
   RepositorySummary
@@ -67,6 +68,7 @@ describe('RepositoryScreenPage', () => {
   let createEntry: ReturnType<typeof vi.fn>;
   let readFile: ReturnType<typeof vi.fn<(path: string) => Observable<FileContent>>>;
   let saveFile: ReturnType<typeof vi.fn>;
+  let gitDiff: ReturnType<typeof vi.fn<(path: string) => Observable<GitDiff>>>;
   let recreateFile: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
@@ -97,6 +99,7 @@ describe('RepositoryScreenPage', () => {
         {
           provide: GitApi,
           useValue: {
+            diff: (_id: number, query: { path: string; }) => gitDiff(query.path),
             gitStatus: (): Observable<GitStatus> =>
               gitStatusAnswer ?? of({
                 branch: 'main',
@@ -179,6 +182,7 @@ describe('RepositoryScreenPage', () => {
     gone = new Set();
     changes = [];
     gitStatusAnswer = undefined;
+    gitDiff = vi.fn(() => of<GitDiff>({ kind: 'text', lines: [], complete: true, lineEndingsOnly: false }));
     saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
     recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
     document.title = '';
@@ -715,6 +719,134 @@ describe('RepositoryScreenPage', () => {
         ]);
       });
 
+      describe('selecting a change', () => {
+        const entryButton = (name: string) =>
+          [ ...page().querySelectorAll('rs-change-entry') ].find(row =>
+            row.querySelector('.name')?.textContent?.trim() === name
+          )
+            ?.querySelector('button') as HTMLButtonElement;
+        const diffView = () => page().querySelector('rs-diff-view');
+        const editorArea = () => page().querySelector('rs-editor-area') as HTMLElement;
+
+        async function select(name: string): Promise<void> {
+          entryButton(name).click();
+          await settle(harness.fixture);
+        }
+
+        beforeEach(() => {
+          changes = THREE;
+          localStorage.setItem('fb.4.sideTool', 'changes');
+        });
+
+        it('shows its diff in place of the open file, and the URL keeps naming the file', async () => {
+          await visit('/repositories/12/files/README.md');
+
+          await select('guide.md');
+
+          expect(diffView()).not.toBeNull();
+          expect(gitDiff).toHaveBeenCalledWith('docs/guide.md');
+          expect(editorArea().hidden).toBe(true);
+          expect(url()).toBe('/repositories/12/files/README.md');
+          expect(entryButton('guide.md').getAttribute('aria-current')).toBe('true');
+          expect(entryButton('README.md').getAttribute('aria-current')).toBeNull();
+        });
+
+        it('passes on the state from the status', async () => {
+          await visit('/repositories/12/files/README.md');
+
+          await select('logo.png');
+
+          expect(page().querySelector('rs-diff-view button')).toBeNull();
+        });
+
+        it('ends when another file opens through the route', async () => {
+          await visit('/repositories/12/files/README.md');
+          await select('guide.md');
+
+          await go('/repositories/12/files/docs/guide.md');
+
+          expect(diffView()).toBeNull();
+          expect(editorArea().hidden).toBe(false);
+        });
+
+        it('stays when the open file is deleted, which only closes it', async () => {
+          await visit('/repositories/12/files/README.md');
+          await select('guide.md');
+
+          await TestBed.inject(Router).navigate([ '/repositories', 12 ], { replaceUrl: true, state: { closed: true } });
+          await settle(harness.fixture);
+
+          expect(diffView()).not.toBeNull();
+          expect(editorArea().hidden).toBe(true);
+        });
+
+        it('stays when the open file is renamed, which replaces the URL', async () => {
+          await visit('/repositories/12/files/README.md');
+          await select('guide.md');
+
+          await TestBed.inject(Router).navigate([ '/repositories', 12, 'files', 'logo.png' ], { replaceUrl: true });
+          await settle(harness.fixture);
+
+          expect(diffView()).not.toBeNull();
+        });
+
+        it('ends when another repository opens, even with a replaced URL', async () => {
+          await visit('/repositories/12/files/README.md');
+          await select('guide.md');
+
+          await TestBed.inject(Router).navigate([ '/repositories', 13 ], { replaceUrl: true });
+          await settle(harness.fixture);
+
+          expect(diffView()).toBeNull();
+        });
+
+        it('ends when the open file is selected again in the tree', async () => {
+          localStorage.setItem('fb.4.sideTool', 'files');
+          await visit('/repositories/12/files/README.md');
+          changesItem().click();
+          await settle(harness.fixture);
+          await select('guide.md');
+          files().click();
+          await settle(harness.fixture);
+
+          row('README.md').click();
+          await settle(harness.fixture);
+
+          expect(diffView()).toBeNull();
+          expect(editorArea().hidden).toBe(false);
+        });
+
+        it('ends on Open in editor, which opens the file', async () => {
+          gitDiff.mockReturnValue(of<GitDiff>({
+            kind: 'text',
+            lines: [ { type: 'added', oldLine: null, newLine: 1, text: 'new' } ],
+            complete: true,
+            lineEndingsOnly: false
+          }));
+          await visit('/repositories/12/files/README.md');
+          await select('guide.md');
+
+          (page().querySelector('rs-diff-view .head button') as HTMLButtonElement).click();
+          await settle(harness.fixture);
+
+          expect(diffView()).toBeNull();
+          expect(url()).toBe('/repositories/12/files/docs/guide.md');
+        });
+
+        it('closes the drawer on narrow screens', async () => {
+          narrow = true;
+          await visit('/repositories/12/files/README.md');
+          changesItem().click();
+          await settle(harness.fixture);
+          expect(shown(tree())).toBe(true);
+
+          await select('guide.md');
+
+          expect(shown(tree())).toBe(false);
+          expect(diffView()).not.toBeNull();
+        });
+      });
+
       it('says plain Changes when there are none', async () => {
         await visit('/repositories/12');
 
@@ -786,22 +918,6 @@ describe('RepositoryScreenPage', () => {
 
         expect(changesItem().getAttribute('aria-label')).toBe(`${KEY}.changesFailed`);
         expect(changesItem().querySelector('.change-count')?.getAttribute('data-count')).toBe('!');
-      });
-
-      it('goes to a selected change and closes the drawer', async () => {
-        changes = [ { path: 'docs/guide.md', state: 'modified' } ];
-        narrow = true;
-        await visit('/repositories/12');
-        changesItem().click();
-        await settle(harness.fixture);
-
-        (page().querySelector('rs-change-entry button') as HTMLButtonElement).click();
-        await settle(harness.fixture);
-        await settle(harness.fixture);
-
-        expect(TestBed.inject(Router).url).toBe('/repositories/12/files/docs/guide.md');
-        expect(shown(tree())).toBe(false);
-        expect(page().querySelector('rs-change-entry button[aria-current="true"]')).not.toBeNull();
       });
 
       it('meets a focus request of the tree while Changes is shown, not later', async () => {
@@ -1077,6 +1193,41 @@ describe('RepositoryScreenPage', () => {
 
       expect(savedPaths()).toEqual([ 'README.md' ]);
       expect(status()).toBe(`${STATUS}.saved`);
+    });
+
+    it('flushes when a change is selected, so that its diff has the edit', async () => {
+      changes = [ { path: 'README.md', state: 'modified' } ];
+      localStorage.setItem('fb.4.sideTool', 'changes');
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+      expect(saveFile).not.toHaveBeenCalled();
+
+      (page().querySelector('rs-change-entry button') as HTMLButtonElement).click();
+      await settle(harness.fixture);
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+    });
+
+    it('reads the diff only after the waiting save has been answered', async () => {
+      changes = [ { path: 'README.md', state: 'modified' } ];
+      localStorage.setItem('fb.4.sideTool', 'changes');
+      const answer = new Subject<{ hash: string; size: number; }>();
+      saveFile.mockReturnValue(answer);
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      (page().querySelector('rs-change-entry button') as HTMLButtonElement).click();
+      await settle(harness.fixture);
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
+      expect(page().querySelector('rs-diff-view')).not.toBeNull();
+      expect(gitDiff).not.toHaveBeenCalled();
+
+      answer.next({ hash: 'b'.repeat(64), size: 10 });
+      answer.complete();
+      await settle(harness.fixture);
+
+      expect(gitDiff).toHaveBeenCalledWith('README.md');
     });
 
     it('flushes when the screen is left', async () => {
