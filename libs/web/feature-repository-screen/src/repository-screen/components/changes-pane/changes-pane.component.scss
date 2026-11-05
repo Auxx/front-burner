@@ -21,7 +21,9 @@
 .actions {
   display: flex;
   flex: none;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2);
   padding: var(--ui-space-1) var(--ui-space-2);
 }
 

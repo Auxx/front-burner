@@ -16,12 +16,15 @@ import type { GitChange } from '@front-burner/shared-contracts';
 import {
   BannerActionsComponent,
   ButtonComponent,
+  CheckboxComponent,
+  ChoiceComponent,
   EmptyStateComponent,
   InlineBannerComponent,
   SpinnerComponent
 } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
+import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
 import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
 import { ChangeEntryComponent } from '../change-entry/change-entry.component';
 
@@ -32,7 +35,8 @@ const FALLBACK_ROW_HEIGHT = 48;
  * The **Changes** tool window (GA-10 to GA-13): every change of the working
  * copy, sorted by path, in a virtual list, so that 20,000 changes stay usable.
  * A read that failed says so above the last list, and never looks like "No
- * changes". **Discard** on an entry and **Discard all** ask the page, with the
+ * changes". Each entry has a checkbox, and one at the top ticks or clears them
+ * all (GA-17). **Discard** on an entry and **Discard all** ask the page, with the
  * changes shown (GA-23).
  */
 @Component({
@@ -44,6 +48,8 @@ const FALLBACK_ROW_HEIGHT = 48;
     TranslocoDirective,
     BannerActionsComponent,
     ButtonComponent,
+    CheckboxComponent,
+    ChoiceComponent,
     EmptyStateComponent,
     InlineBannerComponent,
     SpinnerComponent,
@@ -57,6 +63,7 @@ const FALLBACK_ROW_HEIGHT = 48;
 })
 export class ChangesPaneComponent {
   protected readonly store = inject(GitStatusStore);
+  protected readonly ticks = inject(CommitTicksService);
 
   /** The path of the entry to mark as selected. */
   readonly selected = input<string | null>(null);

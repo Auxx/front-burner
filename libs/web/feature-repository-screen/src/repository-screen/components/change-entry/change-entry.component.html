@@ -1,4 +1,13 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ChangeEntryComponent'">
+  <label class="tick">
+    <input
+      type="checkbox"
+      uiCheckbox
+      [attr.aria-label]="t('tick', { path: change().path })"
+      [checked]="ticked()"
+      (change)="tickedChange.emit(!ticked())"
+    />
+  </label>
   <button
     type="button"
     class="entry"

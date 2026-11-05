@@ -16,6 +16,18 @@
     <ui-empty-state icon="check">{{ t('empty') }}</ui-empty-state>
   } @else {
     <div class="actions">
+      @let allState = ticks.allState();
+      <label uiChoice class="all">
+        <input
+          type="checkbox"
+          uiCheckbox
+          [attr.aria-checked]="allState === 'some' ? 'mixed' : null"
+          [checked]="allState === 'all'"
+          [indeterminate]="allState === 'some'"
+          (change)="ticks.setAll(allState !== 'all')"
+        />
+        {{ t('tickAll') }}
+      </label>
       <button #discardAll uiButton class="discard-all" size="small" (click)="discard.emit(changes)">
         {{ t('discardAll') }}
       </button>
@@ -25,9 +37,11 @@
         *cdkVirtualFor="let change of changes; let index = index; trackBy: trackChange"
         [change]="change"
         [selected]="change.path === selected()"
+        [ticked]="ticks.isTicked(change.path)"
         [attr.aria-posinset]="index + 1"
         [attr.aria-setsize]="changes.length"
         (selectPath)="selectPath.emit($event)"
+        (tickedChange)="ticks.setTicked(change.path, $event)"
         (discard)="discard.emit([ $event ])"
       />
     </cdk-virtual-scroll-viewport>
