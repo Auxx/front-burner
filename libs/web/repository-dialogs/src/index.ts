@@ -2,3 +2,9 @@ export { CommitAuthorFormComponent } from './repository-dialogs/components/commi
 export { CommitAuthorSummaryComponent } from './repository-dialogs/components/commit-author-summary/commit-author-summary.component';
 export { commitAuthorForm } from './repository-dialogs/models/commit-author-form.model';
 export { CommitAuthorRefusals } from './repository-dialogs/models/commit-author-refusals';
+export { ChangeCommitAuthorDialog } from './repository-dialogs/dialogs/change-commit-author/change-commit-author.dialog';
+export {
+  type CommitAuthorConfirmed,
+  ConfirmCommitAuthorDialog
+} from './repository-dialogs/dialogs/confirm-commit-author/confirm-commit-author.dialog';
+export type { CommitAuthorDialogData } from './repository-dialogs/models/commit-author-dialog.model';
