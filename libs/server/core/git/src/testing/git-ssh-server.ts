@@ -33,12 +33,12 @@ function parsed(text: string): ParsedKey {
   return key;
 }
 
-/** `git-upload-pack '<path>'` as git sends it over SSH. */
-const UPLOAD_PACK = /^git-upload-pack '\/?([^']+)'$/;
+/** `git-upload-pack '<path>'` or `git-receive-pack '<path>'` as git sends it over SSH. */
+const GIT_COMMAND = /^git-(upload-pack|receive-pack) '\/?([^']+)'$/;
 
 /**
  * An SSH git server on `127.0.0.1` for tests: accepts only the authorized
- * keys and serves `git-upload-pack` by spawning it.
+ * keys and serves `git-upload-pack` and `git-receive-pack` by spawning them.
  */
 export async function startGitSshServer(options: GitSshServerOptions): Promise<GitSshServer> {
   const hostKey = options.hostKey ?? generateEd25519Key('host').privateKey;
@@ -74,16 +74,16 @@ export async function startGitSshServer(options: GitSshServerOptions): Promise<G
       });
       session.on('exec', (acceptExec, _reject, info) => {
         const stream = acceptExec();
-        const match = UPLOAD_PACK.exec(info.command);
-        const repository = match ? options.repositories[match[1] ?? ''] : undefined;
+        const match = GIT_COMMAND.exec(info.command);
+        const repository = match ? options.repositories[match[2] ?? ''] : undefined;
         if (repository === undefined) {
-          stream.stderr.write(`fatal: '${match?.[1] ?? info.command}' does not appear to be a git repository\n`);
+          stream.stderr.write(`fatal: '${match?.[2] ?? info.command}' does not appear to be a git repository\n`);
           stream.exit(128);
           stream.end();
           return;
         }
         setTimeout(() => {
-          const child = spawn('git', [ 'upload-pack', repository ], {
+          const child = spawn('git', [ match?.[1] ?? 'upload-pack', repository ], {
             env: {
               PATH: process.env['PATH'] ?? '/usr/bin:/bin',
               HOME: tmpdir(),

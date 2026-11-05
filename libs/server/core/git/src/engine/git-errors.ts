@@ -118,7 +118,8 @@ export function classifyPushFailure(
     if (fromRemote === null) {
       own.push(text);
     } else {
-      remote.push(fromRemote[1] ?? '');
+      // git pads each line with spaces, to clear any progress shown before.
+      remote.push((fromRemote[1] ?? '').trimEnd());
     }
   }
   const remoteMessages = limitBytes(redactCredentials(remote.join('\n')), REMOTE_MESSAGES_MAX_BYTES);

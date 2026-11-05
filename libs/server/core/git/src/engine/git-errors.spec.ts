@@ -169,7 +169,8 @@ describe('classifyPushFailure', () => {
   });
 
   it('collects the remote lines, without credentials and at most 64 KB', () => {
-    const stderr = 'remote: First\r\nremote:\nremote: see https://u:token@h/x\nerror: failed\n';
+    // git pads each line with spaces, to clear any progress shown before.
+    const stderr = 'remote: First        \r\nremote:\nremote: see https://u:token@h/x\nerror: failed\n';
 
     expect(classifyPushFailure(pushed(stderr), []).remoteMessages).toBe('First\n\nsee https://***@h/x');
 

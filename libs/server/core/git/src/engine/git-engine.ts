@@ -8,10 +8,11 @@ import { Broker, GitCredentials, openBroker } from '../broker/broker';
 import { assertSafeRepositoryConfig, UnsafeRepositoryConfigError } from '../config/repository-config';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult, GitRunner } from '../runner/git-runner';
+import { redactCredentials } from '../runner/redact';
 import { probeHostKey } from '../ssh/host-key-probe';
 import { hasHostEntry } from '../ssh/known-hosts';
 import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
-import { classifyGitFailure, GitOperationError } from './git-errors';
+import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
 import { parseStatus, WorkingCopyStatus } from './git-status';
 
 /** What `git status` shows for a byte of a name that is not valid UTF-8. */
@@ -45,6 +46,34 @@ export interface CloneRequest {
   destination: string;
   /** For SSH: the user's accepted hosts as `known_hosts` lines; the instance's are always added. */
   knownHosts?: string[];
+}
+
+export interface PushRequest {
+  /** The repository's stored remote; `origin` must have this URL. */
+  remoteUrl: string;
+  credentials: GitCredentials;
+  /** For SSH: the user's accepted hosts as `known_hosts` lines; the instance's are always added. */
+  knownHosts: string[];
+  /** The current branch. */
+  branch: string;
+  /** The working copy is a single-branch clone (GA-41). */
+  singleBranch: boolean;
+}
+
+export interface PushResult {
+  /** The commits the branch had that its upstream did not, counted before the push. */
+  commits: number;
+  /** Such as `origin/main`. */
+  upstream: string;
+}
+
+interface NetworkRunOptions {
+  /** Values for the user's message besides `host`. */
+  params?: Record<string, string>;
+  /** A working copy to run in; its config is checked first (A-5.7). */
+  cwd?: string;
+  /** Classifies a failure as a push's, with the remote's own lines. */
+  push?: boolean;
 }
 
 export interface CommitRequest {
@@ -184,7 +213,7 @@ export class GitEngine implements BeforeApplicationShutdown {
         request.knownHosts ?? [],
         remote => [ ...NO_LFS, 'clone', '--no-recurse-submodules', ...single, '--', remote, dir ],
         this.options.cloneTimeoutMs,
-        request.branch === undefined ? {} : { branch: request.branch }
+        { params: request.branch === undefined ? {} : { branch: request.branch } }
       );
       await this.assertSafeConfig(dir);
       await rename(dir, request.destination);
@@ -681,6 +710,92 @@ export class GitEngine implements BeforeApplicationShutdown {
     return found.includes(true);
   }
 
+  /**
+   * Pushes the current branch to its upstream on `origin`, or publishes it
+   * under its own name and makes that its upstream; never forced, without tags
+   * (GA-29, GA-30). In a single-branch clone, a published branch is added to
+   * what is fetched (GA-41). Takes no lock: the caller holds the NetworkLock.
+   *
+   * @throws GitOperationError `unsafe-repository-config` when `origin` is not
+   * the stored remote, and push-* codes with `remoteMessages` when the remote
+   * refuses (GA-31, RC-5).
+   */
+  async push(workingCopy: string, request: PushRequest): Promise<PushResult> {
+    const { branch } = request;
+    const origin = await this.runLocal(workingCopy, [ 'config', '--get', 'remote.origin.url' ]);
+    if (origin.exitCode !== 0 || origin.stdout.trim() !== request.remoteUrl) {
+      // The broker's credentials are for the stored remote only.
+      throw new GitOperationError('unsafe-repository-config', 'origin is not the repository\'s remote.');
+    }
+    const source = `refs/heads/${branch}`;
+    const target = await this.upstreamOf(workingCopy, branch);
+    const commits = await this.commitsToPush(workingCopy, source, target);
+    if (target === null && request.singleBranch) {
+      await this.fetchAlso(workingCopy, branch);
+    }
+    const destination = target ?? source;
+    await this.runNetwork(
+      'push',
+      request.remoteUrl,
+      request.credentials,
+      request.knownHosts,
+      () => [
+        'push',
+        '--porcelain',
+        '--no-follow-tags',
+        '--no-recurse-submodules',
+        ...(target === null ? [ '--set-upstream' ] : []),
+        'origin',
+        // Full names: a branch named like an option stays a ref, and nothing is forced.
+        `${source}:${destination}`
+      ],
+      this.options.gitTimeoutMs,
+      { cwd: workingCopy, push: true, params: { branch } }
+    );
+    return { commits, upstream: `origin/${destination.slice('refs/heads/'.length)}` };
+  }
+
+  /** The ref the branch's upstream has on `origin`, such as `refs/heads/main`, or `null` when it has none there. */
+  private async upstreamOf(workingCopy: string, branch: string): Promise<string | null> {
+    const [ remote, merge ] = await Promise.all([
+      this.runLocal(workingCopy, [ 'config', '--get', `branch.${branch}.remote` ]),
+      this.runLocal(workingCopy, [ 'config', '--get', `branch.${branch}.merge` ])
+    ]);
+    const ref = merge.stdout.trim();
+    return remote.stdout.trim() === 'origin' && ref.startsWith('refs/heads/') ? ref : null;
+  }
+
+  /** What the remote-tracking branch of `target` lacks, or what no remote branch has. */
+  private async commitsToPush(workingCopy: string, source: string, target: string | null): Promise<number> {
+    const count = (not: string[]) =>
+      this.runLocal(workingCopy, [ 'rev-list', '--count', source, '--not', ...not, '--' ], {
+        timeoutMs: this.options.gitTimeoutMs
+      });
+    let result = target === null
+      ? undefined
+      : await count([ `refs/remotes/origin/${target.slice('refs/heads/'.length)}` ]);
+    if (result === undefined || result.exitCode !== 0) {
+      // Unpublished, or its remote-tracking branch is gone.
+      result = await count([ '--remotes' ]);
+    }
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    if (result.exitCode !== 0) {
+      throw new Error(`git rev-list failed: ${result.stderr.trim()}`);
+    }
+    return Number.parseInt(result.stdout.trim(), 10);
+  }
+
+  /** Adds the branch to what a single-branch clone fetches, so that its upstream ref exists (GA-41). */
+  private async fetchAlso(workingCopy: string, branch: string): Promise<void> {
+    const refspec = `+refs/heads/${branch}:refs/remotes/origin/${branch}`;
+    const fetched = await this.runLocal(workingCopy, [ 'config', '--get-all', 'remote.origin.fetch' ]);
+    if (!fetched.stdout.split('\n').includes(refspec)) {
+      await this.runChecked(workingCopy, [ 'config', '--add', 'remote.origin.fetch', refspec ]);
+    }
+  }
+
   async beforeApplicationShutdown(): Promise<void> {
     await this.runner.killAll();
   }
@@ -869,7 +984,7 @@ export class GitEngine implements BeforeApplicationShutdown {
     userKnownHosts: string[],
     args: (remote: string) => string[],
     timeoutMs: number,
-    params: Record<string, string> = {}
+    { params = {}, cwd, push = false }: NetworkRunOptions = {}
   ): Promise<GitResult> {
     const parsed = parseRemoteUrl(remoteUrl);
     if (!parsed.ok) {
@@ -882,23 +997,33 @@ export class GitEngine implements BeforeApplicationShutdown {
         `${credentials.kind} credentials cannot be used with an ${remote.protocol} remote.`
       );
     }
+    if (cwd !== undefined) {
+      await this.assertSafeConfig(cwd);
+    }
     const knownHosts = [ ...this.options.knownHosts, ...userKnownHosts ];
     let broker: Broker | undefined;
     let failure: GitOperationError;
     try {
       broker = await openBroker({ remote, credentials, gitOptions: this.options, knownHosts });
-      const result = await this.runner.run(args(remoteUrl), { env: broker.env, timeoutMs });
+      const result = await this.runner.run(args(remoteUrl), { env: broker.env, timeoutMs, cwd });
       if (result.exitCode === 0) {
         return result;
       }
-      let code = classifyGitFailure(result, broker.egress.refusals);
+      const pushed = push ? classifyPushFailure(result, broker.egress.refusals) : undefined;
+      let code = pushed?.code ?? classifyGitFailure(result, broker.egress.refusals);
       // ssh calls a key of a type it does not know "unknown", even when it knows another key of this host.
       if (code === 'host-key-unknown' && hasHostEntry(knownHosts, { host: remote.host, port: remote.port ?? 22 })) {
         code = 'host-key-changed';
       }
       // The URL has no credentials: parseRemoteUrl refuses them (NF-10.5).
       this.logger.debug(`git ${operation} of ${remoteUrl} failed with ${code}: ${result.stderr.trim()}`);
-      failure = new GitOperationError(code, result.stderr, { host: remote.host, ...params });
+      // `--porcelain` writes each ref's status to stdout.
+      const detail = push ? `${redactCredentials(result.stdout)}${result.stderr}` : result.stderr;
+      failure = new GitOperationError(code, detail, {
+        host: remote.host,
+        ...params,
+        ...(pushed?.remoteMessages ? { remoteMessages: pushed.remoteMessages } : {})
+      });
     } finally {
       await broker?.close();
     }
