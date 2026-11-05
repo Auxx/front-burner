@@ -18,6 +18,8 @@ export interface GitHttpServerOptions {
   users?: Record<string, string>;
   /** Waits this long before answering each request. */
   delayMs?: number;
+  /** Answers every push request with this status, as a host does for credentials that may only read. */
+  refusePush?: 403;
 }
 
 function authorised(request: IncomingMessage, users: Record<string, string> | undefined): boolean {
@@ -112,7 +114,16 @@ export async function startGitHttpServer(options: GitHttpServerOptions): Promise
         response.end();
         return;
       }
-      const path = new URL(request.url ?? '/', 'https://localhost').pathname;
+      const url = new URL(request.url ?? '/', 'https://localhost');
+      const path = url.pathname;
+      if (
+        options.refusePush !== undefined
+        && (path.endsWith('/git-receive-pack') || url.searchParams.get('service') === 'git-receive-pack')
+      ) {
+        response.writeHead(options.refusePush);
+        response.end();
+        return;
+      }
       const name = Object.keys(options.repositories).find(repository => path.startsWith(`/${repository}/`));
       if (name === undefined) {
         response.writeHead(404);

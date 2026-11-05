@@ -41,7 +41,9 @@ describe.skipIf(process.platform === 'win32')('assertSafeRepositoryConfig', () =
       'url.x.pushInsteadOf',
       'include.path',
       'includeIf.gitdir:/.path',
-      'http.curloptResolve'
+      'http.curloptResolve',
+      // It would send a push somewhere other than the stored remote.
+      'remote.origin.pushurl'
     ])('%s', async key => {
       await git('config', key, 'secret-looking-value');
 

@@ -3,13 +3,15 @@ import { join } from 'node:path';
 import type { GitRunner } from '../runner/git-runner';
 
 /**
- * Keys that route git around the egress proxy or rewrite where it connects
- * (A-5.7). git lower-cases section and variable names, not subsections.
+ * Keys that route git around the egress proxy or rewrite where it connects,
+ * such as a push URL other than the stored remote (A-5.7). git lower-cases
+ * section and variable names, not subsections.
  */
 const UNSAFE_KEYS = [
   /^http\.(.+\.)?proxy$/,
   /^http\.(.+\.)?curloptresolve$/,
   /^remote\..+\.proxy$/,
+  /^remote\..+\.pushurl$/,
   /^core\.gitproxy$/,
   /^core\.sshcommand$/,
   /^url\..+\.(push)?insteadof$/,

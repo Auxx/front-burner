@@ -1,5 +1,6 @@
 import type { EgressRefusal } from '../egress/egress-proxy';
 import type { GitResult } from '../runner/git-runner';
+import { redactCredentials } from '../runner/redact';
 
 /** Why a git operation failed. */
 export const GIT_ERROR_CODES = [
@@ -12,6 +13,16 @@ export const GIT_ERROR_CODES = [
   'host-key-unknown',
   'host-key-changed',
   'unsafe-repository-config',
+  // Of push; classifyPushFailure returns these (GA-30, GA-31, RC-5, CA-15).
+  /** The remote branch has commits that the local branch does not have. */
+  'push-non-fast-forward',
+  /** The credentials may read but not write. */
+  'push-not-allowed',
+  'push-protected-branch',
+  /** The remote takes only signed commits. */
+  'push-unsigned',
+  /** Refused by the remote for another reason, such as a server hook. */
+  'push-rejected',
   // Of local operations; classifyGitFailure never returns these.
   /** A commit's paths name no change. */
   'nothing-to-commit',
@@ -70,4 +81,73 @@ export function classifyGitFailure(result: GitResult, refusals: EgressRefusal[])
     return 'host-unreachable';
   }
   return PATTERNS.find(([ pattern ]) => pattern.test(result.stderr))?.[1] ?? 'failed';
+}
+
+/** At most this many bytes of the remote's own lines are kept. */
+const REMOTE_MESSAGES_MAX_BYTES = 64 * 1024;
+
+// Read from git's own lines only, so that a hook cannot pass for git (RC-5). The first match wins.
+const PUSH_PATTERNS: [ RegExp, GitErrorCode ][] = [
+  [ /\[rejected\].*\((fetch first|non-fast-forward)\)/, 'push-non-fast-forward' ],
+  [
+    /The requested URL returned error: 403|marked as read only|read-only|Permission to .* denied|You do not have write access/,
+    'push-not-allowed'
+  ],
+  [ /protected branch/, 'push-protected-branch' ],
+  [ /\[remote rejected\]|pre-receive hook declined/, 'push-rejected' ]
+];
+// Only the remote says why it wants signed commits. Whole words: a hook's
+// "Signed-off-by" or "assigned" is about something else.
+const UNSIGNED = /\b(signed commits?|unsigned|must be signed|signatures?)\b/i;
+// The remote's URL is in git's own lines, and its words are not git's.
+const QUOTED_URL = /'[a-z][a-z0-9+.-]*:\/\/[^']*'/gi;
+const URL = /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi;
+
+/**
+ * Maps a failed `git push --porcelain` to an error code, and collects the
+ * remote's own lines (the text after `remote: `) as plain text, without
+ * credentials (GA-31). Otherwise as classifyGitFailure, which reads only git's
+ * own lines here.
+ */
+export function classifyPushFailure(
+  result: GitResult,
+  refusals: EgressRefusal[]
+): { code: GitErrorCode; remoteMessages: string; } {
+  const own: string[] = [];
+  const remote: string[] = [];
+  // `--porcelain` writes each ref's status to stdout, and the rest to stderr.
+  for (const line of `${result.stdout}\n${result.stderr}`.split('\n')) {
+    const text = line.replace(/\r$/, '');
+    const fromRemote = /^remote:(?: |$)(.*)$/.exec(text);
+    if (fromRemote === null) {
+      own.push(text);
+    } else {
+      // git pads each line with spaces, to clear any progress shown before.
+      remote.push((fromRemote[1] ?? '').trimEnd());
+    }
+  }
+  const remoteMessages = limitBytes(redactCredentials(remote.join('\n')), REMOTE_MESSAGES_MAX_BYTES);
+  const ownText = own.join('\n').replace(QUOTED_URL, '\'<remote>\'').replace(URL, '<remote>');
+  return { code: pushCode(result, refusals, ownText, remote.join('\n')), remoteMessages };
+}
+
+function pushCode(result: GitResult, refusals: EgressRefusal[], own: string, remote: string): GitErrorCode {
+  if (result.timedOut || refusals.length > 0) {
+    return classifyGitFailure(result, refusals);
+  }
+  const code = PUSH_PATTERNS.find(([ pattern ]) => pattern.test(own))?.[1];
+  // GitHub refuses unsigned commits through branch protection, so this comes before it.
+  if ((code === 'push-protected-branch' || code === 'push-rejected') && UNSIGNED.test(remote)) {
+    return 'push-unsigned';
+  }
+  return code ?? classifyGitFailure({ ...result, stderr: own }, refusals);
+}
+
+function limitBytes(text: string, maxBytes: number): string {
+  const bytes = Buffer.from(text, 'utf8');
+  if (bytes.length <= maxBytes) {
+    return text;
+  }
+  // A character cut in two decodes as U+FFFD.
+  return bytes.subarray(0, maxBytes).toString('utf8').replace(/�$/, '');
 }

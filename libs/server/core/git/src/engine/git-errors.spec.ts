@@ -1,6 +1,6 @@
 import type { EgressRefusal } from '../egress/egress-proxy';
 import type { GitResult } from '../runner/git-runner';
-import { classifyGitFailure, GitOperationError } from './git-errors';
+import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
 
 const failed = (stderr: string, timedOut = false): GitResult => ({
   exitCode: timedOut ? null : 128,
@@ -101,5 +101,135 @@ describe('classifyGitFailure over SSH', () => {
     ]
   ])('maps %j to %s', (stderr, code) => {
     expect(classifyGitFailure(failed(stderr), [])).toBe(code);
+  });
+});
+
+describe('classifyPushFailure', () => {
+  const pushed = (stderr: string, stdout = '', timedOut = false): GitResult => ({
+    exitCode: timedOut ? null : 1,
+    stdout,
+    stdoutBytes: stdout.length,
+    stderr,
+    timedOut
+  });
+  const code = (stderr: string, stdout = '') => classifyPushFailure(pushed(stderr, stdout), []).code;
+  const status = (reason: string) => `To https://h/r.git\n!\trefs/heads/main:refs/heads/main\t${reason}\nDone\n`;
+  const failedToPush = 'error: failed to push some refs to \'https://h/r.git\'\n';
+
+  it('recognises a non-fast-forward', () => {
+    const hint = 'hint: Updates were rejected because the remote contains work that you do not\nhint: have locally.\n';
+
+    expect(code(failedToPush + hint, status('[rejected] (fetch first)'))).toBe('push-non-fast-forward');
+    expect(code(failedToPush, status('[rejected] (non-fast-forward)'))).toBe('push-non-fast-forward');
+  });
+
+  it.each([
+    // GitHub, a token without write access over HTTPS.
+    'remote: Permission to o/r.git denied to u.\nfatal: unable to access \'https://github.com/o/r.git/\': The requested URL returned error: 403\n',
+    // GitHub, a read-only deploy key.
+    'ERROR: The key you are authenticating with has been marked as read only.\nfatal: Could not read from remote repository.\n',
+    // GitHub, an SSH user without write access.
+    'ERROR: Permission to o/r.git denied to u.\nfatal: Could not read from remote repository.\n',
+    // Bitbucket, a read-only access key.
+    'repository access denied. access via a deployment key is read-only.\nfatal: Could not read from remote repository.\n',
+    // Bitbucket, an app password or token without write access.
+    'remote: You do not have write access to this repository.\nfatal: unable to access \'https://bitbucket.org/w/r.git/\': The requested URL returned error: 403\n',
+    'You do not have write access to this repository.\nfatal: Could not read from remote repository.\n'
+  ])('recognises GitHub\'s and Bitbucket\'s refusals of a read-only token and key: %j', stderr => {
+    expect(code(stderr)).toBe('push-not-allowed');
+  });
+
+  it('recognises a protected branch', () => {
+    const stderr = 'remote: error: GH006: Protected branch update failed for refs/heads/main.\n'
+      + 'remote: error: Changes must be made through a pull request.\n' + failedToPush;
+
+    expect(code(stderr, status('[remote rejected] (protected branch hook declined)'))).toBe('push-protected-branch');
+  });
+
+  it('recognises a refusal of unsigned commits', () => {
+    // GitHub reports it through branch protection, and through rulesets.
+    const protection = 'remote: error: GH006: Protected branch update failed for refs/heads/main.\n'
+      + 'remote: error: Commits must have verified signatures.\n' + failedToPush;
+    const ruleset = 'remote: error: GH013: Repository rule violations found for refs/heads/main.\n'
+      + 'remote: - Commits must have verified signatures.\n' + failedToPush;
+
+    expect(code(protection, status('[remote rejected] (protected branch hook declined)'))).toBe('push-unsigned');
+    expect(code(ruleset, status('[remote rejected] (push declined due to repository rule violations)'))).toBe(
+      'push-unsigned'
+    );
+  });
+
+  it('recognises any other refusal by the remote', () => {
+    expect(code('remote: Nope.\n' + failedToPush, status('[remote rejected] (pre-receive hook declined)'))).toBe(
+      'push-rejected'
+    );
+    expect(code('remote: Nope.\n ! [remote rejected] main -> main (pre-receive hook declined)\n')).toBe(
+      'push-rejected'
+    );
+  });
+
+  it('does not take words in the remote\'s URL for a reason', () => {
+    const url = 'https://h/team/read-only-docs.git';
+
+    expect(code(`fatal: unable to access '${url}/': Could not resolve host: h\n`)).toBe('host-unreachable');
+    expect(code(`fatal: Authentication failed for '${url}/'\n`)).toBe('auth-failed');
+    expect(
+      code(
+        `remote: Nope.\n${failedToPush}`,
+        `To ${url}\n!\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)\n`
+      )
+    )
+      .toBe('push-rejected');
+    expect(code('fatal: unable to access \'ssh://git@h/protected branch/r.git\': x\n')).toBe('failed');
+  });
+
+  it('does not take a sign-off or other words for a refusal of unsigned commits', () => {
+    const rejected = status('[remote rejected] (pre-receive hook declined)');
+
+    expect(code(`remote: commit abc123 is missing Signed-off-by\n${failedToPush}`, rejected)).toBe('push-rejected');
+    expect(code(`remote: the issue must be assigned first\n${failedToPush}`, rejected)).toBe('push-rejected');
+    expect(code(`remote: GL-HOOK-ERR: Commit must be signed with a GPG key\n${failedToPush}`, rejected)).toBe(
+      'push-unsigned'
+    );
+  });
+
+  it('collects the remote lines, without credentials and at most 64 KB', () => {
+    // git pads each line with spaces, to clear any progress shown before.
+    const stderr = 'remote: First        \r\nremote:\nremote: see https://u:token@h/x\nerror: failed\n';
+
+    expect(classifyPushFailure(pushed(stderr), []).remoteMessages).toBe('First\n\nsee https://***@h/x');
+
+    const long = classifyPushFailure(pushed(`remote: ${'é'.repeat(40_000)}\n`), []).remoteMessages;
+    expect(Buffer.byteLength(long)).toBeLessThanOrEqual(64 * 1024);
+    expect(long).toBe('é'.repeat(32 * 1024));
+  });
+
+  it('reads git\'s codes only from git\'s own lines', () => {
+    const stderr = 'remote: ! [rejected] (fetch first)\nremote: The requested URL returned error: 403\n'
+      + 'remote: protected branch\nremote: Authentication failed\n' + failedToPush;
+
+    expect(code(stderr, status('[remote rejected] (pre-receive hook declined)'))).toBe('push-rejected');
+    expect(code('remote: The requested URL returned error: 403\nfatal: the remote end hung up\n')).toBe('failed');
+  });
+
+  it('still reports a refused login as auth-failed', () => {
+    expect(code('remote: Invalid username or password.\nfatal: Authentication failed for \'https://h/r.git/\'\n')).toBe(
+      'auth-failed'
+    );
+    expect(code('git@h: Permission denied (publickey).\nfatal: Could not read from remote repository.\n')).toBe(
+      'auth-failed'
+    );
+    expect(code('fatal: unable to access \'https://h/r/\': The requested URL returned error: 401\n')).toBe(
+      'auth-failed'
+    );
+  });
+
+  it('puts a timeout and an egress refusal first', () => {
+    expect(classifyPushFailure(pushed(failedToPush, status('[rejected] (fetch first)'), true), []).code).toBe(
+      'timeout'
+    );
+    expect(classifyPushFailure(pushed('fatal: x\n'), [ { host: 'h', reason: 'blocked' } ]).code).toBe(
+      'host-unreachable'
+    );
   });
 });

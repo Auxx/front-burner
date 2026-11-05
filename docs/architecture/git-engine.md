@@ -178,9 +178,10 @@ Confirmed by spike 2 (spikes.md).
     and the engine never writes these keys, so before each network command the
     engine reads the repository's config (with includes) and refuses the command
     if it holds any of `http.*proxy`, `http.*curloptResolve`, `remote.*.proxy`,
-    `core.gitProxy`, `core.sshCommand`, `url.*.insteadOf`,
-    `url.*.pushInsteadOf`, `include.*` or `includeIf.*`. _(My call: defence in
-    depth against a bug elsewhere.)_
+    `remote.*.pushurl`, `core.gitProxy`, `core.sshCommand`, `url.*.insteadOf`,
+    `url.*.pushInsteadOf`, `include.*` or `includeIf.*`. A push also needs
+    `origin`'s URL to be the repository's stored remote, the only URL the broker
+    has credentials for. _(My call: defence in depth against a bug elsewhere.)_
   - Running git in an unprivileged network namespace without network (`unshare
     -Un`) would make bypassing the proxy impossible. It works in rootless podman
     with the NF-11.13 settings, but Docker's default seccomp profile blocks

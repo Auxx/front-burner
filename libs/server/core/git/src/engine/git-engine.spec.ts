@@ -2,6 +2,7 @@ import { startHttpsTestServer, TEST_CERTIFICATE_FILES } from '@front-burner/serv
 import { PathRefusedError } from '@front-burner/server-core-storage';
 import { execFileSync } from 'node:child_process';
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -1742,6 +1743,240 @@ describe('GitEngine', () => {
     );
   });
 
+  describe('push', () => {
+    const bare = () => join(root, 'fixture.git');
+    const work = () => join(root, 'repos', 'one');
+    const remoteUrl = () => `${server.url}/fixture.git`;
+    const cloneIt = (mode: 'full' | 'single-branch' = 'full', credentials: GitCredentials = NONE) =>
+      engine().clone({ remoteUrl: remoteUrl(), credentials, mode, branch: 'main', tmpRoot, destination: work() });
+    const push = (overrides: Partial<Parameters<GitEngine['push']>[1]> = {}) =>
+      engine().push(work(), {
+        remoteUrl: remoteUrl(),
+        credentials: NONE,
+        knownHosts: [],
+        branch: 'main',
+        singleBranch: false,
+        ...overrides
+      });
+    const commitIn = (subject: string) => git(work(), 'commit', '-q', '--allow-empty', '-m', subject);
+    const remoteLog = (ref = 'main') => git(bare(), 'log', '--format=%s', ref).trim();
+    const serveRepositories = async (extra: Partial<Parameters<typeof startGitHttpServer>[0]>) => {
+      await server.close();
+      server = await startGitHttpServer({
+        repositories: { 'fixture.git': bare(), 'empty.git': join(root, 'empty.git') },
+        ...extra
+      });
+    };
+    const refuseWithHook = (script: string) => {
+      const hook = join(bare(), 'hooks', 'pre-receive');
+      writeFileSync(hook, `#!/bin/sh\n${script}\nexit 1\n`);
+      chmodSync(hook, 0o755);
+    };
+
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    describe.skipIf(process.platform === 'win32')('over HTTPS', () => {
+      it('pushes over HTTPS', async () => {
+        await serveRepositories({ users: { [USER]: TOKEN } });
+        await cloneIt('full', HTTPS);
+        commitIn('third');
+
+        const result = await push({ credentials: HTTPS });
+
+        expect(result).toEqual({ commits: 1, upstream: 'origin/main' });
+        expect(remoteLog()).toBe('third\nsecond\nfirst');
+        expect(git(work(), 'rev-parse', 'origin/main')).toBe(git(work(), 'rev-parse', 'HEAD'));
+      });
+
+      it('pushes the current branch and no other, and no tags', async () => {
+        await cloneIt();
+        commitIn('third');
+        git(work(), 'tag', '-a', '-m', 'v1', 'v1');
+        git(work(), 'checkout', '-q', '-b', 'extra');
+        commitIn('extra');
+        git(work(), 'checkout', '-q', 'main');
+
+        await push();
+
+        expect(remoteLog()).toBe('third\nsecond\nfirst');
+        expect(git(bare(), 'for-each-ref', '--format=%(refname)').trim().split('\n')).toEqual([
+          'refs/heads/feature/x',
+          'refs/heads/main'
+        ]);
+      });
+
+      it('publishes an unpublished branch and sets its upstream', async () => {
+        await cloneIt();
+        git(work(), 'checkout', '-q', '-b', 'topic');
+        commitIn('topic work');
+
+        const result = await push({ branch: 'topic' });
+
+        expect(result).toEqual({ commits: 1, upstream: 'origin/topic' });
+        expect(remoteLog('topic')).toBe('topic work\nsecond\nfirst');
+        expect(git(work(), 'rev-parse', '--abbrev-ref', 'topic@{upstream}').trim()).toBe('origin/topic');
+      });
+
+      it('pushes to an upstream of another name', async () => {
+        await cloneIt();
+        git(work(), 'checkout', '-q', '-b', 'local', '--track', 'origin/feature/x');
+        commitIn('on x');
+
+        const result = await push({ branch: 'local' });
+
+        expect(result).toEqual({ commits: 1, upstream: 'origin/feature/x' });
+        expect(remoteLog('feature/x')).toBe('on x\nsecond\nfirst');
+        expect(git(bare(), 'for-each-ref', '--format=%(refname)', 'refs/heads/local')).toBe('');
+      });
+
+      it('pushes a new branch from a single-branch clone', async () => {
+        await cloneIt('single-branch');
+        git(work(), 'checkout', '-q', '-b', 'topic');
+        commitIn('topic work');
+
+        expect(await push({ branch: 'topic', singleBranch: true })).toEqual({ commits: 1, upstream: 'origin/topic' });
+        expect(git(work(), 'rev-parse', 'refs/remotes/origin/topic')).toBe(git(work(), 'rev-parse', 'HEAD'));
+
+        commitIn('more');
+        await push({ branch: 'topic', singleBranch: true });
+
+        expect(git(work(), 'config', '--get-all', 'remote.origin.fetch').trim().split('\n')).toEqual([
+          '+refs/heads/main:refs/remotes/origin/main',
+          '+refs/heads/topic:refs/remotes/origin/topic'
+        ]);
+        expect(remoteLog('topic')).toBe('more\ntopic work\nsecond\nfirst');
+      });
+
+      it('pushes a branch whose name starts with a dash', async () => {
+        await cloneIt();
+        git(work(), 'update-ref', 'refs/heads/-x', 'HEAD');
+        git(work(), 'symbolic-ref', 'HEAD', 'refs/heads/-x');
+        commitIn('dashed');
+
+        expect(await push({ branch: '-x' })).toEqual({ commits: 1, upstream: 'origin/-x' });
+        expect(git(bare(), 'log', '--format=%s', '-1', 'refs/heads/-x').trim()).toBe('dashed');
+      });
+
+      it('reports a non-fast-forward, and does not force', async () => {
+        await cloneIt();
+        commitIn('mine');
+        const theirs = git(bare(), 'commit-tree', '-p', 'main', '-m', 'theirs', 'main^{tree}').trim();
+        git(bare(), 'update-ref', 'refs/heads/main', theirs);
+
+        const failure = await failureOf(push());
+
+        expect(failure.code).toBe('push-non-fast-forward');
+        expect(git(bare(), 'rev-parse', 'main').trim()).toBe(theirs);
+      });
+
+      it('reports a server hook\'s lines', async () => {
+        await cloneIt();
+        commitIn('third');
+        refuseWithHook('echo "Branch main is frozen." >&2');
+
+        const failure = await failureOf(push());
+
+        expect(failure.code).toBe('push-rejected');
+        expect(failure.params['remoteMessages']).toBe('Branch main is frozen.');
+        expect(remoteLog()).toBe('second\nfirst');
+      });
+
+      it('reports a 403 as push-not-allowed', async () => {
+        await serveRepositories({ refusePush: 403 });
+        await cloneIt();
+        commitIn('third');
+
+        const failure = await failureOf(push());
+
+        expect(failure.code).toBe('push-not-allowed');
+      });
+
+      it('reports refused credentials as auth-failed', async () => {
+        await serveRepositories({ users: { [USER]: TOKEN } });
+        await cloneIt('full', HTTPS);
+        commitIn('third');
+
+        const failure = await failureOf(push({ credentials: { ...HTTPS, password: 'wrong' } }));
+
+        expect(failure.code).toBe('auth-failed');
+      });
+
+      it('leaves no credentials in the error\'s detail and params', async () => {
+        await serveRepositories({ users: { [USER]: TOKEN } });
+        await cloneIt('full', HTTPS);
+        commitIn('third');
+        refuseWithHook(`echo "see https://${USER}:${TOKEN}@example.com/help" >&2`);
+
+        const failure = await failureOf(push({ credentials: HTTPS }));
+
+        expect(failure.code).toBe('push-rejected');
+        expect(failure.params['remoteMessages']).toBe('see https://***@example.com/help');
+        expect(failure.detail).not.toContain(TOKEN);
+        expect(JSON.stringify(failure.params)).not.toContain(TOKEN);
+      });
+
+      it('refuses a config with a pushurl', async () => {
+        await cloneIt();
+        commitIn('third');
+        git(work(), 'config', 'remote.origin.pushurl', `${server.url}/empty.git`);
+
+        const failure = await failureOf(push());
+
+        expect(failure.code).toBe('unsafe-repository-config');
+        expect(git(join(root, 'empty.git'), 'for-each-ref')).toBe('');
+      });
+
+      it('refuses an origin with another URL besides the stored remote', async () => {
+        await cloneIt();
+        commitIn('third');
+        // git pushes to every URL of a remote; `--get` reads only the last.
+        git(work(), 'config', 'remote.origin.url', `${server.url}/empty.git`);
+        git(work(), 'config', '--add', 'remote.origin.url', remoteUrl());
+
+        const failure = await failureOf(push());
+
+        expect(failure.code).toBe('unsafe-repository-config');
+        expect(git(join(root, 'empty.git'), 'for-each-ref')).toBe('');
+        expect(remoteLog()).toBe('second\nfirst');
+      });
+
+      it('leaves what a single-branch clone fetches as it was when the push fails', async () => {
+        await cloneIt('single-branch');
+        git(work(), 'checkout', '-q', '-b', 'topic');
+        commitIn('topic work');
+        refuseWithHook('echo "No new branches." >&2');
+
+        const failure = await failureOf(push({ branch: 'topic', singleBranch: true }));
+
+        expect(failure.code).toBe('push-rejected');
+        expect(git(work(), 'config', '--get-all', 'remote.origin.fetch').trim()).toBe(
+          '+refs/heads/main:refs/remotes/origin/main'
+        );
+      });
+
+      it('does not report a config it cannot read as unsafe', async () => {
+        await cloneIt();
+        commitIn('third');
+        writeFileSync(join(work(), '.git', 'config'), '[[[ not a config\n');
+
+        const error = await push().catch((caught: unknown) => caught);
+
+        expect(error).toBeInstanceOf(Error);
+        expect(error).not.toBeInstanceOf(GitOperationError);
+        expect(remoteLog()).toBe('second\nfirst');
+      });
+
+      it('refuses when origin is not the stored remote', async () => {
+        await cloneIt();
+        commitIn('third');
+
+        const failure = await failureOf(push({ remoteUrl: `${server.url}/empty.git` }));
+
+        expect(failure.code).toBe('unsafe-repository-config');
+        expect(remoteLog()).toBe('second\nfirst');
+      });
+    });
+  });
+
   describe('over SSH', () => {
     const KEYS = join(__dirname, '../testing/fixtures/keys');
     const keyText = (name: string) => readFileSync(join(KEYS, name), 'utf8');
@@ -1789,6 +2024,24 @@ describe('GitEngine', () => {
       const result = await engine({ knownHosts: [ ssh.hostKeyLine ] }).accessCheck(url(), SSH);
 
       expect(result.defaultBranch).toBe('main');
+    });
+
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('pushes over SSH with a key', async () => {
+      await clone();
+      const destination = join(root, 'repos', 'one');
+      git(destination, 'commit', '-q', '--allow-empty', '-m', 'over ssh');
+
+      const result = await engine().push(destination, {
+        remoteUrl: url(),
+        credentials: SSH,
+        knownHosts: [ ssh.hostKeyLine ],
+        branch: 'main',
+        singleBranch: false
+      });
+
+      expect(result).toEqual({ commits: 1, upstream: 'origin/main' });
+      expect(git(join(root, 'fixture.git'), 'log', '-1', '--format=%s', 'main').trim()).toBe('over ssh');
     });
 
     // The broker listens on a Unix socket in a POSIX path: not on Windows.
