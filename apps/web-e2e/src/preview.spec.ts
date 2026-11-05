@@ -373,7 +373,9 @@ test.describe('preview', () => {
     await openScreen(page, `/repositories/${id}/files/large.md`);
     await expect(preview(page, 'large.md').getByText('The end', { exact: true })).toBeAttached();
     const cdp = await page.context().newCDPSession(page);
-    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    // A mid-range device. A CI runner renders 2 to 5 times slower than a desktop before any throttling, and its
+    // speed varies by more than the budget leaves, so 2x there asks at least as much as 4x on a desktop.
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: process.env['CI'] ? 2 : 4 });
 
     await page.evaluate(() => {
       const state = window as unknown as { lastKey: number; changedAt: number | null; };
