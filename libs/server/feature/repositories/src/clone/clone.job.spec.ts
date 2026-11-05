@@ -14,7 +14,12 @@ import {
 import { JobRunner } from '@front-burner/server-core-jobs';
 import { SessionLifecycle } from '@front-burner/server-core-security';
 import { DataLayout } from '@front-burner/server-core-storage';
-import { KeyUnlockStore, KnownHostsService, SavedCredentialsService } from '@front-burner/server-feature-credentials';
+import {
+  JobKeys,
+  KeyUnlockStore,
+  KnownHostsService,
+  SavedCredentialsService
+} from '@front-burner/server-feature-credentials';
 import type { AddRepositoryRequest, PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
@@ -25,7 +30,6 @@ import { RequestCredentials } from '../add/request-credentials';
 import { insertUser } from '../testing/fixtures';
 import { createRemotes, git, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
 import { createTestDatabase } from '../testing/test-database';
-import { CloneKeys } from './clone-keys';
 import { CloneJob } from './clone.job';
 
 const box = new SecretBox('clone-job-spec-key-0123456789abcdef');
@@ -57,7 +61,7 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
   let engine: GitEngine;
   let publish: ReturnType<typeof vi.fn<(userId: number, event: PushEvent) => void>>;
   let adding: AddRepositoryService;
-  let cloneKeys: CloneKeys;
+  let jobKeys: JobKeys;
   let alice: { id: number; sessionId: string; };
 
   function build(gitOptions: GitOptions = testGitOptions()): void {
@@ -66,8 +70,8 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
     runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, events);
     engine = new GitEngine(gitOptions, new GitRunner());
     const knownHosts = new KnownHostsService(database, gitOptions);
-    cloneKeys = new CloneKeys();
-    new CloneJob(database, runner, engine, saved, knownHosts, cloneKeys, events, layout).onModuleInit();
+    jobKeys = new JobKeys();
+    new CloneJob(database, runner, engine, saved, knownHosts, jobKeys, events, layout).onModuleInit();
     adding = new AddRepositoryService(
       database,
       new RequestCredentials(saved, unlocks),
@@ -76,7 +80,7 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
       knownHosts,
       engine,
       runner,
-      cloneKeys
+      jobKeys
     );
   }
 
@@ -191,11 +195,11 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
   it('drops the held key of a clone cancelled before it ran', async () => {
     const { id } = await add();
     const [ job ] = database.db.select().from(jobs).where(eq(jobs.repositoryId, id)).all();
-    cloneKeys.hold(job?.id ?? 0, unlockPrivateKey(sshKeyFixture('ed25519')));
+    jobKeys.hold(job?.id ?? 0, unlockPrivateKey(sshKeyFixture('ed25519')));
 
     runner.cancel({ id: job?.id ?? 0 });
 
-    expect(cloneKeys.take(job?.id ?? 0)).toBeUndefined();
+    expect(jobKeys.take(job?.id ?? 0)).toBeUndefined();
     expect(rowOf(id)?.status).toBe('cloning');
   });
 

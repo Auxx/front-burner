@@ -2,7 +2,12 @@ import { DATABASE, Database, repositories, savedCredentials, Tx, users } from '@
 import { GitEngine, GitOperationError } from '@front-burner/server-core-git';
 import { JobRunner } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { KeyUnlockStore, KnownHostsService, SavedCredentialsService } from '@front-burner/server-feature-credentials';
+import {
+  JobKeys,
+  KeyUnlockStore,
+  KnownHostsService,
+  SavedCredentialsService
+} from '@front-burner/server-feature-credentials';
 import {
   type AccessCheckRequest,
   type AccessCheckResult,
@@ -15,7 +20,6 @@ import {
 import { type ParsedRemote, parseRemoteUrl } from '@front-burner/shared-util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
-import { CloneKeys } from '../clone/clone-keys';
 import { toSummary } from '../repositories/repository-queries';
 import { toAddRepositoryError } from './remote-errors';
 import { RequestCredentials, ResolvedCredentials } from './request-credentials';
@@ -76,7 +80,7 @@ export class AddRepositoryService {
     private readonly knownHosts: KnownHostsService,
     private readonly engine: GitEngine,
     private readonly runner: JobRunner,
-    private readonly cloneKeys: CloneKeys
+    private readonly jobKeys: JobKeys
   ) {}
 
   /** The branch list of the form (AR-35). */
@@ -136,7 +140,7 @@ export class AddRepositoryService {
     });
     // Synchronously after the commit, before the runner's loop can start the job (AR-49).
     if (credentials.protectedKey && credentials.git.kind === 'ssh') {
-      this.cloneKeys.hold(jobId, credentials.git.key);
+      this.jobKeys.hold(jobId, credentials.git.key);
     }
     if (
       request.credentials.mode === 'new-ssh-key' && request.credentials.passphrase !== undefined && row.credentialId
