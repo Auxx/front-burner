@@ -7,7 +7,7 @@
       }
       @if (error.retry) {
         <div uiBannerActions>
-          <button uiButton size="small" class="retry" (click)="submit()">{{ t('retry') }}</button>
+          <button uiButton size="small" class="retry" (click)="retry()">{{ t('retry') }}</button>
         </div>
       }
     </ui-inline-banner>
@@ -17,13 +17,14 @@
   </ui-field>
   @let reason = blocked();
   <button
+    #commitButton
     uiButton
     uiTooltipLongPress
     class="commit"
     variant="primary"
     [busy]="commit.busy()"
     [unavailable]="reason !== null"
-    [uiTooltip]="reason ? t(reason, { count: maxPaths }) : ''"
+    [uiTooltip]="reason ? t(reason, { count: maxPaths, length: maxMessageLength }) : ''"
     (click)="submit()"
   >
     {{ t(count() === 1 ? 'commitOne' : 'commitMany', { count: count() }) }}

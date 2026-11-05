@@ -1,4 +1,5 @@
-import { computed, effect, inject, Injectable, linkedSignal, untracked } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { computed, DestroyRef, effect, inject, Injectable, linkedSignal, untracked } from '@angular/core';
 import { CurrentUserService } from '@front-burner/web-core';
 
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
@@ -11,6 +12,7 @@ import { GitStatusStore } from '../git-status-store/git-status-store.service';
  * starts ticked without being recorded, under
  * `fb.<userId>.unticked.<repositoryId>`. A path that is no longer a change is
  * forgotten whenever the status changes, so that the file comes back ticked.
+ * Another tab's ticks are followed, as they are this device's too.
  * Storage that is missing or refuses access only loses the memory.
  */
 @Injectable()
@@ -61,6 +63,16 @@ export class CommitTicksService {
         }
       });
     });
+
+    const window = inject(DOCUMENT).defaultView;
+    const changedElsewhere = (event: StorageEvent) => {
+      const key = this.key();
+      if (key !== null && (event.key === key || event.key === null)) {
+        this.unticked.set(new Set(readPaths(key)));
+      }
+    };
+    window?.addEventListener('storage', changedElsewhere);
+    inject(DestroyRef).onDestroy(() => window?.removeEventListener('storage', changedElsewhere));
   }
 
   isTicked(path: string): boolean {

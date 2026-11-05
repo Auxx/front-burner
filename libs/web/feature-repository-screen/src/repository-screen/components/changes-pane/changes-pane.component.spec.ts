@@ -54,7 +54,13 @@ describe('ChangesPaneComponent', () => {
         CommitTicksService,
         {
           provide: CommitService,
-          useValue: { message: signal(''), busy: signal(false), error: signal(null), commit: vi.fn() }
+          useValue: {
+            paths: signal([]),
+            message: signal(''),
+            busy: signal(false),
+            error: signal(null),
+            commit: vi.fn()
+          }
         },
         { provide: CurrentUserService, useValue: { user: signal({ id: 4 } as CurrentUser) } },
         { provide: GitStatusStore, useValue: { status, failed, refresh, followed: signal(1) } }

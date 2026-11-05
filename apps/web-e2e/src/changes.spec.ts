@@ -84,9 +84,8 @@ test.describe('committing', () => {
 
   test('AC-GIT-002.5: typing and committing at once includes the last edit', async ({ page, instance }) => {
     const { id, dir } = await handbook(instance);
-    writeFileSync(join(dir, 'README.md'), '# Changed\n');
+    // A clean file, so that **Changes** does not list it until a status has been read after the save.
     await openScreen(page, `/repositories/${id}/files/README.md`);
-    await expect(changesButton(page, 'Changes (1)')).toBeVisible();
 
     await page.getByRole('main', { name: 'Editor' }).getByRole('textbox', { name: 'README.md', exact: true }).click();
     await page.keyboard.press('ControlOrMeta+End');
@@ -95,9 +94,12 @@ test.describe('committing', () => {
     await message(page).fill('With the last edit');
     await commitButton(page, 'Commit 1 file').click();
 
-    await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
+    // The field is cleared by the commit. "No changes" may still be there from before the first edit.
+    await expect(message(page)).toHaveValue('');
     expect(gitIn(dir, 'show', 'HEAD:README.md')).toContain('The last edit');
     expect(readFileSync(join(dir, 'README.md'), 'utf8')).toContain('The last edit');
+    await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
+    expect(gitIn(dir, 'status', '--porcelain').trim()).toBe('');
   });
 
   test('AC-GIT-002.6: a first line over 72 characters shows a hint and still commits, and a line starting with # is kept', async ({ page, instance }) => {

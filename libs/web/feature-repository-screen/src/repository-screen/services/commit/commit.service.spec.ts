@@ -68,7 +68,13 @@ describe('CommitService', () => {
       return Promise.resolve();
     });
     TestBed.configureTestingModule({
-      imports: [ translocoTesting() ],
+      imports: [
+        translocoTesting({
+          'errors.changed-on-disk': 'Changed {{ path }}',
+          'errors.file-gone': 'Gone {{ path }}',
+          'errors.file-held': 'Held {{ path }}'
+        })
+      ],
       providers: [
         CommitService,
         CommitTicksService,
@@ -157,6 +163,84 @@ describe('CommitService', () => {
     expect(requests).toEqual([ 'save the last edit', 'commit', 'status' ]);
   });
 
+  it('AC-GIT-002.5: includes the first edit of a file that the list does not show yet', async () => {
+    const file = await openFiles.open('new-edit.md');
+    file.saver.edit(() => 'the first edit');
+    expect(service.paths()).toEqual([ 'a.md', 'b.md', 'new-edit.md' ]);
+
+    const done = service.commit('Subject');
+    await sent();
+    saves[0].answer.next({ hash: HASH } as FileState);
+    saves[0].answer.complete();
+    await done;
+
+    expect(commits[0].paths).toEqual([ 'a.md', 'b.md', 'new-edit.md' ]);
+  });
+
+  it('can commit only the first edit of a file, when nothing is listed yet', async () => {
+    status.set(statusOf());
+    const file = await openFiles.open('new-edit.md');
+    file.saver.edit(() => 'the first edit');
+
+    const done = service.commit('Subject');
+    await sent();
+    saves[0].answer.next({ hash: HASH } as FileState);
+    saves[0].answer.complete();
+
+    expect(await done).toBe(true);
+    expect(commits[0].paths).toEqual([ 'new-edit.md' ]);
+  });
+
+  it('keeps out an unticked file that has unsaved edits', async () => {
+    const file = await openFiles.open('b.md');
+    ticks.setTicked('b.md', false);
+    file.saver.edit(() => 'the last edit');
+
+    expect(service.paths()).toEqual([ 'a.md' ]);
+    file.saver.discard();
+  });
+
+  it('does not commit when a save fails after the user left the repository', async () => {
+    const file = await openFiles.open('a.md');
+    file.saver.edit(() => 'the last edit');
+
+    const done = service.commit('Subject');
+    await sent();
+    repository.set({ id: 13 });
+    followed.set(13);
+    TestBed.tick();
+    saves[0].answer.error(new HttpErrorResponse({ status: 503 }));
+
+    expect(await done).toBe(false);
+    expect(commits).toEqual([]);
+    expect(service.error()).toBeNull();
+    file.saver.discard();
+  });
+
+  it('does not commit a ticked file whose save is held, as during a rename', async () => {
+    const file = await openFiles.open('a.md');
+    const release = file.saver.hold();
+    file.saver.edit(() => 'the last edit');
+
+    expect(await service.commit('Subject')).toBe(false);
+
+    expect(commits).toEqual([]);
+    expect(service.error()).toMatchObject({ text: 'Held a.md', retry: true });
+    release();
+    file.saver.discard();
+  });
+
+  it('names the file and its way out when it was deleted elsewhere with unsaved edits', async () => {
+    const file = await openFiles.open('a.md');
+    file.saver.edit(() => 'mine');
+    openFiles.markGone('a.md');
+
+    expect(await service.commit('Subject')).toBe(false);
+
+    expect(service.error()).toMatchObject({ text: 'Gone a.md', retry: false });
+    file.saver.discard();
+  });
+
   it('does not commit when a waiting save fails', async () => {
     const file = await openFiles.open('a.md');
     file.saver.edit(() => 'the last edit');
@@ -193,7 +277,7 @@ describe('CommitService', () => {
     expect(await service.commit('Subject')).toBe(false);
 
     expect(commits).toEqual([]);
-    expect(service.error()).toMatchObject({ retry: false });
+    expect(service.error()).toMatchObject({ text: `Changed a.md`, retry: false });
     file.saver.discard();
   });
 
@@ -265,6 +349,70 @@ describe('CommitService', () => {
     expect(service.error()).toBeNull();
   });
 
+  it('does not offer the committed files again when the status could not be read', async () => {
+    await service.commit('Subject');
+    expect(service.paths()).toEqual([]);
+    expect(await service.commit('Another')).toBe(false);
+    expect(commits.length).toBe(1);
+
+    // A later read knows better, also about a file that changed again.
+    status.set(statusOf('a.md'));
+    expect(service.paths()).toEqual([ 'a.md' ]);
+  });
+
+  it('still offers a file edited again after the commit, before the status was read', async () => {
+    await service.commit('Subject');
+    const file = await openFiles.open('a.md');
+    file.saver.edit(() => 'edited again');
+
+    expect(service.paths()).toEqual([ 'a.md' ]);
+    file.saver.discard();
+  });
+
+  describe('a failure that is no longer true', () => {
+    beforeEach(async () => {
+      commitAnswer = () => throwError(() => refusal('nothing-to-commit'));
+      await service.commit('Subject');
+      TestBed.tick();
+      expect(service.error()).not.toBeNull();
+    });
+
+    it('stays while nothing changes, also when the same status is read again', () => {
+      status.set(statusOf('a.md', 'b.md'));
+      TestBed.tick();
+
+      expect(service.error()).not.toBeNull();
+    });
+
+    it('goes when the message changes', () => {
+      service.message.set('Another');
+      TestBed.tick();
+
+      expect(service.error()).toBeNull();
+    });
+
+    it('goes when the ticks change', () => {
+      ticks.setTicked('b.md', false);
+      TestBed.tick();
+
+      expect(service.error()).toBeNull();
+    });
+  });
+
+  it('removes a failed save\'s error once the file is saved', async () => {
+    const file = await openFiles.open('a.md');
+    file.saver.edit(() => 'mine');
+    openFiles.changedOnDisk('a.md', HASH);
+    await service.commit('Subject');
+    TestBed.tick();
+    expect(service.error()).not.toBeNull();
+
+    file.saver.discard();
+    TestBed.tick();
+
+    expect(service.error()).toBeNull();
+  });
+
   it('needs a message and a ticked file', async () => {
     expect(await service.commit('  \n ')).toBe(false);
     ticks.setAll(false);
@@ -284,6 +432,29 @@ describe('CommitService', () => {
 
     expect(service.message()).toBe('');
     expect(service.error()).toBeNull();
+  });
+
+  it('is busy only for the repository it commits in, which can commit again meanwhile', async () => {
+    const answer = new Subject<CommitResult>();
+    commitAnswer = () => answer;
+    const first = service.commit('Subject');
+    expect(service.busy()).toBe(true);
+    await vi.waitFor(() => expect(commits.length).toBe(1));
+
+    repository.set({ id: 13 });
+    followed.set(13);
+    TestBed.tick();
+    expect(service.busy()).toBe(false);
+    commitAnswer = () => of({ oid: 'c'.repeat(40) });
+    expect(await service.commit('For the next repository')).toBe(true);
+    expect(commits.length).toBe(2);
+
+    repository.set({ id: 12 });
+    expect(service.busy()).toBe(true);
+    answer.next({ oid: 'c'.repeat(40) });
+    answer.complete();
+    await first;
+    expect(service.busy()).toBe(false);
   });
 
   it('does not touch the next repository\'s form when a commit ends after a navigation', async () => {

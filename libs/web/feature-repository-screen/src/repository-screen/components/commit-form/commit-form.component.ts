@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { COMMIT_MAX_PATHS } from '@front-burner/shared-contracts';
+import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, viewChild } from '@angular/core';
+import { COMMIT_MAX_PATHS, COMMIT_MESSAGE_MAX_LENGTH } from '@front-burner/shared-contracts';
 import {
   BannerActionsComponent,
   ButtonComponent,
@@ -10,7 +10,6 @@ import {
 } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
 import { CommitService } from '../../services/commit/commit.service';
 
 /** Longer first lines get a hint; nothing is refused (GA-18). */
@@ -40,17 +39,21 @@ const SUBJECT_HINT_LENGTH = 72;
 })
 export class CommitFormComponent {
   protected readonly commit = inject(CommitService);
-  private readonly ticks = inject(CommitTicksService);
+  private readonly commitButton = viewChild.required('commitButton', { read: ElementRef<HTMLElement> });
 
-  protected readonly count = computed(() => this.ticks.ticked().length);
+  protected readonly count = computed(() => this.commit.paths().length);
   protected readonly longSubject = computed(() => this.commit.message().split('\n', 1)[0].length > SUBJECT_HINT_LENGTH);
   protected readonly subjectHintLength = SUBJECT_HINT_LENGTH;
   protected readonly maxPaths = COMMIT_MAX_PATHS;
+  protected readonly maxMessageLength = COMMIT_MESSAGE_MAX_LENGTH;
 
   /** The translation key of why the button can't commit, if it can't. */
   protected readonly blocked = computed(() => {
     if (this.commit.message().trim() === '') {
       return 'needsMessage';
+    }
+    if (this.commit.message().length > COMMIT_MESSAGE_MAX_LENGTH) {
+      return 'messageTooLong';
     }
     if (this.count() === 0) {
       return 'needsFile';
@@ -62,6 +65,12 @@ export class CommitFormComponent {
     if (this.blocked() === null) {
       void this.commit.commit(this.commit.message());
     }
+  }
+
+  /** The banner goes with the button that asked, so the focus moves first. */
+  protected retry(): void {
+    (this.commitButton().nativeElement as HTMLElement).focus();
+    this.submit();
   }
 
   protected typed(event: Event): void {

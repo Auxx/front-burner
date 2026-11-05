@@ -147,6 +147,33 @@ describe('CommitTicksService', () => {
     }
   });
 
+  it('follows what another tab ticks on this device', () => {
+    const ticks = create();
+    ticks.setTicked('a.md', false);
+
+    localStorage.setItem('fb.4.unticked.1', '["b.md"]');
+    window.dispatchEvent(new StorageEvent('storage', { key: 'fb.4.unticked.1' }));
+    expect(ticks.ticked()).toEqual([ 'a.md', 'c.md' ]);
+
+    // So that what this tab writes next keeps the other tab's choice.
+    ticks.setTicked('c.md', false);
+    expect(JSON.parse(localStorage.getItem('fb.4.unticked.1') as string)).toEqual([ 'b.md', 'c.md' ]);
+  });
+
+  it('ignores another tab\'s ticks of another repository, and stops listening when destroyed', () => {
+    const ticks = create();
+    ticks.setTicked('a.md', false);
+
+    localStorage.setItem('fb.4.unticked.2', '["b.md"]');
+    window.dispatchEvent(new StorageEvent('storage', { key: 'fb.4.unticked.2' }));
+    expect(ticks.ticked()).toEqual([ 'b.md', 'c.md' ]);
+
+    TestBed.resetTestingModule();
+    localStorage.setItem('fb.4.unticked.1', '["b.md"]');
+    window.dispatchEvent(new StorageEvent('storage', { key: 'fb.4.unticked.1' }));
+    expect(ticks.ticked()).toEqual([ 'b.md', 'c.md' ]);
+  });
+
   it('keeps working when storage throws', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('denied');

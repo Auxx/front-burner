@@ -5,7 +5,6 @@ import { TooltipDirective } from '@front-burner/ui';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
-import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
 import { type CommitFailure, CommitService } from '../../services/commit/commit.service';
 import { CommitFormComponent } from './commit-form.component';
 
@@ -13,7 +12,7 @@ const KEY = 'web-feature-repository-screen.CommitFormComponent';
 
 describe('CommitFormComponent', () => {
   let fixture: ComponentFixture<CommitFormComponent>;
-  let ticked: ReturnType<typeof signal<string[]>>;
+  let paths: ReturnType<typeof signal<string[]>>;
   let message: ReturnType<typeof signal<string>>;
   let busy: ReturnType<typeof signal<boolean>>;
   let error: ReturnType<typeof signal<CommitFailure | null>>;
@@ -36,7 +35,7 @@ describe('CommitFormComponent', () => {
   }
 
   beforeEach(() => {
-    ticked = signal([ 'a.md', 'b.md' ]);
+    paths = signal([ 'a.md', 'b.md' ]);
     message = signal('');
     busy = signal(false);
     error = signal<CommitFailure | null>(null);
@@ -50,8 +49,7 @@ describe('CommitFormComponent', () => {
         })
       ],
       providers: [
-        { provide: CommitTicksService, useValue: { ticked } },
-        { provide: CommitService, useValue: { message, busy, error, commit } }
+        { provide: CommitService, useValue: { paths, message, busy, error, commit } }
       ]
     });
   });
@@ -60,7 +58,7 @@ describe('CommitFormComponent', () => {
     await render();
     expect(button().textContent?.trim()).toBe('Commit 2 files');
 
-    ticked.set([ 'a.md' ]);
+    paths.set([ 'a.md' ]);
     await settle(fixture);
     expect(button().textContent?.trim()).toBe('Commit 1 file');
   });
@@ -77,7 +75,7 @@ describe('CommitFormComponent', () => {
     expect(button().getAttribute('aria-disabled')).toBeNull();
     expect(reason()).toBe('');
 
-    ticked.set([]);
+    paths.set([]);
     await settle(fixture);
     expect(button().getAttribute('aria-disabled')).toBe('true');
     expect(reason()).toBe(`${KEY}.needsFile`);
@@ -86,12 +84,39 @@ describe('CommitFormComponent', () => {
   });
 
   it('says so when more files are ticked than one commit takes', async () => {
-    ticked.set(Array.from({ length: 10_001 }, (_, index) => `${index}.md`));
+    paths.set(Array.from({ length: 10_001 }, (_, index) => `${index}.md`));
     await render();
     await type('Subject');
 
     expect(button().getAttribute('aria-disabled')).toBe('true');
     expect(reason()).toBe(`${KEY}.tooManyFiles`);
+  });
+
+  it('says so when the message is longer than a commit takes', async () => {
+    await render();
+    await type('x'.repeat(65_537));
+
+    expect(button().getAttribute('aria-disabled')).toBe('true');
+    expect(reason()).toBe(`${KEY}.messageTooLong`);
+
+    await type('x'.repeat(65_536));
+    expect(button().getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('keeps the focus in the form when Try again goes with its banner', async () => {
+    message.set('Subject');
+    error.set({ text: 'No network', reference: null, retry: true });
+    await render();
+    document.body.append(host());
+    const retry = host().querySelector('.retry') as HTMLButtonElement;
+    retry.focus();
+
+    retry.click();
+    error.set(null);
+    await settle(fixture);
+
+    expect(document.activeElement).toBe(button());
+    host().remove();
   });
 
   it('sends the message as written', async () => {

@@ -114,6 +114,11 @@ export class FileSaver {
     return this.pending?.() ?? null;
   }
 
+  /** Whether content waits that a flush can't send, since the saver is held. */
+  held(): boolean {
+    return this.holds > 0 && this.pending !== null;
+  }
+
   /** Records an edit; `content` is read only when the save is sent. */
   edit(content: () => string): void {
     this.pending = content;
