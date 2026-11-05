@@ -54,6 +54,16 @@ export interface CommitRequest {
   message: string;
   /** Recorded as author and committer (CA-2). */
   author: { name: string; email: string; };
+  /** Replaces the last commit (GA-22); then `paths` may name no change. */
+  amend?: boolean;
+}
+
+/** The current branch's last commit, as far as the commit form needs it (GA-22). */
+export interface LastCommit {
+  /** It is on the current branch, not on any remote branch, and not a merge commit. */
+  amendable: boolean;
+  /** Without a trailing line break; `null` when it cannot be amended, as nothing else needs it. */
+  message: string | null;
 }
 
 interface LocalRunOptions {
@@ -370,13 +380,55 @@ export class GitEngine implements BeforeApplicationShutdown {
   }
 
   /**
+   * The last commit and whether it can be amended (GA-22), or `null` without
+   * commits. Never writes the index, so it can run outside the working-tree lock
+   * (A-5.3).
+   */
+  async lastCommit(workingCopy: string): Promise<LastCommit | null> {
+    const head = await this.runLocal(workingCopy, [ '--no-optional-locks', 'rev-list', '--parents', '-1', 'HEAD' ]);
+    if (head.timedOut) {
+      throw new GitOperationError('timeout', head.stderr);
+    }
+    if (head.exitCode !== 0) {
+      // HEAD names a branch that has no commit yet.
+      return null;
+    }
+    const [ branch, onRemote ] = await Promise.all([
+      this.runLocal(workingCopy, [ 'symbolic-ref', '--quiet', 'HEAD' ]),
+      this.runChecked(workingCopy, [
+        '--no-optional-locks',
+        'for-each-ref',
+        '--contains',
+        'HEAD',
+        '--count=1',
+        'refs/remotes'
+      ])
+    ]);
+    if (branch.timedOut) {
+      throw new GitOperationError('timeout', branch.stderr);
+    }
+    const isMerge = head.stdout.trim().split(' ').length > 2;
+    if (branch.exitCode !== 0 || isMerge || onRemote.trim() !== '') {
+      return { amendable: false, message: null };
+    }
+    const message = await this.runChecked(workingCopy, [ '--no-optional-locks', 'log', '-1', '--format=%B' ]);
+    return { amendable: true, message: message.replace(/\n+$/, '') };
+  }
+
+  /**
    * Commits exactly the listed paths, as they are on disk, with their additions
    * and deletions, as `author` (GA-19, CA-2). Paths that are not changes are
    * ignored. Anything else in the index is left out, and on failure the index
    * is emptied again, so that the working copy is as it was (GA-43). The
    * caller has checked the paths and holds the working-tree lock.
    *
-   * @throws GitOperationError `nothing-to-commit` when no path is a change.
+   * With `amend`, replaces the last commit with one that has the message, the
+   * last commit's files and the listed paths, which then need not name a change
+   * (GA-22). The rule is checked here, inside the lock, since a push can have
+   * happened after the client read the status.
+   *
+   * @throws GitOperationError `nothing-to-commit` when no path is a change, and
+   * `amend-not-allowed` when the last commit cannot be amended.
    */
   async commit(workingCopy: string, request: CommitRequest): Promise<{ oid: string; }> {
     const status = await this.status(workingCopy);
@@ -384,9 +436,13 @@ export class GitEngine implements BeforeApplicationShutdown {
       // A commit on no branch is lost after the next switch (plan 52's review).
       throw new GitOperationError('detached-head', 'HEAD is not on a branch.');
     }
+    const amend = request.amend === true;
+    if (amend && (await this.lastCommit(workingCopy))?.amendable !== true) {
+      throw new GitOperationError('amend-not-allowed', 'The last commit cannot be amended.');
+    }
     const changed = new Set(status.changes.map(change => change.path));
     const paths = [ ...new Set(request.paths) ].filter(path => changed.has(path));
-    if (paths.length === 0) {
+    if (paths.length === 0 && !amend) {
       throw new GitOperationError('nothing-to-commit', 'None of the paths is a change.');
     }
     const emptyIndex = status.noCommits ? [ 'read-tree', '--empty' ] : [ 'reset', '-q' ];
@@ -398,15 +454,28 @@ export class GitEngine implements BeforeApplicationShutdown {
         // GA-42: whatever HEAD names in a new repository, the first commit makes `main`.
         await this.runChecked(workingCopy, [ 'symbolic-ref', 'HEAD', 'refs/heads/main' ]);
       }
-      await this.runChecked(
-        workingCopy,
-        [ '--literal-pathspecs', 'add', '-A', '--pathspec-from-file=-', '--pathspec-file-nul' ],
-        { stdin: nulTerminated(paths), timeoutMs: this.options.gitTimeoutMs }
-      );
+      if (paths.length > 0) {
+        // With no paths at all, `add -A` would add every change.
+        await this.runChecked(
+          workingCopy,
+          [ '--literal-pathspecs', 'add', '-A', '--pathspec-from-file=-', '--pathspec-file-nul' ],
+          { stdin: nulTerminated(paths), timeoutMs: this.options.gitTimeoutMs }
+        );
+      }
       const { name, email } = request.author;
       await this.runChecked(
         workingCopy,
-        [ '-c', 'commit.gpgsign=false', 'commit', '--cleanup=whitespace', '--no-edit', '-F', '-' ],
+        [
+          '-c',
+          'commit.gpgsign=false',
+          'commit',
+          // `--allow-empty`: a message can change on a commit that has no files of its own.
+          ...(amend ? [ '--amend', '--reset-author', '--allow-empty' ] : []),
+          '--cleanup=whitespace',
+          '--no-edit',
+          '-F',
+          '-'
+        ],
         {
           stdin: request.message,
           timeoutMs: this.options.gitTimeoutMs,
@@ -761,11 +830,11 @@ export class GitEngine implements BeforeApplicationShutdown {
   }
 
   /**
-   * A local command that must succeed.
+   * A local command that must succeed; gives its output.
    *
    * @throws GitOperationError `timeout` when it ran out of time.
    */
-  private async runChecked(cwd: string, args: string[], options: LocalRunOptions = {}): Promise<void> {
+  private async runChecked(cwd: string, args: string[], options: LocalRunOptions = {}): Promise<string> {
     const result = await this.runLocal(cwd, args, options);
     if (result.timedOut) {
       throw new GitOperationError('timeout', result.stderr);
@@ -773,6 +842,7 @@ export class GitEngine implements BeforeApplicationShutdown {
     if (result.exitCode !== 0) {
       throw new Error(`git ${args.join(' ')} failed: ${result.stderr.trim()}`);
     }
+    return result.stdout;
   }
 
   /** Runs with `LOCAL_TIMEOUT_MS` unless `options` says otherwise. */

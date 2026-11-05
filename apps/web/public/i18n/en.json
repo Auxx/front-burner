@@ -37,6 +37,7 @@
   "errors.nothing-to-commit": "There is nothing to commit. These files have no changes.",
   "errors.discard-blocked": "Another file or folder is where this file goes. Move or remove it first, or discard it too if it is in Changes.",
   "errors.detached-head": "You're not on a branch. Switch to a branch before you commit.",
+  "errors.amend-not-allowed": "The last commit can't be amended any more, because it was pushed or is a merge commit.",
   "errors.git-timeout": "Git took too long. Try again.",
   "errors.network": "Could not reach the server. Check your connection.",
   "web-repository-dialogs.commitAuthor.name": "Name",

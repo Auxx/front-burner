@@ -26,4 +26,16 @@ describe('CommitRequestSchema', () => {
       false
     );
   });
+
+  it('amending needs no paths (GA-19)', () => {
+    expect(accepts({ ...valid, paths: [], amend: true })).toBe(true);
+    expect(accepts({ ...valid, paths: [], amend: false })).toBe(false);
+  });
+
+  it('amending still needs a message and keeps the limit on paths', () => {
+    expect(accepts({ ...valid, message: ' ', paths: [], amend: true })).toBe(false);
+    expect(
+      accepts({ ...valid, amend: true, paths: Array.from({ length: COMMIT_MAX_PATHS + 1 }, (_, i) => `${i}.md`) })
+    ).toBe(false);
+  });
 });

@@ -130,7 +130,8 @@ describe('GitController', () => {
       ahead: 0,
       behind: 0,
       mergeInProgress: false,
-      changes: [ { path: 'notes.md', state: 'modified' } ]
+      changes: [ { path: 'notes.md', state: 'modified' } ],
+      lastCommit: { amendable: true, message: 'base' }
     });
 
     const cloning = await status(CLONING).expect(409);
@@ -554,6 +555,55 @@ describe('GitController', () => {
       await commit({ message: 'Update', paths: [ 'notes.md' ] }).expect(201);
 
       expect(published).toEqual([ { type: 'git.changed', repositoryId: READY } ]);
+    });
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    describe.skipIf(process.platform === 'win32')('amending', () => {
+      it('amends with no paths, changing only the message', async () => {
+        const before = git(root, 'show', '--name-status', '--format=', 'HEAD').trim();
+
+        const { body } = await commit({ message: 'Better', paths: [], amend: true }).expect(201);
+
+        expect(body).toEqual({ oid: git(root, 'rev-parse', 'HEAD').trim() });
+        expect(git(root, 'log', '--format=%s').trim()).toBe('Better');
+        expect(git(root, 'show', '--name-status', '--format=', 'HEAD').trim()).toBe(before);
+        expect(authorOf()).toBe('Ada Lovelace <ada@example.com> / Ada Lovelace <ada@example.com>');
+        expect(published).toEqual([ { type: 'git.changed', repositoryId: READY } ]);
+      });
+
+      it('refuses an amend of a commit that was pushed meanwhile', async () => {
+        const head = git(root, 'rev-parse', 'HEAD');
+        git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+
+        const { body } = await commit({ message: 'Better', paths: [], amend: true }).expect(409);
+
+        expect(body).toMatchObject({ code: 'amend-not-allowed' });
+        expect(git(root, 'rev-parse', 'HEAD')).toBe(head);
+        expect(published).toEqual([]);
+      });
+
+      it('refuses an amend from a user who has not confirmed', async () => {
+        commitAuthor = { ...commitAuthor, confirmed: false };
+
+        const { body } = await commit({ message: 'Better', paths: [], amend: true }).expect(409);
+
+        expect(body).toMatchObject({ code: 'commit-author-not-confirmed' });
+        expect(git(root, 'log', '--format=%s').trim()).toBe('base');
+      });
+
+      it('checks the listed paths', async () => {
+        const { body } = await commit({ message: 'Better', paths: [ '.git/config' ], amend: true }).expect(400);
+
+        expect(body).toMatchObject({ code: 'path-refused', params: { reason: 'inside-git' } });
+      });
+
+      it('reports in the status that a pushed commit can no longer be amended', async () => {
+        git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+
+        const { body } = await status().expect(200);
+
+        expect(body.lastCommit).toEqual({ amendable: false, message: null });
+      });
     });
   });
 });

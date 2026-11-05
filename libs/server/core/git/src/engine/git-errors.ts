@@ -17,6 +17,8 @@ export const GIT_ERROR_CODES = [
   'nothing-to-commit',
   /** HEAD is on no branch, so a commit would belong to none. */
   'detached-head',
+  /** The last commit is on a remote branch, is a merge commit, or does not exist (GA-22). */
+  'amend-not-allowed',
   /** Restoring a deleted file would replace a file or folder that is not being discarded. */
   'discard-blocked',
   'failed'

@@ -73,7 +73,8 @@ describe('git status (REQ-GIT-002)', () => {
       ahead: 0,
       behind: 0,
       mergeInProgress: false,
-      changes: [ { path: 'README.md', state: 'added' } ]
+      changes: [ { path: 'README.md', state: 'added' } ],
+      lastCommit: null
     });
   });
 

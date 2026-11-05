@@ -2455,6 +2455,24 @@
           "state"
         ]
       },
+      "GitLastCommit": {
+        "type": "object",
+        "properties": {
+          "amendable": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "amendable",
+          "message"
+        ]
+      },
       "GitStatus": {
         "type": "object",
         "properties": {
@@ -2491,6 +2509,14 @@
           },
           "mergeInProgress": {
             "type": "boolean"
+          },
+          "lastCommit": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GitLastCommit"
+              }
+            ],
+            "nullable": true
           }
         },
         "required": [
@@ -2500,7 +2526,8 @@
           "ahead",
           "behind",
           "changes",
-          "mergeInProgress"
+          "mergeInProgress",
+          "lastCommit"
         ]
       },
       "DiffLine": {
@@ -2638,12 +2665,14 @@
             "maxLength": 65536
           },
           "paths": {
-            "minItems": 1,
             "maxItems": 10000,
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "amend": {
+            "type": "boolean"
           }
         },
         "required": [
