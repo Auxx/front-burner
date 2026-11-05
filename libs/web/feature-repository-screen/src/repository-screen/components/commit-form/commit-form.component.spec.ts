@@ -116,6 +116,18 @@ describe('CommitFormComponent', () => {
       expect(refresh).toHaveBeenCalledTimes(1);
     });
 
+    it('moves the focus before Try again removes the warning', async () => {
+      author.set(null);
+      readFailed.set(true);
+      await render();
+      const retry = host().querySelector('.author-retry') as HTMLButtonElement;
+      retry.focus();
+
+      retry.click();
+
+      expect(document.activeElement).toBe(button());
+    });
+
     it('still lets the user commit while warning', async () => {
       author.set(null);
       readFailed.set(true);

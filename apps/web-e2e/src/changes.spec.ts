@@ -268,6 +268,22 @@ test.describe('the commit author', () => {
     expect(gitIn(dir, 'log', '-1', '--format=%an').trim()).toBe('Ada Edited');
   });
 
+  test('a default changed in another tab shows here at once', async ({ page, context, instance }) => {
+    const { id, dir } = await handbook(instance);
+    await readyToCommit(page, `/repositories/${id}`, dir, 'Other tab');
+    await expect(committingAs(page, ADMIN_AUTHOR)).toBeVisible();
+
+    const other = await context.newPage();
+    await other.goto('/preferences');
+    await other.getByRole('button', { name: 'Edit' }).click();
+    await other.getByRole('textbox', { name: 'Name' }).fill('Ada Elsewhere');
+    await other.getByRole('button', { name: 'Save' }).click();
+    await expect(other.getByRole('button', { name: 'Edit' })).toBeVisible();
+    await other.close();
+
+    await expect(committingAs(page, `Ada Elsewhere <${TEST_ADMIN.email}>`)).toBeVisible();
+  });
+
   test('warns when the author can\'t be read, and Try again brings the line back', async ({ page, instance, monitor }) => {
     const { id, dir } = await handbook(instance);
     let refuse = true;

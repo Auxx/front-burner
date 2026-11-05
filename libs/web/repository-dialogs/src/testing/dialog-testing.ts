@@ -1,4 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { ApplicationRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 
 /** The overlay that `DialogService` opens dialogs in. */
 export function overlay(): HTMLElement {
@@ -25,7 +27,10 @@ export function dialogButton(text: string): HTMLButtonElement | undefined {
 
 /** Lets promise chains, timers and the dialog's rendering finish. */
 export async function settleDialog(): Promise<void> {
-  await new Promise(resolve => setTimeout(resolve, 20));
+  const application = TestBed.inject(ApplicationRef);
+  await new Promise(resolve => setTimeout(resolve));
+  await application.whenStable();
+  await new Promise(resolve => setTimeout(resolve));
 }
 
 /** An API error response, with field errors when `fields` is given. */

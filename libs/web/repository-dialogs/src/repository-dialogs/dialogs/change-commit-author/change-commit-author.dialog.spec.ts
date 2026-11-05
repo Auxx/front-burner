@@ -131,11 +131,47 @@ describe('ChangeCommitAuthorDialog', () => {
     expect(await closed).toEqual({ author: work, source: 'default', confirmed: true });
   });
 
+  it('saving the default without an edit changes nothing, so that the first commit still asks', async () => {
+    const unconfirmed: RepositoryCommitAuthor = { ...usingDefault, confirmed: false };
+    await open(unconfirmed);
+    const closed = firstValueFrom(ref.closed);
+
+    await save();
+
+    expect(api['setCommitAuthor']).not.toHaveBeenCalled();
+    expect(await closed).toEqual(unconfirmed);
+  });
+
+  it('says what was saved when removing the override fails after the default was saved', async () => {
+    api['removeRepositoryCommitAuthor'].mockReturnValueOnce(throwError(() => apiError(500, 'internal')));
+    await open(usingOverride);
+    radio('asDefault').click();
+    await settleDialog();
+
+    await save();
+
+    expect(overlay().querySelector('ui-inline-banner')?.textContent).toContain(`${KEY}.defaultSaved`);
+    expect(overlay().querySelector('dlg-change-commit-author')).not.toBeNull();
+  });
+
+  it('does not say that anything was saved when the first request fails', async () => {
+    api['setCommitAuthor'].mockReturnValueOnce(throwError(() => apiError(500, 'internal')));
+    await open(usingOverride);
+    radio('asDefault').click();
+    await settleDialog();
+
+    await save();
+
+    expect(overlay().querySelector('ui-inline-banner')?.textContent).not.toContain(`${KEY}.defaultSaved`);
+  });
+
   it('shows a refusal next to the field, and stays open', async () => {
     api['setCommitAuthor'].mockReturnValueOnce(
       throwError(() => apiError(400, 'validation-failed', [ { path: 'email', code: 'email-invalid' } ]))
     );
     await open(usingDefault);
+    type(input('name'), 'Ada L');
+    await settleDialog();
 
     await save();
 
@@ -158,6 +194,8 @@ describe('ChangeCommitAuthorDialog', () => {
   it('shows any other failure above the buttons, and stays open', async () => {
     api['setCommitAuthor'].mockReturnValueOnce(throwError(() => apiError(500, 'internal')));
     await open(usingDefault);
+    type(input('name'), 'Ada L');
+    await settleDialog();
 
     await save();
 

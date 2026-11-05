@@ -39,6 +39,10 @@ export const PushEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('git.changed'),
     repositoryId: z.number().int()
+  }),
+  /** The user's commit author or a repository's override changed, or was confirmed: read it again (CA-9). */
+  z.object({
+    type: z.literal('commit-author.changed')
   })
 ]);
 

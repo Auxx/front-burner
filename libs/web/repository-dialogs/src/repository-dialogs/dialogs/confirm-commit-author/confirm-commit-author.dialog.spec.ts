@@ -180,7 +180,7 @@ describe('ConfirmCommitAuthorDialog', () => {
     await settleDialog();
 
     expect(closed).toBe(false);
-    expect(overlay().querySelector('ui-inline-banner')).not.toBeNull();
+    expect(overlay().querySelector('ui-inline-banner')?.textContent).toContain(`${EDITOR}.overrideSaved`);
   });
 
   it('shows a default that breaks CA-10 in the form, with the reason next to the field', async () => {

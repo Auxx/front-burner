@@ -85,10 +85,10 @@ numbering conventions.
     RM-8) and `key.unlocked` (key ID, to the streams of the session that
     unlocked it; RC-16).
   - `git.changed` (repository ID) says that git state changed. It is an event of
-    its own, since a commit or a push changes no files. A change of a
-    repository's commit author override publishes it too, so that every tab
-    shows who commits; a change of the default concerns no one repository, and
-    tabs read it on (re)connect. _(Plan's call.)_
+    its own, since a commit or a push changes no files. _(Plan's call.)_
+  - `commit-author.changed` says that the user's commit author, a repository's
+    override or the confirmation changed, so that every tab shows who commits.
+    It names no repository, as the default concerns them all. _(Plan's call.)_
   - The user's own saves also cause `files.changed`; the web client ignores a
     change to the open file whose content hash matches its last save (ED-24).
     _(My call.)_

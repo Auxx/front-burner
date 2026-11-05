@@ -4,6 +4,9 @@
       @if (failure(); as failure) {
         <ui-inline-banner status="danger" announce>
           {{ failure.text }}
+          @if (partlySaved(); as saved) {
+            <span class="partly-saved">{{ t(saved) }}</span>
+          }
           @if (failure.reference) {
             <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
           }

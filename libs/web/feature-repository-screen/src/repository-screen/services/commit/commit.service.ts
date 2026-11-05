@@ -1,5 +1,5 @@
 import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
-import type { ApiError, CommitRequest, GitStatus } from '@front-burner/shared-contracts';
+import type { ApiError, GitStatus } from '@front-burner/shared-contracts';
 import { GitApi } from '@front-burner/web-api-client';
 import { type ApiErrorText, ApiErrorTextService, isRefusal, toApiError } from '@front-burner/web-core';
 import { firstValueFrom } from 'rxjs';
@@ -22,8 +22,9 @@ export interface CommitFailure extends ApiErrorText {
  * repository starts with an empty form.
  *
  * It first asks `CommitAuthorGate` (CA-12); cancelling there cancels the commit,
- * with the message kept. The API's refusal of a user who has not confirmed
- * (CA-13) leads to the same place, and the commit is then tried once more.
+ * with the message kept. If the API still refuses a user who has not confirmed
+ * (CA-13), the refusal is shown and the gate reads again, so that the next press
+ * asks.
  *
  * The files are those the button named when it was pressed: the ticked ones, and
  * an open file with unsaved edits that the list does not show yet, since a status
@@ -128,9 +129,7 @@ export class CommitService {
         }
         return false;
       }
-      if (!await this.send(repositoryId, { message, paths: [ ...paths ] }, stayed)) {
-        return false;
-      }
+      await firstValueFrom(this.api.commit(repositoryId, { message, paths: [ ...paths ] }));
       if (stayed()) {
         this.committed.set({ status: this.store.status(), paths: new Set(paths) });
         this.message.set('');
@@ -139,29 +138,16 @@ export class CommitService {
       return true;
     } catch (error) {
       if (stayed()) {
-        this.fail(toApiError(error), !isRefusal(error));
+        const apiError = toApiError(error);
+        if (apiError.code === 'commit-author-not-confirmed') {
+          this.gate.refresh();
+        }
+        this.fail(apiError, !isRefusal(error));
       }
       return false;
     } finally {
       this.setRunning(repositoryId, false);
     }
-  }
-
-  /** Resolves `false` when the user, asked after the API's refusal, did not go on. */
-  private async send(repositoryId: number, request: CommitRequest, stayed: () => boolean): Promise<boolean> {
-    try {
-      await firstValueFrom(this.api.commit(repositoryId, request));
-      return true;
-    } catch (error) {
-      if (toApiError(error).code !== 'commit-author-not-confirmed') {
-        throw error;
-      }
-    }
-    if (!await this.gate.recheck() || !stayed()) {
-      return false;
-    }
-    await firstValueFrom(this.api.commit(repositoryId, request));
-    return true;
   }
 
   private setRunning(repositoryId: number, running: boolean): void {

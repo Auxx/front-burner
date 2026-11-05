@@ -56,6 +56,8 @@
   "web-repository-dialogs.CommitAuthorEditorComponent.forRepository": "For this repository",
   "web-repository-dialogs.CommitAuthorEditorComponent.dropsOverride": "This repository will stop using its own author, and use your default.",
   "web-repository-dialogs.CommitAuthorEditorComponent.fixDefault": "Your default commit author needs correcting before your first commit.",
+  "web-repository-dialogs.CommitAuthorEditorComponent.defaultSaved": "Your default was saved, but this repository still uses its own author.",
+  "web-repository-dialogs.CommitAuthorEditorComponent.overrideSaved": "The author for this repository was saved, but your commit author isn't confirmed yet.",
   "web-repository-dialogs.CommitAuthorEditorComponent.save": "Save",
   "web-repository-dialogs.CommitAuthorEditorComponent.saveAndCommit": "Save and commit",
   "web-repository-dialogs.CommitAuthorEditorComponent.cancel": "Cancel",

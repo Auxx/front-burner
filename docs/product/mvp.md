@@ -138,9 +138,9 @@ Limited in MVP:
 
 ### 5. Commit author
 
-| Requirement                                     | Status   | In MVP                                       | Limited in MVP                         | Not in MVP                                                                                       | MVP notes                  |
-| ----------------------------------------------- | -------- | -------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------- |
-| [REQ-GIT-001](../requirements/commit-author.md) | Accepted | CA-1 to CA-15; AC-GIT-001.1 to AC-GIT-001.12 | #83, #84, #88, `commit-author-dialogs` | CA-9 (the repository management page), CA-14 (with CA-1's merge commits), CA-15 (the push error) | AC-GIT-001.5, AC-GIT-001.9 |
+| Requirement                                     | Status   | In MVP                                       | Limited in MVP | Not in MVP | MVP notes                                                                                                                   |
+| ----------------------------------------------- | -------- | -------------------------------------------- | -------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [REQ-GIT-001](../requirements/commit-author.md) | Accepted | CA-1 to CA-15; AC-GIT-001.1 to AC-GIT-001.12 | —              | —          | As written. Includes a minimal **Preferences** page (`/preferences`) for the default commit author. Commits are not signed. |
 
 ### 6. File browser
 
@@ -158,10 +158,10 @@ Limited in MVP:
 
 ### 8. Git at the Advanced level
 
-| Requirement                                     | Status   | In MVP                                       | Limited in MVP                                                       | Not in MVP | MVP notes                                                                                                                                                                     |
-| ----------------------------------------------- | -------- | -------------------------------------------- | -------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [REQ-GIT-002](../requirements/git-advanced.md)  | Accepted | GA-1 to GA-43; AC-GIT-002.1 to AC-GIT-002.23 | #85, #88, #89, #91, #93, #94, #95, #96, #97, `commit-author-dialogs` | —          | As written. Builds on D-4, D-5 and D-6. The backend exposes one set of git operations for every level; the MVP builds only the Advanced level's UI. Pull only merges (D-5.2). |
-| [REQ-GIT-003](../requirements/git-conflicts.md) | Accepted | GC-1 to GC-28; AC-GIT-003.1 to AC-GIT-003.16 | —                                                                    | —          | As written. The other resolution methods are deferred.                                                                                                                        |
+| Requirement                                     | Status   | In MVP                                       | Limited in MVP | Not in MVP | MVP notes                                                                                                                                                                     |
+| ----------------------------------------------- | -------- | -------------------------------------------- | -------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [REQ-GIT-002](../requirements/git-advanced.md)  | Accepted | GA-1 to GA-43; AC-GIT-002.1 to AC-GIT-002.23 | —              | —          | As written. Builds on D-4, D-5 and D-6. The backend exposes one set of git operations for every level; the MVP builds only the Advanced level's UI. Pull only merges (D-5.2). |
+| [REQ-GIT-003](../requirements/git-conflicts.md) | Accepted | GC-1 to GC-28; AC-GIT-003.1 to AC-GIT-003.16 | —              | —          | As written. The other resolution methods are deferred.                                                                                                                        |
 
 ### 9. Navigation
 

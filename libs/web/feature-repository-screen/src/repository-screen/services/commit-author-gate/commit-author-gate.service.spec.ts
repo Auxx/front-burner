@@ -121,21 +121,26 @@ describe('CommitAuthorGate', () => {
     expect(question()).toBeNull();
   });
 
-  it('asks once when the API refuses, and goes on after one answer', async () => {
-    start(confirmed, unconfirmed, confirmed);
-
-    const again = gate.recheck();
+  it('asks after a read finds that the author is not confirmed after all', async () => {
+    start(confirmed, unconfirmed, unconfirmed);
     await settleDialog();
-    expect(overlay().querySelectorAll('dlg-confirm-commit-author').length).toBe(1);
-    commitAs()?.click();
+    gate.refresh();
+    await settleDialog();
 
-    expect(await again).toBe(true);
+    const ready = gate.ready();
+    await settleDialog();
+    dialogButton(`${QUESTION}.cancel`)?.click();
+
+    expect(await ready).toBe(false);
   });
 
-  it('does not ask when the API refused but the read finds the author confirmed by now', async () => {
-    start(confirmed, confirmed);
+  it('leaves it to the API when the repository can\'t be read yet, so that nothing fails silently', async () => {
+    start(confirmed);
+    await settleDialog();
+    followed.set(99);
+    TestBed.tick();
 
-    expect(await gate.recheck()).toBe(true);
+    expect(await gate.ready()).toBe(true);
     expect(question()).toBeNull();
   });
 
@@ -171,11 +176,11 @@ describe('CommitAuthorGate', () => {
   });
 
   describe('reads the author again', () => {
-    it('reads the author again on git.changed and after Change', async () => {
+    it('reads the author again on commit-author.changed and after Change', async () => {
       start(confirmed, work);
       await settleDialog();
 
-      events.next({ type: 'git.changed', repositoryId: 12 });
+      events.next({ type: 'commit-author.changed' });
       await settleDialog();
       expect(gate.author()).toEqual(work);
 
@@ -189,7 +194,29 @@ describe('CommitAuthorGate', () => {
       expect(gate.author()).toEqual(work);
     });
 
-    it('on a (re)connect, as a change of the default has no event', async () => {
+    it('not on git.changed, as a commit does not change the author', async () => {
+      start(confirmed);
+      await settleDialog();
+
+      events.next({ type: 'git.changed', repositoryId: 12 });
+      await settleDialog();
+
+      expect(api['repositoryCommitAuthor']).toHaveBeenCalledTimes(1);
+    });
+
+    it('when Change is cancelled, as part of it may have been saved', async () => {
+      start(confirmed, work);
+      await settleDialog();
+
+      const change = gate.change();
+      await settleDialog();
+      dialogButton(`${EDITOR}.cancel`)?.click();
+      await change;
+
+      expect(gate.author()).toEqual(work);
+    });
+
+    it('on a (re)connect, as events are never replayed', async () => {
       start(confirmed, work);
       await settleDialog();
 
@@ -197,15 +224,6 @@ describe('CommitAuthorGate', () => {
       await settleDialog();
 
       expect(gate.author()).toEqual(work);
-    });
-
-    it('not for another repository\'s event', async () => {
-      start(confirmed);
-      await settleDialog();
-
-      events.next({ type: 'git.changed', repositoryId: 13 });
-
-      expect(api['repositoryCommitAuthor']).toHaveBeenCalledTimes(1);
     });
 
     it('when the question is cancelled, as Change may have saved an override', async () => {
@@ -240,7 +258,7 @@ describe('CommitAuthorGate', () => {
     await settleDialog();
     api['repositoryCommitAuthor'].mockReturnValueOnce(throwError(() => apiError(500, 'internal')));
 
-    events.next({ type: 'git.changed', repositoryId: 12 });
+    events.next({ type: 'commit-author.changed' });
     await settleDialog();
 
     expect(gate.author()).toEqual(work);

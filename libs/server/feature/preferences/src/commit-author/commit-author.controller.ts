@@ -31,14 +31,19 @@ export class CommitAuthorController {
     @Req() req: Request,
     @Body() body: CommitAuthorDto
   ): CommitAuthorPreference {
-    return this.commitAuthors.setDefault(authOf(req).userId, body);
+    const { userId } = authOf(req);
+    const preference = this.commitAuthors.setDefault(userId, body);
+    this.published(userId);
+    return preference;
   }
 
   @Post('preferences/commit-author/confirm')
   @HttpCode(204)
   @ApiNoContentResponse({ description: 'The default commit author is confirmed' })
   confirmCommitAuthor(@Req() req: Request): void {
-    this.commitAuthors.confirm(authOf(req).userId);
+    const { userId } = authOf(req);
+    this.commitAuthors.confirm(userId);
+    this.published(userId);
   }
 
   @Get('repositories/:id/commit-author')
@@ -61,7 +66,7 @@ export class CommitAuthorController {
   ): RepositoryCommitAuthor {
     const { userId } = authOf(req);
     const author = this.commitAuthors.setOverride(userId, params.id, body);
-    this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
+    this.published(userId);
     return author;
   }
 
@@ -74,7 +79,12 @@ export class CommitAuthorController {
   ): RepositoryCommitAuthor {
     const { userId } = authOf(req);
     const author = this.commitAuthors.removeOverride(userId, params.id);
-    this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
+    this.published(userId);
     return author;
+  }
+
+  /** Every tab of the user reads the author again, as a change of the default concerns all their repositories. */
+  private published(userId: number): void {
+    this.events.publish(userId, { type: 'commit-author.changed' });
   }
 }

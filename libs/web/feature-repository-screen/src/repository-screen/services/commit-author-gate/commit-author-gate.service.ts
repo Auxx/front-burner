@@ -19,16 +19,15 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
  * The open repository's commit author (CA-6, CA-9), and the question before the
  * user's first commit (CA-12). Provided by the page.
  *
- * It reads the author when the repository is ready, on `git.changed`, which a
- * change of an override publishes, and after every (re)connect, since a change of
- * the default publishes nothing and events are never replayed (A-3.11). A read
+ * It reads the author when the repository is ready, on `commit-author.changed`,
+ * and after every (re)connect, since events are never replayed (A-3.11). A read
  * that fails keeps what is shown, and `readFailed` says when that is nothing, so
  * that the form can warn instead of hiding who commits (CA-9).
  *
  * What it knows may be old, as the confirmation applies to the user and can be
- * given in another tab. So it reads again before it asks, and the API's refusal
- * (CA-13) leads here too: both end in the same place, and a user who has confirmed
- * is not asked again.
+ * given in another tab, so it reads again before it asks. The backend has the last
+ * word (CA-13): when it refuses a commit, `CommitService` calls `refresh`, and the
+ * next press asks.
  */
 @Injectable()
 export class CommitAuthorGate {
@@ -68,7 +67,7 @@ export class CommitAuthorGate {
     // `reconnected` first, as in `TreeSyncService`.
     this.push.reconnected.pipe(takeUntilDestroyed()).subscribe(() => this.refresh());
     this.push.events.pipe(takeUntilDestroyed()).subscribe(event => {
-      if (event.type === 'git.changed' && event.repositoryId === this.repositoryId()) {
+      if (event.type === 'commit-author.changed') {
         this.refresh();
       }
     });
@@ -76,17 +75,14 @@ export class CommitAuthorGate {
 
   /**
    * Whether the commit may go on, asking first if the user has not confirmed.
-   * Rejects when the author can't be read, as nothing could be shown.
+   * Rejects when the author can't be read, as nothing could be shown. While no
+   * repository can be read, it leaves the answer to the API, so that a failure is
+   * shown rather than nothing happening.
    */
   async ready(): Promise<boolean> {
-    return this.current()?.confirmed === true || this.recheck();
-  }
-
-  /** As `ready`, without trusting what is known, for when the API refused a commit (CA-13). */
-  async recheck(): Promise<boolean> {
     const repositoryId = this.repositoryId();
-    if (repositoryId === null) {
-      return false;
+    if (this.current()?.confirmed === true || repositoryId === null) {
+      return true;
     }
     const current = await this.read(repositoryId);
     if (current.confirmed) {
@@ -102,7 +98,7 @@ export class CommitAuthorGate {
     if (confirmed && this.repositoryId() === repositoryId) {
       this.current.update(author => author && { ...author, confirmed });
     }
-    // Also after cancelling: **Change** may have saved an override before confirming failed.
+    // Also after cancelling: part of a failed save may have reached the backend.
     await this.settle(repositoryId);
     return confirmed;
   }
@@ -120,12 +116,11 @@ export class CommitAuthorGate {
         { data: { repositoryId, current } }
       ).closed
     );
-    if (saved !== undefined) {
-      if (this.repositoryId() === repositoryId) {
-        this.current.set(saved);
-      }
-      await this.settle(repositoryId);
+    if (saved !== undefined && this.repositoryId() === repositoryId) {
+      this.current.set(saved);
     }
+    // Also after cancelling: part of a failed save may have reached the backend.
+    await this.settle(repositoryId);
   }
 
   /** Reads the author again, such as for **Try again**. */

@@ -54,7 +54,7 @@ describe('CommitService', () => {
   let status: ReturnType<typeof signal<GitStatus | null>>;
   let followed: ReturnType<typeof signal<number | null>>;
   let repository: ReturnType<typeof signal<{ id: number; }>>;
-  let gate: { ready: ReturnType<typeof vi.fn>; recheck: ReturnType<typeof vi.fn>; };
+  let gate: { ready: ReturnType<typeof vi.fn>; refresh: ReturnType<typeof vi.fn>; };
 
   beforeEach(() => {
     localStorage.clear();
@@ -65,7 +65,7 @@ describe('CommitService', () => {
     status = signal<GitStatus | null>(statusOf('a.md', 'b.md'));
     followed = signal<number | null>(12);
     repository = signal({ id: 12 });
-    gate = { ready: vi.fn(() => Promise.resolve(true)), recheck: vi.fn(() => Promise.resolve(true)) };
+    gate = { ready: vi.fn(() => Promise.resolve(true)), refresh: vi.fn() };
     refresh = vi.fn(() => {
       requests.push('status');
       return Promise.resolve();
@@ -338,36 +338,22 @@ describe('CommitService', () => {
       expect(service.error()?.retry).toBe(true);
     });
 
-    it('asks once when the API refuses, and retries once', async () => {
-      commitAnswer = vi.fn()
-        .mockReturnValueOnce(throwError(() => refusal('commit-author-not-confirmed')))
-        .mockReturnValueOnce(of<CommitResult>({ oid: 'c'.repeat(40) }));
-
-      expect(await service.commit('Subject')).toBe(true);
-
-      expect(gate.recheck).toHaveBeenCalledTimes(1);
-      expect(commits).toHaveLength(2);
-      expect(service.error()).toBeNull();
-    });
-
-    it('shows the error when the API refuses again, without asking twice', async () => {
+    it('shows the API\'s refusal and reads the author again, so that the next press asks', async () => {
       commitAnswer = () => throwError(() => refusal('commit-author-not-confirmed'));
-
-      expect(await service.commit('Subject')).toBe(false);
-
-      expect(gate.recheck).toHaveBeenCalledTimes(1);
-      expect(commits).toHaveLength(2);
-      expect(service.error()?.retry).toBe(false);
-    });
-
-    it('makes no commit when the question that the API caused is cancelled', async () => {
-      commitAnswer = () => throwError(() => refusal('commit-author-not-confirmed'));
-      gate.recheck.mockResolvedValueOnce(false);
 
       expect(await service.commit('Subject')).toBe(false);
 
       expect(commits).toHaveLength(1);
-      expect(service.error()).toBeNull();
+      expect(gate.refresh).toHaveBeenCalledTimes(1);
+      expect(service.error()?.retry).toBe(false);
+    });
+
+    it('does not read the author again after any other failure', async () => {
+      commitAnswer = () => throwError(() => refusal('nothing-to-commit'));
+
+      await service.commit('Subject');
+
+      expect(gate.refresh).not.toHaveBeenCalled();
     });
 
     it('makes no commit in the next repository when the user left during the question', async () => {

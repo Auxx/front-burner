@@ -33,7 +33,7 @@
     <ui-inline-banner class="author-failed" status="warning" announce>
       {{ t('authorFailed') }}
       <div uiBannerActions>
-        <button uiButton size="small" class="author-retry" (click)="gate.refresh()">{{ t('retry') }}</button>
+        <button uiButton size="small" class="author-retry" (click)="retryAuthor()">{{ t('retry') }}</button>
       </div>
     </ui-inline-banner>
   }

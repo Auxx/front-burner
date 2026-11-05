@@ -295,18 +295,25 @@ describe('CommitAuthorController', () => {
     });
   });
 
-  it('publishes git.changed after an override changes, so that every tab shows the author', async () => {
+  it('publishes commit-author.changed after every change, so that every tab shows who commits', async () => {
     const publish = vi.spyOn(app.get(EventsHub), 'publish');
     const author = { name: 'Alice Work', email: 'alice@work.example' };
+    const user = String(aliceId);
+    const changes = [
+      () => http().put('/api/v1/preferences/commit-author').set('x-test-user', user).send(author).expect(200),
+      () => http().post('/api/v1/preferences/commit-author/confirm').set('x-test-user', user).expect(204),
+      () =>
+        http().put(`/api/v1/repositories/${aliceRepoId}/commit-author`).set('x-test-user', user).send(author).expect(
+          200
+        ),
+      () => http().delete(`/api/v1/repositories/${aliceRepoId}/commit-author`).set('x-test-user', user).expect(200)
+    ];
 
-    await http().put(`/api/v1/repositories/${aliceRepoId}/commit-author`)
-      .set('x-test-user', String(aliceId)).send(author).expect(200);
-    expect(publish).toHaveBeenCalledExactlyOnceWith(aliceId, { type: 'git.changed', repositoryId: aliceRepoId });
-
-    publish.mockClear();
-    await http().delete(`/api/v1/repositories/${aliceRepoId}/commit-author`)
-      .set('x-test-user', String(aliceId)).expect(200);
-    expect(publish).toHaveBeenCalledExactlyOnceWith(aliceId, { type: 'git.changed', repositoryId: aliceRepoId });
+    for (const change of changes) {
+      publish.mockClear();
+      await change();
+      expect(publish).toHaveBeenCalledExactlyOnceWith(aliceId, { type: 'commit-author.changed' });
+    }
   });
 
   it('publishes nothing when another user\'s override is refused', async () => {

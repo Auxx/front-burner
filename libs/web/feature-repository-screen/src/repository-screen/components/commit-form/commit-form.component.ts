@@ -75,6 +75,12 @@ export class CommitFormComponent {
     }
   }
 
+  /** The warning goes with the button that asked, so the focus moves first. */
+  protected retryAuthor(): void {
+    (this.commitButton().nativeElement as HTMLElement).focus();
+    this.gate.refresh();
+  }
+
   /** The banner goes with the button that asked, so the focus moves first. */
   protected retry(): void {
     (this.commitButton().nativeElement as HTMLElement).focus();

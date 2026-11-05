@@ -50,6 +50,9 @@ let nextId = 0;
  * repository's override, which the dialog says: the next commit records what the
  * user typed.
  *
+ * What a failure leaves behind is said, as these are two requests: the default
+ * can be saved while the override stays, or an override saved but not confirmed.
+ *
  * With `confirming`, for the first commit's question, saving also confirms: saving
  * the default does so itself, and an override is followed by the confirmation,
  * which concerns the default (plan 42). If the backend refuses that default, the
@@ -102,6 +105,8 @@ export class CommitAuthorEditorComponent implements OnInit {
     ];
   });
   protected readonly failure = signal<ApiErrorText | null>(null);
+  /** The translation key of what reached the backend before a failure, as two requests aren't atomic. */
+  protected readonly partlySaved = signal<'defaultSaved' | 'overrideSaved' | null>(null);
   /** Whether the form shows a default that the backend refused to confirm. */
   protected readonly fixingDefault = signal(false);
   protected readonly dropsOverride = computed(() =>
@@ -137,6 +142,7 @@ export class CommitAuthorEditorComponent implements OnInit {
 
   private async send(value: CommitAuthor): Promise<void> {
     this.failure.set(null);
+    this.partlySaved.set(null);
     this.refusals.clear();
     try {
       const saved = await (this.scope() === 'default' ? this.saveDefault(value) : this.saveOverride(value));
@@ -149,10 +155,20 @@ export class CommitAuthorEditorComponent implements OnInit {
   }
 
   private async saveDefault(value: CommitAuthor): Promise<RepositoryCommitAuthor> {
+    const { current } = this.data;
+    if (
+      !this.confirming() && current.source === 'default'
+      && value.name === current.author.name && value.email === current.author.email
+    ) {
+      // Saving the default confirms it (CA-12), which pressing Save on what is there should not.
+      return current;
+    }
     const preference = await firstValueFrom(this.api.setCommitAuthor(value));
-    return this.dropsOverride()
-      ? firstValueFrom(this.api.removeRepositoryCommitAuthor(this.data.repositoryId))
-      : { ...preference, source: 'default' };
+    if (!this.dropsOverride()) {
+      return { ...preference, source: 'default' };
+    }
+    this.partlySaved.set('defaultSaved');
+    return firstValueFrom(this.api.removeRepositoryCommitAuthor(this.data.repositoryId));
   }
 
   /** Resolves `null` when the form has moved on to a default that can't be confirmed. */
@@ -161,6 +177,7 @@ export class CommitAuthorEditorComponent implements OnInit {
     if (!this.confirming()) {
       return saved;
     }
+    this.partlySaved.set('overrideSaved');
     try {
       await firstValueFrom(this.api.confirmCommitAuthor());
     } catch (error) {
@@ -168,6 +185,7 @@ export class CommitAuthorEditorComponent implements OnInit {
       if (!refusal.fields?.length) {
         throw error;
       }
+      this.partlySaved.set(null);
       await this.fixDefault(refusal);
       return null;
     }
