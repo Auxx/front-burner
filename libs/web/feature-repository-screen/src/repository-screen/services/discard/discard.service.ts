@@ -7,7 +7,6 @@ import { firstValueFrom } from 'rxjs';
 
 import { type DiscardChangesData, DiscardChangesDialog } from '../../dialogs/discard-changes/discard-changes.dialog';
 import { discardBatches } from '../../utils/discard-batches/discard-batches';
-import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
 import { FirstFileService } from '../first-file/first-file.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
@@ -36,7 +35,6 @@ export class DiscardService {
   private readonly api = inject(GitApi);
   private readonly status = inject(GitStatusStore);
   private readonly openFiles = inject(OpenFilesService);
-  private readonly diskChanges = inject(DiskChangesService);
   private readonly commands = inject(EntryCommandsService);
   private readonly firstFile = inject(FirstFileService);
   private readonly session = inject(RepositorySessionService);
@@ -60,12 +58,14 @@ export class DiscardService {
       const added = new Set(changes.filter(change => change.state === 'added').map(change => change.path));
       const batches = discardBatches(changes.map(change => change.path));
       const route = this.routePath();
+      // A navigation closes the dialog (browser Back, say), and whatever is left then stays as it is.
+      let open = true;
       const ref = this.dialogs.open<DiscardChangesDialog, DiscardChangesData, boolean>(DiscardChangesDialog, {
         data: {
           count: changes.length,
           discard: async () => {
             try {
-              while (batches.length > 0) {
+              while (open && batches.length > 0) {
                 await this.send(repositoryId, batches[0], added);
                 batches.shift();
               }
@@ -76,6 +76,7 @@ export class DiscardService {
         }
       });
       const discarded = await firstValueFrom(ref.closed) === true;
+      open = false;
       // After the dialog, since a navigation closes it. Also when a later request failed.
       if (route !== '' && added.has(route) && !batches.flat().includes(route)) {
         // The page shows the empty state for this navigation, not the README (FB-39).
@@ -92,6 +93,8 @@ export class DiscardService {
     // Only these can be followed as a change on disk, which this one is not (ED-24, FB-42).
     const shown = paths.filter(path => this.openFiles.get(path) !== undefined || path === route);
     const own = new Map(shown.map(path => [ path, this.commands.ownChange(path) ]));
+    // Those with no entry have no save to wait for, and keep their drafts if this fails.
+    const notOpen = paths.filter(path => this.openFiles.get(path) === undefined);
     const dropped = await Promise.all(shown.map(path => this.openFiles.dropForDiscard(path)));
     try {
       await firstValueFrom(this.api.discard(repositoryId, { paths: [ ...paths ] }), { defaultValue: undefined });
@@ -100,30 +103,46 @@ export class DiscardService {
       own.forEach(release => release());
       throw error;
     }
-    const others = paths.filter(path => !own.has(path));
-    void this.openFiles.deleteDrafts(others);
+    void this.openFiles.deleteDrafts(repositoryId, notOpen);
+    if (this.session.repository()?.id !== repositoryId) {
+      // Navigated meanwhile: the entries at these paths are now another repository's.
+      dropped.forEach(file => file?.release());
+      own.forEach(release => release());
+      return;
+    }
     await Promise.all(shown.map(async (path, index) => {
       const release = own.get(path) as () => void;
+      let reloaded = true;
       if (added.has(path)) {
         this.openFiles.close(path, { dropPending: true });
         this.firstFile.deleted(repositoryId, path);
-      } else if (!(await this.reloaded(path))) {
-        dropped[index]?.release();
-        release();
-        this.diskChanges.notice(path);
-        return;
+      } else {
+        reloaded = await this.reload(path);
       }
       dropped[index]?.release();
-      setTimeout(release, OWN_CHANGE_MS);
+      if (reloaded) {
+        setTimeout(release, OWN_CHANGE_MS);
+      } else {
+        // Later events may find the new content.
+        release();
+      }
     }));
   }
 
-  /** Loads the file again; when that fails, the disk no longer holds what the editor shows. */
-  private async reloaded(path: string): Promise<boolean> {
+  /**
+   * Loads the file again. When that fails, the editor still shows what was
+   * discarded, and a save would bring it back: the file waits for **Reload**, as
+   * after any change on disk (ED-24), or for the next event to load it.
+   */
+  private async reload(path: string): Promise<boolean> {
     try {
       await this.openFiles.reload(path, { discard: true });
       return true;
     } catch {
+      const file = this.openFiles.get(path);
+      if (file) {
+        this.openFiles.changedOnDisk(path, file.hash());
+      }
       return false;
     }
   }

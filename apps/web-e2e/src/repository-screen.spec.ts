@@ -1365,12 +1365,14 @@ test.describe('repository screen, kept up to date', () => {
     const name = row.locator('.name');
     expect(await name.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
 
-    // The drawer has the focus now, so the next tab stop is the entry.
+    // The drawer has the focus now, so the entry is the tab stop after Discard all.
+    const entryButton = row.getByRole('button', { name: /^a-file-with/ });
     if (isMobile) {
-      await pointAt(row.getByRole('button'), isMobile);
+      await pointAt(entryButton, isMobile);
     } else {
       await page.keyboard.press('Tab');
-      await expect(row.getByRole('button')).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(entryButton).toBeFocused();
     }
     await expect(tooltip(page)).toContainText(`${folder}a-file-with-a-rather-long-name-of-its-own.md`);
   });

@@ -116,6 +116,28 @@ describe('DiscardChangesDialog', () => {
     }
   );
 
+  it('keeps the focus on the button that is pressed, which becomes Try again', async () => {
+    discard.mockRejectedValueOnce(new HttpErrorResponse({ status: 0 }));
+    await open(1);
+    dialogButton(`${K}.discard`)?.focus();
+
+    dialogButton(`${K}.discard`)?.click();
+    await settleDialog();
+
+    expect(document.activeElement).toBe(dialogButton(`${K}.retry`));
+  });
+
+  it('moves the focus to Cancel after a refusal, as the button pressed is gone', async () => {
+    discard.mockRejectedValueOnce(apiError(409, 'discard-blocked'));
+    await open(1);
+    dialogButton(`${K}.discard`)?.focus();
+
+    dialogButton(`${K}.discard`)?.click();
+    await settleDialog();
+
+    expect(document.activeElement).toBe(dialogButton(`${K}.cancel`));
+  });
+
   it('cannot be dismissed while the discard runs', async () => {
     let finish!: () => void;
     discard.mockReturnValueOnce(new Promise(resolve => (finish = resolve)));

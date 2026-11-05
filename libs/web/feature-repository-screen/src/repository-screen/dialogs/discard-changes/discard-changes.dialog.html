@@ -10,13 +10,11 @@
     }
     <p class="message">{{ t('message') }}</p>
     <div uiDialogFooter>
-      <button uiButton data-autofocus [unavailable]="busy()" (click)="ref.close(false)">{{ t('cancel') }}</button>
-      @if (failure(); as failure) {
-        @if (failure.retry) {
-          <button uiButton variant="danger" (click)="confirm()">{{ t('retry') }}</button>
-        }
-      } @else {
-        <button uiButton variant="danger" [busy]="busy()" (click)="confirm()">{{ t('discard') }}</button>
+      <button #cancel uiButton data-autofocus [unavailable]="busy()" (click)="ref.close(false)">{{ t('cancel') }}</button>
+      @if (failure()?.retry !== false) {
+        <button #action uiButton variant="danger" [busy]="busy()" (click)="confirm()">
+          {{ failure() ? t('retry') : t('discard') }}
+        </button>
       }
     </div>
   </ui-dialog>

@@ -291,11 +291,8 @@ export class OpenFilesService {
   }
 
   /** Deletes the browser drafts at `paths`, of files not open here, except those another tab has open (D-1.3). */
-  async deleteDrafts(paths: readonly string[]): Promise<void> {
-    const repositoryId = this.repositoryId();
-    await this.drafts.deleteUnclaimed(
-      paths.flatMap(path => this.keyAt(repositoryId, path) ?? [])
-    );
+  async deleteDrafts(repositoryId: number, paths: readonly string[]): Promise<void> {
+    await this.drafts.deleteUnclaimed(paths.flatMap(path => this.keyAt(repositoryId, path) ?? []));
   }
 
   /**

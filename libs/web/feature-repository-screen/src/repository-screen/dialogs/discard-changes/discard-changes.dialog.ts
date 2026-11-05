@@ -1,5 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  inject,
+  Injector,
+  signal,
+  viewChild
+} from '@angular/core';
 import {
   ButtonComponent,
   DIALOG_DATA,
@@ -36,7 +45,7 @@ function canRetry(error: unknown): boolean {
  * cannot be recovered, with the focus on **Cancel**. It closes with `true` once
  * they are discarded. A failure keeps it open with the reason; a network or
  * server error offers **Try again**, and a refusal, which another try would not
- * change, leaves only **Cancel**.
+ * change, leaves only **Cancel**, which then takes the focus.
  */
 @Component({
   selector: 'rs-discard-changes',
@@ -49,6 +58,9 @@ export class DiscardChangesDialog {
   protected readonly ref = inject<DialogRef<boolean>>(DialogRef);
   protected readonly data = inject(DIALOG_DATA) as DiscardChangesData;
   private readonly errorText = inject(ApiErrorTextService);
+  private readonly injector = inject(Injector);
+  private readonly cancel = viewChild.required('cancel', { read: ElementRef<HTMLElement> });
+  private readonly action = viewChild('action', { read: ElementRef<HTMLElement> });
 
   protected readonly failure = signal<Failure | null>(null);
   protected readonly busy = signal(false);
@@ -65,6 +77,9 @@ export class DiscardChangesDialog {
       this.ref.close(true);
     } catch (error) {
       this.failure.set({ ...this.errorText.describe(toApiError(error)), retry: canRetry(error) });
+      afterNextRender({
+        read: () => ((this.action() ?? this.cancel()).nativeElement as HTMLElement).focus()
+      }, { injector: this.injector });
     } finally {
       this.busy.set(false);
       this.ref.dismissible.set(true);

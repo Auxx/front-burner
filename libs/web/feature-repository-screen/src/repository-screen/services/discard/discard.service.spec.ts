@@ -13,7 +13,6 @@ import { apiError, dialogButton, overlay, settleDialog } from '../../../testing/
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
-import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
 import { FirstFileService } from '../first-file/first-file.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
@@ -41,11 +40,11 @@ describe('DiscardService', () => {
   let saves: { request: SaveFileRequest; answer: Subject<FileState>; }[];
   let refresh: ReturnType<typeof vi.fn>;
   let navigate: ReturnType<typeof vi.fn>;
-  let notice: ReturnType<typeof vi.fn>;
   let forgotten: ReturnType<typeof vi.fn>;
   let own: string[];
   let released: string[];
   let routePath: string;
+  let repository: ReturnType<typeof signal<{ id: number; }>>;
 
   /** Asks to discard `changes`, and presses **Discard**. */
   async function confirm(changes: GitChange[]): Promise<{ done: Promise<boolean>; }> {
@@ -65,11 +64,11 @@ describe('DiscardService', () => {
     saves = [];
     refresh = vi.fn(() => Promise.resolve());
     navigate = vi.fn(() => Promise.resolve(true));
-    notice = vi.fn();
     forgotten = vi.fn();
     own = [];
     released = [];
     routePath = '';
+    repository = signal({ id: 12 });
     TestBed.configureTestingModule({
       imports: [ translocoTesting({ [`${K}.heading`]: 'Discard {{ count }}' }) ],
       providers: [
@@ -77,7 +76,6 @@ describe('DiscardService', () => {
         OpenFilesService,
         provideMemoryDrafts(drafts),
         { provide: GitStatusStore, useValue: { refresh } },
-        { provide: DiskChangesService, useValue: { notice } },
         { provide: FirstFileService, useValue: { deleted: forgotten } },
         {
           provide: EntryCommandsService,
@@ -97,7 +95,7 @@ describe('DiscardService', () => {
             }
           }
         },
-        { provide: RepositorySessionService, useValue: { repository: signal({ id: 12 }) } },
+        { provide: RepositorySessionService, useValue: { repository } },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         {
           provide: GitApi,
@@ -263,7 +261,6 @@ describe('DiscardService', () => {
     expect(file.revision()).toBe(revision + 1);
     expect(file.file.content).toBe('committed');
     expect(file.changed()).toBeNull();
-    expect(notice).not.toHaveBeenCalled();
   });
 
   it('marks the open file as changed by this tab, so that its event is not taken for a change elsewhere', async () => {
@@ -391,14 +388,62 @@ describe('DiscardService', () => {
     expect(last.revision()).toBe(1);
   });
 
-  it('leaves the reload to the file\'s change on disk when it cannot be read', async () => {
-    await opened('README.md');
+  it('holds the old content back from saving when it cannot be read again', async () => {
+    const file = await opened('README.md');
     readAnswer = () => throwError(() => new HttpErrorResponse({ status: 0 }));
 
     expect(await (await confirm([ modified('README.md') ])).done).toBe(true);
 
     expect(released).toContain('README.md');
-    expect(notice).toHaveBeenCalledWith('README.md');
+    expect(file.changed()).toBe(file.hash());
+    file.saver.edit(() => 'typed on the old content');
+    void file.saver.flush();
+    expect(saves).toEqual([]);
+  });
+
+  it('deletes the browser draft of a file at the route that is not open', async () => {
+    routePath = 'gone.md';
+    await drafts.put({ userId: 4, repositoryId: 12, path: 'gone.md' }, {
+      content: 'draft',
+      savedAt: new Date().toISOString()
+    });
+
+    await (await confirm([ deleted('gone.md') ])).done;
+
+    expect(drafts.at('gone.md')).toBeUndefined();
+  });
+
+  it('leaves another repository\'s file at the same path alone when the answer comes after a navigation', async () => {
+    await opened('README.md');
+    const answer = new Subject<void>();
+    discardAnswer = () => answer;
+    const { done } = await confirm([ modified('README.md') ]);
+
+    TestBed.inject(DialogService).closeAll();
+    expect(await done).toBe(false);
+    repository.set({ id: 13 });
+    const other = await openFiles.open('README.md');
+    other.saver.edit(() => 'mine');
+    answer.next();
+    answer.complete();
+    await settleDialog();
+
+    expect(other.saver.waiting()).toBe('mine');
+    expect(other.revision()).toBe(0);
+  });
+
+  it('sends no more requests once a navigation closed the dialog', async () => {
+    const answer = new Subject<void>();
+    discardAnswer = () => answer;
+    const { done } = await confirm(Array.from({ length: 10_001 }, (_, index) => modified(`f${index}.md`)));
+
+    TestBed.inject(DialogService).closeAll();
+    expect(await done).toBe(false);
+    answer.next();
+    answer.complete();
+    await settleDialog();
+
+    expect(discarded).toHaveLength(1);
   });
 
   it('closes the open file only after the dialog, whose closing a navigation would answer', async () => {
