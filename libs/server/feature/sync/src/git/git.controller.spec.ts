@@ -131,7 +131,7 @@ describe('GitController', () => {
       behind: 0,
       mergeInProgress: false,
       changes: [ { path: 'notes.md', state: 'modified' } ],
-      lastCommit: { amendable: true, message: 'base' }
+      lastCommit: { oid: git(root, 'rev-parse', 'HEAD').trim(), amendable: true, message: 'base' }
     });
 
     const cloning = await status(CLONING).expect(409);
@@ -602,7 +602,11 @@ describe('GitController', () => {
 
         const { body } = await status().expect(200);
 
-        expect(body.lastCommit).toEqual({ amendable: false, message: null });
+        expect(body.lastCommit).toEqual({
+          oid: git(root, 'rev-parse', 'HEAD').trim(),
+          amendable: false,
+          message: null
+        });
       });
     });
   });

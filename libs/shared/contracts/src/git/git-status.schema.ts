@@ -13,6 +13,8 @@ export const GitChangeSchema = z
 /** The current branch's last commit (GA-22). */
 export const GitLastCommitSchema = z
   .object({
+    /** Which commit this is, so that a client can tell when it was replaced. */
+    oid: z.string(),
     /** It is on the current branch, not on any remote branch, and not a merge commit. */
     amendable: z.boolean(),
     /** Without a trailing line break; `null` unless it can be amended, as nothing else needs it. */

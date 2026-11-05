@@ -60,6 +60,8 @@ export interface CommitRequest {
 
 /** The current branch's last commit, as far as the commit form needs it (GA-22). */
 export interface LastCommit {
+  /** Which commit this is, so that a client can tell when it was replaced. */
+  oid: string;
   /** It is on the current branch, not on any remote branch, and not a merge commit. */
   amendable: boolean;
   /** Without a trailing line break; `null` when it cannot be amended, as nothing else needs it. */
@@ -385,34 +387,35 @@ export class GitEngine implements BeforeApplicationShutdown {
    * (A-5.3).
    */
   async lastCommit(workingCopy: string): Promise<LastCommit | null> {
-    const head = await this.runLocal(workingCopy, [ '--no-optional-locks', 'rev-list', '--parents', '-1', 'HEAD' ]);
-    if (head.timedOut) {
-      throw new GitOperationError('timeout', head.stderr);
+    // `--` everywhere: a file named HEAD would make the revision ambiguous.
+    const [ head, unpushed, branch ] = await Promise.all([
+      this.runLocal(workingCopy, [ '--no-optional-locks', 'log', '-1', '--format=%H %P%x00%B', 'HEAD', '--' ]),
+      // Walks only the commits that no remote branch has: nothing printed means HEAD was pushed.
+      this.runLocal(workingCopy, [ '--no-optional-locks', 'rev-list', '-1', 'HEAD', '--not', '--remotes', '--' ]),
+      this.runLocal(workingCopy, [ 'symbolic-ref', '--quiet', 'HEAD' ])
+    ]);
+    for (const result of [ head, unpushed, branch ]) {
+      if (result.timedOut) {
+        throw new GitOperationError('timeout', result.stderr);
+      }
     }
     if (head.exitCode !== 0) {
-      // HEAD names a branch that has no commit yet.
-      return null;
+      const resolved = await this.runLocal(workingCopy, [ 'rev-parse', '--verify', '--quiet', 'HEAD' ]);
+      if (resolved.exitCode !== 0 && !resolved.timedOut) {
+        // HEAD names a branch that has no commit yet.
+        return null;
+      }
+      throw new Error(`git log failed: ${head.stderr.trim()}`);
     }
-    const [ branch, onRemote ] = await Promise.all([
-      this.runLocal(workingCopy, [ 'symbolic-ref', '--quiet', 'HEAD' ]),
-      this.runChecked(workingCopy, [
-        '--no-optional-locks',
-        'for-each-ref',
-        '--contains',
-        'HEAD',
-        '--count=1',
-        'refs/remotes'
-      ])
-    ]);
-    if (branch.timedOut) {
-      throw new GitOperationError('timeout', branch.stderr);
+    if (unpushed.exitCode !== 0) {
+      throw new Error(`git rev-list failed: ${unpushed.stderr.trim()}`);
     }
-    const isMerge = head.stdout.trim().split(' ').length > 2;
-    if (branch.exitCode !== 0 || isMerge || onRemote.trim() !== '') {
-      return { amendable: false, message: null };
+    const separator = head.stdout.indexOf('\0');
+    const [ oid = '', ...parents ] = head.stdout.slice(0, separator).trim().split(' ');
+    if (branch.exitCode !== 0 || parents.length > 1 || unpushed.stdout.trim() === '') {
+      return { oid, amendable: false, message: null };
     }
-    const message = await this.runChecked(workingCopy, [ '--no-optional-locks', 'log', '-1', '--format=%B' ]);
-    return { amendable: true, message: message.replace(/\n+$/, '') };
+    return { oid, amendable: true, message: head.stdout.slice(separator + 1).replace(/\n+$/, '') };
   }
 
   /**
@@ -431,13 +434,16 @@ export class GitEngine implements BeforeApplicationShutdown {
    * `amend-not-allowed` when the last commit cannot be amended.
    */
   async commit(workingCopy: string, request: CommitRequest): Promise<{ oid: string; }> {
-    const status = await this.status(workingCopy);
+    const amend = request.amend === true;
+    const [ status, last ] = await Promise.all([
+      this.status(workingCopy),
+      amend ? this.lastCommit(workingCopy) : null
+    ]);
     if (status.branch === null) {
       // A commit on no branch is lost after the next switch (plan 52's review).
       throw new GitOperationError('detached-head', 'HEAD is not on a branch.');
     }
-    const amend = request.amend === true;
-    if (amend && (await this.lastCommit(workingCopy))?.amendable !== true) {
+    if (amend && last?.amendable !== true) {
       throw new GitOperationError('amend-not-allowed', 'The last commit cannot be amended.');
     }
     const changed = new Set(status.changes.map(change => change.path));

@@ -41,6 +41,7 @@ export interface CommitFailure extends ApiErrorText {
  * can be amended. Ticking it fills in that commit's message, and unticking it,
  * by hand or because the option went away, puts back what the field held, unless
  * the user changed the text, so that the old message is not committed by accident.
+ * It is unticked, too, when the last commit is replaced while it is ticked.
  */
 @Injectable()
 export class CommitService {
@@ -57,8 +58,8 @@ export class CommitService {
   private readonly failure = signal<{ shown: CommitFailure; state: string; } | null>(null);
   /** The last commit's files, and the status that still lists them. */
   private readonly committed = signal<{ status: GitStatus | null; paths: ReadonlySet<string>; } | null>(null);
-  /** What ticking Amend put in the message field, and what it replaced. */
-  private amendFill: { filled: string; replaced: string; } | null = null;
+  /** Which commit ticking Amend took the message from, what it put in the field, and what it replaced. */
+  private amendFill: { oid: string; filled: string; replaced: string; } | null = null;
 
   /** The text of the message field. */
   readonly message = signal('');
@@ -112,7 +113,9 @@ export class CommitService {
     let amended = false;
     effect(() => {
       const amending = this.amending();
-      if (amending && !this.canAmend()) {
+      const oid = this.store.status()?.lastCommit?.oid;
+      // A last commit replaced meanwhile, for example on another device, must not get the old message.
+      if (amending && (!this.canAmend() || (this.amendFill !== null && this.amendFill.oid !== oid))) {
         this.amending.set(false);
       } else if (amending !== amended) {
         amended = amending;
@@ -186,8 +189,9 @@ export class CommitService {
   }
 
   private fillIn(): void {
-    const filled = this.store.status()?.lastCommit?.message ?? '';
-    this.amendFill = { filled, replaced: this.message() };
+    const lastCommit = this.store.status()?.lastCommit;
+    const filled = lastCommit?.message ?? '';
+    this.amendFill = { oid: lastCommit?.oid ?? '', filled, replaced: this.message() };
     this.message.set(filled);
   }
 

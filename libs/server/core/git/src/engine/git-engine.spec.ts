@@ -651,6 +651,7 @@ describe('GitEngine', () => {
       const amend = (paths: string[], message = 'Amended', author = AUTHOR) =>
         engine().commit(work, { paths, message, author, amend: true });
       const lastCommit = () => engine().lastCommit(work);
+      const head = () => git(work, 'rev-parse', 'HEAD').trim();
       const subjects = () => git(work, 'log', '--format=%s').trim();
 
       beforeEach(() => {
@@ -759,7 +760,7 @@ describe('GitEngine', () => {
         it('gives the message of a commit that can be amended, without a trailing line break', async () => {
           git(work, 'commit', '-q', '--amend', '-m', 'Subject', '-m', 'Body');
 
-          expect(await lastCommit()).toEqual({ amendable: true, message: 'Subject\n\nBody' });
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: true, message: 'Subject\n\nBody' });
         });
 
         it('is null without commits', async () => {
@@ -774,19 +775,19 @@ describe('GitEngine', () => {
         it('a pushed commit cannot be amended', async () => {
           git(work, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
 
-          expect(await lastCommit()).toEqual({ amendable: false, message: null });
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: false, message: null });
         });
 
         it('a commit on any remote branch cannot be amended', async () => {
           git(work, 'update-ref', 'refs/remotes/fork/feature/other', 'HEAD');
 
-          expect(await lastCommit()).toEqual({ amendable: false, message: null });
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: false, message: null });
         });
 
         it('a commit newer than the remote branch can be amended', async () => {
           git(work, 'update-ref', 'refs/remotes/origin/main', 'HEAD~1');
 
-          expect(await lastCommit()).toEqual({ amendable: true, message: 'Local' });
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: true, message: 'Local' });
         });
 
         it('a merge commit cannot be amended', async () => {
@@ -796,7 +797,7 @@ describe('GitEngine', () => {
           git(work, 'checkout', '-q', 'main');
           git(work, 'merge', '-q', '--no-edit', 'other');
 
-          expect(await lastCommit()).toEqual({ amendable: false, message: null });
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: false, message: null });
         });
 
         it('a root commit can be amended', async () => {
@@ -808,7 +809,7 @@ describe('GitEngine', () => {
           git(fresh, 'commit', '-q', '-m', 'First');
           work = fresh;
 
-          expect(await lastCommit()).toEqual({ amendable: true, message: 'First' });
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: true, message: 'First' });
 
           await amend([]);
 
@@ -819,7 +820,19 @@ describe('GitEngine', () => {
         it('a detached HEAD cannot be amended', async () => {
           git(work, 'checkout', '-q', '--detach');
 
-          expect(await lastCommit()).toEqual({ amendable: false, message: null });
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: false, message: null });
+        });
+
+        it('is not confused by a file named HEAD', async () => {
+          writeFileSync(join(work, 'HEAD'), 'a file\n');
+
+          expect(await lastCommit()).toEqual({ oid: head(), amendable: true, message: 'Local' });
+        });
+
+        it('fails, rather than saying there is no commit, when git cannot read it', async () => {
+          writeFileSync(join(work, '.git', 'refs', 'heads', 'main'), `${'1'.repeat(40)}\n`);
+
+          await expect(lastCommit()).rejects.toThrow();
         });
       });
     });

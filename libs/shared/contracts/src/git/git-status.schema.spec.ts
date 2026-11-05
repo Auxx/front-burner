@@ -12,7 +12,7 @@ describe('GitStatusSchema', () => {
       path: 'c.md',
       state: 'deleted'
     } ],
-    lastCommit: { amendable: true, message: 'Subject\n\nBody' }
+    lastCommit: { oid: '0123456789abcdef0123456789abcdef01234567', amendable: true, message: 'Subject\n\nBody' }
   };
 
   it('parses a status', () => {
@@ -21,7 +21,7 @@ describe('GitStatusSchema', () => {
 
   it('parses no commits, and a last commit that cannot be amended', () => {
     expect(GitStatusSchema.parse({ ...status, lastCommit: null }).lastCommit).toBeNull();
-    const pushed = { amendable: false, message: null };
+    const pushed = { oid: '0123456789abcdef0123456789abcdef01234567', amendable: false, message: null };
     expect(GitStatusSchema.parse({ ...status, lastCommit: pushed }).lastCommit).toEqual(pushed);
   });
 

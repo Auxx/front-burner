@@ -143,9 +143,9 @@ describe('CommitService', () => {
   });
 
   describe('amending', () => {
-    const amendable = (message = 'Last commit\n\nBody'): GitStatus => ({
+    const amendable = (message = 'Last commit\n\nBody', oid = 'last'): GitStatus => ({
       ...statusOf('a.md', 'b.md'),
-      lastCommit: { amendable: true, message }
+      lastCommit: { oid, amendable: true, message }
     });
 
     function tickAmend(on = true): void {
@@ -161,7 +161,7 @@ describe('CommitService', () => {
     it('offers it only for a commit that can be amended', () => {
       expect(service.canAmend()).toBe(true);
 
-      status.set({ ...statusOf(), lastCommit: { amendable: false, message: null } });
+      status.set({ ...statusOf(), lastCommit: { oid: 'last', amendable: false, message: null } });
       expect(service.canAmend()).toBe(false);
 
       status.set({ ...statusOf(), lastCommit: null });
@@ -201,7 +201,7 @@ describe('CommitService', () => {
     it('the option goes away when the commit can no longer be amended, with the old message', () => {
       tickAmend();
 
-      status.set({ ...statusOf('a.md'), lastCommit: { amendable: false, message: null } });
+      status.set({ ...statusOf('a.md'), lastCommit: { oid: 'last', amendable: false, message: null } });
       TestBed.tick();
 
       expect(service.canAmend()).toBe(false);
@@ -213,11 +213,36 @@ describe('CommitService', () => {
       tickAmend();
       service.message.set('Mine');
 
-      status.set({ ...statusOf('a.md'), lastCommit: { amendable: false, message: null } });
+      status.set({ ...statusOf('a.md'), lastCommit: { oid: 'last', amendable: false, message: null } });
       TestBed.tick();
 
       expect(service.amending()).toBe(false);
       expect(service.message()).toBe('Mine');
+    });
+
+    it('stays ticked while the status changes, with the same last commit', () => {
+      tickAmend();
+
+      status.set(amendable());
+      TestBed.tick();
+
+      expect(service.amending()).toBe(true);
+      expect(service.message()).toBe('Last commit\n\nBody');
+    });
+
+    it('is unticked when the last commit was replaced, so that its old message does not replace the new one', () => {
+      service.message.set('Written first');
+      tickAmend();
+
+      status.set(amendable('Amended elsewhere', 'other'));
+      TestBed.tick();
+
+      expect(service.canAmend()).toBe(true);
+      expect(service.amending()).toBe(false);
+      expect(service.message()).toBe('Written first');
+
+      tickAmend();
+      expect(service.message()).toBe('Amended elsewhere');
     });
 
     it('sends amend with the ticked files, then starts over', async () => {
@@ -267,7 +292,7 @@ describe('CommitService', () => {
       expect(requests).toEqual([ 'commit', 'status' ]);
 
       // The status that follows does not take the message away.
-      status.set({ ...statusOf('a.md', 'b.md'), lastCommit: { amendable: false, message: null } });
+      status.set({ ...statusOf('a.md', 'b.md'), lastCommit: { oid: 'last', amendable: false, message: null } });
       TestBed.tick();
       expect(service.error()?.text).toBe('amend-not-allowed');
     });
