@@ -161,7 +161,8 @@ describe('sameDiff', () => {
   it('is false for any difference', () => {
     expect(sameDiff(text(context(3)), text(context(4)))).toBe(false);
     expect(sameDiff(text([ removed('a') ]), text([ removed('b') ]))).toBe(false);
-    expect(sameDiff(text(context(1)), { ...text(context(1)), complete: false })).toBe(false);
+    expect(sameDiff(text(context(1)), { kind: 'text', lines: context(1), complete: false, lineEndingsOnly: false }))
+      .toBe(false);
     expect(sameDiff({ kind: 'binary', oldSize: 1, newSize: 2 }, { kind: 'binary', oldSize: 1, newSize: 3 })).toBe(
       false
     );
