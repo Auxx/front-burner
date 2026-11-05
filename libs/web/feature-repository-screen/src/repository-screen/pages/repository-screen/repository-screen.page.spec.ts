@@ -784,11 +784,11 @@ describe('RepositoryScreenPage', () => {
 
           it('shows a file again when it comes back, as it could not be opened', async () => {
             changes = [ { path: 'docs/guide.md', state: 'deleted' } ];
-            const docs = folders.docs;
-            folders.docs = listing('docs', []);
+            const docs = folders['docs'];
+            folders['docs'] = listing('docs', []);
             await visit('/repositories/12/files/docs/guide.md');
             expect(page().querySelector('rs-editor-pane')).toBeNull();
-            folders.docs = docs;
+            folders['docs'] = docs;
 
             await discard('guide.md');
 
@@ -799,11 +799,11 @@ describe('RepositoryScreenPage', () => {
             changes = [ { path: 'docs/guide.md', state: 'deleted' } ];
             const { '': root, docs } = folders;
             folders[''] = listing('', [ entry('README.md') ]);
-            delete folders.docs;
+            delete folders['docs'];
             await visit('/repositories/12/files/docs/guide.md');
             expect(page().querySelector('rs-editor-pane')).toBeNull();
             folders[''] = root;
-            folders.docs = docs;
+            folders['docs'] = docs;
 
             await discard('guide.md');
 
@@ -815,13 +815,13 @@ describe('RepositoryScreenPage', () => {
             const injector = harness.routeDebugElement?.injector;
             await harness.navigateByUrl('/repositories/12/files/README.md');
             await settle(harness.fixture);
-            const docs = folders.docs;
-            folders.docs = listing('docs', []);
+            const docs = folders['docs'];
+            folders['docs'] = listing('docs', []);
             await injector?.get(FileTreeStoreService).load('docs');
             await harness.navigateByUrl('/repositories/12/files/docs/guide.md');
             await settle(harness.fixture);
             expect(page().querySelector('rs-editor-pane')).toBeNull();
-            folders.docs = docs;
+            folders['docs'] = docs;
             changes = [ { path: 'docs/guide.md', state: 'deleted' } ];
             await injector?.get(GitStatusStore).refresh();
             await settle(harness.fixture);
