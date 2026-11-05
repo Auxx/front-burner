@@ -7,8 +7,11 @@ import { type Draft, type DraftKey, DraftStore } from '@front-burner/web-core';
  * it, as in the real store. `claimed` holds the keys this tab claims, and
  * `elsewhere` those another tab claims.
  */
-export class MemoryDraftStore
-  implements Pick<DraftStore, 'put' | 'get' | 'delete' | 'move' | 'clearAll' | 'claim' | 'claimedElsewhere'> {
+export class MemoryDraftStore implements
+  Pick<
+    DraftStore,
+    'put' | 'get' | 'delete' | 'deleteUnclaimed' | 'move' | 'clearAll' | 'claim' | 'claimedElsewhere'
+  > {
   readonly drafts = new Map<string, Draft>();
   readonly claimed = new Set<string>();
   readonly elsewhere = new Set<string>();
@@ -31,6 +34,14 @@ export class MemoryDraftStore
     for (const stored of [ ...this.drafts.keys() ]) {
       if (stored === prefix || stored.startsWith(`${prefix}/`)) {
         this.drafts.delete(stored);
+      }
+    }
+  }
+
+  async deleteUnclaimed(keys: readonly DraftKey[]): Promise<void> {
+    for (const key of keys) {
+      if (!this.elsewhere.has(keyOf(key))) {
+        this.drafts.delete(keyOf(key));
       }
     }
   }

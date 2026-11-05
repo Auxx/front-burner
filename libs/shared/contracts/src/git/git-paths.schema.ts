@@ -5,6 +5,8 @@ import { z } from 'zod';
  * on a request body. A client sends a longer list in several requests.
  */
 export const GIT_PATHS_MAX = 10_000;
+/** A body of paths stays under this many bytes, to be under the server's 2 MB limit with a margin. */
+export const GIT_PATHS_MAX_BYTES = 2_000_000;
 /** As `GitDiffQuerySchema`. */
 export const GIT_PATH_MAX_LENGTH = 4096;
 

@@ -119,6 +119,61 @@ describe('ChangesPaneComponent', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  describe('discarding', () => {
+    const discardAll = () => host().querySelector<HTMLButtonElement>('.discard-all');
+
+    it('offers Discard all with the changes the list shows', async () => {
+      await render();
+      const asked: (readonly GitChange[])[] = [];
+      fixture.componentInstance.discard.subscribe(changes => asked.push(changes));
+
+      expect(discardAll()?.textContent?.trim()).toBe(`${KEY}.discardAll`);
+      discardAll()?.click();
+
+      expect(asked).toEqual([ THREE ]);
+    });
+
+    it('does not offer Discard all without changes', async () => {
+      status.set(statusOf([]));
+      await render();
+
+      expect(discardAll()).toBeNull();
+    });
+
+    it('passes on the Discard of an entry, as a list of one', async () => {
+      await render();
+      const asked: (readonly GitChange[])[] = [];
+      fixture.componentInstance.discard.subscribe(changes => asked.push(changes));
+
+      (rows()[1].querySelector('.discard') as HTMLButtonElement).click();
+
+      expect(asked).toEqual([ [ THREE[1] ] ]);
+    });
+
+    it('moves the focus to Discard all after a discard, as the row is gone', async () => {
+      await render();
+      document.body.append(host());
+
+      fixture.componentInstance.focusAfterDiscard();
+      await settle(fixture);
+
+      expect(document.activeElement).toBe(discardAll());
+      host().remove();
+    });
+
+    it('moves the focus to the pane when no change is left', async () => {
+      status.set(statusOf([]));
+      await render();
+      document.body.append(host());
+
+      fixture.componentInstance.focusAfterDiscard();
+      await settle(fixture);
+
+      expect(document.activeElement).toBe(host());
+      host().remove();
+    });
+  });
+
   it('marks the selected path and passes on the one asked for', async () => {
     await render();
     fixture.componentRef.setInput('selected', 'docs/guide.md');

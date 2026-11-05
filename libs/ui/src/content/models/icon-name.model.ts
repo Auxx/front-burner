@@ -13,6 +13,7 @@ export const ICON_NAMES = [
   'chevron-right',
   'close',
   'diff-ignored',
+  'discard',
   'ellipsis',
   'error',
   'eye',

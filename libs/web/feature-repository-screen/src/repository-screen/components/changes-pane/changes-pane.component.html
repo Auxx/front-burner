@@ -15,6 +15,11 @@
   } @else if (changes.length === 0) {
     <ui-empty-state icon="check">{{ t('empty') }}</ui-empty-state>
   } @else {
+    <div class="actions">
+      <button #discardAll uiButton class="discard-all" size="small" (click)="discard.emit(changes)">
+        {{ t('discardAll') }}
+      </button>
+    </div>
     <cdk-virtual-scroll-viewport class="list" role="list" [attr.aria-label]="t('label')" [itemSize]="rowHeight()">
       <rs-change-entry
         *cdkVirtualFor="let change of changes; let index = index; trackBy: trackChange"
@@ -23,6 +28,7 @@
         [attr.aria-posinset]="index + 1"
         [attr.aria-setsize]="changes.length"
         (selectPath)="selectPath.emit($event)"
+        (discard)="discard.emit([ $event ])"
       />
     </cdk-virtual-scroll-viewport>
   }

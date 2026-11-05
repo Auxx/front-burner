@@ -21,6 +21,7 @@ import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { BehaviorSubject, map, Observable, of, Subject, throwError } from 'rxjs';
 
+import { dialogButton, settleDialog } from '../../../testing/dialog-testing';
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { entry, folder, listing } from '../../../testing/listings';
 import { fileContent } from '../../../testing/open-files';
@@ -80,6 +81,8 @@ describe('RepositoryScreenPage', () => {
   let drafts: MemoryDraftStore;
   /** The files `fileState` does not find. */
   let gone: Set<string>;
+  /** The paths of each `GitApi.discard`. */
+  let discards: string[][];
   /** What `GitApi.gitStatus` answers. */
   let changes: GitChange[];
   /** In place of `changes`, such as a failure. */
@@ -100,6 +103,10 @@ describe('RepositoryScreenPage', () => {
           provide: GitApi,
           useValue: {
             diff: (_id: number, query: { path: string; }) => gitDiff(query.path),
+            discard: (_id: number, body: { paths: string[]; }) => {
+              discards.push(body.paths);
+              return of(undefined);
+            },
             gitStatus: (): Observable<GitStatus> =>
               gitStatusAnswer ?? of({
                 branch: 'main',
@@ -182,6 +189,7 @@ describe('RepositoryScreenPage', () => {
     gone = new Set();
     changes = [];
     gitStatusAnswer = undefined;
+    discards = [];
     gitDiff = vi.fn(() => of<GitDiff>({ kind: 'text', lines: [], complete: true, lineEndingsOnly: false }));
     saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
     recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
@@ -736,6 +744,49 @@ describe('RepositoryScreenPage', () => {
         beforeEach(() => {
           changes = THREE;
           localStorage.setItem('fb.4.sideTool', 'changes');
+        });
+
+        describe('discarding', () => {
+          const K = 'web-feature-repository-screen.DiscardChangesDialog';
+
+          async function discard(name: string): Promise<void> {
+            entryButton(name).closest('rs-change-entry')?.querySelector<HTMLButtonElement>('.discard')?.click();
+            await settleDialog();
+            dialogButton(`${K}.discard`)?.click();
+            await settleDialog();
+            await settle(harness.fixture);
+          }
+
+          it('closes the diff of a discarded file', async () => {
+            await visit('/repositories/12/files/README.md');
+            await select('guide.md');
+            expect(diffView()).not.toBeNull();
+
+            await discard('guide.md');
+
+            expect(discards).toEqual([ [ 'docs/guide.md' ] ]);
+            expect(diffView()).toBeNull();
+            expect(editorArea().hidden).toBe(false);
+          });
+
+          it('keeps the diff of another file', async () => {
+            await visit('/repositories/12/files/README.md');
+            await select('guide.md');
+
+            await discard('README.md');
+
+            expect(diffView()).not.toBeNull();
+          });
+
+          it('shows the open file again when it comes back', async () => {
+            changes = [ { path: 'docs/guide.md', state: 'deleted' } ];
+            await visit('/repositories/12/files/docs/guide.md');
+            folders.docs = listing('docs', [ entry('guide.md') ]);
+
+            await discard('guide.md');
+
+            expect(page().querySelector('rs-editor-pane')).not.toBeNull();
+          });
         });
 
         it('shows its diff in place of the open file, and the URL keeps naming the file', async () => {

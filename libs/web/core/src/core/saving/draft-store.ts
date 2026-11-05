@@ -122,6 +122,28 @@ export class DraftStore {
   }
 
   /**
+   * Deletes the drafts at exactly `keys`, of files not open in this tab, at one
+   * go, however many they are. A file another tab has open keeps its draft, which
+   * is still being saved there (D-1.3).
+   */
+  async deleteUnclaimed(keys: readonly DraftKey[]): Promise<void> {
+    const locks = globalThis.navigator?.locks as LockManager | undefined;
+    let claimed = new Set<string | undefined>();
+    try {
+      claimed = new Set(((await locks?.query())?.held ?? []).map(lock => lock.name));
+    } catch {
+      // As without Web Locks: no file counts as open elsewhere.
+    }
+    await this.write(store => {
+      for (const key of keys) {
+        if (!claimed.has(lockOf(key))) {
+          store.delete(keyOf(key));
+        }
+      }
+    });
+  }
+
+  /**
    * Moves the draft at `from`, or every draft under the folder at `from`'s
    * path, to its path under `to`, such as after a rename (FB-36).
    */

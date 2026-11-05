@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -1140,6 +1140,184 @@ test.describe('repository screen, kept up to date', () => {
     await page.getByRole('button', { name: 'Show 42 more lines' }).click();
 
     await expect(diffLines(page).getByText('line 20', { exact: true })).toBeVisible();
+  });
+
+  test.describe('discarding', () => {
+    const discardButton = (page: Page, file: string) =>
+      changesPane(page).getByRole('button', { name: `Discard ${file}`, exact: true });
+    const confirmDiscard = (page: Page) => dialog(page).getByRole('button', { name: 'Discard', exact: true }).click();
+
+    test('AC-GIT-002.8: asks first, and restores a modified file, deletes an added one and restores a deleted one', async ({ page, instance, isMobile }) => {
+      const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+      const dir = workingCopyOf(instance.dataDir, handbook);
+      const original = readFileSync(join(dir, 'docs/guide.md'), 'utf8');
+      writeFileSync(join(dir, 'docs/guide.md'), '# Changed\n');
+      writeFileSync(join(dir, 'new.md'), '# New\n');
+      rmSync(join(dir, 'logo.png'));
+      await openScreen(page, `/repositories/${handbook}/files/README.md`);
+      await expect(changesButton(page, 'Changes (3)')).toBeVisible();
+      await showChanges(page);
+
+      await discardButton(page, 'guide.md').click();
+      await expect(dialog(page).getByRole('heading', { name: 'Discard changes to 1 file?' })).toBeVisible();
+      await expect(dialog(page)).toContainText('These changes can\'t be recovered.');
+      await expect(dialog(page).getByRole('button', { name: 'Cancel' })).toBeFocused();
+      expect((await axe(page, isMobile).analyze()).violations).toEqual([]);
+
+      await dialog(page).getByRole('button', { name: 'Cancel' }).click();
+      expect(readFileSync(join(dir, 'docs/guide.md'), 'utf8')).toBe('# Changed\n');
+
+      await discardButton(page, 'guide.md').click();
+      await confirmDiscard(page);
+      await expect(changesPane(page).getByRole('listitem')).toHaveCount(2);
+      expect(readFileSync(join(dir, 'docs/guide.md'), 'utf8')).toBe(original);
+      // The row is gone, and the focus is not lost with it.
+      await expect(changesPane(page).getByRole('button', { name: 'Discard all' })).toBeFocused();
+
+      await discardButton(page, 'new.md').click();
+      await confirmDiscard(page);
+      await expect(changesPane(page).getByRole('listitem')).toHaveCount(1);
+      expect(existsSync(join(dir, 'new.md'))).toBe(false);
+
+      await discardButton(page, 'logo.png').click();
+      await confirmDiscard(page);
+      await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
+      expect(existsSync(join(dir, 'logo.png'))).toBe(true);
+    });
+
+    test('AC-GIT-002.8: Discard all says how many, and discards what the list shows', async ({ page, instance }) => {
+      const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+      const dir = workingCopyOf(instance.dataDir, handbook);
+      writeFileSync(join(dir, 'README.md'), '# Changed\n');
+      writeFileSync(join(dir, 'new.md'), '# New\n');
+      rmSync(join(dir, 'logo.png'));
+      await openScreen(page, `/repositories/${handbook}`);
+      await expect(changesButton(page, 'Changes (3)')).toBeVisible();
+      await showChanges(page);
+
+      await changesPane(page).getByRole('button', { name: 'Discard all' }).click();
+      await expect(dialog(page).getByRole('heading', { name: 'Discard changes to all 3 files?' })).toBeVisible();
+      await confirmDiscard(page);
+
+      await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
+      await expect(changesButton(page, /^Changes$/)).toBeVisible();
+      await expect(dialog(page)).toHaveCount(0);
+    });
+
+    test('AC-GIT-002.8: discarding the open file while a save is waiting does not bring the change back', async ({ page, instance, isMobile }) => {
+      const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+      const dir = workingCopyOf(instance.dataDir, handbook);
+      const original = readFileSync(join(dir, 'README.md'), 'utf8');
+      writeFileSync(join(dir, 'README.md'), `${original}Saved.\n`);
+      await openScreen(page, `/repositories/${handbook}/files/README.md`);
+      await expect(editorOf(page, 'README.md')).toBeVisible();
+      await expect(changesButton(page, 'Changes (1)')).toBeVisible();
+
+      await editorOf(page, 'README.md').click();
+      await page.keyboard.type('Waiting. ');
+      await showChanges(page);
+      await discardButton(page, 'README.md').click();
+      await confirmDiscard(page);
+      await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
+      if (isMobile) {
+        await changesButton(page).click();
+      }
+      await expect(editorOf(page, 'README.md')).not.toContainText('Waiting.');
+      await expect(editorOf(page, 'README.md')).not.toContainText('Saved.');
+      // No question, and no notice: the user asked for this.
+      await expect(editor(page).getByText('This file changed while you were editing.')).toHaveCount(0);
+      await expect(page.getByText('This file was updated.')).toHaveCount(0);
+
+      // Longer than the save's delay.
+      await page.waitForTimeout(2000);
+      expect(readFileSync(join(dir, 'README.md'), 'utf8')).toBe(original);
+      await expect(changesButton(page, /^Changes$/)).toBeVisible();
+    });
+
+    test('closes an open file that was added, and shows the empty state', async ({ page, instance, isMobile }) => {
+      const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+      writeFileSync(join(workingCopyOf(instance.dataDir, handbook), 'new.md'), '# New\n');
+      await openScreen(page, `/repositories/${handbook}/files/new.md`);
+      await expect(editorOf(page, 'new.md')).toBeVisible();
+      await showChanges(page);
+
+      await discardButton(page, 'new.md').click();
+      await confirmDiscard(page);
+
+      await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}$`));
+      if (isMobile) {
+        await changesButton(page).click();
+      }
+      await expect(editor(page).getByText(EMPTY_STATE)).toBeVisible();
+    });
+
+    test('closes the diff of a discarded file', async ({ page, instance, isMobile }) => {
+      const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+      writeFileSync(join(workingCopyOf(instance.dataDir, handbook), 'docs/guide.md'), '# Manual\n');
+      await openScreen(page, `/repositories/${handbook}/files/README.md`);
+      await expect(editorOf(page, 'README.md')).toBeVisible();
+      await selectChange(page, /^guide\.md/);
+      await expect(diffLines(page).first()).toBeVisible();
+
+      await showChanges(page);
+      await discardButton(page, 'guide.md').click();
+      await confirmDiscard(page);
+
+      await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
+      await expect(diffLines(page)).toHaveCount(0);
+      if (isMobile) {
+        await changesButton(page).click();
+      }
+      await expect(editorOf(page, 'README.md')).toBeVisible();
+    });
+
+    test('says why a deleted file cannot come back', async ({ page, instance, monitor }) => {
+      const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+      const dir = workingCopyOf(instance.dataDir, handbook);
+      rmSync(join(dir, 'docs'), { recursive: true });
+      writeFileSync(join(dir, 'docs'), 'A file in its place\n');
+      await openScreen(page, `/repositories/${handbook}`);
+      await showChanges(page);
+      await expect(changesPane(page).getByRole('listitem')).toHaveCount(2);
+
+      await discardButton(page, 'guide.md').click();
+      await confirmDiscard(page);
+
+      await expect(dialog(page)).toContainText('Another file or folder is where this file goes.');
+      await expect(dialog(page).getByRole('button', { name: 'Try again' })).toHaveCount(0);
+      drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/git/discard`);
+      await dialog(page).getByRole('button', { name: 'Cancel' }).click();
+      await expect(changesPane(page).getByRole('listitem')).toHaveCount(2);
+      // Discarding both, in one request, restores the folder.
+      await changesPane(page).getByRole('button', { name: 'Discard all' }).click();
+      await confirmDiscard(page);
+      await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
+    });
+
+    test('another tab is asked about a file discarded here', async ({ page, context, instance }) => {
+      const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+      const dir = workingCopyOf(instance.dataDir, handbook);
+      writeFileSync(join(dir, 'README.md'), '# Changed\n');
+      await openScreen(page, `/repositories/${handbook}/files/README.md`);
+      await expect(editorOf(page, 'README.md')).toBeVisible();
+      const other = await context.newPage();
+      await other.goto(`/repositories/${handbook}/files/README.md`);
+      await expect(editorOf(other, 'README.md')).toBeVisible();
+      await editorOf(other, 'README.md').click();
+      // Held back, so that it stays unsaved in that tab when the discard comes.
+      await other.route(/\/file$/, route => route.abort());
+      await other.keyboard.type('Mine. ');
+
+      await page.bringToFront();
+      await showChanges(page);
+      await discardButton(page, 'README.md').click();
+      await confirmDiscard(page);
+      await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
+
+      await expect(editor(other).getByText('This file changed while you were editing.')).toBeVisible();
+      await expect(editorOf(other, 'README.md')).toContainText('Mine.');
+      await other.close();
+    });
   });
 
   test('keeps each tool window\'s scroll position when switching', async ({ page, instance }) => {

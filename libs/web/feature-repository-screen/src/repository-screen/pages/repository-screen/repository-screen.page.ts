@@ -38,6 +38,7 @@ import { EditorAreaComponent } from '../../components/editor-area/editor-area.co
 import { FileTreeComponent } from '../../components/file-tree/file-tree.component';
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
+import { DiscardService } from '../../services/discard/discard.service';
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { EntryCommandsService } from '../../services/entry-commands/entry-commands.service';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
@@ -49,7 +50,7 @@ import { RepositorySessionService } from '../../services/repository-session/repo
 import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import type { EntryAction } from '../../utils/entry-actions/entry-actions';
-import { fileName } from '../../utils/file-name/file-name';
+import { fileName, parentPath } from '../../utils/file-name/file-name';
 
 /** A larger count shows as `99+`; the item's accessible name says it in full. */
 const MAX_BADGE_COUNT = 99;
@@ -86,6 +87,8 @@ const MAX_BADGE_COUNT = 99;
  * diff in place of the editor until a file is opened again (GA-14). It is not in
  * the URL, which keeps naming the open file, so that a reload opens the file; the
  * editor stays in place, hidden, so that it keeps its scroll position and undo.
+ * **Discard** runs through `DiscardService` (GA-23); it ends the diff of a file it
+ * discards.
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -122,6 +125,7 @@ const MAX_BADGE_COUNT = 99;
     OpenFilesService,
     DiskChangesService,
     GitStatusStore,
+    DiscardService,
     // One per screen, so that switching files or tabs loads no image again (IM-10).
     ImageCache
   ],
@@ -142,6 +146,7 @@ export class RepositoryScreenPage {
   protected readonly openFiles = inject(OpenFilesService);
   private readonly diskChanges = inject(DiskChangesService);
   protected readonly gitStatus = inject(GitStatusStore);
+  private readonly discards = inject(DiscardService);
 
   protected readonly user = this.currentUser.user;
   /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
@@ -150,6 +155,7 @@ export class RepositoryScreenPage {
   protected readonly drawerOpen = signal(false);
   /** The page's app shell, once there is one; it knows whether the layout is narrow. */
   private readonly shell = viewChild(AppShellComponent);
+  private readonly changesPane = viewChild(ChangesPaneComponent);
   /** The activity bar's selected item: the tool window shown, beside the editor or as the drawer (FB-7, FB-9, GA-10). */
   protected readonly sideTool = computed(() => {
     const narrow = this.shell()?.narrow() ?? false;
@@ -312,6 +318,28 @@ export class RepositoryScreenPage {
     if (selected === this.diffsSelected) {
       this.diffWaiting.set(false);
     }
+  }
+
+  /**
+   * **Discard** or **Discard all** (GA-23): the diff of a discarded file ends, and
+   * a file that comes back at the route's path, but was not open, is shown.
+   */
+  protected async discardChanges(changes: readonly GitChange[]): Promise<void> {
+    if (!(await this.discards.discard(changes))) {
+      return;
+    }
+    const inChanges = (path: string | undefined) => changes.some(change => change.path === path);
+    if (inChanges(this.selectedChange()?.path)) {
+      this.selectedChange.set(null);
+    }
+    const path = this.path();
+    const repository = this.session.repository();
+    const cameBack = changes.some(change => change.path === path && change.state === 'deleted');
+    if (cameBack && repository && !this.openFiles.get(path)) {
+      await this.tree.load(parentPath(path));
+      void this.show(repository.id, path, false);
+    }
+    this.changesPane()?.focusAfterDiscard();
   }
 
   /**

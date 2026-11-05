@@ -245,6 +245,60 @@ export class OpenFilesService {
   }
 
   /**
+   * Before the file at `path` is discarded (GA-24): drops its waiting save and
+   * its browser draft, offered or not, and holds its saver. Resolves, once a save
+   * in flight has been answered, so that none can land after the discard, with
+   * what ends the hold: `release` when the file was discarded, and `restore` when
+   * it was not, which offers the draft again and saves the editor's content again.
+   * `null` when the file is not open.
+   */
+  async dropForDiscard(path: string): Promise<{ release(): void; restore(): void; } | null> {
+    const file = this.get(path);
+    if (!file) {
+      return null;
+    }
+    const repositoryId = this.repositoryId();
+    const release = file.saver.hold();
+    const unsaved = file.saver.unsaved();
+    const offered = file.draft();
+    file.draft.set(null);
+    file.saver.discard();
+    await file.saver.settled();
+    const key = this.keyAt(repositoryId, file.path());
+    if (key) {
+      await this.drafts.delete(key);
+    }
+    return {
+      release,
+      restore: () => {
+        if (offered) {
+          file.draft.set(offered);
+          if (key) {
+            void this.drafts.put(key, offered);
+          }
+        }
+        if (unsaved) {
+          file.saver.edit(file.preview.read);
+          if (this.waits.has(file)) {
+            this.wait(file);
+          } else {
+            void file.saver.flush();
+          }
+        }
+        release();
+      }
+    };
+  }
+
+  /** Deletes the browser drafts at `paths`, of files not open here, except those another tab has open (D-1.3). */
+  async deleteDrafts(paths: readonly string[]): Promise<void> {
+    const repositoryId = this.repositoryId();
+    await this.drafts.deleteUnclaimed(
+      paths.flatMap(path => this.keyAt(repositoryId, path) ?? [])
+    );
+  }
+
+  /**
    * Whether `hash` is the content of `file` as this tab knows it: its last
    * load or save, or a save of this tab answered in the last
    * {@link OWN_SAVE_MS}, whose event can come after a newer save's answer.

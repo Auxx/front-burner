@@ -1,0 +1,23 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.DiscardChangesDialog'">
+  <ui-dialog [heading]="t(data.count > 1 ? 'headingAll' : 'heading', { count: data.count })">
+    @if (failure(); as failure) {
+      <ui-inline-banner status="danger" announce>
+        {{ failure.text }}
+        @if (failure.reference) {
+          <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+        }
+      </ui-inline-banner>
+    }
+    <p class="message">{{ t('message') }}</p>
+    <div uiDialogFooter>
+      <button uiButton data-autofocus [unavailable]="busy()" (click)="ref.close(false)">{{ t('cancel') }}</button>
+      @if (failure(); as failure) {
+        @if (failure.retry) {
+          <button uiButton variant="danger" (click)="confirm()">{{ t('retry') }}</button>
+        }
+      } @else {
+        <button uiButton variant="danger" [busy]="busy()" (click)="confirm()">{{ t('discard') }}</button>
+      }
+    </div>
+  </ui-dialog>
+</ng-container>
