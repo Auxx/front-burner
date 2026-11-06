@@ -11,6 +11,8 @@ import type {
   FolderListing,
   GitChange,
   GitDiff,
+  GitJobStarted,
+  GitJobState,
   GitStatus,
   PushEvent,
   RepositorySummary
@@ -72,6 +74,8 @@ describe('RepositoryScreenPage', () => {
   let readFile: ReturnType<typeof vi.fn<(path: string) => Observable<FileContent>>>;
   let saveFile: ReturnType<typeof vi.fn>;
   let gitDiff: ReturnType<typeof vi.fn<(path: string) => Observable<GitDiff>>>;
+  let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
+  let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let recreateFile: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
@@ -106,6 +110,8 @@ describe('RepositoryScreenPage', () => {
           provide: GitApi,
           useValue: {
             diff: (_id: number, query: { path: string; }) => gitDiff(query.path),
+            push,
+            gitJob,
             discard: (_id: number, body: { paths: string[]; }) => {
               discards.push(body.paths);
               return discardAnswer(body.paths);
@@ -199,6 +205,8 @@ describe('RepositoryScreenPage', () => {
     discardAnswer = () => of(undefined);
     gitDiff = vi.fn(() => of<GitDiff>({ kind: 'text', lines: [], complete: true, lineEndingsOnly: false }));
     saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
+    push = vi.fn(() => of({ jobId: 7 }));
+    gitJob = vi.fn(() => of<GitJobState>({ status: 'running', outcome: null }));
     recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
     document.title = '';
   });
@@ -1123,6 +1131,57 @@ describe('RepositoryScreenPage', () => {
       });
     });
 
+    describe('pushing', () => {
+      const pushButton = () => page().querySelector('rs-repository-bar rs-push-button button') as HTMLButtonElement;
+      const problem = () => page().querySelector('rs-push-problem');
+
+      it('pushes from the bar and shows it running', async () => {
+        await visit('/repositories/12');
+
+        pushButton().click();
+        await settle(harness.fixture);
+
+        expect(push).toHaveBeenCalledExactlyOnceWith(12);
+        expect(pushButton().textContent?.trim()).toBe('web-feature-repository-screen.PushButtonComponent.pushing');
+      });
+
+      it('shows a new banner for each failure, so that Try again that fails again is announced', async () => {
+        push.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 0 })));
+        await visit('/repositories/12');
+        pushButton().click();
+        await settle(harness.fixture);
+        const first = problem() as HTMLElement;
+        expect(first.textContent).toContain('errors.network');
+
+        (first.querySelector('[uiBannerActions] button') as HTMLButtonElement).click();
+        await settle(harness.fixture);
+
+        expect(push).toHaveBeenCalledTimes(2);
+        expect(problem()).toBeTruthy();
+        expect(problem()).not.toBe(first);
+      });
+
+      it('shows why a push failed below the bar, above the panes, and dismisses it', async () => {
+        gitJob.mockReturnValue(of<GitJobState>({
+          status: 'done',
+          outcome: { kind: 'failed', code: 'push-non-fast-forward', params: { branch: 'main' } }
+        }));
+        await visit('/repositories/12');
+
+        pushButton().click();
+        await settle(harness.fixture);
+
+        const shown = problem() as HTMLElement;
+        expect(shown.closest('header')).toBeTruthy();
+        expect(shown.closest('rs-repository-bar')).toBeNull();
+        expect(shown.textContent).toContain('errors.push-non-fast-forward');
+
+        (shown.querySelector('ui-inline-banner button') as HTMLButtonElement).click();
+        await settle(harness.fixture);
+        expect(problem()).toBeNull();
+      });
+    });
+
     it('has one pressed Files item with a folder icon in the activity bar', async () => {
       await visit('/repositories/12');
 
@@ -1316,6 +1375,17 @@ describe('RepositoryScreenPage', () => {
 
       expect(saveFile).toHaveBeenCalledTimes(1);
       expect(saveFile.mock.calls[0][0]).toBe(12);
+    });
+
+    it('does not flush saves when pushing: a push sends what was committed', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      (page().querySelector('rs-repository-bar rs-push-button button') as HTMLButtonElement).click();
+      await settle(harness.fixture);
+
+      expect(push).toHaveBeenCalledOnce();
+      expect(saveFile).not.toHaveBeenCalled();
     });
 
     it('flushes when the tab is hidden', async () => {

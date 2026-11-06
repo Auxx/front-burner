@@ -16,6 +16,9 @@ import { AppShellComponent } from './app-shell.component';
     <button type="button" class="other">Other</button>
     <ui-app-shell skipLinkLabel="Skip to content" [(sideOpen)]="sideOpen" [(drawerOpen)]="drawerOpen" [(sideSize)]="sideSize" [mainLabel]="mainLabel()">
       <span uiAppShellHeader>Front Burner</span>
+      @if (withBanner()) {
+        <p uiAppShellBanner class="notice">Notice</p>
+      }
       @if (withActivity()) {
         <ui-activity-bar label="Tool windows" />
       }
@@ -34,6 +37,7 @@ class HostComponent {
   readonly sideSize = signal(20);
   readonly withSide = signal(true);
   readonly withActivity = signal(false);
+  readonly withBanner = signal(false);
   readonly mainLabel = signal<string | undefined>(undefined);
 }
 
@@ -94,6 +98,15 @@ describe('AppShellComponent', () => {
 
     skip.click();
     expect(document.activeElement).toBe(main());
+  });
+
+  it('shows banners below the header\'s bar, in the banner landmark, before main', async () => {
+    await set(() => host.withBanner.set(true));
+
+    const notice = query('.notice') as HTMLElement;
+    expect(notice.closest('header')).toBeTruthy();
+    expect(notice.closest('.bar')).toBeNull();
+    expect(query('header .bar')?.compareDocumentPosition(notice)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('labels main only when given a label', async () => {

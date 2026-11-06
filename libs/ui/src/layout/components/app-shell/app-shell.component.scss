@@ -38,12 +38,18 @@
 
   .header {
     grid-area: header;
+    display: grid;
+    gap: var(--ui-space-2);
+    min-inline-size: 0;
+    padding-block-start: var(--ui-space-2);
+    padding-inline: var(--ui-page-padding-inline);
+  }
+
+  .bar {
     display: flex;
     align-items: center;
     min-inline-size: 0;
     min-block-size: var(--ui-control-height);
-    padding-block-start: var(--ui-space-2);
-    padding-inline: var(--ui-page-padding-inline);
   }
 
   .activity {

@@ -1,0 +1,22 @@
+<ng-container *transloco="let t">
+  @let shown = problem();
+  <ui-inline-banner
+    status="danger"
+    [announce]="!shown.quiet"
+    [dismissLabel]="t('web-feature-repository-screen.PushProblemComponent.dismiss')"
+    (dismissed)="dismissed.emit()"
+  >
+    {{ t(shown.messageKey, shown.params) }}
+    @if (remoteMessages(); as lines) {
+      <!-- The remote's lines as text, never as HTML (GA-31). -->
+      <pre class="remote">{{ lines }}</pre>
+    }
+    @if (fix(); as fix) {
+      <div uiBannerActions>
+        <button uiButton size="small" (click)="fixSelected.emit(fix)">
+          {{ t('web-feature-repository-screen.PushProblemComponent.fixes.' + fix) }}
+        </button>
+      </div>
+    }
+  </ui-inline-banner>
+</ng-container>

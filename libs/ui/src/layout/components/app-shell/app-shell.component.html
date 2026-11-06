@@ -1,6 +1,8 @@
 <a class="skip-link" [href]="'#' + mainId" (click)="skipToMain($event)">{{ skipLinkLabel() }}</a>
 <header class="header">
-  <ng-content select="[uiAppShellHeader]" />
+  <div class="bar"><ng-content select="[uiAppShellHeader]" /></div>
+  <!-- In the banner landmark, so that all content is in landmarks. -->
+  <ng-content select="[uiAppShellBanner]" />
 </header>
 <!-- All content must be in a landmark; the activity bar switches between the
 side panel's views, so it is navigation, named after the bar. -->

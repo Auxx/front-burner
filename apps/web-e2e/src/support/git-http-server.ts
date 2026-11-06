@@ -1,6 +1,6 @@
 import { workspaceRoot } from '@nx/devkit';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createServer } from 'node:https';
 import type { AddressInfo } from 'node:net';
@@ -39,6 +39,17 @@ export function createHandbookRemote(root: string): string {
   git(work, 'branch', 'feature/x');
   git(work, 'push', '-q', handbook, 'main', 'feature/x');
   return handbook;
+}
+
+/**
+ * Makes the bare repository `bare` refuse every push with a `pre-receive` hook
+ * that prints `lines`, which git shows the pusher as `remote:` lines (GA-31).
+ */
+export function refusePushes(bare: string, lines: readonly string[]): void {
+  const hook = join(bare, 'hooks', 'pre-receive');
+  const quoted = lines.map(line => `'${line.replaceAll('\'', '\'\\\'\'')}'`).join(' ');
+  writeFileSync(hook, `#!/bin/sh\nprintf '%s\\n' ${quoted} >&2\nexit 1\n`);
+  chmodSync(hook, 0o755);
 }
 
 export interface GitHttpServer {

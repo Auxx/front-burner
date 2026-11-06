@@ -2,6 +2,7 @@
 <rs-repository-switcher class="name" [repository]="repository()" [narrow]="narrow()" />
 @if (withFiles()) {
   <rs-git-status-summary [status]="gitStatus()" />
+  <rs-push-button [status]="gitStatus()" [running]="pushing()" [narrow]="narrow()" (push)="push.emit()" />
   <rs-save-status class="status" [status]="saveStatus()" />
 }
 @if (user(); as user) {

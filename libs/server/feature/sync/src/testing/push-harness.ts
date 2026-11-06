@@ -126,7 +126,8 @@ export class PushHarness {
       this.engine,
       this.openable,
       this.saved,
-      this.jobKeys
+      this.jobKeys,
+      this.events
     );
   }
 
