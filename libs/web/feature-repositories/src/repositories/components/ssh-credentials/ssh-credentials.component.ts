@@ -100,7 +100,10 @@ export class SshCredentialsComponent {
     try {
       await this.sessionKeys.unlock(key.id, passphrase().value());
     } catch (error) {
-      const code = toApiError(error).fields?.find(field => field.path === 'passphrase')?.code ?? 'unlock-failed';
+      const apiError = toApiError(error);
+      // The limit on wrong passphrases (RC-18) is a 429 without fields, but it concerns this field.
+      const code = apiError.fields?.find(field => field.path === 'passphrase')?.code
+        ?? (apiError.code === 'unlock-too-many-attempts' ? apiError.code : 'unlock-failed');
       this.unlockError.set({ key: fieldErrorKey('credentials.passphrase', code), params: {} });
       return;
     }

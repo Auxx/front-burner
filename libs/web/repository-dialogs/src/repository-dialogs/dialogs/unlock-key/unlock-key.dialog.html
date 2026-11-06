@@ -1,0 +1,35 @@
+<ng-container *transloco="let t; prefix: 'web-repository-dialogs.UnlockKeyDialog'">
+  <ui-dialog [heading]="t('heading', { name: data.name })">
+    <form class="form" novalidate [id]="formId" (submit)="unlock($event)">
+      @if (failure(); as failure) {
+        <ui-inline-banner status="danger" announce>
+          {{ failure.text }}
+          @if (failure.reference) {
+            <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+          }
+        </ui-inline-banner>
+      }
+      <dl uiKeyValueList>
+        <div uiKeyValue [label]="t('name')">{{ data.name }}</div>
+        <div uiKeyValue [label]="t('type')">{{ t('keyTypes.' + data.keyType) }}</div>
+        <div uiKeyValue mono [label]="t('fingerprint')">{{ data.fingerprint }}</div>
+      </dl>
+      @let shownError = error();
+      <ui-field [label]="t('passphrase')" [error]="shownError ? t('errors.' + shownError) : undefined">
+        <input
+          #passphraseInput
+          uiInput
+          type="password"
+          autocomplete="off"
+          required
+          [value]="passphrase()"
+          (input)="typed($any($event.target).value)"
+        />
+      </ui-field>
+    </form>
+    <div uiDialogFooter>
+      <button uiButton [unavailable]="busy()" (click)="ref.close()">{{ t('cancel') }}</button>
+      <button uiButton variant="primary" type="submit" [attr.form]="formId" [busy]="busy()">{{ t('unlock') }}</button>
+    </div>
+  </ui-dialog>
+</ng-container>

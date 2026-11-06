@@ -47,7 +47,8 @@ const FIELD_CODES: Record<string, readonly string[]> = {
     'wrong-passphrase',
     'passphrase-required',
     'passphrase-not-needed',
-    'unlock-failed'
+    'unlock-failed',
+    'unlock-too-many-attempts'
   ],
   'credentials.generateName': [ 'too-small', 'too-big', 'name-taken', 'generate-failed' ],
   branch: [ 'required', 'branch-not-found', 'no-branches' ],
