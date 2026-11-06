@@ -92,7 +92,7 @@ export class PushService {
       const id = this.store.followed();
       untracked(() => {
         if (
-          job !== null && id !== null && this.starting() === null && this.followed()?.jobId !== job.id
+          job !== null && id !== null && this.starting() !== id && this.followed()?.jobId !== job.id
           && !this.ended.has(job.id)
         ) {
           this.follow({ repositoryId: id, jobId: job.id, own: false });
@@ -141,7 +141,10 @@ export class PushService {
         void this.store.refresh();
       }
     } finally {
-      this.starting.set(null);
+      // Another repository's push may have started meanwhile, after a switch.
+      if (this.starting() === repositoryId) {
+        this.starting.set(null);
+      }
     }
   }
 
@@ -156,6 +159,8 @@ export class PushService {
 
   private follow(followed: Followed): void {
     clearTimeout(this.retryTimer);
+    // A new push makes the last one's failure out of date, also one started in another tab.
+    this.shownProblem.set(null);
     this.followed.set(followed);
     // It may have ended before it was followed: its `job.finished` came first.
     void this.read(followed);

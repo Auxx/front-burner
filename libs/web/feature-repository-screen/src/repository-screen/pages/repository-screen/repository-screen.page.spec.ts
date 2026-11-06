@@ -1145,6 +1145,22 @@ describe('RepositoryScreenPage', () => {
         expect(pushButton().textContent?.trim()).toBe('web-feature-repository-screen.PushButtonComponent.pushing');
       });
 
+      it('shows a new banner for each failure, so that Try again that fails again is announced', async () => {
+        push.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 0 })));
+        await visit('/repositories/12');
+        pushButton().click();
+        await settle(harness.fixture);
+        const first = problem() as HTMLElement;
+        expect(first.textContent).toContain('errors.network');
+
+        (first.querySelector('[uiBannerActions] button') as HTMLButtonElement).click();
+        await settle(harness.fixture);
+
+        expect(push).toHaveBeenCalledTimes(2);
+        expect(problem()).toBeTruthy();
+        expect(problem()).not.toBe(first);
+      });
+
       it('shows why a push failed below the bar, above the panes, and dismisses it', async () => {
         gitJob.mockReturnValue(of<GitJobState>({
           status: 'done',

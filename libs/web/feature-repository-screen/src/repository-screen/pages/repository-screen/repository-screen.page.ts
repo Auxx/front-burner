@@ -360,6 +360,15 @@ export class RepositoryScreenPage {
     this.changesPane()?.focusAfterDiscard();
   }
 
+  /**
+   * Why the last push failed, as a list of one, so that each new problem gets
+   * a banner of its own, which announces it (RC-25).
+   */
+  protected readonly pushProblems = computed(() => {
+    const problem = this.pushes.problem();
+    return this.session.state() === 'ready' && problem !== null ? [ problem ] : [];
+  });
+
   /** The fix of a push problem (RC-4); plans 60, 63, 64 and 66 add the dialogs. */
   protected fixPush(fix: PushProblem['fix']): void {
     if (fix === 'retry') {

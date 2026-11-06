@@ -27,7 +27,7 @@
         <shell-app-header uiAppShellHeader [user]="user" />
       }
       <!-- One root element, so that the shell projects it below the bar (NV-16). -->
-      @if (state === 'ready' && pushes.problem(); as problem) {
+      @for (problem of pushProblems(); track problem) {
         <rs-push-problem
           uiAppShellBanner
           [problem]="problem"

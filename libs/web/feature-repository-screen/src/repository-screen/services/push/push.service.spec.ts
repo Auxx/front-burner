@@ -266,6 +266,42 @@ describe('PushService', () => {
     expect(service.problem()).toBeNull();
   });
 
+  it('clears an old failure when it takes up another tab\'s push', async () => {
+    push.mockReturnValueOnce(throwError(() => refused('push-rejected')));
+    await service.start();
+    expect(service.problem()).not.toBeNull();
+
+    gitStatus.set(status({ id: 9, type: 'push' }));
+    await settle();
+    expect(service.running()).toBe(true);
+    expect(service.problem()).toBeNull();
+
+    gitJob.mockReturnValue(of(PUSHED));
+    finished(9);
+    await settle();
+
+    expect(service.problem()).toBeNull();
+  });
+
+  it('keeps a push of another repository starting when the first one\'s request answers', async () => {
+    const first = new Subject<GitJobStarted>();
+    const second = new Subject<GitJobStarted>();
+    push.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const started = service.start();
+    followed.set(13);
+    await settle();
+    void service.start();
+    expect(push).toHaveBeenLastCalledWith(13);
+
+    first.next({ jobId: 7 });
+    first.complete();
+    await started;
+
+    expect(service.running()).toBe(true);
+    await service.start();
+    expect(push).toHaveBeenCalledTimes(2);
+  });
+
   it('clears the problem', async () => {
     push.mockReturnValueOnce(throwError(() => refused('push-rejected')));
     await service.start();
