@@ -7,6 +7,7 @@ import type {
   AccessCheckResult,
   AddRepositoryRequest,
   RecentRepositories,
+  RepositoryCredentialsInfo,
   RepositoryIndex,
   RepositorySummary
 } from '@front-burner/shared-contracts';
@@ -49,6 +50,11 @@ export class RepositoriesApi {
     return this.http.request<RepositorySummary>(
       'POST',
       `/api/v1/repositories/${encodeURIComponent(id)}/open`
+    );
+  }
+  repositoryCredentials(id: number): Observable<RepositoryCredentialsInfo> {
+    return this.http.get<RepositoryCredentialsInfo>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/credentials`
     );
   }
 }

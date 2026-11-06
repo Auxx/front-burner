@@ -6,6 +6,7 @@ import {
   RecentRepositoriesSchema,
   refineAddRepository,
   refineCredentialsProtocol,
+  RepositoryCredentialsInfoSchema,
   RepositoryIndexSchema,
   RepositoryParamsSchema,
   RepositorySummarySchema
@@ -44,3 +45,6 @@ export class AddRepositoryRequestDto extends createZodDto(
 
 @ApiSchema({ name: 'RepositoryParams' })
 export class RepositoryParamsDto extends createZodDto(z.object(RepositoryParamsSchema.shape)) {}
+
+@ApiSchema({ name: 'RepositoryCredentialsInfo' })
+export class RepositoryCredentialsInfoDto extends createZodDto(z.object(RepositoryCredentialsInfoSchema.shape)) {}

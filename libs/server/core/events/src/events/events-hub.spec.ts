@@ -28,6 +28,20 @@ describe('EventsHub', () => {
     expect(bob.send).not.toHaveBeenCalled();
   });
 
+  it('delivers to one session\'s streams only', () => {
+    const tabs = [ stream(1, 'a1'), stream(1, 'a1') ];
+    const otherSession = stream(1, 'a2');
+    const bob = stream(2, 'b1');
+
+    hub.publishToSession('a1', event);
+
+    for (const tab of tabs) {
+      expect(tab.send).toHaveBeenCalledWith(event);
+    }
+    expect(otherSession.send).not.toHaveBeenCalled();
+    expect(bob.send).not.toHaveBeenCalled();
+  });
+
   it('stops delivering to a removed stream', () => {
     const tab = stream(1, 'a1');
     tab.remove();

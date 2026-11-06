@@ -1,6 +1,7 @@
 import type { Config } from '@front-burner/server-core-config';
 import { SecretBox } from '@front-burner/server-core-crypto';
 import { Database, savedCredentials } from '@front-burner/server-core-database';
+import { EventsHub } from '@front-burner/server-core-events';
 import { SSH_KEY_PROBLEMS, UnlockedKey } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { ApiErrorException } from '@front-burner/server-core-observability';
@@ -38,7 +39,7 @@ describe('SavedCredentialsService', () => {
 
   beforeEach(() => {
     database = createTestDatabase();
-    unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, new SessionLifecycle());
+    unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, new SessionLifecycle(), new EventsHub());
     attempts = new UnlockAttempts();
     service = new SavedCredentialsService(database, box, unlocks, attempts);
     alice = insertUser(database, 'alice@x.io');

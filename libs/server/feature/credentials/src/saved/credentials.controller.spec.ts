@@ -1,6 +1,7 @@
 import { Config, ConfigModule } from '@front-burner/server-core-config';
 import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule, knownHosts } from '@front-burner/server-core-database';
+import { EventsModule } from '@front-burner/server-core-events';
 import { GIT_OPTIONS } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
@@ -67,6 +68,7 @@ describe('credentials endpoints', () => {
         DatabaseModule.forRoot(database),
         CryptoModule.forRoot(config),
         SessionLifecycleModule,
+        EventsModule,
         StubGitModule,
         CredentialsModule
       ],
@@ -181,6 +183,21 @@ describe('credentials endpoints', () => {
       code: 'validation-failed',
       fields: [ { path: 'passphrase', code: 'wrong-passphrase', params: {} } ]
     });
+  });
+
+  it('answers a sixth wrong passphrase within a minute with too many attempts', async () => {
+    const key = seedKey(alice);
+    const unlock = (passphrase: string) =>
+      request(app.getHttpServer()).post(`/api/v1/credentials/ssh-keys/${key}/unlock`).set(as(alice)).send({
+        passphrase
+      });
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await unlock('wrong').expect(400);
+    }
+
+    const response = await unlock(FIXTURE_PASSPHRASE).expect(429);
+
+    expect(response.body).toMatchObject({ code: 'unlock-too-many-attempts' });
   });
 
   it('answers 404 for another user\'s credential', async () => {

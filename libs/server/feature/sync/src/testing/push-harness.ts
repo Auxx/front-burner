@@ -52,10 +52,11 @@ export class PushHarness {
   readonly layout = new DataLayout(join(this.root, 'data'));
   readonly published: { userId: number; event: PushEvent; }[] = [];
   readonly events = {
-    publish: (userId: number, event: PushEvent) => this.published.push({ userId, event })
+    publish: (userId: number, event: PushEvent) => this.published.push({ userId, event }),
+    publishToSession: () => undefined
   } as unknown as EventsHub;
   readonly lifecycle = new SessionLifecycle();
-  readonly unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, this.lifecycle);
+  readonly unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, this.lifecycle, this.events);
   readonly saved = new SavedCredentialsService(this.database, box, this.unlocks, new UnlockAttempts());
   readonly jobKeys = new JobKeys();
   readonly queries = new RepositoryQueries(this.database);

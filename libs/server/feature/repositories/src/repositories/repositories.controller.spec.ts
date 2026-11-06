@@ -3,11 +3,17 @@ import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule, jobs } from '@front-burner/server-core-database';
 import { EventsModule } from '@front-burner/server-core-events';
 import { GitModule } from '@front-burner/server-core-git';
-import { GitHttpServer, startGitHttpServer } from '@front-burner/server-core-git/testing';
+import {
+  FIXTURE_PASSPHRASE,
+  GitHttpServer,
+  sshKeyFixture,
+  startGitHttpServer
+} from '@front-burner/server-core-git/testing';
 import { JobsModule } from '@front-burner/server-core-jobs';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
 import { RateLimitModule, SessionLifecycleModule } from '@front-burner/server-core-security';
 import { StorageModule } from '@front-burner/server-core-storage';
+import { SavedCredentialsService } from '@front-burner/server-feature-credentials';
 import { CanActivate, ExecutionContext, INestApplication, Injectable } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -226,7 +232,7 @@ describe('RepositoriesController', () => {
     const missing = secret + 100;
     const strip = (body: Record<string, unknown>) => ({ ...body, requestId: undefined });
 
-    for (const [ method, suffix ] of [ [ 'get', '' ], [ 'post', '/open' ] ] as const) {
+    for (const [ method, suffix ] of [ [ 'get', '' ], [ 'post', '/open' ], [ 'get', '/credentials' ] ] as const) {
       const other = await http()[method](`/api/v1/repositories/${secret}${suffix}`).set('x-test-user', String(alice));
       const none = await http()[method](`/api/v1/repositories/${missing}${suffix}`).set('x-test-user', String(alice));
       expect(other.status).toBe(404);
@@ -236,6 +242,38 @@ describe('RepositoriesController', () => {
     }
     expect(database.sqlite.prepare('select last_accessed_at from repositories where id = ?').get(secret))
       .toEqual({ last_accessed_at: 0 });
+  });
+
+  it('returns no secret', async () => {
+    const alice = insertUser(database, 'alice@example.com');
+    const saved = app.get(SavedCredentialsService);
+    const key = database.db.transaction(tx =>
+      saved.createPastedKey(tx, alice, {
+        name: 'Laptop',
+        privateKey: sshKeyFixture('ed25519-passphrase'),
+        passphrase: FIXTURE_PASSPHRASE
+      })
+    );
+    const https = database.db.transaction(tx =>
+      saved.createHttps(tx, alice, { name: 'Work', username: 'alice', password: 'ghp_secret-token' })
+    );
+    const ssh = insertRepository(database, alice, {
+      name: 'ssh',
+      remoteUrl: 'git@github.com:acme/handbook.git',
+      credentialId: key
+    });
+    const token = insertRepository(database, alice, { name: 'https', credentialId: https });
+
+    for (const id of [ ssh, token ]) {
+      const response = await http().get(`/api/v1/repositories/${id}/credentials`).set('x-test-user', String(alice))
+        .expect(200);
+      const text = JSON.stringify(response.body);
+      expect(text).not.toMatch(/"(secret|privateKey|password)"/);
+      expect(text).not.toContain('ghp_secret-token');
+      expect(text).not.toContain('PRIVATE KEY');
+    }
+    const response = await http().get(`/api/v1/repositories/${ssh}/credentials`).set('x-test-user', String(alice));
+    expect(response.body).toMatchObject({ protocol: 'ssh', inUse: { kind: 'ssh-key', name: 'Laptop', usedBy: 1 } });
   });
 
   it('refuses an id that is not a positive integer', async () => {

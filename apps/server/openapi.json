@@ -531,6 +531,39 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/credentials": {
+      "get": {
+        "operationId": "repositoryCredentials",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryCredentialsInfo"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
     "/api/v1/preferences/commit-author": {
       "get": {
         "operationId": "commitAuthor",
@@ -2201,6 +2234,112 @@
           "name",
           "credentials",
           "cloneMode"
+        ]
+      },
+      "RepositoryCredentialsInfo": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "https",
+              "ssh"
+            ]
+          },
+          "inUse": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "https"
+                    ]
+                  },
+                  "id": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "usedBy": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "name",
+                  "username",
+                  "usedBy"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "ssh-key"
+                    ]
+                  },
+                  "id": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "keyType": {
+                    "type": "string",
+                    "enum": [
+                      "ed25519",
+                      "ecdsa",
+                      "rsa"
+                    ]
+                  },
+                  "fingerprint": {
+                    "type": "string"
+                  },
+                  "passphraseProtected": {
+                    "type": "boolean"
+                  },
+                  "unlocked": {
+                    "type": "boolean"
+                  },
+                  "usedBy": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "name",
+                  "keyType",
+                  "fingerprint",
+                  "passphraseProtected",
+                  "unlocked",
+                  "usedBy"
+                ]
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "protocol",
+          "inUse"
         ]
       },
       "StoredCommitAuthor": {

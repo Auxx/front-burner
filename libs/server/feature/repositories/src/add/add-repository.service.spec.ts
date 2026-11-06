@@ -93,7 +93,9 @@ describe('AddRepositoryService', () => {
     createRemotes(root);
     await serve();
     database = createTestDatabase();
-    unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, new SessionLifecycle());
+    unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, new SessionLifecycle(), {
+      publishToSession: vi.fn()
+    } as unknown as EventsHub);
     saved = new SavedCredentialsService(database, box, unlocks, new UnlockAttempts());
     const gitOptions = testGitOptions();
     runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, { publish: vi.fn() } as unknown as EventsHub);

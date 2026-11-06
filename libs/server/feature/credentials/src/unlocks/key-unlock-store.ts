@@ -1,4 +1,5 @@
 import { CONFIG, Config } from '@front-burner/server-core-config';
+import { EventsHub } from '@front-burner/server-core-events';
 import { UnlockedKey, unlockPrivateKey } from '@front-burner/server-core-git';
 import { SessionLifecycle } from '@front-burner/server-core-security';
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
@@ -20,12 +21,17 @@ export class KeyUnlockStore implements OnModuleDestroy {
   readonly #sessions = new Map<string, Map<number, Unlock>>();
   readonly #subscription: Subscription;
 
-  constructor(@Inject(CONFIG) private readonly config: Config, lifecycle: SessionLifecycle) {
+  constructor(
+    @Inject(CONFIG) private readonly config: Config,
+    lifecycle: SessionLifecycle,
+    private readonly events: EventsHub
+  ) {
     this.#subscription = lifecycle.revoked.subscribe(sessionId => this.dropSession(sessionId));
   }
 
   /**
-   * Unlocks a key for one session; the passphrase is not kept.
+   * Unlocks a key for one session; the passphrase is not kept. Every way of
+   * unlocking comes here, so this tells the session's tabs (RC-16, RC-20).
    *
    * @throws SshKeyError such as `wrong-passphrase`.
    */
@@ -38,6 +44,7 @@ export class KeyUnlockStore implements OnModuleDestroy {
       this.#sessions.set(sessionId, unlocks);
     }
     unlocks.set(credentialId, { key, timer: this.idleTimer(sessionId, credentialId) });
+    this.events.publishToSession(sessionId, { type: 'key.unlocked', keyId: credentialId });
   }
 
   /**

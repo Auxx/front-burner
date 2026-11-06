@@ -37,6 +37,15 @@ export class EventsHub implements BeforeApplicationShutdown {
     }
   }
 
+  /** Delivers to one session's streams only, such as `key.unlocked`, which belongs to that session (RC-20). */
+  publishToSession(sessionId: string, event: PushEvent): void {
+    for (const stream of this.streams) {
+      if (stream.sessionId === sessionId) {
+        stream.send(event);
+      }
+    }
+  }
+
   /** Closes the streams of a revoked session, so that it keeps no authenticated channel (A-7.2). */
   closeSession(sessionId: string): void {
     this.closeWhere(stream => stream.sessionId === sessionId);

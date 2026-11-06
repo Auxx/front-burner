@@ -113,7 +113,9 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
     mkdirSync(layout.reposDir, { recursive: true });
     database = createTestDatabase();
     lifecycle = new SessionLifecycle();
-    unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, lifecycle);
+    unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, lifecycle, {
+      publishToSession: vi.fn()
+    } as unknown as EventsHub);
     saved = new SavedCredentialsService(database, box, unlocks, new UnlockAttempts());
     alice = { id: insertUser(database, 'alice@x.io'), sessionId: SESSION };
     build();
