@@ -15,6 +15,7 @@ import type {
   NewHttpsCredentials,
   NewSshKey,
   SavedCredentials,
+  SavedHttpsCredentials,
   SavedSshKey,
   SshKeyType
 } from '@front-burner/shared-contracts';
@@ -67,12 +68,7 @@ export class SavedCredentialsService {
       .orderBy(sql`lower(${savedCredentials.name})`, asc(savedCredentials.id))
       .all();
     return {
-      https: rows.filter(row => row.kind === 'https').map(row => ({
-        id: row.id,
-        name: row.name,
-        username: row.username ?? '',
-        missing: row.secret === null
-      })),
+      https: rows.filter(row => row.kind === 'https').map(row => this.toHttps(row)),
       sshKeys: rows.filter(row => row.kind === 'ssh-key').map(row => this.toSshKey(row, sessionId))
     };
   }
@@ -212,14 +208,16 @@ export class SavedCredentialsService {
     }
     this.attempts.assertAllowed(userId, row.id);
     const privateKey = this.secretOf(row);
-    try {
-      checkKey(() => this.unlocks.unlock(sessionId, row.id, privateKey, passphrase));
-    } catch (error) {
-      if (error instanceof ApiErrorException && error.fields?.some(field => field.code === 'wrong-passphrase')) {
-        this.attempts.recordWrong(userId, row.id);
+    checkKey(() => {
+      try {
+        this.unlocks.unlock(sessionId, row.id, privateKey, passphrase);
+      } catch (error) {
+        if (error instanceof SshKeyError && error.problem === 'wrong-passphrase') {
+          this.attempts.recordWrong(userId, row.id);
+        }
+        throw error;
       }
-      throw error;
-    }
+    });
     this.attempts.clear(userId, row.id);
   }
 
@@ -251,6 +249,23 @@ export class SavedCredentialsService {
       throw new ApiErrorException(409, 'credentials-missing', { id: row.id });
     }
     return this.secretBox.decrypt(row.secret, bindingOf(row));
+  }
+
+  /**
+   * A row as clients see it, without its secret (AR-17); a key's `unlocked`
+   * is in this session, and reading it does not keep the key unlocked.
+   */
+  toPublic(
+    row: SavedCredential,
+    sessionId: string
+  ): ({ kind: 'https'; } & SavedHttpsCredentials) | ({ kind: 'ssh-key'; } & SavedSshKey) {
+    return row.kind === 'https'
+      ? { kind: 'https', ...this.toHttps(row) }
+      : { kind: 'ssh-key', ...this.toSshKey(row, sessionId) };
+  }
+
+  private toHttps(row: SavedCredential): SavedHttpsCredentials {
+    return { id: row.id, name: row.name, username: row.username ?? '', missing: row.secret === null };
   }
 
   private toSshKey(row: SavedCredential, sessionId: string | undefined): SavedSshKey {

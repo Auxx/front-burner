@@ -2268,6 +2268,9 @@
                   "username": {
                     "type": "string"
                   },
+                  "missing": {
+                    "type": "boolean"
+                  },
                   "usedBy": {
                     "type": "integer",
                     "minimum": -9007199254740991,
@@ -2279,6 +2282,7 @@
                   "id",
                   "name",
                   "username",
+                  "missing",
                   "usedBy"
                 ]
               },
@@ -2316,6 +2320,12 @@
                   "unlocked": {
                     "type": "boolean"
                   },
+                  "generated": {
+                    "type": "boolean"
+                  },
+                  "missing": {
+                    "type": "boolean"
+                  },
                   "usedBy": {
                     "type": "integer",
                     "minimum": -9007199254740991,
@@ -2330,6 +2340,8 @@
                   "fingerprint",
                   "passphraseProtected",
                   "unlocked",
+                  "generated",
+                  "missing",
                   "usedBy"
                 ]
               }

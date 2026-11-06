@@ -1,6 +1,6 @@
 import type { Config } from '@front-burner/server-core-config';
 import { SecretBox } from '@front-burner/server-core-crypto';
-import { Database } from '@front-burner/server-core-database';
+import { Database, savedCredentials } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { SessionLifecycle } from '@front-burner/server-core-security';
@@ -40,7 +40,7 @@ describe('RepositoryCredentialsService', () => {
     database = createTestDatabase();
     unlocks = new KeyUnlockStore({ keyUnlockIdleMs: IDLE } as Config, new SessionLifecycle(), new EventsHub());
     saved = new SavedCredentialsService(database, box, unlocks, new UnlockAttempts());
-    service = new RepositoryCredentialsService(database, new RepositoryQueries(database), saved, unlocks);
+    service = new RepositoryCredentialsService(database, new RepositoryQueries(database), saved);
     alice = insertUser(database, 'alice@x.io');
     bob = insertUser(database, 'bob@x.io');
   });
@@ -61,7 +61,7 @@ describe('RepositoryCredentialsService', () => {
 
     expect(service.get(alice, 's1', id)).toEqual({
       protocol: 'https',
-      inUse: { kind: 'https', id: https, name: 'Work', username: 'alice', usedBy: 2 }
+      inUse: { kind: 'https', id: https, name: 'Work', username: 'alice', missing: false, usedBy: 2 }
     });
   });
 
@@ -80,6 +80,8 @@ describe('RepositoryCredentialsService', () => {
         fingerprint: expect.stringMatching(/^SHA256:/),
         passphraseProtected: true,
         unlocked: false,
+        generated: false,
+        missing: false,
         usedBy: 1
       }
     });
@@ -102,6 +104,14 @@ describe('RepositoryCredentialsService', () => {
     vi.advanceTimersByTime(1000);
 
     expect(service.get(alice, 's1', id).inUse).toMatchObject({ unlocked: false });
+  });
+
+  it('reports credentials whose secret an encryption key reset deleted as missing', () => {
+    const key = createKey();
+    const id = insertRepository(database, alice, { name: 'handbook', remoteUrl: SSH_REMOTE, credentialId: key });
+    database.db.update(savedCredentials).set({ secret: null }).run();
+
+    expect(service.get(alice, 's1', id).inUse).toMatchObject({ passphraseProtected: true, missing: true });
   });
 
   it('answers another user\'s repository like a missing one', () => {

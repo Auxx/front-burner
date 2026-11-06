@@ -13,7 +13,11 @@ export const UNLOCK_ATTEMPT_WINDOW_MS = 60_000;
  */
 @Injectable()
 export class UnlockAttempts {
-  /** `userId:keyId` → times of the wrong attempts within the window, oldest first. */
+  /**
+   * `userId:keyId` → times of the wrong attempts within the window, oldest
+   * first. On the monotonic clock, so that setting the system clock neither
+   * stretches nor ends a lockout.
+   */
   readonly #wrong = new Map<string, number[]>();
 
   /** @throws ApiErrorException 429 `unlock-too-many-attempts` once the key's limit is reached. */
@@ -28,7 +32,7 @@ export class UnlockAttempts {
     this.forgetExpired();
     const key = keyOf(userId, keyId);
     const times = this.#wrong.get(key) ?? [];
-    times.push(Date.now());
+    times.push(performance.now());
     this.#wrong.set(key, times);
   }
 
@@ -45,7 +49,7 @@ export class UnlockAttempts {
 
   /** Drops attempts older than the window, and keys left without any, so that the map stays small. */
   private forgetExpired(): void {
-    const since = Date.now() - UNLOCK_ATTEMPT_WINDOW_MS;
+    const since = performance.now() - UNLOCK_ATTEMPT_WINDOW_MS;
     for (const [ key, times ] of this.#wrong) {
       const kept = times.filter(time => time > since);
       if (kept.length === 0) {

@@ -6,7 +6,7 @@ describe('UnlockAttempts', () => {
   let attempts: UnlockAttempts;
 
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: [ 'performance', 'Date' ] });
     attempts = new UnlockAttempts();
   });
 
@@ -42,6 +42,18 @@ describe('UnlockAttempts', () => {
     // A sliding window: the other four still count, so one more is the limit again.
     attempts.recordWrong(1, 7);
     expect(() => attempts.assertAllowed(1, 7)).toThrow(tooMany);
+  });
+
+  it('ignores changes to the system clock', () => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      attempts.recordWrong(1, 7);
+    }
+
+    vi.setSystemTime(Date.now() + 3_600_000);
+    expect(() => attempts.assertAllowed(1, 7)).toThrow(tooMany);
+    vi.setSystemTime(Date.now() - 7_200_000);
+    vi.advanceTimersByTime(UNLOCK_ATTEMPT_WINDOW_MS);
+    attempts.assertAllowed(1, 7);
   });
 
   it('forgets a key\'s attempts after a success and after the window', () => {
