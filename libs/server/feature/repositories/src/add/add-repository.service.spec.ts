@@ -334,7 +334,7 @@ describe('AddRepositoryService', () => {
       );
 
       const [ job ] = all().jobs;
-      expect(jobKeys.take(job?.id ?? 0)).toBeInstanceOf(UnlockedKey);
+      expect(jobKeys.take(job?.id ?? 0, id)).toBeInstanceOf(UnlockedKey);
       expect(all().repositories[0]?.credentialId).toBe(id);
     });
 
@@ -355,7 +355,7 @@ describe('AddRepositoryService', () => {
       const { credentials: [ credential ], jobs: [ job ] } = all();
       expect(credential).toMatchObject({ kind: 'ssh-key', name: 'Laptop', sshPassphraseProtected: true });
       expect(unlocks.isUnlocked(SESSION, credential?.id ?? 0)).toBe(true);
-      expect(jobKeys.take(job?.id ?? 0)).toBeInstanceOf(UnlockedKey);
+      expect(jobKeys.take(job?.id ?? 0, credential?.id ?? 0)).toBeInstanceOf(UnlockedKey);
     });
   });
 });

@@ -5,9 +5,8 @@ import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { JobKeys, KnownHostsService, SavedCredentialsService } from '@front-burner/server-feature-credentials';
 import { OpenableRepository } from '@front-burner/server-feature-files';
-import { RepositoryQueries } from '@front-burner/server-feature-repositories';
 import type { GitJobOutcome } from '@front-burner/shared-contracts';
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 
 export const PUSH_JOB_TYPE = 'sync.push';
 
@@ -17,8 +16,11 @@ export interface PushJobPayload {
   branch: string;
 }
 
-/** The dedupe key of a repository's push, so that a second request gets the same job. */
-export const pushDedupeKey = (repositoryId: number) => `push:${repositoryId}`;
+/**
+ * The dedupe key of a branch's push, so that a second request gets the same
+ * job, and a push of another branch after a switch gets its own.
+ */
+export const pushDedupeKey = (repositoryId: number, branch: string) => `push:${repositoryId}:${branch}`;
 
 /**
  * The API's code for a push that git refused or could not do (GA-30, GA-31,
@@ -65,7 +67,6 @@ export class PushJob implements OnModuleInit {
     private readonly engine: GitEngine,
     private readonly networkLock: NetworkLock,
     private readonly repositories: OpenableRepository,
-    private readonly queries: RepositoryQueries,
     private readonly saved: SavedCredentialsService,
     private readonly knownHosts: KnownHostsService,
     private readonly jobKeys: JobKeys,
@@ -91,21 +92,21 @@ export class PushJob implements OnModuleInit {
     }
     // Network steps take the network lock only, so saves never wait behind the remote (A-5.3).
     return this.networkLock.run(repositoryId, async () => {
-      const root = this.repositories.root(userId, repositoryId);
-      const row = this.queries.find(userId, repositoryId);
-      if (row === undefined) {
-        throw new ApiErrorException(404, 'not-found');
-      }
+      const { row, root } = this.repositories.open(userId, repositoryId);
       const { branch } = job.payload;
       let credentials: GitCredentials;
       try {
         credentials = row.credentialId === null
           ? { kind: 'none' }
-          : this.saved.resolveForJob(userId, row.credentialId, this.jobKeys.take(job.id));
+          : this.saved.resolveForJob(userId, row.credentialId, this.jobKeys.take(job.id, row.credentialId));
       } catch (error) {
         if (error instanceof ApiErrorException && error.getStatus() === 409) {
           // `key-locked` or `credentials-missing`, with what the user needs to fix it (RC-4).
           return { kind: 'failed', code: error.code, params: stringParams(error.params) };
+        }
+        if (error instanceof NotFoundException) {
+          // The credential is not the user's any more; a deleted one leaves the repository without any.
+          return { kind: 'failed', code: 'credentials-missing', params: {} };
         }
         throw error;
       }

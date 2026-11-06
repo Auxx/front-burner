@@ -19,6 +19,7 @@ function statusOf(changes: GitChange[]): GitStatus {
     branch: 'main',
     noCommits: false,
     upstream: null,
+    upstreamGone: false,
     ahead: 0,
     behind: 0,
     changes,

@@ -5,6 +5,7 @@ describe('GitStatusSchema', () => {
     branch: 'main',
     noCommits: false,
     upstream: 'origin/main',
+    upstreamGone: false,
     ahead: 2,
     behind: 3,
     mergeInProgress: false,
@@ -39,6 +40,11 @@ describe('GitStatusSchema', () => {
   it('refuses an unknown state', () => {
     const renamed = { ...status, changes: [ { path: 'a.md', state: 'renamed' } ] };
     expect(GitStatusSchema.safeParse(renamed).success).toBe(false);
+  });
+
+  it('parses an upstream that is gone', () => {
+    const gone = { ...status, upstreamGone: true, ahead: 0, behind: 0 };
+    expect(GitStatusSchema.parse(gone)).toEqual(gone);
   });
 
   it('parses the running push', () => {

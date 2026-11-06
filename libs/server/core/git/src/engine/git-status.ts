@@ -10,11 +10,14 @@ export interface WorkingCopyStatus {
   branch: string | null;
   /** With no commit yet, `branch` is `main`, whatever `HEAD` names (GA-42). */
   noCommits: boolean;
-  /**
-   * For example `origin/main`; `null` for an unpublished branch, and for one
-   * whose upstream does not exist on the remote as of the last fetch.
-   */
+  /** For example `origin/main`; `null` for an unpublished branch. */
   upstream: string | null;
+  /**
+   * The upstream does not exist as of the last fetch: the remote was empty when
+   * cloned, or its branch was deleted. The counts are then 0, and a push
+   * creates it again.
+   */
+  upstreamGone: boolean;
   /** Commits to push, as of the last fetch. */
   ahead: number;
   /** Commits to pull, as of the last fetch. */
@@ -94,8 +97,8 @@ export function parseStatus(stdout: string): WorkingCopyStatus {
   return {
     branch: noCommits ? 'main' : branch,
     noCommits,
-    // A gone upstream, such as `origin/main` before the first push to an empty remote, is not published (GA-7).
-    upstream: current && counted ? upstream : null,
+    upstream: current ? upstream : null,
+    upstreamGone: current && upstream !== null && !counted,
     ahead: current ? ahead : 0,
     behind: current ? behind : 0,
     changes: [ ...changes ]

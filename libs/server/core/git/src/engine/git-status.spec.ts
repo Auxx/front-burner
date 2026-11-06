@@ -11,6 +11,7 @@ describe('parseStatus', () => {
       branch: 'main',
       noCommits: false,
       upstream: null,
+      upstreamGone: false,
       ahead: 0,
       behind: 0,
       changes: []
@@ -103,6 +104,7 @@ describe('parseStatus', () => {
       branch: 'main',
       noCommits: true,
       upstream: null,
+      upstreamGone: false,
       ahead: 0,
       behind: 0,
       changes: [ { path: 'a.md', state: 'added' } ]
@@ -114,9 +116,17 @@ describe('parseStatus', () => {
     expect(status).toMatchObject({ upstream: 'origin/main', ahead: 0, behind: 0 });
   });
 
-  it('reads a branch whose upstream is gone as unpublished', () => {
-    // As after the first commit in a clone of an empty remote: origin/main is configured but does not exist.
+  it('reads a branch whose upstream is gone', () => {
+    // As after the first commit in a clone of an empty remote, or after the remote branch was deleted and pruned.
     const status = parseStatus(output(...onMain, '# branch.upstream origin/main'));
-    expect(status).toMatchObject({ upstream: null, ahead: 0, behind: 0 });
+    expect(status).toMatchObject({ upstream: 'origin/main', upstreamGone: true, ahead: 0, behind: 0 });
+  });
+
+  it('reads an upstream that exists as not gone', () => {
+    expect(parseStatus(output(...onMain, '# branch.upstream origin/main', '# branch.ab +0 -0')).upstreamGone)
+      .toBe(false);
+    expect(parseStatus(output(...onMain, '# branch.upstream origin/main', '# branch.ab +? -?')).upstreamGone)
+      .toBe(false);
+    expect(parseStatus(output(...onMain)).upstreamGone).toBe(false);
   });
 });

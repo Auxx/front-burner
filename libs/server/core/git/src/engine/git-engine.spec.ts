@@ -404,6 +404,7 @@ describe('GitEngine', () => {
         branch: 'main',
         noCommits: false,
         upstream: 'origin/main',
+        upstreamGone: false,
         ahead: 2,
         behind: 1,
         changes: []
@@ -417,15 +418,15 @@ describe('GitEngine', () => {
       expect(await engine().status(work)).toMatchObject({ branch: 'topic', upstream: null, ahead: 0, behind: 0 });
     });
 
-    it('reports zero counts and no upstream when the upstream is gone', async () => {
+    it('reports zero counts when the upstream is gone, and that it is gone', async () => {
       cloneFixture();
       git(work, 'commit', '-q', '--allow-empty', '-m', 'local');
       git(work, 'update-ref', '-d', 'refs/remotes/origin/main');
 
-      // Not published as far as the last fetch knows, so that Push is offered (GA-8).
       expect(await engine().status(work)).toMatchObject({
         branch: 'main',
-        upstream: null,
+        upstream: 'origin/main',
+        upstreamGone: true,
         ahead: 0,
         behind: 0
       });
@@ -440,6 +441,7 @@ describe('GitEngine', () => {
         branch: null,
         noCommits: false,
         upstream: null,
+        upstreamGone: false,
         ahead: 0,
         behind: 0,
         changes: []
@@ -455,6 +457,7 @@ describe('GitEngine', () => {
         branch: 'main',
         noCommits: true,
         upstream: null,
+        upstreamGone: false,
         ahead: 0,
         behind: 0,
         changes: [ { path: 'a.md', state: 'added' } ]

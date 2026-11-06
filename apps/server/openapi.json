@@ -2593,6 +2593,9 @@
               "type": "string"
             }
           },
+          "upstreamGone": {
+            "type": "boolean"
+          },
           "ahead": {
             "type": "integer",
             "minimum": 0,
@@ -2633,6 +2636,7 @@
           "branch",
           "noCommits",
           "upstream",
+          "upstreamGone",
           "ahead",
           "behind",
           "changes",

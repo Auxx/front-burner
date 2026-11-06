@@ -30,8 +30,14 @@ export const GitStatusSchema = z
     branch: z.string().nullable(),
     /** No commit yet: `branch` is `main` (GA-42). */
     noCommits: z.boolean(),
-    /** For example `origin/main`; `null` for an unpublished branch, or one whose upstream is gone from the remote. */
+    /** For example `origin/main`; `null` for an unpublished branch. */
     upstream: z.string().nullable(),
+    /**
+     * The upstream does not exist as of the last fetch: the remote was empty
+     * when cloned, or its branch was deleted. The counts are then 0, and a push
+     * creates it again (GA-8).
+     */
+    upstreamGone: z.boolean(),
     /** **To push**, as of the last fetch. */
     ahead: z.number().int().min(0),
     /** **To pull**, as of the last fetch. */

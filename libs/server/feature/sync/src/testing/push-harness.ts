@@ -115,7 +115,6 @@ export class PushHarness {
       this.engine,
       this.networkLock,
       this.openable,
-      this.queries,
       this.saved,
       knownHosts,
       this.jobKeys,
@@ -126,7 +125,6 @@ export class PushHarness {
       this.runner,
       this.engine,
       this.openable,
-      this.queries,
       this.saved,
       this.jobKeys
     );

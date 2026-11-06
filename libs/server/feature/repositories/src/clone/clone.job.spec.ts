@@ -195,11 +195,11 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
   it('drops the held key of a clone cancelled before it ran', async () => {
     const { id } = await add();
     const [ job ] = database.db.select().from(jobs).where(eq(jobs.repositoryId, id)).all();
-    jobKeys.hold(job?.id ?? 0, unlockPrivateKey(sshKeyFixture('ed25519')));
+    jobKeys.hold(job?.id ?? 0, 1, unlockPrivateKey(sshKeyFixture('ed25519')));
 
     runner.cancel({ id: job?.id ?? 0 });
 
-    expect(jobKeys.take(job?.id ?? 0)).toBeUndefined();
+    expect(jobKeys.take(job?.id ?? 0, 1)).toBeUndefined();
     expect(rowOf(id)?.status).toBe('cloning');
   });
 

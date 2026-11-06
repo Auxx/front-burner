@@ -1,3 +1,4 @@
+import type { Repository } from '@front-burner/server-core-database';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
 import { RepositoryQueries } from '@front-burner/server-feature-repositories';
@@ -19,6 +20,16 @@ export class OpenableRepository {
    * @throws ApiErrorException
    */
   root(userId: number, id: number): string {
+    return this.open(userId, id).root;
+  }
+
+  /**
+   * As `root`, with the repository's row, for an operation that also needs
+   * its remote or credentials.
+   *
+   * @throws ApiErrorException
+   */
+  open(userId: number, id: number): { row: Repository; root: string; } {
     const repository = this.queries.find(userId, id);
     if (repository === undefined) {
       throw new ApiErrorException(404, 'not-found');
@@ -26,6 +37,6 @@ export class OpenableRepository {
     if (repository.status !== 'ready') {
       throw new ApiErrorException(409, 'repository-not-openable', { status: repository.status });
     }
-    return this.layout.workingCopy(userId, id);
+    return { row: repository, root: this.layout.workingCopy(userId, id) };
   }
 }

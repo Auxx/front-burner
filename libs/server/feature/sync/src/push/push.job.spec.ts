@@ -17,7 +17,7 @@ describe.skipIf(process.platform === 'win32')('PushJob', () => {
       userId: harness.alice,
       repositoryId: harness.repositoryId,
       payload: { branch: 'main' },
-      dedupeKey: `push:${harness.repositoryId}`
+      dedupeKey: `push:${harness.repositoryId}:main`
     });
   const resultOf = (id: number) => JSON.parse(harness.jobOf(id)?.result ?? 'null') as unknown;
   const gitChanged = () =>
@@ -47,31 +47,31 @@ describe.skipIf(process.platform === 'win32')('PushJob', () => {
 
     harness.commit('second');
     const done = enqueue();
-    harness.jobKeys.hold(done, key);
+    harness.jobKeys.hold(done, 1, key);
     await harness.finished(done);
     expect(harness.jobOf(done)?.status).toBe('done');
-    expect(harness.jobKeys.take(done)).toBeUndefined();
+    expect(harness.jobKeys.take(done, 1)).toBeUndefined();
 
     // A repository whose working copy is gone fails the job.
     await harness.runner.beforeApplicationShutdown();
     harness.build();
     harness.commit('third');
     const failed = enqueue();
-    harness.jobKeys.hold(failed, key);
+    harness.jobKeys.hold(failed, 1, key);
     harness.database.db.update(repositories).set({ status: 'error' }).where(eq(repositories.id, harness.repositoryId))
       .run();
     harness.runner.start();
     await harness.finished(failed);
     expect(harness.jobOf(failed)?.status).toBe('failed');
-    expect(harness.jobKeys.take(failed)).toBeUndefined();
+    expect(harness.jobKeys.take(failed, 1)).toBeUndefined();
 
     await harness.runner.beforeApplicationShutdown();
     harness.build();
     const cancelled = enqueue();
-    harness.jobKeys.hold(cancelled, key);
+    harness.jobKeys.hold(cancelled, 1, key);
     harness.runner.cancel({ id: cancelled });
     expect(harness.jobOf(cancelled)?.status).toBe('cancelled');
-    expect(harness.jobKeys.take(cancelled)).toBeUndefined();
+    expect(harness.jobKeys.take(cancelled, 1)).toBeUndefined();
   });
 
   it('returns a push the remote refused as a finished job, with the remote\'s lines', async () => {
@@ -89,6 +89,21 @@ describe.skipIf(process.platform === 'win32')('PushJob', () => {
       params: expect.objectContaining({ branch: 'main', remoteMessages: 'Pushes are frozen until Monday.' })
     });
     expect(harness.remoteLog()).toBe('first');
+  });
+
+  it('reports credentials-missing for a credential that is not the user\'s', async () => {
+    const theirs = harness.database.db.transaction(tx =>
+      harness.saved.createHttps(tx, harness.bob, { name: 'Bob', username: 'bob', password: 'secret' })
+    );
+    harness.database.db.update(repositories).set({ credentialId: theirs })
+      .where(eq(repositories.id, harness.repositoryId)).run();
+    harness.commit('second');
+    harness.runner.start();
+
+    const id = enqueue();
+    await harness.finished(id);
+
+    expect(resultOf(id)).toEqual({ kind: 'failed', code: 'credentials-missing', params: {} });
   });
 
   it('publishes git.changed when it ends', async () => {

@@ -5,7 +5,6 @@ import { ApiErrorException } from '@front-burner/server-core-observability';
 import type { RequestAuth } from '@front-burner/server-core-security';
 import { JobKeys, SavedCredentialsService } from '@front-burner/server-feature-credentials';
 import { OpenableRepository } from '@front-burner/server-feature-files';
-import { RepositoryQueries } from '@front-burner/server-feature-repositories';
 import {
   ERROR_CODES,
   GitJobOutcome,
@@ -30,14 +29,13 @@ export class PushService {
     private readonly runner: JobRunner,
     private readonly engine: GitEngine,
     private readonly repositories: OpenableRepository,
-    private readonly queries: RepositoryQueries,
     private readonly saved: SavedCredentialsService,
     private readonly jobKeys: JobKeys
   ) {}
 
   /**
-   * Queues a push of the current branch, or returns the push already waiting
-   * or running. A protected key must be unlocked in this session; the job gets
+   * Queues a push of the current branch, or returns the push of that branch
+   * already waiting or running. A protected key must be unlocked in this session; the job gets
    * its own copy (RC-19), and the request keeps the unlock alive (AR-31).
    *
    * @throws ApiErrorException 409 `merge-in-progress` (GA-4), `no-branch`,
@@ -45,37 +43,35 @@ export class PushService {
    */
   async start(auth: Pick<RequestAuth, 'userId' | 'sessionId'>, repositoryId: number): Promise<number> {
     const { userId, sessionId } = auth;
-    const root = this.repositories.root(userId, repositoryId);
-    if (await this.engine.mergeInProgress(root)) {
+    const { row, root } = this.repositories.open(userId, repositoryId);
+    const [ merging, status ] = await Promise.all([ this.engine.mergeInProgress(root), this.engine.status(root) ]);
+    if (merging) {
       throw new ApiErrorException(409, 'merge-in-progress');
     }
-    const status = await this.engine.status(root);
     if (status.branch === null) {
       throw new ApiErrorException(409, 'no-branch');
     }
     if (status.noCommits) {
       throw new ApiErrorException(409, 'no-commits');
     }
-    // An unpublished branch is always pushed: that publishes it (GA-8, GA-29).
-    if (status.upstream !== null && status.ahead === 0) {
+    // An unpublished branch, or one whose upstream is gone, is always pushed: that creates it (GA-8, GA-29).
+    if (status.upstream !== null && !status.upstreamGone && status.ahead === 0) {
       throw new ApiErrorException(409, 'nothing-to-push');
     }
-    const row = this.queries.find(userId, repositoryId);
-    if (row === undefined) {
-      throw new ApiErrorException(404, 'not-found');
-    }
-    const heldKey = this.keyToHold(userId, sessionId, row.credentialId);
+    const heldKey = row.credentialId === null
+      ? undefined
+      : this.saved.keyForJob(userId, sessionId, row.credentialId);
     const payload: PushJobPayload = { branch: status.branch };
     const jobId = this.runner.enqueue({
       type: PUSH_JOB_TYPE,
       userId,
       repositoryId,
       payload,
-      dedupeKey: pushDedupeKey(repositoryId)
+      dedupeKey: pushDedupeKey(repositoryId, status.branch)
     });
     // Synchronously after queueing, before the runner's loop can start the job.
-    if (heldKey !== undefined) {
-      this.jobKeys.hold(jobId, heldKey);
+    if (heldKey !== undefined && row.credentialId !== null) {
+      this.jobKeys.hold(jobId, row.credentialId, heldKey);
     }
     return jobId;
   }
@@ -91,7 +87,8 @@ export class PushService {
       eq(jobs.repositoryId, repositoryId),
       eq(jobs.type, PUSH_JOB_TYPE)
     )).get();
-    if (job === undefined || this.queries.find(userId, repositoryId) === undefined) {
+    // The job's user and repository match, so the repository is the user's.
+    if (job === undefined) {
       throw new ApiErrorException(404, 'not-found');
     }
     return { status: job.status, outcome: outcomeOf(job) };
@@ -106,16 +103,6 @@ export class PushService {
       inArray(jobs.status, [ 'queued', 'running' ])
     )).orderBy(desc(jobs.id)).get();
     return job === undefined ? null : { id: job.id, type: 'push' };
-  }
-
-  /** Checks the credentials now; returns the copy of a protected key the job needs. */
-  private keyToHold(userId: number, sessionId: string, credentialId: number | null) {
-    if (credentialId === null) {
-      return undefined;
-    }
-    const credentials = this.saved.resolveForGit(userId, sessionId, credentialId, { touch: true });
-    const isProtected = this.saved.findOwned(userId, credentialId).sshPassphraseProtected === true;
-    return isProtected && credentials.kind === 'ssh' ? credentials.key : undefined;
   }
 }
 

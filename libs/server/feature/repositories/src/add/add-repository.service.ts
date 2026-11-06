@@ -139,8 +139,8 @@ export class AddRepositoryService {
       return { row: inserted, jobId: id };
     });
     // Synchronously after the commit, before the runner's loop can start the job (AR-49).
-    if (credentials.protectedKey && credentials.git.kind === 'ssh') {
-      this.jobKeys.hold(jobId, credentials.git.key);
+    if (credentials.protectedKey && credentials.git.kind === 'ssh' && row.credentialId !== null) {
+      this.jobKeys.hold(jobId, row.credentialId, credentials.git.key);
     }
     if (
       request.credentials.mode === 'new-ssh-key' && request.credentials.passphrase !== undefined && row.credentialId

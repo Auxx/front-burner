@@ -83,7 +83,7 @@ export class CloneJob implements OnModuleInit {
     if (row.credentialId === null) {
       return { kind: 'none' };
     }
-    return this.saved.resolveForJob(row.userId, row.credentialId, this.jobKeys.take(jobId));
+    return this.saved.resolveForJob(row.userId, row.credentialId, this.jobKeys.take(jobId, row.credentialId));
   }
 
   private finished(job: Job, outcome: 'done' | 'failed' | 'cancelled', errorCode: string | null): void {

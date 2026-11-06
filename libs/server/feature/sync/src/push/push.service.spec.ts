@@ -92,7 +92,7 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
         userId: harness.alice,
         repositoryId: harness.repositoryId,
         payload: JSON.stringify({ branch: 'main' }),
-        dedupeKey: `push:${harness.repositoryId}`
+        dedupeKey: `push:${harness.repositoryId}:main`
       })
     ]);
   });
@@ -117,6 +117,44 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
     expect(pushJobs()).toEqual([]);
   });
 
+  it('pushes a branch whose upstream is gone, which creates it again', async () => {
+    // As when the remote branch was deleted and the next fetch pruned it.
+    git(harness.workingCopy, 'update-ref', '-d', 'refs/remotes/origin/main');
+    git(harness.bare, 'update-ref', '-d', 'refs/heads/main');
+    harness.runner.start();
+    expect((await http().get(`/repositories/${harness.repositoryId}/git/status`).expect(200)).body)
+      .toMatchObject({ upstream: 'origin/main', upstreamGone: true, ahead: 0 });
+
+    const { jobId } = (await push().expect(202)).body as { jobId: number; };
+    await harness.finished(jobId);
+
+    expect((await jobState(jobId).expect(200)).body).toEqual({
+      status: 'done',
+      outcome: { kind: 'pushed', commits: 1, upstream: 'origin/main' }
+    });
+    expect(harness.remoteLog()).toBe('first');
+  });
+
+  it('queues one job per branch', async () => {
+    harness.commit('second');
+    const onMain = (await push().expect(202)).body as { jobId: number; };
+    git(harness.workingCopy, 'checkout', '-q', '-b', 'draft');
+    harness.commit('draft work');
+
+    const onDraft = (await push().expect(202)).body as { jobId: number; };
+
+    expect(onDraft.jobId).not.toBe(onMain.jobId);
+    expect(pushJobs().map(job => JSON.parse(job.payload) as unknown)).toEqual([
+      { branch: 'main' },
+      { branch: 'draft' }
+    ]);
+    harness.runner.start();
+    await harness.finished(onDraft.jobId);
+    expect((await jobState(onDraft.jobId).expect(200)).body).toMatchObject({
+      outcome: { kind: 'pushed', upstream: 'origin/draft' }
+    });
+  });
+
   it('asks for a locked key before queueing', async () => {
     const keyId = harness.database.db.transaction(tx =>
       harness.saved.createPastedKey(tx, harness.alice, {
@@ -136,7 +174,7 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
 
     harness.saved.unlock(harness.alice, SESSION, keyId, FIXTURE_PASSPHRASE);
     const started = await push(id).expect(202);
-    expect(harness.jobKeys.take(started.body.jobId)).toBeDefined();
+    expect(harness.jobKeys.take(started.body.jobId, keyId)).toBeDefined();
   });
 
   it('reports the pushed commits and upstream', async () => {
@@ -197,7 +235,7 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
       runAt: new Date(),
       createdAt: new Date(),
       attempts: 1,
-      dedupeKey: `push:${harness.repositoryId}`
+      dedupeKey: `push:${harness.repositoryId}:main`
     }).returning().get().id;
 
     // As after a restart.

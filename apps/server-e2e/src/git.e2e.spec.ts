@@ -97,6 +97,7 @@ describe('git status (REQ-GIT-002)', () => {
       branch: 'main',
       noCommits: true,
       upstream: null,
+      upstreamGone: false,
       ahead: 0,
       behind: 0,
       mergeInProgress: false,

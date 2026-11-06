@@ -10,14 +10,20 @@ import { Injectable } from '@nestjs/common';
  */
 @Injectable()
 export class JobKeys {
-  readonly #keys = new Map<number, UnlockedKey>();
+  readonly #keys = new Map<number, { credentialId: number; key: UnlockedKey; }>();
 
-  hold(jobId: number, key: UnlockedKey): void {
-    this.#keys.set(jobId, key);
+  /** Holds the decrypted key of saved credential `credentialId` for the job. */
+  hold(jobId: number, credentialId: number, key: UnlockedKey): void {
+    this.#keys.set(jobId, { credentialId, key });
   }
 
-  take(jobId: number): UnlockedKey | undefined {
-    return this.#keys.get(jobId);
+  /**
+   * The key held for the job, only when it is of the credential the job uses
+   * now: credentials replaced since it was queued are not served the old key.
+   */
+  take(jobId: number, credentialId: number): UnlockedKey | undefined {
+    const held = this.#keys.get(jobId);
+    return held?.credentialId === credentialId ? held.key : undefined;
   }
 
   release(jobId: number): void {

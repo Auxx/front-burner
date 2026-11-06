@@ -199,6 +199,30 @@ describe('SavedCredentialsService', () => {
     expect(() => service.resolveForJob(bob, id, undefined)).toThrow(NotFoundException);
   });
 
+  it('gives a job the key of a protected key unlocked in the session, and nothing for others', () => {
+    const https = createHttps();
+    const plain = createKey(PLAIN, undefined, 'Plain');
+    const locked = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+
+    expect(service.keyForJob(alice, 's1', https)).toBeUndefined();
+    expect(service.keyForJob(alice, 's1', plain)).toBeUndefined();
+    expect(() => service.keyForJob(alice, 's1', locked)).toThrow(
+      expect.objectContaining({ code: 'key-locked', params: { keyId: locked, keyName: 'Laptop' } })
+    );
+    service.unlock(alice, 's1', locked, FIXTURE_PASSPHRASE);
+    expect(service.keyForJob(alice, 's1', locked)).toBe(unlocks.get('s1', locked, { touch: false }));
+    expect(() => service.keyForJob(bob, 's1', https)).toThrow(NotFoundException);
+  });
+
+  it('refuses a job credentials whose secret is gone', () => {
+    const https = createHttps();
+    database.db.update(savedCredentials).set({ secret: null }).where(eq(savedCredentials.id, https)).run();
+
+    expect(() => service.keyForJob(alice, 's1', https)).toThrow(
+      expect.objectContaining({ code: 'credentials-missing' })
+    );
+  });
+
   it('reports a wrong passphrase on unlock as a field error', () => {
     const id = createKey(PROTECTED, FIXTURE_PASSPHRASE);
     expect(() => service.unlock(alice, 's1', id, 'wrong')).toThrow(fieldError('passphrase', 'wrong-passphrase'));

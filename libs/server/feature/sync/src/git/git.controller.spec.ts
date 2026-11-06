@@ -130,6 +130,7 @@ describe('GitController', () => {
       branch: 'main',
       noCommits: false,
       upstream: null,
+      upstreamGone: false,
       ahead: 0,
       behind: 0,
       mergeInProgress: false,
