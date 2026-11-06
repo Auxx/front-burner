@@ -43,6 +43,11 @@ export const PushEventSchema = z.discriminatedUnion('type', [
   /** The user's commit author or a repository's override changed, or was confirmed: read it again (CA-9). */
   z.object({
     type: z.literal('commit-author.changed')
+  }),
+  /** A saved key was unlocked; sent only to the streams of the session that unlocked it (RC-16, RC-20). */
+  z.object({
+    type: z.literal('key.unlocked'),
+    keyId: z.number().int()
   })
 ]);
 

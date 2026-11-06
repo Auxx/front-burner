@@ -11,7 +11,8 @@ import {
   JobKeys,
   KeyUnlockStore,
   KnownHostsService,
-  SavedCredentialsService
+  SavedCredentialsService,
+  UnlockAttempts
 } from '@front-burner/server-feature-credentials';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { RepositoryQueries } from '@front-burner/server-feature-repositories';
@@ -51,11 +52,12 @@ export class PushHarness {
   readonly layout = new DataLayout(join(this.root, 'data'));
   readonly published: { userId: number; event: PushEvent; }[] = [];
   readonly events = {
-    publish: (userId: number, event: PushEvent) => this.published.push({ userId, event })
+    publish: (userId: number, event: PushEvent) => this.published.push({ userId, event }),
+    publishToSession: () => undefined
   } as unknown as EventsHub;
   readonly lifecycle = new SessionLifecycle();
-  readonly unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, this.lifecycle);
-  readonly saved = new SavedCredentialsService(this.database, box, this.unlocks);
+  readonly unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, this.lifecycle, this.events);
+  readonly saved = new SavedCredentialsService(this.database, box, this.unlocks, new UnlockAttempts());
   readonly jobKeys = new JobKeys();
   readonly queries = new RepositoryQueries(this.database);
   readonly openable = new OpenableRepository(this.queries, this.layout);

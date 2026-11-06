@@ -1,10 +1,11 @@
 import type { Config } from '@front-burner/server-core-config';
 import { SecretBox } from '@front-burner/server-core-crypto';
 import { Database } from '@front-burner/server-core-database';
+import { EventsHub } from '@front-burner/server-core-events';
 import { UnlockedKey } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { SessionLifecycle } from '@front-burner/server-core-security';
-import { KeyUnlockStore, SavedCredentialsService } from '@front-burner/server-feature-credentials';
+import { KeyUnlockStore, SavedCredentialsService, UnlockAttempts } from '@front-burner/server-feature-credentials';
 import { NotFoundException } from '@nestjs/common';
 import { insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
@@ -32,8 +33,8 @@ describe('RequestCredentials', () => {
 
   beforeEach(() => {
     database = createTestDatabase();
-    unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, new SessionLifecycle());
-    saved = new SavedCredentialsService(database, box, unlocks);
+    unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, new SessionLifecycle(), new EventsHub());
+    saved = new SavedCredentialsService(database, box, unlocks, new UnlockAttempts());
     credentials = new RequestCredentials(saved, unlocks);
     alice = { id: insertUser(database, 'alice@x.io'), sessionId: SESSION };
   });

@@ -15,12 +15,14 @@ import type {
   NewHttpsCredentials,
   NewSshKey,
   SavedCredentials,
+  SavedHttpsCredentials,
   SavedSshKey,
   SshKeyType
 } from '@front-burner/shared-contracts';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { KeyUnlockStore } from '../unlocks/key-unlock-store';
+import { UnlockAttempts } from '../unlocks/unlock-attempts';
 
 const bindingOf = (row: Pick<SavedCredential, 'id' | 'userId'>): SecretBinding => ({
   table: 'saved_credentials',
@@ -55,7 +57,8 @@ export class SavedCredentialsService {
   constructor(
     @Inject(DATABASE) private readonly database: Database,
     @Inject(SECRET_BOX) private readonly secretBox: SecretBox,
-    private readonly unlocks: KeyUnlockStore
+    private readonly unlocks: KeyUnlockStore,
+    private readonly attempts: UnlockAttempts
   ) {}
 
   /** The user's credentials without secrets, each kind sorted by name; `unlocked` in this session. */
@@ -65,12 +68,7 @@ export class SavedCredentialsService {
       .orderBy(sql`lower(${savedCredentials.name})`, asc(savedCredentials.id))
       .all();
     return {
-      https: rows.filter(row => row.kind === 'https').map(row => ({
-        id: row.id,
-        name: row.name,
-        username: row.username ?? '',
-        missing: row.secret === null
-      })),
+      https: rows.filter(row => row.kind === 'https').map(row => this.toHttps(row)),
       sshKeys: rows.filter(row => row.kind === 'ssh-key').map(row => this.toSshKey(row, sessionId))
     };
   }
@@ -195,18 +193,32 @@ export class SavedCredentialsService {
   }
 
   /**
-   * Unlocks a saved key for this session (AR-25, AR-31).
+   * Unlocks a saved key for this session (AR-25, AR-31). Wrong passphrases
+   * are limited per key and user (RC-18); the limit is checked only once the
+   * key is known to be the user's, so that no one can use up another user's.
    *
    * @throws NotFoundException for an unknown ID, another user's or one that is not an SSH key.
-   * @throws ApiErrorException `wrong-passphrase` on `passphrase`, or `credentials-missing`.
+   * @throws ApiErrorException 429 `unlock-too-many-attempts` before the key's KDF runs,
+   * `wrong-passphrase` on `passphrase`, or `credentials-missing`.
    */
   unlock(userId: number, sessionId: string, id: number, passphrase: string): void {
     const row = this.findOwned(userId, id);
     if (row.kind !== 'ssh-key') {
       throw new NotFoundException();
     }
+    this.attempts.assertAllowed(userId, row.id);
     const privateKey = this.secretOf(row);
-    checkKey(() => this.unlocks.unlock(sessionId, row.id, privateKey, passphrase));
+    checkKey(() => {
+      try {
+        this.unlocks.unlock(sessionId, row.id, privateKey, passphrase);
+      } catch (error) {
+        if (error instanceof SshKeyError && error.problem === 'wrong-passphrase') {
+          this.attempts.recordWrong(userId, row.id);
+        }
+        throw error;
+      }
+    });
+    this.attempts.clear(userId, row.id);
   }
 
   private insert(
@@ -237,6 +249,23 @@ export class SavedCredentialsService {
       throw new ApiErrorException(409, 'credentials-missing', { id: row.id });
     }
     return this.secretBox.decrypt(row.secret, bindingOf(row));
+  }
+
+  /**
+   * A row as clients see it, without its secret (AR-17); a key's `unlocked`
+   * is in this session, and reading it does not keep the key unlocked.
+   */
+  toPublic(
+    row: SavedCredential,
+    sessionId: string
+  ): ({ kind: 'https'; } & SavedHttpsCredentials) | ({ kind: 'ssh-key'; } & SavedSshKey) {
+    return row.kind === 'https'
+      ? { kind: 'https', ...this.toHttps(row) }
+      : { kind: 'ssh-key', ...this.toSshKey(row, sessionId) };
+  }
+
+  private toHttps(row: SavedCredential): SavedHttpsCredentials {
+    return { id: row.id, name: row.name, username: row.username ?? '', missing: row.secret === null };
   }
 
   private toSshKey(row: SavedCredential, sessionId: string | undefined): SavedSshKey {

@@ -14,6 +14,8 @@ export const ERROR_CODES = [
   'oidc-code-invalid',
   'too-many-jobs',
   'key-locked',
+  /** 429; five wrong passphrases for this key within a minute (RC-18). */
+  'unlock-too-many-attempts',
   'credentials-missing',
   'host-key-changed',
   /** The remote did not answer in time; params `{ host }` (AR-42). */

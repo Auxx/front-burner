@@ -1,4 +1,5 @@
 import type { Config } from '@front-burner/server-core-config';
+import { EventsHub } from '@front-burner/server-core-events';
 import { SshKeyError, UnlockedKey } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { SessionLifecycle } from '@front-burner/server-core-security';
@@ -10,11 +11,13 @@ const PROTECTED = sshKeyFixture('ed25519-passphrase');
 describe('KeyUnlockStore', () => {
   let lifecycle: SessionLifecycle;
   let store: KeyUnlockStore;
+  let events: EventsHub;
 
   beforeEach(() => {
     vi.useFakeTimers();
     lifecycle = new SessionLifecycle();
-    store = new KeyUnlockStore({ keyUnlockIdleMs: IDLE } as Config, lifecycle);
+    events = new EventsHub();
+    store = new KeyUnlockStore({ keyUnlockIdleMs: IDLE } as Config, lifecycle, events);
   });
 
   afterEach(() => {
@@ -29,11 +32,31 @@ describe('KeyUnlockStore', () => {
     expect(store.get('s1', 7, { touch: false })).toBeInstanceOf(UnlockedKey);
   });
 
+  it('an unlock reaches only its own session', () => {
+    const tab = { userId: 1, sessionId: 's1', send: vi.fn(), close: vi.fn() };
+    const otherDevice = { userId: 1, sessionId: 's2', send: vi.fn(), close: vi.fn() };
+    events.open(tab);
+    events.open(otherDevice);
+
+    store.unlock('s1', 7, PROTECTED, FIXTURE_PASSPHRASE);
+
+    expect(tab.send).toHaveBeenCalledExactlyOnceWith({ type: 'key.unlocked', keyId: 7 });
+    expect(otherDevice.send).not.toHaveBeenCalled();
+    expect(store.isUnlocked('s2', 7)).toBe(false);
+  });
+
   it('refuses a wrong passphrase', () => {
     expect(() => store.unlock('s1', 7, PROTECTED, 'wrong')).toThrow(
       expect.objectContaining({ constructor: SshKeyError, problem: 'wrong-passphrase' })
     );
     expect(store.isUnlocked('s1', 7)).toBe(false);
+  });
+
+  it('tells no one about a wrong passphrase', () => {
+    const publish = vi.spyOn(events, 'publishToSession');
+
+    expect(() => store.unlock('s1', 7, PROTECTED, 'wrong')).toThrow(SshKeyError);
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it('keeps an unlock to its session', () => {

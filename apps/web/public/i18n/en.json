@@ -14,6 +14,7 @@
   "errors.oidc-code-invalid": "OIDC login failed",
   "errors.too-many-jobs": "Too many tasks are waiting. Wait for one to finish and try again.",
   "errors.key-locked": "Enter the passphrase of this key to unlock it for this session.",
+  "errors.unlock-too-many-attempts": "Too many attempts. Try again in a minute.",
   "errors.credentials-missing": "These saved credentials are no longer available. Add them again.",
   "errors.host-key-changed": "The server's identity has changed. This may be an attack.",
   "errors.remote-timeout": "{{ host }} didn't answer in time. Try again later.",

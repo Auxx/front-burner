@@ -3,15 +3,24 @@ import { Module } from '@nestjs/common';
 import { AddRepositoryService } from './add/add-repository.service';
 import { RequestCredentials } from './add/request-credentials';
 import { CloneJob } from './clone/clone.job';
+import { RepositoryCredentialsController } from './credentials/repository-credentials.controller';
+import { RepositoryCredentialsService } from './credentials/repository-credentials.service';
 import { WorkingCopyCheck } from './recovery/working-copy-check';
 import { RepositoriesController } from './repositories/repositories.controller';
 import { RepositoryQueries } from './repositories/repository-queries';
 
-/** The user's repositories (REQ-DASH-001, REQ-REPO-001). Needs the global auth guard. */
+/** The user's repositories and the credentials they use (REQ-DASH-001, REQ-REPO-001, REQ-REPO-002). Needs the global auth guard. */
 @Module({
   imports: [ CredentialsModule ],
-  controllers: [ RepositoriesController ],
-  providers: [ RepositoryQueries, RequestCredentials, AddRepositoryService, CloneJob, WorkingCopyCheck ],
+  controllers: [ RepositoriesController, RepositoryCredentialsController ],
+  providers: [
+    RepositoryQueries,
+    RepositoryCredentialsService,
+    RequestCredentials,
+    AddRepositoryService,
+    CloneJob,
+    WorkingCopyCheck
+  ],
   exports: [ RepositoryQueries ]
 })
 export class RepositoriesModule {}

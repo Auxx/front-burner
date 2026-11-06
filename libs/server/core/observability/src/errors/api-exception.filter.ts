@@ -23,6 +23,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'oidc-code-invalid': 'OIDC login failed',
   'too-many-jobs': 'Too many tasks are waiting. Wait for one to finish and try again.',
   'key-locked': 'Enter the passphrase of this key to unlock it for this session.',
+  'unlock-too-many-attempts': 'Too many attempts. Try again in a minute.',
   'credentials-missing': 'These saved credentials are no longer available. Add them again.',
   'host-key-changed': 'The server\'s identity has changed. This may be an attack.',
   'remote-timeout': 'The remote didn\'t answer in time. Try again later.',

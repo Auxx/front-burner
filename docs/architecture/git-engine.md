@@ -117,6 +117,12 @@ by spike 1 (spikes.md).
     refused before the KDF runs (`kdf-rounds-too-high` on the private key;
     `ssh-keygen` uses 16 by default), and unlock attempts are in their own
     rate-limit group. _(Plan 10's call.)_
+  - Wrong passphrases are also counted per user and key in memory, in a sliding
+    window of one minute: after 5, every attempt on that key is refused with
+    `429 unlock-too-many-attempts` before the KDF runs (RC-18). A key is checked
+    to be the user's first, so one user cannot use up another's attempts; a
+    correct passphrase clears the count, and a restart forgets it. _(Plan 59's
+    call.)_
   - "Removed from memory" means the backend drops its last reference to the key.
     JavaScript cannot wipe strings, and `ssh2` keeps the decrypted key as a PEM
     string until garbage collection. _(My call: accepted. Anyone who can read
