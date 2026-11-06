@@ -15,7 +15,8 @@ import {
   JobKeys,
   KeyUnlockStore,
   KnownHostsService,
-  SavedCredentialsService
+  SavedCredentialsService,
+  UnlockAttempts
 } from '@front-burner/server-feature-credentials';
 import type { AddRepositoryRequest } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
@@ -93,7 +94,7 @@ describe('AddRepositoryService', () => {
     await serve();
     database = createTestDatabase();
     unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, new SessionLifecycle());
-    saved = new SavedCredentialsService(database, box, unlocks);
+    saved = new SavedCredentialsService(database, box, unlocks, new UnlockAttempts());
     const gitOptions = testGitOptions();
     runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, { publish: vi.fn() } as unknown as EventsHub);
     // Not started: the clone job stays queued (the clone itself is covered by its own spec).

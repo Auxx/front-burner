@@ -18,7 +18,8 @@ import {
   JobKeys,
   KeyUnlockStore,
   KnownHostsService,
-  SavedCredentialsService
+  SavedCredentialsService,
+  UnlockAttempts
 } from '@front-burner/server-feature-credentials';
 import type { AddRepositoryRequest, PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
@@ -113,7 +114,7 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
     database = createTestDatabase();
     lifecycle = new SessionLifecycle();
     unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, lifecycle);
-    saved = new SavedCredentialsService(database, box, unlocks);
+    saved = new SavedCredentialsService(database, box, unlocks, new UnlockAttempts());
     alice = { id: insertUser(database, 'alice@x.io'), sessionId: SESSION };
     build();
   });

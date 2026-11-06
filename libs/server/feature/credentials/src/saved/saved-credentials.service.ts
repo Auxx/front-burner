@@ -21,6 +21,7 @@ import type {
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { KeyUnlockStore } from '../unlocks/key-unlock-store';
+import { UnlockAttempts } from '../unlocks/unlock-attempts';
 
 const bindingOf = (row: Pick<SavedCredential, 'id' | 'userId'>): SecretBinding => ({
   table: 'saved_credentials',
@@ -55,7 +56,8 @@ export class SavedCredentialsService {
   constructor(
     @Inject(DATABASE) private readonly database: Database,
     @Inject(SECRET_BOX) private readonly secretBox: SecretBox,
-    private readonly unlocks: KeyUnlockStore
+    private readonly unlocks: KeyUnlockStore,
+    private readonly attempts: UnlockAttempts
   ) {}
 
   /** The user's credentials without secrets, each kind sorted by name; `unlocked` in this session. */
@@ -195,18 +197,30 @@ export class SavedCredentialsService {
   }
 
   /**
-   * Unlocks a saved key for this session (AR-25, AR-31).
+   * Unlocks a saved key for this session (AR-25, AR-31). Wrong passphrases
+   * are limited per key and user (RC-18); the limit is checked only once the
+   * key is known to be the user's, so that no one can use up another user's.
    *
    * @throws NotFoundException for an unknown ID, another user's or one that is not an SSH key.
-   * @throws ApiErrorException `wrong-passphrase` on `passphrase`, or `credentials-missing`.
+   * @throws ApiErrorException 429 `unlock-too-many-attempts` before the key's KDF runs,
+   * `wrong-passphrase` on `passphrase`, or `credentials-missing`.
    */
   unlock(userId: number, sessionId: string, id: number, passphrase: string): void {
     const row = this.findOwned(userId, id);
     if (row.kind !== 'ssh-key') {
       throw new NotFoundException();
     }
+    this.attempts.assertAllowed(userId, row.id);
     const privateKey = this.secretOf(row);
-    checkKey(() => this.unlocks.unlock(sessionId, row.id, privateKey, passphrase));
+    try {
+      checkKey(() => this.unlocks.unlock(sessionId, row.id, privateKey, passphrase));
+    } catch (error) {
+      if (error instanceof ApiErrorException && error.fields?.some(field => field.code === 'wrong-passphrase')) {
+        this.attempts.recordWrong(userId, row.id);
+      }
+      throw error;
+    }
+    this.attempts.clear(userId, row.id);
   }
 
   private insert(

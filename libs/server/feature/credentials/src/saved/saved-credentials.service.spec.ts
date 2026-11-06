@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
 import { KeyUnlockStore } from '../unlocks/key-unlock-store';
+import { UnlockAttempts } from '../unlocks/unlock-attempts';
 import { SavedCredentialsService } from './saved-credentials.service';
 
 const box = new SecretBox('saved-credentials-spec-key-0123456789abcdef');
@@ -24,6 +25,7 @@ const fieldError = (path: string, code: string) =>
 describe('SavedCredentialsService', () => {
   let database: Database;
   let unlocks: KeyUnlockStore;
+  let attempts: UnlockAttempts;
   let service: SavedCredentialsService;
   let alice: number;
   let bob: number;
@@ -37,7 +39,8 @@ describe('SavedCredentialsService', () => {
   beforeEach(() => {
     database = createTestDatabase();
     unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, new SessionLifecycle());
-    service = new SavedCredentialsService(database, box, unlocks);
+    attempts = new UnlockAttempts();
+    service = new SavedCredentialsService(database, box, unlocks, attempts);
     alice = insertUser(database, 'alice@x.io');
     bob = insertUser(database, 'bob@x.io');
   });
@@ -284,5 +287,83 @@ describe('SavedCredentialsService', () => {
   it('answers 404 when unlocking HTTPS credentials', () => {
     const id = createHttps();
     expect(() => service.unlock(alice, 's1', id, 'x')).toThrow(NotFoundException);
+  });
+
+  describe('wrong passphrases (RC-18)', () => {
+    const tooMany = expect.objectContaining({ code: 'unlock-too-many-attempts' });
+    const caught = (run: () => void): ApiErrorException | undefined => {
+      try {
+        run();
+      } catch (error) {
+        return error instanceof ApiErrorException ? error : undefined;
+      }
+      return undefined;
+    };
+    const wrongTimes = (count: number, id: number, userId = alice) => {
+      for (let attempt = 0; attempt < count; attempt++) {
+        expect(() => service.unlock(userId, 's1', id, 'wrong')).toThrow(fieldError('passphrase', 'wrong-passphrase'));
+      }
+    };
+
+    it('a sixth attempt within a minute gets too many attempts', () => {
+      const id = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+      wrongTimes(5, id);
+
+      expect(() => service.unlock(alice, 's1', id, 'wrong')).toThrow(tooMany);
+      expect(caught(() => service.unlock(alice, 's1', id, 'wrong'))?.getStatus()).toBe(429);
+      // Right or wrong: the passphrase is not even checked.
+      expect(() => service.unlock(alice, 's2', id, FIXTURE_PASSPHRASE)).toThrow(tooMany);
+      expect(unlocks.isUnlocked('s2', id)).toBe(false);
+    });
+
+    it('does not run the KDF once limited', () => {
+      const id = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+      wrongTimes(5, id);
+      const unlock = vi.spyOn(unlocks, 'unlock');
+
+      expect(() => service.unlock(alice, 's1', id, FIXTURE_PASSPHRASE)).toThrow(tooMany);
+      expect(unlock).not.toHaveBeenCalled();
+    });
+
+    it('limits each key on its own', () => {
+      const limited = createKey(PROTECTED, FIXTURE_PASSPHRASE, 'Laptop');
+      const other = createKey(PROTECTED, FIXTURE_PASSPHRASE, 'Desktop');
+      wrongTimes(5, limited);
+
+      wrongTimes(1, other);
+      service.unlock(alice, 's1', other, FIXTURE_PASSPHRASE);
+      expect(unlocks.isUnlocked('s1', other)).toBe(true);
+    });
+
+    it('does not count an attempt on another user\'s key', () => {
+      const id = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+      for (let attempt = 0; attempt < 6; attempt++) {
+        expect(() => service.unlock(bob, 's9', id, 'wrong')).toThrow(NotFoundException);
+      }
+
+      service.unlock(alice, 's1', id, FIXTURE_PASSPHRASE);
+      expect(unlocks.isUnlocked('s1', id)).toBe(true);
+    });
+
+    it('clears the count after a correct passphrase', () => {
+      const id = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+      wrongTimes(4, id);
+      service.unlock(alice, 's1', id, FIXTURE_PASSPHRASE);
+
+      wrongTimes(5, id);
+      expect(() => service.unlock(alice, 's1', id, 'wrong')).toThrow(tooMany);
+    });
+
+    it('counts no attempt when the secret is missing', () => {
+      const id = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+      database.db.update(savedCredentials).set({ secret: null }).run();
+
+      for (let attempt = 0; attempt < 6; attempt++) {
+        expect(() => service.unlock(alice, 's1', id, 'wrong')).toThrow(
+          expect.objectContaining({ code: 'credentials-missing' })
+        );
+      }
+      expect(attempts.size).toBe(0);
+    });
   });
 });
