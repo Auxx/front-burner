@@ -1,0 +1,8 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.LockedKeyBannerComponent'">
+  <ui-inline-banner status="warning" announce [dismissLabel]="t('dismiss')" (dismissed)="dismissed.emit()">
+    {{ t('message', { name: keyName() }) }}
+    <div uiBannerActions>
+      <button uiButton size="small" (click)="unlock.emit()">{{ t('unlock') }}</button>
+    </div>
+  </ui-inline-banner>
+</ng-container>

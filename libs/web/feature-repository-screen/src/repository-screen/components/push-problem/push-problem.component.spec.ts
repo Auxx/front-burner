@@ -73,6 +73,15 @@ describe('PushProblemComponent', () => {
     expect(fixes).toEqual([ 'retry' ]);
   });
 
+  it('offers Unlock for a locked key', async () => {
+    await show(problem('key-locked', { keyId: '3', keyName: 'laptop' }));
+
+    expect(buttons()).toEqual([ `${KEY}.fixes.unlock` ]);
+    (element().querySelector('[uiBannerActions] button') as HTMLButtonElement).click();
+
+    expect(fixes).toEqual([ 'unlock' ]);
+  });
+
   it('shows a fix whose dialog does not exist yet without a button', async () => {
     await show(problem('credentials-refused'));
 

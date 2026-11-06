@@ -8,6 +8,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { pushProblem, type PushProblemText } from '../../utils/push-problem/push-problem';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
+import { LockedKeyService } from '../locked-key/locked-key.service';
 
 const KEY = 'web-feature-repository-screen.PushService';
 
@@ -46,14 +47,19 @@ const stringParams = (params: Readonly<Record<string, unknown>>): Record<string,
  *
  * Only the tab that started a push says "Pushed 2 commits to origin/main". A
  * push that failed becomes `problem`, quiet for a push this tab did not start, so
- * that it is not announced. So does a push the backend refused to start, such as
- * `409 key-locked`. Nothing is saved first: a push sends what was committed.
+ * that it is not announced. So does a push the backend refused to start, except
+ * `409 key-locked`: that asks for the passphrase at once, and the push carries on
+ * after the unlock without being started again; cancelling cancels it, with no
+ * message (RC-17). It asks once per press, so that a key that is locked again at
+ * once shows the problem, with **Unlock**. Nothing is saved first: a push sends
+ * what was committed.
  */
 @Injectable()
 export class PushService {
   private readonly api = inject(GitApi);
   private readonly channel = inject(PushChannelService);
   private readonly store = inject(GitStatusStore);
+  private readonly lockedKey = inject(LockedKeyService);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
 
@@ -109,6 +115,9 @@ export class PushService {
       const followed = this.followed();
       if (event.type === 'job.finished' && followed?.jobId === event.jobId) {
         void this.read(followed);
+      } else if (event.type === 'key.unlocked' && this.shownProblem()?.params['keyId'] === String(event.keyId)) {
+        // Unlocked from the banner or another tab of this session: "Unlock laptop to continue." is out of date.
+        this.shownProblem.set(null);
       }
     }));
     inject(DestroyRef).onDestroy(() => {
@@ -119,12 +128,25 @@ export class PushService {
 
   /**
    * Pushes the current branch (GA-29). Nothing happens while a push is being
-   * started or runs. Settles once the backend has queued it, or refused it.
+   * started or runs. Settles once the backend has queued it, or refused it, and
+   * after the passphrase was asked for, if it was (RC-17).
    */
   async start(): Promise<void> {
+    const locked = await this.request();
+    if (locked !== undefined) {
+      await this.unlockAndRetry(locked);
+    }
+  }
+
+  /**
+   * Asks the backend to push; resolves the refusal's params when it refused
+   * because the key is locked and `quietLock` is set, which shows nothing, so
+   * that the caller can ask for the passphrase.
+   */
+  private async request(quietLock = true): Promise<Record<string, string> | undefined> {
     const repositoryId = this.store.followed();
     if (repositoryId === null || this.running()) {
-      return;
+      return undefined;
     }
     this.shownProblem.set(null);
     this.starting.set(repositoryId);
@@ -136,6 +158,9 @@ export class PushService {
     } catch (error) {
       if (this.store.followed() === repositoryId) {
         const apiError = toApiError(error);
+        if (quietLock && apiError.code === 'key-locked') {
+          return stringParams(apiError.params);
+        }
         this.fail(apiError.code, stringParams(apiError.params), false);
         // A refusal such as `nothing-to-push` means the status shown is out of date.
         void this.store.refresh();
@@ -146,11 +171,34 @@ export class PushService {
         this.starting.set(null);
       }
     }
+    return undefined;
   }
 
   /** The last push again, such as after its fix (RC-9). */
   retry(): Promise<void> {
     return this.start();
+  }
+
+  /**
+   * **Unlock** on a push problem (RC-4, RC-16): the push runs again once the key
+   * is unlocked. When the key can't be read to ask for it, the problem stays, so
+   * that **Unlock** can be tried again.
+   */
+  async unlockAndRetry(locked: Record<string, string> = this.shownProblem()?.params ?? {}): Promise<void> {
+    const repositoryId = this.store.followed();
+    let unlocked: boolean;
+    try {
+      unlocked = await this.lockedKey.unlock();
+    } catch {
+      if (this.store.followed() === repositoryId) {
+        this.fail('key-locked', locked, false);
+      }
+      return;
+    }
+    // Not after a switch to another repository while the dialog was open.
+    if (unlocked && this.store.followed() === repositoryId) {
+      await this.request(false);
+    }
   }
 
   clearProblem(): void {

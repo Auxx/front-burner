@@ -15,10 +15,11 @@ import type {
   GitJobState,
   GitStatus,
   PushEvent,
+  RepositoryCredentialsInfo,
   RepositorySummary
 } from '@front-burner/shared-contracts';
 import { ToastService } from '@front-burner/ui';
-import { FilesApi, GitApi, RepositoriesApi } from '@front-burner/web-api-client';
+import { CredentialsApi, FilesApi, GitApi, RepositoriesApi } from '@front-burner/web-api-client';
 import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { BehaviorSubject, map, Observable, of, Subject, throwError } from 'rxjs';
@@ -77,6 +78,9 @@ describe('RepositoryScreenPage', () => {
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let recreateFile: ReturnType<typeof vi.fn>;
+  /** What `RepositoriesApi.repositoryCredentials` answers. */
+  let credentialsInfo: RepositoryCredentialsInfo;
+  let unlockSshKey: ReturnType<typeof vi.fn>;
   let harness: RouterTestingHarness;
   let narrow: boolean;
   /** The viewport's narrowness, which a test can flip. */
@@ -105,7 +109,11 @@ describe('RepositoryScreenPage', () => {
       imports: [ translocoTesting({ 'errors.internal': 'Something went wrong.' }) ],
       providers: [
         provideRouter([ { path: 'repositories/:id', children: routes } ]),
-        { provide: RepositoriesApi, useValue: { open } },
+        {
+          provide: RepositoriesApi,
+          useValue: { open, repositoryCredentials: () => of(credentialsInfo) }
+        },
+        { provide: CredentialsApi, useValue: { unlockSshKey } },
         {
           provide: GitApi,
           useValue: {
@@ -208,6 +216,8 @@ describe('RepositoryScreenPage', () => {
     push = vi.fn(() => of({ jobId: 7 }));
     gitJob = vi.fn(() => of<GitJobState>({ status: 'running', outcome: null }));
     recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
+    credentialsInfo = { protocol: 'https', inUse: null };
+    unlockSshKey = vi.fn(() => of(undefined));
     document.title = '';
   });
 
@@ -1128,6 +1138,60 @@ describe('RepositoryScreenPage', () => {
 
         expect(summary()).toBe(before);
         expect(before).toContain('main');
+      });
+    });
+
+    describe('a locked key', () => {
+      const banner = () => page().querySelector('rs-locked-key-banner');
+      const BANNER = 'web-feature-repository-screen.LockedKeyBannerComponent';
+
+      beforeEach(() => {
+        credentialsInfo = {
+          protocol: 'ssh',
+          inUse: {
+            kind: 'ssh-key',
+            id: 3,
+            name: 'laptop',
+            keyType: 'ed25519',
+            fingerprint: 'SHA256:abc',
+            passphraseProtected: true,
+            unlocked: false,
+            generated: false,
+            missing: false,
+            usedBy: 1
+          }
+        };
+      });
+
+      it('shows the banner below the bar, and Unlock removes it after the unlock', async () => {
+        await visit('/repositories/12');
+
+        const shown = banner() as HTMLElement;
+        expect(shown.closest('header')).toBeTruthy();
+        expect(shown.closest('rs-repository-bar')).toBeNull();
+        expect(shown.textContent).toContain(`${BANNER}.message`);
+
+        (shown.querySelector('[uiBannerActions] button') as HTMLButtonElement).click();
+        await settleDialog();
+        const input = document.querySelector('dlg-unlock-key input') as HTMLInputElement;
+        input.value = 'correct horse';
+        input.dispatchEvent(new Event('input'));
+        await settleDialog();
+        dialogButton('web-repository-dialogs.UnlockKeyDialog.unlock')?.click();
+        await settleDialog();
+        await settle(harness.fixture);
+
+        expect(unlockSshKey).toHaveBeenCalledWith(3, { passphrase: 'correct horse' });
+        expect(banner()).toBeNull();
+      });
+
+      it('can be dismissed', async () => {
+        await visit('/repositories/12');
+
+        (banner()?.querySelector(`button[aria-label="${BANNER}.dismiss"]`) as HTMLButtonElement).click();
+        await settle(harness.fixture);
+
+        expect(banner()).toBeNull();
       });
     });
 

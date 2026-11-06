@@ -162,6 +162,21 @@ describe('SshCredentialsComponent', () => {
     expect(page().textContent).not.toContain(`${KEY}.unlocked`);
   });
 
+  it('AC-REPO-002.10: reports too many attempts on the passphrase field', async () => {
+    api.unlockSshKey.mockReturnValue(throwError(() =>
+      new HttpErrorResponse({
+        status: 429,
+        error: { code: 'unlock-too-many-attempts', params: {}, requestId: 'r', message: 'm' }
+      })
+    ));
+    await open([ locked ]);
+
+    type(control(page(), `${KEY}.passphrase`), 'wrong');
+    await settle(fixture);
+
+    expect(errorOf(page(), `${KEY}.passphrase`)).toBe(`${ERRORS}.credentials.passphrase.unlock-too-many-attempts`);
+  });
+
   it('says a key is unlocked for this session', async () => {
     await open([ { ...locked, unlocked: true } ]);
 

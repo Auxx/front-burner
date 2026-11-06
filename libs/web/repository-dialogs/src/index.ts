@@ -5,6 +5,7 @@ export {
   type CommitAuthorConfirmed,
   ConfirmCommitAuthorDialog
 } from './repository-dialogs/dialogs/confirm-commit-author/confirm-commit-author.dialog';
+export { UnlockKeyDialog, type UnlockKeyDialogData } from './repository-dialogs/dialogs/unlock-key/unlock-key.dialog';
 export type { CommitAuthorDialogData } from './repository-dialogs/models/commit-author-dialog.model';
 export { commitAuthorForm } from './repository-dialogs/models/commit-author-form.model';
 export { CommitAuthorRefusals } from './repository-dialogs/models/commit-author-refusals';
