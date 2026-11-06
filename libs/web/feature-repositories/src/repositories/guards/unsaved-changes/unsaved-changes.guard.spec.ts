@@ -14,6 +14,7 @@ import { AddRepositoryPage } from '../../pages/add-repository/add-repository.pag
 import { unsavedChangesGuard } from './unsaved-changes.guard';
 
 const REPOS = 'web-feature-repositories';
+const DIALOGS = 'web-repository-dialogs';
 
 const generated: GeneratedSshKey = {
   key: {
@@ -92,11 +93,11 @@ describe('unsavedChangesGuard', () => {
     // The URL is filled in, not typed, so that only the key counts.
     fixture.componentInstance['model'].remoteUrl().value.set('git@github.com:acme/handbook.git');
     await settle(fixture);
-    choose(page(), `${REPOS}.SshCredentialsComponent.choices.generate`);
+    choose(page(), `${DIALOGS}.SshCredentialsComponent.choices.generate`);
     await settle(fixture);
-    type(control(page(), `${REPOS}.GeneratedKeyComponent.name`), 'Front Burner');
+    type(control(page(), `${DIALOGS}.GeneratedKeyComponent.name`), 'Front Burner');
     await settle(fixture);
-    button(page(), `${REPOS}.GeneratedKeyComponent.generate`)?.click();
+    button(page(), `${DIALOGS}.GeneratedKeyComponent.generate`)?.click();
     await settle(fixture);
     page().querySelector<HTMLInputElement>('input[type=checkbox]')?.click();
     await settle(fixture);

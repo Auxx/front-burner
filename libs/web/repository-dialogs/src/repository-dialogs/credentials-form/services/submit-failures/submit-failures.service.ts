@@ -1,6 +1,6 @@
 import { computed, Injectable, type Signal, signal } from '@angular/core';
 
-import type { FailureText, FieldErrorText } from '../../utils/add-repository-errors';
+import type { FailureText, FieldErrorText } from '../../credentials-errors';
 
 /**
  * The backend's field failures of the last submit (AR-6, AR-42), shown on

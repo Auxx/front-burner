@@ -14,11 +14,11 @@ import {
 import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
-import type { CredentialsModel } from '../../models/add-repository-form.model';
+import { fieldErrorKey, type FieldErrorText, shownError } from '../../credentials-errors';
+import type { CredentialsModel } from '../../credentials-form.model';
 import { SessionKeysService } from '../../services/session-keys/session-keys.service';
-import { fieldErrorKey, type FieldErrorText, shownError } from '../../utils/add-repository-errors';
 
-const KEY = 'web-feature-repositories.GeneratedKeyComponent';
+const KEY = 'web-repository-dialogs.GeneratedKeyComponent';
 
 /**
  * **Generate a key** (AR-29, AR-30): a key name and **Generate**, then the
@@ -27,7 +27,7 @@ const KEY = 'web-feature-repositories.GeneratedKeyComponent';
  * shows it again.
  */
 @Component({
-  selector: 'repo-generated-key',
+  selector: 'dlg-generated-key',
   imports: [
     TranslocoDirective,
     FormField,

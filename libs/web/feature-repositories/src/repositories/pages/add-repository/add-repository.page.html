@@ -4,7 +4,7 @@
     <h1 uiPageTitle>{{ t('heading') }}</h1>
     <form class="form" novalidate (submit)="submit($event)">
       <repo-remote-section [remoteUrl]="model.remoteUrl" [name]="model.name" [index]="index()" />
-      <repo-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="saved()" />
+      <dlg-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="saved()" />
       <repo-clone-section [cloneMode]="model.cloneMode" [branch]="model.branch" [understood]="model.understood" />
       <repo-level-section [gitLevel]="model.gitLevel" [allowed]="allowedLevels()" />
       @if (failure(); as failure) {

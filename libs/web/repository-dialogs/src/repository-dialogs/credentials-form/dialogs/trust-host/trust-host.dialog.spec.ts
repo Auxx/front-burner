@@ -3,11 +3,11 @@ import type { HostKey } from '@front-burner/shared-contracts';
 import { DialogRef, DialogService } from '@front-burner/ui';
 import { firstValueFrom } from 'rxjs';
 
-import { button } from '../../../testing/form-testing';
-import { translocoTesting } from '../../../testing/transloco-testing';
+import { button } from '../../../../testing/form-testing';
+import { translocoTesting } from '../../../../testing/transloco-testing';
 import { TrustHostDialog } from './trust-host.dialog';
 
-const KEY = 'web-feature-repositories.TrustHostDialog';
+const KEY = 'web-repository-dialogs.TrustHostDialog';
 
 const hostKey: HostKey = {
   host: 'git.example.com',

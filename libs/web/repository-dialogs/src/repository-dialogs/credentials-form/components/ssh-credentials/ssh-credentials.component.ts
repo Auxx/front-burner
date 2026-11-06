@@ -14,13 +14,13 @@ import {
 import { toApiError } from '@front-burner/web-core';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
-import type { CredentialsChoice, CredentialsModel } from '../../models/add-repository-form.model';
+import { fieldErrorKey, type FieldErrorText, shownError } from '../../credentials-errors';
+import type { CredentialsChoice, CredentialsModel } from '../../credentials-form.model';
 import { SessionKeysService } from '../../services/session-keys/session-keys.service';
 import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
-import { fieldErrorKey, type FieldErrorText, shownError } from '../../utils/add-repository-errors';
 import { GeneratedKeyComponent } from '../generated-key/generated-key.component';
 
-const KEY = 'web-feature-repositories.SshCredentialsComponent';
+const KEY = 'web-repository-dialogs.SshCredentialsComponent';
 
 /**
  * The SSH options (AR-23 to AR-31): a saved key (only when the user has some,
@@ -29,7 +29,7 @@ const KEY = 'web-feature-repositories.SshCredentialsComponent';
  * user leaves the field.
  */
 @Component({
-  selector: 'repo-ssh-credentials',
+  selector: 'dlg-ssh-credentials',
   imports: [
     TranslocoDirective,
     FormField,

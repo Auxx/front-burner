@@ -4,9 +4,9 @@ import type { SavedCredentials } from '@front-burner/shared-contracts';
 import { IconComponent, SpinnerComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import { type CredentialsModel, defaultCredentials } from '../../models/add-repository-form.model';
+import { shownError } from '../../credentials-errors';
+import { type CredentialsModel, defaultCredentials } from '../../credentials-form.model';
 import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
-import { shownError } from '../../utils/add-repository-errors';
 import { HttpsCredentialsComponent } from '../https-credentials/https-credentials.component';
 import { SshCredentialsComponent } from '../ssh-credentials/ssh-credentials.component';
 
@@ -16,7 +16,7 @@ import { SshCredentialsComponent } from '../ssh-credentials/ssh-credentials.comp
  * changes, the other protocol's choices are cleared.
  */
 @Component({
-  selector: 'repo-credentials-section',
+  selector: 'dlg-credentials-section',
   imports: [ TranslocoDirective, IconComponent, SpinnerComponent, HttpsCredentialsComponent, SshCredentialsComponent ],
   templateUrl: './credentials-section.component.html',
   styleUrl: './credentials-section.component.scss',

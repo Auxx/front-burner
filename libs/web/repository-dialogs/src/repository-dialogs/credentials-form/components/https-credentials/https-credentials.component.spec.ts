@@ -2,14 +2,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { SavedCredentials } from '@front-burner/shared-contracts';
 import { CredentialsApi } from '@front-burner/web-api-client';
 
-import { FormHostComponent, hostWith } from '../../../testing/form-host';
-import { choose, control, errorOf, field, radio, radioLabels } from '../../../testing/form-testing';
-import { settle } from '../../../testing/settle';
-import { translocoTesting } from '../../../testing/transloco-testing';
+import { FormHostComponent, hostWith } from '../../../../testing/form-host';
+import { choose, control, errorOf, field, radio, radioLabels } from '../../../../testing/form-testing';
+import { settle } from '../../../../testing/settle';
+import { translocoTesting } from '../../../../testing/transloco-testing';
 import { CredentialsSectionComponent } from '../credentials-section/credentials-section.component';
 
-const KEY = 'web-feature-repositories.HttpsCredentialsComponent';
-const ERRORS = 'web-feature-repositories.errors';
+const KEY = 'web-repository-dialogs.HttpsCredentialsComponent';
+const ERRORS = 'web-repository-dialogs.errors';
 
 const saved: SavedCredentials = {
   https: [
@@ -28,7 +28,7 @@ describe('HttpsCredentialsComponent', () => {
   /** The section as the page shows it, for an HTTPS URL. */
   async function open(credentials: SavedCredentials = { https: [], sshKeys: [] }): Promise<void> {
     hostWith(
-      '<repo-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
+      '<dlg-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
       [ CredentialsSectionComponent ]
     );
     await TestBed.configureTestingModule({

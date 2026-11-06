@@ -16,16 +16,17 @@ import type {
 import { DialogService } from '@front-burner/ui';
 import { CredentialsApi, KnownHostsApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { CurrentUserService } from '@front-burner/web-core';
+import { TrustHostDialog } from '@front-burner/web-repository-dialogs';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { button, choose, control, errorOf, field, selectValue, type } from '../../../testing/form-testing';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
-import { TrustHostDialog } from '../../dialogs/trust-host/trust-host.dialog';
 import { AddRepositoryPage } from './add-repository.page';
 
 const KEY = 'web-feature-repositories.AddRepositoryPage';
 const REPOS = 'web-feature-repositories';
+const DIALOGS = 'web-repository-dialogs';
 
 function userWith(allowedGitLevels: GitLevel[]): CurrentUser {
   return { id: 4, email: 'ada@example.com', displayName: 'Ada', role: 'user', allowedGitLevels };
@@ -153,7 +154,7 @@ describe('AddRepositoryPage', () => {
     const sections = [ ...page().querySelectorAll('form > *') ].map(element => element.tagName.toLowerCase());
     expect(sections.slice(0, 4)).toEqual([
       'repo-remote-section',
-      'repo-credentials-section',
+      'dlg-credentials-section',
       'repo-clone-section',
       'repo-level-section'
     ]);
@@ -176,7 +177,7 @@ describe('AddRepositoryPage', () => {
   it('loads the branches when single branch is chosen', async () => {
     await open();
     await enterUrl('https://github.com/acme/handbook.git');
-    choose(page(), `${REPOS}.HttpsCredentialsComponent.choices.none`);
+    choose(page(), `${DIALOGS}.HttpsCredentialsComponent.choices.none`);
     await settle(fixture);
     expect(accessChecks).toHaveLength(0);
 
@@ -197,7 +198,7 @@ describe('AddRepositoryPage', () => {
   it('checks the branches again when the URL changes', async () => {
     await open();
     await enterUrl('https://github.com/acme/handbook.git');
-    choose(page(), `${REPOS}.HttpsCredentialsComponent.choices.none`);
+    choose(page(), `${DIALOGS}.HttpsCredentialsComponent.choices.none`);
     choose(page(), `${REPOS}.CloneSectionComponent.modes.single-branch`);
     await vi.waitFor(() => expect(accessChecks).toHaveLength(1), { timeout: 2000 });
 
@@ -210,7 +211,7 @@ describe('AddRepositoryPage', () => {
   it('does not check the branches for a full clone', async () => {
     await open();
     await enterUrl('https://github.com/acme/handbook.git');
-    choose(page(), `${REPOS}.HttpsCredentialsComponent.choices.none`);
+    choose(page(), `${DIALOGS}.HttpsCredentialsComponent.choices.none`);
     await new Promise(resolve => setTimeout(resolve, 700));
 
     expect(accessChecks).toHaveLength(0);
@@ -224,16 +225,16 @@ describe('AddRepositoryPage', () => {
     /** A public HTTPS repository: valid as soon as the URL is in. */
     async function fillPublic(): Promise<void> {
       await enterUrl('https://github.com/acme/handbook.git');
-      choose(page(), `${REPOS}.HttpsCredentialsComponent.choices.none`);
+      choose(page(), `${DIALOGS}.HttpsCredentialsComponent.choices.none`);
       await settle(fixture);
     }
 
     /** A pasted, encrypted SSH key. */
     async function fillPastedKey(): Promise<void> {
       await enterUrl('git@git.example.com:acme/handbook.git');
-      type(control(page(), `${REPOS}.SshCredentialsComponent.name`), 'Laptop');
-      type(control(page(), `${REPOS}.SshCredentialsComponent.privateKey`), '-----BEGIN OPENSSH PRIVATE KEY-----');
-      type(control(page(), `${REPOS}.SshCredentialsComponent.pastePassphrase`), 'correct horse');
+      type(control(page(), `${DIALOGS}.SshCredentialsComponent.name`), 'Laptop');
+      type(control(page(), `${DIALOGS}.SshCredentialsComponent.privateKey`), '-----BEGIN OPENSSH PRIVATE KEY-----');
+      type(control(page(), `${DIALOGS}.SshCredentialsComponent.pastePassphrase`), 'correct horse');
       await settle(fixture);
     }
 
@@ -311,12 +312,12 @@ describe('AddRepositoryPage', () => {
         expect.objectContaining({ mode: 'new-ssh-key', passphrase: 'correct horse' })
       );
       expect(url().value).toBe('git@git.example.com:acme/handbook.git');
-      expect(control(page(), `${REPOS}.SshCredentialsComponent.privateKey`).value).toBe(
+      expect(control(page(), `${DIALOGS}.SshCredentialsComponent.privateKey`).value).toBe(
         '-----BEGIN OPENSSH PRIVATE KEY-----'
       );
-      expect(control(page(), `${REPOS}.SshCredentialsComponent.pastePassphrase`).value).toBe('');
-      expect(errorOf(page(), `${REPOS}.SshCredentialsComponent.privateKey`)).toBe(
-        `${REPOS}.errors.credentials.privateKey.invalid-key`
+      expect(control(page(), `${DIALOGS}.SshCredentialsComponent.pastePassphrase`).value).toBe('');
+      expect(errorOf(page(), `${DIALOGS}.SshCredentialsComponent.privateKey`)).toBe(
+        `${DIALOGS}.errors.credentials.privateKey.invalid-key`
       );
       expect(url().disabled).toBe(false);
     });
@@ -347,8 +348,8 @@ describe('AddRepositoryPage', () => {
 
       await clickSubmit();
 
-      expect(page().querySelector('repo-credentials-section .error')?.textContent?.trim()).toBe(
-        `${REPOS}.errors.credentials.credentials-required`
+      expect(page().querySelector('dlg-credentials-section .error')?.textContent?.trim()).toBe(
+        `${DIALOGS}.errors.credentials.credentials-required`
       );
     });
 
@@ -382,7 +383,7 @@ describe('AddRepositoryPage', () => {
 
       expect(knownHosts.trust).not.toHaveBeenCalled();
       expect(adds).toHaveLength(1);
-      expect(control(page(), `${REPOS}.SshCredentialsComponent.pastePassphrase`).value).toBe('correct horse');
+      expect(control(page(), `${DIALOGS}.SshCredentialsComponent.pastePassphrase`).value).toBe('correct horse');
       expect(page().querySelector('.failure')).toBeNull();
       expect(page().querySelectorAll('.error')).toHaveLength(0);
       expect(url().disabled).toBe(false);
@@ -391,8 +392,8 @@ describe('AddRepositoryPage', () => {
     it('asks to trust an unknown host found by the branch list, and checks again', async () => {
       await open();
       await enterUrl('git@git.example.com:acme/handbook.git');
-      type(control(page(), `${REPOS}.SshCredentialsComponent.name`), 'Laptop');
-      type(control(page(), `${REPOS}.SshCredentialsComponent.privateKey`), '-----BEGIN OPENSSH PRIVATE KEY-----');
+      type(control(page(), `${DIALOGS}.SshCredentialsComponent.name`), 'Laptop');
+      type(control(page(), `${DIALOGS}.SshCredentialsComponent.privateKey`), '-----BEGIN OPENSSH PRIVATE KEY-----');
       choose(page(), `${REPOS}.CloneSectionComponent.modes.single-branch`);
       await vi.waitFor(() => expect(accessChecks).toHaveLength(1), { timeout: 2000 });
 
@@ -438,8 +439,8 @@ describe('AddRepositoryPage', () => {
         )
       );
       await clickSubmit();
-      expect(page().querySelector('repo-credentials-section .error')?.textContent?.trim()).toBe(
-        `${REPOS}.errors.credentials.credentials-refused-generated`
+      expect(page().querySelector('dlg-credentials-section .error')?.textContent?.trim()).toBe(
+        `${DIALOGS}.errors.credentials.credentials-refused-generated`
       );
 
       // The user adds the key on the git server, and tries again without changing anything.
@@ -484,7 +485,7 @@ describe('AddRepositoryPage', () => {
       };
       await open({ saved: { https: [], sshKeys: [ key ] } });
       await enterUrl('git@git.example.com:acme/handbook.git');
-      expect(page().textContent).toContain(`${REPOS}.SshCredentialsComponent.unlocked`);
+      expect(page().textContent).toContain(`${DIALOGS}.SshCredentialsComponent.unlocked`);
       addAnswers.push(() =>
         throwError(() =>
           failure(400, {
@@ -496,9 +497,9 @@ describe('AddRepositoryPage', () => {
 
       await clickSubmit();
 
-      expect(page().textContent).not.toContain(`${REPOS}.SshCredentialsComponent.unlocked`);
-      expect(errorOf(page(), `${REPOS}.SshCredentialsComponent.passphrase`)).toBe(
-        `${REPOS}.errors.credentials.passphrase.passphrase-required`
+      expect(page().textContent).not.toContain(`${DIALOGS}.SshCredentialsComponent.unlocked`);
+      expect(errorOf(page(), `${DIALOGS}.SshCredentialsComponent.passphrase`)).toBe(
+        `${DIALOGS}.errors.credentials.passphrase.passphrase-required`
       );
     });
 
@@ -541,7 +542,7 @@ describe('AddRepositoryPage', () => {
       }));
       await settle(fixture);
 
-      expect(field(page(), `${REPOS}.SshCredentialsComponent.passphrase`)).toBeTruthy();
+      expect(field(page(), `${DIALOGS}.SshCredentialsComponent.passphrase`)).toBeTruthy();
     });
   });
 });

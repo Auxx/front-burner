@@ -4,7 +4,7 @@ import type { SavedCredentials, SavedSshKey } from '@front-burner/shared-contrac
 import { CredentialsApi } from '@front-burner/web-api-client';
 import { of, throwError } from 'rxjs';
 
-import { FormHostComponent, hostWith } from '../../../testing/form-host';
+import { FormHostComponent, hostWith } from '../../../../testing/form-host';
 import {
   control,
   errorOf,
@@ -14,13 +14,13 @@ import {
   radioLabels,
   selectOptions,
   type
-} from '../../../testing/form-testing';
-import { settle } from '../../../testing/settle';
-import { translocoTesting } from '../../../testing/transloco-testing';
+} from '../../../../testing/form-testing';
+import { settle } from '../../../../testing/settle';
+import { translocoTesting } from '../../../../testing/transloco-testing';
 import { CredentialsSectionComponent } from '../credentials-section/credentials-section.component';
 
-const KEY = 'web-feature-repositories.SshCredentialsComponent';
-const ERRORS = 'web-feature-repositories.errors';
+const KEY = 'web-repository-dialogs.SshCredentialsComponent';
+const ERRORS = 'web-repository-dialogs.errors';
 
 const locked: SavedSshKey = {
   id: 3,
@@ -52,7 +52,7 @@ describe('SshCredentialsComponent', () => {
   /** The section as the page shows it, for an SSH URL. */
   async function open(sshKeys: SavedSshKey[] = []): Promise<void> {
     hostWith(
-      '<repo-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
+      '<dlg-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
       [ CredentialsSectionComponent ]
     );
     await TestBed.configureTestingModule({
