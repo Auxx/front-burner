@@ -97,6 +97,17 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
     ]);
   });
 
+  it('publishes git.changed when it queues a push, so that other tabs show it running', async () => {
+    harness.commit('second');
+
+    await push().expect(202);
+
+    expect(harness.published).toContainEqual({
+      userId: harness.alice,
+      event: { type: 'git.changed', repositoryId: harness.repositoryId }
+    });
+  });
+
   it('refuses during a merge, on a detached HEAD, without commits and with nothing to push', async () => {
     harness.commit('second');
     const head = git(harness.workingCopy, 'rev-parse', 'HEAD').trim();

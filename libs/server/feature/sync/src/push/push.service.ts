@@ -1,4 +1,5 @@
 import { DATABASE, Database, Job, jobs } from '@front-burner/server-core-database';
+import { EventsHub } from '@front-burner/server-core-events';
 import { GitEngine } from '@front-burner/server-core-git';
 import { JobRunner } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
@@ -30,13 +31,16 @@ export class PushService {
     private readonly engine: GitEngine,
     private readonly repositories: OpenableRepository,
     private readonly saved: SavedCredentialsService,
-    private readonly jobKeys: JobKeys
+    private readonly jobKeys: JobKeys,
+    private readonly events: EventsHub
   ) {}
 
   /**
    * Queues a push of the current branch, or returns the push of that branch
    * already waiting or running. A protected key must be unlocked in this session; the job gets
-   * its own copy (RC-19), and the request keeps the unlock alive (AR-31).
+   * its own copy (RC-19), and the request keeps the unlock alive (AR-31). Publishes
+   * `git.changed`, so that the user's other tabs read the status's `networkJob` and
+   * show the push as running (GA-9) _(plan 58's call)_.
    *
    * @throws ApiErrorException 409 `merge-in-progress` (GA-4), `no-branch`,
    * `no-commits`, `nothing-to-push`, then `key-locked` or `credentials-missing`.
@@ -73,6 +77,7 @@ export class PushService {
     if (heldKey !== undefined && row.credentialId !== null) {
       this.jobKeys.hold(jobId, row.credentialId, heldKey);
     }
+    this.events.publish(userId, { type: 'git.changed', repositoryId });
     return jobId;
   }
 

@@ -22,7 +22,9 @@ let nextId = 0;
 /**
  * The layout of every page that needs a login (A-10.5, A-10.6): the header, an
  * optional activity bar and side panel, the main content and an optional status
- * bar, on the canvas.
+ * bar, on the canvas. Elements marked `uiAppShellBanner`, such as a page's
+ * notices (NV-16), go below the header's bar, one above the other, across the
+ * whole width.
  *
  * On wide screens the side panel is beside the content and can be resized and
  * collapsed (`sideOpen`). On narrow screens it is a drawer shown instead of the
