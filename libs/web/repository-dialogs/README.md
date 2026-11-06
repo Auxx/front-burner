@@ -22,8 +22,11 @@ What several web features share about a repository's git setup (A-2.4).
   provided by the page or dialog that shows the section.
 - `SubmitFailuresService`: the backend's field failures of the last submit,
   shown on their fields until the inputs change; optional, provided by the page
-  or dialog. `shownError` and `fieldErrorKey` give a field's text; the
-  credentials' texts are under `web-repository-dialogs.errors.credentials`.
+  or dialog.
+- `credentialsShownError` and `credentialsErrorKey`: a credentials field's text,
+  under `web-repository-dialogs.errors.credentials`, with `credentials.invalid`
+  for a code without one. `shownFieldError` does the same for any field, given
+  its keys.
 - `TrustHostDialog`: "Do you trust this server?" for an unknown SSH host
   (AR-32).
 

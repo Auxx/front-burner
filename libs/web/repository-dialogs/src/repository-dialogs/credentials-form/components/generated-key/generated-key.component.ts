@@ -14,7 +14,7 @@ import {
 import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
-import { fieldErrorKey, type FieldErrorText, shownError } from '../../credentials-errors';
+import { credentialsErrorKey, credentialsShownError, type FieldErrorText } from '../../credentials-errors';
 import type { CredentialsModel } from '../../credentials-form.model';
 import { SessionKeysService } from '../../services/session-keys/session-keys.service';
 
@@ -60,7 +60,7 @@ export class GeneratedKeyComponent {
   protected readonly failure = signal<{ text: string; reference: string | null; } | null>(null);
 
   protected error(): FieldErrorText | undefined {
-    return this.nameError() ?? shownError(this.credentials().generateName, 'credentials.generateName');
+    return this.nameError() ?? credentialsShownError(this.credentials().generateName, 'credentials.generateName');
   }
 
   protected async generate(): Promise<void> {
@@ -76,7 +76,7 @@ export class GeneratedKeyComponent {
       const apiError = toApiError(error);
       const code = apiError.fields?.find(field => field.path === 'name')?.code;
       if (code) {
-        this.nameError.set({ key: fieldErrorKey('credentials.generateName', code), params: {} });
+        this.nameError.set({ key: credentialsErrorKey('credentials.generateName', code), params: {} });
       } else {
         this.failure.set(this.errorText.describe(apiError));
       }

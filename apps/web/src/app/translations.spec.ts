@@ -91,6 +91,7 @@ describe('i18n/en.json', () => {
       'These credentials can\'t access the repository. Has the key been added to your git server?'
     ],
     [ `${DIALOGS}.errors.credentials.credentials-required`, 'This repository needs credentials.' ],
+    [ `${DIALOGS}.errors.credentials.invalid`, 'This value is not valid.' ],
     [
       `${REPOS}.errors.remoteUrl.repository-not-found`,
       'Repository not found, or these credentials can\'t see it.'

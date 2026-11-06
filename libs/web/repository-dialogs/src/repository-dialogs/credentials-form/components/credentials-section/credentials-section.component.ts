@@ -4,7 +4,7 @@ import type { SavedCredentials } from '@front-burner/shared-contracts';
 import { IconComponent, SpinnerComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import { shownError } from '../../credentials-errors';
+import { credentialsShownError } from '../../credentials-errors';
 import { type CredentialsModel, defaultCredentials } from '../../credentials-form.model';
 import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { HttpsCredentialsComponent } from '../https-credentials/https-credentials.component';
@@ -33,7 +33,7 @@ export class CredentialsSectionComponent {
   protected readonly loaded = computed(() => this.saved() !== null);
   /** A failure of the credentials as a whole, such as refused credentials (AR-22, AR-42). */
   protected readonly sectionError = computed(() =>
-    this.failures?.forPath('credentials') ?? shownError(this.credentials(), 'credentials')
+    this.failures?.forPath('credentials') ?? credentialsShownError(this.credentials(), 'credentials')
   );
 
   /** The last valid protocol, so that editing the URL through invalid states keeps the choices. */

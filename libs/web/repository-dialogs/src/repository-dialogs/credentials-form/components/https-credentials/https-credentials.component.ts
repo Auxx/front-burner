@@ -13,7 +13,7 @@ import {
 } from '@front-burner/ui';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
-import { type FieldErrorText, shownError } from '../../credentials-errors';
+import { credentialsShownError, type FieldErrorText } from '../../credentials-errors';
 import type { CredentialsChoice, CredentialsModel } from '../../credentials-form.model';
 import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 
@@ -62,6 +62,7 @@ export class HttpsCredentialsComponent {
   );
 
   protected error(name: keyof CredentialsModel): FieldErrorText | undefined {
-    return this.failures?.forPath(`credentials.${name}`) ?? shownError(this.credentials()[name], `credentials.${name}`);
+    return this.failures?.forPath(`credentials.${name}`)
+      ?? credentialsShownError(this.credentials()[name], `credentials.${name}`);
   }
 }

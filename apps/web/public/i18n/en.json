@@ -113,6 +113,7 @@
   "web-repository-dialogs.HttpsCredentialsComponent.passwordHint": "GitHub and Bitbucket need an access token, not your account password.",
   "web-repository-dialogs.HttpsCredentialsComponent.showPassword": "Show password or token",
   "web-repository-dialogs.HttpsCredentialsComponent.noneHint": "For repositories anyone can read. You will need credentials to push changes.",
+  "web-repository-dialogs.errors.credentials.invalid": "This value is not valid.",
   "web-repository-dialogs.errors.credentials.savedId.required": "Choose saved credentials",
   "web-repository-dialogs.errors.credentials.name.too-small": "Enter a name for these credentials",
   "web-repository-dialogs.errors.credentials.name.too-big": "Use at most 100 characters",

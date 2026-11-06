@@ -49,6 +49,12 @@ describe('failureTexts', () => {
     ]);
   });
 
+  it('gives a credentials code it has no text for the credentials\' generic text', () => {
+    expect(failureTexts(fields({ path: 'credentials.privateKey', code: 'brand-new', params: {} }))).toEqual([
+      { path: 'credentials.privateKey', key: 'credentials.invalid', params: {} }
+    ]);
+  });
+
   it('shows every field failure', () => {
     const failures = failureTexts(fields(
       { path: 'name', code: 'name-taken', params: { name: 'handbook' } },

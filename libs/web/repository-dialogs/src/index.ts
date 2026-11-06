@@ -2,12 +2,12 @@ export { CommitAuthorFormComponent } from './repository-dialogs/components/commi
 export { CommitAuthorSummaryComponent } from './repository-dialogs/components/commit-author-summary/commit-author-summary.component';
 export { CredentialsSectionComponent } from './repository-dialogs/credentials-form/components/credentials-section/credentials-section.component';
 export {
-  CREDENTIALS_FIELD_CODES,
+  credentialsErrorKey,
+  credentialsShownError,
   type FailureText,
-  type FieldCodes,
-  fieldErrorKey,
   type FieldErrorText,
-  shownError
+  isCredentialsPath,
+  shownFieldError
 } from './repository-dialogs/credentials-form/credentials-errors';
 export {
   type CredentialsChoice,
