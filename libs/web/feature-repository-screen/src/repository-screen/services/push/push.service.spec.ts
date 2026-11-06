@@ -280,6 +280,33 @@ describe('PushService', () => {
     expect(service.problem()).toBeNull();
   });
 
+  it('shows the problem, with Unlock, when the key can\'t be read to ask for it', async () => {
+    push.mockReturnValue(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+    unlock.mockRejectedValue(new Error('offline'));
+
+    await service.start();
+    expect(service.problem()).toMatchObject({ code: 'key-locked', params: { keyId: '3', keyName: 'laptop' } });
+
+    await service.unlockAndRetry();
+    expect(push).toHaveBeenCalledOnce();
+    expect(service.problem()).toMatchObject({ code: 'key-locked', fix: 'unlock', params: { keyName: 'laptop' } });
+  });
+
+  it('clears a locked-key problem when the key is unlocked from the banner or another tab', async () => {
+    push.mockReturnValue(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+    unlock.mockResolvedValueOnce(false);
+    await service.start();
+    // Unlocked, but locked again at once: the problem shows, with Unlock.
+    await service.unlockAndRetry();
+    expect(service.problem()?.code).toBe('key-locked');
+
+    events.next({ type: 'key.unlocked', keyId: 4 });
+    expect(service.problem()?.code).toBe('key-locked');
+
+    events.next({ type: 'key.unlocked', keyId: 3 });
+    expect(service.problem()).toBeNull();
+  });
+
   it('does not push another repository after a switch while the passphrase was asked for', async () => {
     push.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
     unlock.mockImplementationOnce(async () => {

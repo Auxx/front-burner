@@ -36,6 +36,7 @@ describe('LockedKeyService', () => {
   let events: Subject<PushEvent>;
   let reconnected: Subject<void>;
   let followed: ReturnType<typeof signal<number | null>>;
+  let sessionState: ReturnType<typeof signal<string>>;
   let service: LockedKeyService;
 
   const settle = async () => {
@@ -56,6 +57,7 @@ describe('LockedKeyService', () => {
     events = new Subject();
     reconnected = new Subject();
     followed = signal(12);
+    sessionState = signal('ready');
     TestBed.configureTestingModule({
       providers: [
         LockedKeyService,
@@ -65,7 +67,7 @@ describe('LockedKeyService', () => {
         { provide: GitStatusStore, useValue: { followed } },
         {
           provide: RepositorySessionService,
-          useValue: { state: signal('ready'), repository: () => ({ id: followed() }) }
+          useValue: { state: sessionState, repository: () => ({ id: followed() }) }
         }
       ]
     });
@@ -194,6 +196,44 @@ describe('LockedKeyService', () => {
     await start(unlocked);
 
     expect(await service.unlock()).toBe(true);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('keeps a dismissal while the session opens the same repository again', async () => {
+    await start(locked);
+    service.dismissed.set(true);
+
+    sessionState.set('loading');
+    await settle();
+    sessionState.set('ready');
+    await settle();
+
+    expect(service.dismissed()).toBe(true);
+    expect(service.key()).toEqual(laptop);
+  });
+
+  it('rejects, asking nothing, when the key can\'t be read to ask for it', async () => {
+    await start(unlocked);
+    repositoryCredentials.mockReturnValue(throwError(() => new Error('offline')));
+
+    await expect(service.unlock()).rejects.toThrow('offline');
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('does not ask about a key unlocked while it was being read', async () => {
+    await start(locked);
+    events.next({ type: 'key.unlocked', keyId: 3 });
+    const answer = new Subject<RepositoryCredentialsInfo>();
+    repositoryCredentials.mockReturnValue(answer);
+
+    const unlocking = service.unlock();
+    await settle();
+    // Another tab of this session unlocked it again meanwhile.
+    events.next({ type: 'key.unlocked', keyId: 3 });
+    answer.next(locked);
+    answer.complete();
+
+    expect(await unlocking).toBe(true);
     expect(open).not.toHaveBeenCalled();
   });
 

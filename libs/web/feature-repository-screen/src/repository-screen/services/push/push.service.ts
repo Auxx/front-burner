@@ -115,6 +115,9 @@ export class PushService {
       const followed = this.followed();
       if (event.type === 'job.finished' && followed?.jobId === event.jobId) {
         void this.read(followed);
+      } else if (event.type === 'key.unlocked' && this.shownProblem()?.params['keyId'] === String(event.keyId)) {
+        // Unlocked from the banner or another tab of this session: "Unlock laptop to continue." is out of date.
+        this.shownProblem.set(null);
       }
     }));
     inject(DestroyRef).onDestroy(() => {
@@ -129,20 +132,21 @@ export class PushService {
    * after the passphrase was asked for, if it was (RC-17).
    */
   async start(): Promise<void> {
-    if (await this.request() === 'key-locked') {
-      await this.unlockAndRetry();
+    const locked = await this.request();
+    if (locked !== undefined) {
+      await this.unlockAndRetry(locked);
     }
   }
 
   /**
-   * Asks the backend to push; resolves `key-locked` when it refused because the
-   * key is locked and `quietLock` is set, which shows nothing, so that the caller
-   * can ask for the passphrase.
+   * Asks the backend to push; resolves the refusal's params when it refused
+   * because the key is locked and `quietLock` is set, which shows nothing, so
+   * that the caller can ask for the passphrase.
    */
-  private async request(quietLock = true): Promise<'key-locked' | void> {
+  private async request(quietLock = true): Promise<Record<string, string> | undefined> {
     const repositoryId = this.store.followed();
     if (repositoryId === null || this.running()) {
-      return;
+      return undefined;
     }
     this.shownProblem.set(null);
     this.starting.set(repositoryId);
@@ -155,7 +159,7 @@ export class PushService {
       if (this.store.followed() === repositoryId) {
         const apiError = toApiError(error);
         if (quietLock && apiError.code === 'key-locked') {
-          return 'key-locked';
+          return stringParams(apiError.params);
         }
         this.fail(apiError.code, stringParams(apiError.params), false);
         // A refusal such as `nothing-to-push` means the status shown is out of date.
@@ -167,6 +171,7 @@ export class PushService {
         this.starting.set(null);
       }
     }
+    return undefined;
   }
 
   /** The last push again, such as after its fix (RC-9). */
@@ -174,11 +179,24 @@ export class PushService {
     return this.start();
   }
 
-  /** **Unlock** on a push problem (RC-4, RC-16): the push runs again once the key is unlocked. */
-  async unlockAndRetry(): Promise<void> {
+  /**
+   * **Unlock** on a push problem (RC-4, RC-16): the push runs again once the key
+   * is unlocked. When the key can't be read to ask for it, the problem stays, so
+   * that **Unlock** can be tried again.
+   */
+  async unlockAndRetry(locked: Record<string, string> = this.shownProblem()?.params ?? {}): Promise<void> {
     const repositoryId = this.store.followed();
+    let unlocked: boolean;
+    try {
+      unlocked = await this.lockedKey.unlock();
+    } catch {
+      if (this.store.followed() === repositoryId) {
+        this.fail('key-locked', locked, false);
+      }
+      return;
+    }
     // Not after a switch to another repository while the dialog was open.
-    if (await this.lockedKey.unlock() && this.store.followed() === repositoryId) {
+    if (unlocked && this.store.followed() === repositoryId) {
       await this.request(false);
     }
   }

@@ -46,6 +46,8 @@ export class LockedKeyService {
   private readonly current = signal<LockedKey | null>(null);
   /** The latest read: only that one may change what is shown. */
   private latestRead = 0;
+  /** For each read in flight, the keys unlocked since it was sent, which its answer may still call locked. */
+  private readonly unlockedDuringReads = new Set<Set<number>>();
   /** The dialog open now, so that a second request waits for it rather than opening another. */
   private asking: Promise<boolean> | null = null;
 
@@ -60,12 +62,17 @@ export class LockedKeyService {
   });
 
   constructor() {
+    /** The last repository read, so that a dismissal lasts while the session reopens the same one. */
+    let lastId: number | null = null;
     effect(() => {
       const id = this.repositoryId();
       untracked(() => {
         this.latestRead++;
         this.current.set(null);
-        this.dismissed.set(false);
+        if (id !== null && id !== lastId) {
+          lastId = id;
+          this.dismissed.set(false);
+        }
         if (id !== null) {
           void this.read(id);
         }
@@ -79,8 +86,11 @@ export class LockedKeyService {
       }
     });
     this.push.events.pipe(takeUntilDestroyed()).subscribe(event => {
-      if (event.type === 'key.unlocked' && event.keyId === this.current()?.id) {
-        this.latestRead++;
+      if (event.type !== 'key.unlocked') {
+        return;
+      }
+      this.unlockedDuringReads.forEach(keys => keys.add(event.keyId));
+      if (event.keyId === this.current()?.id) {
         this.current.set(null);
       }
     });
@@ -91,7 +101,8 @@ export class LockedKeyService {
    * it was unlocked; `false` when cancelled. The key is read again first when
    * the banner does not know it, such as when the unlock ended by itself after
    * the banner went away. Resolves `true` without asking if it turns out to be
-   * unlocked already.
+   * unlocked already, and rejects when it cannot be read, as nothing could be
+   * asked.
    */
   unlock(): Promise<boolean> {
     this.asking ??= this.ask().finally(() => this.asking = null);
@@ -103,30 +114,48 @@ export class LockedKeyService {
     if (id === null) {
       return false;
     }
-    const key = this.current() ?? await this.read(id);
+    const key = this.current() ?? await this.readKey(id);
     if (key === null) {
       return true;
     }
     const ref = this.dialogs.open<UnlockKeyDialog, UnlockKeyDialogData, boolean>(UnlockKeyDialog, { data: key });
     const unlocked = await firstValueFrom(ref.closed, { defaultValue: undefined }) === true;
     if (unlocked && this.current()?.id === key.id) {
-      this.latestRead++;
       this.current.set(null);
     }
     return unlocked;
   }
 
-  /** Reads whether the key is locked, and resolves it; a read that fails changes nothing. */
-  private async read(id: number): Promise<LockedKey | null> {
-    const read = ++this.latestRead;
+  /** Reads whether the key is locked; a read that fails changes nothing. */
+  private async read(id: number): Promise<void> {
     try {
-      const key = lockedKeyOf(await firstValueFrom(this.api.repositoryCredentials(id)));
-      if (read === this.latestRead) {
-        this.current.set(key);
-      }
-      return key;
+      await this.readKey(id);
     } catch {
-      return this.current();
+      // The banner keeps what it showed; the next (re)connect reads again.
     }
+  }
+
+  /**
+   * Reads the key while it is locked, and rejects when the read fails. A key
+   * that `key.unlocked` named while the read was on its way counts as unlocked,
+   * and a newer read, or a switch, has the last word on what is shown.
+   */
+  private async readKey(id: number): Promise<LockedKey | null> {
+    const read = ++this.latestRead;
+    const unlockedMeanwhile = new Set<number>();
+    this.unlockedDuringReads.add(unlockedMeanwhile);
+    let key: LockedKey | null;
+    try {
+      key = lockedKeyOf(await firstValueFrom(this.api.repositoryCredentials(id)));
+    } finally {
+      this.unlockedDuringReads.delete(unlockedMeanwhile);
+    }
+    if (key !== null && unlockedMeanwhile.has(key.id)) {
+      key = null;
+    }
+    if (read === this.latestRead) {
+      this.current.set(key);
+    }
+    return key;
   }
 }
