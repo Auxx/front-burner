@@ -35,9 +35,9 @@ const FIXES: Readonly<Record<string, PushFix>> = {
   'remote-timeout': 'retry',
   'remote-failed': 'retry',
   'host-unreachable': 'retry',
-  'interrupted': 'retry',
-  'network': 'retry',
-  'internal': 'retry',
+  interrupted: 'retry',
+  network: 'retry',
+  internal: 'retry',
   'git-timeout': 'retry',
   'rate-limited': 'retry',
   'too-many-jobs': 'retry'

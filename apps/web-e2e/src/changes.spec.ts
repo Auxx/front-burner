@@ -1,9 +1,17 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 
 import { drainFailedRequests, expect, test } from './support/fixtures';
+import {
+  createHandbookRemote,
+  type GitHttpServer,
+  refusePushes,
+  startGitHttpServer,
+  TEST_CERTIFICATE_FILE
+} from './support/git-http-server';
 import { adminAuthToken, confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
 import { gitIn } from './support/working-copy';
 
@@ -182,6 +190,139 @@ test.describe('amending', () => {
     await showChanges(page);
     await expect(commitButton(page, 'Commit 0 files')).toBeVisible();
     await expect(amend(page)).toHaveCount(0);
+  });
+});
+
+test.describe('pushing', () => {
+  test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
+
+  let root: string;
+  let git: GitHttpServer;
+  /** The server's repositories, which each test adds to. */
+  const remotes: Record<string, string> = {};
+  let next = 0;
+
+  test.beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-push-'));
+    git = await startGitHttpServer({ repositories: remotes });
+  });
+
+  test.afterAll(async () => {
+    await git?.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const bar = (page: Page) => page.getByRole('banner');
+  const gitActions = (page: Page) => bar(page).getByRole('button', { name: 'Git actions' });
+
+  /** **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
+  async function push(page: Page): Promise<void> {
+    const button = bar(page).getByRole('button', { name: 'Push', exact: true });
+    await expect(button.or(gitActions(page))).toBeVisible();
+    if (await gitActions(page).isVisible()) {
+      await gitActions(page).click();
+      await page.getByRole('menuitem', { name: 'Push' }).click();
+    } else {
+      await button.click();
+    }
+  }
+  const summary = (page: Page) => bar(page).locator('rs-git-status-summary');
+  const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
+
+  /**
+   * A repository whose remote is a bare repository on the git server: an empty
+   * one, so that `main` is unpublished, or the handbook remote, cloned.
+   */
+  function pushable(
+    instance: { dataDir: string; },
+    remote: 'empty' | 'cloned'
+  ): { id: number; dir: string; bare: string; } {
+    const name = `remote-${next++}.git`;
+    const parent = join(root, name.replace('.git', ''));
+    mkdirSync(parent, { recursive: true });
+    const bare = remote === 'cloned' ? createHandbookRemote(parent) : join(parent, 'handbook.git');
+    if (remote === 'empty') {
+      gitIn(parent, 'init', '-q', '--bare', '-b', 'main', bare);
+    }
+    remotes[name] = bare;
+    const remoteUrl = `${git.url}/${name}`;
+    const [ id ] = seed(instance.dataDir, {
+      repositories: [ { userId: ADMIN_ID, name: `pushed-${next}`, remoteUrl } ]
+    }).repositoryIds;
+    const dir = join(instance.dataDir, 'repos', String(ADMIN_ID), String(id));
+    if (remote === 'cloned') {
+      rmSync(dir, { recursive: true, force: true });
+      gitIn(dirname(dir), 'clone', '-q', bare, dir);
+      gitIn(dir, 'remote', 'set-url', 'origin', remoteUrl);
+    } else {
+      gitIn(dir, 'remote', 'add', 'origin', remoteUrl);
+    }
+    return { id, dir, bare };
+  }
+
+  test('AC-GIT-002.10: Push publishes an unpublished branch, and the bar then shows no counts', async ({ page, instance }) => {
+    const { id, dir, bare } = pushable(instance, 'empty');
+    await openScreen(page, `/repositories/${id}`);
+    await expect(summary(page)).toHaveText(/main\s*·\s*Not published/);
+
+    await push(page);
+
+    await expect(toasts(page).getByText('Pushed 1 commit to origin/main')).toBeVisible();
+    await expect(summary(page)).toHaveText('main');
+    expect(gitIn(dir, 'rev-parse', '--abbrev-ref', 'main@{upstream}').trim()).toBe('origin/main');
+    expect(gitIn(bare, 'rev-parse', 'main').trim()).toBe(gitIn(dir, 'rev-parse', 'HEAD').trim());
+  });
+
+  test('says Pushed 2 commits to origin/main, and the counts update', async ({ page, instance }) => {
+    const { id, dir, bare } = pushable(instance, 'cloned');
+    gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
+    gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'third');
+    await openScreen(page, `/repositories/${id}`);
+    await expect(summary(page)).toHaveText(/main\s*·\s*2 to push/);
+
+    await push(page);
+
+    await expect(toasts(page).getByText('Pushed 2 commits to origin/main')).toBeVisible();
+    await expect(summary(page)).toHaveText('main');
+    expect(gitIn(bare, 'log', '-1', '--format=%s', 'main').trim()).toBe('third');
+  });
+
+  test('AC-GIT-002.12: shows a hook\'s lines as text', async ({ page, instance }) => {
+    const { id, dir, bare } = pushable(instance, 'cloned');
+    const before = gitIn(bare, 'rev-parse', 'main').trim();
+    refusePushes(bare, [ '<b>Pushes to main need a review</b>', 'Open a pull request instead.' ]);
+    gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
+    await openScreen(page, `/repositories/${id}`);
+
+    await push(page);
+
+    const problem = bar(page).locator('rs-push-problem');
+    await expect(problem).toContainText('The remote refused the push.');
+    const lines = problem.locator('pre');
+    await expect(lines).toContainText('<b>Pushes to main need a review</b>');
+    await expect(lines).toContainText('Open a pull request instead.');
+    await expect(lines.locator('b')).toHaveCount(0);
+    // Nothing was forced, and the commit is still to push.
+    expect(gitIn(bare, 'rev-parse', 'main').trim()).toBe(before);
+    await expect(summary(page)).toHaveText(/1 to push/);
+    expect((await new AxeBuilder({ page }).include('rs-push-problem').analyze()).violations).toEqual([]);
+
+    await problem.getByRole('button', { name: 'Dismiss' }).click();
+    await expect(problem).toHaveCount(0);
+  });
+
+  test('moves Push into a menu on a phone', async ({ page, instance }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    const { id, dir } = pushable(instance, 'cloned');
+    gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
+    await openScreen(page, `/repositories/${id}`);
+    await expect(summary(page)).toHaveText(/1 to push/);
+
+    await gitActions(page).click();
+    await page.getByRole('menuitem', { name: 'Push' }).click();
+
+    await expect(toasts(page).getByText('Pushed 1 commit to origin/main')).toBeVisible();
+    await expect(summary(page)).toHaveText('main');
   });
 });
 

@@ -91,8 +91,10 @@ export class PushService {
       const job = this.store.status()?.networkJob ?? null;
       const id = this.store.followed();
       untracked(() => {
-        if (job !== null && id !== null && this.starting() === null && this.followed()?.jobId !== job.id
-          && !this.ended.has(job.id)) {
+        if (
+          job !== null && id !== null && this.starting() === null && this.followed()?.jobId !== job.id
+          && !this.ended.has(job.id)
+        ) {
           this.follow({ repositoryId: id, jobId: job.id, own: false });
         }
       });
