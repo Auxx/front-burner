@@ -36,6 +36,7 @@ import { ChangesPaneComponent } from '../../components/changes-pane/changes-pane
 import { DiffViewComponent } from '../../components/diff-view/diff-view.component';
 import { EditorAreaComponent } from '../../components/editor-area/editor-area.component';
 import { FileTreeComponent } from '../../components/file-tree/file-tree.component';
+import { LockedKeyBannerComponent } from '../../components/locked-key-banner/locked-key-banner.component';
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
 import { PushProblemComponent } from '../../components/push-problem/push-problem.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
@@ -48,6 +49,7 @@ import { EntryCommandsService } from '../../services/entry-commands/entry-comman
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
 import { FirstFileService } from '../../services/first-file/first-file.service';
 import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
+import { LockedKeyService } from '../../services/locked-key/locked-key.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { PaneMemoryService, type SideTool } from '../../services/pane-memory/pane-memory.service';
 import { type PushProblem, PushService } from '../../services/push/push.service';
@@ -94,7 +96,8 @@ const MAX_BADGE_COUNT = 99;
  * editor stays in place, hidden, so that it keeps its scroll position and undo.
  * **Discard** runs through `DiscardService` (GA-23); it ends the diff of a file it
  * discards. **Push** in the bar runs through `PushService` (GA-29), and why a push
- * failed is shown below the bar (NV-16).
+ * failed is shown below the bar (NV-16), as is the locked-key banner of
+ * `LockedKeyService` (RC-15).
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -117,6 +120,7 @@ const MAX_BADGE_COUNT = 99;
     DiffViewComponent,
     EditorAreaComponent,
     FileTreeComponent,
+    LockedKeyBannerComponent,
     NotOpenableComponent,
     PushProblemComponent,
     RepositoryBarComponent
@@ -136,6 +140,7 @@ const MAX_BADGE_COUNT = 99;
     CommitAuthorGate,
     CommitService,
     DiscardService,
+    LockedKeyService,
     PushService,
     // One per screen, so that switching files or tabs loads no image again (IM-10).
     ImageCache
@@ -159,6 +164,7 @@ export class RepositoryScreenPage {
   protected readonly gitStatus = inject(GitStatusStore);
   private readonly discards = inject(DiscardService);
   protected readonly pushes = inject(PushService);
+  protected readonly lockedKey = inject(LockedKeyService);
 
   protected readonly user = this.currentUser.user;
   /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
@@ -369,10 +375,17 @@ export class RepositoryScreenPage {
     return this.session.state() === 'ready' && problem !== null ? [ problem ] : [];
   });
 
-  /** The fix of a push problem (RC-4); plans 60, 63, 64 and 66 add the dialogs. */
+  /** The locked key, while the banner for it is shown (RC-15). */
+  protected readonly lockedKeyShown = computed(() =>
+    this.session.state() === 'ready' && !this.lockedKey.dismissed() ? this.lockedKey.key() : null
+  );
+
+  /** The fix of a push problem (RC-4); plans 63, 64 and 66 add their dialogs. */
   protected fixPush(fix: PushProblem['fix']): void {
     if (fix === 'retry') {
       void this.pushes.retry();
+    } else if (fix === 'unlock') {
+      void this.pushes.unlockAndRetry();
     }
   }
 

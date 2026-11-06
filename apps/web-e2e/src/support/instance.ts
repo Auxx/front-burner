@@ -42,6 +42,8 @@ export interface Instance {
   url: string;
   /** The instance's data directory, for {@link seed}. */
   dataDir: string;
+  /** Stops the server and starts it again on the same port and data: it forgets everything kept in memory. */
+  restart(): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -109,10 +111,14 @@ export async function startInstance(options: InstanceOptions = {}): Promise<Inst
   }
 }
 
-async function startOnce(options: InstanceOptions): Promise<Instance> {
-  const dataDir = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-'));
-  const port = await freePort();
-  const url = `http://localhost:${port}`;
+/** A server process of an instance. */
+interface Spawned {
+  readonly child: ChildProcess;
+  readonly output: () => string;
+  readonly exited: Promise<void>;
+}
+
+function spawnServer(options: InstanceOptions, dataDir: string, port: number): Spawned {
   // Drop the developer's own FRONT_BURNER_* variables.
   const env = Object.fromEntries(Object.entries(process.env).filter(([ key ]) => !key.startsWith('FRONT_BURNER_')));
   const setupToken = options.setupToken ?? (options.onboarded ? TEST_TOKEN : undefined);
@@ -144,31 +150,47 @@ async function startOnce(options: InstanceOptions): Promise<Instance> {
   let output = '';
   child.stdout?.on('data', chunk => (output += chunk));
   child.stderr?.on('data', chunk => (output += chunk));
-  const exited = new Promise<void>(done => child.on('exit', () => done()));
+  return { child, output: () => output, exited: new Promise<void>(done => child.on('exit', () => done())) };
+}
+
+async function kill({ child, exited }: Spawned): Promise<void> {
+  if (child.exitCode === null && child.signalCode === null) {
+    child.kill('SIGTERM');
+    await exited;
+  }
+}
+
+async function startOnce(options: InstanceOptions): Promise<Instance> {
+  const dataDir = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-'));
+  const port = await freePort();
+  const url = `http://localhost:${port}`;
+  let spawned = spawnServer(options, dataDir, port);
 
   const stop = async () => {
-    if (child.exitCode === null && child.signalCode === null) {
-      child.kill('SIGTERM');
-      await exited;
-    }
+    await kill(spawned);
     rmSync(dataDir, { recursive: true, force: true });
+  };
+  const restart = async () => {
+    await kill(spawned);
+    spawned = spawnServer(options, dataDir, port);
+    await waitUntilReady(url, spawned.child, spawned.output);
   };
 
   try {
-    await waitUntilReady(url, child, () => output);
+    await waitUntilReady(url, spawned.child, spawned.output);
     if (options.onboarded) {
       await onboard(url);
     }
   } catch (error) {
     // The answer may have come from whoever holds the port, while this server fails to bind it.
-    await Promise.race([ exited, new Promise(done => setTimeout(done, EXIT_WAIT_MS)) ]);
+    await Promise.race([ spawned.exited, new Promise(done => setTimeout(done, EXIT_WAIT_MS)) ]);
     await stop();
-    if (output.includes('EADDRINUSE')) {
+    if (spawned.output().includes('EADDRINUSE')) {
       throw new PortTaken(`Port ${port} was taken`);
     }
     throw error;
   }
-  return { url, dataDir, stop };
+  return { url, dataDir, restart, stop };
 }
 
 /** Logs in as `TEST_ADMIN` on the login page, which `page` must show, and waits for the page after it. */

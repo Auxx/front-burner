@@ -35,6 +35,14 @@
           (dismissed)="pushes.clearProblem()"
         />
       }
+      @if (lockedKeyShown(); as key) {
+        <rs-locked-key-banner
+          uiAppShellBanner
+          [keyName]="key.name"
+          (unlock)="lockedKey.unlock()"
+          (dismissed)="lockedKey.dismissed.set(true)"
+        />
+      }
       @switch (state) {
         @case ('missing') {
           <shell-page-not-found />

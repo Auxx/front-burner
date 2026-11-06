@@ -9,6 +9,7 @@ import { type Observable, of, Subject, throwError } from 'rxjs';
 
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
+import { LockedKeyService } from '../locked-key/locked-key.service';
 import { OpenFilesService } from '../open-files/open-files.service';
 import { JOB_RETRY_MS, PushService } from './push.service';
 
@@ -48,6 +49,7 @@ describe('PushService', () => {
   let refresh: ReturnType<typeof vi.fn>;
   let toast: { show: ReturnType<typeof vi.fn>; };
   let flushAll: ReturnType<typeof vi.fn>;
+  let unlock: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
   let service: PushService;
 
   const settle = async () => {
@@ -67,6 +69,7 @@ describe('PushService', () => {
     refresh = vi.fn(async () => undefined);
     toast = { show: vi.fn() };
     flushAll = vi.fn(async () => undefined);
+    unlock = vi.fn(async () => true);
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
@@ -80,6 +83,7 @@ describe('PushService', () => {
         { provide: PushChannelService, useValue: { events, reconnected } },
         { provide: GitStatusStore, useValue: { followed, status: gitStatus, refresh } },
         { provide: OpenFilesService, useValue: { flushAll } },
+        { provide: LockedKeyService, useValue: { unlock } },
         { provide: ToastService, useValue: toast }
       ]
     });
@@ -209,12 +213,52 @@ describe('PushService', () => {
     expect(service.running()).toBe(false);
   });
 
-  it('shows a push the backend refused to start as a problem, such as a locked key', async () => {
-    push.mockReturnValue(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+  it('shows a push the backend refused to start as a problem', async () => {
+    push.mockReturnValue(throwError(() => refused('nothing-to-push')));
 
     await service.start();
 
     expect(service.running()).toBe(false);
+    expect(service.problem()).toEqual({
+      code: 'nothing-to-push',
+      params: {},
+      messageKey: 'errors.nothing-to-push',
+      fix: null,
+      quiet: false
+    });
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('asks for the passphrase of a locked key, and pushes after the unlock without another press', async () => {
+    push.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+
+    await service.start();
+    await settle();
+
+    expect(unlock).toHaveBeenCalledOnce();
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(service.running()).toBe(true);
+    expect(service.problem()).toBeNull();
+  });
+
+  it('cancelling the passphrase cancels the push, with no message', async () => {
+    unlock.mockResolvedValue(false);
+    push.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+
+    await service.start();
+
+    expect(push).toHaveBeenCalledOnce();
+    expect(service.running()).toBe(false);
+    expect(service.problem()).toBeNull();
+  });
+
+  it('asks once per press: a key locked again at once shows the problem, with Unlock', async () => {
+    push.mockReturnValue(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+
+    await service.start();
+
+    expect(unlock).toHaveBeenCalledOnce();
+    expect(push).toHaveBeenCalledTimes(2);
     expect(service.problem()).toEqual({
       code: 'key-locked',
       params: { keyId: '3', keyName: 'laptop' },
@@ -222,7 +266,30 @@ describe('PushService', () => {
       fix: 'unlock',
       quiet: false
     });
-    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('Unlock on the problem pushes again once the key is unlocked', async () => {
+    push.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+    unlock.mockResolvedValueOnce(false);
+    await service.start();
+
+    await service.unlockAndRetry();
+
+    expect(unlock).toHaveBeenCalledTimes(2);
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(service.problem()).toBeNull();
+  });
+
+  it('does not push another repository after a switch while the passphrase was asked for', async () => {
+    push.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+    unlock.mockImplementationOnce(async () => {
+      followed.set(13);
+      return true;
+    });
+
+    await service.start();
+
+    expect(push).toHaveBeenCalledOnce();
   });
 
   it('offers Try again for a network failure, and retry pushes again', async () => {

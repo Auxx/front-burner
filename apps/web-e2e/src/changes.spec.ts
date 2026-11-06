@@ -12,6 +12,13 @@ import {
   startGitHttpServer,
   TEST_CERTIFICATE_FILE
 } from './support/git-http-server';
+import {
+  type GitSshServer,
+  PROTECTED_KEY,
+  PROTECTED_KEY_PASSPHRASE,
+  PROTECTED_KEY_PUBLIC,
+  startGitSshServer
+} from './support/git-ssh-server';
 import { adminAuthToken, confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
 import { gitIn } from './support/working-copy';
 
@@ -323,6 +330,212 @@ test.describe('pushing', () => {
 
     await expect(toasts(page).getByText('Pushed 1 commit to origin/main')).toBeVisible();
     await expect(summary(page)).toHaveText('main');
+  });
+});
+
+test.describe('a locked key', () => {
+  let root: string;
+  let ssh: GitSshServer;
+  /** The server's repositories, which each test adds to. */
+  const remotes: Record<string, string> = {};
+  let next = 0;
+
+  test.beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-ssh-'));
+    ssh = await startGitSshServer({ repositories: remotes, authorizedKeys: [ PROTECTED_KEY_PUBLIC ] });
+  });
+
+  test.afterAll(async () => {
+    await ssh?.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const bar = (page: Page) => page.getByRole('banner');
+  const banner = (page: Page) => page.locator('rs-locked-key-banner');
+  const dialog = (page: Page) => page.getByRole('dialog', { name: 'Unlock laptop' });
+  const summary = (page: Page) => bar(page).locator('rs-git-status-summary');
+  const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
+  const gitActions = (page: Page) => bar(page).getByRole('button', { name: 'Git actions' });
+
+  /** **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
+  async function push(page: Page): Promise<void> {
+    const button = bar(page).getByRole('button', { name: 'Push', exact: true });
+    await expect(button.or(gitActions(page))).toBeVisible();
+    if (await gitActions(page).isVisible()) {
+      await gitActions(page).click();
+      await page.getByRole('menuitem', { name: 'Push' }).click();
+    } else {
+      await button.click();
+    }
+  }
+
+  async function api(url: string, authToken: string, method: string, path: string, body?: unknown) {
+    const response = await fetch(`${url}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${authToken}`, 'content-type': 'application/json' },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) })
+    });
+    const text = await response.text();
+    return { status: response.status, body: (text === '' ? {} : JSON.parse(text)) as Record<string, unknown> };
+  }
+
+  /**
+   * A repository added over SSH with the passphrase-protected key `laptop`
+   * (the key's ID is 1), as the Add repository page does, by another session of
+   * the admin: the key is unlocked there, and locked in the browser's. Its
+   * working copy has one commit to push.
+   */
+  async function lockedRepository(instance: { url: string; dataDir: string; }): Promise<{ id: number; bare: string; }> {
+    await confirmCommitAuthor(instance.url);
+    const name = `locked-${next++}`;
+    const parent = join(root, name);
+    mkdirSync(parent, { recursive: true });
+    const bare = createHandbookRemote(parent);
+    remotes[`${name}.git`] = bare;
+    const remoteUrl = ssh.url(`${name}.git`);
+    const credentials = {
+      mode: 'new-ssh-key',
+      name: 'laptop',
+      privateKey: PROTECTED_KEY,
+      passphrase: PROTECTED_KEY_PASSPHRASE
+    };
+    const authToken = await adminAuthToken(instance.url);
+    const check = await api(instance.url, authToken, 'POST', '/api/v1/repositories/access-check', {
+      remoteUrl,
+      credentials
+    });
+    expect(check.status).toBe(409);
+    const { host, port, type, key } = check.body['params'] as Record<string, unknown>;
+    expect((await api(instance.url, authToken, 'POST', '/api/v1/known-hosts', { host, port, type, key })).status)
+      .toBe(204);
+    const added = await api(instance.url, authToken, 'POST', '/api/v1/repositories', {
+      remoteUrl,
+      name,
+      cloneMode: 'full',
+      credentials
+    });
+    expect(added.status).toBe(201);
+    const id = added.body['id'] as number;
+    await expect.poll(async () => {
+      const recent = await api(instance.url, authToken, 'GET', '/api/v1/repositories/recent');
+      return (recent.body['repositories'] as { id: number; status: string; }[]).find(found => found.id === id)?.status;
+    }).toBe('ready');
+    gitIn(
+      join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)),
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'second'
+    );
+    return { id, bare };
+  }
+
+  async function unlock(page: Page, passphrase = PROTECTED_KEY_PASSPHRASE): Promise<void> {
+    await expect(dialog(page)).toBeVisible();
+    await expect(dialog(page)).toContainText('Ed25519');
+    await dialog(page).getByLabel('Passphrase').fill(passphrase);
+    await dialog(page).getByRole('button', { name: 'Unlock' }).click();
+  }
+
+  test('shows the banner below the bar, and unlocking from it removes it', async ({ page, instance }) => {
+    const { id } = await lockedRepository(instance);
+    await openScreen(page, `/repositories/${id}`);
+
+    await expect(banner(page)).toContainText('laptop is locked. Unlock it to fetch, pull and push.');
+    expect((await new AxeBuilder({ page }).include('rs-locked-key-banner').analyze()).violations).toEqual([]);
+    await banner(page).getByRole('button', { name: 'Unlock' }).click();
+    await expect(dialog(page).getByLabel('Passphrase')).toBeFocused();
+    // Contrast is measured once the dialog and its backdrop have faded in.
+    await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished)));
+    expect((await new AxeBuilder({ page }).include('dlg-unlock-key').analyze()).violations).toEqual([]);
+    await unlock(page);
+
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(banner(page)).toHaveCount(0);
+    await page.reload();
+    await expect(summary(page)).toHaveText(/1 to push/);
+    await expect(banner(page)).toHaveCount(0);
+  });
+
+  test('AC-REPO-002.9: starting a push with a locked key opens the dialog, and after unlocking the push carries on; cancelling cancels it', async ({ page, instance, monitor }) => {
+    const { id, bare } = await lockedRepository(instance);
+    const before = gitIn(bare, 'rev-parse', 'main').trim();
+    await openScreen(page, `/repositories/${id}`);
+    await expect(summary(page)).toHaveText(/1 to push/);
+
+    await push(page);
+    await expect(dialog(page)).toBeVisible();
+    await dialog(page).getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(bar(page).locator('rs-push-problem')).toHaveCount(0);
+    expect(gitIn(bare, 'rev-parse', 'main').trim()).toBe(before);
+
+    await push(page);
+    await dialog(page).getByLabel('Passphrase').fill('wrong');
+    await dialog(page).getByRole('button', { name: 'Unlock' }).click();
+    await expect(dialog(page).getByText('Wrong passphrase')).toBeVisible();
+    await unlock(page);
+
+    await expect(toasts(page).getByText('Pushed 1 commit to origin/main')).toBeVisible();
+    expect(gitIn(bare, 'log', '-1', '--format=%s', 'main').trim()).toBe('second');
+    await expect(banner(page)).toHaveCount(0);
+    drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/push`);
+    drainFailedRequests(monitor, '/api/v1/credentials/ssh-keys/1/unlock');
+  });
+
+  test('AC-REPO-002.15: a key unlocked on one session still shows the banner on another', async ({ page, browser, instance }) => {
+    const { id } = await lockedRepository(instance);
+    const context = await browser.newContext({ baseURL: instance.url, viewport: { width: 375, height: 700 } });
+    const phone = await context.newPage();
+    try {
+      await openScreen(page, `/repositories/${id}`);
+      await openScreen(phone, `/repositories/${id}`);
+      await expect(banner(phone)).toBeVisible();
+
+      await banner(page).getByRole('button', { name: 'Unlock' }).click();
+      await unlock(page);
+      await expect(banner(page)).toHaveCount(0);
+
+      await phone.reload();
+      await expect(bar(phone).getByRole('button', { name: 'Git actions' })).toBeVisible();
+      await expect(banner(phone)).toContainText('laptop is locked.');
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('after a backend restart, opening the repository shows the banner', async ({ page, instance }) => {
+    // A second server start.
+    test.slow();
+    const { id } = await lockedRepository(instance);
+    await openScreen(page, `/repositories/${id}`);
+    await banner(page).getByRole('button', { name: 'Unlock' }).click();
+    await unlock(page);
+    await expect(banner(page)).toHaveCount(0);
+
+    // Away from the screen while the backend is down, so that nothing it asks for meanwhile fails.
+    await page.goto('about:blank');
+    await instance.restart();
+    await page.goto(`/repositories/${id}`);
+
+    await expect(banner(page)).toContainText('laptop is locked.');
+  });
+
+  test('a dismissed banner stays away for the visit, and Push still asks', async ({ page, instance, monitor }) => {
+    const { id } = await lockedRepository(instance);
+    await openScreen(page, `/repositories/${id}`);
+    await banner(page).getByRole('button', { name: 'Dismiss' }).click();
+    await expect(banner(page)).toHaveCount(0);
+
+    await push(page);
+    await expect(dialog(page)).toBeVisible();
+    await dialog(page).getByRole('button', { name: 'Cancel' }).click();
+    await expect(banner(page)).toHaveCount(0);
+
+    await page.reload();
+    await expect(banner(page)).toBeVisible();
+    drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/push`);
   });
 });
 
