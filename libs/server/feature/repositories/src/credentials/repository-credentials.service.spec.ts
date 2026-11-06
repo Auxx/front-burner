@@ -18,6 +18,7 @@ import {
   UnlockAttempts
 } from '@front-burner/server-feature-credentials';
 import { NotFoundException } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -100,8 +101,7 @@ describe('RepositoryCredentialsService', () => {
       new RepositoryQueries(database),
       saved,
       new RequestCredentials(saved, unlocks),
-      new CredentialsCheck(database, saved, new KnownHostsService(database, gitOptions), engine),
-      unlocks
+      new CredentialsCheck(database, saved, new KnownHostsService(database, gitOptions), engine, unlocks)
     );
     alice = insertUser(database, 'alice@x.io');
     bob = insertUser(database, 'bob@x.io');
@@ -257,14 +257,18 @@ describe('RepositoryCredentialsService', () => {
       for (
         const credentials of [
           { mode: 'none' as const },
-          { mode: 'new-https' as const, name: 'New', username: 'alice', password: NEW_TOKEN },
-          { mode: 'saved' as const, credentialId: createHttps() }
+          { mode: 'new-https' as const, name: 'New', username: 'alice', password: NEW_TOKEN }
         ]
       ) {
+        // As the Add repository page's schema answers.
         expect(await rejectionOf(service.replace(user(), id, credentials))).toEqual(
-          fieldError('credentials', 'kind-mismatch')
+          fieldError('credentials', 'protocol-mismatch')
         );
       }
+      // Saved credentials of the other kind, as RequestCredentials answers when adding.
+      expect(await rejectionOf(service.replace(user(), id, { mode: 'saved', credentialId: createHttps() }))).toEqual(
+        fieldError('credentials', 'kind-mismatch')
+      );
       expect(all().repositories[0]?.credentialId).toBeNull();
     });
 
@@ -294,7 +298,7 @@ describe('RepositoryCredentialsService', () => {
       expect(error).toEqual(fieldError('credentials.name', 'name-taken'));
     });
 
-    it('refuses a repository that is not ready', async () => {
+    it('refuses a repository that is still cloning', async () => {
       const id = insertRepository(database, alice, { name: 'handbook', remoteUrl: handbookUrl(), status: 'cloning' });
 
       const replacing = await rejectionOf(service.replace(user(), id, { mode: 'none' }));
@@ -303,6 +307,22 @@ describe('RepositoryCredentialsService', () => {
       for (const error of [ replacing, updating ]) {
         expect(error).toMatchObject({ status: 409, code: 'repository-not-openable', params: { status: 'cloning' } });
       }
+    });
+
+    it('replaces the credentials of a repository whose clone failed, for a retry', async () => {
+      const old = createHttps(alice, 'Old', OLD_TOKEN);
+      const id = insertRepository(database, alice, {
+        name: 'handbook',
+        remoteUrl: handbookUrl(),
+        credentialId: old,
+        status: 'error',
+        errorCode: 'clone-failed'
+      });
+      const fresh = createHttps(alice, 'Fresh', NEW_TOKEN);
+
+      await service.replace(user(), id, { mode: 'saved', credentialId: fresh });
+
+      expect(all().repositories[0]).toMatchObject({ credentialId: fresh, status: 'error' });
     });
 
     it('answers another user\'s repository like a missing one', async () => {
@@ -359,6 +379,24 @@ describe('RepositoryCredentialsService', () => {
       expect(error).toEqual(fieldError('credentials', 'credentials-refused', { generatedKey: false }));
       // Byte for byte: not even encrypted again.
       expect(all()).toEqual(before);
+    });
+
+    it('refuses to update credentials the repository was given while the check ran', async () => {
+      const other = createHttps(alice, 'Other', NEW_TOKEN);
+      const before = all().credentials;
+      const check = vi.spyOn(GitEngine.prototype, 'accessCheck').mockImplementationOnce(async () => {
+        // Another tab replaces the repository's credentials meanwhile.
+        database.db.update(repositories).set({ credentialId: other }).where(eq(repositories.id, handbook)).run();
+        return { branches: [ 'main' ], defaultBranch: 'main' };
+      });
+
+      try {
+        expect(await rejectionOf(service.updateToken(user(), handbook, { username: 'alice', password: NEW_TOKEN })))
+          .toMatchObject({ status: 409, code: 'credentials-not-updatable' });
+      } finally {
+        check.mockRestore();
+      }
+      expect(all().credentials).toEqual(before);
     });
 
     it('refuses to update an SSH key or a repository without credentials', async () => {

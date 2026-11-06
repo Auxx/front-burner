@@ -77,8 +77,7 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
     adding = new AddRepositoryService(
       database,
       new RequestCredentials(saved, unlocks),
-      new CredentialsCheck(database, saved, knownHosts, engine),
-      unlocks,
+      new CredentialsCheck(database, saved, knownHosts, engine, unlocks),
       runner,
       jobKeys
     );

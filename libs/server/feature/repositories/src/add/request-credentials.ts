@@ -3,6 +3,7 @@ import { ApiErrorException } from '@front-burner/server-core-observability';
 import { KeyUnlockStore, SavedCredentialsService } from '@front-burner/server-feature-credentials';
 import type { RepositoryCredentials } from '@front-burner/shared-contracts';
 import { Injectable } from '@nestjs/common';
+import { fieldError } from './request-fields';
 
 export interface ResolvedCredentials {
   git: GitCredentials;
@@ -13,8 +14,6 @@ export interface ResolvedCredentials {
   /** A passphrase-protected key: a clone job must hold its own copy (AR-49, A-6.3). */
   protectedKey: boolean;
 }
-
-const fieldError = (path: string, code: string) => ApiErrorException.forFields([ { path, code, params: {} } ]);
 
 /** Reports a key's problem on the request's `credentials.` field (AR-27). */
 function underCredentials<T>(run: () => T): T {

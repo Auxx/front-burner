@@ -488,7 +488,9 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
         body: JSON.stringify({ mode: 'new-ssh-key', name: 'Key', privateKey: 'x' })
       });
       expect(wrongProtocol.status).toBe(400);
-      expect(await wrongProtocol.json()).toMatchObject({ fields: [ { path: 'credentials', code: 'kind-mismatch' } ] });
+      expect(await wrongProtocol.json()).toMatchObject({
+        fields: [ { path: 'credentials', code: 'protocol-mismatch' } ]
+      });
       const malformed = await api(`/repositories/${id}/credentials`, {
         method: 'PUT',
         body: JSON.stringify({ mode: 'saved' })

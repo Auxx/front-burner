@@ -16,7 +16,7 @@
   "errors.key-locked": "Enter the passphrase of this key to unlock it for this session.",
   "errors.unlock-too-many-attempts": "Too many attempts. Try again in a minute.",
   "errors.credentials-missing": "These saved credentials are no longer available. Add them again.",
-  "errors.credentials-not-updatable": "Only saved HTTPS credentials can be updated. Use other credentials instead.",
+  "errors.credentials-not-updatable": "This repository doesn't use saved HTTPS credentials that can be updated. Use other credentials instead.",
   "errors.host-key-changed": "The server's identity has changed. This may be an attack.",
   "errors.remote-timeout": "{{ host }} didn't answer in time. Try again later.",
   "errors.remote-failed": "Something went wrong while contacting the remote.",

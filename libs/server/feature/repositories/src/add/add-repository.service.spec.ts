@@ -115,9 +115,9 @@ describe('AddRepositoryService', () => {
         database,
         saved,
         new KnownHostsService(database, gitOptions),
-        new GitEngine(gitOptions, new GitRunner())
+        new GitEngine(gitOptions, new GitRunner()),
+        unlocks
       ),
-      unlocks,
       runner,
       jobKeys
     );

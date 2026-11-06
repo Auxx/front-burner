@@ -1,13 +1,14 @@
 import { DATABASE, Database, savedCredentials, Tx } from '@front-burner/server-core-database';
 import { GitEngine, GitOperationError } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { KnownHostsService, SavedCredentialsService } from '@front-burner/server-feature-credentials';
+import { KeyUnlockStore, KnownHostsService, SavedCredentialsService } from '@front-burner/server-feature-credentials';
 import type { AccessCheckResult, RepositoryCredentials } from '@front-burner/shared-contracts';
 import type { ParsedRemote } from '@front-burner/shared-util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
 import { toAddRepositoryError } from './remote-errors';
 import { ResolvedCredentials } from './request-credentials';
+import { fieldError } from './request-fields';
 
 /** Reports a credential's field error under `credentials.` (its name, AR-18). */
 function underCredentials<T>(run: () => T): T {
@@ -34,7 +35,8 @@ export class CredentialsCheck {
     @Inject(DATABASE) private readonly database: Database,
     private readonly saved: SavedCredentialsService,
     private readonly knownHosts: KnownHostsService,
-    private readonly engine: GitEngine
+    private readonly engine: GitEngine,
+    private readonly unlocks: KeyUnlockStore
   ) {}
 
   /**
@@ -85,7 +87,7 @@ export class CredentialsCheck {
       ))
       .get();
     if (taken !== undefined) {
-      throw ApiErrorException.forFields([ { path: 'credentials.name', code: 'name-taken', params: {} } ]);
+      throw fieldError('credentials.name', 'name-taken');
     }
   }
 
@@ -98,6 +100,17 @@ export class CredentialsCheck {
         return underCredentials(() => this.saved.createPastedKey(tx, userId, credentials));
       default:
         return undefined;
+    }
+  }
+
+  /**
+   * After the transaction that saved them: a pasted key's passphrase unlocks
+   * it for the session once checked (AR-31). Does nothing for other
+   * credentials.
+   */
+  unlockPasted(sessionId: string, credentialId: number | null, credentials: RepositoryCredentials): void {
+    if (credentials.mode === 'new-ssh-key' && credentials.passphrase !== undefined && credentialId !== null) {
+      this.unlocks.unlock(sessionId, credentialId, credentials.privateKey, credentials.passphrase);
     }
   }
 }

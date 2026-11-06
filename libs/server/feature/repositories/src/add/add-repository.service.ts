@@ -1,7 +1,6 @@
 import { DATABASE, Database, repositories, Tx, users } from '@front-burner/server-core-database';
 import { JobRunner } from '@front-burner/server-core-jobs';
-import { ApiErrorException } from '@front-burner/server-core-observability';
-import { JobKeys, KeyUnlockStore } from '@front-burner/server-feature-credentials';
+import { JobKeys } from '@front-burner/server-feature-credentials';
 import {
   type AccessCheckRequest,
   type AccessCheckResult,
@@ -10,12 +9,12 @@ import {
   type GitLevel,
   type RepositorySummary
 } from '@front-burner/shared-contracts';
-import { type ParsedRemote, parseRemoteUrl } from '@front-burner/shared-util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
 import { toSummary } from '../repositories/repository-queries';
 import { CredentialsCheck } from './credentials-check';
 import { RequestCredentials } from './request-credentials';
+import { fieldError, remoteOf } from './request-fields';
 
 /** The job type of the background clone (AR-49). */
 export const CLONE_JOB_TYPE = 'repositories.clone';
@@ -29,20 +28,8 @@ export interface RequestUser {
   sessionId: string;
 }
 
-const fieldError = (path: string, code: string, params: Record<string, unknown> = {}) =>
-  ApiErrorException.forFields([ { path, code, params } ]);
-
 const isUniqueViolation = (error: unknown): boolean =>
   (error as { code?: unknown; }).code === 'SQLITE_CONSTRAINT_UNIQUE';
-
-/** The schema has checked the URL; this only takes it apart again. */
-function remoteOf(url: string): ParsedRemote {
-  const result = parseRemoteUrl(url);
-  if (!('remote' in result)) {
-    throw fieldError('remoteUrl', result.problem);
-  }
-  return result.remote;
-}
 
 /**
  * Adds a repository (REQ-REPO-001): checks every field, runs the access check
@@ -57,7 +44,6 @@ export class AddRepositoryService {
     @Inject(DATABASE) private readonly database: Database,
     private readonly requestCredentials: RequestCredentials,
     private readonly credentialsCheck: CredentialsCheck,
-    private readonly unlocks: KeyUnlockStore,
     private readonly runner: JobRunner,
     private readonly jobKeys: JobKeys
   ) {}
@@ -128,17 +114,7 @@ export class AddRepositoryService {
     if (credentials.protectedKey && credentials.git.kind === 'ssh' && row.credentialId !== null) {
       this.jobKeys.hold(jobId, row.credentialId, credentials.git.key);
     }
-    if (
-      request.credentials.mode === 'new-ssh-key' && request.credentials.passphrase !== undefined && row.credentialId
-    ) {
-      // AR-31: a pasted key's passphrase unlocks it for the session once checked.
-      this.unlocks.unlock(
-        user.sessionId,
-        row.credentialId,
-        request.credentials.privateKey,
-        request.credentials.passphrase
-      );
-    }
+    this.credentialsCheck.unlockPasted(user.sessionId, row.credentialId, request.credentials);
     this.logger.debug(`User ${user.id} added repository ${row.id} (${row.name}); cloning`);
     return toSummary(row);
   }

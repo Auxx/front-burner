@@ -25,7 +25,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'key-locked': 'Enter the passphrase of this key to unlock it for this session.',
   'unlock-too-many-attempts': 'Too many attempts. Try again in a minute.',
   'credentials-missing': 'These saved credentials are no longer available. Add them again.',
-  'credentials-not-updatable': 'Only saved HTTPS credentials can be updated.',
+  'credentials-not-updatable': 'This repository doesn\'t use saved HTTPS credentials that can be updated.',
   'host-key-changed': 'The server\'s identity has changed. This may be an attack.',
   'remote-timeout': 'The remote didn\'t answer in time. Try again later.',
   'remote-failed': 'Something went wrong while contacting the remote.',
