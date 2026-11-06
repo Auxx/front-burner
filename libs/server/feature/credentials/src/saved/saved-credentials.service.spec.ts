@@ -130,6 +130,54 @@ describe('SavedCredentialsService', () => {
     });
   });
 
+  describe('replacing HTTPS credentials (RC-13)', () => {
+    const replace = (userId: number, id: number, input = { username: 'alice2', password: 'ghp_new-token' }) =>
+      database.db.transaction(tx => service.replaceHttps(tx, userId, id, input));
+
+    it('replaces the username and password, encrypted with the row\'s binding, keeping the name', () => {
+      const id = createHttps();
+
+      replace(alice, id);
+
+      const stored = row(id);
+      expect(stored).toMatchObject({ id, name: 'Work', username: 'alice2' });
+      expect(stored?.secret).not.toContain('ghp_new-token');
+      expect(box.decrypt(stored?.secret ?? '', { table: 'saved_credentials', recordId: id, userId: alice }))
+        .toBe('ghp_new-token');
+      expect(service.resolveForJob(alice, id, undefined)).toEqual({
+        kind: 'https',
+        username: 'alice2',
+        password: 'ghp_new-token'
+      });
+    });
+
+    it('restores a password an encryption key reset deleted', () => {
+      const id = createHttps();
+      database.db.update(savedCredentials).set({ secret: null }).run();
+
+      replace(alice, id);
+
+      expect(service.list(alice, 's1').https[0]?.missing).toBe(false);
+    });
+
+    it('refuses an SSH key', () => {
+      const key = createKey(PLAIN);
+      const before = row(key);
+
+      expect(() => replace(alice, key)).toThrow(expect.objectContaining({ code: 'credentials-not-updatable' }));
+      expect(row(key)).toEqual(before);
+    });
+
+    it('answers 404 for another user\'s credentials, and changes nothing', () => {
+      const id = createHttps(bob);
+      const before = row(id);
+
+      expect(() => replace(alice, id)).toThrow(NotFoundException);
+      expect(() => replace(alice, 9999)).toThrow(NotFoundException);
+      expect(row(id)).toEqual(before);
+    });
+  });
+
   it('resolves an unprotected key without an unlock', () => {
     const id = createKey(PLAIN);
     const credentials = service.resolveForGit(alice, 's1', id, { touch: true });

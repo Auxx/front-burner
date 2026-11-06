@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RepositoryCredentialsInfoSchema } from './repository-credentials.schema';
+import { RepositoryCredentialsInfoSchema, UpdateTokenRequestSchema } from './repository-credentials.schema';
 
 const key = {
   kind: 'ssh-key',
@@ -41,5 +41,23 @@ describe('RepositoryCredentialsInfoSchema', () => {
 
   it('registers the schema for OpenAPI', () => {
     expect(z.globalRegistry.get(RepositoryCredentialsInfoSchema)?.id).toBe('RepositoryCredentialsInfo');
+  });
+});
+
+describe('UpdateTokenRequestSchema', () => {
+  it('keeps the username and token as typed', () => {
+    expect(UpdateTokenRequestSchema.parse({ username: ' alice ', password: ' ghp_x ' })).toEqual({
+      username: ' alice ',
+      password: ' ghp_x '
+    });
+  });
+
+  it('needs both', () => {
+    expect(UpdateTokenRequestSchema.safeParse({ username: 'alice', password: '' }).success).toBe(false);
+    expect(UpdateTokenRequestSchema.safeParse({ password: 'ghp_x' }).success).toBe(false);
+  });
+
+  it('registers the schema for OpenAPI', () => {
+    expect(z.globalRegistry.get(UpdateTokenRequestSchema)?.id).toBe('UpdateTokenRequest');
   });
 });
