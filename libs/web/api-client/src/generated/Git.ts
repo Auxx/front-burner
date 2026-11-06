@@ -2,7 +2,15 @@
 
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import type { CommitRequest, CommitResult, GitDiff, GitPaths, GitStatus } from '@front-burner/shared-contracts';
+import type {
+  CommitRequest,
+  CommitResult,
+  GitDiff,
+  GitJobStarted,
+  GitJobState,
+  GitPaths,
+  GitStatus
+} from '@front-burner/shared-contracts';
 import type { Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -39,6 +47,17 @@ export class GitApi {
     return this.http.post<CommitResult>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/commits`,
       data
+    );
+  }
+  push(id: number): Observable<GitJobStarted> {
+    return this.http.request<GitJobStarted>(
+      'POST',
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/push`
+    );
+  }
+  gitJob(id: number, jobId: number): Observable<GitJobState> {
+    return this.http.get<GitJobState>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/jobs/${encodeURIComponent(jobId)}`
     );
   }
 }

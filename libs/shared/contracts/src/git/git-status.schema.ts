@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { GitNetworkJobSchema } from './git-push.schema';
 
 export const GIT_CHANGE_STATES = [ 'modified', 'added', 'deleted' ] as const;
 export type GitChangeState = (typeof GIT_CHANGE_STATES)[number];
@@ -31,6 +32,12 @@ export const GitStatusSchema = z
     noCommits: z.boolean(),
     /** For example `origin/main`; `null` for an unpublished branch. */
     upstream: z.string().nullable(),
+    /**
+     * The upstream does not exist as of the last fetch: the remote was empty
+     * when cloned, or its branch was deleted. The counts are then 0, and a push
+     * creates it again (GA-8).
+     */
+    upstreamGone: z.boolean(),
     /** **To push**, as of the last fetch. */
     ahead: z.number().int().min(0),
     /** **To pull**, as of the last fetch. */
@@ -39,7 +46,9 @@ export const GitStatusSchema = z
     changes: z.array(GitChangeSchema),
     mergeInProgress: z.boolean(),
     /** `null` without commits. */
-    lastCommit: GitLastCommitSchema.nullable()
+    lastCommit: GitLastCommitSchema.nullable(),
+    /** The unfinished push, or `null` (GA-9). */
+    networkJob: GitNetworkJobSchema.nullable()
   })
   .meta({ id: 'GitStatus' });
 

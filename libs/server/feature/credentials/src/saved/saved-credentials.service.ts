@@ -6,6 +6,7 @@ import {
   inspectPrivateKey,
   SshKeyError,
   SshKeyInfo,
+  UnlockedKey,
   unlockPrivateKey
 } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
@@ -144,6 +145,53 @@ export class SavedCredentialsService {
       throw new ApiErrorException(409, 'key-locked', { keyId: row.id, keyName: row.name });
     }
     return { kind: 'ssh', key };
+  }
+
+  /**
+   * Checks, when a job is queued, that the credentials can be used, and
+   * returns the decrypted key of a protected key unlocked in this session, for
+   * the job to hold (RC-19). Keeps the unlock alive, as a git operation the
+   * user started does (AR-31). Decrypts nothing else.
+   *
+   * @throws NotFoundException for an unknown ID or another user's (AR-56).
+   * @throws ApiErrorException 409 `key-locked` with `keyId` and `keyName`, or
+   * `credentials-missing` (NF-8.6).
+   */
+  keyForJob(userId: number, sessionId: string, id: number): UnlockedKey | undefined {
+    const row = this.findOwned(userId, id);
+    if (row.secret === null) {
+      throw new ApiErrorException(409, 'credentials-missing', { id: row.id });
+    }
+    if (row.kind !== 'ssh-key' || !row.sshPassphraseProtected) {
+      return undefined;
+    }
+    const key = this.unlocks.get(sessionId, row.id, { touch: true });
+    if (key === undefined) {
+      throw new ApiErrorException(409, 'key-locked', { keyId: row.id, keyName: row.name });
+    }
+    return key;
+  }
+
+  /**
+   * The credentials for a job's git operation, read when it runs, so that
+   * credentials replaced since it was queued are used (RC-19). A protected key
+   * comes only from the copy held for the job since it was queued (JobKeys).
+   *
+   * @throws NotFoundException for an unknown ID or another user's (AR-56).
+   * @throws ApiErrorException 409 `key-locked` for a protected key without
+   * `heldKey`, or `credentials-missing` (NF-8.6).
+   */
+  resolveForJob(userId: number, id: number, heldKey: UnlockedKey | undefined): GitCredentials {
+    const row = this.findOwned(userId, id);
+    if (row.kind === 'ssh-key' && row.sshPassphraseProtected) {
+      if (heldKey === undefined) {
+        this.secretOf(row);
+        throw new ApiErrorException(409, 'key-locked', { keyId: row.id, keyName: row.name });
+      }
+      return { kind: 'ssh', key: heldKey };
+    }
+    // HTTPS credentials and unprotected keys need no session.
+    return this.resolveForGit(userId, '', id, { touch: false });
   }
 
   /**

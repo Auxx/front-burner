@@ -388,8 +388,9 @@ describe('JobRunner', () => {
     expect(rowOf(id)).toMatchObject({ userId, payload: '{"repositoryId":4,"credentialsId":2}', status: 'queued' });
   });
 
-  it('stores the repository of a job', () => {
-    controlledType();
+  it('stores the repository of a job and hands it to the handler', async () => {
+    const started = controlledType();
+    runner.start();
     const repositoryId = database.db.insert(repositories).values({
       userId,
       name: 'handbook',
@@ -404,6 +405,8 @@ describe('JobRunner', () => {
     const id = runner.enqueue({ type: 'test.controlled', userId, repositoryId, payload: {} });
 
     expect(rowOf(id)?.repositoryId).toBe(repositoryId);
+    await settle();
+    expect(started[0]?.job.repositoryId).toBe(repositoryId);
   });
 
   it('enqueues inside the caller\'s transaction', async () => {

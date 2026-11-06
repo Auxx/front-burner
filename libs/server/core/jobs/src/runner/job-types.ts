@@ -13,6 +13,8 @@ export function jobPoolSizes(config: Pick<Config, 'cloneConcurrency'>): Record<J
 export interface RunningJob<P = unknown> {
   id: number;
   userId: number | null;
+  /** The repository the job works on, when it has one. */
+  repositoryId: number | null;
   payload: P;
   /** 1 for the first attempt. */
   attempt: number;

@@ -52,7 +52,34 @@ export const ERROR_CODES = [
   /** 409; the last commit was pushed, is a merge commit, or does not exist (GA-22). */
   'amend-not-allowed',
   /** 504; a local git command ran past `FRONT_BURNER_GIT_TIMEOUT` (NF-11.8). */
-  'git-timeout'
+  'git-timeout',
+  /** 409; HEAD is on no branch, so there is nothing to push. */
+  'no-branch',
+  /** 409; the branch has no commits yet (GA-42). */
+  'no-commits',
+  /** 409; the upstream has every commit of the branch (GA-8). */
+  'nothing-to-push',
+  // How a push job ended; params as named, and `branch` (GA-30, GA-31, RC-4, RC-5, CA-15).
+  /** The remote needs credentials and the repository has none (RC-4). */
+  'no-credentials',
+  /** The remote refused the credentials: wrong, expired or revoked (RC-4). */
+  'credentials-refused',
+  /** The credentials may read but not push (RC-4, RC-5). */
+  'push-not-allowed',
+  /** The upstream has commits that the branch does not (GA-30). */
+  'push-non-fast-forward',
+  /** params `{ remoteMessages }`, the remote's own lines, as for the other refusals (GA-31). */
+  'push-protected-branch',
+  /** The remote takes only signed commits (CA-15). */
+  'push-unsigned',
+  /** Refused for another reason, such as a server hook (GA-31). */
+  'push-rejected',
+  /** params `{ host }`. */
+  'host-unreachable',
+  'tls-untrusted',
+  'repository-not-found',
+  /** The backend stopped while the job ran (NF-9.5). */
+  'interrupted'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

@@ -19,6 +19,7 @@ describe('DeleteFolderJob', () => {
       {
         id: 41,
         userId: null,
+        repositoryId: null,
         payload: { name },
         attempt: 1,
         signal: new AbortController().signal,

@@ -162,6 +162,67 @@ describe('SavedCredentialsService', () => {
     );
   });
 
+  it('reads saved credentials when the job runs', () => {
+    const id = createHttps();
+    const binding = { table: 'saved_credentials' as const, recordId: id, userId: alice };
+    // The token is replaced after the job was queued.
+    database.db.update(savedCredentials).set({ secret: box.encrypt('ghp_new-token', binding) })
+      .where(eq(savedCredentials.id, id)).run();
+
+    expect(service.resolveForJob(alice, id, undefined)).toEqual({
+      kind: 'https',
+      username: 'alice',
+      password: 'ghp_new-token'
+    });
+    const plain = createKey(PLAIN, undefined, 'Plain');
+    expect(service.resolveForJob(alice, plain, undefined)).toEqual({ kind: 'ssh', key: expect.any(UnlockedKey) });
+  });
+
+  it('uses the held copy of a protected key', () => {
+    const id = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+    service.unlock(alice, 's1', id, FIXTURE_PASSPHRASE);
+    const held = unlocks.get('s1', id, { touch: false });
+
+    // The session's unlock ends; the job's copy stays.
+    unlocks.lock('s1', id);
+
+    expect(service.resolveForJob(alice, id, held)).toEqual({ kind: 'ssh', key: held });
+  });
+
+  it('refuses a protected key with no held copy', () => {
+    const id = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+    service.unlock(alice, 's1', id, FIXTURE_PASSPHRASE);
+
+    expect(() => service.resolveForJob(alice, id, undefined)).toThrow(
+      expect.objectContaining({ code: 'key-locked', params: { keyId: id, keyName: 'Laptop' } })
+    );
+    expect(() => service.resolveForJob(bob, id, undefined)).toThrow(NotFoundException);
+  });
+
+  it('gives a job the key of a protected key unlocked in the session, and nothing for others', () => {
+    const https = createHttps();
+    const plain = createKey(PLAIN, undefined, 'Plain');
+    const locked = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+
+    expect(service.keyForJob(alice, 's1', https)).toBeUndefined();
+    expect(service.keyForJob(alice, 's1', plain)).toBeUndefined();
+    expect(() => service.keyForJob(alice, 's1', locked)).toThrow(
+      expect.objectContaining({ code: 'key-locked', params: { keyId: locked, keyName: 'Laptop' } })
+    );
+    service.unlock(alice, 's1', locked, FIXTURE_PASSPHRASE);
+    expect(service.keyForJob(alice, 's1', locked)).toBe(unlocks.get('s1', locked, { touch: false }));
+    expect(() => service.keyForJob(bob, 's1', https)).toThrow(NotFoundException);
+  });
+
+  it('refuses a job credentials whose secret is gone', () => {
+    const https = createHttps();
+    database.db.update(savedCredentials).set({ secret: null }).where(eq(savedCredentials.id, https)).run();
+
+    expect(() => service.keyForJob(alice, 's1', https)).toThrow(
+      expect.objectContaining({ code: 'credentials-missing' })
+    );
+  });
+
   it('reports a wrong passphrase on unlock as a field error', () => {
     const id = createKey(PROTECTED, FIXTURE_PASSPHRASE);
     expect(() => service.unlock(alice, 's1', id, 'wrong')).toThrow(fieldError('passphrase', 'wrong-passphrase'));

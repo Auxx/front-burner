@@ -29,6 +29,14 @@ describe('OpenableRepository', () => {
     expect(queries.find).toHaveBeenCalledWith(3, 7);
   });
 
+  it('gives the row of a ready repository with its working copy', () => {
+    const ready = row('ready');
+    const { openable: subject, queries } = openable(ready);
+    expect(subject.open(3, 7)).toEqual({ row: ready, root: join('/data', 'repos', '3', '7') });
+    expect(queries.find).toHaveBeenCalledTimes(1);
+    expect(failure(() => openable(row('cloning')).openable.open(3, 7))).toMatchObject({ status: 409 });
+  });
+
   it('refuses a cloning repository with its status', () => {
     const { openable: subject } = openable(row('cloning'));
     expect(failure(() => subject.root(3, 7)))

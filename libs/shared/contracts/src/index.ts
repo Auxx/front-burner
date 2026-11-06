@@ -13,6 +13,7 @@ export * from './files/image.schema';
 export * from './git/git-commit.schema';
 export * from './git/git-diff.schema';
 export * from './git/git-paths.schema';
+export * from './git/git-push.schema';
 export * from './git/git-status.schema';
 export * from './health/health-status.schema';
 export * from './onboarding/onboarding.schema';

@@ -12,6 +12,12 @@ export interface WorkingCopyStatus {
   noCommits: boolean;
   /** For example `origin/main`; `null` for an unpublished branch. */
   upstream: string | null;
+  /**
+   * The upstream does not exist as of the last fetch: the remote was empty when
+   * cloned, or its branch was deleted. The counts are then 0, and a push
+   * creates it again.
+   */
+  upstreamGone: boolean;
   /** Commits to push, as of the last fetch. */
   ahead: number;
   /** Commits to pull, as of the last fetch. */
@@ -53,6 +59,7 @@ export function parseStatus(stdout: string): WorkingCopyStatus {
   let head: string | undefined;
   let noCommits = false;
   let upstream: string | null = null;
+  let counted = false;
   let ahead = 0;
   let behind = 0;
   const changes = new Map<string, WorkingCopyChangeState>();
@@ -70,6 +77,7 @@ export function parseStatus(stdout: string): WorkingCopyStatus {
       upstream = record.slice('# branch.upstream '.length);
     } else if (record.startsWith('# branch.ab ')) {
       // Absent when the upstream is gone; `+? -?` when git could not count.
+      counted = true;
       const counts = /^# branch\.ab \+(\d+) -(\d+)$/.exec(record);
       ahead = Number(counts?.[1] ?? 0);
       behind = Number(counts?.[2] ?? 0);
@@ -90,6 +98,7 @@ export function parseStatus(stdout: string): WorkingCopyStatus {
     branch: noCommits ? 'main' : branch,
     noCommits,
     upstream: current ? upstream : null,
+    upstreamGone: current && upstream !== null && !counted,
     ahead: current ? ahead : 0,
     behind: current ? behind : 0,
     changes: [ ...changes ]

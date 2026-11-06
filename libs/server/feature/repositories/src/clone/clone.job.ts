@@ -3,14 +3,13 @@ import { EventsHub } from '@front-burner/server-core-events';
 import { GitCredentials, GitEngine, GitOperationError } from '@front-burner/server-core-git';
 import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
 import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
-import { KnownHostsService, SavedCredentialsService } from '@front-burner/server-feature-credentials';
+import { JobKeys, KnownHostsService, SavedCredentialsService } from '@front-burner/server-feature-credentials';
 import type { RepositoryError } from '@front-burner/shared-contracts';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { CLONE_JOB_TYPE, CloneJobPayload } from '../add/add-repository.service';
-import { CloneKeys } from './clone-keys';
 
 /** How many clones of one user may wait or run at once (NF-11.4). */
 const CLONE_PER_USER_LIMIT = 3;
@@ -30,7 +29,7 @@ export class CloneJob implements OnModuleInit {
     private readonly engine: GitEngine,
     private readonly saved: SavedCredentialsService,
     private readonly knownHosts: KnownHostsService,
-    private readonly cloneKeys: CloneKeys,
+    private readonly jobKeys: JobKeys,
     private readonly events: EventsHub,
     @Inject(DATA_LAYOUT) private readonly layout: DataLayout
   ) {}
@@ -75,7 +74,7 @@ export class CloneJob implements OnModuleInit {
         throw error;
       }
     } finally {
-      this.cloneKeys.release(job.id);
+      this.jobKeys.release(job.id);
     }
   }
 
@@ -84,21 +83,12 @@ export class CloneJob implements OnModuleInit {
     if (row.credentialId === null) {
       return { kind: 'none' };
     }
-    const credential = this.saved.findOwned(row.userId, row.credentialId);
-    if (credential.kind === 'ssh-key' && credential.sshPassphraseProtected) {
-      const key = this.cloneKeys.take(jobId);
-      if (key === undefined) {
-        throw Object.assign(new Error('The clone\'s key is locked'), { code: 'key-locked' });
-      }
-      return { kind: 'ssh', key };
-    }
-    // HTTPS credentials and unprotected keys need no session.
-    return this.saved.resolveForGit(row.userId, '', credential.id, { touch: false });
+    return this.saved.resolveForJob(row.userId, row.credentialId, this.jobKeys.take(jobId, row.credentialId));
   }
 
   private finished(job: Job, outcome: 'done' | 'failed' | 'cancelled', errorCode: string | null): void {
     // Also for a job that never ran, such as one cancelled while queued (AR-49).
-    this.cloneKeys.release(job.id);
+    this.jobKeys.release(job.id);
     if (outcome === 'cancelled' || job.repositoryId === null) {
       return;
     }

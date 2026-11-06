@@ -23,6 +23,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
+import { PushService } from '../push/push.service';
 import { GitController } from './git.controller';
 
 const gitEnv = {
@@ -98,6 +99,8 @@ describe('GitController', () => {
         { provide: WorkingTreeGuard, useValue: new WorkingTreeGuard(new WorkingTreeLock(), engine) },
         { provide: OpenableRepository, useValue: repositories },
         { provide: CommitAuthors, useValue: commitAuthors },
+        // Pushing has its own spec, with a remote.
+        { provide: PushService, useValue: { networkJob: () => null } },
         { provide: EventsHub, useValue: { publish: (_userId: number, event: PushEvent) => published.push(event) } },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
@@ -127,11 +130,13 @@ describe('GitController', () => {
       branch: 'main',
       noCommits: false,
       upstream: null,
+      upstreamGone: false,
       ahead: 0,
       behind: 0,
       mergeInProgress: false,
       changes: [ { path: 'notes.md', state: 'modified' } ],
-      lastCommit: { oid: git(root, 'rev-parse', 'HEAD').trim(), amendable: true, message: 'base' }
+      lastCommit: { oid: git(root, 'rev-parse', 'HEAD').trim(), amendable: true, message: 'base' },
+      networkJob: null
     });
 
     const cloning = await status(CLONING).expect(409);

@@ -11,13 +11,17 @@ import {
 } from '@front-burner/server-core-git/testing';
 import { JobRunner } from '@front-burner/server-core-jobs';
 import { SessionLifecycle } from '@front-burner/server-core-security';
-import { KeyUnlockStore, KnownHostsService, SavedCredentialsService } from '@front-burner/server-feature-credentials';
+import {
+  JobKeys,
+  KeyUnlockStore,
+  KnownHostsService,
+  SavedCredentialsService
+} from '@front-burner/server-feature-credentials';
 import type { AddRepositoryRequest } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CloneKeys } from '../clone/clone-keys';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createRemotes, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
 import { createTestDatabase } from '../testing/test-database';
@@ -48,7 +52,7 @@ describe('AddRepositoryService', () => {
   let unlocks: KeyUnlockStore;
   let saved: SavedCredentialsService;
   let runner: JobRunner;
-  let cloneKeys: CloneKeys;
+  let jobKeys: JobKeys;
   let service: AddRepositoryService;
   let alice: { id: number; sessionId: string; };
 
@@ -99,7 +103,7 @@ describe('AddRepositoryService', () => {
       onInterrupted: 'fail',
       handler: () => Promise.resolve()
     });
-    cloneKeys = new CloneKeys();
+    jobKeys = new JobKeys();
     service = new AddRepositoryService(
       database,
       new RequestCredentials(saved, unlocks),
@@ -108,7 +112,7 @@ describe('AddRepositoryService', () => {
       new KnownHostsService(database, gitOptions),
       new GitEngine(gitOptions, new GitRunner()),
       runner,
-      cloneKeys
+      jobKeys
     );
     alice = { id: insertUser(database, 'alice@x.io'), sessionId: SESSION };
   });
@@ -330,7 +334,7 @@ describe('AddRepositoryService', () => {
       );
 
       const [ job ] = all().jobs;
-      expect(cloneKeys.take(job?.id ?? 0)).toBeInstanceOf(UnlockedKey);
+      expect(jobKeys.take(job?.id ?? 0, id)).toBeInstanceOf(UnlockedKey);
       expect(all().repositories[0]?.credentialId).toBe(id);
     });
 
@@ -351,7 +355,7 @@ describe('AddRepositoryService', () => {
       const { credentials: [ credential ], jobs: [ job ] } = all();
       expect(credential).toMatchObject({ kind: 'ssh-key', name: 'Laptop', sshPassphraseProtected: true });
       expect(unlocks.isUnlocked(SESSION, credential?.id ?? 0)).toBe(true);
-      expect(cloneKeys.take(job?.id ?? 0)).toBeInstanceOf(UnlockedKey);
+      expect(jobKeys.take(job?.id ?? 0, credential?.id ?? 0)).toBeInstanceOf(UnlockedKey);
     });
   });
 });

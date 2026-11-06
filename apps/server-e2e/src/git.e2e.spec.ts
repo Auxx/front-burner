@@ -1,16 +1,43 @@
+import {
+  type GitHttpServer,
+  type GitHttpServerOptions,
+  startGitHttpServer
+} from '@front-burner/server-core-git/testing';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  copyRemote,
+  createRemotes,
+  gitOutput,
+  type HoldingProxy,
+  pushFromElsewhere,
+  refuseWithHook,
+  startHoldingProxy
+} from './support/git-remotes';
 import {
   E2E_ADMIN,
   E2E_SETUP_TOKEN,
   login,
   onboard,
+  postJson,
   seed,
   type ServerProcess,
   startServerProcess
 } from './support/server-process';
+
+/** Polls until `check` resolves to true, for at most 20 seconds. */
+async function waitFor(check: () => Promise<boolean> | boolean): Promise<void> {
+  const deadline = Date.now() + 20_000;
+  while (!(await check())) {
+    if (Date.now() > deadline) {
+      throw new Error('timed out waiting');
+    }
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+}
 
 describe('git status (REQ-GIT-002)', () => {
   let server: ServerProcess;
@@ -70,11 +97,13 @@ describe('git status (REQ-GIT-002)', () => {
       branch: 'main',
       noCommits: true,
       upstream: null,
+      upstreamGone: false,
       ahead: 0,
       behind: 0,
       mergeInProgress: false,
       changes: [ { path: 'README.md', state: 'added' } ],
-      lastCommit: null
+      lastCommit: null,
+      networkJob: null
     });
   });
 
@@ -207,5 +236,221 @@ describe('git status (REQ-GIT-002)', () => {
     it('needs a login', async () => {
       expect((await discard(notes, [ 'other.md' ])).status).toBe(401);
     });
+  });
+});
+
+describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
+  const TOKEN = 'ghp_e2e-push-token-value';
+  let root: string;
+  let remotes: { handbook: string; empty: string; };
+  let server: ServerProcess;
+  let token: string;
+  let publicGit: GitHttpServer;
+  let privateGit: GitHttpServer;
+  const publicOptions: GitHttpServerOptions = { repositories: {} };
+  const privateOptions: GitHttpServerOptions = { repositories: {}, users: { alice: TOKEN } };
+  const proxies: HoldingProxy[] = [];
+
+  const api = (path: string, init: RequestInit = {}, authToken = token) =>
+    fetch(`${server.url}/api/v1${path}`, {
+      ...init,
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${authToken}`, ...init.headers }
+    });
+  const portOf = (git: GitHttpServer) => Number(new URL(git.url).port);
+
+  /** A copy of `source` served under `name` by both test servers. */
+  function remote(name: string, source = remotes.handbook): string {
+    const bare = copyRemote(root, source, name);
+    publicOptions.repositories[`${name}.git`] = bare;
+    privateOptions.repositories[`${name}.git`] = bare;
+    return bare;
+  }
+
+  /** Adds a repository through the API and waits for its clone; returns its ID and working copy. */
+  async function add(name: string, remoteUrl: string, credentials: object = { mode: 'none' }) {
+    const added = await api('/repositories', {
+      method: 'POST',
+      body: JSON.stringify({ remoteUrl, name, credentials, cloneMode: 'full' })
+    });
+    expect(added.status).toBe(201);
+    const { id } = await added.json() as { id: number; };
+    await waitFor(async () => (await api(`/repositories/${id}/git/status`)).status === 200);
+    const [ userDir ] = readdirSync(join(server.dataDir, 'repos'));
+    return { id, workingCopy: join(server.dataDir, 'repos', userDir ?? '', String(id)) };
+  }
+
+  const commitIn = (workingCopy: string, subject: string) =>
+    execFileSync('git', [ 'commit', '-q', '--allow-empty', '-m', subject ], {
+      cwd: workingCopy,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'A',
+        GIT_AUTHOR_EMAIL: 'a@x.io',
+        GIT_COMMITTER_NAME: 'A',
+        GIT_COMMITTER_EMAIL: 'a@x.io'
+      }
+    });
+
+  async function startPush(id: number): Promise<number> {
+    const response = await api(`/repositories/${id}/git/push`, { method: 'POST' });
+    expect(response.status).toBe(202);
+    return (await response.json() as { jobId: number; }).jobId;
+  }
+
+  async function jobState(id: number, jobId: number, authToken = token) {
+    const response = await api(`/repositories/${id}/git/jobs/${jobId}`, {}, authToken);
+    expect(response.status).toBe(200);
+    return await response.json() as { status: string; outcome: { kind: string; [key: string]: unknown; } | null; };
+  }
+
+  async function pushed(id: number, authToken = token) {
+    const jobId = await startPush(id);
+    let state = await jobState(id, jobId, authToken);
+    await waitFor(async () => {
+      state = await jobState(id, jobId, authToken);
+      return state.status !== 'queued' && state.status !== 'running';
+    });
+    return state;
+  }
+
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-e2e-push-'));
+    remotes = createRemotes(root);
+    publicGit = await startGitHttpServer(publicOptions);
+    privateGit = await startGitHttpServer(privateOptions);
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
+    await onboard(server);
+    token = (await login(server, 'body')).authToken;
+    const confirmed = await api('/preferences/commit-author', {
+      method: 'PUT',
+      body: JSON.stringify({ name: 'Admin', email: 'admin@example.com' })
+    });
+    expect(confirmed.status).toBe(200);
+  });
+
+  afterEach(async () => {
+    for (const proxy of proxies.splice(0)) {
+      await proxy.close();
+    }
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+    await Promise.all([ publicGit?.close(), privateGit?.close() ]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('a push publishes an unpublished branch under the same name and sets its upstream', async () => {
+    const bare = remote('publish');
+    const { id, workingCopy } = await add('publish', `${publicGit.url}/publish.git`);
+    execFileSync('git', [ 'checkout', '-q', '-b', 'feature' ], { cwd: workingCopy });
+    commitIn(workingCopy, 'feature work');
+
+    const state = await pushed(id);
+
+    expect(state).toEqual({ status: 'done', outcome: { kind: 'pushed', commits: 1, upstream: 'origin/feature' } });
+    expect(gitOutput(bare, 'log', '--format=%s', 'feature')).toBe('feature work\nfirst');
+    const status = await (await api(`/repositories/${id}/git/status`)).json() as Record<string, unknown>;
+    expect(status).toMatchObject({ branch: 'feature', upstream: 'origin/feature', ahead: 0, networkJob: null });
+  });
+
+  it('a push rejected by a server hook returns the remote lines as text', async () => {
+    const bare = remote('hooked');
+    refuseWithHook(bare, [ 'Pushes are frozen until Monday.', '<b>Ask the release team.</b>' ]);
+    const { id, workingCopy } = await add('hooked', `${publicGit.url}/hooked.git`);
+    commitIn(workingCopy, 'late change');
+
+    const state = await pushed(id);
+
+    expect(state.outcome).toEqual({
+      kind: 'failed',
+      code: 'push-rejected',
+      params: expect.objectContaining({
+        branch: 'main',
+        remoteMessages: 'Pushes are frozen until Monday.\n<b>Ask the release team.</b>'
+      })
+    });
+    expect(gitOutput(bare, 'log', '--format=%s', 'main')).toBe('first');
+  });
+
+  it('AC-GIT-002.19: in a repository cloned from an empty remote, the first commit creates main and a push publishes it', async () => {
+    const bare = remote('blank', remotes.empty);
+    const { id, workingCopy } = await add('blank', `${publicGit.url}/blank.git`);
+    writeFileSync(join(workingCopy, 'a.md'), '# A\n');
+    const committed = await api(`/repositories/${id}/git/commits`, {
+      method: 'POST',
+      body: JSON.stringify({ message: 'First notes', paths: [ 'a.md' ] })
+    });
+    expect(committed.status).toBe(201);
+
+    const state = await pushed(id);
+
+    expect(state.outcome).toEqual({ kind: 'pushed', commits: 1, upstream: 'origin/main' });
+    expect(gitOutput(bare, 'log', '--format=%s', 'main')).toBe('First notes');
+  });
+
+  it('AC-REPO-002.11: a running push finishes after the user logs out', async () => {
+    const bare = remote('held');
+    const proxy = await startHoldingProxy(portOf(publicGit));
+    proxies.push(proxy);
+    const { id, workingCopy } = await add('held', `https://127.0.0.1:${proxy.port}/held.git`);
+    commitIn(workingCopy, 'before logout');
+    const session = await login(server, 'body');
+    proxy.holdFrom(proxy.connections);
+
+    const pushing = await api(`/repositories/${id}/git/push`, { method: 'POST' }, session.authToken);
+    expect(pushing.status).toBe(202);
+    const { jobId } = await pushing.json() as { jobId: number; };
+    await waitFor(async () => (await jobState(id, jobId)).status === 'running' && proxy.connections > 0);
+    const loggedOut = await postJson(server, '/api/v1/auth/session/logout', { refreshToken: session.refreshToken });
+    expect(loggedOut.status).toBe(204);
+    expect((await api(`/repositories/${id}/git/jobs/${jobId}`, {}, session.authToken)).status).toBe(401);
+    proxy.release();
+
+    await waitFor(async () => (await jobState(id, jobId)).status === 'done');
+    expect((await jobState(id, jobId)).outcome).toEqual({ kind: 'pushed', commits: 1, upstream: 'origin/main' });
+    expect(gitOutput(bare, 'log', '--format=%s', 'main')).toBe('before logout\nfirst');
+  });
+
+  it('reports read-only credentials, refused credentials and a non-fast-forward by their codes', async () => {
+    const bare = remote('gate');
+    const credentials = { mode: 'new-https', name: 'Gate token', username: 'alice', password: TOKEN };
+    const { id, workingCopy } = await add('gate', `${privateGit.url}/gate.git`, credentials);
+    commitIn(workingCopy, 'mine');
+
+    privateOptions.refusePush = 403;
+    try {
+      expect((await pushed(id)).outcome).toMatchObject({ kind: 'failed', code: 'push-not-allowed' });
+    } finally {
+      delete privateOptions.refusePush;
+    }
+
+    privateOptions.users = { alice: 'rotated-token' };
+    try {
+      expect((await pushed(id)).outcome).toMatchObject({ kind: 'failed', code: 'credentials-refused' });
+    } finally {
+      privateOptions.users = { alice: TOKEN };
+    }
+
+    pushFromElsewhere(bare, 'theirs');
+    expect((await pushed(id)).outcome).toMatchObject({ kind: 'failed', code: 'push-non-fast-forward' });
+    expect(gitOutput(bare, 'log', '--format=%s', 'main')).toBe('theirs\nfirst');
+  });
+
+  it('reports unsigned commits in plain words (CA-15)', async () => {
+    const bare = remote('signed');
+    refuseWithHook(bare, [ 'GL-HOOK-ERR: Commit must be signed with a GPG key' ]);
+    const { id, workingCopy } = await add('signed', `${publicGit.url}/signed.git`);
+    commitIn(workingCopy, 'unsigned');
+
+    const state = await pushed(id);
+
+    expect(state.outcome).toMatchObject({ kind: 'failed', code: 'push-unsigned' });
+    const texts = JSON.parse(
+      readFileSync(join(__dirname, '..', '..', 'web', 'public', 'i18n', 'en.json'), 'utf8')
+    ) as Record<string, string>;
+    expect(texts['errors.push-unsigned']).toBe(
+      'The remote accepts only signed commits. Front Burner doesn\'t sign commits.'
+    );
   });
 });
