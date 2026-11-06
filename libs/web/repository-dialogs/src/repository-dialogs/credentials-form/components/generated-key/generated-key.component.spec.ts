@@ -5,15 +5,15 @@ import { ToastService } from '@front-burner/ui';
 import { CredentialsApi } from '@front-burner/web-api-client';
 import { of, throwError } from 'rxjs';
 
-import { FormHostComponent, hostWith } from '../../../testing/form-host';
-import { button, choose, control, errorOf, radio, radioLabels, type } from '../../../testing/form-testing';
-import { settle } from '../../../testing/settle';
-import { translocoTesting } from '../../../testing/transloco-testing';
+import { FormHostComponent, hostWith } from '../../../../testing/form-host';
+import { button, choose, control, errorOf, radio, radioLabels, type } from '../../../../testing/form-testing';
+import { settle } from '../../../../testing/settle';
+import { translocoTesting } from '../../../../testing/transloco-testing';
 import { CredentialsSectionComponent } from '../credentials-section/credentials-section.component';
 
-const KEY = 'web-feature-repositories.GeneratedKeyComponent';
-const SSH = 'web-feature-repositories.SshCredentialsComponent';
-const ERRORS = 'web-feature-repositories.errors';
+const KEY = 'web-repository-dialogs.GeneratedKeyComponent';
+const SSH = 'web-repository-dialogs.SshCredentialsComponent';
+const ERRORS = 'web-repository-dialogs.errors';
 
 const generated: GeneratedSshKey = {
   key: {
@@ -41,7 +41,7 @@ describe('GeneratedKeyComponent', () => {
   /** The section for an SSH URL, with Generate a key chosen. */
   async function open(): Promise<void> {
     hostWith(
-      '<repo-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
+      '<dlg-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
       [ CredentialsSectionComponent ]
     );
     await TestBed.configureTestingModule({

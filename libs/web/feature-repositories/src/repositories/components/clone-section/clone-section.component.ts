@@ -12,10 +12,10 @@ import {
   SelectComponent
 } from '@front-burner/ui';
 import { ApiErrorTextService } from '@front-burner/web-core';
+import { SubmitFailuresService } from '@front-burner/web-repository-dialogs';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 import { BranchListService } from '../../services/branch-list/branch-list.service';
-import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { failureTexts, shownError } from '../../utils/add-repository-errors';
 
 const KEY = 'web-feature-repositories.CloneSectionComponent';

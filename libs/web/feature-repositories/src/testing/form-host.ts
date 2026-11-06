@@ -3,9 +3,9 @@ import { TestBed } from '@angular/core/testing';
 import { form } from '@angular/forms/signals';
 import type { RepositoryIndex, SavedCredentials } from '@front-burner/shared-contracts';
 import { parseRemoteUrl } from '@front-burner/shared-util';
+import { SessionKeysService } from '@front-burner/web-repository-dialogs';
 
 import { addRepositorySchema, emptyAddRepositoryForm } from '../repositories/models/add-repository-form.model';
-import { SessionKeysService } from '../repositories/services/session-keys/session-keys.service';
 
 /**
  * The page's model and checks without the page, for the specs of the form's

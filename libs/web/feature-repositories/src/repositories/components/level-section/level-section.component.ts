@@ -2,9 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import { type FieldTree, FormField } from '@angular/forms/signals';
 import { GIT_LEVELS, type GitLevel } from '@front-burner/shared-contracts';
 import { type ChoiceOption, FieldComponent, SelectComponent } from '@front-burner/ui';
+import { SubmitFailuresService } from '@front-burner/web-repository-dialogs';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
-
-import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 
 const KEY = 'web-feature-repositories.LevelSectionComponent';
 

@@ -3,9 +3,9 @@ import { type FieldTree, FormField } from '@angular/forms/signals';
 import type { RepositoryIndex } from '@front-burner/shared-contracts';
 import { defaultRepositoryName, parseRemoteUrl, remoteKey } from '@front-burner/shared-util';
 import { FieldComponent, InlineBannerComponent, InputComponent } from '@front-burner/ui';
+import { SubmitFailuresService } from '@front-burner/web-repository-dialogs';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { shownError } from '../../utils/add-repository-errors';
 
 /**

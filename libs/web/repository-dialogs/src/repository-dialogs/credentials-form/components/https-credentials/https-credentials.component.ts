@@ -13,11 +13,11 @@ import {
 } from '@front-burner/ui';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
-import type { CredentialsChoice, CredentialsModel } from '../../models/add-repository-form.model';
+import { credentialsShownError, type FieldErrorText } from '../../credentials-errors';
+import type { CredentialsChoice, CredentialsModel } from '../../credentials-form.model';
 import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
-import { type FieldErrorText, shownError } from '../../utils/add-repository-errors';
 
-const KEY = 'web-feature-repositories.HttpsCredentialsComponent';
+const KEY = 'web-repository-dialogs.HttpsCredentialsComponent';
 
 /**
  * The HTTPS options (AR-19 to AR-22): saved credentials (only when the user
@@ -25,7 +25,7 @@ const KEY = 'web-feature-repositories.HttpsCredentialsComponent';
  * repository.
  */
 @Component({
-  selector: 'repo-https-credentials',
+  selector: 'dlg-https-credentials',
   imports: [
     TranslocoDirective,
     FormField,
@@ -62,6 +62,7 @@ export class HttpsCredentialsComponent {
   );
 
   protected error(name: keyof CredentialsModel): FieldErrorText | undefined {
-    return this.failures?.forPath(`credentials.${name}`) ?? shownError(this.credentials()[name], `credentials.${name}`);
+    return this.failures?.forPath(`credentials.${name}`)
+      ?? credentialsShownError(this.credentials()[name], `credentials.${name}`);
   }
 }

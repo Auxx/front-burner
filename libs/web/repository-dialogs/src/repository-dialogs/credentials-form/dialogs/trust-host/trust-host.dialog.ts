@@ -19,7 +19,7 @@ const SSH_PORT = 22;
  * **Trust** and `false` for **Cancel**, the safe choice, which has the focus.
  */
 @Component({
-  selector: 'repo-trust-host',
+  selector: 'dlg-trust-host',
   imports: [
     TranslocoDirective,
     ButtonComponent,

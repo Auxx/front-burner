@@ -14,13 +14,13 @@ import {
 import { toApiError } from '@front-burner/web-core';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
-import type { CredentialsChoice, CredentialsModel } from '../../models/add-repository-form.model';
+import { credentialsErrorKey, credentialsShownError, type FieldErrorText } from '../../credentials-errors';
+import type { CredentialsChoice, CredentialsModel } from '../../credentials-form.model';
 import { SessionKeysService } from '../../services/session-keys/session-keys.service';
 import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
-import { fieldErrorKey, type FieldErrorText, shownError } from '../../utils/add-repository-errors';
 import { GeneratedKeyComponent } from '../generated-key/generated-key.component';
 
-const KEY = 'web-feature-repositories.SshCredentialsComponent';
+const KEY = 'web-repository-dialogs.SshCredentialsComponent';
 
 /**
  * The SSH options (AR-23 to AR-31): a saved key (only when the user has some,
@@ -29,7 +29,7 @@ const KEY = 'web-feature-repositories.SshCredentialsComponent';
  * user leaves the field.
  */
 @Component({
-  selector: 'repo-ssh-credentials',
+  selector: 'dlg-ssh-credentials',
   imports: [
     TranslocoDirective,
     FormField,
@@ -87,7 +87,8 @@ export class SshCredentialsComponent {
     if (name === 'passphrase' && unlockError !== null) {
       return unlockError;
     }
-    return this.failures?.forPath(`credentials.${name}`) ?? shownError(this.credentials()[name], `credentials.${name}`);
+    return this.failures?.forPath(`credentials.${name}`)
+      ?? credentialsShownError(this.credentials()[name], `credentials.${name}`);
   }
 
   /** Unlocks the chosen key for the session (AR-25, AR-31); the passphrase is then forgotten. */
@@ -104,7 +105,7 @@ export class SshCredentialsComponent {
       // The limit on wrong passphrases (RC-18) is a 429 without fields, but it concerns this field.
       const code = apiError.fields?.find(field => field.path === 'passphrase')?.code
         ?? (apiError.code === 'unlock-too-many-attempts' ? apiError.code : 'unlock-failed');
-      this.unlockError.set({ key: fieldErrorKey('credentials.passphrase', code), params: {} });
+      this.unlockError.set({ key: credentialsErrorKey('credentials.passphrase', code), params: {} });
       return;
     }
     passphrase().value.set('');

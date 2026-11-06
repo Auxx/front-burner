@@ -2,14 +2,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { SavedCredentials } from '@front-burner/shared-contracts';
 import { CredentialsApi } from '@front-burner/web-api-client';
 
-import { FormHostComponent, hostWith } from '../../../testing/form-host';
-import { choose, control, type } from '../../../testing/form-testing';
-import { settle } from '../../../testing/settle';
-import { translocoTesting } from '../../../testing/transloco-testing';
+import { FormHostComponent, hostWith } from '../../../../testing/form-host';
+import { choose, control, type } from '../../../../testing/form-testing';
+import { settle } from '../../../../testing/settle';
+import { translocoTesting } from '../../../../testing/transloco-testing';
 import { CredentialsSectionComponent } from './credentials-section.component';
 
-const KEY = 'web-feature-repositories.CredentialsSectionComponent';
-const HTTPS = 'web-feature-repositories.HttpsCredentialsComponent';
+const KEY = 'web-repository-dialogs.CredentialsSectionComponent';
+const HTTPS = 'web-repository-dialogs.HttpsCredentialsComponent';
 
 const savedHttps: SavedCredentials = {
   https: [ { id: 7, name: 'GitHub', username: 'octocat', missing: false } ],
@@ -24,7 +24,7 @@ describe('CredentialsSectionComponent', () => {
 
   async function open(saved: SavedCredentials | null = { https: [], sshKeys: [] }): Promise<void> {
     hostWith(
-      '<repo-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
+      '<dlg-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
       [ CredentialsSectionComponent ]
     );
     await TestBed.configureTestingModule({
@@ -45,7 +45,7 @@ describe('CredentialsSectionComponent', () => {
     await open();
 
     expect(page().textContent).toContain(`${KEY}.enterUrlFirst`);
-    expect(page().querySelector('repo-https-credentials')).toBeNull();
+    expect(page().querySelector('dlg-https-credentials')).toBeNull();
   });
 
   it('shows the HTTPS options for an HTTPS URL', async () => {
@@ -54,7 +54,7 @@ describe('CredentialsSectionComponent', () => {
     await enterUrl('https://github.com/acme/handbook.git');
 
     expect(page().textContent).not.toContain(`${KEY}.enterUrlFirst`);
-    expect(page().querySelector('repo-https-credentials')).not.toBeNull();
+    expect(page().querySelector('dlg-https-credentials')).not.toBeNull();
   });
 
   it('waits for the saved credentials before offering a choice', async () => {
@@ -62,7 +62,7 @@ describe('CredentialsSectionComponent', () => {
 
     await enterUrl('https://github.com/acme/handbook.git');
 
-    expect(page().querySelector('repo-https-credentials')).toBeNull();
+    expect(page().querySelector('dlg-https-credentials')).toBeNull();
     expect(page().querySelector('ui-spinner')).not.toBeNull();
   });
 

@@ -1,13 +1,21 @@
-import type { FieldTree, ValidationError } from '@angular/forms/signals';
+import type { FieldTree } from '@angular/forms/signals';
 import type { ApiError } from '@front-burner/shared-contracts';
-import { fieldErrorCode } from '@front-burner/web-core';
+import {
+  credentialsErrorKey,
+  type FailureText,
+  type FieldErrorText,
+  isCredentialsPath,
+  shownFieldError
+} from '@front-burner/web-repository-dialogs';
 
 /**
- * The codes each field of the form has a text for, under
+ * The codes each field of the page's own sections has a text for, under
  * `web-feature-repositories.errors.<field>.<code>`: the form's own checks and
- * the backend's field codes (AR-9, AR-10, AR-14, AR-15, AR-42).
+ * the backend's field codes (AR-9, AR-10, AR-14, AR-15, AR-42). The
+ * credentials are not here: their section comes from `web-repository-dialogs`
+ * and has its texts there.
  */
-const FIELD_CODES: Record<string, readonly string[]> = {
+const FIELD_CODES: Readonly<Record<string, readonly string[]>> = {
   remoteUrl: [
     'required',
     'too-long',
@@ -21,36 +29,6 @@ const FIELD_CODES: Record<string, readonly string[]> = {
     'host-key-changed'
   ],
   name: [ 'too-small', 'too-big', 'control-character', 'name-taken' ],
-  credentials: [
-    'credentials-refused',
-    'credentials-refused-generated',
-    'credentials-required',
-    'kind-mismatch',
-    'protocol-mismatch'
-  ],
-  'credentials.savedId': [ 'required' ],
-  'credentials.name': [ 'too-small', 'too-big', 'name-taken' ],
-  'credentials.username': [ 'too-small', 'too-big' ],
-  'credentials.password': [ 'too-small', 'too-big' ],
-  'credentials.privateKey': [
-    'too-small',
-    'too-big',
-    'invalid-key',
-    'unsupported-type',
-    'rsa-too-short',
-    'passphrase-required',
-    'kdf-rounds-too-high'
-  ],
-  'credentials.passphrase': [
-    'required',
-    'too-big',
-    'wrong-passphrase',
-    'passphrase-required',
-    'passphrase-not-needed',
-    'unlock-failed',
-    'unlock-too-many-attempts'
-  ],
-  'credentials.generateName': [ 'too-small', 'too-big', 'name-taken', 'generate-failed' ],
   branch: [ 'required', 'branch-not-found', 'no-branches' ],
   understood: [ 'required' ],
   gitLevel: [ 'level-not-allowed' ]
@@ -59,55 +37,35 @@ const FIELD_CODES: Record<string, readonly string[]> = {
 /** The failures shown above the buttons with a text of the form's own (AR-42, AR-55). */
 const FORM_CODES: readonly string[] = [ 'remote-timeout', 'remote-failed', 'rate-limited' ];
 
-/** Where a failure of a request is shown, and with which text. */
-export interface FailureText {
-  /** The field it belongs to, as the API names it; `null` for above the buttons (AR-6). */
-  readonly path: string | null;
-  /**
-   * The key, relative to `web-feature-repositories.errors`, of its text;
-   * `null` for the API's general text of the code (`ApiErrorTextService`).
-   */
-  readonly key: string | null;
-  readonly params: Record<string, unknown>;
-}
-
 /**
- * The key, relative to `web-feature-repositories.errors`, of the text for
- * `code` on the field at `path`; `invalid` for a code the field has no text
- * for, such as one newer than the client.
+ * The key of the text for `code` on the field at `path`: for the credentials,
+ * relative to `web-repository-dialogs.errors`, where their section shows it
+ * ({@link credentialsErrorKey}); for any other field, relative to
+ * `web-feature-repositories.errors`, with `invalid` for a code the field has
+ * no text for, such as one newer than the client.
  */
-export function fieldErrorKey(path: string, code: string): string {
+function fieldErrorKey(path: string, code: string): string {
+  if (isCredentialsPath(path)) {
+    return credentialsErrorKey(path, code);
+  }
   return FIELD_CODES[path]?.includes(code) ? `${path}.${code}` : 'invalid';
 }
 
-/** The text of a field error: its key, relative to `web-feature-repositories.errors`, and parameters. */
-export interface FieldErrorText {
-  readonly key: string;
-  readonly params: Record<string, unknown>;
-}
-
 /**
- * A field's first error, once the field is touched or the form submitted
- * (AR-6). An error may carry the parameters of its text in `params`, as the
- * API's field errors do.
+ * A field's first error on one of the page's own sections, once the field is
+ * touched or the form submitted (AR-6); its key is relative to
+ * `web-feature-repositories.errors`.
  */
 export function shownError(field: FieldTree<unknown>, path: string): FieldErrorText | undefined {
-  const state = field();
-  const error: ValidationError | undefined = state.touched() ? state.errors()[0] : undefined;
-  if (!error) {
-    return undefined;
-  }
-  const params = (error as { params?: unknown; }).params;
-  return {
-    key: fieldErrorKey(path, fieldErrorCode(error)),
-    params: typeof params === 'object' && params !== null ? params as Record<string, unknown> : {}
-  };
+  return shownFieldError(field, code => fieldErrorKey(path, code));
 }
 
 /**
  * The one place where a failed access check or submit becomes the texts of
  * AR-42: each field failure on its field, any other failure above the
- * buttons. For a generated key, refused credentials also ask whether the key
+ * buttons. A field failure's key is relative to the `errors` of the texts of
+ * the section that shows the field: `web-repository-dialogs.errors` for the
+ * credentials, `web-feature-repositories.errors` for the rest. For a generated key, refused credentials also ask whether the key
  * was added on the git server.
  */
 export function failureTexts(error: ApiError): FailureText[] {

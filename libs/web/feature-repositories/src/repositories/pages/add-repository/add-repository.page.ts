@@ -22,23 +22,22 @@ import {
 } from '@front-burner/ui';
 import { CredentialsApi, KnownHostsApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { ApiErrorTextService, CurrentUserService, toApiError } from '@front-burner/web-core';
+import {
+  CredentialsSectionComponent,
+  SessionKeysService,
+  SubmitFailuresService,
+  toRepositoryCredentials,
+  TrustHostDialog
+} from '@front-burner/web-repository-dialogs';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 
 import { CloneSectionComponent } from '../../components/clone-section/clone-section.component';
-import { CredentialsSectionComponent } from '../../components/credentials-section/credentials-section.component';
 import { LevelSectionComponent } from '../../components/level-section/level-section.component';
 import { RemoteSectionComponent } from '../../components/remote-section/remote-section.component';
-import { TrustHostDialog } from '../../dialogs/trust-host/trust-host.dialog';
 import type { LeavesWithCare } from '../../guards/unsaved-changes/unsaved-changes.guard';
-import {
-  addRepositorySchema,
-  emptyAddRepositoryForm,
-  toRepositoryCredentials
-} from '../../models/add-repository-form.model';
+import { addRepositorySchema, emptyAddRepositoryForm } from '../../models/add-repository-form.model';
 import { BranchListService } from '../../services/branch-list/branch-list.service';
-import { SessionKeysService } from '../../services/session-keys/session-keys.service';
-import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { failureTexts } from '../../utils/add-repository-errors';
 
 const KEY = 'web-feature-repositories.AddRepositoryPage';
