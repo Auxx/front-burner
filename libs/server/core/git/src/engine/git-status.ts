@@ -10,7 +10,10 @@ export interface WorkingCopyStatus {
   branch: string | null;
   /** With no commit yet, `branch` is `main`, whatever `HEAD` names (GA-42). */
   noCommits: boolean;
-  /** For example `origin/main`; `null` for an unpublished branch. */
+  /**
+   * For example `origin/main`; `null` for an unpublished branch, and for one
+   * whose upstream does not exist on the remote as of the last fetch.
+   */
   upstream: string | null;
   /** Commits to push, as of the last fetch. */
   ahead: number;
@@ -53,6 +56,7 @@ export function parseStatus(stdout: string): WorkingCopyStatus {
   let head: string | undefined;
   let noCommits = false;
   let upstream: string | null = null;
+  let counted = false;
   let ahead = 0;
   let behind = 0;
   const changes = new Map<string, WorkingCopyChangeState>();
@@ -70,6 +74,7 @@ export function parseStatus(stdout: string): WorkingCopyStatus {
       upstream = record.slice('# branch.upstream '.length);
     } else if (record.startsWith('# branch.ab ')) {
       // Absent when the upstream is gone; `+? -?` when git could not count.
+      counted = true;
       const counts = /^# branch\.ab \+(\d+) -(\d+)$/.exec(record);
       ahead = Number(counts?.[1] ?? 0);
       behind = Number(counts?.[2] ?? 0);
@@ -89,7 +94,8 @@ export function parseStatus(stdout: string): WorkingCopyStatus {
   return {
     branch: noCommits ? 'main' : branch,
     noCommits,
-    upstream: current ? upstream : null,
+    // A gone upstream, such as `origin/main` before the first push to an empty remote, is not published (GA-7).
+    upstream: current && counted ? upstream : null,
     ahead: current ? ahead : 0,
     behind: current ? behind : 0,
     changes: [ ...changes ]

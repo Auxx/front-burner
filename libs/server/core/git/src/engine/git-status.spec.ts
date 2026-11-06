@@ -113,4 +113,10 @@ describe('parseStatus', () => {
     const status = parseStatus(output(...onMain, '# branch.upstream origin/main', '# branch.ab +? -?'));
     expect(status).toMatchObject({ upstream: 'origin/main', ahead: 0, behind: 0 });
   });
+
+  it('reads a branch whose upstream is gone as unpublished', () => {
+    // As after the first commit in a clone of an empty remote: origin/main is configured but does not exist.
+    const status = parseStatus(output(...onMain, '# branch.upstream origin/main'));
+    expect(status).toMatchObject({ upstream: null, ahead: 0, behind: 0 });
+  });
 });
