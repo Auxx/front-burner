@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { SavedHttpsCredentialsSchema, SavedSshKeySchema } from '../credentials/credentials.schema';
+import {
+  NewHttpsCredentialsSchema,
+  SavedHttpsCredentialsSchema,
+  SavedSshKeySchema
+} from '../credentials/credentials.schema';
 
 /**
  * The credentials a repository uses, for the repository credentials dialog
@@ -25,4 +29,17 @@ export const RepositoryCredentialsInfoSchema = z
   })
   .meta({ id: 'RepositoryCredentialsInfo' });
 
+/**
+ * A new username and password or token for the saved HTTPS credentials a
+ * repository uses (RC-12, RC-13). Neither is trimmed, as when they were saved
+ * (AR-20). The name is kept.
+ */
+export const UpdateTokenRequestSchema = z
+  .object({
+    username: NewHttpsCredentialsSchema.shape.username,
+    password: NewHttpsCredentialsSchema.shape.password
+  })
+  .meta({ id: 'UpdateTokenRequest' });
+
 export type RepositoryCredentialsInfo = z.infer<typeof RepositoryCredentialsInfoSchema>;
+export type UpdateTokenRequest = z.infer<typeof UpdateTokenRequestSchema>;

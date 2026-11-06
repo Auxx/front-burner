@@ -27,6 +27,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AddRepositoryService } from '../add/add-repository.service';
+import { CredentialsCheck } from '../add/credentials-check';
 import { RequestCredentials } from '../add/request-credentials';
 import { insertUser } from '../testing/fixtures';
 import { createRemotes, git, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
@@ -76,10 +77,7 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
     adding = new AddRepositoryService(
       database,
       new RequestCredentials(saved, unlocks),
-      saved,
-      unlocks,
-      knownHosts,
-      engine,
+      new CredentialsCheck(database, saved, knownHosts, engine, unlocks),
       runner,
       jobKeys
     );

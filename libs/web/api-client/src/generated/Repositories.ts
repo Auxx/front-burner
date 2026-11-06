@@ -7,9 +7,11 @@ import type {
   AccessCheckResult,
   AddRepositoryRequest,
   RecentRepositories,
+  RepositoryCredentials,
   RepositoryCredentialsInfo,
   RepositoryIndex,
-  RepositorySummary
+  RepositorySummary,
+  UpdateTokenRequest
 } from '@front-burner/shared-contracts';
 import type { Observable } from 'rxjs';
 
@@ -55,6 +57,24 @@ export class RepositoriesApi {
   repositoryCredentials(id: number): Observable<RepositoryCredentialsInfo> {
     return this.http.get<RepositoryCredentialsInfo>(
       `/api/v1/repositories/${encodeURIComponent(id)}/credentials`
+    );
+  }
+  replaceRepositoryCredentials(
+    id: number,
+    data: RepositoryCredentials
+  ): Observable<RepositoryCredentialsInfo> {
+    return this.http.put<RepositoryCredentialsInfo>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/credentials`,
+      data
+    );
+  }
+  updateRepositoryToken(
+    id: number,
+    data: UpdateTokenRequest
+  ): Observable<RepositoryCredentialsInfo> {
+    return this.http.put<RepositoryCredentialsInfo>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/credentials/token`,
+      data
     );
   }
 }

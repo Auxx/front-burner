@@ -437,6 +437,84 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     expect(gitOutput(bare, 'log', '--format=%s', 'main')).toBe('theirs\nfirst');
   });
 
+  it('updating a refused saved token fixes the push of every repository that uses it', async () => {
+    remote('rotate-a');
+    remote('rotate-b');
+    const credentials = { mode: 'new-https', name: 'Rotating token', username: 'alice', password: TOKEN };
+    const first = await add('rotate-a', `${privateGit.url}/rotate-a.git`, credentials);
+    const info = await (await api(`/repositories/${first.id}/credentials`)).json() as { inUse: { id: number; }; };
+    const second = await add('rotate-b', `${privateGit.url}/rotate-b.git`, {
+      mode: 'saved',
+      credentialId: info.inUse.id
+    });
+    commitIn(first.workingCopy, 'first change');
+    commitIn(second.workingCopy, 'second change');
+    const ROTATED = 'ghp_e2e-rotated-token';
+    privateOptions.users = { alice: ROTATED };
+    try {
+      expect((await pushed(first.id)).outcome).toMatchObject({ kind: 'failed', code: 'credentials-refused' });
+      const refused = await api(`/repositories/${first.id}/credentials/token`, {
+        method: 'PUT',
+        body: JSON.stringify({ username: 'alice', password: 'still-wrong' })
+      });
+      expect(refused.status).toBe(400);
+
+      const updated = await api(`/repositories/${first.id}/credentials/token`, {
+        method: 'PUT',
+        body: JSON.stringify({ username: 'alice', password: ROTATED })
+      });
+
+      expect(updated.status).toBe(200);
+      const text = await updated.text();
+      expect(text).not.toContain(ROTATED);
+      expect(JSON.parse(text)).toMatchObject({ inUse: { name: 'Rotating token', usedBy: 2 } });
+      expect((await pushed(first.id)).outcome).toMatchObject({ kind: 'pushed' });
+      expect((await pushed(second.id)).outcome).toMatchObject({ kind: 'pushed' });
+    } finally {
+      privateOptions.users = { alice: TOKEN };
+    }
+  });
+
+  it('replacing a repository\'s credentials keeps the old ones and pushes with the new ones', async () => {
+    const bare = remote('swap');
+    const old = { mode: 'new-https', name: 'Swap old', username: 'alice', password: TOKEN };
+    const { id, workingCopy } = await add('swap', `${privateGit.url}/swap.git`, old);
+    commitIn(workingCopy, 'swapped');
+    const SWAPPED = 'ghp_e2e-swapped-token';
+    privateOptions.users = { alice: SWAPPED };
+    try {
+      const wrongProtocol = await api(`/repositories/${id}/credentials`, {
+        method: 'PUT',
+        body: JSON.stringify({ mode: 'new-ssh-key', name: 'Key', privateKey: 'x' })
+      });
+      expect(wrongProtocol.status).toBe(400);
+      expect(await wrongProtocol.json()).toMatchObject({
+        fields: [ { path: 'credentials', code: 'protocol-mismatch' } ]
+      });
+      const malformed = await api(`/repositories/${id}/credentials`, {
+        method: 'PUT',
+        body: JSON.stringify({ mode: 'saved' })
+      });
+      expect(malformed.status).toBe(400);
+
+      const replaced = await api(`/repositories/${id}/credentials`, {
+        method: 'PUT',
+        body: JSON.stringify({ mode: 'new-https', name: 'Swap new', username: 'alice', password: SWAPPED })
+      });
+
+      expect(replaced.status).toBe(200);
+      const text = await replaced.text();
+      expect(text).not.toContain(SWAPPED);
+      expect(JSON.parse(text)).toMatchObject({ protocol: 'https', inUse: { name: 'Swap new', usedBy: 1 } });
+      const saved = await (await api('/credentials')).json() as { https: { name: string; }[]; };
+      expect(saved.https.map(entry => entry.name)).toEqual(expect.arrayContaining([ 'Swap new', 'Swap old' ]));
+      expect((await pushed(id)).outcome).toMatchObject({ kind: 'pushed' });
+      expect(gitOutput(bare, 'log', '--format=%s', 'main')).toBe('swapped\nfirst');
+    } finally {
+      privateOptions.users = { alice: TOKEN };
+    }
+  });
+
   it('reports unsigned commits in plain words (CA-15)', async () => {
     const bare = remote('signed');
     refuseWithHook(bare, [ 'GL-HOOK-ERR: Commit must be signed with a GPG key' ]);

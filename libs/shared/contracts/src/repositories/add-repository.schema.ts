@@ -47,6 +47,14 @@ const MODE_PROTOCOLS: Record<RepositoryCredentials['mode'], readonly ('https' | 
 };
 
 /**
+ * Whether credentials of this mode can be used with a remote of this protocol
+ * (AR-16, AR-22); a saved credential's kind is checked by the backend.
+ */
+export function modeFitsProtocol(mode: RepositoryCredentials['mode'], protocol: 'https' | 'ssh'): boolean {
+  return MODE_PROTOCOLS[mode].includes(protocol);
+}
+
+/**
  * No credentials or new ones only with a matching protocol (AR-16, AR-22).
  * Exported for DTOs, which copy the shape and so lose object refinements.
  */
@@ -56,7 +64,7 @@ export function refineCredentialsProtocol(
 ): void {
   const result = parseRemoteUrl(value.remoteUrl);
   const mode = value.credentials?.mode;
-  if ('remote' in result && mode !== undefined && !MODE_PROTOCOLS[mode].includes(result.remote.protocol)) {
+  if ('remote' in result && mode !== undefined && !modeFitsProtocol(mode, result.remote.protocol)) {
     ctx.addIssue({ code: 'custom', path: [ 'credentials' ], params: { code: 'protocol-mismatch' } });
   }
 }

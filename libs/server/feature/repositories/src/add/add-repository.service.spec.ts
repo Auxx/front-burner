@@ -27,6 +27,7 @@ import { insertRepository, insertUser } from '../testing/fixtures';
 import { createRemotes, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
 import { createTestDatabase } from '../testing/test-database';
 import { AddRepositoryService } from './add-repository.service';
+import { CredentialsCheck } from './credentials-check';
 import { RequestCredentials } from './request-credentials';
 
 const box = new SecretBox('add-repository-spec-key-0123456789abcdef');
@@ -110,10 +111,13 @@ describe('AddRepositoryService', () => {
     service = new AddRepositoryService(
       database,
       new RequestCredentials(saved, unlocks),
-      saved,
-      unlocks,
-      new KnownHostsService(database, gitOptions),
-      new GitEngine(gitOptions, new GitRunner()),
+      new CredentialsCheck(
+        database,
+        saved,
+        new KnownHostsService(database, gitOptions),
+        new GitEngine(gitOptions, new GitRunner()),
+        unlocks
+      ),
       runner,
       jobKeys
     );

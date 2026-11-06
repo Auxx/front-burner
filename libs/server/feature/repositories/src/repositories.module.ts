@@ -1,6 +1,7 @@
 import { CredentialsModule } from '@front-burner/server-feature-credentials';
 import { Module } from '@nestjs/common';
 import { AddRepositoryService } from './add/add-repository.service';
+import { CredentialsCheck } from './add/credentials-check';
 import { RequestCredentials } from './add/request-credentials';
 import { CloneJob } from './clone/clone.job';
 import { RepositoryCredentialsController } from './credentials/repository-credentials.controller';
@@ -17,6 +18,7 @@ import { RepositoryQueries } from './repositories/repository-queries';
     RepositoryQueries,
     RepositoryCredentialsService,
     RequestCredentials,
+    CredentialsCheck,
     AddRepositoryService,
     CloneJob,
     WorkingCopyCheck

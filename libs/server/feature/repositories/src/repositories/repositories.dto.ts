@@ -7,9 +7,11 @@ import {
   refineAddRepository,
   refineCredentialsProtocol,
   RepositoryCredentialsInfoSchema,
+  RepositoryCredentialsSchema,
   RepositoryIndexSchema,
   RepositoryParamsSchema,
-  RepositorySummarySchema
+  RepositorySummarySchema,
+  UpdateTokenRequestSchema
 } from '@front-burner/shared-contracts';
 import { ApiSchema } from '@nestjs/swagger';
 import { createZodDto } from 'nestjs-zod';
@@ -48,3 +50,12 @@ export class RepositoryParamsDto extends createZodDto(z.object(RepositoryParamsS
 
 @ApiSchema({ name: 'RepositoryCredentialsInfo' })
 export class RepositoryCredentialsInfoDto extends createZodDto(z.object(RepositoryCredentialsInfoSchema.shape)) {}
+
+// The body of `PUT …/credentials`: the request's union, as on the Add repository
+// page (RC-7). As GitDiffDto: rebuilt from its members without its id, and
+// named by calling the decorator, since a union cannot be a class's base.
+export const RepositoryCredentialsDto = createZodDto(z.discriminatedUnion('mode', RepositoryCredentialsSchema.options));
+ApiSchema({ name: 'RepositoryCredentials' })(RepositoryCredentialsDto);
+
+@ApiSchema({ name: 'UpdateTokenRequest' })
+export class UpdateTokenRequestDto extends createZodDto(z.object(UpdateTokenRequestSchema.shape)) {}

@@ -145,8 +145,10 @@ describe('OnboardingController', () => {
   });
 
   it('a weak password lists every failed rule', async () => {
+    // Not hex, so that it can't turn up in the response's random request ID.
+    const WEAK = 'xyz';
     await start();
-    const response = await http().post('/api/v1/onboarding/password-setup').send({ ...setup, password: 'abc' });
+    const response = await http().post('/api/v1/onboarding/password-setup').send({ ...setup, password: WEAK });
     expect(response.status).toBe(400);
     expect(response.body.code).toBe('validation-failed');
     expect(response.body.fields).toEqual(
@@ -155,7 +157,7 @@ describe('OnboardingController', () => {
         expect.objectContaining({ path: 'password', code: 'too-few-classes' })
       ])
     );
-    expect(response.text).not.toContain('abc');
+    expect(response.text).not.toContain(WEAK);
     expect(database.db.select().from(users).all()).toHaveLength(0);
   });
 

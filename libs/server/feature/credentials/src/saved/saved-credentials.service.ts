@@ -94,6 +94,32 @@ export class SavedCredentialsService {
   }
 
   /**
+   * Replaces the username and password of saved HTTPS credentials inside the
+   * caller's transaction, keeping their name and ID, so that every repository
+   * that uses them uses the new ones (RC-12, RC-13). The password is encrypted
+   * with the row's own binding, as when it was saved (A-4.8). Also restores a
+   * password an encryption key reset deleted (NF-8.6).
+   *
+   * @throws NotFoundException for an unknown ID or another user's (AR-56).
+   * @throws ApiErrorException 409 `credentials-not-updatable` for an SSH key (RC-14).
+   */
+  replaceHttps(tx: Tx, userId: number, id: number, input: { username: string; password: string; }): void {
+    const row = tx.select().from(savedCredentials)
+      .where(and(eq(savedCredentials.id, id), eq(savedCredentials.userId, userId)))
+      .get();
+    if (row === undefined) {
+      throw new NotFoundException();
+    }
+    if (row.kind !== 'https') {
+      throw new ApiErrorException(409, 'credentials-not-updatable', { id: row.id });
+    }
+    tx.update(savedCredentials)
+      .set({ username: input.username, secret: this.secretBox.encrypt(input.password, bindingOf(row)) })
+      .where(eq(savedCredentials.id, row.id))
+      .run();
+  }
+
+  /**
    * Saves a pasted key inside the caller's transaction, as pasted and with its
    * public parts (AR-26 to AR-28). The passphrase is only checked.
    *

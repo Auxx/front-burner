@@ -17,6 +17,8 @@ export const ERROR_CODES = [
   /** 429; five wrong passphrases for this key within a minute (RC-18). */
   'unlock-too-many-attempts',
   'credentials-missing',
+  /** 409; the repository uses no saved HTTPS credentials to update in place: none, an SSH key, or replaced meanwhile (RC-14). */
+  'credentials-not-updatable',
   'host-key-changed',
   /** The remote did not answer in time; params `{ host }` (AR-42). */
   'remote-timeout',
