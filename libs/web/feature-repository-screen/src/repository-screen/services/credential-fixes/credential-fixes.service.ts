@@ -58,8 +58,9 @@ export class CredentialFixesService {
     if (!saved || this.store.followed() !== repository.id) {
       return;
     }
-    // The new credentials may be a locked key: the banner shows it, and the push asks for it (RC-17).
-    await this.lockedKey.reread();
+    // The new credentials may be a locked key, for the banner. The push needs no wait for it: it asks
+    // for a locked key's passphrase by itself (RC-17).
+    void this.lockedKey.reread();
     await this.pushes.retry();
   }
 }

@@ -45,10 +45,19 @@ export interface CredentialsContext {
   readonly generated: Signal<GeneratedSshKey | null>;
 }
 
-/** The credentials of a protocol as they start (AR-16, AR-19, AR-23): saved ones first, when there are any. */
-export function defaultCredentials(protocol: 'https' | 'ssh' | undefined, saved: SavedCredentials): CredentialsModel {
+/**
+ * The credentials of a protocol as they start (AR-16, AR-19, AR-23): saved
+ * ones first, when there are any. `inUse`, the saved credentials a repository
+ * uses now, is never the default: the repository credentials dialog is opened
+ * because they failed (RC-7).
+ */
+export function defaultCredentials(
+  protocol: 'https' | 'ssh' | undefined,
+  saved: SavedCredentials,
+  inUse: number | null = null
+): CredentialsModel {
   const list = protocol === 'ssh' ? saved.sshKeys : protocol === 'https' ? saved.https : [];
-  const first = list[0];
+  const first = list.find(credentials => credentials.id !== inUse);
   const choice: CredentialsChoice = first ? 'saved' : protocol === 'ssh' ? 'new-ssh-key' : 'new-https';
   return {
     choice,

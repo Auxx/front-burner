@@ -123,6 +123,21 @@ describe('LockedKeyService', () => {
     expect(service.key()).toEqual(laptop);
   });
 
+  it('shows the banner again for another locked key after a dismissal, but not for the same one', async () => {
+    await start(locked);
+    service.dismissed.set(true);
+
+    await service.reread();
+    expect(service.dismissed()).toBe(true);
+
+    const other = { ...sshKey(), id: 8, name: 'desktop' };
+    repositoryCredentials.mockReturnValue(of({ protocol: 'ssh', inUse: other } satisfies RepositoryCredentialsInfo));
+    await service.reread();
+
+    expect(service.key()).toEqual(expect.objectContaining({ id: 8, name: 'desktop' }));
+    expect(service.dismissed()).toBe(false);
+  });
+
   it('removes the banner on key.unlocked', async () => {
     await start(locked);
 

@@ -10,26 +10,19 @@ import {
   signal
 } from '@angular/core';
 import { apply, disabled, form, submit } from '@angular/forms/signals';
-import type {
-  HostKey,
-  RepositoryCredentials,
-  RepositoryCredentialsInfo,
-  RepositorySummary,
-  SavedCredentials
-} from '@front-burner/shared-contracts';
+import type { RepositoryCredentialsInfo, RepositorySummary, SavedCredentials } from '@front-burner/shared-contracts';
 import {
   ButtonComponent,
   DIALOG_DATA,
   DialogComponent,
   DialogFooterComponent,
   DialogRef,
-  DialogService,
   InlineBannerComponent,
   KeyValueComponent,
   KeyValueListComponent,
   SpinnerComponent
 } from '@front-burner/ui';
-import { CredentialsApi, KnownHostsApi, RepositoriesApi } from '@front-burner/web-api-client';
+import { CredentialsApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { type ApiErrorText, ApiErrorTextService, toApiError } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
@@ -41,10 +34,9 @@ import {
   defaultCredentials,
   toRepositoryCredentials
 } from '../../credentials-form/credentials-form.model';
-import { TrustHostDialog } from '../../credentials-form/dialogs/trust-host/trust-host.dialog';
-import { unknownHostKey } from '../../credentials-form/host-keys';
 import { SessionKeysService } from '../../credentials-form/services/session-keys/session-keys.service';
 import { SubmitFailuresService } from '../../credentials-form/services/submit-failures/submit-failures.service';
+import { HostNotTrusted, HostTrustService } from '../../services/host-trust/host-trust.service';
 
 /** What `RepositoryCredentialsDialog` is opened with. */
 export interface RepositoryCredentialsDialogData {
@@ -57,12 +49,6 @@ const NO_CREDENTIALS: SavedCredentials = { https: [], sshKeys: [] };
 
 let nextId = 0;
 
-/** The user cancelled the host key dialog: the form stays as it was (AR-32). */
-class HostNotTrusted extends Error {}
-
-/** The user closed the dialog while its request ran: its answer is ignored. */
-class Closed extends Error {}
-
 /**
  * Gives a repository other credentials (RC-7 to RC-10, RC-14): the repository's
  * name and remote (DS-18), the credentials in use, and the choices of the
@@ -72,8 +58,9 @@ class Closed extends Error {}
  * failed check keeps it open with the error as on the Add repository page
  * (AR-42); an unknown SSH host asks to trust it, then checks again (AR-32).
  *
- * **Cancel** stays usable while the check runs, and its answer is then
- * ignored. Everything typed, and the key generated or unlocked, belongs to
+ * **Cancel** and Escape are unavailable while the check runs: the backend
+ * may already use the new credentials when it answers, and the push must then
+ * run again (RC-9). Everything typed, and the key generated or unlocked, belongs to
  * this instance: a generated key is saved in the user's profile already, so
  * it is among the saved keys the next time (AR-30).
  */
@@ -100,8 +87,7 @@ export class RepositoryCredentialsDialog {
   protected readonly data = inject(DIALOG_DATA) as RepositoryCredentialsDialogData;
   private readonly repositoriesApi = inject(RepositoriesApi);
   private readonly credentialsApi = inject(CredentialsApi);
-  private readonly knownHostsApi = inject(KnownHostsApi);
-  private readonly dialogs = inject(DialogService);
+  private readonly hostTrust = inject(HostTrustService);
   private readonly errorText = inject(ApiErrorTextService);
   private readonly sessionKeys = inject(SessionKeysService);
   private readonly failures = inject(SubmitFailuresService);
@@ -141,11 +127,7 @@ export class RepositoryCredentialsDialog {
     this.info() !== null && !this.submitting() && this.model().valid() && !this.sessionKeys.busy()
   );
 
-  /** Whether the dialog is still open, so that an answer that comes after Cancel is ignored. */
-  private open = true;
-
   constructor() {
-    this.ref.closed.subscribe(() => this.open = false);
     // A failure stays on its field until the inputs change; passphrases are cleared after it (AR-46).
     this.failures.watch(computed(() =>
       JSON.stringify({
@@ -182,12 +164,15 @@ export class RepositoryCredentialsDialog {
         return undefined;
       }
       this.submitting.set(true);
+      this.ref.dismissible.set(false);
       this.failure.set(null);
       this.failures.clear();
       try {
-        await this.trusting(() => this.replace(credentials));
+        await this.hostTrust.trusting(() =>
+          firstValueFrom(this.repositoriesApi.replaceRepositoryCredentials(this.data.repository.id, credentials))
+        );
       } catch (error) {
-        if (!(error instanceof HostNotTrusted || error instanceof Closed)) {
+        if (!(error instanceof HostNotTrusted)) {
           // AR-46: everything else stays.
           this.model.passphrase().value.set('');
           this.refusal(error);
@@ -195,43 +180,11 @@ export class RepositoryCredentialsDialog {
         return undefined;
       } finally {
         this.submitting.set(false);
+        this.ref.dismissible.set(true);
       }
       this.ref.close(true);
       return undefined;
     });
-  }
-
-  private async replace(credentials: RepositoryCredentials): Promise<void> {
-    await firstValueFrom(this.repositoriesApi.replaceRepositoryCredentials(this.data.repository.id, credentials));
-    if (!this.open) {
-      throw new Closed();
-    }
-  }
-
-  /**
-   * Runs `request`; if it meets an unknown SSH host, asks the user to trust it
-   * and runs it once more (AR-32). Throws {@link HostNotTrusted} on Cancel.
-   */
-  private async trusting(request: () => Promise<void>): Promise<void> {
-    try {
-      await request();
-    } catch (error) {
-      const hostKey = unknownHostKey(toApiError(error));
-      if (hostKey === undefined || !this.open) {
-        throw error;
-      }
-      await this.trust(hostKey);
-      await request();
-    }
-  }
-
-  private async trust(hostKey: HostKey): Promise<void> {
-    const ref = this.dialogs.open<TrustHostDialog, HostKey, boolean>(TrustHostDialog, { data: hostKey, size: 'small' });
-    if ((await firstValueFrom(ref.closed)) !== true) {
-      throw new HostNotTrusted();
-    }
-    const { host, port, type, key } = hostKey;
-    await firstValueFrom(this.knownHostsApi.trust({ host, port, type, key }), { defaultValue: undefined });
   }
 
   /**
@@ -240,9 +193,6 @@ export class RepositoryCredentialsDialog {
    * remote that can't be reached.
    */
   private refusal(error: unknown): void {
-    if (!this.open) {
-      return;
-    }
     const apiError = toApiError(error);
     const fields = apiError.fields ?? [];
     const credentials = this.model().value();

@@ -43,6 +43,7 @@ const laptop: SavedSshKey = {
 };
 
 const sshInUse: RepositoryCredentialsInfo = { protocol: 'ssh', inUse: { kind: 'ssh-key', ...laptop, usedBy: 1 } };
+const sshWithout: RepositoryCredentialsInfo = { protocol: 'ssh', inUse: null };
 const httpsWithout: RepositoryCredentialsInfo = { protocol: 'https', inUse: null };
 const nothingSaved: SavedCredentials = { https: [], sshKeys: [] };
 
@@ -200,7 +201,7 @@ describe('RepositoryCredentialsDialog', () => {
 
   it('Save waits while a key is being generated', async () => {
     const generated = new Subject<GeneratedSshKey>();
-    repositoriesApi.repositoryCredentials.mockReturnValue(of(sshInUse));
+    repositoriesApi.repositoryCredentials.mockReturnValue(of(sshWithout));
     credentialsApi.list.mockReturnValue(of({ https: [], sshKeys: [ laptop ] }));
     credentialsApi.generateSshKey.mockReturnValue(generated);
     await open();
@@ -250,7 +251,7 @@ describe('RepositoryCredentialsDialog', () => {
     expect(shown()).not.toBeNull();
   });
 
-  it('shows progress on Save, and Cancel ignores the answer', async () => {
+  it('shows progress on Save, and cannot be closed until the check answers', async () => {
     const answer = new Subject<RepositoryCredentialsInfo>();
     repositoriesApi.replaceRepositoryCredentials.mockReturnValue(answer);
     await open();
@@ -260,17 +261,63 @@ describe('RepositoryCredentialsDialog', () => {
 
     await save();
     expect(dialogButton(`${KEY}.save`)?.getAttribute('aria-disabled')).toBe('true');
-    expect(dialogButton(`${KEY}.cancel`)?.getAttribute('aria-disabled')).toBeNull();
+    // The backend may already use the new credentials when it answers: the push must then run again (RC-9).
+    expect(dialogButton(`${KEY}.cancel`)?.getAttribute('aria-disabled')).toBe('true');
+    expect(ref.dismissible()).toBe(false);
     await cancel();
+    expect(shown()).not.toBeNull();
+
     answer.next(httpsWithout);
     answer.complete();
     await settleDialog();
 
+    expect(await closed).toBe(true);
+  });
+
+  it('can be closed again once a check failed', async () => {
+    repositoriesApi.replaceRepositoryCredentials.mockReturnValueOnce(throwError(() => failure(500, 'internal')));
+    await open();
+    const closed = firstValueFrom(ref.closed);
+    choose(dialog(), `${HTTPS}.choices.none`);
+    await settleDialog();
+    await save();
+
+    expect(ref.dismissible()).toBe(true);
+    await cancel();
+
     expect(await closed).toBeUndefined();
+    expect(repositoriesApi.replaceRepositoryCredentials).toHaveBeenCalledOnce();
+  });
+
+  it('does not choose the credentials in use, which failed, by default', async () => {
+    const readOnly = { id: 4, name: 'read only', username: 'reader', missing: false };
+    const writer = { id: 6, name: 'writer', username: 'writer', missing: false };
+    repositoriesApi.repositoryCredentials.mockReturnValue(of(
+      {
+        protocol: 'https',
+        inUse: { kind: 'https', ...readOnly, usedBy: 1 }
+      } satisfies RepositoryCredentialsInfo
+    ));
+    credentialsApi.list.mockReturnValue(of({ https: [ readOnly, writer ], sshKeys: [] }));
+
+    await open();
+
+    expect(selectValue(dialog(), `${HTTPS}.saved`)).toContain('writer');
+  });
+
+  it('offers new credentials by default when the only saved ones are those in use', async () => {
+    repositoriesApi.repositoryCredentials.mockReturnValue(of(sshInUse));
+    credentialsApi.list.mockReturnValue(of({ https: [], sshKeys: [ laptop ] }));
+
+    await open();
+
+    const checked = dialog().querySelector<HTMLInputElement>('input[type=radio]:checked');
+    expect(checked?.closest('label')?.textContent?.trim()).toBe(`${SSH}.choices.new-ssh-key`);
+    expect(radioLabels(dialog())).toContain(`${SSH}.choices.saved`);
   });
 
   it('asks to trust an unknown host, and checks again', async () => {
-    repositoriesApi.repositoryCredentials.mockReturnValue(of(sshInUse));
+    repositoriesApi.repositoryCredentials.mockReturnValue(of(sshWithout));
     credentialsApi.list.mockReturnValue(of({ https: [], sshKeys: [ laptop ] }));
     repositoriesApi.replaceRepositoryCredentials
       .mockReturnValueOnce(throwError(() => failure(502, 'host-key-unknown', { params: hostKey })))

@@ -33,9 +33,13 @@ AR-19 to AR-32, AR-42.
 - It says "Make sure these credentials can also push." (RC-8).
 - A refused SSH key shows "Check that this key is still added to your git
   server, or use another key." (RC-14).
-- While the access check runs, **Save** shows progress and Cancel stays usable;
-  a Cancel ignores the answer _(plan's call)_. If the check fails, the dialog
+- While the access check runs, **Save** shows progress, and **Cancel** and
+  Escape are unavailable: the backend may already use the new credentials when
+  it answers, and the push must then run again (RC-9) _(plan's call, changed in
+  review from a Cancel that ignored the answer)_. If the check fails, the dialog
   stays open and shows the error as on the Add repository page (RC-8).
+- The credentials in use are never the default choice, since they just failed
+  _(plan's call, from review)_.
 - An unknown host key in the access check opens plan 61's `TrustHostDialog`,
   then checks again, as the Add repository page does (AR-32).
 - **Save** is not sent while a generate or unlock runs

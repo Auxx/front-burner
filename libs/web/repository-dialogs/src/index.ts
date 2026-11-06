@@ -35,3 +35,4 @@ export { UnlockKeyDialog, type UnlockKeyDialogData } from './repository-dialogs/
 export type { CommitAuthorDialogData } from './repository-dialogs/models/commit-author-dialog.model';
 export { commitAuthorForm } from './repository-dialogs/models/commit-author-form.model';
 export { CommitAuthorRefusals } from './repository-dialogs/models/commit-author-refusals';
+export { HostNotTrusted, HostTrustService } from './repository-dialogs/services/host-trust/host-trust.service';

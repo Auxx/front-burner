@@ -27,6 +27,8 @@ export class CredentialsSectionComponent {
   readonly credentials = input.required<FieldTree<CredentialsModel>>();
   /** The user's saved credentials; `null` while they load. */
   readonly saved = input.required<SavedCredentials | null>();
+  /** The saved credentials the repository uses now, if any, which are not chosen by default (RC-7). */
+  readonly inUse = input<number | null>(null);
 
   private readonly failures = inject(SubmitFailuresService, { optional: true });
 
@@ -48,7 +50,7 @@ export class CredentialsSectionComponent {
       this.shownProtocol = protocol;
       untracked(() => {
         const saved = this.saved() ?? { https: [], sshKeys: [] };
-        this.credentials()().value.set(defaultCredentials(protocol, saved));
+        this.credentials()().value.set(defaultCredentials(protocol, saved, this.inUse()));
       });
     });
   }

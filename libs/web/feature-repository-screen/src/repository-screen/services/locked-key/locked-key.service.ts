@@ -111,13 +111,24 @@ export class LockedKeyService {
 
   /**
    * Reads the key again, such as after the repository was given other
-   * credentials (RC-8), which may be a locked key. A read that fails changes
-   * nothing.
+   * credentials (RC-8), which may be a locked key. Another locked key than the
+   * one whose banner was dismissed shows the banner again. A read that fails
+   * changes nothing.
    */
   async reread(): Promise<void> {
     const id = this.repositoryId();
-    if (id !== null) {
-      await this.read(id);
+    if (id === null) {
+      return;
+    }
+    const before = this.current()?.id ?? null;
+    let key: LockedKey | null;
+    try {
+      key = await this.readKey(id);
+    } catch {
+      return;
+    }
+    if (key !== null && key.id !== before) {
+      this.dismissed.set(false);
     }
   }
 

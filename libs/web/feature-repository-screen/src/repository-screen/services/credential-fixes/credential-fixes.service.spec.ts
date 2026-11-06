@@ -103,6 +103,15 @@ describe('CredentialFixesService', () => {
     expect(lockedKey.reread).toHaveBeenCalledOnce();
   });
 
+  it('the push does not wait for the key to be read again', async () => {
+    await failedPush('no-credentials');
+    lockedKey.reread.mockReturnValue(new Promise(() => undefined));
+
+    await fix('add-credentials', true);
+
+    expect(push).toHaveBeenCalledTimes(2);
+  });
+
   it('Use other credentials opens the dialog', async () => {
     await failedPush('push-not-allowed');
 
