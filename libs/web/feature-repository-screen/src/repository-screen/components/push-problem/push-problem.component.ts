@@ -5,8 +5,14 @@ import { TranslocoDirective } from '@jsverse/transloco';
 import type { PushProblem } from '../../services/push/push.service';
 import type { PushFix } from '../../utils/push-problem/push-problem';
 
-/** The fixes with a button so far; plans 63, 64 and 66 add their dialogs' fixes. */
-const OFFERED: ReadonlySet<PushFix> = new Set<PushFix>([ 'retry', 'unlock' ]);
+/** The fixes with a button so far; plan 66 adds the changed host key's. */
+const OFFERED: ReadonlySet<PushFix> = new Set<PushFix>([
+  'retry',
+  'unlock',
+  'add-credentials',
+  'fix-credentials',
+  'other-credentials'
+]);
 
 /**
  * Why a push failed, below the repository bar and above the panes (NV-16):

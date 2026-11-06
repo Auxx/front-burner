@@ -113,6 +113,16 @@ describe('LockedKeyService', () => {
     expect(service.key()).toEqual(laptop);
   });
 
+  it('reads the key again when asked, such as after the credentials were replaced', async () => {
+    await start({ protocol: 'ssh', inUse: null });
+    expect(service.key()).toBeNull();
+
+    repositoryCredentials.mockReturnValue(of(locked));
+    await service.reread();
+
+    expect(service.key()).toEqual(laptop);
+  });
+
   it('removes the banner on key.unlocked', async () => {
     await start(locked);
 

@@ -109,6 +109,18 @@ export class LockedKeyService {
     return this.asking;
   }
 
+  /**
+   * Reads the key again, such as after the repository was given other
+   * credentials (RC-8), which may be a locked key. A read that fails changes
+   * nothing.
+   */
+  async reread(): Promise<void> {
+    const id = this.repositoryId();
+    if (id !== null) {
+      await this.read(id);
+    }
+  }
+
   private async ask(): Promise<boolean> {
     const id = this.repositoryId();
     if (id === null) {
