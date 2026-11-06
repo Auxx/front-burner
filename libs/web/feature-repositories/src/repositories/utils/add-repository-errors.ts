@@ -2,6 +2,7 @@ import type { FieldTree } from '@angular/forms/signals';
 import type { ApiError } from '@front-burner/shared-contracts';
 import {
   credentialsErrorKey,
+  credentialsFailureKey,
   type FailureText,
   type FieldErrorText,
   isCredentialsPath,
@@ -65,17 +66,16 @@ export function shownError(field: FieldTree<unknown>, path: string): FieldErrorT
  * AR-42: each field failure on its field, any other failure above the
  * buttons. A field failure's key is relative to the `errors` of the texts of
  * the section that shows the field: `web-repository-dialogs.errors` for the
- * credentials, `web-feature-repositories.errors` for the rest. For a generated key, refused credentials also ask whether the key
- * was added on the git server.
+ * credentials ({@link credentialsFailureKey}), `web-feature-repositories.errors`
+ * for the rest.
  */
 export function failureTexts(error: ApiError): FailureText[] {
   if (error.fields !== undefined && error.fields.length > 0) {
-    return error.fields.map(({ path, code, params }) => {
-      const shown = code === 'credentials-refused' && params['generatedKey'] === true
-        ? 'credentials-refused-generated'
-        : code;
-      return { path, key: fieldErrorKey(path, shown), params };
-    });
+    return error.fields.map(({ path, code, params }) => ({
+      path,
+      key: isCredentialsPath(path) ? credentialsFailureKey(path, code, params) : fieldErrorKey(path, code),
+      params
+    }));
   }
   return [ { path: null, key: FORM_CODES.includes(error.code) ? `form.${error.code}` : null, params: error.params } ];
 }

@@ -74,6 +74,18 @@ export function credentialsErrorKey(path: string, code: string): string {
 }
 
 /**
+ * {@link credentialsErrorKey} for a backend failure on the credentials field
+ * at `path`: refused credentials that are a key generated on this visit also
+ * ask whether the key was added on the git server (AR-29, AR-42).
+ */
+export function credentialsFailureKey(path: string, code: string, params: Readonly<Record<string, unknown>>): string {
+  const shown = code === 'credentials-refused' && params['generatedKey'] === true
+    ? 'credentials-refused-generated'
+    : code;
+  return credentialsErrorKey(path, shown);
+}
+
+/**
  * A field's first error, once the field is touched or the form submitted
  * (AR-6), with its key from `keyOf`. An error may carry the parameters of its
  * text in `params`, as the API's field errors do.

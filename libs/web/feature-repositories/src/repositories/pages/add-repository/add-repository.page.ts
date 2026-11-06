@@ -3,11 +3,9 @@ import { apply, disabled, type FieldTree, form, submit } from '@angular/forms/si
 import { Router, RouterLink } from '@angular/router';
 import {
   type AddRepositoryRequest,
-  type ApiError,
   GIT_LEVELS,
   type GitLevel,
   type HostKey,
-  HostKeySchema,
   type RepositoryIndex,
   type SavedCredentials
 } from '@front-burner/shared-contracts';
@@ -27,7 +25,8 @@ import {
   SessionKeysService,
   SubmitFailuresService,
   toRepositoryCredentials,
-  TrustHostDialog
+  TrustHostDialog,
+  unknownHostKey
 } from '@front-burner/web-repository-dialogs';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
@@ -45,15 +44,6 @@ const NO_CREDENTIALS: SavedCredentials = { https: [], sshKeys: [] };
 
 /** The user cancelled the host key dialog: the form stays as it was (AR-32). */
 class HostNotTrusted extends Error {}
-
-/** The host key of an unknown SSH server, if that is why a request failed (AR-32). */
-function unknownHostKey(apiError: ApiError): HostKey | undefined {
-  if (apiError.code !== 'host-key-unknown') {
-    return undefined;
-  }
-  const parsed = HostKeySchema.safeParse(apiError.params);
-  return parsed.success ? parsed.data : undefined;
-}
 
 /**
  * The Add repository page (REQ-REPO-001): one form, split into a component per
