@@ -338,7 +338,8 @@ describe('SavedCredentialsService', () => {
     expect(() => service.unlock(alice, 's1', id, 'x')).toThrow(NotFoundException);
   });
 
-  describe('wrong passphrases (RC-18)', () => {
+  // Each wrong passphrase runs the key's KDF, about half a second on a CI runner; a test runs up to ten.
+  describe('wrong passphrases (RC-18)', { timeout: 30_000 }, () => {
     const tooMany = expect.objectContaining({ code: 'unlock-too-many-attempts' });
     const caught = (run: () => void): ApiErrorException | undefined => {
       try {
