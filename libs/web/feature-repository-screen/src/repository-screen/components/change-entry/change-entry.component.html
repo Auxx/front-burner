@@ -1,21 +1,18 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ChangeEntryComponent'">
+  @let entry = change();
   <label class="tick">
-    <input
-      type="checkbox"
-      uiCheckbox
-      [attr.aria-label]="t('tick', { path: change().path })"
-      [checked]="ticked()"
-      (change)="tickedChange.emit(!ticked())"
-    />
+    <input type="checkbox"
+           uiCheckbox
+           [attr.aria-label]="t('tick', { path: entry.path })"
+           [checked]="ticked()"
+           (change)="tickedChange.emit(!ticked())" />
   </label>
-  <button
-    type="button"
-    class="entry"
-    uiTooltipLongPress
-    [uiTooltip]="change().path"
-    [attr.aria-current]="selected() ? 'true' : null"
-    (click)="selectPath.emit(change().path)"
-  >
+  <button type="button"
+          class="entry"
+          uiTooltipLongPress
+          [uiTooltip]="entry.path"
+          [attr.aria-current]="selected() ? 'true' : null"
+          (click)="selectPath.emit(entry.path)">
     <span class="path">
       <span class="name">{{ name() }}</span>
       @if (folder(); as folder) {
@@ -23,17 +20,18 @@
       }
     </span>
     <span class="state">
-      <span class="word">{{ t(change().state) }}</span>
-      <span uiBadge class="letter" aria-hidden="true" [status]="status()">{{ t(change().state + 'Letter') }}</span>
+      <span class="word">{{ t(entry.state) }}</span>
+      <span uiBadge
+            class="letter"
+            aria-hidden="true"
+            [status]="status()">{{ t(entry.state + 'Letter') }}</span>
     </span>
   </button>
-  <button
-    uiIconButton
-    class="discard"
-    size="small"
-    [label]="t('discard', { name: name() })"
-    (click)="discard.emit(change())"
-  >
+  <button uiIconButton
+          class="discard"
+          size="small"
+          [label]="t('discard', { name: name() })"
+          (click)="discard.emit(entry)">
     <ui-icon name="discard" />
   </button>
 </ng-container>

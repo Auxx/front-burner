@@ -1,22 +1,32 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.EditorAreaComponent'">
   @if (path(); as path) {
     @if (goneElsewhere()) {
-      <ui-empty-state icon="info" [heading]="name()">{{ t('goneElsewhere') }}</ui-empty-state>
+      <ui-empty-state icon="info"
+                      [heading]="name()">{{ t('goneElsewhere') }}</ui-empty-state>
     } @else if (entry() !== undefined) {
       @if (!markdown()) {
-        <rs-entry-message [entry]="entry() ?? null" [path]="path" (action)="action.emit($event)" />
+        <rs-entry-message [entry]="entry() ?? null"
+                          [path]="path"
+                          (action)="action.emit($event)" />
       } @else if (explained(); as code) {
-        <rs-entry-message [entry]="entry() ?? null" [path]="path" [openError]="code" (action)="action.emit($event)" />
+        <rs-entry-message [entry]="entry() ?? null"
+                          [path]="path"
+                          [openError]="code"
+                          (action)="action.emit($event)" />
       } @else if (failure(); as failure) {
-        <ui-empty-state icon="error" [heading]="name()">
+        <ui-empty-state icon="error"
+                        [heading]="name()">
           {{ t('openFailed') }} {{ failure.text }}
           <div uiEmptyStateActions>
-            <button uiButton (click)="retryOpen.emit()">{{ t('retry') }}</button>
+            <button uiButton
+                    (click)="retryOpen.emit()">{{ t('retry') }}</button>
           </div>
         </ui-empty-state>
       } @else if (file(); as file) {
         @defer {
-          <rs-editor-pane [file]="file" [fragment]="fragment()" (openPath)="openPath.emit($event)" />
+          <rs-editor-pane [file]="file"
+                          [fragment]="fragment()"
+                          (openPath)="openPath.emit($event)" />
         } @loading (minimum 0ms) {
           <ui-spinner [label]="t('opening')" />
         }
@@ -28,7 +38,9 @@
     <ui-empty-state icon="markdown">
       {{ t('empty') }}
       <div uiEmptyStateActions>
-        <button uiButton variant="primary" (click)="newFile.emit()">{{ t('newFile') }}</button>
+        <button uiButton
+                variant="primary"
+                (click)="newFile.emit()">{{ t('newFile') }}</button>
       </div>
     </ui-empty-state>
   }

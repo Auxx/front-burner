@@ -194,6 +194,18 @@ describe('ChangesPaneComponent', () => {
       expect(TestBed.inject(CommitTicksService).ticked()).toEqual([ 'README.md', 'logo.png' ]);
     });
 
+    it('shows each entry ticked or not as the ticks say', async () => {
+      await render();
+
+      TestBed.inject(CommitTicksService).setTicked('logo.png', false);
+      await settle(fixture);
+      expect(boxes().map(box => box.checked)).toEqual([ true, true, false ]);
+
+      TestBed.inject(CommitTicksService).setTicked('logo.png', true);
+      await settle(fixture);
+      expect(boxes().map(box => box.checked)).toEqual([ true, true, true ]);
+    });
+
     it('clears and ticks all with the top checkbox', async () => {
       await render();
 

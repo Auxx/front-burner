@@ -25,12 +25,12 @@ const ada: CurrentUser = {
 
 @Component({
   imports: [ FileTreeComponent ],
-  template: `<rs-file-tree
-      [selected]="selected()"
-      (selectPath)="selects.push($event)"
-      (retry)="retries.push($event)"
-      (action)="actions.push($event)"
-    />`
+  template: `
+    <rs-file-tree [selected]="selected()"
+                  (selectPath)="selects.push($event)"
+                  (retry)="retries.push($event)"
+                  (action)="actions.push($event)" />
+  `
 })
 class HostComponent {
   readonly selected = signal<string | null>(null);

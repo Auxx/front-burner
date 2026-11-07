@@ -11,12 +11,12 @@ const K = 'web-feature-repository-screen.EntryMessageComponent';
 
 @Component({
   imports: [ EntryMessageComponent ],
-  template: `<rs-entry-message
-    [entry]="entry()"
-    [path]="path()"
-    [openError]="openError()"
-    (action)="actions.push($event)"
-  />`
+  template: `
+    <rs-entry-message [entry]="entry()"
+                      [path]="path()"
+                      [openError]="openError()"
+                      (action)="actions.push($event)" />
+  `
 })
 class HostComponent {
   readonly entry = signal<Entry | null>(null);

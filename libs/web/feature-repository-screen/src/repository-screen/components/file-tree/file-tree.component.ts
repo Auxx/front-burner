@@ -13,7 +13,6 @@ import {
 import {
   IconButtonComponent,
   IconComponent,
-  type IconName,
   MenuComponent,
   MenuItemComponent,
   MenuTriggerDirective,
@@ -21,14 +20,16 @@ import {
   TooltipDirective,
   TreeComponent,
   TreeItemMenuDirective,
-  type TreeNode,
   TreeNodeDirective
 } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import type { TreeEntry } from '../../models/tree-entry.model';
+import { EntryIconPipe } from '../../pipes/entry-icon/entry-icon.pipe';
+import { rowActions, RowActionsPipe } from '../../pipes/row-actions/row-actions.pipe';
+import { TreeEntryPipe } from '../../pipes/tree-entry/tree-entry.pipe';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
-import { type EntryAction, entryActions } from '../../utils/entry-actions/entry-actions';
+import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 
 /** An action chosen for an entry; `path` is `''` for the root folder (FB-25). */
 export interface EntryActionRequest {
@@ -71,7 +72,10 @@ export interface EntryActionRequest {
     TooltipDirective,
     TreeComponent,
     TreeItemMenuDirective,
-    TreeNodeDirective
+    TreeNodeDirective,
+    EntryIconPipe,
+    RowActionsPipe,
+    TreeEntryPipe
   ],
   templateUrl: './file-tree.component.html',
   styleUrl: './file-tree.component.scss',
@@ -94,7 +98,7 @@ export class FileTreeComponent {
   protected readonly menuActions = computed(() => {
     const row = this.menuRow();
     const shown = row ? this.find(this.store.nodes(), row.value) : undefined;
-    return shown ? this.actions(shown) : [];
+    return shown ? rowActions(shown) : [];
   });
 
   constructor() {
@@ -107,24 +111,6 @@ export class FileTreeComponent {
         this.store.focusRequest.set(null);
       }
     });
-  }
-
-  /** The rows are the store's; `ui-tree` hands them back as plain nodes. */
-  protected row(node: TreeNode): TreeEntry {
-    return node as TreeEntry;
-  }
-
-  protected icon(row: TreeEntry): IconName {
-    switch (row.kind) {
-      case 'folder':
-        return 'folder';
-      case 'symlink':
-        return 'file-symlink-file';
-      case 'submodule':
-        return 'file-submodule';
-      default:
-        return row.entry?.markdown ? 'markdown' : 'file';
-    }
   }
 
   /** A row was opened by click, tap or key, also the open file again (FB-9). */
@@ -140,10 +126,6 @@ export class FileTreeComponent {
     } else {
       this.selectPath.emit(row.path);
     }
-  }
-
-  protected actions(row: TreeEntry): EntryAction[] {
-    return row.entry && !row.deleting ? entryActions(row.entry) : [];
   }
 
   protected onMenuItem(action: EntryAction): void {

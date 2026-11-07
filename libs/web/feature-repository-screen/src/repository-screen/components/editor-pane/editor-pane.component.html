@@ -1,43 +1,47 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.EditorPaneComponent'">
-  @if (file().draft() || file().gone() || file().changed() !== null || noteShown()) {
+  @let openFile = file();
+  @if (noticesShown()) {
     <div class="notices">
-    @if (file().draft(); as draft) {
-      <rs-draft-offer [draft]="draft" (restore)="restore()" (discard)="discard()" />
+    @if (openFile.draft(); as draft) {
+      <rs-draft-offer [draft]="draft"
+                      (restore)="restore()"
+                      (discard)="discard()" />
     }
-    @if (file().gone()) {
-      <rs-gone-elsewhere [error]="file().recreateError()" (recreate)="recreate()" />
-    } @else if (file().changed() !== null) {
-      <rs-changed-on-disk
-        [existsAgain]="file().recreateError()?.code === 'entry-exists'"
-        (reload)="reload()"
-        (keepMine)="keepMine()"
-      />
+    @if (openFile.gone()) {
+      <rs-gone-elsewhere [error]="openFile.recreateError()"
+                         (recreate)="recreate()" />
+    } @else if (openFile.changed() !== null) {
+      <rs-changed-on-disk [existsAgain]="openFile.recreateError()?.code === 'entry-exists'"
+                          (reload)="reload()"
+                          (keepMine)="keepMine()" />
     }
     @if (noteShown()) {
-      <rs-large-file-note (turnOn)="file().highlight.set(true)" />
+      <rs-large-file-note (turnOn)="openFile.highlight.set(true)" />
     }
     </div>
   }
   @if (viewMode.narrow()) {
     <!-- ED-34: Edit and Preview tabs; the hidden pane is kept, and the preview does no work meanwhile. -->
-    <div class="tabs" uiTabGroup>
+    <div class="tabs"
+         uiTabGroup>
       <!-- Inside the tab group, so that the tabs reach their panels. -->
       <div class="toolbar">
         @if (viewMode.editorShown()) {
           <div class="start">
-            <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+            <button uiButton
+                    variant="ghost"
+                    size="small"
+                    (click)="openSearch()">{{ t('find') }}</button>
           </div>
         }
         <div class="end">
           @if (viewMode.editorShown()) {
-            <button
-              uiButton
-              class="wrap"
-              variant="ghost"
-              size="small"
-              [attr.aria-pressed]="settings.softWrap()"
-              (click)="settings.softWrap.set(!settings.softWrap())"
-            >
+            <button uiButton
+                    class="wrap"
+                    variant="ghost"
+                    size="small"
+                    [attr.aria-pressed]="settings.softWrap()"
+                    (click)="settings.softWrap.set(!settings.softWrap())">
               <ui-icon name="word-wrap" />
               {{ t('wrap') }}
             </button>
@@ -45,28 +49,26 @@
           <rs-view-mode-switch />
         </div>
       </div>
-      <div class="panel" uiTabPanel="edit">
+      <div class="panel"
+           uiTabPanel="edit">
         <ng-template uiTabContent>
-          <ce-code-editor
-            class="editor"
-            [state]="state()"
-            (stateChange)="changed($event)"
-            (scrolled)="editorScrolled($event)"
-          />
+          <ce-code-editor class="editor"
+                          [state]="state()"
+                          (stateChange)="changed($event)"
+                          (scrolled)="editorScrolled($event)" />
         </ng-template>
       </div>
-      <div class="panel" uiTabPanel="preview">
+      <div class="panel"
+           uiTabPanel="preview">
         <ng-template uiTabContent>
-          <md-preview
-            [source]="file().preview"
-            [path]="file().path()"
-            [label]="name()"
-            [fragment]="fragment()"
-            [active]="viewMode.previewShown()"
-            [repositoryId]="repositoryId()"
-            (openPath)="openPath.emit($event)"
-            (scrolled)="previewScrolled($event)"
-          />
+          <md-preview [source]="openFile.preview"
+                      [path]="openFile.path()"
+                      [label]="name()"
+                      [fragment]="fragment()"
+                      [active]="viewMode.previewShown()"
+                      [repositoryId]="repositoryId()"
+                      (openPath)="openPath.emit($event)"
+                      (scrolled)="previewScrolled($event)" />
         </ng-template>
       </div>
     </div>
@@ -74,19 +76,20 @@
     <div class="toolbar">
       @if (viewMode.editorShown()) {
         <div class="start">
-          <button uiButton variant="ghost" size="small" (click)="openSearch()">{{ t('find') }}</button>
+          <button uiButton
+                  variant="ghost"
+                  size="small"
+                  (click)="openSearch()">{{ t('find') }}</button>
         </div>
       }
       <div class="end">
         @if (viewMode.editorShown()) {
-          <button
-            uiButton
-            class="wrap"
-            variant="ghost"
-            size="small"
-            [attr.aria-pressed]="settings.softWrap()"
-            (click)="settings.softWrap.set(!settings.softWrap())"
-          >
+          <button uiButton
+                  class="wrap"
+                  variant="ghost"
+                  size="small"
+                  [attr.aria-pressed]="settings.softWrap()"
+                  (click)="settings.softWrap.set(!settings.softWrap())">
             <ui-icon name="word-wrap" />
             {{ t('wrap') }}
           </button>
@@ -94,25 +97,24 @@
         <rs-view-mode-switch />
       </div>
     </div>
-    <ui-split-pane class="panes" [show]="show()" [(size)]="editorSize" [separatorLabel]="t('resizePreview')">
-      <ce-code-editor
-        uiSplitPaneStart
-        class="editor"
-        [state]="state()"
-        (stateChange)="changed($event)"
-        (scrolled)="editorScrolled($event)"
-      />
-      <md-preview
-        uiSplitPaneEnd
-        [source]="file().preview"
-        [path]="file().path()"
-        [label]="name()"
-        [fragment]="fragment()"
-        [active]="viewMode.previewShown()"
-        [repositoryId]="repositoryId()"
-        (openPath)="openPath.emit($event)"
-        (scrolled)="previewScrolled($event)"
-      />
+    <ui-split-pane class="panes"
+                   [show]="show()"
+                   [(size)]="editorSize"
+                   [separatorLabel]="t('resizePreview')">
+      <ce-code-editor uiSplitPaneStart
+                      class="editor"
+                      [state]="state()"
+                      (stateChange)="changed($event)"
+                      (scrolled)="editorScrolled($event)" />
+      <md-preview uiSplitPaneEnd
+                  [source]="openFile.preview"
+                  [path]="openFile.path()"
+                  [label]="name()"
+                  [fragment]="fragment()"
+                  [active]="viewMode.previewShown()"
+                  [repositoryId]="repositoryId()"
+                  (openPath)="openPath.emit($event)"
+                  (scrolled)="previewScrolled($event)" />
     </ui-split-pane>
   }
 </ng-container>

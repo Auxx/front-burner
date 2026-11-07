@@ -4,6 +4,7 @@ import {
   afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
+  computed,
   ElementRef,
   inject,
   Injector,
@@ -83,6 +84,10 @@ export class ChangesPaneComponent {
   protected readonly rowHeight = signal(FALLBACK_ROW_HEIGHT);
 
   protected readonly trackChange = (_index: number, change: GitChange) => change.path;
+  /** Whether each listed change is ticked, by path. */
+  protected readonly tickedPaths = computed(() =>
+    Object.fromEntries(this.ticks.ticked().map(path => [ path, true ])) as Readonly<Record<string, boolean>>
+  );
 
   constructor() {
     // Measured again when shown after `display: none` (a collapsed pane, a closed
