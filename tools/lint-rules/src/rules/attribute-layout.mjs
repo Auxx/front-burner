@@ -6,18 +6,49 @@ function columnOf(text, offset) {
 }
 
 /**
+ * Whether a line break of a bound attribute lies inside a string or template
+ * literal of its expression, where shifting the next line would change the
+ * string's value. The attribute's own delimiter quote ends the value, so
+ * only the other quote characters open strings inside it.
+ */
+function breaksInsideString(attributeText) {
+  const equals = attributeText.indexOf('=');
+  const delimiter = attributeText[equals + 1];
+  if (equals === -1 || (delimiter !== '"' && delimiter !== '\'')) {
+    return false;
+  }
+  let quote = null;
+  for (let index = equals + 2; index < attributeText.length - 1; index++) {
+    const character = attributeText[index];
+    if (quote) {
+      if (character === '\\') {
+        index++;
+      } else if (character === quote) {
+        quote = null;
+      } else if (character === '\n' && quote === '`') {
+        return true;
+      }
+    } else if (character === '`' || ((character === '"' || character === '\'') && character !== delimiter)) {
+      quote = character;
+    }
+  }
+  return false;
+}
+
+/**
  * The text of a multi-line attribute moved `delta` columns to the right (left
  * when negative), with its continuation lines shifted by the same amount so
  * that a bound expression keeps its shape. Blank lines stay as they are.
  * `undefined` when the text cannot be moved: a static value reaches the DOM, so
  * its continuation lines are never changed, and a line without enough leading
- * spaces cannot shift left.
+ * spaces cannot shift left. A line break inside a string or template literal
+ * of a bound value is never changed either.
  */
 function shifted(attribute, delta) {
   if (delta === 0 || !attribute.text.includes('\n')) {
     return attribute.text;
   }
-  if (!attribute.bound) {
+  if (!attribute.bound || breaksInsideString(attribute.text)) {
     return undefined;
   }
   const [ first, ...rest ] = attribute.text.split('\n');

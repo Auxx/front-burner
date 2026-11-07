@@ -19,6 +19,8 @@ The lint rules come from one shared config,
 `tools/lint-rules/README.md`). They apply to `.html` files and to inline
 templates. In the test hosts of specs (inline templates in `*.spec.ts` files and
 templates under `testing/`) only attribute layout and control flow are checked.
+Inline templates in Storybook stories (`*.stories.ts`) are not linted at all:
+the shared config turns the rules off for them, so apply the rules yourself.
 
 ## Before you finish
 

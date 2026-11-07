@@ -71,6 +71,12 @@ describe('GeneratedKeyComponent', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
   });
 
+  it('shows no name error before the field is touched', async () => {
+    await open();
+
+    expect(errorOf(page(), `${KEY}.name`)).toBeUndefined();
+  });
+
   it('asks for a key name before generating', async () => {
     await open();
 
@@ -116,6 +122,10 @@ describe('GeneratedKeyComponent', () => {
 
     expect(errorOf(page(), `${KEY}.name`)).toBe(`${ERRORS}.credentials.generateName.name-taken`);
     expect(publicKey()).toBeNull();
+
+    type(control(page(), `${KEY}.name`), 'Another name');
+    await settle(fixture);
+    expect(errorOf(page(), `${KEY}.name`)).toBeUndefined();
   });
 
   it('requires the key-added checkbox', async () => {
