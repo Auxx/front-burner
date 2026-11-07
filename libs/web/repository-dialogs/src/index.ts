@@ -23,6 +23,7 @@ export { unknownHostKey } from './repository-dialogs/credentials-form/host-keys'
 export { SessionKeysService } from './repository-dialogs/credentials-form/services/session-keys/session-keys.service';
 export { SubmitFailuresService } from './repository-dialogs/credentials-form/services/submit-failures/submit-failures.service';
 export { ChangeCommitAuthorDialog } from './repository-dialogs/dialogs/change-commit-author/change-commit-author.dialog';
+export { ChangedHostKeyDialog } from './repository-dialogs/dialogs/changed-host-key/changed-host-key.dialog';
 export {
   type CommitAuthorConfirmed,
   ConfirmCommitAuthorDialog

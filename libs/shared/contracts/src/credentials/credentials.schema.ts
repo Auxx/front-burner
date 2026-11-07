@@ -85,9 +85,12 @@ const hostKeyFields = {
   key: z.string().min(1).max(4096).regex(BASE64)
 };
 
-/** A server's host key, as an unknown-host-key error describes it (AR-32). */
+/** The port of a host key error, which a push's outcome writes as a string. */
+const errorPort = z.coerce.number().pipe(hostKeyFields.port);
+
+/** A server's host key, as an unknown-host-key error describes it (AR-32). A push's outcome writes the port as a string. */
 export const HostKeySchema = z
-  .object({ ...hostKeyFields, fingerprint: z.string() })
+  .object({ ...hostKeyFields, port: errorPort, fingerprint: z.string() })
   .meta({ id: 'HostKey' });
 
 /**
@@ -99,7 +102,7 @@ export const HostKeySchema = z
 export const ChangedHostKeySchema = z
   .object({
     host: hostKeyFields.host,
-    port: z.coerce.number().pipe(hostKeyFields.port),
+    port: errorPort,
     type: z.string().optional(),
     key: z.string().optional(),
     fingerprint: z.string().optional(),

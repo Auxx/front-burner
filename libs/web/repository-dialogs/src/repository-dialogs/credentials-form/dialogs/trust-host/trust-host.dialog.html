@@ -2,7 +2,7 @@
   <ui-dialog [heading]="t('heading')">
     <p class="message">{{ t('message') }}</p>
     <dl uiKeyValueList>
-      <div uiKeyValue [label]="t('host')">{{ host() }}</div>
+      <div uiKeyValue [label]="t('host')">{{ host }}</div>
       <div uiKeyValue [label]="t('keyType')">{{ hostKey.type }}</div>
       <div uiKeyValue [label]="t('fingerprint')"><code class="fingerprint">{{ hostKey.fingerprint }}</code></div>
     </dl>

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import type { HostKey } from '@front-burner/shared-contracts';
 import {
   ButtonComponent,
@@ -11,7 +11,7 @@ import {
 } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-const SSH_PORT = 22;
+import { hostLabel } from '../../host-keys';
 
 /**
  * "Do you trust this server?" (AR-32): the host, key type and fingerprint of
@@ -36,7 +36,5 @@ export class TrustHostDialog {
   protected readonly ref = inject<DialogRef<boolean>>(DialogRef);
   protected readonly hostKey = inject(DIALOG_DATA) as HostKey;
 
-  protected readonly host = computed(() =>
-    this.hostKey.port === SSH_PORT ? this.hostKey.host : `${this.hostKey.host}:${this.hostKey.port}`
-  );
+  protected readonly host = hostLabel(this.hostKey.host, this.hostKey.port);
 }

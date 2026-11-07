@@ -45,6 +45,12 @@ describe('TrustHostDialog', () => {
     expect(dialog().textContent).not.toContain(':22');
   });
 
+  it('puts an IPv6 address in brackets before its port', async () => {
+    await open({ ...hostKey, host: 'fd00::1' });
+
+    expect(dialog().textContent).toContain('[fd00::1]:2222');
+  });
+
   it('closes with true on Trust', async () => {
     await open();
     const result = firstValueFrom(ref.closed);

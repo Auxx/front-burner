@@ -3,16 +3,6 @@ import { ButtonComponent, InlineBannerComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import type { PushProblem } from '../../services/push/push.service';
-import type { PushFix } from '../../utils/push-problem/push-problem';
-
-/** The fixes with a button so far; plan 66 adds the changed host key's. */
-const OFFERED: ReadonlySet<PushFix> = new Set<PushFix>([
-  'retry',
-  'unlock',
-  'add-credentials',
-  'fix-credentials',
-  'other-credentials'
-]);
 
 /**
  * Why a push failed, below the repository bar and above the panes (NV-16):
@@ -32,10 +22,5 @@ export class PushProblemComponent {
   readonly fixSelected = output<PushProblem['fix']>();
   readonly dismissed = output<void>();
 
-  /** The fix to offer, if it has a button yet. */
-  protected readonly fix = computed(() => {
-    const fix = this.problem().fix;
-    return OFFERED.has(fix) ? fix : null;
-  });
   protected readonly remoteMessages = computed(() => this.problem().params['remoteMessages']?.trim() || null);
 }

@@ -117,6 +117,20 @@ describe('ChangedHostKeySchema', () => {
   });
 });
 
+describe('HostKeySchema', () => {
+  const unknown = { host: 'git.example.com', port: 2222, type: 'ssh-ed25519', key: 'AAAA', fingerprint: 'SHA256:x' };
+
+  it('reads the port as a push outcome writes it', () => {
+    expect(HostKeySchema.parse({ ...unknown, port: '2222' })).toEqual(unknown);
+  });
+
+  it('refuses a port that is not one', () => {
+    for (const port of [ undefined, '', 'ssh', '22.5', '0', '65536' ]) {
+      expect(HostKeySchema.safeParse({ ...unknown, port }).success).toBe(false);
+    }
+  });
+});
+
 describe('TrustHostRequestSchema', () => {
   const host = { host: 'git.example.com', port: 22, type: 'ssh-ed25519', key: 'AAAA' };
 
