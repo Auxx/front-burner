@@ -9,15 +9,14 @@ Also are there any other issues with Angular HTML templates I am missing?
 
 ## 1. Signals inside templates
 
-Each time a signal is used inside a template a new dependency (subscription)
-is created to track changes. It is better to read signal value once, either
-at the start of the template or at the start of a block like `<ng-template>`
-which creates its own context.
+Each time a signal is used inside a template a new dependency (subscription) is
+created to track changes. It is better to read signal value once, either at the
+start of the template or at the start of a block like `<ng-template>` which
+creates its own context.
 
 ### Bad approach:
 
 ```html
-
 <ul>
   @for (item of items(); track item.id) {
   <li>
@@ -58,14 +57,12 @@ effects
 ### Bad approach:
 
 ```html
-
 <some-component [(selected)]="selectedModel"/>
 ```
 
 ### Good approach:
 
 ```html
-
 <some-component [selected]="selected"
                 (selectionChanged)="updateSelection()"/>
 ```
@@ -89,7 +86,6 @@ be used as event handlers.
 ### Good approach:
 
 ```html
-
 <div>
   {{ item.weight | grams }}
 </div>
@@ -114,7 +110,6 @@ change is the way attributes are positioned.
 ### Bad approach:
 
 ```html
-
 <button
   uiButton
   variant="ghost"
@@ -126,7 +121,6 @@ change is the way attributes are positioned.
 ### Good approach:
 
 ```html
-
 <button uiButton
         variant="ghost"
         size="small"
