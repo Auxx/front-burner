@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
-> checkbox (`- [x]`) syntax for tracking.
+> checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Plan 67 of [the step 3 index](2026-11-02-00-roadmap-step-3.md): one
 end-to-end test walks through exit criterion 7 on desktop and on a phone, the

@@ -12,14 +12,12 @@ import {
   PROTECTED_KEY_PUBLIC,
   startGitSshServer
 } from './support/git-ssh-server';
-import { adminAuthToken, confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
-import { sshRepository } from './support/ssh-repository';
+import { confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
+import { addOverApi, ADMIN_ID, escapeRegExp, sshRepository, workingCopyOf } from './support/repositories';
 import { createWorkingCopy, gitIn } from './support/working-copy';
 
 test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
 
-/** The administrator that onboarding created. */
-const ADMIN_ID = 1;
 const ADMIN_AUTHOR = `${TEST_ADMIN.displayName} <${TEST_ADMIN.email}>`;
 
 /** A token the git server lets push, and later only read. */
@@ -39,12 +37,12 @@ const changesPane = (page: Page) => page.getByRole('region', { name: 'Changes', 
 const rows = (page: Page) => changesPane(page).getByRole('listitem');
 const tree = (page: Page) => page.getByRole('tree', { name: 'Files' });
 const entry = (page: Page, name: string) =>
-  tree(page).getByRole('treeitem', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},`) });
+  tree(page).getByRole('treeitem', { name: new RegExp(`^${escapeRegExp(name)},`) });
 const editorOf = (page: Page, name: string) =>
   page.getByRole('main', { name: 'Editor' }).getByRole('textbox', { name, exact: true });
 const diffLines = (page: Page) => page.locator('rs-diff-view .lines');
 const changeButton = (page: Page, name: string) =>
-  changesPane(page).getByRole('button', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) });
+  changesPane(page).getByRole('button', { name: new RegExp(`^${escapeRegExp(name)}`) });
 const tick = (page: Page, path: string) =>
   changesPane(page).getByRole('checkbox', { name: `Commit ${path}`, exact: true });
 const message = (page: Page) => changesPane(page).getByRole('textbox', { name: 'Commit message' });
@@ -340,26 +338,12 @@ test.describe('commit and push', () => {
     const bare = join(root, name, 'handbook.git');
     gitIn(dirname(bare), 'clone', '-q', '--bare', source, bare);
     remotes[`${name}.git`] = bare;
-    const authToken = await adminAuthToken(instance.url);
-    const headers = { authorization: `Bearer ${authToken}`, 'content-type': 'application/json' };
-    const added = await fetch(`${instance.url}/api/v1/repositories`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        remoteUrl: `${git.url}/${name}.git`,
-        name,
-        cloneMode: 'full',
-        credentials: { mode: 'new-https', name: 'first token', ...FIRST }
-      })
+    const { id, dir } = await addOverApi(instance, {
+      name,
+      remoteUrl: `${git.url}/${name}.git`,
+      credentials: { mode: 'new-https', name: 'first token', ...FIRST }
     });
-    expect(added.status).toBe(201);
-    const { id } = await added.json() as { id: number; };
-    await expect.poll(async () => {
-      const recent = await fetch(`${instance.url}/api/v1/repositories/recent`, { headers });
-      const { repositories } = await recent.json() as { repositories: { id: number; status: string; }[]; };
-      return repositories.find(found => found.id === id)?.status;
-    }).toBe('ready');
-    return { id, dir: join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)), bare };
+    return { id, dir, bare };
   }
 
   /**
@@ -477,43 +461,52 @@ test.describe('commit and push', () => {
     writeFileSync(join(dir, 'README.md'), '# Changed\n');
     writeFileSync(join(dir, 'new.md'), '# New\n');
     gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'to push');
-    // The remote holds the push until the test lets it go.
+    // The remote holds the push until the test lets it go, and for a minute at most if it never does.
     const release = join(root, `release-${next}`);
     const hook = join(bare, 'hooks', 'pre-receive');
-    writeFileSync(hook, `#!/bin/sh\nwhile [ ! -e '${release}' ]; do sleep 0.1; done\nexit 0\n`);
+    writeFileSync(
+      hook,
+      `#!/bin/sh\nwaited=0\nwhile [ ! -e '${release}' ] && [ $waited -lt 600 ]; do sleep 0.1; waited=$((waited + 1)); done\nexit 0\n`
+    );
     chmodSync(hook, 0o755);
-    await openScreen(page, `/repositories/${id}`);
-    await expect(summary(page)).toHaveText(/main\s*·\s*1 to push/);
-    await expect(changesButton(page, 'Changes (2)')).toBeVisible();
-    await changesButton(page).click();
-    await tick(page, 'new.md').click();
-    await expect(tick(page, 'new.md')).not.toBeChecked();
-
-    await pushFromBar(page);
-    const running = async () => {
-      const gitActions = bar(page).getByRole('button', { name: 'Git actions' });
-      if (await gitActions.isVisible()) {
-        await expect(gitActions).toHaveAttribute('data-busy', 'true');
-      } else {
-        await expect(bar(page).getByRole('button', { name: 'Pushing…' })).toBeVisible();
-      }
-    };
-    await running();
-
-    await page.reload();
-
-    await expect(summary(page)).toHaveText(/main\s*·\s*1 to push/);
-    await running();
-    await expect(changesButton(page, 'Changes (2)')).toBeVisible();
-    if (await changesButton(page).getAttribute('aria-pressed') === 'false') {
-      await changesButton(page).click();
+    try {
+      await holdAndReload();
+    } finally {
+      writeFileSync(release, '');
     }
-    await expect(tick(page, 'new.md')).not.toBeChecked();
-    await expect(tick(page, 'README.md')).toBeChecked();
-
-    writeFileSync(release, '');
     await expect(summary(page)).toHaveText('main');
     expect(gitIn(bare, 'log', '-1', '--format=%s', 'main').trim()).toBe('to push');
+
+    async function holdAndReload(): Promise<void> {
+      await openScreen(page, `/repositories/${id}`);
+      await expect(summary(page)).toHaveText(/main\s*·\s*1 to push/);
+      await expect(changesButton(page, 'Changes (2)')).toBeVisible();
+      await changesButton(page).click();
+      await tick(page, 'new.md').click();
+      await expect(tick(page, 'new.md')).not.toBeChecked();
+
+      await pushFromBar(page);
+      const running = async () => {
+        const gitActions = bar(page).getByRole('button', { name: 'Git actions' });
+        if (await gitActions.isVisible()) {
+          await expect(gitActions).toHaveAttribute('data-busy', 'true');
+        } else {
+          await expect(bar(page).getByRole('button', { name: 'Pushing…' })).toBeVisible();
+        }
+      };
+      await running();
+
+      await page.reload();
+
+      await expect(summary(page)).toHaveText(/main\s*·\s*1 to push/);
+      await running();
+      await expect(changesButton(page, 'Changes (2)')).toBeVisible();
+      if (await changesButton(page).getAttribute('aria-pressed') === 'false') {
+        await changesButton(page).click();
+      }
+      await expect(tick(page, 'new.md')).not.toBeChecked();
+      await expect(tick(page, 'README.md')).toBeChecked();
+    }
   });
 });
 
@@ -528,7 +521,7 @@ test.describe('every action, by touch and by keyboard', () => {
     const [ id ] = seed(instance.dataDir, {
       repositories: [ { userId: ADMIN_ID, name: 'handbook', workingCopy: 'handbook' } ]
     }).repositoryIds;
-    const dir = join(instance.dataDir, 'repos', String(ADMIN_ID), String(id));
+    const dir = workingCopyOf(instance.dataDir, id);
     const lines = Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n');
     writeFileSync(join(dir, 'README.md'), `# Handbook\n${lines}\n`);
     gitIn(dir, 'commit', '-qam', 'longer');
@@ -628,8 +621,6 @@ test.describe('every action, by touch and by keyboard', () => {
 });
 
 test.describe('the credential dialogs and the banner', () => {
-  test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
-
   let root: string;
   let ssh: GitSshServer;
   let git: GitHttpServer;
@@ -715,7 +706,7 @@ test.describe('the credential dialogs and the banner', () => {
     const [ publicId ] = seed(instance.dataDir, {
       repositories: [ { userId: ADMIN_ID, name: 'public', remoteUrl } ]
     }).repositoryIds;
-    const dir = join(instance.dataDir, 'repos', String(ADMIN_ID), String(publicId));
+    const dir = workingCopyOf(instance.dataDir, publicId);
     rmSync(dir, { recursive: true, force: true });
     gitIn(dirname(dir), 'clone', '-q', bare, dir);
     gitIn(dir, 'remote', 'set-url', 'origin', remoteUrl);

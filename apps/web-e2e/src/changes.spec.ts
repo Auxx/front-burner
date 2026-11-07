@@ -19,13 +19,10 @@ import {
   startGitSshServer
 } from './support/git-ssh-server';
 import { adminAuthToken, confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
-import { sshRepository } from './support/ssh-repository';
+import { addOverApi as addRepository, ADMIN_ID, sshRepository } from './support/repositories';
 import { gitIn } from './support/working-copy';
 
 test.use({ instanceOptions: { onboarded: true } });
-
-/** The administrator that onboarding created. */
-const ADMIN_ID = 1;
 
 const changesButton = (page: Page, name: string | RegExp = /^Changes/) =>
   page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name });
@@ -388,29 +385,8 @@ test.describe('fixing credentials from a push', () => {
     credentials: object
   ): Promise<{ id: number; bare: string; }> {
     const { remoteUrl, bare } = remote();
-    const authToken = await adminAuthToken(instance.url);
-    const added = await fetch(`${instance.url}/api/v1/repositories`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${authToken}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ remoteUrl, name, cloneMode: 'full', credentials })
-    });
-    expect(added.status).toBe(201);
-    const { id } = await added.json() as { id: number; };
-    await expect.poll(async () => {
-      const recent = await fetch(`${instance.url}/api/v1/repositories/recent`, {
-        headers: { authorization: `Bearer ${authToken}` }
-      });
-      const { repositories } = await recent.json() as { repositories: { id: number; status: string; }[]; };
-      return repositories.find(found => found.id === id)?.status;
-    }).toBe('ready');
-    gitIn(
-      join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)),
-      'commit',
-      '-q',
-      '--allow-empty',
-      '-m',
-      'second'
-    );
+    const { id, dir } = await addRepository(instance, { name, remoteUrl, credentials });
+    gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
     return { id, bare };
   }
 
