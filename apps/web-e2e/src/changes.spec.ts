@@ -387,6 +387,43 @@ test.describe('fixing credentials from a push', () => {
     return { remoteUrl: `${git.url}/${name}.git`, bare };
   }
 
+  /**
+   * Adds a repository of a new remote over the API, as an administrator, and
+   * waits for its clone; returns its ID and the bare repository. The working
+   * copy has one commit to push.
+   */
+  async function addOverApi(
+    instance: { url: string; dataDir: string; },
+    name: string,
+    credentials: object
+  ): Promise<{ id: number; bare: string; }> {
+    const { remoteUrl, bare } = remote();
+    const authToken = await adminAuthToken(instance.url);
+    const added = await fetch(`${instance.url}/api/v1/repositories`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${authToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ remoteUrl, name, cloneMode: 'full', credentials })
+    });
+    expect(added.status).toBe(201);
+    const { id } = await added.json() as { id: number; };
+    await expect.poll(async () => {
+      const recent = await fetch(`${instance.url}/api/v1/repositories/recent`, {
+        headers: { authorization: `Bearer ${authToken}` }
+      });
+      const { repositories } = await recent.json() as { repositories: { id: number; status: string; }[]; };
+      return repositories.find(found => found.id === id)?.status;
+    }).toBe('ready');
+    gitIn(
+      join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)),
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'second'
+    );
+    return { id, bare };
+  }
+
   /** Gives new HTTPS credentials in the dialog, and saves them. */
   async function saveNewCredentials(page: Page, credentials: { username: string; password: string; }): Promise<void> {
     await expect(dialog(page)).toBeVisible();
@@ -430,35 +467,11 @@ test.describe('fixing credentials from a push', () => {
 
   test('AC-REPO-002.3: pushing with a read-only token says so, and Use other credentials fixes it', async ({ page, instance }) => {
     await confirmCommitAuthor(instance.url);
-    const { remoteUrl, bare } = remote();
-    const authToken = await adminAuthToken(instance.url);
-    const added = await fetch(`${instance.url}/api/v1/repositories`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${authToken}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        remoteUrl,
-        name: `read-only-${next}`,
-        cloneMode: 'full',
-        credentials: { mode: 'new-https', name: 'read only', ...READER }
-      })
+    const { id, bare } = await addOverApi(instance, `read-only-${next}`, {
+      mode: 'new-https',
+      name: 'read only',
+      ...READER
     });
-    expect(added.status).toBe(201);
-    const { id } = await added.json() as { id: number; };
-    await expect.poll(async () => {
-      const recent = await fetch(`${instance.url}/api/v1/repositories/recent`, {
-        headers: { authorization: `Bearer ${authToken}` }
-      });
-      const { repositories } = await recent.json() as { repositories: { id: number; status: string; }[]; };
-      return repositories.find(found => found.id === id)?.status;
-    }).toBe('ready');
-    gitIn(
-      join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)),
-      'commit',
-      '-q',
-      '--allow-empty',
-      '-m',
-      'second'
-    );
     await openScreen(page, `/repositories/${id}`);
 
     await push(page);
@@ -469,6 +482,40 @@ test.describe('fixing credentials from a push', () => {
     await saveNewCredentials(page, WRITER);
 
     await expect(toasts(page).getByText('Pushed 1 commit to origin/main')).toBeVisible();
+    expect(gitIn(bare, 'log', '-1', '--format=%s', 'main').trim()).toBe('second');
+  });
+
+  test('AC-REPO-002.4: with an expired saved token used by four repositories, a push offers Update the token, and after updating the push runs again', async ({ page, instance }) => {
+    await confirmCommitAuthor(instance.url);
+    const EXPIRED = { username: WRITER.username, password: 'expired-token' };
+    const { id, bare } = await addOverApi(instance, 'work-1', { mode: 'new-https', name: 'GitHub work', ...EXPIRED });
+    const authToken = await adminAuthToken(instance.url);
+    const info = await (await fetch(`${instance.url}/api/v1/repositories/${id}/credentials`, {
+      headers: { authorization: `Bearer ${authToken}` }
+    })).json() as { inUse: { id: number; }; };
+    for (const name of [ 'work-2', 'work-3', 'work-4' ]) {
+      await addOverApi(instance, name, { mode: 'saved', credentialId: info.inUse.id });
+    }
+    await openScreen(page, `/repositories/${id}`);
+
+    await push(page);
+    await expect(problem(page)).toContainText('The remote refused your credentials.');
+    await problem(page).getByRole('button', { name: 'Fix credentials' }).click();
+
+    const update = dialog(page).getByRole('radio', { name: 'Update the token of GitHub work' });
+    await expect(update).toBeChecked();
+    await expect(update).toBeFocused();
+    await expect(dialog(page)).toContainText('Used by 4 of your repositories');
+    await expect(dialog(page).getByLabel('Username')).toHaveValue(WRITER.username);
+    await expect(dialog(page).getByRole('radio', { name: 'Use other credentials for this repository' }))
+      .toBeAttached();
+    expect((await new AxeBuilder({ page }).include('dlg-repository-credentials').analyze()).violations).toEqual([]);
+    await dialog(page).getByLabel('Password or token', { exact: true }).fill(WRITER.password);
+    await dialog(page).getByRole('button', { name: 'Update' }).click();
+
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(toasts(page).getByText('Pushed 1 commit to origin/main')).toBeVisible();
+    await expect(problem(page)).toHaveCount(0);
     expect(gitIn(bare, 'log', '-1', '--format=%s', 'main').trim()).toBe('second');
   });
 

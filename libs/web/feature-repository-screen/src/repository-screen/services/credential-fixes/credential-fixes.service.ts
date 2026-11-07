@@ -16,9 +16,11 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
  * does: **Try again** and **Unlock** run through `PushService`; **Add
  * credentials**, **Fix credentials** and **Use other credentials** open the
  * repository credentials dialog (RC-7), and once it saved, the push runs again
- * on its own (RC-9). **Cancel** changes nothing, and the problem stays. A
- * refused key gets RC-14's hint; plan 64 adds updating saved HTTPS
- * credentials, and plan 66 the changed host key. Provided by the page.
+ * on its own (RC-9). **Cancel** changes nothing, and the problem stays.
+ * Refused credentials offer to update the token of saved HTTPS credentials,
+ * and a refused key gets RC-14's hint: the dialog shows whichever fits the
+ * credentials in use (RC-12, RC-14). Plan 66 adds the changed host key.
+ * Provided by the page.
  */
 @Injectable()
 export class CredentialFixesService {
@@ -38,7 +40,7 @@ export class CredentialFixesService {
       case 'other-credentials':
         return this.replaceCredentials({});
       case 'fix-credentials':
-        return this.replaceCredentials({ hint: 'refused-key' });
+        return this.replaceCredentials({ hint: 'refused-key', offerTokenUpdate: true });
       default:
         return undefined;
     }

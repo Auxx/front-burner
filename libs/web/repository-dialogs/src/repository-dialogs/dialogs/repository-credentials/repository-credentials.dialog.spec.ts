@@ -12,7 +12,7 @@ import { CredentialsApi, KnownHostsApi, RepositoriesApi } from '@front-burner/we
 import { firstValueFrom, of, Subject, throwError } from 'rxjs';
 
 import { dialogButton, overlay, settleDialog } from '../../../testing/dialog-testing';
-import { choose, control, radioLabels, selectValue, type } from '../../../testing/form-testing';
+import { choose, control, errorOf, radioLabels, selectValue, type } from '../../../testing/form-testing';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { RepositoryCredentialsDialog, type RepositoryCredentialsDialogData } from './repository-credentials.dialog';
 
@@ -47,6 +47,9 @@ const sshWithout: RepositoryCredentialsInfo = { protocol: 'ssh', inUse: null };
 const httpsWithout: RepositoryCredentialsInfo = { protocol: 'https', inUse: null };
 const nothingSaved: SavedCredentials = { https: [], sshKeys: [] };
 
+const githubWork = { id: 7, name: 'GitHub work', username: 'ada', missing: false };
+const httpsInUse: RepositoryCredentialsInfo = { protocol: 'https', inUse: { kind: 'https', ...githubWork, usedBy: 4 } };
+
 const hostKey = {
   host: 'git.example.com',
   port: 22,
@@ -67,6 +70,7 @@ describe('RepositoryCredentialsDialog', () => {
   let repositoriesApi: {
     repositoryCredentials: ReturnType<typeof vi.fn>;
     replaceRepositoryCredentials: ReturnType<typeof vi.fn>;
+    updateRepositoryToken: ReturnType<typeof vi.fn>;
   };
   let credentialsApi: {
     list: ReturnType<typeof vi.fn>;
@@ -108,7 +112,8 @@ describe('RepositoryCredentialsDialog', () => {
   beforeEach(() => {
     repositoriesApi = {
       repositoryCredentials: vi.fn(() => of(httpsWithout)),
-      replaceRepositoryCredentials: vi.fn(() => of(httpsWithout))
+      replaceRepositoryCredentials: vi.fn(() => of(httpsWithout)),
+      updateRepositoryToken: vi.fn(() => of(httpsInUse))
     };
     credentialsApi = {
       list: vi.fn(() => of(nothingSaved)),
@@ -117,7 +122,14 @@ describe('RepositoryCredentialsDialog', () => {
     };
     knownHostsApi = { trust: vi.fn(() => of(undefined)) };
     TestBed.configureTestingModule({
-      imports: [ translocoTesting({ 'errors.host-unreachable': '{{ host }} can\'t be reached.' }) ],
+      imports: [
+        translocoTesting({
+          'errors.host-unreachable': '{{ host }} can\'t be reached.',
+          // The test module has no ICU transpiler; en.json's plural is checked by the web application.
+          [`${KEY}.usedBy`]: 'Used by {{ count }} of your repositories',
+          [`${KEY}.choices.update`]: 'Update the token of {{ name }}'
+        })
+      ],
       providers: [
         { provide: RepositoriesApi, useValue: repositoriesApi },
         { provide: CredentialsApi, useValue: credentialsApi },
@@ -406,5 +418,230 @@ describe('RepositoryCredentialsDialog', () => {
 
     expect(dialog().querySelector('ui-inline-banner[status="danger"]')).not.toBeNull();
     expect(dialogButton(`${KEY}.save`)?.getAttribute('aria-disabled')).toBe('true');
+  });
+  describe('updating a saved token (RC-12 to RC-14)', () => {
+    const UPDATE = 'Update the token of GitHub work';
+    const OTHER = `${KEY}.choices.other`;
+
+    beforeEach(() => {
+      repositoriesApi.repositoryCredentials.mockReturnValue(of(httpsInUse));
+      credentialsApi.list.mockReturnValue(of({ https: [ githubWork ], sshKeys: [] }));
+    });
+
+    async function typeToken(token: string): Promise<void> {
+      type(control(dialog(), `${HTTPS}.password`), token);
+      await settleDialog();
+    }
+
+    it('offers to update the token by default, with the username prefilled', async () => {
+      await open({ offerTokenUpdate: true });
+
+      expect(radioLabels(dialog())).toEqual([ UPDATE, OTHER ]);
+      expect(
+        dialog().querySelector<HTMLInputElement>('input[type=radio]:checked')?.closest('label')?.textContent?.trim()
+      )
+        .toBe(UPDATE);
+      expect(control(dialog(), `${HTTPS}.username`).value).toBe('ada');
+      const token = control(dialog(), `${HTTPS}.password`);
+      expect(token.type).toBe('password');
+      expect(token.getAttribute('autocomplete')).toBe('off');
+      expect(dialogButton(`${KEY}.update`)).toBeDefined();
+      expect(dialogButton(`${KEY}.update`)?.getAttribute('aria-disabled')).toBe('true');
+    });
+
+    it('says how many repositories use the credentials', async () => {
+      await open({ offerTokenUpdate: true });
+      expect(text()).toContain('Used by 4 of your repositories');
+      await cancel();
+
+      repositoriesApi.repositoryCredentials.mockReturnValue(
+        of(
+          { protocol: 'https', inUse: { kind: 'https', ...githubWork, usedBy: 1 } } satisfies RepositoryCredentialsInfo
+        )
+      );
+      await open({ offerTokenUpdate: true });
+      expect(text()).toContain('Used by 1 of your repositories');
+    });
+
+    it('updates the token, then closes with true', async () => {
+      await open({ offerTokenUpdate: true });
+      const closed = firstValueFrom(ref.closed);
+      type(control(dialog(), `${HTTPS}.username`), 'ada-lovelace');
+      await typeToken('ghp_new');
+
+      dialogButton(`${KEY}.update`)?.click();
+      await settleDialog();
+
+      expect(repositoriesApi.updateRepositoryToken).toHaveBeenCalledWith(5, {
+        username: 'ada-lovelace',
+        password: 'ghp_new'
+      });
+      expect(repositoriesApi.replaceRepositoryCredentials).not.toHaveBeenCalled();
+      expect(await closed).toBe(true);
+    });
+
+    it('sends the token as typed, without trimming it', async () => {
+      await open({ offerTokenUpdate: true });
+      await typeToken(' pass word ');
+
+      dialogButton(`${KEY}.update`)?.click();
+      await settleDialog();
+
+      expect(repositoriesApi.updateRepositoryToken).toHaveBeenCalledWith(5, {
+        username: 'ada',
+        password: ' pass word '
+      });
+    });
+
+    it('AC-REPO-002.5: an update whose check fails shows the error', async () => {
+      repositoriesApi.updateRepositoryToken.mockReturnValueOnce(
+        throwError(() =>
+          failure(400, 'validation-failed', {
+            fields: [ { path: 'credentials', code: 'credentials-refused', params: {} } ]
+          })
+        )
+      );
+      await open({ offerTokenUpdate: true });
+      const closed = firstValueFrom(ref.closed);
+      await typeToken('ghp_wrong');
+
+      dialogButton(`${KEY}.update`)?.click();
+      await settleDialog();
+
+      expect(text()).toContain('web-repository-dialogs.errors.credentials.credentials-refused');
+      expect(shown()).not.toBeNull();
+      expect(control(dialog(), `${HTTPS}.username`).value).toBe('ada');
+      expect(ref.dismissible()).toBe(true);
+
+      // A failure that concerns no field is shown above the buttons.
+      repositoriesApi.updateRepositoryToken.mockReturnValueOnce(
+        throwError(() =>
+          failure(400, 'validation-failed', {
+            fields: [ { path: 'remoteUrl', code: 'host-unreachable', params: { host: 'github.com' } } ]
+          })
+        )
+      );
+      dialogButton(`${KEY}.update`)?.click();
+      await settleDialog();
+      expect(dialog().querySelector('ui-inline-banner[status="danger"]')?.textContent).toContain(
+        'github.com can\'t be reached.'
+      );
+
+      await cancel();
+      expect(await closed).toBeUndefined();
+    });
+
+    it('shows the other choices when the credentials were replaced meanwhile', async () => {
+      const other = { id: 8, name: 'Other', username: 'grace', missing: false };
+      repositoriesApi.updateRepositoryToken.mockReturnValueOnce(
+        throwError(() => failure(409, 'credentials-not-updatable'))
+      );
+      await open({ offerTokenUpdate: true });
+      repositoriesApi.repositoryCredentials.mockReturnValue(
+        of({ protocol: 'https', inUse: { kind: 'https', ...other, usedBy: 1 } } satisfies RepositoryCredentialsInfo)
+      );
+      await typeToken('ghp_new');
+
+      dialogButton(`${KEY}.update`)?.click();
+      await settleDialog();
+
+      expect(dialog().querySelector('ui-inline-banner[status="danger"]')).not.toBeNull();
+      expect(
+        dialog().querySelector<HTMLInputElement>('input[type=radio]:checked')?.closest('label')?.textContent?.trim()
+      )
+        .toBe(OTHER);
+      expect(dialogButton(`${KEY}.save`)).toBeDefined();
+      const values = [ ...dialog().querySelectorAll('[uiKeyValue]') ].map(element => element.textContent ?? '');
+      expect(values.some(value => value.includes('Other'))).toBe(true);
+    });
+
+    it('shows a refused field of the request on its field', async () => {
+      repositoriesApi.updateRepositoryToken.mockReturnValueOnce(
+        throwError(() =>
+          failure(400, 'validation-failed', { fields: [ { path: 'password', code: 'too-big', params: {} } ] })
+        )
+      );
+      await open({ offerTokenUpdate: true });
+      await typeToken('ghp_new');
+
+      dialogButton(`${KEY}.update`)?.click();
+      await settleDialog();
+
+      expect(errorOf(dialog(), `${HTTPS}.password`)).toBe('web-repository-dialogs.errors.credentials.password.too-big');
+    });
+
+    it('offers the update only for saved HTTPS credentials', async () => {
+      // Not without the request to offer it: Use other credentials (RC-14).
+      await open();
+      expect(radioLabels(dialog())).toEqual([
+        `${HTTPS}.choices.saved`,
+        `${HTTPS}.choices.new-https`,
+        `${HTTPS}.choices.none`
+      ]);
+      await cancel();
+
+      // Not for a key, which gets RC-14's hint.
+      repositoriesApi.repositoryCredentials.mockReturnValue(of(sshInUse));
+      credentialsApi.list.mockReturnValue(of({ https: [], sshKeys: [ laptop ] }));
+      await open({ hint: 'refused-key', offerTokenUpdate: true });
+      expect(radioLabels(dialog())).not.toContain(UPDATE);
+      expect(text()).toContain(`${KEY}.refusedKey`);
+      await cancel();
+
+      // Not for a repository without credentials.
+      repositoriesApi.repositoryCredentials.mockReturnValue(of(httpsWithout));
+      credentialsApi.list.mockReturnValue(of({ https: [ githubWork ], sshKeys: [] }));
+      await open({ offerTokenUpdate: true });
+      expect(radioLabels(dialog())).toEqual([
+        `${HTTPS}.choices.saved`,
+        `${HTTPS}.choices.new-https`,
+        `${HTTPS}.choices.none`
+      ]);
+    });
+
+    it('Use other credentials shows the choices of the protocol', async () => {
+      await open({ offerTokenUpdate: true });
+
+      choose(dialog(), OTHER);
+      await settleDialog();
+
+      expect(radioLabels(dialog())).toEqual([
+        UPDATE,
+        OTHER,
+        `${HTTPS}.choices.saved`,
+        `${HTTPS}.choices.new-https`,
+        `${HTTPS}.choices.none`
+      ]);
+      expect(dialogButton(`${KEY}.save`)).toBeDefined();
+      expect(dialogButton(`${KEY}.update`)).toBeUndefined();
+      expect(text()).not.toContain('Used by 4 of your repositories');
+    });
+
+    it('sends only the chosen choice\'s fields', async () => {
+      await open({ offerTokenUpdate: true });
+      choose(dialog(), OTHER);
+      await settleDialog();
+      choose(dialog(), `${HTTPS}.choices.new-https`);
+      await settleDialog();
+      type(control(dialog(), `${HTTPS}.name`), 'Other');
+      type(control(dialog(), `${HTTPS}.username`), 'grace');
+      type(control(dialog(), `${HTTPS}.password`), 'ghp_other');
+      await settleDialog();
+
+      choose(dialog(), UPDATE);
+      await settleDialog();
+      expect(control(dialog(), `${HTTPS}.username`).value).toBe('ada');
+      expect(control(dialog(), `${HTTPS}.password`).value).toBe('');
+      expect(dialogButton(`${KEY}.update`)?.getAttribute('aria-disabled')).toBe('true');
+      await typeToken('ghp_update');
+      choose(dialog(), OTHER);
+      await settleDialog();
+      choose(dialog(), `${HTTPS}.choices.none`);
+      await settleDialog();
+      await save();
+
+      expect(repositoriesApi.replaceRepositoryCredentials).toHaveBeenCalledWith(5, { mode: 'none' });
+      expect(repositoriesApi.updateRepositoryToken).not.toHaveBeenCalled();
+    });
   });
 });
