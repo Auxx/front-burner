@@ -28,12 +28,14 @@ export function toAddRepositoryError(error: GitOperationError, context: RemoteEr
     case 'repository-not-found':
       return onField('remoteUrl', error.code);
     case 'host-key-changed': {
-      // RC-21: what was trusted and, when the probe reached the server, the new key.
-      const { port, ...changed } = error.params;
+      // RC-21: what was trusted and, when the probe reached the server, the new key; nothing else.
+      const { port, type, key, fingerprint, trustedType, trustedFingerprint } = error.params;
+      const changed = Object.entries({ type, key, fingerprint, trustedType, trustedFingerprint })
+        .filter(([ , value ]) => value !== undefined);
       return onField('remoteUrl', 'host-key-changed', {
-        ...changed,
         host,
-        ...(port === undefined ? {} : { port: Number(port) })
+        ...(port === undefined ? {} : { port: Number(port) }),
+        ...Object.fromEntries(changed)
       });
     }
     case 'auth-failed':

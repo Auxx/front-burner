@@ -105,8 +105,15 @@ describe('ChangedHostKeySchema', () => {
     expect(ChangedHostKeySchema.parse(withoutNewKey)).toEqual(withoutNewKey);
   });
 
-  it('needs the trusted fingerprint', () => {
-    expect(ChangedHostKeySchema.safeParse({ ...changed, trustedFingerprint: undefined }).success).toBe(false);
+  it('reads a change whose trusted key the backend could not name', () => {
+    const withoutTrusted = { host: changed.host, port: changed.port, fingerprint: changed.fingerprint };
+
+    expect(ChangedHostKeySchema.parse(withoutTrusted)).toEqual(withoutTrusted);
+  });
+
+  it('needs the host and port', () => {
+    expect(ChangedHostKeySchema.safeParse({ ...changed, port: undefined }).success).toBe(false);
+    expect(ChangedHostKeySchema.safeParse({ ...changed, host: undefined }).success).toBe(false);
   });
 });
 

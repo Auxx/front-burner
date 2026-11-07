@@ -1099,8 +1099,8 @@ export class GitEngine implements BeforeApplicationShutdown {
   /**
    * A changed host key with the key that was trusted and, when the probe
    * reaches the server, the new one (RC-21). Of the trusted keys, the one of
-   * the new key's type, the user's own before the instance's; otherwise the
-   * first.
+   * the new key's type if there is one, and the user's own before the
+   * instance's, as the user's lines come last.
    */
   private async describeChangedHostKey(
     failure: GitOperationError,
@@ -1116,7 +1116,7 @@ export class GitEngine implements BeforeApplicationShutdown {
       this.logger.debug(`Host key probe of ${target.host}:${target.port} failed: ${(error as Error).message}`);
     }
     const sameType = trusted.filter(({ type }) => type === probed?.type);
-    const shown = sameType.at(-1) ?? trusted[0];
+    const shown = sameType.at(-1) ?? trusted.at(-1);
     return new GitOperationError('host-key-changed', failure.detail, {
       ...failure.params,
       host: target.host,

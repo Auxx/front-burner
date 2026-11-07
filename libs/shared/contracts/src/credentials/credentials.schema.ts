@@ -103,9 +103,13 @@ export const ChangedHostKeySchema = z
     type: z.string().optional(),
     key: z.string().optional(),
     fingerprint: z.string().optional(),
-    /** The key type that was trusted, as `known_hosts` names it. */
-    trustedType: z.string(),
-    trustedFingerprint: z.string()
+    /**
+     * The key type that was trusted, as `known_hosts` names it. Missing, with
+     * the fingerprint, when no line names the host plainly, such as a pattern
+     * in the operator's file.
+     */
+    trustedType: z.string().optional(),
+    trustedFingerprint: z.string().optional()
   })
   .meta({ id: 'ChangedHostKey' });
 

@@ -92,6 +92,11 @@ describe('toAddRepositoryError', () => {
     );
   });
 
+  it('passes on only the changed key\'s params', () => {
+    expect(fail('host-key-changed', { host: 'git.example.com', port: '22', branch: 'main', remoteMessages: 'x' }))
+      .toEqual(onField('remoteUrl', 'host-key-changed', { host: 'git.example.com', port: 22 }));
+  });
+
   it('reports a missing branch on the branch', () => {
     expect(fail('branch-not-found', { host: 'git.example.com', branch: 'main' })).toEqual(
       onField('branch', 'branch-not-found')

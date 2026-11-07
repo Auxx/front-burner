@@ -38,7 +38,7 @@ export function knownHostsLine(entry: Pick<HostKey, 'host' | 'port' | 'type' | '
 
 /**
  * Whether `known_hosts` lines hold any key for a host and port. Like `ssh`, a
- * port other than 22 matches only `[host]:port` entries.
+ * port other than 22 matches only `[host]:port` entries, and case is ignored.
  */
 export function hasHostEntry(knownHosts: readonly string[], target: { host: string; port: number; }): boolean {
   return knownHosts.some(line => isEntryFor(line, target));
@@ -58,9 +58,11 @@ export function trustedKeysFor(
   });
 }
 
+/** Like `ssh`, host names match ignoring case. */
 function isEntryFor(line: string, target: { host: string; port: number; }): boolean {
-  const name = target.port === 22 ? target.host : `[${target.host}]:${target.port}`;
-  return (line.split(/\s+/)[0] ?? '').split(',').includes(name);
+  const host = target.host.toLowerCase();
+  const name = target.port === 22 ? host : `[${host}]:${target.port}`;
+  return (line.split(/\s+/)[0] ?? '').toLowerCase().split(',').includes(name);
 }
 
 /**

@@ -66,18 +66,23 @@ export class KnownHostsService {
    * built-in host the user's key is added next to the instance's (RC-23).
    * The change is logged (RC-24).
    *
-   * @throws ApiErrorException 409 `host-key-unknown` for a host and port that
-   * neither the user nor the instance has a key for, which {@link trust} is
-   * for; `invalid-key` on `key` when the key is not of the type named.
+   * A key that is already trusted changes nothing and is not logged.
+   *
+   * @throws ApiErrorException 409 `host-key-not-trusted` for a host and port
+   * that neither the user nor the instance has a key for, which {@link trust}
+   * is for; `invalid-key` on `key` when the key is not of the type named.
    */
   replace(userId: number, request: TrustHostRequest): void {
     const entry = checkedEntry(request);
-    const known = [ ...this.gitOptions.knownHosts, ...this.linesFor(userId) ];
+    const mine = this.linesFor(userId);
+    const known = [ ...this.gitOptions.knownHosts, ...mine ];
     if (!hasHostEntry(known, entry)) {
-      throw new ApiErrorException(409, 'host-key-unknown', { host: entry.host, port: entry.port });
+      throw new ApiErrorException(409, 'host-key-not-trusted', { host: entry.host, port: entry.port });
     }
-    const own = trustedKeysFor(this.linesFor(userId), entry);
-    const before = own.length > 0 ? own : trustedKeysFor(this.gitOptions.knownHosts, entry);
+    if (known.includes(knownHostsLine(entry))) {
+      return;
+    }
+    const before = replacedKeys(trustedKeysFor(mine, entry), trustedKeysFor(this.gitOptions.knownHosts, entry), entry);
     const row = rowOf(userId, entry);
     this.database.db.transaction(tx => {
       tx.delete(knownHosts)
@@ -90,6 +95,23 @@ export class KnownHostsService {
         + `${before.map(({ fingerprint }) => fingerprint).join(', ')} → ${row.fingerprint}`
     );
   }
+}
+
+/**
+ * The trusted keys a replacement takes the place of, for the log (RC-24): all
+ * of the user's own for the host and port, which are deleted; without any, the
+ * instance's key of the new key's type, or all of them for a new type.
+ */
+function replacedKeys(
+  own: { type: string; fingerprint: string; }[],
+  instance: { type: string; fingerprint: string; }[],
+  entry: TrustHostRequest
+): { type: string; fingerprint: string; }[] {
+  if (own.length > 0) {
+    return own;
+  }
+  const sameType = instance.filter(({ type }) => type === entry.type);
+  return sameType.length > 0 ? sameType : instance;
 }
 
 /**

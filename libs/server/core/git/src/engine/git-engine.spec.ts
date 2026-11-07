@@ -2154,6 +2154,28 @@ describe('GitEngine', () => {
     });
 
     // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')(
+      'without a key of the new type, names the user\'s own trusted key before the instance\'s',
+      async () => {
+        vi.mocked(probeHostKey).mockRejectedValueOnce(
+          new GitOperationError('host-unreachable', 'no SSH host key received', { host: '127.0.0.1' })
+        );
+        const instance = keyText('ed25519-passphrase.pub').trim().split(' ');
+        const own = keyText('rsa-2048.pub').trim().split(' ');
+        const error = await failureOf(
+          engine({ knownHosts: [ `[127.0.0.1]:${ssh.port} ${instance[0]} ${instance[1]}` ] }).accessCheck(url(), SSH, [
+            `[127.0.0.1]:${ssh.port} ${own[0]} ${own[1]}`
+          ])
+        );
+
+        expect(error.params).toMatchObject({
+          trustedType: 'ssh-rsa',
+          trustedFingerprint: fingerprintOf(`${own[0]} ${own[1]}`)
+        });
+      }
+    );
+
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
     it.skipIf(process.platform === 'win32')('still reports the change when the probe fails', async () => {
       vi.mocked(probeHostKey).mockRejectedValueOnce(
         new GitOperationError('host-unreachable', 'no SSH host key received', { host: '127.0.0.1' })

@@ -144,10 +144,10 @@ describe('KnownHostsService', () => {
       service.trust(alice, host);
 
       const unknown = () => service.replace(alice, { ...host, host: 'new.example.com' });
-      expect(unknown).toThrow(expect.objectContaining({ code: 'host-key-unknown' }));
+      expect(unknown).toThrow(expect.objectContaining({ code: 'host-key-not-trusted' }));
       expect(unknown).toThrow(ApiErrorException);
       expect(() => service.replace(alice, { ...host, port: 2200 })).toThrow(
-        expect.objectContaining({ code: 'host-key-unknown' })
+        expect.objectContaining({ code: 'host-key-not-trusted' })
       );
       expect(() => service.replace(alice, { ...host, type: 'ssh-rsa' })).toThrow(
         expect.objectContaining({ code: 'validation-failed' })
@@ -194,6 +194,33 @@ describe('KnownHostsService', () => {
           + `${fingerprintOf(`ssh-ed25519 ${ED25519}`)} → ${fingerprintOf(`ssh-ed25519 ${OTHER}`)}`
       );
       expect(JSON.stringify(info.mock.calls)).not.toContain(OTHER);
+      info.mockRestore();
+    });
+
+    it('logs only the instance\'s key of the type replaced', () => {
+      service = new KnownHostsService(database, {
+        knownHosts: [ `github.com ssh-ed25519 ${OTHER}`, `github.com ssh-rsa ${RSA}` ]
+      } as GitOptions);
+      const info = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+
+      service.replace(alice, { ...host, host: 'github.com', key: ED25519 });
+
+      expect(info).toHaveBeenCalledWith(
+        `User ${alice} replaced the trusted host key of github.com port 22: `
+          + `${fingerprintOf(`ssh-ed25519 ${OTHER}`)} → ${fingerprintOf(`ssh-ed25519 ${ED25519}`)}`
+      );
+      info.mockRestore();
+    });
+
+    it('does nothing for a key that is already trusted', () => {
+      const info = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      service.trust(alice, host);
+
+      service.replace(alice, { ...host, host: 'github.com', key: OTHER });
+      service.replace(alice, host);
+
+      expect(service.linesFor(alice)).toEqual([ `git.example.com ssh-ed25519 ${ED25519}` ]);
+      expect(info).not.toHaveBeenCalled();
       info.mockRestore();
     });
 

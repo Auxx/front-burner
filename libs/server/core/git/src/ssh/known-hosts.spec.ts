@@ -92,6 +92,12 @@ describe('hasHostEntry', () => {
     expect(hasHostEntry(lines, { host: 'git.example.com', port: 2222 })).toBe(false);
     expect(hasHostEntry(lines, { host: 'other.example.com', port: 22 })).toBe(false);
   });
+
+  it('matches host names ignoring case, as ssh does', () => {
+    expect(hasHostEntry(lines, { host: 'Git.Example.COM', port: 22 })).toBe(true);
+    expect(hasHostEntry([ '[Other.example.com]:2222 ssh-rsa BBBB' ], { host: 'other.example.com', port: 2222 }))
+      .toBe(true);
+  });
 });
 
 describe('trustedKeysFor', () => {
@@ -111,5 +117,9 @@ describe('trustedKeysFor', () => {
       { type: 'ssh-ed25519', fingerprint: fingerprint(line) }
     ]);
     expect(trustedKeysFor([ line ], { host: 'github.com', port: 22 })).toEqual([]);
+  });
+
+  it('matches host names ignoring case, as ssh does', () => {
+    expect(trustedKeysFor([ ...BUILT_IN_KNOWN_HOSTS ], { host: 'GitHub.com', port: 22 })).toHaveLength(3);
   });
 });

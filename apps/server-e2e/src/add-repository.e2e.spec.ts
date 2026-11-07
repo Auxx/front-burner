@@ -1,3 +1,4 @@
+import { fingerprintOf } from '@front-burner/server-core-git';
 import {
   FIXTURE_PASSPHRASE,
   type GitHttpServer,
@@ -7,7 +8,6 @@ import {
   startGitSshServer
 } from '@front-burner/server-core-git/testing';
 import BetterSqlite3 from 'better-sqlite3';
-import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -95,15 +95,17 @@ class Client {
     return { status: response.status, body: (await response.json()) as Answer['body'] };
   }
 
-  async post(path: string, body: unknown): Promise<Answer> {
-    const response = await postJson(this.server, path, body, { authorization: `Bearer ${this.authToken}` });
-    const text = await response.text();
-    return { status: response.status, body: (text === '' ? {} : JSON.parse(text)) as Answer['body'] };
+  post(path: string, body: unknown): Promise<Answer> {
+    return this.send('POST', path, body);
   }
 
-  async put(path: string, body: unknown): Promise<Answer> {
+  put(path: string, body: unknown): Promise<Answer> {
+    return this.send('PUT', path, body);
+  }
+
+  private async send(method: 'POST' | 'PUT', path: string, body: unknown): Promise<Answer> {
     const response = await fetch(`${this.server.url}${path}`, {
-      method: 'PUT',
+      method,
       headers: { 'content-type': 'application/json', authorization: `Bearer ${this.authToken}` },
       body: JSON.stringify(body)
     });
@@ -372,8 +374,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
         const answer = await admin.post(ACCESS_CHECK, { remoteUrl: sshUrl(changed), credentials });
 
         const [ , newType, newKey ] = /^\S+ (\S+) (\S+)/.exec(changed.hostKeyLine) ?? [];
-        const fingerprint = (blob = '') =>
-          `SHA256:${createHash('sha256').update(Buffer.from(blob, 'base64')).digest('base64').replace(/=+$/, '')}`;
+        const fingerprint = (blob = '') => fingerprintOf(`${type} ${blob}`);
         expect(answer.body.fields).toEqual([ {
           path: 'remoteUrl',
           code: 'host-key-changed',
