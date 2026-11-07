@@ -64,9 +64,23 @@ export async function startGitSshServer(options: GitSshServerOptions): Promise<G
   };
 }
 
+/**
+ * A new Ed25519 private key. `ssh2` writes about one key in 250 in a form it
+ * cannot read back ("Malformed OpenSSH private key"), so such a key is
+ * replaced.
+ */
+export function newHostKey(): string {
+  for (;;) {
+    const key = utils.generateKeyPairSync('ed25519').private;
+    if (!(utils.parseKey(key) instanceof Error)) {
+      return key;
+    }
+  }
+}
+
 /** The server of {@link startGitSshServer}, with a new host key, not listening yet. */
 function gitSshServer(options: GitSshServerOptions): Server {
-  const hostKey = utils.generateKeyPairSync('ed25519').private;
+  const hostKey = newHostKey();
   const authorized = options.authorizedKeys.map(parsed);
 
   return new Server({ hostKeys: [ hostKey ] }, client => {
