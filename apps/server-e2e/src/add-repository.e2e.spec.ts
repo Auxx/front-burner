@@ -7,6 +7,7 @@ import {
   startGitSshServer
 } from '@front-burner/server-core-git/testing';
 import BetterSqlite3 from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -96,6 +97,16 @@ class Client {
 
   async post(path: string, body: unknown): Promise<Answer> {
     const response = await postJson(this.server, path, body, { authorization: `Bearer ${this.authToken}` });
+    const text = await response.text();
+    return { status: response.status, body: (text === '' ? {} : JSON.parse(text)) as Answer['body'] };
+  }
+
+  async put(path: string, body: unknown): Promise<Answer> {
+    const response = await fetch(`${this.server.url}${path}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${this.authToken}` },
+      body: JSON.stringify(body)
+    });
     const text = await response.text();
     return { status: response.status, body: (text === '' ? {} : JSON.parse(text)) as Answer['body'] };
   }
@@ -360,9 +371,35 @@ describe('adding a repository (REQ-REPO-001)', () => {
 
         const answer = await admin.post(ACCESS_CHECK, { remoteUrl: sshUrl(changed), credentials });
 
-        expect(answer.body.fields).toEqual([
-          { path: 'remoteUrl', code: 'host-key-changed', params: { host: '127.0.0.1' } }
-        ]);
+        const [ , newType, newKey ] = /^\S+ (\S+) (\S+)/.exec(changed.hostKeyLine) ?? [];
+        const fingerprint = (blob = '') =>
+          `SHA256:${createHash('sha256').update(Buffer.from(blob, 'base64')).digest('base64').replace(/=+$/, '')}`;
+        expect(answer.body.fields).toEqual([ {
+          path: 'remoteUrl',
+          code: 'host-key-changed',
+          params: {
+            host: '127.0.0.1',
+            port: changed.port,
+            type: newType,
+            key: newKey,
+            fingerprint: fingerprint(newKey),
+            trustedType: type,
+            trustedFingerprint: fingerprint(key)
+          }
+        } ]);
+
+        // RC-22, RC-24: replacing the trusted key lets the check through, and the log keeps a trace.
+        const replaced = await admin.put('/api/v1/known-hosts', {
+          host: '127.0.0.1',
+          port: changed.port,
+          type: newType,
+          key: newKey
+        });
+        expect(replaced.status).toBe(204);
+        expect((await admin.post(ACCESS_CHECK, { remoteUrl: sshUrl(changed), credentials })).status).toBe(200);
+        await expect(server.waitForOutput(`${fingerprint(key)} → ${fingerprint(newKey)}`)).resolves.toContain(
+          `replaced the trusted host key of 127.0.0.1 port ${changed.port}`
+        );
       } finally {
         await changed.close();
       }

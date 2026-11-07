@@ -347,6 +347,28 @@
         "tags": [
           "known-hosts"
         ]
+      },
+      "put": {
+        "operationId": "replace",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrustHostRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "known-hosts"
+        ]
       }
     },
     "/api/v1/repositories/recent": {
