@@ -11,7 +11,7 @@
       <!-- The remote's lines as text, never as HTML (GA-31). -->
       <pre class="remote">{{ lines }}</pre>
     }
-    @if (fix(); as fix) {
+    @if (shown.fix; as fix) {
       <div uiBannerActions>
         <button uiButton size="small" (click)="fixSelected.emit(fix)">
           {{ t('web-feature-repository-screen.PushProblemComponent.fixes.' + fix) }}

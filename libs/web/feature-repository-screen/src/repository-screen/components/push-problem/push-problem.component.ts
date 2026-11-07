@@ -22,6 +22,5 @@ export class PushProblemComponent {
   readonly fixSelected = output<PushProblem['fix']>();
   readonly dismissed = output<void>();
 
-  protected readonly fix = computed(() => this.problem().fix);
   protected readonly remoteMessages = computed(() => this.problem().params['remoteMessages']?.trim() || null);
 }

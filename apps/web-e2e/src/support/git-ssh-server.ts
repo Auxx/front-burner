@@ -1,7 +1,7 @@
 import { workspaceRoot } from '@nx/devkit';
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import type { AddressInfo } from 'node:net';
+import { type AddressInfo, createServer, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type ParsedKey, Server, utils } from 'ssh2';
@@ -19,7 +19,7 @@ export interface GitSshServer {
   port: number;
   /** `ssh://git@127.0.0.1:<port>/<path>`. */
   url(path: string): string;
-  /** Listens again on the same port with a new host key, as a server whose key was replaced (RC-21). */
+  /** Answers with a new host key from now on, as a server whose key was replaced (RC-21); open connections end. */
   changeHostKey(): Promise<void>;
   close(): Promise<void>;
 }
@@ -46,21 +46,44 @@ const GIT_COMMAND = /^git-(upload-pack|receive-pack) '\/?([^']+)'$/;
  * An SSH git server on `127.0.0.1` for tests, with a new Ed25519 host key:
  * accepts only the authorized keys and serves `git-upload-pack` and
  * `git-receive-pack` by spawning them.
+ *
+ * It owns the port and the connections itself and hands each connection to the
+ * SSH server of the moment, so that the host key can change without giving up
+ * the port, and closing never waits for a connection that stays open.
  */
 export async function startGitSshServer(options: GitSshServerOptions): Promise<GitSshServer> {
-  let server = gitSshServer(options);
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const port = (server.address() as AddressInfo).port;
-  const close = () => new Promise<void>(resolve => server.close(() => resolve()));
+  let ssh = gitSshServer(options);
+  const sockets = new Set<Socket>();
+  const tcp = createServer(socket => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
+    ssh.injectSocket(socket);
+  });
+  const endConnections = () => {
+    for (const socket of sockets) {
+      socket.destroy();
+    }
+  };
+  await new Promise<void>((resolve, reject) => {
+    tcp.once('error', reject);
+    tcp.listen(0, '127.0.0.1', () => {
+      tcp.off('error', reject);
+      resolve();
+    });
+  });
+  const port = (tcp.address() as AddressInfo).port;
   return {
     port,
     url: path => `ssh://git@127.0.0.1:${port}/${path}`,
     changeHostKey: async () => {
-      await close();
-      server = gitSshServer(options);
-      await new Promise<void>(resolve => server.listen(port, '127.0.0.1', resolve));
+      ssh = gitSshServer(options);
+      endConnections();
     },
-    close
+    close: () =>
+      new Promise((resolve, reject) => {
+        tcp.close(error => (error ? reject(error) : resolve()));
+        endConnections();
+      })
   };
 }
 
@@ -78,7 +101,7 @@ export function newHostKey(): string {
   }
 }
 
-/** The server of {@link startGitSshServer}, with a new host key, not listening yet. */
+/** The SSH server of {@link startGitSshServer}, with a new host key, for the connections it is given. */
 function gitSshServer(options: GitSshServerOptions): Server {
   const hostKey = newHostKey();
   const authorized = options.authorizedKeys.map(parsed);

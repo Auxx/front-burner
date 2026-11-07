@@ -102,9 +102,7 @@ export class CredentialFixesService {
   }
 
   private async trustHost(): Promise<void> {
-    const params = this.pushes.problem()?.params;
-    // A push's outcome writes the port as a string.
-    const parsed = HostKeySchema.safeParse({ ...params, port: Number(params?.['port']) });
+    const parsed = HostKeySchema.safeParse(this.pushes.problem()?.params);
     if (!parsed.success) {
       return;
     }

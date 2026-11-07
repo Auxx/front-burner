@@ -50,6 +50,20 @@ function unconfirmedHandbook(instance: { dataDir: string; }, name = 'handbook'):
   return { id, dir: join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)) };
 }
 
+/** **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
+async function push(page: Page): Promise<void> {
+  const bar = page.getByRole('banner');
+  const button = bar.getByRole('button', { name: 'Push', exact: true });
+  const gitActions = bar.getByRole('button', { name: 'Git actions' });
+  await expect(button.or(gitActions)).toBeVisible();
+  if (await gitActions.isVisible()) {
+    await gitActions.click();
+    await page.getByRole('menuitem', { name: 'Push' }).click();
+  } else {
+    await button.click();
+  }
+}
+
 async function openScreen(page: Page, url: string): Promise<void> {
   await page.goto(url);
   await logIn(page);
@@ -222,17 +236,6 @@ test.describe('pushing', () => {
   const bar = (page: Page) => page.getByRole('banner');
   const gitActions = (page: Page) => bar(page).getByRole('button', { name: 'Git actions' });
 
-  /** **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
-  async function push(page: Page): Promise<void> {
-    const button = bar(page).getByRole('button', { name: 'Push', exact: true });
-    await expect(button.or(gitActions(page))).toBeVisible();
-    if (await gitActions(page).isVisible()) {
-      await gitActions(page).click();
-      await page.getByRole('menuitem', { name: 'Push' }).click();
-    } else {
-      await button.click();
-    }
-  }
   const summary = (page: Page) => bar(page).locator('rs-git-status-summary');
   const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
 
@@ -423,19 +426,6 @@ test.describe('fixing credentials from a push', () => {
   const problem = (page: Page) => bar(page).locator('rs-push-problem');
   const dialog = (page: Page) => page.getByRole('dialog', { name: 'Repository credentials' });
   const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
-  const gitActions = (page: Page) => bar(page).getByRole('button', { name: 'Git actions' });
-
-  /** **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
-  async function push(page: Page): Promise<void> {
-    const button = bar(page).getByRole('button', { name: 'Push', exact: true });
-    await expect(button.or(gitActions(page))).toBeVisible();
-    if (await gitActions(page).isVisible()) {
-      await gitActions(page).click();
-      await page.getByRole('menuitem', { name: 'Push' }).click();
-    } else {
-      await button.click();
-    }
-  }
 
   /** A remote on the git server, a clone of the handbook; returns its URL and the bare repository. */
   function remote(): { remoteUrl: string; bare: string; } {
@@ -633,19 +623,6 @@ test.describe('a locked key', () => {
   const dialog = (page: Page) => page.getByRole('dialog', { name: 'Unlock laptop' });
   const summary = (page: Page) => bar(page).locator('rs-git-status-summary');
   const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
-  const gitActions = (page: Page) => bar(page).getByRole('button', { name: 'Git actions' });
-
-  /** **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
-  async function push(page: Page): Promise<void> {
-    const button = bar(page).getByRole('button', { name: 'Push', exact: true });
-    await expect(button.or(gitActions(page))).toBeVisible();
-    if (await gitActions(page).isVisible()) {
-      await gitActions(page).click();
-      await page.getByRole('menuitem', { name: 'Push' }).click();
-    } else {
-      await button.click();
-    }
-  }
 
   /**
    * A repository added over SSH with the passphrase-protected key `laptop`
@@ -788,19 +765,6 @@ test.describe('a changed host key', () => {
   const problem = (page: Page) => bar(page).locator('rs-push-problem');
   const dialog = (page: Page) => page.getByRole('dialog', { name: HEADING });
   const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
-  const gitActions = (page: Page) => bar(page).getByRole('button', { name: 'Git actions' });
-
-  /** **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
-  async function push(page: Page): Promise<void> {
-    const button = bar(page).getByRole('button', { name: 'Push', exact: true });
-    await expect(button.or(gitActions(page))).toBeVisible();
-    if (await gitActions(page).isVisible()) {
-      await gitActions(page).click();
-      await page.getByRole('menuitem', { name: 'Push' }).click();
-    } else {
-      await button.click();
-    }
-  }
 
   /**
    * An SSH repository whose key is unlocked in the browser, and whose server
