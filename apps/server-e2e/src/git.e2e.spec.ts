@@ -1,8 +1,12 @@
 import {
+  FIXTURE_PASSPHRASE,
   type GitHttpServer,
   type GitHttpServerOptions,
-  startGitHttpServer
+  type GitSshServer,
+  startGitHttpServer,
+  startGitSshServer
 } from '@front-burner/server-core-git/testing';
+import BetterSqlite3 from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,6 +21,7 @@ import {
   refuseWithHook,
   startHoldingProxy
 } from './support/git-remotes';
+import { decryptedKeyBody, pastedKeyLine, PROTECTED_KEY, PROTECTED_PUBLIC } from './support/secrets';
 import {
   E2E_ADMIN,
   E2E_SETUP_TOKEN,
@@ -543,5 +548,179 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     expect(texts['errors.push-unsigned']).toBe(
       'The remote accepts only signed commits. Front Burner doesn\'t sign commits.'
     );
+  });
+});
+
+describe('secrets in a push (REQ-REPO-002)', () => {
+  const TOKEN = 'ghp_e2e-leak-first-token';
+  const REPLACED = 'ghp_e2e-leak-replaced-token';
+  const ROTATED = 'ghp_e2e-leak-rotated-token';
+  let root: string;
+  let server: ServerProcess;
+  let https: GitHttpServer;
+  let ssh: GitSshServer;
+  const httpsOptions: GitHttpServerOptions = { repositories: {}, users: { alice: TOKEN } };
+  /** Every response body the test received, in order. */
+  const bodies: string[] = [];
+
+  async function call(path: string, init: RequestInit, authToken: string): Promise<Response> {
+    const response = await fetch(`${server.url}/api/v1${path}`, {
+      ...init,
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${authToken}`, ...init.headers }
+    });
+    bodies.push(await response.clone().text());
+    return response;
+  }
+
+  const send = (method: string, path: string, body: unknown, authToken: string) =>
+    call(path, { method, body: JSON.stringify(body) }, authToken);
+
+  async function loggedIn(): Promise<string> {
+    const session = await login(server, 'body');
+    bodies.push(await session.response.text());
+    return session.authToken;
+  }
+
+  async function add(authToken: string, name: string, remoteUrl: string, credentials: object) {
+    const added = await send('POST', '/repositories', { remoteUrl, name, credentials, cloneMode: 'full' }, authToken);
+    expect(added.status).toBe(201);
+    const { id } = await added.json() as { id: number; };
+    await waitFor(async () => (await call(`/repositories/${id}/git/status`, {}, authToken)).status === 200);
+    const [ userDir ] = readdirSync(join(server.dataDir, 'repos'));
+    return { id, workingCopy: join(server.dataDir, 'repos', userDir ?? '', String(id)) };
+  }
+
+  async function commitFile(authToken: string, id: number, workingCopy: string, file: string): Promise<void> {
+    writeFileSync(join(workingCopy, file), `# ${file}\n`);
+    const committed = await send(
+      'POST',
+      `/repositories/${id}/git/commits`,
+      { message: file, paths: [ file ] },
+      authToken
+    );
+    expect(committed.status).toBe(201);
+  }
+
+  async function push(authToken: string, id: number): Promise<{ kind: string; code?: string; }> {
+    const started = await call(`/repositories/${id}/git/push`, { method: 'POST' }, authToken);
+    expect(started.status).toBe(202);
+    const { jobId } = await started.json() as { jobId: number; };
+    let state = { status: 'queued', outcome: null as { kind: string; code?: string; } | null };
+    await waitFor(async () => {
+      state = await (await call(`/repositories/${id}/git/jobs/${jobId}`, {}, authToken)).json() as typeof state;
+      return state.status !== 'queued' && state.status !== 'running';
+    });
+    return state.outcome ?? { kind: 'none' };
+  }
+
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-e2e-secrets-'));
+    const remotes = createRemotes(root);
+    httpsOptions.repositories['notes.git'] = copyRemote(root, remotes.handbook, 'notes');
+    https = await startGitHttpServer(httpsOptions);
+    ssh = await startGitSshServer({
+      repositories: { 'keys.git': copyRemote(root, remotes.handbook, 'keys') },
+      authorizedKeys: [ PROTECTED_PUBLIC ]
+    });
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN, FRONT_BURNER_LOG_LEVEL: 'debug' });
+    await onboard(server);
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+    await Promise.all([ https?.close(), ssh?.close() ]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('AC-REPO-002.14: no API response contains a password, token, private key or passphrase, and none appears in the logs', async () => {
+    const first = await loggedIn();
+    expect(
+      (await send('PUT', '/preferences/commit-author', { name: 'Admin', email: 'admin@example.com' }, first)).status
+    )
+      .toBe(200);
+    const notes = await add(first, 'notes', `${https.url}/notes.git`, {
+      mode: 'new-https',
+      name: 'Notes token',
+      username: 'alice',
+      password: TOKEN
+    });
+    const sshUrl = `ssh://git@127.0.0.1:${ssh.port}/keys.git`;
+    const pasted = {
+      mode: 'new-ssh-key',
+      name: 'Pasted key',
+      privateKey: PROTECTED_KEY,
+      passphrase: FIXTURE_PASSPHRASE
+    };
+    const check = await send('POST', '/repositories/access-check', { remoteUrl: sshUrl, credentials: pasted }, first);
+    expect(check.status).toBe(409);
+    const { host, port, type, key } = (await check.json() as { params: Record<string, unknown>; }).params;
+    expect((await send('POST', '/known-hosts', { host, port, type, key }, first)).status).toBe(204);
+    const keys = await add(first, 'keys', sshUrl, pasted);
+
+    // A new session has the key locked: the push asks for the passphrase, and the unlock lets it run.
+    const second = await loggedIn();
+    await commitFile(second, keys.id, keys.workingCopy, 'keys.md');
+    const locked = await call(`/repositories/${keys.id}/git/push`, { method: 'POST' }, second);
+    expect(locked.status).toBe(409);
+    const { keyId } = (await locked.json() as { params: { keyId: number; }; }).params;
+    const unlocked = await send(
+      'POST',
+      `/credentials/ssh-keys/${keyId}/unlock`,
+      { passphrase: FIXTURE_PASSPHRASE },
+      second
+    );
+    expect(unlocked.status).toBe(204);
+    expect(await push(second, keys.id)).toMatchObject({ kind: 'pushed' });
+
+    // A push refused for read-only credentials, then fixed by replacing them and by updating the token.
+    await commitFile(second, notes.id, notes.workingCopy, 'notes.md');
+    httpsOptions.refusePush = 403;
+    expect(await push(second, notes.id)).toMatchObject({ kind: 'failed', code: 'push-not-allowed' });
+    delete httpsOptions.refusePush;
+    httpsOptions.users = { alice: REPLACED };
+    const replaced = await send('PUT', `/repositories/${notes.id}/credentials`, {
+      mode: 'new-https',
+      name: 'Notes write token',
+      username: 'alice',
+      password: REPLACED
+    }, second);
+    expect(replaced.status).toBe(200);
+    httpsOptions.users = { alice: ROTATED };
+    expect(await push(second, notes.id)).toMatchObject({ kind: 'failed', code: 'credentials-refused' });
+    const updated = await send('PUT', `/repositories/${notes.id}/credentials/token`, {
+      username: 'alice',
+      password: ROTATED
+    }, second);
+    expect(updated.status).toBe(200);
+    expect(await push(second, notes.id)).toMatchObject({ kind: 'pushed' });
+    await call('/credentials', {}, second);
+    await call(`/repositories/${notes.id}/credentials`, {}, second);
+    await call(`/repositories/${keys.id}/credentials`, {}, second);
+
+    const secrets = {
+      token: TOKEN,
+      'replaced token': REPLACED,
+      'rotated token': ROTATED,
+      passphrase: FIXTURE_PASSPHRASE,
+      password: E2E_ADMIN.password,
+      'pasted private key': pastedKeyLine(),
+      'decrypted private key': decryptedKeyBody()
+    };
+    const sqlite = new BetterSqlite3(join(server.dataDir, 'db', 'front-burner.sqlite'), { readonly: true });
+    let jobRows: string;
+    try {
+      const rows = sqlite.prepare('SELECT type, payload, result, error_code FROM jobs').all() as { type: string; }[];
+      expect(rows.map(row => row.type)).toContain('sync.push');
+      jobRows = JSON.stringify(rows);
+    } finally {
+      sqlite.close();
+    }
+    const log = server.output();
+    expect(log).toContain('"level":"debug"');
+    for (const [ what, secret ] of Object.entries(secrets)) {
+      expect(log.includes(secret), `the log contains the ${what}`).toBe(false);
+      expect(bodies.filter(body => body.includes(secret)), `a response contains the ${what}`).toEqual([]);
+      expect(jobRows.includes(secret), `a job row contains the ${what}`).toBe(false);
+    }
   });
 });
