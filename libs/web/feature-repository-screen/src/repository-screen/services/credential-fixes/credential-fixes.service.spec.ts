@@ -121,14 +121,27 @@ describe('CredentialFixesService', () => {
     expect(push).toHaveBeenCalledTimes(2);
   });
 
-  it('Fix credentials opens the dialog with the hint for a refused key', async () => {
+  it('Fix credentials opens the dialog with the hint for a refused key and the offer to update a token', async () => {
     await failedPush('credentials-refused');
 
     await fix('fix-credentials', true);
 
+    // The dialog decides which applies to the credentials in use (RC-12, RC-14).
     expect(open).toHaveBeenCalledWith(RepositoryCredentialsDialog, {
-      data: { repository: handbook, hint: 'refused-key' }
+      data: { repository: handbook, hint: 'refused-key', offerTokenUpdate: true }
     });
+  });
+
+  it('runs the push again after updating', async () => {
+    await failedPush('credentials-refused');
+    gitJob.mockReturnValueOnce(
+      of({ status: 'done', outcome: { kind: 'pushed', commits: 1, upstream: 'origin/main' } })
+    );
+
+    await fix('fix-credentials', true);
+
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(pushes.problem()).toBeNull();
   });
 
   it('Cancel leaves the push alone', async () => {

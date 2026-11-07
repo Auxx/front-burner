@@ -132,9 +132,9 @@ Limited in MVP:
 
 ### 4. Push credentials and key unlock
 
-| Requirement                                         | Status   | In MVP                                         | Limited in MVP | Not in MVP | MVP notes   |
-| --------------------------------------------------- | -------- | ---------------------------------------------- | -------------- | ---------- | ----------- |
-| [REQ-REPO-002](../requirements/repo-credentials.md) | Accepted | RC-1 to RC-25; AC-REPO-002.1 to AC-REPO-002.15 | —              | —          | As written. |
+| Requirement                                         | Status | In MVP      | Limited in MVP                                        | Not in MVP                                                                                                                                                                                                                                                              | MVP notes                                                      |
+| --------------------------------------------------- | ------ | ----------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [REQ-REPO-002](../requirements/repo-credentials.md) | 3      | In progress | #102, #103, #104, #105, #107, #108, `update-token-ui` | All except RC-3, RC-4's messages and fixes for a push (except **Review the new key**, which comes with plan 66), RC-5, RC-7 to RC-10, RC-11 (except the repository management page, step 5), RC-12 to RC-14, RC-15 (except its fetch clause, step 4) and RC-16 to RC-20 | AC-REPO-002.2, AC-REPO-002.8, AC-REPO-002.12 to AC-REPO-002.14 |
 
 ### 5. Commit author
 

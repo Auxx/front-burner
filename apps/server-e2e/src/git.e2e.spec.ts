@@ -437,27 +437,22 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     expect(gitOutput(bare, 'log', '--format=%s', 'main')).toBe('theirs\nfirst');
   });
 
-  it('updating a refused saved token fixes the push of every repository that uses it', async () => {
-    remote('rotate-a');
-    remote('rotate-b');
-    const credentials = { mode: 'new-https', name: 'Rotating token', username: 'alice', password: TOKEN };
-    const first = await add('rotate-a', `${privateGit.url}/rotate-a.git`, credentials);
+  it('AC-REPO-002.4: with an expired saved token used by four repositories, updating it fixes the push of all four', async () => {
+    const names = [ 'rotate-a', 'rotate-b', 'rotate-c', 'rotate-d' ];
+    names.forEach(name => remote(name));
+    const credentials = { mode: 'new-https', name: 'GitHub work', username: 'alice', password: TOKEN };
+    const first = await add(names[0] ?? '', `${privateGit.url}/${names[0]}.git`, credentials);
     const info = await (await api(`/repositories/${first.id}/credentials`)).json() as { inUse: { id: number; }; };
-    const second = await add('rotate-b', `${privateGit.url}/rotate-b.git`, {
-      mode: 'saved',
-      credentialId: info.inUse.id
-    });
-    commitIn(first.workingCopy, 'first change');
-    commitIn(second.workingCopy, 'second change');
+    const others = [];
+    for (const name of names.slice(1)) {
+      others.push(await add(name, `${privateGit.url}/${name}.git`, { mode: 'saved', credentialId: info.inUse.id }));
+    }
+    const all = [ first, ...others ];
+    all.forEach(({ workingCopy }, index) => commitIn(workingCopy, `change ${index}`));
     const ROTATED = 'ghp_e2e-rotated-token';
     privateOptions.users = { alice: ROTATED };
     try {
       expect((await pushed(first.id)).outcome).toMatchObject({ kind: 'failed', code: 'credentials-refused' });
-      const refused = await api(`/repositories/${first.id}/credentials/token`, {
-        method: 'PUT',
-        body: JSON.stringify({ username: 'alice', password: 'still-wrong' })
-      });
-      expect(refused.status).toBe(400);
 
       const updated = await api(`/repositories/${first.id}/credentials/token`, {
         method: 'PUT',
@@ -467,12 +462,30 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
       expect(updated.status).toBe(200);
       const text = await updated.text();
       expect(text).not.toContain(ROTATED);
-      expect(JSON.parse(text)).toMatchObject({ inUse: { name: 'Rotating token', usedBy: 2 } });
-      expect((await pushed(first.id)).outcome).toMatchObject({ kind: 'pushed' });
-      expect((await pushed(second.id)).outcome).toMatchObject({ kind: 'pushed' });
+      expect(JSON.parse(text)).toMatchObject({ inUse: { name: 'GitHub work', usedBy: 4 } });
+      for (const { id } of all) {
+        expect((await pushed(id)).outcome).toMatchObject({ kind: 'pushed' });
+      }
     } finally {
       privateOptions.users = { alice: TOKEN };
     }
+  });
+
+  it('AC-REPO-002.5: an update whose access check fails changes nothing', async () => {
+    remote('rotate-failed');
+    const credentials = { mode: 'new-https', name: 'Failed rotation', username: 'alice', password: TOKEN };
+    const { id, workingCopy } = await add('rotate-failed', `${privateGit.url}/rotate-failed.git`, credentials);
+    commitIn(workingCopy, 'mine');
+
+    const refused = await api(`/repositories/${id}/credentials/token`, {
+      method: 'PUT',
+      body: JSON.stringify({ username: 'alice', password: 'still-wrong' })
+    });
+
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ fields: [ { path: 'credentials', code: 'credentials-refused' } ] });
+    // The old token is still the saved one.
+    expect((await pushed(id)).outcome).toMatchObject({ kind: 'pushed' });
   });
 
   it('replacing a repository\'s credentials keeps the old ones and pushes with the new ones', async () => {

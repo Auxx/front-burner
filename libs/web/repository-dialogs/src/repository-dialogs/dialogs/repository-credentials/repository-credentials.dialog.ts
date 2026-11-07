@@ -9,26 +9,44 @@ import {
   Injector,
   signal
 } from '@angular/core';
-import { apply, disabled, form, submit } from '@angular/forms/signals';
-import type { RepositoryCredentialsInfo, RepositorySummary, SavedCredentials } from '@front-burner/shared-contracts';
+import { apply, disabled, form, FormField, submit, validate, validateStandardSchema } from '@angular/forms/signals';
+import {
+  NewHttpsCredentialsSchema,
+  type RepositoryCredentialsInfo,
+  type RepositorySummary,
+  type SavedCredentials
+} from '@front-burner/shared-contracts';
 import {
   ButtonComponent,
+  type ChoiceOption,
   DIALOG_DATA,
   DialogComponent,
   DialogFooterComponent,
   DialogRef,
+  FieldComponent,
+  IconButtonComponent,
+  IconComponent,
   InlineBannerComponent,
+  InputComponent,
   KeyValueComponent,
   KeyValueListComponent,
+  PasswordRevealDirective,
+  SegmentedControlComponent,
   SpinnerComponent
 } from '@front-burner/ui';
 import { CredentialsApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { type ApiErrorText, ApiErrorTextService, toApiError } from '@front-burner/web-core';
-import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 
 import { CredentialsSectionComponent } from '../../credentials-form/components/credentials-section/credentials-section.component';
-import { credentialsFailureKey, type FailureText, isCredentialsPath } from '../../credentials-form/credentials-errors';
+import {
+  credentialsFailureKey,
+  credentialsShownError,
+  type FailureText,
+  type FieldErrorText,
+  isCredentialsPath
+} from '../../credentials-form/credentials-errors';
 import {
   credentialsSchema,
   defaultCredentials,
@@ -43,7 +61,24 @@ export interface RepositoryCredentialsDialogData {
   readonly repository: RepositorySummary;
   /** `refused-key`: the remote refused the repository's key, so the dialog says what to check (RC-14). */
   readonly hint?: 'refused-key';
+  /**
+   * The remote refused the repository's credentials: when they are saved
+   * HTTPS credentials, the dialog offers to update their token, by default
+   * (RC-12, RC-14).
+   */
+  readonly offerTokenUpdate?: boolean;
 }
+
+/** RC-12's choices: update the saved credentials' token, or give the repository others. */
+type TokenChoice = 'update' | 'other';
+
+/** The fields of **Update the token**. */
+interface TokenModel {
+  username: string;
+  password: string;
+}
+
+const KEY = 'web-repository-dialogs.RepositoryCredentialsDialog';
 
 const NO_CREDENTIALS: SavedCredentials = { https: [], sshKeys: [] };
 
@@ -53,8 +88,12 @@ let nextId = 0;
  * Gives a repository other credentials (RC-7 to RC-10, RC-14): the repository's
  * name and remote (DS-18), the credentials in use, and the choices of the
  * Add repository page for the remote's protocol, which cannot change here.
- * **Save** runs the backend's access check; it closes with `true` once the
- * repository uses the new credentials, and with nothing when cancelled. A
+ * When the remote refused saved HTTPS credentials, it first offers to update
+ * their username and token instead, for every repository that uses them
+ * (RC-12, RC-13); the two choices keep their own fields, so that only the
+ * chosen one's are sent. **Save** or **Update** runs the backend's access
+ * check; it closes with `true` once the repository uses the new credentials
+ * or token, and with nothing when cancelled. A
  * failed check keeps it open with the error as on the Add repository page
  * (AR-42); an unknown SSH host asks to trust it, then checks again (AR-32).
  *
@@ -75,7 +114,14 @@ let nextId = 0;
     InlineBannerComponent,
     KeyValueComponent,
     KeyValueListComponent,
-    SpinnerComponent
+    SpinnerComponent,
+    FormField,
+    FieldComponent,
+    InputComponent,
+    IconButtonComponent,
+    IconComponent,
+    PasswordRevealDirective,
+    SegmentedControlComponent
   ],
   templateUrl: './repository-credentials.dialog.html',
   styleUrl: './repository-credentials.dialog.scss',
@@ -91,6 +137,7 @@ export class RepositoryCredentialsDialog {
   private readonly errorText = inject(ApiErrorTextService);
   private readonly sessionKeys = inject(SessionKeysService);
   private readonly failures = inject(SubmitFailuresService);
+  private readonly transloco = inject(TranslocoService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly injector = inject(Injector);
 
@@ -115,17 +162,50 @@ export class RepositoryCredentialsDialog {
     );
     disabled(path, () => this.submitting());
   });
+  /** RC-12's choice; only shown while {@link updatable} has credentials. */
+  protected readonly tokenChoice = signal<TokenChoice>('update');
+  protected readonly tokenModel = form(signal<TokenModel>({ username: '', password: '' }), path => {
+    validateStandardSchema(path.username, NewHttpsCredentialsSchema.shape.username);
+    validateStandardSchema(path.password, NewHttpsCredentialsSchema.shape.password);
+    // It is sent trimmed: spaces alone are no token.
+    validate(path.password, ({ value }) => value() !== '' && value().trim() === '' ? { kind: 'too-small' } : undefined);
+    disabled(path, () => this.submitting());
+  });
   /** A failure that concerns no field the dialog shows, above the buttons (AR-6). */
   protected readonly failure = signal<ApiErrorText | null>(null);
 
   protected readonly protocol = computed(() => this.info()?.protocol);
   /** RC-14's hint, for a key only. */
   protected readonly refusedKey = computed(() => this.data.hint === 'refused-key' && this.protocol() === 'ssh');
+  /** The saved HTTPS credentials whose token the dialog offers to update (RC-12, RC-14), if any. */
+  protected readonly updatable = computed(() => {
+    const inUse = this.info()?.inUse;
+    return this.data.offerTokenUpdate === true && this.protocol() === 'https' && inUse?.kind === 'https'
+      ? inUse
+      : null;
+  });
+  /** Whether **Update the token** is chosen. */
+  protected readonly updating = computed(() => this.updatable() !== null && this.tokenChoice() === 'update');
+  protected readonly tokenChoices = computed<readonly ChoiceOption<TokenChoice>[]>(() => {
+    // Re-evaluated when the language changes.
+    this.transloco.activeLang();
+    const name = this.updatable()?.name ?? '';
+    return [
+      { value: 'update', label: this.transloco.translate(`${KEY}.choices.update`, { name }) },
+      { value: 'other', label: this.transloco.translate(`${KEY}.choices.other`) }
+    ];
+  });
 
-  /** **Save** is available once the form is valid and no request of the form runs (AR-7). */
-  protected readonly ready = computed(() =>
-    this.info() !== null && !this.submitting() && this.model().valid() && !this.sessionKeys.busy()
-  );
+  /** A failure of the credentials as a whole on **Update the token**, such as refused credentials. */
+  protected readonly tokenFailure = computed(() => this.failures.forPath('credentials'));
+
+  /** **Save** or **Update** is available once the chosen fields are valid and no request of the form runs (AR-7). */
+  protected readonly ready = computed(() => {
+    if (this.info() === null || this.submitting()) {
+      return false;
+    }
+    return this.updating() ? this.tokenModel().valid() : this.model().valid() && !this.sessionKeys.busy();
+  });
 
   constructor() {
     // A failure stays on its field until the inputs change; passphrases are cleared after it (AR-46).
@@ -133,7 +213,8 @@ export class RepositoryCredentialsDialog {
       JSON.stringify({
         ...this.model().value(),
         passphrase: '',
-        generated: this.sessionKeys.generated()?.key.id
+        generated: this.sessionKeys.generated()?.key.id,
+        token: this.updating() ? this.tokenModel().value() : null
       })
     ));
     void this.load();
@@ -157,6 +238,9 @@ export class RepositoryCredentialsDialog {
     event.preventDefault();
     if (this.submitting()) {
       return;
+    }
+    if (this.updating()) {
+      return this.updateToken();
     }
     await submit(this.model, async () => {
       const credentials = toRepositoryCredentials(this.model().value(), this.sessionKeys.generated());
@@ -188,13 +272,51 @@ export class RepositoryCredentialsDialog {
   }
 
   /**
+   * Updates the token of the saved credentials in use (RC-13), with the
+   * token trimmed, as a pasted token may come with spaces around it. A failure keeps the
+   * dialog open with everything typed (AR-42).
+   */
+  private async updateToken(): Promise<void> {
+    await submit(this.tokenModel, async () => {
+      if (!this.ready()) {
+        return undefined;
+      }
+      const { username, password } = this.tokenModel().value();
+      this.submitting.set(true);
+      this.ref.dismissible.set(false);
+      this.failure.set(null);
+      this.failures.clear();
+      try {
+        await firstValueFrom(
+          this.repositoriesApi.updateRepositoryToken(this.data.repository.id, { username, password: password.trim() })
+        );
+      } catch (error) {
+        this.refusal(error, path => isCredentialsPath(path) ? path : `credentials.${path}`);
+        return undefined;
+      } finally {
+        this.submitting.set(false);
+        this.ref.dismissible.set(true);
+      }
+      this.ref.close(true);
+      return undefined;
+    });
+  }
+
+  /** The failure or error of a field of **Update the token**, under `web-repository-dialogs.errors`. */
+  protected tokenError(name: keyof TokenModel): FieldErrorText | undefined {
+    return this.failures.forPath(`credentials.${name}`)
+      ?? credentialsShownError(this.tokenModel[name], `credentials.${name}`);
+  }
+
+  /**
    * Puts each failure of the credentials on its field, and any other above
    * the buttons, with the API's text of its code (AR-6, AR-42), such as a
    * remote that can't be reached.
    */
-  private refusal(error: unknown): void {
+  private refusal(error: unknown, pathOf: (path: string) => string = path => path): void {
     const apiError = toApiError(error);
-    const fields = apiError.fields ?? [];
+    // The token request's fields are its own (`username`, `password`): named as the credentials' here.
+    const fields = (apiError.fields ?? []).map(field => ({ ...field, path: pathOf(field.path) }));
     const credentials = this.model().value();
     if (
       credentials.choice === 'saved'
@@ -217,6 +339,9 @@ export class RepositoryCredentialsDialog {
 
   /** Whether the dialog shows the credentials field the API's `path` names. */
   private shows(path: string): boolean {
+    if (this.updating()) {
+      return [ 'credentials', 'credentials.username', 'credentials.password' ].includes(path);
+    }
     const { choice, savedId } = this.model().value();
     const key = this.saved()?.sshKeys.find(sshKey => sshKey.id === savedId);
     const shown: Record<string, boolean> = {
@@ -236,7 +361,12 @@ export class RepositoryCredentialsDialog {
   private async load(): Promise<void> {
     void this.loadSaved();
     try {
-      this.info.set(await firstValueFrom(this.repositoriesApi.repositoryCredentials(this.data.repository.id)));
+      const info = await firstValueFrom(this.repositoriesApi.repositoryCredentials(this.data.repository.id));
+      if (info.inUse?.kind === 'https') {
+        // Prefilled, and can be changed (RC-12).
+        this.tokenModel.username().value.set(info.inUse.username);
+      }
+      this.info.set(info);
     } catch (error) {
       this.failure.set(this.errorText.describe(toApiError(error)));
     }
