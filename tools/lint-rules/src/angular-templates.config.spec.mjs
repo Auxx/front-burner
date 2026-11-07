@@ -83,6 +83,10 @@ describe('angular-templates config', () => {
     ]);
   });
 
+  it('turns every template rule off for the inline templates of Storybook stories', async () => {
+    expect(await reported(component(specHostTemplate), 'app/x.component.stories.ts')).toEqual([]);
+  });
+
   describe('attribute-layout in inline templates', () => {
     /** The text of `code` after ESLint's fixes, linted as a component file. */
     async function fixedText(code) {

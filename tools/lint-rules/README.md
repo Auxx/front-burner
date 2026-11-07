@@ -12,7 +12,8 @@ Every Angular project lints its templates with the shared config in
 chosen `@angular-eslint/template` rules, as errors, for `.html` files and for
 the inline templates of `.ts` files. Test hosts (the inline templates of
 `*.spec.ts` files and templates under `testing/`) keep only `attribute-layout`
-and `prefer-control-flow`.
+and `prefer-control-flow`. The inline templates of Storybook stories
+(`*.stories.ts`) are not linted.
 
 A project imports it in its `eslint.config.mjs`, with a path relative to the
 project, and spreads it after `...baseConfig` and before its own `**/*.html`

@@ -49,5 +49,10 @@ export default [
         .filter(rule => !specHostRules.includes(rule))
         .map(rule => [ rule, 'off' ])
     )
+  },
+  {
+    // Storybook stories are out of scope (see the design spec's non-goals).
+    files: [ '**/*.stories.ts/*.html' ],
+    rules: Object.fromEntries(Object.keys(templateRules).map(rule => [ rule, 'off' ]))
   }
 ];
