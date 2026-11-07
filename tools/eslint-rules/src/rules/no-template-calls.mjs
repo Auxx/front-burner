@@ -26,7 +26,8 @@ export default {
     ],
     docs: { description: 'Allow calls in templates only to read signals, translate or handle events.' },
     messages: {
-      call: 'Templates call functions only to read signals, translate or handle events; move this into a computed() signal or a pipe.'
+      call:
+        'Templates call functions only to read signals, translate or handle events; move this into a computed() signal or a pipe.'
     }
   },
 

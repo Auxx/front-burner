@@ -63,16 +63,20 @@ function expectedLayout(text, tag, offset, eol) {
  * The layout problems of a start tag as `[ messageId, offset ]` pairs, at most
  * one of each kind, in source order. Alignment is measured against the first
  * attribute where it stands now, so that a misplaced first attribute is
- * reported once rather than as a misalignment of every other one.
+ * reported once rather than as a misalignment of every other one. Columns at
+ * or before `unknownUntil` are not those of the real file (see `create`): when
+ * the first attribute stands there, the others only have to align with the
+ * second.
  */
-function problemsOf(text, tag, eol) {
+function problemsOf(text, tag, eol, unknownUntil) {
   const { attributes } = tag;
   const problems = [];
   if (attributes.length && text.slice(tag.nameEnd, attributes[0].start) !== ' ') {
     problems.push([ 'firstAttribute', attributes[0].start ]);
   }
-  if (attributes.length) {
-    const indent = eol + ' '.repeat(columnOf(text, attributes[0].start));
+  if (attributes.length > 1) {
+    const reference = attributes[0].start > unknownUntil ? attributes[0] : attributes[1];
+    const indent = eol + ' '.repeat(columnOf(text, reference.start));
     const misaligned = attributes.slice(1).find((attribute, index) =>
       text.slice(attributes[index].end, attribute.start) !== indent
     );
@@ -112,6 +116,15 @@ export default {
     const { text } = sourceCode;
     const eol = text.includes('\r\n') ? '\r\n' : '\n';
     const handled = new Set();
+    // An inline template that angular-eslint's processor extracts from a `.ts`
+    // file starts after the opening quote, so the columns of its first line are
+    // not those of the real file. Tags there are reported but not fixed.
+    const lineBreak = text.indexOf('\n');
+    const unknownUntil = context.physicalFilename === context.filename
+      ? -1
+      : lineBreak === -1
+      ? text.length
+      : lineBreak;
 
     function check(node) {
       const offset = node.startSourceSpan?.start.offset;
@@ -121,11 +134,11 @@ export default {
       }
       handled.add(offset);
       const tag = scanStartTag(text, offset);
-      const problems = problemsOf(text, tag, eol);
+      const problems = problemsOf(text, tag, eol, unknownUntil);
       if (!problems.length) {
         return;
       }
-      const expected = expectedLayout(text, tag, offset, eol);
+      const expected = offset > unknownUntil ? expectedLayout(text, tag, offset, eol) : undefined;
       problems.forEach(([ messageId, at ], index) => {
         context.report({
           messageId,
