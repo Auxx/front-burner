@@ -480,21 +480,17 @@ describe('RepositoryCredentialsDialog', () => {
       expect(await closed).toBe(true);
     });
 
-    it('trims a pasted token', async () => {
+    it('sends the token as typed, without trimming it', async () => {
       await open({ offerTokenUpdate: true });
-      await typeToken('  ghp_new\n');
+      await typeToken(' pass word ');
 
       dialogButton(`${KEY}.update`)?.click();
       await settleDialog();
 
-      expect(repositoriesApi.updateRepositoryToken).toHaveBeenCalledWith(5, { username: 'ada', password: 'ghp_new' });
-    });
-
-    it('a token of spaces only is not a token', async () => {
-      await open({ offerTokenUpdate: true });
-      await typeToken('   ');
-
-      expect(dialogButton(`${KEY}.update`)?.getAttribute('aria-disabled')).toBe('true');
+      expect(repositoriesApi.updateRepositoryToken).toHaveBeenCalledWith(5, {
+        username: 'ada',
+        password: ' pass word '
+      });
     });
 
     it('AC-REPO-002.5: an update whose check fails shows the error', async () => {

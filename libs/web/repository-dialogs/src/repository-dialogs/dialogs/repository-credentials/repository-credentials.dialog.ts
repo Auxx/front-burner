@@ -9,7 +9,7 @@ import {
   Injector,
   signal
 } from '@angular/core';
-import { apply, disabled, form, FormField, submit, validate, validateStandardSchema } from '@angular/forms/signals';
+import { apply, disabled, form, FormField, submit, validateStandardSchema } from '@angular/forms/signals';
 import {
   NewHttpsCredentialsSchema,
   type RepositoryCredentialsInfo,
@@ -167,8 +167,6 @@ export class RepositoryCredentialsDialog {
   protected readonly tokenModel = form(signal<TokenModel>({ username: '', password: '' }), path => {
     validateStandardSchema(path.username, NewHttpsCredentialsSchema.shape.username);
     validateStandardSchema(path.password, NewHttpsCredentialsSchema.shape.password);
-    // It is sent trimmed: spaces alone are no token.
-    validate(path.password, ({ value }) => value() !== '' && value().trim() === '' ? { kind: 'too-small' } : undefined);
     disabled(path, () => this.submitting());
   });
   /** A failure that concerns no field the dialog shows, above the buttons (AR-6). */
@@ -272,8 +270,8 @@ export class RepositoryCredentialsDialog {
   }
 
   /**
-   * Updates the token of the saved credentials in use (RC-13), with the
-   * token trimmed, as a pasted token may come with spaces around it. A failure keeps the
+   * Updates the token of the saved credentials in use (RC-13), as typed:
+   * neither is trimmed, as when they were saved (AR-20). A failure keeps the
    * dialog open with everything typed (AR-42).
    */
   private async updateToken(): Promise<void> {
@@ -288,7 +286,7 @@ export class RepositoryCredentialsDialog {
       this.failures.clear();
       try {
         await firstValueFrom(
-          this.repositoriesApi.updateRepositoryToken(this.data.repository.id, { username, password: password.trim() })
+          this.repositoriesApi.updateRepositoryToken(this.data.repository.id, { username, password })
         );
       } catch (error) {
         this.refusal(error, path => isCredentialsPath(path) ? path : `credentials.${path}`);

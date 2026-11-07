@@ -35,8 +35,10 @@ RC-14; criteria 4, 5).
 
 ## Review Focus
 
-- **A token pasted with a trailing newline or spaces** is what the field sends,
-  as tokens have none; trim it _(plan's call)_ → test `trims a pasted token`.
+- **A token with spaces around it** is sent as typed: the field takes passwords
+  too, and neither is trimmed, as when they were saved (AR-20). A browser drops
+  a pasted newline from the field itself. _(Changed in review: the plan first
+  trimmed it.)_ → test `sends the token as typed, without trimming it`.
 - **A failed update** stays in the dialog, shows the error, and keeps the
   username → test `AC-REPO-002.5: an update whose check fails shows the error`.
 - **Credentials used by one repository** must say "Used by 1 of your
@@ -69,9 +71,9 @@ RC-14; criteria 4, 5).
       four pushes, end to end for the dialog); `AC-REPO-002.5: an update whose
       check fails shows the error`; `says how many repositories use the
       credentials`; `offers the update only for saved HTTPS credentials`; `Use
-      other credentials shows the choices of the protocol`; `trims a pasted
-      token`; `sends only the chosen choice's fields`; `runs the push again
-      after updating`.
+      other credentials shows the choices of the protocol`; `sends the token as
+      typed, without trimming it`; `sends only the chosen choice's fields`;
+      `runs the push again after updating`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
       web-repository-dialogs web-feature-repository-screen`.
 - [ ] **Step 3: Implement.**

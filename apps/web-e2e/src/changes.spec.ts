@@ -510,8 +510,7 @@ test.describe('fixing credentials from a push', () => {
     await expect(dialog(page).getByRole('radio', { name: 'Use other credentials for this repository' }))
       .toBeAttached();
     expect((await new AxeBuilder({ page }).include('dlg-repository-credentials').analyze()).violations).toEqual([]);
-    // As pasted, with spaces around it.
-    await dialog(page).getByLabel('Password or token', { exact: true }).fill(` ${WRITER.password}  `);
+    await dialog(page).getByLabel('Password or token', { exact: true }).fill(WRITER.password);
     await dialog(page).getByRole('button', { name: 'Update' }).click();
 
     await expect(dialog(page)).toHaveCount(0);
