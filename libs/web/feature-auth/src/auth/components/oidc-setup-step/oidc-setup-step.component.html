@@ -1,5 +1,7 @@
 <ng-container *transloco="let t; prefix: 'web-feature-auth.OidcSetupStepComponent'">
-  <form novalidate (submit)="submit($event)">
+  <form novalidate
+        (submit)="submit($event)">
+    @let errors = fieldErrors();
     <h2>{{ t('heading') }}</h2>
     @if (loginFailure(); as reason) {
       <ng-container *transloco="let root">
@@ -17,55 +19,77 @@
         }
       </ui-inline-banner>
     }
-    <ui-field [label]="t('redirectUri')" [hint]="t('redirectUriHint')">
-      <input uiInput code readonly [value]="redirectUri" />
-      <button uiButton (click)="copyRedirectUri()">{{ t('copy') }}</button>
+    <ui-field [label]="t('redirectUri')"
+              [hint]="t('redirectUriHint')">
+      <input uiInput
+             code
+             readonly
+             [value]="redirectUri" />
+      <button uiButton
+              (click)="copyRedirectUri()">{{ t('copy') }}</button>
     </ui-field>
-    @let issuerError = error('issuer');
-    <ui-field [label]="t('issuer')" [error]="issuerError ? t(issuerError.key, issuerError.params) : undefined">
-      <input uiInput type="url" autocomplete="off" [formField]="model.issuer" />
+    <ui-field [label]="t('issuer')"
+              [error]="errors.issuer ? t(errors.issuer.key, errors.issuer.params) : undefined">
+      <input uiInput
+             type="url"
+             autocomplete="off"
+             [formField]="model.issuer" />
     </ui-field>
-    @let clientIdError = error('clientId');
-    <ui-field [label]="t('clientId')" [error]="clientIdError ? t(clientIdError.key, clientIdError.params) : undefined">
-      <input uiInput autocomplete="off" [formField]="model.clientId" />
+    <ui-field [label]="t('clientId')"
+              [error]="errors.clientId ? t(errors.clientId.key, errors.clientId.params) : undefined">
+      <input uiInput
+             autocomplete="off"
+             [formField]="model.clientId" />
     </ui-field>
-    @let clientSecretError = error('clientSecret');
-    <ui-field
-      [label]="t('clientSecret')"
-      [hint]="keepsSecret() ? t('clientSecretKeep') : undefined"
-      [error]="clientSecretError ? t(clientSecretError.key, clientSecretError.params) : undefined"
-    >
-      <input uiInput #secret type="password" autocomplete="off" [formField]="model.clientSecret" />
-      <button uiIconButton [uiPasswordReveal]="secret" [label]="t('showClientSecret')">
+    <ui-field [label]="t('clientSecret')"
+              [hint]="keepsSecret() ? t('clientSecretKeep') : undefined"
+              [error]="errors.clientSecret ? t(errors.clientSecret.key, errors.clientSecret.params) : undefined">
+      <input uiInput
+             #secret
+             type="password"
+             autocomplete="off"
+             [formField]="model.clientSecret" />
+      <button uiIconButton
+              [uiPasswordReveal]="secret"
+              [label]="t('showClientSecret')">
         <ui-icon name="eye" />
       </button>
     </ui-field>
-    @let scopesError = error('scopes');
-    <ui-field
-      [label]="t('scopes')"
-      [hint]="t('scopesHint')"
-      [error]="scopesError ? t(scopesError.key, scopesError.params) : undefined"
-    >
-      <input uiInput code autocomplete="off" [formField]="model.scopes" />
+    <ui-field [label]="t('scopes')"
+              [hint]="t('scopesHint')"
+              [error]="errors.scopes ? t(errors.scopes.key, errors.scopes.params) : undefined">
+      <input uiInput
+             code
+             autocomplete="off"
+             [formField]="model.scopes" />
     </ui-field>
     <div class="verified-email">
       <label uiChoice>
-        <input type="checkbox" uiCheckbox aria-describedby="oidc-verified-email-hint" [formField]="model.requireVerifiedEmail" />
+        <input type="checkbox"
+               uiCheckbox
+               aria-describedby="oidc-verified-email-hint"
+               [formField]="model.requireVerifiedEmail" />
         {{ t('requireVerifiedEmail') }}
       </label>
-      <p class="hint" id="oidc-verified-email-hint">{{ t('requireVerifiedEmailHint') }}</p>
+      <p class="hint"
+         id="oidc-verified-email-hint">{{ t('requireVerifiedEmailHint') }}</p>
     </div>
-    @let adminEmailError = error('adminEmail');
-    <ui-field
-      [label]="t('adminEmail')"
-      [hint]="t('adminEmailHint')"
-      [error]="adminEmailError ? t(adminEmailError.key, adminEmailError.params) : undefined"
-    >
-      <input uiInput type="email" autocomplete="email" [formField]="model.adminEmail" />
+    <ui-field [label]="t('adminEmail')"
+              [hint]="t('adminEmailHint')"
+              [error]="errors.adminEmail ? t(errors.adminEmail.key, errors.adminEmail.params) : undefined">
+      <input uiInput
+             type="email"
+             autocomplete="email"
+             [formField]="model.adminEmail" />
     </ui-field>
     <div class="actions">
-      <button uiButton (click)="back.emit()">{{ t('back') }}</button>
-      <button uiButton variant="primary" type="submit" [busy]="busy()" [unavailable]="model().invalid()">
+      <button uiButton
+              (click)="back.emit()">{{ t('back') }}</button>
+      <button uiButton
+              variant="primary"
+              type="submit"
+              [busy]="busy()"
+              [unavailable]="model().invalid()">
         {{ t('submit') }}
       </button>
     </div>

@@ -4,6 +4,7 @@ import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { OidcFailureReason, OidcSetupView } from '@front-burner/shared-contracts';
 import { ToastService } from '@front-burner/ui';
+import { TranslocoService } from '@jsverse/transloco';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -24,14 +25,14 @@ const SAVED: OidcSetupView = {
 
 @Component({
   imports: [ OidcSetupStepComponent ],
-  template: `<auth-oidc-setup-step
-    [setupToken]="token"
-    [saved]="saved()"
-    [failure]="failure()"
-    (back)="events.push('back')"
-    (refused)="events.push('refused')"
-    (submitted)="events.push('submitted')"
-  />`
+  template: `
+    <auth-oidc-setup-step [setupToken]="token"
+                          [saved]="saved()"
+                          [failure]="failure()"
+                          (back)="events.push('back')"
+                          (refused)="events.push('refused')"
+                          (submitted)="events.push('submitted')" />
+  `
 })
 class HostComponent {
   readonly token = TOKEN;
@@ -176,6 +177,60 @@ describe('OidcSetupStepComponent', () => {
     await settle(fixture);
     expect(fieldText('issuer')).toContain(`${KEY}.fieldErrors.issuer.oidc-issuer-mismatch`);
     expect(fixture.componentInstance.events).toEqual([]);
+  });
+
+  it('shows each field\'s first error once the form is submitted', async () => {
+    await start();
+    expect(element().textContent).not.toContain(`${KEY}.fieldErrors`);
+    await fill({ issuer: 'not a url', clientId: '', clientSecret: '', scopes: 'email', adminEmail: 'not an email' });
+    await submit();
+    http.expectNone(SETUP);
+    expect(fieldText('issuer')).toContain(`${KEY}.fieldErrors.issuer.invalid-format`);
+    expect(fieldText('clientId')).toContain(`${KEY}.fieldErrors.clientId.too-small`);
+    expect(fieldText('clientSecret')).toContain(`${KEY}.fieldErrors.clientSecret.required`);
+    expect(fieldText('scopes')).toContain(`${KEY}.fieldErrors.scopes.missing-openid`);
+    expect(fieldText('adminEmail')).toContain(`${KEY}.fieldErrors.adminEmail.invalid-format`);
+  });
+
+  it('passes a field error\'s parameters to its text', async () => {
+    await start();
+    TestBed.inject(TranslocoService).setTranslation(
+      { [KEY]: { fieldErrors: { clientId: { 'too-big': 'At most {{ maximum }}' } } } },
+      'en',
+      { merge: true }
+    );
+    await fill(valid);
+    await submit();
+    http.expectOne(SETUP).flush(
+      {
+        code: 'validation-failed',
+        params: {},
+        requestId: 'r',
+        message: 'x',
+        fields: [ { path: 'clientId', code: 'too-big', params: { maximum: 200 } } ]
+      },
+      { status: 400, statusText: 'Bad Request' }
+    );
+    await settle(fixture);
+    expect(fieldText('clientId')).toContain('At most 200');
+  });
+
+  it('shows a field error code without its own text as the generic error', async () => {
+    await start();
+    await fill(valid);
+    await submit();
+    http.expectOne(SETUP).flush(
+      {
+        code: 'validation-failed',
+        params: {},
+        requestId: 'r',
+        message: 'x',
+        fields: [ { path: 'clientId', code: 'not-a-known-code', params: {} } ]
+      },
+      { status: 400, statusText: 'Bad Request' }
+    );
+    await settle(fixture);
+    expect(fieldText('clientId')).toContain(`${KEY}.fieldErrors.invalid`);
   });
 
   it('emits submitted after a successful submit', async () => {

@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import {
   type FieldTree,
   form,
@@ -107,6 +107,15 @@ export class PasswordSetupStepComponent {
   protected readonly busy = signal(false);
   protected readonly failure = signal<{ text: string; reference: string | null; } | null>(null);
   protected readonly score = signal<PasswordStrength | null>(null);
+  /** The text key of each field's first error, once the field is touched (AR-6). */
+  protected readonly fieldErrors = computed(
+    (): Record<keyof Details, string | undefined> => ({
+      email: this.errorKey('email'),
+      displayName: this.errorKey('displayName'),
+      password: this.errorKey('password'),
+      passwordConfirmation: this.errorKey('passwordConfirmation')
+    })
+  );
 
   constructor() {
     effect(onCleanup => {
@@ -128,17 +137,6 @@ export class PasswordSetupStepComponent {
         clearTimeout(timer);
       });
     });
-  }
-
-  /** The key of a field's first error, once the field is touched (AR-6). */
-  protected errorKey(name: keyof Details): string | undefined {
-    const state = this.model[name]();
-    const error = state.touched() ? state.errors()[0] : undefined;
-    if (!error) {
-      return undefined;
-    }
-    const code = fieldErrorCode(error);
-    return KNOWN_CODES[name].includes(code) ? `fieldErrors.${name}.${code}` : 'fieldErrors.invalid';
   }
 
   protected async submit(event: Event): Promise<void> {
@@ -186,6 +184,17 @@ export class PasswordSetupStepComponent {
       this.failure.set(this.errorText.describe(apiError));
     }
     return fieldErrors;
+  }
+
+  /** The key of a field's first error, once the field is touched. */
+  private errorKey(name: keyof Details): string | undefined {
+    const state = this.model[name]();
+    const error = state.touched() ? state.errors()[0] : undefined;
+    if (!error) {
+      return undefined;
+    }
+    const code = fieldErrorCode(error);
+    return KNOWN_CODES[name].includes(code) ? `fieldErrors.${name}.${code}` : 'fieldErrors.invalid';
   }
 
   private fieldTree(path: string): FieldTree<string> | undefined {

@@ -1,9 +1,14 @@
 <ng-container *transloco="let t; prefix: 'web-feature-auth.LoginMethodStepComponent'">
   <h2>{{ t('heading') }}</h2>
   <p>{{ t('intro') }}</p>
-  <ui-segmented-control [label]="t('label')" [options]="options()" [(value)]="method" />
+  <ui-segmented-control [label]="t('label')"
+                        [options]="options()"
+                        [(value)]="method" />
   <div class="actions">
-    <button uiButton (click)="back.emit()">{{ t('back') }}</button>
-    <button uiButton variant="primary" (click)="continue()">{{ t('continue') }}</button>
+    <button uiButton
+            (click)="back.emit()">{{ t('back') }}</button>
+    <button uiButton
+            variant="primary"
+            (click)="continue()">{{ t('continue') }}</button>
   </div>
 </ng-container>

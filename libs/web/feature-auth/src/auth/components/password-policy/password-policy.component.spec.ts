@@ -8,7 +8,10 @@ const KEY = 'web-feature-auth.PasswordPolicyComponent';
 
 @Component({
   imports: [ PasswordPolicyComponent ],
-  template: `<auth-password-policy [password]="password()" [email]="email()" />`
+  template: `
+    <auth-password-policy [password]="password()"
+                          [email]="email()" />
+  `
 })
 class HostComponent {
   readonly password = signal('');
