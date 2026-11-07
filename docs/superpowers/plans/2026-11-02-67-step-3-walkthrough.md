@@ -58,15 +58,15 @@ is merged.
 - Modify: `apps/server-e2e/src/git.e2e.spec.ts`, `apps/server-e2e/src/support/`
   as needed
 
-- [ ] **Step 1: Write the test**: `AC-REPO-002.14: no API response contains a
+- [x] **Step 1: Write the test**: `AC-REPO-002.14: no API response contains a
       password, token, private key or passphrase, and none appears in the logs`:
       start the instance at log level `debug`; add a repository with a token and
       another with a protected pasted key; unlock, commit, push, refuse a push,
       replace credentials and update the token. Search every response body, the
       captured log and the `jobs` table for each secret.
-- [ ] **Step 2: Run it** — `npx nx e2e server-e2e`; it passes, or the leak is
+- [x] **Step 2: Run it** — `npx nx e2e server-e2e`; it passes, or the leak is
       fixed here.
-- [ ] **Step 3: Commit** — `test(sync): no secret in responses, logs or jobs`
+- [x] **Step 3: Commit** — `test(sync): no secret in responses, logs or jobs`
 
 ---
 
@@ -76,7 +76,7 @@ is merged.
 
 - Create: `apps/web-e2e/src/commit-and-push.spec.ts`
 
-- [ ] **Step 1: Write the tests**:
+- [x] **Step 1: Write the tests**:
   - `exit criterion 7, on desktop with the keyboard alone`, and `exit criterion
     7, on a phone by touch alone`: edit two files and delete one; see **Changes
     (3)** and each diff; discard one; confirm the author; commit one of the two
@@ -89,9 +89,9 @@ is merged.
     banner is announced once`, for the unlock, credentials and changed host key
     dialogs, with axe-core on each.
   - `a reload keeps the ticks, the counts and a running push`.
-- [ ] **Step 2: Run them** — `npx nx e2e web-e2e`; all pass, in every browser of
+- [x] **Step 2: Run them** — `npx nx e2e web-e2e`; all pass, in every browser of
       the matrix. Fix small problems here; a larger one gets its own plan.
-- [ ] **Step 3: Commit** — `test(repository-screen): walk through commit and
+- [x] **Step 3: Commit** — `test(repository-screen): walk through commit and
       push`
 
 ---
@@ -104,17 +104,17 @@ is merged.
   `docs/superpowers/plans/2026-11-02-00-roadmap-step-3.md`, `docs/README.md` if
   it lists the indexes
 
-- [ ] **Step 1: Check the status table** against "Keeping it up to date":
+- [x] **Step 1: Check the status table** against "Keeping it up to date":
       REQ-GIT-001, REQ-REPO-002 and REQ-GIT-002 are **In progress**, each with
       only the parts this index's "Left out" section names; REQ-APP-001 no
       longer lists NV-9's and NV-11's branch and counts. Run `node
       tools/ai-tools/src/bin/doc-ids.mjs criteria` and copy its result into
       **MVP criteria without a test**.
-- [ ] **Step 2: Compare** that result with the list in Global Constraints above.
+- [x] **Step 2: Compare** that result with the list in Global Constraints above.
       Anything else left is a gap: add its test here, or write down why it can
       wait.
-- [ ] **Step 3: Set this plan's row in the index** to **Done**. Add anything
+- [x] **Step 3: Set this plan's row in the index** to **Done**. Add anything
       found along the way to its "Left out" section.
-- [ ] **Step 4: Format, check and commit** — `npx dprint fmt && npx dprint
+- [x] **Step 4: Format, check and commit** — `npx dprint fmt && npx dprint
       check`; `node tools/ai-tools/src/bin/doc-ids.mjs check`; `npx nx affected
       -t lint test build`; commit `docs: step 3 is finished`.

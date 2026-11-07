@@ -11,9 +11,10 @@ import BetterSqlite3 from 'better-sqlite3';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { utils } from 'ssh2';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { waitFor } from './support/git-api';
 import { createRemotes, type HoldingProxy, startHoldingProxy } from './support/git-remotes';
+import { decryptedKeyBody, pastedKeyLines, PROTECTED_KEY, PROTECTED_PUBLIC } from './support/secrets';
 import {
   E2E_ADMIN,
   E2E_SETUP_TOKEN,
@@ -26,8 +27,6 @@ import {
 } from './support/server-process';
 
 const TOKEN = 'ghp_e2e-s3cret-token-value';
-const PROTECTED_KEY = sshKeyFixture('ed25519-passphrase');
-const PROTECTED_PUBLIC = sshKeyFixture('ed25519-passphrase.pub').trim();
 const REPOSITORIES = '/api/v1/repositories';
 const ACCESS_CHECK = '/api/v1/repositories/access-check';
 
@@ -44,27 +43,6 @@ interface Summary {
 }
 
 const fieldsOf = (answer: Answer) => answer.body.fields?.map(({ path, code }) => ({ path, code }));
-
-/** A distinctive part of the decrypted private key, as the backend holds it in memory. */
-function decryptedKeyBody(): string {
-  const parsed = utils.parseKey(PROTECTED_KEY, FIXTURE_PASSPHRASE);
-  const key = Array.isArray(parsed) ? parsed[0] : parsed;
-  if (key === undefined || key instanceof Error) {
-    throw new Error('the fixture does not parse');
-  }
-  return key.getPrivatePEM().split('\n').filter(line => line !== '' && !line.startsWith('-----')).join('');
-}
-
-/** Polls until `check` resolves to true, for at most 20 seconds. */
-async function waitFor(check: () => Promise<boolean> | boolean): Promise<void> {
-  const deadline = Date.now() + 20_000;
-  while (!(await check())) {
-    if (Date.now() > deadline) {
-      throw new Error('timed out waiting');
-    }
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
-}
 
 /** The command line and environment of every process this user can read. */
 function processTexts(): string[] {
@@ -510,7 +488,7 @@ describe('adding a repository (REQ-REPO-001)', () => {
       proxy.release();
       await admin.settled(added.body['id'] as number);
 
-      const secrets = [ TOKEN, FIXTURE_PASSPHRASE, decryptedKeyBody(), PROTECTED_KEY.split('\n')[1] ?? '' ];
+      const secrets = [ TOKEN, FIXTURE_PASSPHRASE, decryptedKeyBody(), ...pastedKeyLines() ];
       const database = readFileSync(join(server.dataDir, 'db', 'front-burner.sqlite'), 'latin1')
         + readFileSync(join(server.dataDir, 'db', 'front-burner.sqlite-wal'), 'latin1');
       const responses = JSON.stringify([ added.body, await admin.get('/api/v1/credentials'), await admin.recent() ]);

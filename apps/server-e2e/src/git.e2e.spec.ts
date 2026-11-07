@@ -1,13 +1,18 @@
 import {
+  FIXTURE_PASSPHRASE,
   type GitHttpServer,
   type GitHttpServerOptions,
-  startGitHttpServer
+  type GitSshServer,
+  startGitHttpServer,
+  startGitSshServer
 } from '@front-burner/server-core-git/testing';
+import BetterSqlite3 from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { GitApi, waitFor } from './support/git-api';
 import {
   copyRemote,
   createRemotes,
@@ -17,6 +22,7 @@ import {
   refuseWithHook,
   startHoldingProxy
 } from './support/git-remotes';
+import { decryptedKeyBody, pastedKeyLines, PROTECTED_KEY, PROTECTED_PUBLIC } from './support/secrets';
 import {
   E2E_ADMIN,
   E2E_SETUP_TOKEN,
@@ -27,17 +33,6 @@ import {
   type ServerProcess,
   startServerProcess
 } from './support/server-process';
-
-/** Polls until `check` resolves to true, for at most 20 seconds. */
-async function waitFor(check: () => Promise<boolean> | boolean): Promise<void> {
-  const deadline = Date.now() + 20_000;
-  while (!(await check())) {
-    if (Date.now() > deadline) {
-      throw new Error('timed out waiting');
-    }
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
-}
 
 describe('git status (REQ-GIT-002)', () => {
   let server: ServerProcess;
@@ -251,11 +246,9 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
   const privateOptions: GitHttpServerOptions = { repositories: {}, users: { alice: TOKEN } };
   const proxies: HoldingProxy[] = [];
 
-  const api = (path: string, init: RequestInit = {}, authToken = token) =>
-    fetch(`${server.url}/api/v1${path}`, {
-      ...init,
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${authToken}`, ...init.headers }
-    });
+  let client: GitApi;
+
+  const api = (path: string, init: RequestInit = {}, authToken = token) => client.call(path, init, authToken);
   const portOf = (git: GitHttpServer) => Number(new URL(git.url).port);
 
   /** A copy of `source` served under `name` by both test servers. */
@@ -266,18 +259,7 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     return bare;
   }
 
-  /** Adds a repository through the API and waits for its clone; returns its ID and working copy. */
-  async function add(name: string, remoteUrl: string, credentials: object = { mode: 'none' }) {
-    const added = await api('/repositories', {
-      method: 'POST',
-      body: JSON.stringify({ remoteUrl, name, credentials, cloneMode: 'full' })
-    });
-    expect(added.status).toBe(201);
-    const { id } = await added.json() as { id: number; };
-    await waitFor(async () => (await api(`/repositories/${id}/git/status`)).status === 200);
-    const [ userDir ] = readdirSync(join(server.dataDir, 'repos'));
-    return { id, workingCopy: join(server.dataDir, 'repos', userDir ?? '', String(id)) };
-  }
+  const add = (name: string, remoteUrl: string, credentials?: object) => client.add(name, remoteUrl, credentials);
 
   const commitIn = (workingCopy: string, subject: string) =>
     execFileSync('git', [ 'commit', '-q', '--allow-empty', '-m', subject ], {
@@ -291,27 +273,8 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
       }
     });
 
-  async function startPush(id: number): Promise<number> {
-    const response = await api(`/repositories/${id}/git/push`, { method: 'POST' });
-    expect(response.status).toBe(202);
-    return (await response.json() as { jobId: number; }).jobId;
-  }
-
-  async function jobState(id: number, jobId: number, authToken = token) {
-    const response = await api(`/repositories/${id}/git/jobs/${jobId}`, {}, authToken);
-    expect(response.status).toBe(200);
-    return await response.json() as { status: string; outcome: { kind: string; [key: string]: unknown; } | null; };
-  }
-
-  async function pushed(id: number, authToken = token) {
-    const jobId = await startPush(id);
-    let state = await jobState(id, jobId, authToken);
-    await waitFor(async () => {
-      state = await jobState(id, jobId, authToken);
-      return state.status !== 'queued' && state.status !== 'running';
-    });
-    return state;
-  }
+  const jobState = (id: number, jobId: number, authToken?: string) => client.jobState(id, jobId, authToken);
+  const pushed = (id: number, authToken?: string) => client.pushed(id, authToken);
 
   beforeAll(async () => {
     root = mkdtempSync(join(tmpdir(), 'front-burner-e2e-push-'));
@@ -321,6 +284,7 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
     await onboard(server);
     token = (await login(server, 'body')).authToken;
+    client = new GitApi(server, token);
     const confirmed = await api('/preferences/commit-author', {
       method: 'PUT',
       body: JSON.stringify({ name: 'Admin', email: 'admin@example.com' })
@@ -543,5 +507,141 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     expect(texts['errors.push-unsigned']).toBe(
       'The remote accepts only signed commits. Front Burner doesn\'t sign commits.'
     );
+  });
+});
+
+describe('secrets in a push (REQ-REPO-002)', () => {
+  const TOKEN = 'ghp_e2e-leak-first-token';
+  const REPLACED = 'ghp_e2e-leak-replaced-token';
+  const ROTATED = 'ghp_e2e-leak-rotated-token';
+  let root: string;
+  let server: ServerProcess;
+  let https: GitHttpServer;
+  let ssh: GitSshServer;
+  const httpsOptions: GitHttpServerOptions = { repositories: {}, users: { alice: TOKEN } };
+  /** Every response body the test received, in order. */
+  const bodies: string[] = [];
+
+  /** A client of a new session, which keeps its response bodies in `bodies`. */
+  async function loggedIn(): Promise<GitApi> {
+    const session = await login(server, 'body');
+    bodies.push(await session.response.text());
+    return new GitApi(server, session.authToken, bodies);
+  }
+
+  async function commitFile(client: GitApi, id: number, workingCopy: string, file: string): Promise<void> {
+    writeFileSync(join(workingCopy, file), `# ${file}\n`);
+    const committed = await client.send('POST', `/repositories/${id}/git/commits`, { message: file, paths: [ file ] });
+    expect(committed.status).toBe(201);
+  }
+
+  const push = async (client: GitApi, id: number) => (await client.pushed(id)).outcome;
+
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-e2e-secrets-'));
+    const remotes = createRemotes(root);
+    httpsOptions.repositories['notes.git'] = copyRemote(root, remotes.handbook, 'notes');
+    https = await startGitHttpServer(httpsOptions);
+    ssh = await startGitSshServer({
+      repositories: { 'keys.git': copyRemote(root, remotes.handbook, 'keys') },
+      authorizedKeys: [ PROTECTED_PUBLIC ]
+    });
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN, FRONT_BURNER_LOG_LEVEL: 'debug' });
+    await onboard(server);
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+    await Promise.all([ https?.close(), ssh?.close() ]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('AC-REPO-002.14: no API response contains a password, token, private key or passphrase, and none appears in the logs', async () => {
+    const first = await loggedIn();
+    expect(
+      (await first.send('PUT', '/preferences/commit-author', { name: 'Admin', email: 'admin@example.com' })).status
+    )
+      .toBe(200);
+    const notes = await first.add('notes', `${https.url}/notes.git`, {
+      mode: 'new-https',
+      name: 'Notes token',
+      username: 'alice',
+      password: TOKEN
+    });
+    const sshUrl = `ssh://git@127.0.0.1:${ssh.port}/keys.git`;
+    const pasted = {
+      mode: 'new-ssh-key',
+      name: 'Pasted key',
+      privateKey: PROTECTED_KEY,
+      passphrase: FIXTURE_PASSPHRASE
+    };
+    const check = await first.send('POST', '/repositories/access-check', { remoteUrl: sshUrl, credentials: pasted });
+    expect(check.status).toBe(409);
+    const { host, port, type, key } = (await check.json() as { params: Record<string, unknown>; }).params;
+    expect((await first.send('POST', '/known-hosts', { host, port, type, key })).status).toBe(204);
+    const keys = await first.add('keys', sshUrl, pasted);
+
+    // A new session has the key locked: the push asks for the passphrase, and the unlock lets it run.
+    const second = await loggedIn();
+    await commitFile(second, keys.id, keys.workingCopy, 'keys.md');
+    const locked = await second.call(`/repositories/${keys.id}/git/push`, { method: 'POST' });
+    expect(locked.status).toBe(409);
+    const { keyId } = (await locked.json() as { params: { keyId: number; }; }).params;
+    const unlocked = await second.send('POST', `/credentials/ssh-keys/${keyId}/unlock`, {
+      passphrase: FIXTURE_PASSPHRASE
+    });
+    expect(unlocked.status).toBe(204);
+    expect(await push(second, keys.id)).toMatchObject({ kind: 'pushed' });
+
+    // A push refused for read-only credentials, then fixed by replacing them and by updating the token.
+    await commitFile(second, notes.id, notes.workingCopy, 'notes.md');
+    httpsOptions.refusePush = 403;
+    expect(await push(second, notes.id)).toMatchObject({ kind: 'failed', code: 'push-not-allowed' });
+    delete httpsOptions.refusePush;
+    httpsOptions.users = { alice: REPLACED };
+    const replaced = await second.send('PUT', `/repositories/${notes.id}/credentials`, {
+      mode: 'new-https',
+      name: 'Notes write token',
+      username: 'alice',
+      password: REPLACED
+    });
+    expect(replaced.status).toBe(200);
+    httpsOptions.users = { alice: ROTATED };
+    expect(await push(second, notes.id)).toMatchObject({ kind: 'failed', code: 'credentials-refused' });
+    const updated = await second.send('PUT', `/repositories/${notes.id}/credentials/token`, {
+      username: 'alice',
+      password: ROTATED
+    });
+    expect(updated.status).toBe(200);
+    expect(await push(second, notes.id)).toMatchObject({ kind: 'pushed' });
+    await second.call('/credentials');
+    await second.call(`/repositories/${notes.id}/credentials`);
+    await second.call(`/repositories/${keys.id}/credentials`);
+
+    const secrets = {
+      token: TOKEN,
+      'replaced token': REPLACED,
+      'rotated token': ROTATED,
+      passphrase: FIXTURE_PASSPHRASE,
+      password: E2E_ADMIN.password,
+      ...Object.fromEntries(pastedKeyLines().map((line, index) => [ `pasted private key, line ${index + 1}`, line ])),
+      'decrypted private key': decryptedKeyBody()
+    };
+    const sqlite = new BetterSqlite3(join(server.dataDir, 'db', 'front-burner.sqlite'), { readonly: true });
+    let jobRows: string;
+    try {
+      const rows = sqlite.prepare('SELECT type, payload, result, error_code FROM jobs').all() as { type: string; }[];
+      expect(rows.map(row => row.type)).toContain('sync.push');
+      jobRows = JSON.stringify(rows);
+    } finally {
+      sqlite.close();
+    }
+    const log = server.output();
+    expect(log).toContain('"level":"debug"');
+    for (const [ what, secret ] of Object.entries(secrets)) {
+      expect(log.includes(secret), `the log contains the ${what}`).toBe(false);
+      expect(bodies.filter(body => body.includes(secret)), `a response contains the ${what}`).toEqual([]);
+      expect(jobRows.includes(secret), `a job row contains the ${what}`).toBe(false);
+    }
   });
 });
