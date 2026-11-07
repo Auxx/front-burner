@@ -2,7 +2,8 @@
   <ui-dialog [heading]="t('heading')">
     <div class="content">
       @if (failure(); as failure) {
-        <ui-inline-banner status="danger" announce>
+        <ui-inline-banner status="danger"
+                          announce>
           {{ failure.text }}
           @if (failure.reference) {
             <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
@@ -11,8 +12,10 @@
       }
       <p class="message">{{ t('explanation') }}</p>
       <dl uiKeyValueList>
-        <div uiKeyValue [label]="t('host')">{{ host }}</div>
-        <div uiKeyValue [label]="t('trustedKey')">
+        <div uiKeyValue
+             [label]="t('host')">{{ host }}</div>
+        <div uiKeyValue
+             [label]="t('trustedKey')">
           @if (data.trustedFingerprint) {
             <span class="key-type">{{ data.trustedType }}</span>
             <code class="fingerprint">{{ data.trustedFingerprint }}</code>
@@ -21,7 +24,8 @@
           }
         </div>
         @if (newKey; as newKey) {
-          <div uiKeyValue [label]="t('newKey')">
+          <div uiKeyValue
+               [label]="t('newKey')">
             <span class="key-type">{{ newKey.request.type }}</span>
             <code class="fingerprint">{{ newKey.fingerprint }}</code>
           </div>
@@ -29,18 +33,18 @@
       </dl>
       @if (publishedFingerprints; as href) {
         <p class="message">
-          <a [href]="href" target="_blank" rel="noopener noreferrer">{{ t('publishedFingerprints') }}</a>
+          <a [href]="href"
+             target="_blank"
+             rel="noopener noreferrer">{{ t('publishedFingerprints') }}</a>
         </p>
       }
       @if (newKey) {
         <label uiChoice>
-          <input
-            type="checkbox"
-            uiCheckbox
-            [checked]="checked()"
-            [disabled]="busy()"
-            (change)="checked.set($any($event.target).checked)"
-          />
+          <input type="checkbox"
+                 uiCheckbox
+                 [checked]="checked()"
+                 [disabled]="busy()"
+                 (change)="toggled($event)" />
           {{ t('checked') }}
         </label>
       } @else {
@@ -48,13 +52,22 @@
       }
     </div>
     <div uiDialogFooter>
-      <button uiButton data-autofocus [unavailable]="busy()" (click)="ref.close()">{{ t('cancel') }}</button>
+      <button uiButton
+              data-autofocus
+              [unavailable]="busy()"
+              (click)="ref.close()">{{ t('cancel') }}</button>
       @if (newKey) {
-        <button uiButton variant="danger" [busy]="busy()" [unavailable]="!checked()" (click)="trust()">
+        <button uiButton
+                variant="danger"
+                [busy]="busy()"
+                [unavailable]="!checked()"
+                (click)="trust()">
           {{ t('trust') }}
         </button>
       } @else {
-        <button uiButton variant="primary" (click)="ref.close(true)">{{ t('tryAgain') }}</button>
+        <button uiButton
+                variant="primary"
+                (click)="ref.close(true)">{{ t('tryAgain') }}</button>
       }
     </div>
   </ui-dialog>

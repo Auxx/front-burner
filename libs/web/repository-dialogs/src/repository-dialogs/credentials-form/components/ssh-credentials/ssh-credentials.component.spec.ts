@@ -17,6 +17,7 @@ import {
 } from '../../../../testing/form-testing';
 import { settle } from '../../../../testing/settle';
 import { translocoTesting } from '../../../../testing/transloco-testing';
+import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { CredentialsSectionComponent } from '../credentials-section/credentials-section.component';
 
 const KEY = 'web-repository-dialogs.SshCredentialsComponent';
@@ -50,14 +51,14 @@ describe('SshCredentialsComponent', () => {
   const host = () => fixture.componentInstance;
 
   /** The section as the page shows it, for an SSH URL. */
-  async function open(sshKeys: SavedSshKey[] = []): Promise<void> {
+  async function open(sshKeys: SavedSshKey[] = [], texts: Record<string, string> = {}): Promise<void> {
     hostWith(
       '<dlg-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
       [ CredentialsSectionComponent ]
     );
     await TestBed.configureTestingModule({
-      imports: [ FormHostComponent, translocoTesting() ],
-      providers: [ { provide: CredentialsApi, useValue: api } ]
+      imports: [ FormHostComponent, translocoTesting(texts) ],
+      providers: [ { provide: CredentialsApi, useValue: api }, SubmitFailuresService ]
     }).compileComponents();
     fixture = TestBed.createComponent(FormHostComponent);
     host().saved.set({ https: [], sshKeys } satisfies SavedCredentials);
@@ -183,5 +184,42 @@ describe('SshCredentialsComponent', () => {
     expect(page().textContent).toContain(`${KEY}.unlocked`);
     expect(() => field(page(), `${KEY}.passphrase`)).toThrow();
     expect(host().model.credentials().invalid()).toBe(false);
+  });
+
+  it('shows the backend\'s failures on a pasted key\'s fields, with their parameters', async () => {
+    await open([], { [`${ERRORS}.credentials.privateKey.too-big`]: 'At most {{ maximum }} characters' });
+    TestBed.inject(SubmitFailuresService).record([
+      { path: 'credentials.name', key: 'credentials.name.name-taken', params: {} },
+      { path: 'credentials.privateKey', key: 'credentials.privateKey.too-big', params: { maximum: 16384 } },
+      { path: 'credentials.passphrase', key: 'credentials.passphrase.wrong-passphrase', params: {} }
+    ]);
+    await settle(fixture);
+
+    expect(errorOf(page(), `${KEY}.name`)).toBe(`${ERRORS}.credentials.name.name-taken`);
+    expect(errorOf(page(), `${KEY}.privateKey`)).toBe('At most 16384 characters');
+    expect(errorOf(page(), `${KEY}.pastePassphrase`)).toBe(`${ERRORS}.credentials.passphrase.wrong-passphrase`);
+  });
+
+  it('shows the backend\'s failures on a saved key\'s fields, and a refused unlock before them', async () => {
+    api.unlockSshKey.mockReturnValue(throwError(() =>
+      new HttpErrorResponse({
+        status: 429,
+        error: { code: 'unlock-too-many-attempts', params: {}, requestId: 'r', message: 'm' }
+      })
+    ));
+    await open([ locked ]);
+    TestBed.inject(SubmitFailuresService).record([
+      { path: 'credentials.savedId', key: 'credentials.savedId.required', params: {} },
+      { path: 'credentials.passphrase', key: 'credentials.passphrase.passphrase-required', params: {} }
+    ]);
+    await settle(fixture);
+
+    expect(errorOf(page(), `${KEY}.saved`)).toBe(`${ERRORS}.credentials.savedId.required`);
+    expect(errorOf(page(), `${KEY}.passphrase`)).toBe(`${ERRORS}.credentials.passphrase.passphrase-required`);
+
+    type(control(page(), `${KEY}.passphrase`), 'wrong');
+    await settle(fixture);
+
+    expect(errorOf(page(), `${KEY}.passphrase`)).toBe(`${ERRORS}.credentials.passphrase.unlock-too-many-attempts`);
   });
 });

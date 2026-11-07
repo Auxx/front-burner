@@ -1,16 +1,15 @@
 <ng-container *transloco="let t; prefix: 'web-repository-dialogs'">
   @if (changing()) {
-    <dlg-commit-author-editor
-      confirming
-      [refusal]="refusal()"
-      (saved)="ref.close('confirmed')"
-      (cancelled)="ref.close()"
-    />
+    <dlg-commit-author-editor confirming
+                              [refusal]="refusal()"
+                              (saved)="ref.close('confirmed')"
+                              (cancelled)="ref.close()" />
   } @else {
     <ui-dialog [heading]="t('ConfirmCommitAuthorDialog.heading')">
       <div class="content">
         @if (failure(); as failure) {
-          <ui-inline-banner status="danger" announce>
+          <ui-inline-banner status="danger"
+                            announce>
             {{ failure.text }}
             @if (failure.reference) {
               <span class="reference">{{ t('ConfirmCommitAuthorDialog.reference') }} <code>{{ failure.reference }}</code></span>
@@ -21,14 +20,27 @@
         <dlg-commit-author-summary [author]="data.current.author" />
         <p>{{ t('CommitAuthorFormComponent.emailHint') }}</p>
         <p class="help">
-          <a [href]="help.github" target="_blank" rel="noopener noreferrer">{{ t('CommitAuthorFormComponent.githubHelp') }}</a>
-          <a [href]="help.bitbucket" target="_blank" rel="noopener noreferrer">{{ t('CommitAuthorFormComponent.bitbucketHelp') }}</a>
+          <a [href]="help.github"
+             target="_blank"
+             rel="noopener noreferrer">{{ t('CommitAuthorFormComponent.githubHelp') }}</a>
+          <a [href]="help.bitbucket"
+             target="_blank"
+             rel="noopener noreferrer">{{ t('CommitAuthorFormComponent.bitbucketHelp') }}</a>
         </p>
       </div>
       <div uiDialogFooter>
-        <button uiButton data-autofocus [unavailable]="busy()" (click)="ref.close()">{{ t('ConfirmCommitAuthorDialog.cancel') }}</button>
-        <button uiButton [unavailable]="busy()" (click)="changing.set(true)">{{ t('ConfirmCommitAuthorDialog.change') }}</button>
-        <button uiButton wrap variant="primary" [busy]="busy()" (click)="confirm()">
+        <button uiButton
+                data-autofocus
+                [unavailable]="busy()"
+                (click)="ref.close()">{{ t('ConfirmCommitAuthorDialog.cancel') }}</button>
+        <button uiButton
+                [unavailable]="busy()"
+                (click)="changing.set(true)">{{ t('ConfirmCommitAuthorDialog.change') }}</button>
+        <button uiButton
+                wrap
+                variant="primary"
+                [busy]="busy()"
+                (click)="confirm()">
           {{ t('ConfirmCommitAuthorDialog.commitAs', data.current.author) }}
         </button>
       </div>

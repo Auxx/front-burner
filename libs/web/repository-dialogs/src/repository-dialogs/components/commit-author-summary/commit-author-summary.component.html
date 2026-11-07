@@ -1,6 +1,9 @@
 <ng-container *transloco="let t; prefix: 'web-repository-dialogs.commitAuthor'">
+  @let shownAuthor = author();
   <dl uiKeyValueList>
-    <div uiKeyValue [label]="t('name')"><span class="value">{{ author().name }}</span></div>
-    <div uiKeyValue [label]="t('email')"><span class="value">{{ author().email }}</span></div>
+    <div uiKeyValue
+         [label]="t('name')"><span class="value">{{ shownAuthor.name }}</span></div>
+    <div uiKeyValue
+         [label]="t('email')"><span class="value">{{ shownAuthor.email }}</span></div>
   </dl>
 </ng-container>

@@ -95,6 +95,11 @@ export class ChangedHostKeyDialog {
   protected readonly failure = signal<ApiErrorText | null>(null);
   protected readonly ready = computed(() => this.checked() && !this.busy());
 
+  /** Follows the checkbox that confirms the new key was checked. */
+  protected toggled(event: Event): void {
+    this.checked.set((event.target as HTMLInputElement).checked);
+  }
+
   protected async trust(): Promise<void> {
     const newKey = this.newKey;
     if (newKey === null || !this.ready()) {

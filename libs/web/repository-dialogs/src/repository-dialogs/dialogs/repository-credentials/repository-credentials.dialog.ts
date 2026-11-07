@@ -194,6 +194,12 @@ export class RepositoryCredentialsDialog {
     ];
   });
 
+  /** The failure or error to show on each field of **Update the token**. */
+  protected readonly tokenErrors = computed(() => ({
+    username: this.tokenError('username'),
+    password: this.tokenError('password')
+  }));
+
   /** A failure of the credentials as a whole on **Update the token**, such as refused credentials. */
   protected readonly tokenFailure = computed(() => this.failures.forPath('credentials'));
 
@@ -309,7 +315,7 @@ export class RepositoryCredentialsDialog {
   }
 
   /** The failure or error of a field of **Update the token**, under `web-repository-dialogs.errors`. */
-  protected tokenError(name: keyof TokenModel): FieldErrorText | undefined {
+  private tokenError(name: keyof TokenModel): FieldErrorText | undefined {
     return this.failures.forPath(`credentials.${name}`)
       ?? credentialsShownError(this.tokenModel[name], `credentials.${name}`);
   }

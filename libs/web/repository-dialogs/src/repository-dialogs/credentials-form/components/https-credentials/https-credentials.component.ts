@@ -61,7 +61,15 @@ export class HttpsCredentialsComponent {
     this.saved().map(saved => ({ value: saved.id, label: `${saved.name} (${saved.username})` }))
   );
 
-  protected error(name: keyof CredentialsModel): FieldErrorText | undefined {
+  /** The error to show on each field, under `web-repository-dialogs.errors`. */
+  protected readonly fieldErrors = computed(() => ({
+    savedId: this.fieldError('savedId'),
+    name: this.fieldError('name'),
+    username: this.fieldError('username'),
+    password: this.fieldError('password')
+  }));
+
+  private fieldError(name: keyof CredentialsModel): FieldErrorText | undefined {
     return this.failures?.forPath(`credentials.${name}`)
       ?? credentialsShownError(this.credentials()[name], `credentials.${name}`);
   }

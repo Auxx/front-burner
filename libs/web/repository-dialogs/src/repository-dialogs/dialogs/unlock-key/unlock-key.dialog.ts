@@ -84,8 +84,8 @@ export class UnlockKeyDialog {
 
   private readonly input = viewChild.required('passphraseInput', { read: ElementRef<HTMLInputElement> });
 
-  protected typed(value: string): void {
-    this.passphrase.set(value);
+  protected typed(event: Event): void {
+    this.passphrase.set((event.target as HTMLInputElement).value);
     this.error.set(null);
   }
 

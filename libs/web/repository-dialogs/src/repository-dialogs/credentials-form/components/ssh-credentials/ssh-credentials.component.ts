@@ -78,11 +78,24 @@ export class SshCredentialsComponent {
     computation: () => null
   });
 
-  protected key(id: number): SavedSshKey | undefined {
-    return this.keys().find(key => key.id === id);
-  }
+  /** The saved keys by id, for the details of each option. */
+  protected readonly keysById = computed(() => {
+    const byId: Record<number, SavedSshKey> = {};
+    for (const key of this.keys()) {
+      byId[key.id] ??= key;
+    }
+    return byId;
+  });
 
-  protected error(name: keyof CredentialsModel): FieldErrorText | undefined {
+  /** The error to show on each field, under `web-repository-dialogs.errors`. */
+  protected readonly fieldErrors = computed(() => ({
+    savedId: this.fieldError('savedId'),
+    name: this.fieldError('name'),
+    privateKey: this.fieldError('privateKey'),
+    passphrase: this.fieldError('passphrase')
+  }));
+
+  private fieldError(name: keyof CredentialsModel): FieldErrorText | undefined {
     const unlockError = this.unlockError();
     if (name === 'passphrase' && unlockError !== null) {
       return unlockError;
