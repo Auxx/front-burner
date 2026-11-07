@@ -10,9 +10,13 @@ import { InlineBannerComponent } from './inline-banner.component';
   imports: [ InlineBannerComponent, BannerActionsComponent, ButtonComponent ],
   template: `
     @if (shown()) {
-      <ui-inline-banner status="warning" dismissLabel="Dismiss" announce (dismissed)="shown.set(false)">
+      <ui-inline-banner status="warning"
+                        dismissLabel="Dismiss"
+                        announce
+                        (dismissed)="shown.set(false)">
         <strong>work-laptop</strong> is locked. Unlock it to fetch, pull and push.
-        <div uiBannerActions><button uiButton size="small">Unlock</button></div>
+        <div uiBannerActions><button uiButton
+                                     size="small">Unlock</button></div>
       </ui-inline-banner>
     }
     <ui-inline-banner quiet>Some HTML isn't shown in the preview.</ui-inline-banner>

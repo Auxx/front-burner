@@ -16,7 +16,8 @@ import { type ButtonSize, type ButtonType } from '../button/button.component';
   selector: 'button[uiIconButton]',
   imports: [ SpinnerComponent ],
   template: `
-    <span class="icon" [hidden]="busy()"><ng-content /></span>
+    <span class="icon"
+          [hidden]="busy()"><ng-content /></span>
     @if (busy()) {
       <ui-spinner />
     }

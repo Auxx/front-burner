@@ -1,41 +1,37 @@
-<cdk-virtual-scroll-viewport
-  class="viewport"
-  role="tree"
-  tabindex="0"
-  [itemSize]="itemSize()"
-  [attr.aria-label]="label()"
-  [attr.aria-activedescendant]="activeDescendant()"
-  (keydown)="onKeydown($event)"
-  (focusin)="onFocusIn($event)"
-  (click)="onClick($event)"
->
-  <div
-    *cdkVirtualFor="let row of rows(); let index = index; trackBy: trackRow; templateCacheSize: 0"
-    class="row"
-    role="treeitem"
-    [id]="rowId(index)"
-    [attr.aria-level]="row.level"
-    [attr.aria-setsize]="row.setsize"
-    [attr.aria-posinset]="row.posinset"
-    [attr.aria-expanded]="row.expandable ? row.expanded : null"
-    [attr.aria-selected]="row.selectable ? row.node.value === selected() : null"
-    [attr.aria-label]="row.node.accessibleName ?? row.node.label"
-    [attr.data-active]="index === activeIndex() ? 'true' : null"
-    [style.--ui-tree-level]="row.level"
-  >
+<cdk-virtual-scroll-viewport class="viewport"
+                             role="tree"
+                             tabindex="0"
+                             [itemSize]="itemSize()"
+                             [attr.aria-label]="label()"
+                             [attr.aria-activedescendant]="activeDescendant()"
+                             (keydown)="onKeydown($event)"
+                             (focusin)="onFocusIn($event)"
+                             (click)="onClick($event)">
+  <div *cdkVirtualFor="let row of rows(); let index = index; trackBy: trackRow; templateCacheSize: 0"
+       class="row"
+       role="treeitem"
+       [id]="rowIdPrefix + index"
+       [attr.aria-level]="row.level"
+       [attr.aria-setsize]="row.setsize"
+       [attr.aria-posinset]="row.posinset"
+       [attr.aria-expanded]="row.expandable ? row.expanded : null"
+       [attr.aria-selected]="row.selectable ? row.node.value === selected() : null"
+       [attr.aria-label]="row.node.accessibleName ?? row.node.label"
+       [attr.data-active]="index === activeIndex() ? 'true' : null"
+       [style.--ui-tree-level]="row.level">
     <span class="chevron">
       @if (row.expandable) {
         <ui-icon name="chevron-right" />
       }
     </span>
     @if (nodeTemplate(); as content) {
-      <ng-container
-        *ngTemplateOutlet="content.template; context: { $implicit: row.node, level: row.level, expanded: row.expanded, active: index === keyboardIndex() }"
-      />
+      <ng-container *ngTemplateOutlet="content.template; context: { $implicit: row.node, level: row.level, expanded: row.expanded, active: index === keyboardIndex() }" />
     } @else {
       <span class="label">{{ row.node.label }}</span>
     }
   </div>
 </cdk-virtual-scroll-viewport>
 <!-- One row high, so that the row height can be measured and observed without a rendered row. -->
-<div #rowProbe class="row-probe" aria-hidden="true"></div>
+<div #rowProbe
+     class="row-probe"
+     aria-hidden="true"></div>

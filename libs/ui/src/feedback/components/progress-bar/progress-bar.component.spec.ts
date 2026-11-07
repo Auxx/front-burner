@@ -5,7 +5,12 @@ import { ProgressBarComponent } from './progress-bar.component';
 
 @Component({
   imports: [ ProgressBarComponent ],
-  template: `<ui-progress-bar label="Cloning handbook" [value]="value()" [max]="max()" [valueText]="valueText()" />`
+  template: `
+    <ui-progress-bar label="Cloning handbook"
+                     [value]="value()"
+                     [max]="max()"
+                     [valueText]="valueText()" />
+  `
 })
 class HostComponent {
   readonly value = signal<number | null>(45);

@@ -7,7 +7,10 @@ import { IconComponent } from './icon.component';
 
 @Component({
   imports: [ IconComponent ],
-  template: `<ui-icon [name]="name()" [label]="label()" />`
+  template: `
+    <ui-icon [name]="name()"
+             [label]="label()" />
+  `
 })
 class HostComponent {
   readonly name = signal<IconName>('close');

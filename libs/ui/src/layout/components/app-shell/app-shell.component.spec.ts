@@ -12,19 +12,28 @@ import { AppShellComponent } from './app-shell.component';
 @Component({
   imports: [ ActivityBarComponent, AppShellComponent, AppShellSideDirective ],
   template: `
-    <button type="button" class="outside">Outside</button>
-    <button type="button" class="other">Other</button>
-    <ui-app-shell skipLinkLabel="Skip to content" [(sideOpen)]="sideOpen" [(drawerOpen)]="drawerOpen" [(sideSize)]="sideSize" [mainLabel]="mainLabel()">
+    <button type="button"
+            class="outside">Outside</button>
+    <button type="button"
+            class="other">Other</button>
+    <ui-app-shell skipLinkLabel="Skip to content"
+                  [(sideOpen)]="sideOpen"
+                  [(drawerOpen)]="drawerOpen"
+                  [(sideSize)]="sideSize"
+                  [mainLabel]="mainLabel()">
       <span uiAppShellHeader>Front Burner</span>
       @if (withBanner()) {
-        <p uiAppShellBanner class="notice">Notice</p>
+        <p uiAppShellBanner
+           class="notice">Notice</p>
       }
       @if (withActivity()) {
         <ui-activity-bar label="Tool windows" />
       }
       @if (withSide()) {
-        <div uiAppShellSide resizeLabel="Resize side panel">
-          <button type="button" class="opener">Tree</button>
+        <div uiAppShellSide
+             resizeLabel="Resize side panel">
+          <button type="button"
+                  class="opener">Tree</button>
         </div>
       }
       <p class="content">Content</p>

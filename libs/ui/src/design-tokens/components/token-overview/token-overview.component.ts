@@ -13,6 +13,8 @@ import {
 } from '@angular/core';
 
 import { CONTRAST_PAIRS, ContrastPair } from '../../models/contrast-pairs.model';
+import { TokenLayersPipe } from '../../pipes/token-layers/token-layers.pipe';
+import { tokenRef, TokenRefPipe } from '../../pipes/token-ref/token-ref.pipe';
 import { contrastRatio, Rgb } from '../../utils/contrast/contrast.util';
 import { collectTokenNames } from '../../utils/css-tokens/css-tokens.util';
 
@@ -66,7 +68,7 @@ const LAYOUT_GROUPS: readonly TokenGroup[] = [
  */
 @Component({
   selector: 'ui-token-overview',
-  imports: [ DecimalPipe ],
+  imports: [ DecimalPipe, TokenLayersPipe, TokenRefPipe ],
   templateUrl: './token-overview.component.html',
   styleUrl: './token-overview.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -89,7 +91,21 @@ export class TokenOverviewComponent {
     root: new Map()
   });
 
+  /** The values as records, so that the template reads them without calls. */
+  protected readonly tokenValues = computed(() => {
+    const { light, dark, root } = this.values();
+    return {
+      light: Object.fromEntries(light) as Record<string, string | undefined>,
+      dark: Object.fromEntries(dark) as Record<string, string | undefined>,
+      root: Object.fromEntries(root) as Record<string, string | undefined>
+    };
+  });
+
   protected readonly contrast = signal<ContrastResult[]>([]);
+  /** The contrast results with the names of their background layers. */
+  protected readonly contrastRows = computed(() =>
+    this.contrast().map(result => ({ ...result, backgroundNames: result.pair.background.join(' + ') }))
+  );
 
   protected readonly primitives = computed(() => {
     const hues = new Map<string, string[]>();
@@ -123,21 +139,6 @@ export class TokenOverviewComponent {
       observer.observe(document.documentElement, { attributeFilter: [ 'data-theme', 'data-density' ] });
       destroyRef.onDestroy(() => observer.disconnect());
     });
-  }
-
-  protected value(token: string, scope: Scheme | 'root' = 'root'): string {
-    return this.values()[scope].get(token) ?? '';
-  }
-
-  protected ref(token: string): string {
-    return `var(--ui-${token})`;
-  }
-
-  /** A CSS `background` that stacks the layers, the first at the bottom. */
-  protected background(layers: readonly string[]): string {
-    const [ bottom, ...overlays ] = layers;
-    const images = overlays.reverse().map(layer => `linear-gradient(${this.ref(layer)}, ${this.ref(layer)})`);
-    return [ ...images, this.ref(bottom) ].join(', ');
   }
 
   private group(groups: readonly TokenGroup[]) {
@@ -219,7 +220,7 @@ export class TokenOverviewComponent {
       return undefined;
     }
     const swatch = scope.ownerDocument.createElement('span');
-    swatch.style.backgroundColor = this.ref(token);
+    swatch.style.backgroundColor = tokenRef(token);
     scope.append(swatch);
     const colour = getComputedStyle(swatch).backgroundColor;
     swatch.remove();

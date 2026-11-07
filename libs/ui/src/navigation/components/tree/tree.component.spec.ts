@@ -48,20 +48,22 @@ const NODES: readonly TreeNode[] = [
     TreeNodeDirective
   ],
   template: `
-    <ui-tree
-      label="Files"
-      [nodes]="nodes()"
-      [(selected)]="selected"
-      [(expanded)]="expanded"
-      (loadChildren)="requested.push($event)"
-      (activated)="activated.push($event)"
-    >
-      <ng-template uiTreeNode let-node let-active="active">
+    <ui-tree label="Files"
+             [nodes]="nodes()"
+             [(selected)]="selected"
+             [(expanded)]="expanded"
+             (loadChildren)="requested.push($event)"
+             (activated)="activated.push($event)">
+      <ng-template uiTreeNode
+                   let-node
+                   let-active="active">
         <span>{{ node.label }}</span>
         @if (active) {
           <i class="keyboard-active"></i>
         }
-        <button uiTreeItemMenu [uiMenuTrigger]="menu.aria" aria-label="Actions for {{ node.label }}"></button>
+        <button uiTreeItemMenu
+                [uiMenuTrigger]="menu.aria"
+                aria-label="Actions for {{ node.label }}"></button>
       </ng-template>
     </ui-tree>
     <ui-menu #menu="uiMenu">
@@ -80,7 +82,11 @@ class HostComponent {
 
 @Component({
   imports: [ Dir, TreeComponent ],
-  template: `<div dir="rtl"><ui-tree label="Files" [nodes]="nodes" [(expanded)]="expanded" /></div>`
+  template: `
+    <div dir="rtl"><ui-tree label="Files"
+                            [nodes]="nodes"
+                            [(expanded)]="expanded" /></div>
+  `
 })
 class RtlHostComponent {
   readonly nodes = NODES;
@@ -94,7 +100,10 @@ const LARGE: readonly TreeNode[] = Array.from({ length: 5000 }, (_, index) => ({
 
 @Component({
   imports: [ TreeComponent ],
-  template: `<ui-tree label="Files" [nodes]="nodes" />`
+  template: `
+    <ui-tree label="Files"
+             [nodes]="nodes" />
+  `
 })
 class LargeHostComponent {
   readonly nodes = LARGE;

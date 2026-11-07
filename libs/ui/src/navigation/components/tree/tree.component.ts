@@ -103,7 +103,9 @@ export class TreeComponent {
   /** A selectable row was opened by click, tap, Enter or Space, also when it was already selected. */
   readonly activated = output<string>();
 
-  protected readonly id = `ui-tree-${nextId++}`;
+  private readonly id = `ui-tree-${nextId++}`;
+  /** A row's id is this prefix and the row's index. */
+  protected readonly rowIdPrefix = `${this.id}-row-`;
   protected readonly nodeTemplate = contentChild(TreeNodeDirective);
   protected readonly itemSize = signal(FALLBACK_ROW_HEIGHT);
 
@@ -246,8 +248,8 @@ export class TreeComponent {
     return true;
   }
 
-  protected rowId(index: number): string {
-    return `${this.id}-row-${index}`;
+  private rowId(index: number): string {
+    return `${this.rowIdPrefix}${index}`;
   }
 
   protected trackRow(_index: number, row: TreeRow): string {
@@ -476,8 +478,7 @@ export class TreeComponent {
 
   private indexOfRowElement(element: Element | null): number {
     const id = element?.id ?? '';
-    const prefix = `${this.id}-row-`;
-    return id.startsWith(prefix) ? Number(id.slice(prefix.length)) : -1;
+    return id.startsWith(this.rowIdPrefix) ? Number(id.slice(this.rowIdPrefix.length)) : -1;
   }
 
   /**

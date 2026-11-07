@@ -35,11 +35,14 @@ class UiMenuHarness extends MenuHarness {
   imports: [ MenuComponent, MenuItemComponent, MenuSeparatorComponent, MenuTriggerDirective ],
   template: `
     <button [uiMenuTrigger]="menu.aria">Git actions</button>
-    <ui-menu #menu="uiMenu" (itemSelected)="chosen.set($event); selections = selections + 1">
+    <ui-menu #menu="uiMenu"
+             (itemSelected)="chosen.set($event); selections = selections + 1">
       <button uiMenuItem="fetch">Fetch</button>
       <button uiMenuItem="pull">Pull</button>
       <div uiMenuSeparator></div>
-      <a uiMenuItem="settings" href="/repositories/1/settings" (click)="linkClicks = linkClicks + 1; $event.preventDefault()">Repository settings</a>
+      <a uiMenuItem="settings"
+         href="/repositories/1/settings"
+         (click)="linkClicks = linkClicks + 1; $event.preventDefault()">Repository settings</a>
     </ui-menu>
     <button>Outside</button>
   `
@@ -56,7 +59,8 @@ class HostComponent {
   template: `
     <button [uiMenuTrigger]="menu.aria">Repositories</button>
     <ui-menu #menu="uiMenu">
-      <div uiMenuGroup label="Recent">
+      <div uiMenuGroup
+           label="Recent">
         <button uiMenuItem="notes">Notes</button>
       </div>
     </ui-menu>
@@ -109,9 +113,11 @@ class ConditionalHostComponent {
         <button uiMenuItem="loading">Loading</button>
       }
       @for (name of names(); track name) {
-        <a [uiMenuItem]="name" href="/{{ name }}">{{ name }}</a>
+        <a [uiMenuItem]="name"
+           href="/{{ name }}">{{ name }}</a>
       }
-      <a uiMenuItem="all" href="/repositories">All repositories</a>
+      <a uiMenuItem="all"
+         href="/repositories">All repositories</a>
     </ui-menu>
   `
 })

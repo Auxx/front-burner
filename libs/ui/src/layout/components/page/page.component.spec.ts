@@ -8,9 +8,11 @@ import { PageComponent } from './page.component';
 @Component({
   imports: [ PageComponent, PageTitleDirective, BreadcrumbDirective ],
   template: `
-    <ui-page breadcrumbsLabel="Breadcrumb" [column]="column()">
+    <ui-page breadcrumbsLabel="Breadcrumb"
+             [column]="column()">
       @if (ancestors()) {
-        <a *uiBreadcrumb href="/repositories">Repositories</a>
+        <a *uiBreadcrumb
+           href="/repositories">Repositories</a>
       }
       <h1 uiPageTitle>Add repository</h1>
       <form class="form"></form>

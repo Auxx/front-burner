@@ -1,9 +1,15 @@
 <div class="layout">
-  <ui-status-icon class="icon" [status]="status()" />
-  <div #message class="message"><ng-content /></div>
+  <ui-status-icon class="icon"
+                  [status]="status()" />
+  <div #message
+       class="message"><ng-content /></div>
   <div class="actions"><ng-content select="[uiBannerActions]" /></div>
   @if (dismissLabel(); as label) {
-    <button uiIconButton class="dismiss" size="small" [label]="label" (click)="dismissed.emit()">
+    <button uiIconButton
+            class="dismiss"
+            size="small"
+            [label]="label"
+            (click)="dismissed.emit()">
       <ui-icon name="close" />
     </button>
   }

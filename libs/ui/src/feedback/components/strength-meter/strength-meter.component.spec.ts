@@ -7,7 +7,11 @@ type Score = 0 | 1 | 2 | 3 | 4 | null;
 
 @Component({
   imports: [ StrengthMeterComponent ],
-  template: `<ui-strength-meter label="Password strength" [score]="score()" [valueText]="valueText()" />`
+  template: `
+    <ui-strength-meter label="Password strength"
+                       [score]="score()"
+                       [valueText]="valueText()" />
+  `
 })
 class HostComponent {
   readonly score = signal<Score>(null);

@@ -7,7 +7,8 @@ import { IslandComponent } from './island.component';
   imports: [ IslandComponent ],
   template: `
     <ui-island heading="Files">
-      <button uiIslandHeader type="button">Refresh</button>
+      <button uiIslandHeader
+              type="button">Refresh</button>
       <p>Body text</p>
     </ui-island>
   `

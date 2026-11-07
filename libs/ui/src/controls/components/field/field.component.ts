@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, contentChild, effect, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, contentChild, effect, input } from '@angular/core';
 
 import { IconComponent } from '../../../content/components/icon/icon.component';
 import { FieldControl } from '../../models/field-control.model';
@@ -33,6 +33,12 @@ export class FieldComponent {
   protected readonly labelId = `${this.id}-label`;
   protected readonly hintId = `${this.id}-hint`;
   protected readonly errorId = `${this.id}-error`;
+
+  /** The label's `for`; a `<label for>` cannot label a control that is not a form element. */
+  protected readonly labelFor = computed(() => {
+    const control = this.control();
+    return control.labelable ? control.id() : null;
+  });
 
   constructor() {
     effect(() => {

@@ -5,7 +5,12 @@ import { TextareaComponent } from './textarea.component';
 
 @Component({
   imports: [ TextareaComponent ],
-  template: '<textarea uiTextarea aria-label="One"></textarea><textarea uiTextarea aria-label="Two"></textarea>'
+  template: `
+    <textarea uiTextarea
+              aria-label="One"></textarea>
+    <textarea uiTextarea
+              aria-label="Two"></textarea>
+  `
 })
 class HostComponent {
 }

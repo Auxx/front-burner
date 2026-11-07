@@ -7,8 +7,11 @@ import { IconButtonComponent } from './icon-button.component';
 @Component({
   imports: [ IconButtonComponent, IconComponent ],
   template: `
-    <button uiIconButton label="Fetch"><ui-icon name="repo-fetch" /></button>
-    <button uiIconButton label="Show remote images" [pressed]="pressed()"><ui-icon name="eye" /></button>
+    <button uiIconButton
+            label="Fetch"><ui-icon name="repo-fetch" /></button>
+    <button uiIconButton
+            label="Show remote images"
+            [pressed]="pressed()"><ui-icon name="eye" /></button>
   `
 })
 class HostComponent {
@@ -60,8 +63,15 @@ describe('IconButtonComponent', () => {
 @Component({
   imports: [ IconButtonComponent, IconComponent ],
   template: `
-    <button uiIconButton label="Fetch" [busy]="busy()" [unavailable]="unavailable()" (click)="clicks = clicks + 1"><ui-icon name="repo-fetch" /></button>
-    <button uiIconButton label="Push" unavailable (click)="clicks = clicks + 1"><ui-icon name="repo-push" /></button>
+    <button uiIconButton
+            label="Fetch"
+            [busy]="busy()"
+            [unavailable]="unavailable()"
+            (click)="clicks = clicks + 1"><ui-icon name="repo-fetch" /></button>
+    <button uiIconButton
+            label="Push"
+            unavailable
+            (click)="clicks = clicks + 1"><ui-icon name="repo-push" /></button>
   `
 })
 class BusyHostComponent {

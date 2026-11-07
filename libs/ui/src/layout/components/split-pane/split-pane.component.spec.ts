@@ -8,16 +8,14 @@ import { SplitPaneComponent, SplitPanePreset, SplitPaneShow } from './split-pane
   imports: [ SplitPaneComponent, Dir ],
   template: `
     <div [dir]="dir()">
-      <ui-split-pane
-        [(size)]="size"
-        [orientation]="orientation()"
-        [show]="show()"
-        [min]="min()"
-        [max]="max()"
-        [presets]="presets()"
-        [presetsLabel]="presetsLabel()"
-        separatorLabel="Resize file tree"
-      >
+      <ui-split-pane [(size)]="size"
+                     [orientation]="orientation()"
+                     [show]="show()"
+                     [min]="min()"
+                     [max]="max()"
+                     [presets]="presets()"
+                     [presetsLabel]="presetsLabel()"
+                     separatorLabel="Resize file tree">
         <p uiSplitPaneStart>Tree</p>
         <p uiSplitPaneEnd>Editor</p>
       </ui-split-pane>

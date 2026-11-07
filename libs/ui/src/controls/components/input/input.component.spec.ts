@@ -5,7 +5,12 @@ import { InputComponent } from './input.component';
 
 @Component({
   imports: [ InputComponent ],
-  template: '<input uiInput aria-label="One" /><input uiInput aria-label="Two" />'
+  template: `
+    <input uiInput
+           aria-label="One" />
+    <input uiInput
+           aria-label="Two" />
+  `
 })
 class HostComponent {
 }

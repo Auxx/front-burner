@@ -1,48 +1,51 @@
-<div
-  #trigger
-  #combobox="ngCombobox"
-  ngCombobox
-  class="trigger"
-  [(expanded)]="expanded"
-  [disabled]="disabled()"
-  [id]="id()"
-  [attr.aria-labelledby]="labelledBy()"
-  [attr.aria-label]="labelledBy() ? null : ariaLabel()"
-  [attr.aria-describedby]="describedBy()"
-  [attr.aria-invalid]="invalid() || null"
-  (blur)="onBlur($event)"
->
-  <span class="value" [attr.data-placeholder]="selected() ? null : ''">{{ selected()?.label ?? placeholder() }}</span>
-  <ui-icon class="chevron" name="chevron-down" />
+<div #trigger
+     #combobox="ngCombobox"
+     ngCombobox
+     class="trigger"
+     [(expanded)]="expanded"
+     [disabled]="disabled()"
+     [id]="id()"
+     [attr.aria-labelledby]="labelledBy()"
+     [attr.aria-label]="labelledBy() ? null : ariaLabel()"
+     [attr.aria-describedby]="describedBy()"
+     [attr.aria-invalid]="invalid() || null"
+     (blur)="onBlur($event)">
+  @let selectedOption = selected();
+  <span class="value"
+        [attr.data-placeholder]="selectedOption ? null : ''">{{ selectedOption?.label ?? placeholder() }}</span>
+  <ui-icon class="chevron"
+           name="chevron-down" />
 </div>
-<ng-template ngComboboxPopup [combobox]="combobox">
-  <ng-template
-    cdkConnectedOverlay
-    (detach)="expanded.set(false)"
-    [cdkConnectedOverlayOpen]="true"
-    [cdkConnectedOverlayOrigin]="trigger"
-    [cdkConnectedOverlayMinWidth]="triggerWidth()"
-    [cdkConnectedOverlayPositions]="positions"
-    [cdkConnectedOverlayViewportMargin]="8"
-    [cdkConnectedOverlayPush]="true"
-  >
-    <div
-      #panel
-      #listbox="ngListbox"
-      ngComboboxWidget
-      ngListbox
-      class="listbox"
-      focusMode="activedescendant"
-      selectionMode="explicit"
-      [softDisabled]="false"
-      [value]="selectedValues()"
-      [activeDescendant]="listbox.activeDescendant()"
-      (valueChange)="choose($event)"
-      (mousedown)="$event.preventDefault()"
-    >
+<ng-template ngComboboxPopup
+             [combobox]="combobox">
+  <ng-template cdkConnectedOverlay
+               (detach)="expanded.set(false)"
+               [cdkConnectedOverlayOpen]="true"
+               [cdkConnectedOverlayOrigin]="trigger"
+               [cdkConnectedOverlayMinWidth]="triggerWidth()"
+               [cdkConnectedOverlayPositions]="positions"
+               [cdkConnectedOverlayViewportMargin]="8"
+               [cdkConnectedOverlayPush]="true">
+    <div #panel
+         #listbox="ngListbox"
+         ngComboboxWidget
+         ngListbox
+         class="listbox"
+         focusMode="activedescendant"
+         selectionMode="explicit"
+         [softDisabled]="false"
+         [value]="selectedValues()"
+         [activeDescendant]="listbox.activeDescendant()"
+         (valueChange)="choose($event)"
+         (mousedown)="$event.preventDefault()">
       @for (option of options(); track option.value) {
-        <div ngOption class="option" [value]="option.value" [label]="option.label" [disabled]="!!option.disabled">
-          <ui-icon class="check" name="check" />
+        <div ngOption
+             class="option"
+             [value]="option.value"
+             [label]="option.label"
+             [disabled]="!!option.disabled">
+          <ui-icon class="check"
+                   name="check" />
           <span class="text">
             @if (optionTemplate(); as custom) {
               <ng-container *ngTemplateOutlet="custom.template; context: { $implicit: option }" />

@@ -5,7 +5,10 @@ import { AppShellSideDirective } from './app-shell-side.directive';
 
 @Component({
   imports: [ AppShellSideDirective ],
-  template: `<aside uiAppShellSide resizeLabel="Resize side panel"></aside>`
+  template: `
+    <aside uiAppShellSide
+           resizeLabel="Resize side panel"></aside>
+  `
 })
 class HostComponent {}
 

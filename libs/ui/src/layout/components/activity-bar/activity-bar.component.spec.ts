@@ -20,10 +20,15 @@ class ActivityBarItemHarness extends ToolbarWidgetHarness {
 @Component({
   imports: [ ActivityBarComponent, ActivityBarItemComponent ],
   template: `
-    <ui-activity-bar label="Side panel" [orientation]="orientation()" [(selected)]="selected">
-      <button uiActivityBarItem="files" label="Files">F</button>
-      <button uiActivityBarItem="changes" label="Changes">C</button>
-      <button uiActivityBarItem="search" label="Search">S</button>
+    <ui-activity-bar label="Side panel"
+                     [orientation]="orientation()"
+                     [(selected)]="selected">
+      <button uiActivityBarItem="files"
+              label="Files">F</button>
+      <button uiActivityBarItem="changes"
+              label="Changes">C</button>
+      <button uiActivityBarItem="search"
+              label="Search">S</button>
     </ui-activity-bar>
   `
 })
