@@ -1,0 +1,26 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+  min-inline-size: 0;
+}
+
+.message {
+  margin: 0;
+}
+
+.key-type {
+  display: block;
+}
+
+// Selectable whole for comparing, and wrapped anywhere so that it stays within a 320 px dialog.
+.fingerprint {
+  display: block;
+  font-family: var(--ui-font-family-mono);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.reference {
+  display: block;
+}
