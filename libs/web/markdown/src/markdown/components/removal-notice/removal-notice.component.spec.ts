@@ -9,7 +9,10 @@ const PREFIX = 'web-markdown.RemovalNoticeComponent';
 
 @Component({
   imports: [ RemovalNoticeComponent ],
-  template: `<md-removal-notice [removals]="removals()" [(hidden)]="hidden" />`
+  template: `
+    <md-removal-notice [removals]="removals()"
+                       [(hidden)]="hidden" />
+  `
 })
 class HostComponent {
   readonly removals = signal<RemovalReport>(new Map());
