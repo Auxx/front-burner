@@ -1,6 +1,8 @@
-<ui-app-shell *transloco="let t; prefix: 'web-shell.ShellLayoutComponent'" [skipLinkLabel]="t('skipToContent')">
+<ui-app-shell *transloco="let t; prefix: 'web-shell.ShellLayoutComponent'"
+              [skipLinkLabel]="t('skipToContent')">
   @if (user(); as user) {
-    <shell-app-header uiAppShellHeader [user]="user" />
+    <shell-app-header uiAppShellHeader
+                      [user]="user" />
   }
   <router-outlet />
 </ui-app-shell>

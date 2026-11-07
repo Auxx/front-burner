@@ -1,18 +1,21 @@
 <ng-container *transloco="let t; prefix: 'web-shell.UserMenuComponent'">
-  <button
-    class="trigger"
-    [uiMenuTrigger]="account.aria"
-    [attr.aria-label]="t('label', { name: user().displayName })"
-  >
+  @let currentUser = user();
+  <button class="trigger"
+          [uiMenuTrigger]="account.aria"
+          [attr.aria-label]="t('label', { name: currentUser.displayName })">
     {{ initials() }}
   </button>
-  <ui-menu #account="uiMenu" (itemSelected)="selected($event)">
-    <div uiMenuGroup [label]="user().displayName + ', ' + user().email">
-      <div class="identity" aria-hidden="true">
-        <span class="name">{{ user().displayName }}</span>
-        <span class="email">{{ user().email }}</span>
+  <ui-menu #account="uiMenu"
+           (itemSelected)="selected($event)">
+    <div uiMenuGroup
+         [label]="currentUser.displayName + ', ' + currentUser.email">
+      <div class="identity"
+           aria-hidden="true">
+        <span class="name">{{ currentUser.displayName }}</span>
+        <span class="email">{{ currentUser.email }}</span>
       </div>
-      <a uiMenuItem="preferences" routerLink="/preferences">{{ t('preferences') }}</a>
+      <a uiMenuItem="preferences"
+         routerLink="/preferences">{{ t('preferences') }}</a>
       <button uiMenuItem="logout">{{ t('logout') }}</button>
     </div>
   </ui-menu>

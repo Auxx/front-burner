@@ -1,15 +1,15 @@
-<a
-  *transloco="let t; prefix: 'web-shell.BrandLinkComponent'"
-  class="brand"
-  routerLink="/"
-  routerLinkActive="active"
-  ariaCurrentWhenActive="page"
-  [routerLinkActiveOptions]="{ exact: true }"
-  [class.compact]="compact()"
-  [attr.aria-label]="compact() ? t('dashboard') : null"
->
-  <ui-icon class="home" name="home" />
+<a *transloco="let t; prefix: 'web-shell.BrandLinkComponent'"
+   class="brand"
+   routerLink="/"
+   routerLinkActive="active"
+   ariaCurrentWhenActive="page"
+   [routerLinkActiveOptions]="{ exact: true }"
+   [class.compact]="compact()"
+   [attr.aria-label]="compact() ? t('dashboard') : null">
+  <ui-icon class="home"
+           name="home" />
   @if (!compact()) {
-    <span class="label" [attr.data-label]="t('dashboard')">{{ t('dashboard') }}</span>
+    <span class="label"
+          [attr.data-label]="t('dashboard')">{{ t('dashboard') }}</span>
   }
 </a>
