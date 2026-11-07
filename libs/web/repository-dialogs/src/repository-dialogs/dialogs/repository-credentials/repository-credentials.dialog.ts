@@ -218,7 +218,8 @@ export class RepositoryCredentialsDialog {
     void this.load();
     // The first field once the choices are shown; until then `ui-dialog` has focused the dialog (RC-25).
     const focusFirstField = effect(() => {
-      if (this.info() === null || this.saved() === null) {
+      // **Update the token** does not use the saved credentials, so it does not wait for them.
+      if (this.info() === null || (this.saved() === null && !this.updating())) {
         return;
       }
       focusFirstField.destroy();
@@ -272,7 +273,9 @@ export class RepositoryCredentialsDialog {
   /**
    * Updates the token of the saved credentials in use (RC-13), as typed:
    * neither is trimmed, as when they were saved (AR-20). A failure keeps the
-   * dialog open with everything typed (AR-42).
+   * dialog open with everything typed (AR-42). When the repository's
+   * credentials can no longer be updated, because they were replaced
+   * meanwhile, it shows the other choices with the credentials now in use.
    */
   private async updateToken(): Promise<void> {
     await submit(this.tokenModel, async () => {
@@ -289,7 +292,12 @@ export class RepositoryCredentialsDialog {
           this.repositoriesApi.updateRepositoryToken(this.data.repository.id, { username, password })
         );
       } catch (error) {
-        this.refusal(error, path => isCredentialsPath(path) ? path : `credentials.${path}`);
+        // The request's own fields are named as the credentials' here; others, such as `remoteUrl`, stay.
+        this.refusal(error, path => path === 'username' || path === 'password' ? `credentials.${path}` : path);
+        if (toApiError(error).code === 'credentials-not-updatable') {
+          this.tokenChoice.set('other');
+          void this.loadInfo();
+        }
         return undefined;
       } finally {
         this.submitting.set(false);
@@ -313,7 +321,6 @@ export class RepositoryCredentialsDialog {
    */
   private refusal(error: unknown, pathOf: (path: string) => string = path => path): void {
     const apiError = toApiError(error);
-    // The token request's fields are its own (`username`, `password`): named as the credentials' here.
     const fields = (apiError.fields ?? []).map(field => ({ ...field, path: pathOf(field.path) }));
     const credentials = this.model().value();
     if (
@@ -358,6 +365,10 @@ export class RepositoryCredentialsDialog {
 
   private async load(): Promise<void> {
     void this.loadSaved();
+    await this.loadInfo();
+  }
+
+  private async loadInfo(): Promise<void> {
     try {
       const info = await firstValueFrom(this.repositoriesApi.repositoryCredentials(this.data.repository.id));
       if (info.inUse?.kind === 'https') {

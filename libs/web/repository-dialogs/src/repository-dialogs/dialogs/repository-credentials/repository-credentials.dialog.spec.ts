@@ -429,7 +429,7 @@ describe('RepositoryCredentialsDialog', () => {
     });
 
     async function typeToken(token: string): Promise<void> {
-      type(control(dialog(), `${KEY}.password`), token);
+      type(control(dialog(), `${HTTPS}.password`), token);
       await settleDialog();
     }
 
@@ -441,8 +441,8 @@ describe('RepositoryCredentialsDialog', () => {
         dialog().querySelector<HTMLInputElement>('input[type=radio]:checked')?.closest('label')?.textContent?.trim()
       )
         .toBe(UPDATE);
-      expect(control(dialog(), `${KEY}.username`).value).toBe('ada');
-      const token = control(dialog(), `${KEY}.password`);
+      expect(control(dialog(), `${HTTPS}.username`).value).toBe('ada');
+      const token = control(dialog(), `${HTTPS}.password`);
       expect(token.type).toBe('password');
       expect(token.getAttribute('autocomplete')).toBe('off');
       expect(dialogButton(`${KEY}.update`)).toBeDefined();
@@ -466,7 +466,7 @@ describe('RepositoryCredentialsDialog', () => {
     it('updates the token, then closes with true', async () => {
       await open({ offerTokenUpdate: true });
       const closed = firstValueFrom(ref.closed);
-      type(control(dialog(), `${KEY}.username`), 'ada-lovelace');
+      type(control(dialog(), `${HTTPS}.username`), 'ada-lovelace');
       await typeToken('ghp_new');
 
       dialogButton(`${KEY}.update`)?.click();
@@ -510,7 +510,7 @@ describe('RepositoryCredentialsDialog', () => {
 
       expect(text()).toContain('web-repository-dialogs.errors.credentials.credentials-refused');
       expect(shown()).not.toBeNull();
-      expect(control(dialog(), `${KEY}.username`).value).toBe('ada');
+      expect(control(dialog(), `${HTTPS}.username`).value).toBe('ada');
       expect(ref.dismissible()).toBe(true);
 
       // A failure that concerns no field is shown above the buttons.
@@ -531,6 +531,30 @@ describe('RepositoryCredentialsDialog', () => {
       expect(await closed).toBeUndefined();
     });
 
+    it('shows the other choices when the credentials were replaced meanwhile', async () => {
+      const other = { id: 8, name: 'Other', username: 'grace', missing: false };
+      repositoriesApi.updateRepositoryToken.mockReturnValueOnce(
+        throwError(() => failure(409, 'credentials-not-updatable'))
+      );
+      await open({ offerTokenUpdate: true });
+      repositoriesApi.repositoryCredentials.mockReturnValue(
+        of({ protocol: 'https', inUse: { kind: 'https', ...other, usedBy: 1 } } satisfies RepositoryCredentialsInfo)
+      );
+      await typeToken('ghp_new');
+
+      dialogButton(`${KEY}.update`)?.click();
+      await settleDialog();
+
+      expect(dialog().querySelector('ui-inline-banner[status="danger"]')).not.toBeNull();
+      expect(
+        dialog().querySelector<HTMLInputElement>('input[type=radio]:checked')?.closest('label')?.textContent?.trim()
+      )
+        .toBe(OTHER);
+      expect(dialogButton(`${KEY}.save`)).toBeDefined();
+      const values = [ ...dialog().querySelectorAll('[uiKeyValue]') ].map(element => element.textContent ?? '');
+      expect(values.some(value => value.includes('Other'))).toBe(true);
+    });
+
     it('shows a refused field of the request on its field', async () => {
       repositoriesApi.updateRepositoryToken.mockReturnValueOnce(
         throwError(() =>
@@ -543,7 +567,7 @@ describe('RepositoryCredentialsDialog', () => {
       dialogButton(`${KEY}.update`)?.click();
       await settleDialog();
 
-      expect(errorOf(dialog(), `${KEY}.password`)).toBe('web-repository-dialogs.errors.credentials.password.too-big');
+      expect(errorOf(dialog(), `${HTTPS}.password`)).toBe('web-repository-dialogs.errors.credentials.password.too-big');
     });
 
     it('offers the update only for saved HTTPS credentials', async () => {
@@ -606,8 +630,8 @@ describe('RepositoryCredentialsDialog', () => {
 
       choose(dialog(), UPDATE);
       await settleDialog();
-      expect(control(dialog(), `${KEY}.username`).value).toBe('ada');
-      expect(control(dialog(), `${KEY}.password`).value).toBe('');
+      expect(control(dialog(), `${HTTPS}.username`).value).toBe('ada');
+      expect(control(dialog(), `${HTTPS}.password`).value).toBe('');
       expect(dialogButton(`${KEY}.update`)?.getAttribute('aria-disabled')).toBe('true');
       await typeToken('ghp_update');
       choose(dialog(), OTHER);
