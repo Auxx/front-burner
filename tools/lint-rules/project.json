@@ -1,7 +1,7 @@
 {
-  "name": "eslint-rules",
+  "name": "lint-rules",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "tools/eslint-rules/src",
+  "sourceRoot": "tools/lint-rules/src",
   "projectType": "library",
   "tags": [
     "scope:tools",
@@ -20,7 +20,7 @@
       ],
       "options": {
         "command": "vitest run",
-        "cwd": "tools/eslint-rules"
+        "cwd": "tools/lint-rules"
       }
     }
   }

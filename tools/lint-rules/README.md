@@ -1,4 +1,4 @@
-# eslint-rules
+# lint-rules
 
 The workspace's local ESLint plugin, `front-burner`, which holds the custom lint
 rules that no published plugin offers, such as `front-burner/attribute-layout`
@@ -20,7 +20,7 @@ block:
 
 ```js
 import nx from '@nx/eslint-plugin';
-import angularTemplates from '../../tools/eslint-rules/src/angular-templates.config.mjs';
+import angularTemplates from '../../tools/lint-rules/src/angular-templates.config.mjs';
 import baseConfig from '../../eslint.config.mjs';
 
 export default [

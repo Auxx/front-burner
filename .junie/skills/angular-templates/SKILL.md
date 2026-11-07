@@ -15,8 +15,8 @@ cannot be merged. Rules marked **judgement** are not checked by a machine; apply
 them yourself.
 
 The lint rules come from one shared config,
-`tools/eslint-rules/src/angular-templates.config.mjs` (see
-`tools/eslint-rules/README.md`). They apply to `.html` files and to inline
+`tools/lint-rules/src/angular-templates.config.mjs` (see
+`tools/lint-rules/README.md`). They apply to `.html` files and to inline
 templates. In the test hosts of specs (inline templates in `*.spec.ts` files and
 templates under `testing/`) only attribute layout and control flow are checked.
 
@@ -102,9 +102,9 @@ Everything else is a violation, including reading a value through a call
 
 Lint (`front-burner/no-template-calls`) reports any call with arguments outside
 event bindings, other than the translation aliases. It cannot tell a signal from
-a method, so it lets every call without arguments through: a method such as `{{
-fullName() }}` that computes something is still wrong. Make it a `computed()`
-signal.
+a method, so it lets every call without arguments through: a method that
+computes something, such as `fullName()` in `{{ fullName() }}`, is still wrong.
+Make it a `computed()` signal.
 
 ```html
 <!-- Bad -->
@@ -231,6 +231,10 @@ handles the keyboard, disable the rule for that line only, with the reason after
 
 Never disable a rule for a whole file.
 
+A real accessibility fix that changes behaviour or looks needs a test of the new
+behaviour, before and after screenshots where it is visible, and a mention in
+the PR description.
+
 ## Attribute layout (lint, fixed by `--fix`)
 
 Every start tag lays out its attributes the same way:
@@ -261,13 +265,13 @@ Do not lay attributes out by hand: run `lint --fix` (see "Before you finish").
 The fix moves bound attributes (`[x]`, `(x)`, `*x`, …) with their multi-line
 expressions. It never changes the text of a static attribute value that spans
 lines, such as a long `class="…"`; it reports it instead, and you fix it by
-hand. It also only reports a tag that starts on the first line of an inline
-template (`` template: `<a b c>` ``); start the template on a new line.
+hand. A tag that starts on the first line of an inline template is reported but
+not fixed; start the template on a new line.
 
 ## New Angular projects (lint)
 
 Every Angular project spreads the shared config in its `eslint.config.mjs`,
 after `...baseConfig` and before its own `**/*.html` block, as
-`tools/eslint-rules/README.md` shows. A project created by a generator does not
-have it: add it. A test in `eslint-rules` fails when an Angular project's config
+`tools/lint-rules/README.md` shows. A project created by a generator does not
+have it: add it. A test in `lint-rules` fails when an Angular project's config
 does not import it.
