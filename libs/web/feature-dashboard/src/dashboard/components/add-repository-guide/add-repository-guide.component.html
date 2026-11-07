@@ -19,26 +19,31 @@
     <h2>{{ t('heading') }}</h2>
     <ng-container [ngTemplateOutlet]="details" />
     <div>
-      <a uiButton variant="primary" routerLink="/repositories/new">{{ t('add') }}</a>
+      <a uiButton
+         variant="primary"
+         routerLink="/repositories/new">{{ t('add') }}</a>
     </div>
   } @else {
     <div class="strip">
       <p class="strip-text">{{ t('compactText') }}</p>
-      <button
-        uiButton
-        variant="ghost"
-        size="small"
-        class="how"
-        [attr.aria-expanded]="expanded()"
-        [attr.aria-controls]="detailsId"
-        (click)="expanded.set(!expanded())"
-      >
+      <button uiButton
+              variant="ghost"
+              size="small"
+              class="how"
+              [attr.aria-expanded]="expanded()"
+              [attr.aria-controls]="detailsId"
+              (click)="expanded.set(!expanded())">
         {{ t('howItWorks') }}
-        <ui-icon class="chevron" name="chevron-right" />
+        <ui-icon class="chevron"
+                 name="chevron-right" />
       </button>
-      <a uiButton variant="primary" class="add" routerLink="/repositories/new">{{ t('add') }}</a>
+      <a uiButton
+         variant="primary"
+         class="add"
+         routerLink="/repositories/new">{{ t('add') }}</a>
     </div>
-    <ui-collapsible [id]="detailsId" [open]="expanded()">
+    <ui-collapsible [id]="detailsId"
+                    [open]="expanded()">
       <div class="details">
         <ng-container [ngTemplateOutlet]="details" />
       </div>
