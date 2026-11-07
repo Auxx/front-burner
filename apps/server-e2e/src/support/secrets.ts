@@ -17,7 +17,11 @@ export function decryptedKeyBody(): string {
   return key.getPrivatePEM().split('\n').filter(line => line !== '' && !line.startsWith('-----')).join('');
 }
 
-/** A line of the encrypted private key as pasted, which no response or log may repeat. */
-export function pastedKeyLine(): string {
-  return PROTECTED_KEY.split('\n')[1] ?? '';
+/**
+ * The base64 lines of the encrypted private key as pasted, which no response
+ * or log may repeat. Each is checked on its own: the first is mostly the
+ * format's header, and the key material is in the others.
+ */
+export function pastedKeyLines(): string[] {
+  return PROTECTED_KEY.split('\n').filter(line => line !== '' && !line.startsWith('-----'));
 }
