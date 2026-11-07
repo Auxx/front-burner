@@ -2,10 +2,14 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { GitJobStarted, GitJobState, PushEvent, RepositorySummary } from '@front-burner/shared-contracts';
 import { DialogService, ToastService } from '@front-burner/ui';
-import { GitApi } from '@front-burner/web-api-client';
+import { GitApi, KnownHostsApi } from '@front-burner/web-api-client';
 import { PushChannelService } from '@front-burner/web-core';
-import { RepositoryCredentialsDialog } from '@front-burner/web-repository-dialogs';
-import { type Observable, of, Subject } from 'rxjs';
+import {
+  ChangedHostKeyDialog,
+  RepositoryCredentialsDialog,
+  TrustHostDialog
+} from '@front-burner/web-repository-dialogs';
+import { type Observable, of, Subject, throwError } from 'rxjs';
 
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
@@ -24,9 +28,30 @@ const handbook: RepositorySummary = {
   lastAccessedAt: '2026-11-01T10:00:00.000Z'
 };
 
-function failed(code: string): GitJobState {
-  return { status: 'done', outcome: { kind: 'failed', code, params: {} } };
+function failed(code: string, params: Record<string, string> = {}): GitJobState {
+  return { status: 'done', outcome: { kind: 'failed', code, params } };
 }
+
+const pushed: GitJobState = { status: 'done', outcome: { kind: 'pushed', commits: 1, upstream: 'origin/main' } };
+
+/** A push outcome's params of a changed host key, where the port is a string. */
+const changedKeyParams = {
+  host: 'git.example.com',
+  port: '2222',
+  type: 'ssh-ed25519',
+  key: 'AAAAC3NzaC1lZDI1NTE5AAAAIH',
+  fingerprint: 'SHA256:newfingerprint',
+  trustedType: 'ssh-rsa',
+  trustedFingerprint: 'SHA256:trustedfingerprint'
+};
+
+const unknownHostParams = {
+  host: 'git.example.com',
+  port: '2222',
+  type: 'ssh-ed25519',
+  key: 'AAAAC3NzaC1lZDI1NTE5AAAAIH',
+  fingerprint: 'SHA256:newfingerprint'
+};
 
 describe('CredentialFixesService', () => {
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
@@ -35,6 +60,8 @@ describe('CredentialFixesService', () => {
   let closed: Subject<boolean | undefined>;
   let followed: ReturnType<typeof signal<number | null>>;
   let lockedKey: { unlock: ReturnType<typeof vi.fn>; reread: ReturnType<typeof vi.fn>; };
+  let knownHosts: { trust: ReturnType<typeof vi.fn>; };
+  let toast: { show: ReturnType<typeof vi.fn>; };
   let pushes: PushService;
   let service: CredentialFixesService;
 
@@ -44,8 +71,8 @@ describe('CredentialFixesService', () => {
   };
 
   /** A push that failed with `code`, as the banner shows it. */
-  async function failedPush(code: string): Promise<void> {
-    gitJob.mockReturnValueOnce(of(failed(code)));
+  async function failedPush(code: string, params: Record<string, string> = {}): Promise<void> {
+    gitJob.mockReturnValueOnce(of(failed(code, params)));
     await pushes.start();
     await settle();
   }
@@ -67,6 +94,8 @@ describe('CredentialFixesService', () => {
     open = vi.fn(() => ({ closed }));
     followed = signal(12);
     lockedKey = { unlock: vi.fn(async () => true), reread: vi.fn(async () => undefined) };
+    knownHosts = { trust: vi.fn(() => of(undefined)) };
+    toast = { show: vi.fn() };
     TestBed.configureTestingModule({
       imports: [ translocoTesting() ],
       providers: [
@@ -81,7 +110,8 @@ describe('CredentialFixesService', () => {
         { provide: LockedKeyService, useValue: lockedKey },
         { provide: RepositorySessionService, useValue: { repository: signal(handbook) } },
         { provide: DialogService, useValue: { open } },
-        { provide: ToastService, useValue: { show: vi.fn() } }
+        { provide: ToastService, useValue: toast },
+        { provide: KnownHostsApi, useValue: knownHosts }
       ]
     });
     pushes = TestBed.inject(PushService);
@@ -188,5 +218,115 @@ describe('CredentialFixesService', () => {
     await settle();
     expect(lockedKey.unlock).toHaveBeenCalled();
     expect(open).not.toHaveBeenCalled();
+  });
+
+  it('Review the new key opens the dialog with both keys, and the push runs again after trusting', async () => {
+    await failedPush('host-key-changed', changedKeyParams);
+    gitJob.mockReturnValueOnce(of(pushed));
+
+    await fix('review-host-key', true);
+
+    expect(open).toHaveBeenCalledExactlyOnceWith(ChangedHostKeyDialog, {
+      data: { ...changedKeyParams, port: 2222 }
+    });
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(pushes.problem()).toBeNull();
+  });
+
+  it('Try again in the dialog of a key that could not be read runs the push again', async () => {
+    const { host, port, trustedType, trustedFingerprint } = changedKeyParams;
+    await failedPush('host-key-changed', { host, port, trustedType, trustedFingerprint });
+
+    await fix('review-host-key', true);
+
+    expect(open).toHaveBeenCalledWith(ChangedHostKeyDialog, {
+      data: { host, port: 2222, trustedType, trustedFingerprint }
+    });
+    expect(push).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not run the push again when saving fails', async () => {
+    await failedPush('host-key-changed', changedKeyParams);
+
+    // The dialog stays open with the error until the user gives up.
+    await fix('review-host-key', undefined);
+
+    expect(push).toHaveBeenCalledOnce();
+    expect(pushes.problem()?.code).toBe('host-key-changed');
+  });
+
+  it('Cancel changes nothing, and the push stays failed', async () => {
+    await failedPush('host-key-changed', changedKeyParams);
+
+    await fix('review-host-key', undefined);
+
+    expect(push).toHaveBeenCalledOnce();
+    expect(knownHosts.trust).not.toHaveBeenCalled();
+    expect(pushes.problem()).toEqual(expect.objectContaining({ code: 'host-key-changed', fix: 'review-host-key' }));
+  });
+
+  it('does not push another repository after a switch while the host key dialog was open', async () => {
+    await failedPush('host-key-changed', changedKeyParams);
+    const running = service.run('review-host-key');
+    await settle();
+
+    followed.set(13);
+    closed.next(true);
+    closed.complete();
+    await running;
+    await settle();
+
+    expect(push).toHaveBeenCalledOnce();
+  });
+
+  it('opens nothing for a changed host key without a host', async () => {
+    await failedPush('host-key-changed', {});
+
+    await service.run('review-host-key');
+    await settle();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledOnce();
+  });
+
+  it('a push that meets an unknown host asks to trust it, then runs again', async () => {
+    await failedPush('host-key-unknown', unknownHostParams);
+    gitJob.mockReturnValueOnce(of(pushed));
+
+    await fix('trust-host', true);
+
+    expect(open).toHaveBeenCalledExactlyOnceWith(TrustHostDialog, {
+      data: { ...unknownHostParams, port: 2222 },
+      size: 'small'
+    });
+    expect(knownHosts.trust).toHaveBeenCalledWith({
+      host: 'git.example.com',
+      port: 2222,
+      type: 'ssh-ed25519',
+      key: 'AAAAC3NzaC1lZDI1NTE5AAAAIH'
+    });
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(pushes.problem()).toBeNull();
+  });
+
+  it('Cancel on an unknown host trusts nothing, and the push stays failed', async () => {
+    await failedPush('host-key-unknown', unknownHostParams);
+
+    await fix('trust-host', false);
+
+    expect(knownHosts.trust).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledOnce();
+    expect(pushes.problem()?.code).toBe('host-key-unknown');
+  });
+
+  it('says why trusting an unknown host failed, and does not push', async () => {
+    knownHosts.trust.mockReturnValue(throwError(() => new Error('offline')));
+    await failedPush('host-key-unknown', unknownHostParams);
+
+    await fix('trust-host', true);
+
+    expect(push).toHaveBeenCalledOnce();
+    expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ status: 'danger' }));
+    expect(pushes.problem()?.code).toBe('host-key-unknown');
   });
 });

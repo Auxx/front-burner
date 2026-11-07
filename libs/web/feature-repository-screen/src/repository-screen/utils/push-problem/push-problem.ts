@@ -1,6 +1,6 @@
 import { ERROR_CODES } from '@front-burner/shared-contracts';
 
-/** The fix a push problem offers, if any; plans 60, 63, 64 and 66 connect them to their dialogs. */
+/** The fix a push problem offers, if any; `CredentialFixesService` connects each to what it does. */
 export type PushFix =
   | 'add-credentials'
   | 'fix-credentials'

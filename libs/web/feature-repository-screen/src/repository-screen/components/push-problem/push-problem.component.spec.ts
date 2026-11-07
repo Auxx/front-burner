@@ -85,7 +85,9 @@ describe('PushProblemComponent', () => {
   it.each([
     [ 'no-credentials', 'add-credentials' ],
     [ 'credentials-refused', 'fix-credentials' ],
-    [ 'push-not-allowed', 'other-credentials' ]
+    [ 'push-not-allowed', 'other-credentials' ],
+    [ 'host-key-changed', 'review-host-key' ],
+    [ 'host-key-unknown', 'trust-host' ]
   ])('offers a fix of the credentials for %s', async (code, fix) => {
     await show(problem(code));
 
@@ -93,12 +95,6 @@ describe('PushProblemComponent', () => {
     (element().querySelector('[uiBannerActions] button') as HTMLButtonElement).click();
 
     expect(fixes).toEqual([ fix ]);
-  });
-
-  it('shows a fix whose dialog does not exist yet without a button', async () => {
-    await show(problem('host-key-changed'));
-
-    expect(buttons()).toEqual([]);
   });
 
   it('does not announce a quiet problem', async () => {

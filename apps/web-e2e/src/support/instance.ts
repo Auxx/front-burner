@@ -45,6 +45,8 @@ export interface Instance {
   /** Stops the server and starts it again on the same port and data: it forgets everything kept in memory. */
   restart(): Promise<void>;
   stop(): Promise<void>;
+  /** What the running server process wrote, such as its log (`FRONT_BURNER_LOG_LEVEL` sets how much). */
+  output(): string;
 }
 
 async function freePort(): Promise<number> {
@@ -190,7 +192,7 @@ async function startOnce(options: InstanceOptions): Promise<Instance> {
     }
     throw error;
   }
-  return { url, dataDir, restart, stop };
+  return { url, dataDir, restart, stop, output: () => spawned.output() };
 }
 
 /** Logs in as `TEST_ADMIN` on the login page, which `page` must show, and waits for the page after it. */

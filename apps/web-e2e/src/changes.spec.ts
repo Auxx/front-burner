@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import { drainFailedRequests, expect, test } from './support/fixtures';
 import {
@@ -333,6 +333,66 @@ test.describe('pushing', () => {
   });
 });
 
+async function api(url: string, authToken: string, method: string, path: string, body?: unknown) {
+  const response = await fetch(`${url}${path}`, {
+    method,
+    headers: { authorization: `Bearer ${authToken}`, 'content-type': 'application/json' },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) })
+  });
+  const text = await response.text();
+  return { status: response.status, body: (text === '' ? {} : JSON.parse(text)) as Record<string, unknown> };
+}
+
+/**
+ * A repository of a new remote in `parent` on the SSH server, added with the
+ * passphrase-protected key `laptop` (the key's ID is 1), as the Add repository
+ * page does, by another session of the admin: the server's host key is
+ * trusted, and the key is unlocked there and locked in the browser's. Its
+ * working copy has one commit to push.
+ */
+async function sshRepository(
+  instance: { url: string; dataDir: string; },
+  ssh: GitSshServer,
+  remotes: Record<string, string>,
+  parent: string
+): Promise<{ id: number; bare: string; }> {
+  await confirmCommitAuthor(instance.url);
+  const name = basename(parent);
+  mkdirSync(parent, { recursive: true });
+  const bare = createHandbookRemote(parent);
+  remotes[`${name}.git`] = bare;
+  const remoteUrl = ssh.url(`${name}.git`);
+  const credentials = {
+    mode: 'new-ssh-key',
+    name: 'laptop',
+    privateKey: PROTECTED_KEY,
+    passphrase: PROTECTED_KEY_PASSPHRASE
+  };
+  const authToken = await adminAuthToken(instance.url);
+  const check = await api(instance.url, authToken, 'POST', '/api/v1/repositories/access-check', {
+    remoteUrl,
+    credentials
+  });
+  expect(check.status).toBe(409);
+  const { host, port, type, key } = check.body['params'] as Record<string, unknown>;
+  expect((await api(instance.url, authToken, 'POST', '/api/v1/known-hosts', { host, port, type, key })).status)
+    .toBe(204);
+  const added = await api(instance.url, authToken, 'POST', '/api/v1/repositories', {
+    remoteUrl,
+    name,
+    cloneMode: 'full',
+    credentials
+  });
+  expect(added.status).toBe(201);
+  const id = added.body['id'] as number;
+  await expect.poll(async () => {
+    const recent = await api(instance.url, authToken, 'GET', '/api/v1/repositories/recent');
+    return (recent.body['repositories'] as { id: number; status: string; }[]).find(found => found.id === id)?.status;
+  }).toBe('ready');
+  gitIn(join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)), 'commit', '-q', '--allow-empty', '-m', 'second');
+  return { id, bare };
+}
+
 test.describe('fixing credentials from a push', () => {
   test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
 
@@ -587,66 +647,13 @@ test.describe('a locked key', () => {
     }
   }
 
-  async function api(url: string, authToken: string, method: string, path: string, body?: unknown) {
-    const response = await fetch(`${url}${path}`, {
-      method,
-      headers: { authorization: `Bearer ${authToken}`, 'content-type': 'application/json' },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) })
-    });
-    const text = await response.text();
-    return { status: response.status, body: (text === '' ? {} : JSON.parse(text)) as Record<string, unknown> };
-  }
-
   /**
    * A repository added over SSH with the passphrase-protected key `laptop`
-   * (the key's ID is 1), as the Add repository page does, by another session of
-   * the admin: the key is unlocked there, and locked in the browser's. Its
-   * working copy has one commit to push.
+   * (the key's ID is 1) by another session of the admin: the key is unlocked
+   * there, and locked in the browser's. Its working copy has one commit to push.
    */
   async function lockedRepository(instance: { url: string; dataDir: string; }): Promise<{ id: number; bare: string; }> {
-    await confirmCommitAuthor(instance.url);
-    const name = `locked-${next++}`;
-    const parent = join(root, name);
-    mkdirSync(parent, { recursive: true });
-    const bare = createHandbookRemote(parent);
-    remotes[`${name}.git`] = bare;
-    const remoteUrl = ssh.url(`${name}.git`);
-    const credentials = {
-      mode: 'new-ssh-key',
-      name: 'laptop',
-      privateKey: PROTECTED_KEY,
-      passphrase: PROTECTED_KEY_PASSPHRASE
-    };
-    const authToken = await adminAuthToken(instance.url);
-    const check = await api(instance.url, authToken, 'POST', '/api/v1/repositories/access-check', {
-      remoteUrl,
-      credentials
-    });
-    expect(check.status).toBe(409);
-    const { host, port, type, key } = check.body['params'] as Record<string, unknown>;
-    expect((await api(instance.url, authToken, 'POST', '/api/v1/known-hosts', { host, port, type, key })).status)
-      .toBe(204);
-    const added = await api(instance.url, authToken, 'POST', '/api/v1/repositories', {
-      remoteUrl,
-      name,
-      cloneMode: 'full',
-      credentials
-    });
-    expect(added.status).toBe(201);
-    const id = added.body['id'] as number;
-    await expect.poll(async () => {
-      const recent = await api(instance.url, authToken, 'GET', '/api/v1/repositories/recent');
-      return (recent.body['repositories'] as { id: number; status: string; }[]).find(found => found.id === id)?.status;
-    }).toBe('ready');
-    gitIn(
-      join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)),
-      'commit',
-      '-q',
-      '--allow-empty',
-      '-m',
-      'second'
-    );
-    return { id, bare };
+    return sshRepository(instance, ssh, remotes, join(root, `locked-${next++}`));
   }
 
   async function unlock(page: Page, passphrase = PROTECTED_KEY_PASSPHRASE): Promise<void> {
@@ -754,6 +761,118 @@ test.describe('a locked key', () => {
     await page.reload();
     await expect(banner(page)).toBeVisible();
     drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/push`);
+  });
+});
+
+test.describe('a changed host key', () => {
+  // RC-24's line is logged at `info`.
+  test.use({ instanceOptions: { onboarded: true, env: { FRONT_BURNER_LOG_LEVEL: 'info' } } });
+
+  let root: string;
+  let ssh: GitSshServer;
+  const remotes: Record<string, string> = {};
+  let next = 0;
+
+  test.beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-host-key-'));
+    ssh = await startGitSshServer({ repositories: remotes, authorizedKeys: [ PROTECTED_KEY_PUBLIC ] });
+  });
+
+  test.afterAll(async () => {
+    await ssh?.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const HEADING = 'The server\'s identity has changed. This may be an attack.';
+  const bar = (page: Page) => page.getByRole('banner');
+  const problem = (page: Page) => bar(page).locator('rs-push-problem');
+  const dialog = (page: Page) => page.getByRole('dialog', { name: HEADING });
+  const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
+  const gitActions = (page: Page) => bar(page).getByRole('button', { name: 'Git actions' });
+
+  /** **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
+  async function push(page: Page): Promise<void> {
+    const button = bar(page).getByRole('button', { name: 'Push', exact: true });
+    await expect(button.or(gitActions(page))).toBeVisible();
+    if (await gitActions(page).isVisible()) {
+      await gitActions(page).click();
+      await page.getByRole('menuitem', { name: 'Push' }).click();
+    } else {
+      await button.click();
+    }
+  }
+
+  /**
+   * An SSH repository whose key is unlocked in the browser, and whose server
+   * then replaced its host key; a push has just failed for it, and **Review
+   * the new key** opened the dialog.
+   */
+  async function reviewChangedKey(page: Page, instance: { url: string; dataDir: string; }) {
+    const repository = await sshRepository(instance, ssh, remotes, join(root, `changed-${next++}`));
+    await openScreen(page, `/repositories/${repository.id}`);
+    await page.locator('rs-locked-key-banner').getByRole('button', { name: 'Unlock' }).click();
+    const unlock = page.getByRole('dialog', { name: 'Unlock laptop' });
+    await unlock.getByLabel('Passphrase').fill(PROTECTED_KEY_PASSPHRASE);
+    await unlock.getByRole('button', { name: 'Unlock' }).click();
+    await expect(page.locator('rs-locked-key-banner')).toHaveCount(0);
+    await ssh.changeHostKey();
+
+    await push(page);
+    await expect(problem(page)).toContainText(HEADING);
+    await problem(page).getByRole('button', { name: 'Review the new key' }).click();
+    await expect(dialog(page)).toBeVisible();
+    return repository;
+  }
+
+  test('AC-REPO-002.12: a changed host key shows both fingerprints; Trust the new key is disabled until the checkbox is ticked; afterwards the failed operation runs again, and the backend log records the change', async ({ page, instance }) => {
+    const { bare } = await reviewChangedKey(page, instance);
+
+    await expect(dialog(page)).toContainText(`127.0.0.1:${ssh.port}`);
+    const fingerprints = await dialog(page).locator('code.fingerprint').allTextContents();
+    expect(fingerprints).toHaveLength(2);
+    expect(fingerprints.every(fingerprint => fingerprint.trim().startsWith('SHA256:'))).toBe(true);
+    expect(fingerprints[0]).not.toBe(fingerprints[1]);
+    await expect(dialog(page).getByRole('button', { name: 'Cancel' })).toBeFocused();
+    const trust = dialog(page).getByRole('button', { name: 'Trust the new key' });
+    // `aria-disabled`, which a click passes through and the button swallows (its unit test clicks it).
+    await expect(trust).toBeDisabled();
+    await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished)));
+    expect((await new AxeBuilder({ page }).include('dlg-changed-host-key').analyze()).violations).toEqual([]);
+
+    await dialog(page).getByLabel('I have checked the new fingerprint with the server\'s owner.').check();
+    await expect(trust).toBeEnabled();
+    await trust.click();
+
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(toasts(page).getByText('Pushed 1 commit to origin/main')).toBeVisible();
+    expect(gitIn(bare, 'log', '-1', '--format=%s', 'main').trim()).toBe('second');
+    await expect(problem(page)).toHaveCount(0);
+    await expect.poll(() => instance.output()).toContain(
+      `replaced the trusted host key of 127.0.0.1 port ${ssh.port}: ${fingerprints[0]?.trim()} → ${
+        fingerprints[1]?.trim()
+      }`
+    );
+  });
+
+  test('a long fingerprint wraps within the dialog at 320 px; Cancel changes nothing, and the push stays failed', async ({ page, instance }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    const { bare } = await reviewChangedKey(page, instance);
+    const before = gitIn(bare, 'rev-parse', 'main').trim();
+
+    const box = await dialog(page).boundingBox();
+    expect(box).not.toBeNull();
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(320);
+    for (const fingerprint of await dialog(page).locator('code.fingerprint').all()) {
+      const code = await fingerprint.boundingBox();
+      expect((code?.x ?? 0) + (code?.width ?? 0)).toBeLessThanOrEqual((box?.x ?? 0) + (box?.width ?? 0));
+    }
+
+    await dialog(page).getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(problem(page)).toContainText(HEADING);
+    expect(gitIn(bare, 'rev-parse', 'main').trim()).toBe(before);
+    expect(instance.output()).not.toContain('replaced the trusted host key');
   });
 });
 

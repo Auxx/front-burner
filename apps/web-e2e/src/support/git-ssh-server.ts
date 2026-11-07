@@ -19,6 +19,8 @@ export interface GitSshServer {
   port: number;
   /** `ssh://git@127.0.0.1:<port>/<path>`. */
   url(path: string): string;
+  /** Listens again on the same port with a new host key, as a server whose key was replaced (RC-21). */
+  changeHostKey(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -46,10 +48,28 @@ const GIT_COMMAND = /^git-(upload-pack|receive-pack) '\/?([^']+)'$/;
  * `git-receive-pack` by spawning them.
  */
 export async function startGitSshServer(options: GitSshServerOptions): Promise<GitSshServer> {
+  let server = gitSshServer(options);
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = (server.address() as AddressInfo).port;
+  const close = () => new Promise<void>(resolve => server.close(() => resolve()));
+  return {
+    port,
+    url: path => `ssh://git@127.0.0.1:${port}/${path}`,
+    changeHostKey: async () => {
+      await close();
+      server = gitSshServer(options);
+      await new Promise<void>(resolve => server.listen(port, '127.0.0.1', resolve));
+    },
+    close
+  };
+}
+
+/** The server of {@link startGitSshServer}, with a new host key, not listening yet. */
+function gitSshServer(options: GitSshServerOptions): Server {
   const hostKey = utils.generateKeyPairSync('ed25519').private;
   const authorized = options.authorizedKeys.map(parsed);
 
-  const server = new Server({ hostKeys: [ hostKey ] }, client => {
+  return new Server({ hostKeys: [ hostKey ] }, client => {
     client.on('error', () => undefined);
     client.on('authentication', context => {
       const key = context.method === 'publickey'
@@ -104,12 +124,4 @@ export async function startGitSshServer(options: GitSshServerOptions): Promise<G
       });
     });
   });
-
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const port = (server.address() as AddressInfo).port;
-  return {
-    port,
-    url: path => `ssh://git@127.0.0.1:${port}/${path}`,
-    close: () => new Promise(resolve => server.close(() => resolve()))
-  };
 }
