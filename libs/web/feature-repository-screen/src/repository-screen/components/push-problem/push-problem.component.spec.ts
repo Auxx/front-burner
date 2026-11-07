@@ -82,8 +82,21 @@ describe('PushProblemComponent', () => {
     expect(fixes).toEqual([ 'unlock' ]);
   });
 
+  it.each([
+    [ 'no-credentials', 'add-credentials' ],
+    [ 'credentials-refused', 'fix-credentials' ],
+    [ 'push-not-allowed', 'other-credentials' ]
+  ])('offers a fix of the credentials for %s', async (code, fix) => {
+    await show(problem(code));
+
+    expect(buttons()).toEqual([ `${KEY}.fixes.${fix}` ]);
+    (element().querySelector('[uiBannerActions] button') as HTMLButtonElement).click();
+
+    expect(fixes).toEqual([ fix ]);
+  });
+
   it('shows a fix whose dialog does not exist yet without a button', async () => {
-    await show(problem('credentials-refused'));
+    await show(problem('host-key-changed'));
 
     expect(buttons()).toEqual([]);
   });

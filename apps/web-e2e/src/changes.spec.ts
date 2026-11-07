@@ -333,6 +333,177 @@ test.describe('pushing', () => {
   });
 });
 
+test.describe('fixing credentials from a push', () => {
+  test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
+
+  const WRITER = { username: 'writer', password: 'push-token' };
+  const READER = { username: 'reader', password: 'read-token' };
+
+  let root: string;
+  let git: GitHttpServer;
+  /** The server's repositories, which each test adds to; anyone may read them, as public ones. */
+  const remotes: Record<string, string> = {};
+  let next = 0;
+
+  test.beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-push-credentials-'));
+    git = await startGitHttpServer({
+      repositories: remotes,
+      pushers: { [WRITER.username]: WRITER.password },
+      readers: { [READER.username]: READER.password }
+    });
+  });
+
+  test.afterAll(async () => {
+    await git?.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const bar = (page: Page) => page.getByRole('banner');
+  const problem = (page: Page) => bar(page).locator('rs-push-problem');
+  const dialog = (page: Page) => page.getByRole('dialog', { name: 'Repository credentials' });
+  const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
+  const gitActions = (page: Page) => bar(page).getByRole('button', { name: 'Git actions' });
+
+  /** **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
+  async function push(page: Page): Promise<void> {
+    const button = bar(page).getByRole('button', { name: 'Push', exact: true });
+    await expect(button.or(gitActions(page))).toBeVisible();
+    if (await gitActions(page).isVisible()) {
+      await gitActions(page).click();
+      await page.getByRole('menuitem', { name: 'Push' }).click();
+    } else {
+      await button.click();
+    }
+  }
+
+  /** A remote on the git server, a clone of the handbook; returns its URL and the bare repository. */
+  function remote(): { remoteUrl: string; bare: string; } {
+    const name = `public-${next++}`;
+    const parent = join(root, name);
+    mkdirSync(parent, { recursive: true });
+    const bare = createHandbookRemote(parent);
+    remotes[`${name}.git`] = bare;
+    return { remoteUrl: `${git.url}/${name}.git`, bare };
+  }
+
+  /** Gives new HTTPS credentials in the dialog, and saves them. */
+  async function saveNewCredentials(page: Page, credentials: { username: string; password: string; }): Promise<void> {
+    await expect(dialog(page)).toBeVisible();
+    // The radio is visually hidden, so its label is clicked.
+    await dialog(page).getByRole('radiogroup').getByText('Add new credentials', { exact: true }).click();
+    await expect(dialog(page).getByRole('radio', { name: 'Add new credentials' })).toBeChecked();
+    await dialog(page).getByLabel('Credentials name').fill(`push-${next}`);
+    await dialog(page).getByLabel('Username').fill(credentials.username);
+    await dialog(page).getByLabel('Password or token', { exact: true }).fill(credentials.password);
+    await dialog(page).getByRole('button', { name: 'Save' }).click();
+  }
+
+  test('AC-REPO-002.1: pushing a public repository added without credentials says so, and after adding credentials the push runs again', async ({ page, instance }) => {
+    await confirmCommitAuthor(instance.url);
+    const { remoteUrl, bare } = remote();
+    const [ id ] = seed(instance.dataDir, {
+      repositories: [ { userId: ADMIN_ID, name: `public-${next}`, remoteUrl } ]
+    }).repositoryIds;
+    const dir = join(instance.dataDir, 'repos', String(ADMIN_ID), String(id));
+    rmSync(dir, { recursive: true, force: true });
+    gitIn(dirname(dir), 'clone', '-q', bare, dir);
+    gitIn(dir, 'remote', 'set-url', 'origin', remoteUrl);
+    gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
+    await openScreen(page, `/repositories/${id}`);
+
+    await push(page);
+    await expect(problem(page)).toContainText('This repository has no credentials. Add credentials to push.');
+    await problem(page).getByRole('button', { name: 'Add credentials' }).click();
+
+    await expect(dialog(page)).toContainText('Make sure these credentials can also push.');
+    await expect(dialog(page).getByRole('radio', { name: 'No credentials (public repository)' })).toBeAttached();
+    await expect(dialog(page).getByRole('radio', { name: 'Paste a key' })).toHaveCount(0);
+    expect((await new AxeBuilder({ page }).include('dlg-repository-credentials').analyze()).violations).toEqual([]);
+    await saveNewCredentials(page, WRITER);
+
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(toasts(page).getByText('Pushed 1 commit to origin/main')).toBeVisible();
+    await expect(problem(page)).toHaveCount(0);
+    expect(gitIn(bare, 'log', '-1', '--format=%s', 'main').trim()).toBe('second');
+  });
+
+  test('AC-REPO-002.3: pushing with a read-only token says so, and Use other credentials fixes it', async ({ page, instance }) => {
+    await confirmCommitAuthor(instance.url);
+    const { remoteUrl, bare } = remote();
+    const authToken = await adminAuthToken(instance.url);
+    const added = await fetch(`${instance.url}/api/v1/repositories`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${authToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        remoteUrl,
+        name: `read-only-${next}`,
+        cloneMode: 'full',
+        credentials: { mode: 'new-https', name: 'read only', ...READER }
+      })
+    });
+    expect(added.status).toBe(201);
+    const { id } = await added.json() as { id: number; };
+    await expect.poll(async () => {
+      const recent = await fetch(`${instance.url}/api/v1/repositories/recent`, {
+        headers: { authorization: `Bearer ${authToken}` }
+      });
+      const { repositories } = await recent.json() as { repositories: { id: number; status: string; }[]; };
+      return repositories.find(found => found.id === id)?.status;
+    }).toBe('ready');
+    gitIn(
+      join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)),
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'second'
+    );
+    await openScreen(page, `/repositories/${id}`);
+
+    await push(page);
+    await expect(problem(page)).toContainText('Your credentials can read this repository but not push to it.');
+    await problem(page).getByRole('button', { name: 'Use other credentials' }).click();
+
+    await expect(dialog(page)).toContainText('read only');
+    await saveNewCredentials(page, WRITER);
+
+    await expect(toasts(page).getByText('Pushed 1 commit to origin/main')).toBeVisible();
+    expect(gitIn(bare, 'log', '-1', '--format=%s', 'main').trim()).toBe('second');
+  });
+
+  test('Cancel leaves the push alone, and the dialog scrolls on a phone', async ({ page, instance }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await confirmCommitAuthor(instance.url);
+    const { remoteUrl, bare } = remote();
+    const before = gitIn(bare, 'rev-parse', 'main').trim();
+    const [ id ] = seed(instance.dataDir, {
+      repositories: [ { userId: ADMIN_ID, name: `phone-${next}`, remoteUrl } ]
+    }).repositoryIds;
+    const dir = join(instance.dataDir, 'repos', String(ADMIN_ID), String(id));
+    rmSync(dir, { recursive: true, force: true });
+    gitIn(dirname(dir), 'clone', '-q', bare, dir);
+    gitIn(dir, 'remote', 'set-url', 'origin', remoteUrl);
+    gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
+    await openScreen(page, `/repositories/${id}`);
+    await push(page);
+    await problem(page).getByRole('button', { name: 'Add credentials' }).click();
+
+    await expect(dialog(page)).toBeVisible();
+    await expect(dialog(page).getByRole('radio', { name: 'Add new credentials' })).toBeFocused();
+    const save = dialog(page).getByRole('button', { name: 'Save' });
+    await expect(save).toBeInViewport();
+    await dialog(page).getByLabel('Password or token', { exact: true }).scrollIntoViewIfNeeded();
+    await expect(dialog(page).getByLabel('Password or token', { exact: true })).toBeInViewport();
+    await dialog(page).getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(problem(page)).toContainText('This repository has no credentials.');
+    await expect(problem(page).getByRole('button', { name: 'Add credentials' })).toBeFocused();
+    expect(gitIn(bare, 'rev-parse', 'main').trim()).toBe(before);
+  });
+});
+
 test.describe('a locked key', () => {
   let root: string;
   let ssh: GitSshServer;

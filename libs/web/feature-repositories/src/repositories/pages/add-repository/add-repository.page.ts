@@ -3,11 +3,9 @@ import { apply, disabled, type FieldTree, form, submit } from '@angular/forms/si
 import { Router, RouterLink } from '@angular/router';
 import {
   type AddRepositoryRequest,
-  type ApiError,
   GIT_LEVELS,
   type GitLevel,
   type HostKey,
-  HostKeySchema,
   type RepositoryIndex,
   type SavedCredentials
 } from '@front-burner/shared-contracts';
@@ -20,14 +18,16 @@ import {
   PageComponent,
   PageTitleDirective
 } from '@front-burner/ui';
-import { CredentialsApi, KnownHostsApi, RepositoriesApi } from '@front-burner/web-api-client';
+import { CredentialsApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { ApiErrorTextService, CurrentUserService, toApiError } from '@front-burner/web-core';
 import {
   CredentialsSectionComponent,
+  HostNotTrusted,
+  HostTrustService,
   SessionKeysService,
   SubmitFailuresService,
   toRepositoryCredentials,
-  TrustHostDialog
+  unknownHostKey
 } from '@front-burner/web-repository-dialogs';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
@@ -42,18 +42,6 @@ import { failureTexts } from '../../utils/add-repository-errors';
 
 const KEY = 'web-feature-repositories.AddRepositoryPage';
 const NO_CREDENTIALS: SavedCredentials = { https: [], sshKeys: [] };
-
-/** The user cancelled the host key dialog: the form stays as it was (AR-32). */
-class HostNotTrusted extends Error {}
-
-/** The host key of an unknown SSH server, if that is why a request failed (AR-32). */
-function unknownHostKey(apiError: ApiError): HostKey | undefined {
-  if (apiError.code !== 'host-key-unknown') {
-    return undefined;
-  }
-  const parsed = HostKeySchema.safeParse(apiError.params);
-  return parsed.success ? parsed.data : undefined;
-}
 
 /**
  * The Add repository page (REQ-REPO-001): one form, split into a component per
@@ -87,7 +75,7 @@ export class AddRepositoryPage implements LeavesWithCare {
   private readonly credentialsApi = inject(CredentialsApi);
   private readonly currentUser = inject(CurrentUserService);
   private readonly branchList = inject(BranchListService);
-  private readonly knownHostsApi = inject(KnownHostsApi);
+  private readonly hostTrust = inject(HostTrustService);
   private readonly dialogs = inject(DialogService);
   private readonly router = inject(Router);
   private readonly transloco = inject(TranslocoService);
@@ -278,7 +266,7 @@ export class AddRepositoryPage implements LeavesWithCare {
       this.failure.set(null);
       this.failures.clear();
       try {
-        await this.trusting(() => firstValueFrom(this.repositoriesApi.add(request)));
+        await this.hostTrust.trusting(() => firstValueFrom(this.repositoriesApi.add(request)));
       } catch (error) {
         if (error instanceof HostNotTrusted) {
           return undefined;
@@ -313,35 +301,9 @@ export class AddRepositoryPage implements LeavesWithCare {
     };
   }
 
-  /**
-   * Runs `request`; if it meets an unknown SSH host, asks the user to trust it
-   * and runs it once more (AR-32). Throws {@link HostNotTrusted} on Cancel.
-   */
-  private async trusting<T>(request: () => Promise<T>): Promise<T> {
-    try {
-      return await request();
-    } catch (error) {
-      const hostKey = unknownHostKey(toApiError(error));
-      if (hostKey === undefined) {
-        throw error;
-      }
-      await this.trust(hostKey);
-      return request();
-    }
-  }
-
-  private async trust(hostKey: HostKey): Promise<void> {
-    const ref = this.dialogs.open<TrustHostDialog, HostKey, boolean>(TrustHostDialog, { data: hostKey, size: 'small' });
-    if ((await firstValueFrom(ref.closed)) !== true) {
-      throw new HostNotTrusted();
-    }
-    const { host, port, type, key } = hostKey;
-    await firstValueFrom(this.knownHostsApi.trust({ host, port, type, key }), { defaultValue: undefined });
-  }
-
   private async trustAndRetryBranchList(hostKey: HostKey): Promise<void> {
     try {
-      await this.trust(hostKey);
+      await this.hostTrust.trust(hostKey);
     } catch {
       // Cancelled, or not saved: the branch list shows the failure, with Try again.
       return;

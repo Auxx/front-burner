@@ -64,6 +64,13 @@ export interface GitHttpServerOptions {
   /** User name → password; when given, every request needs Basic authentication. */
   users?: Record<string, string>;
   /**
+   * User name → password of the users who may push; when given, anyone may
+   * read, as from a public repository, and a push needs one of them (RC-4).
+   */
+  pushers?: Record<string, string>;
+  /** User name → password of users who may read but not push: their push gets `403` (RC-5). */
+  readers?: Record<string, string>;
+  /**
    * Waited for before each request for objects (a `git-upload-pack` with
    * `want` lines) is served, so that a clone lasts until a test lets it end.
    * Listing the references, as an access check does, is not held.
@@ -82,6 +89,23 @@ function authorised(request: IncomingMessage, users: Record<string, string> | un
   const decoded = Buffer.from(match[1] ?? '', 'base64').toString('utf8');
   const colon = decoded.indexOf(':');
   return colon > 0 && users[decoded.slice(0, colon)] === decoded.slice(colon + 1);
+}
+
+/** Whether `request` is part of a push: its reference listing or its `git-receive-pack`. */
+function isPush(request: IncomingMessage): boolean {
+  const url = new URL(request.url ?? '/', 'https://localhost');
+  return url.pathname.endsWith('/git-receive-pack') || url.searchParams.get('service') === 'git-receive-pack';
+}
+
+/** The status that refuses `request` under `options`' rules, if it is refused. */
+function refusal(request: IncomingMessage, options: GitHttpServerOptions): 401 | 403 | null {
+  if (!authorised(request, options.users)) {
+    return 401;
+  }
+  if (options.pushers === undefined || !isPush(request) || authorised(request, options.pushers)) {
+    return null;
+  }
+  return options.readers !== undefined && authorised(request, options.readers) ? 403 : 401;
 }
 
 /** Runs `git http-backend` as a CGI script for one request. */
@@ -165,8 +189,9 @@ export async function startGitHttpServer(options: GitHttpServerOptions): Promise
     cert: readFileSync(TEST_CERTIFICATE_FILE, 'utf8'),
     key: readFileSync(join(FIXTURES, 'test.key'), 'utf8')
   }, (request, response) => {
-    if (!authorised(request, options.users)) {
-      response.writeHead(401, { 'WWW-Authenticate': 'Basic realm="git"' });
+    const refused = refusal(request, options);
+    if (refused !== null) {
+      response.writeHead(refused, refused === 401 ? { 'WWW-Authenticate': 'Basic realm="git"' } : {});
       response.end();
       return;
     }

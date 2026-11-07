@@ -3,6 +3,7 @@ export { CommitAuthorSummaryComponent } from './repository-dialogs/components/co
 export { CredentialsSectionComponent } from './repository-dialogs/credentials-form/components/credentials-section/credentials-section.component';
 export {
   credentialsErrorKey,
+  credentialsFailureKey,
   credentialsShownError,
   type FailureText,
   type FieldErrorText,
@@ -18,6 +19,7 @@ export {
   toRepositoryCredentials
 } from './repository-dialogs/credentials-form/credentials-form.model';
 export { TrustHostDialog } from './repository-dialogs/credentials-form/dialogs/trust-host/trust-host.dialog';
+export { unknownHostKey } from './repository-dialogs/credentials-form/host-keys';
 export { SessionKeysService } from './repository-dialogs/credentials-form/services/session-keys/session-keys.service';
 export { SubmitFailuresService } from './repository-dialogs/credentials-form/services/submit-failures/submit-failures.service';
 export { ChangeCommitAuthorDialog } from './repository-dialogs/dialogs/change-commit-author/change-commit-author.dialog';
@@ -25,7 +27,12 @@ export {
   type CommitAuthorConfirmed,
   ConfirmCommitAuthorDialog
 } from './repository-dialogs/dialogs/confirm-commit-author/confirm-commit-author.dialog';
+export {
+  RepositoryCredentialsDialog,
+  type RepositoryCredentialsDialogData
+} from './repository-dialogs/dialogs/repository-credentials/repository-credentials.dialog';
 export { UnlockKeyDialog, type UnlockKeyDialogData } from './repository-dialogs/dialogs/unlock-key/unlock-key.dialog';
 export type { CommitAuthorDialogData } from './repository-dialogs/models/commit-author-dialog.model';
 export { commitAuthorForm } from './repository-dialogs/models/commit-author-form.model';
 export { CommitAuthorRefusals } from './repository-dialogs/models/commit-author-refusals';
+export { HostNotTrusted, HostTrustService } from './repository-dialogs/services/host-trust/host-trust.service';

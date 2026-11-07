@@ -43,6 +43,7 @@ import { RepositoryBarComponent } from '../../components/repository-bar/reposito
 import { CommitAuthorGate } from '../../services/commit-author-gate/commit-author-gate.service';
 import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
 import { CommitService } from '../../services/commit/commit.service';
+import { CredentialFixesService } from '../../services/credential-fixes/credential-fixes.service';
 import { DiscardService } from '../../services/discard/discard.service';
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { EntryCommandsService } from '../../services/entry-commands/entry-commands.service';
@@ -142,6 +143,7 @@ const MAX_BADGE_COUNT = 99;
     DiscardService,
     LockedKeyService,
     PushService,
+    CredentialFixesService,
     // One per screen, so that switching files or tabs loads no image again (IM-10).
     ImageCache
   ],
@@ -165,6 +167,7 @@ export class RepositoryScreenPage {
   private readonly discards = inject(DiscardService);
   protected readonly pushes = inject(PushService);
   protected readonly lockedKey = inject(LockedKeyService);
+  private readonly credentialFixes = inject(CredentialFixesService);
 
   protected readonly user = this.currentUser.user;
   /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
@@ -380,13 +383,9 @@ export class RepositoryScreenPage {
     this.session.state() === 'ready' && !this.lockedKey.dismissed() ? this.lockedKey.key() : null
   );
 
-  /** The fix of a push problem (RC-4); plans 63, 64 and 66 add their dialogs. */
+  /** The fix of a push problem (RC-4), through `CredentialFixesService`. */
   protected fixPush(fix: PushProblem['fix']): void {
-    if (fix === 'retry') {
-      void this.pushes.retry();
-    } else if (fix === 'unlock') {
-      void this.pushes.unlockAndRetry();
-    }
+    void this.credentialFixes.run(fix);
   }
 
   /**
