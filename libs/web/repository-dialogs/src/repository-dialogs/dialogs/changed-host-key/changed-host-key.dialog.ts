@@ -17,14 +17,24 @@ import { type ApiErrorText, ApiErrorTextService, toApiError } from '@front-burne
 import { TranslocoDirective } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 
-const SSH_PORT = 22;
+import { hostLabel } from '../../credentials-form/host-keys';
 
-/** The providers' published fingerprints, for exactly these hosts (RC-21). */
-const PUBLISHED_FINGERPRINTS: Readonly<Record<string, string>> = {
-  'github.com':
-    'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints',
-  'bitbucket.org': 'https://support.atlassian.com/bitbucket-cloud/docs/configure-ssh-and-two-step-verification/'
-};
+const GITHUB_FINGERPRINTS =
+  'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints';
+const BITBUCKET_FINGERPRINTS =
+  'https://support.atlassian.com/bitbucket-cloud/docs/configure-ssh-and-two-step-verification/';
+
+/**
+ * The providers' published fingerprints, for exactly these hosts (RC-21): their
+ * SSH hosts, and those of SSH over the HTTPS port, which have the same keys. A
+ * `Map`, so that no inherited property of an object matches a host.
+ */
+const PUBLISHED_FINGERPRINTS: ReadonlyMap<string, string> = new Map([
+  [ 'github.com', GITHUB_FINGERPRINTS ],
+  [ 'ssh.github.com', GITHUB_FINGERPRINTS ],
+  [ 'bitbucket.org', BITBUCKET_FINGERPRINTS ],
+  [ 'altssh.bitbucket.org', BITBUCKET_FINGERPRINTS ]
+]);
 
 /** The new key as the backend stores it, and its fingerprint to show, when the backend could read it. */
 interface NewKey {
@@ -40,7 +50,7 @@ function newKeyOf({ host, port, type, key, fingerprint }: ChangedHostKey): NewKe
 /**
  * "The server's identity has changed. This may be an attack." (RC-21, RC-22):
  * the host and port, the key that was trusted and the new one, each as key type
- * and SHA256 fingerprint, and for `github.com` and `bitbucket.org` a link to
+ * and SHA256 fingerprint, and for GitHub's and Bitbucket's SSH hosts a link to
  * the provider's published fingerprints.
  *
  * **Trust the new key** is unavailable until the user ticks that they have
@@ -76,8 +86,8 @@ export class ChangedHostKeyDialog {
   private readonly api = inject(KnownHostsApi);
   private readonly errorText = inject(ApiErrorTextService);
 
-  protected readonly host = this.data.port === SSH_PORT ? this.data.host : `${this.data.host}:${this.data.port}`;
-  protected readonly publishedFingerprints: string | undefined = PUBLISHED_FINGERPRINTS[this.data.host.toLowerCase()];
+  protected readonly host = hostLabel(this.data.host, this.data.port);
+  protected readonly publishedFingerprints = PUBLISHED_FINGERPRINTS.get(this.data.host.toLowerCase());
   protected readonly newKey = newKeyOf(this.data);
 
   protected readonly checked = signal(false);

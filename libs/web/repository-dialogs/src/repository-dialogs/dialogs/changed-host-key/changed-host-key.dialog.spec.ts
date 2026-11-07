@@ -79,6 +79,18 @@ describe('ChangedHostKeyDialog', () => {
     expect(values().some(text => text.includes(':22'))).toBe(false);
   });
 
+  it('puts an IPv6 address in brackets before its port', async () => {
+    await open({ ...changed, host: 'fd00::1' });
+
+    expect(values().some(text => text.includes('[fd00::1]:2222'))).toBe(true);
+  });
+
+  it('shows an IPv6 address on the standard port without brackets', async () => {
+    await open({ ...changed, host: 'fd00::1', port: 22 });
+
+    expect(values().find(text => text.includes(`${KEY}.host`))?.replace(`${KEY}.host`, '').trim()).toBe('fd00::1');
+  });
+
   it('says when the trusted key is not known by name', async () => {
     await open({ ...changed, trustedType: undefined, trustedFingerprint: undefined });
 
@@ -154,7 +166,16 @@ describe('ChangedHostKeyDialog', () => {
       'GitHub.com',
       'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints'
     ],
-    [ 'bitbucket.org', 'https://support.atlassian.com/bitbucket-cloud/docs/configure-ssh-and-two-step-verification/' ]
+    [ 'bitbucket.org', 'https://support.atlassian.com/bitbucket-cloud/docs/configure-ssh-and-two-step-verification/' ],
+    // The providers' SSH over the HTTPS port, with the same keys.
+    [
+      'ssh.github.com',
+      'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints'
+    ],
+    [
+      'altssh.bitbucket.org',
+      'https://support.atlassian.com/bitbucket-cloud/docs/configure-ssh-and-two-step-verification/'
+    ]
   ])('links %s to the provider\'s published fingerprints', async (host, href) => {
     await open({ ...changed, host, port: 22 });
 
@@ -168,7 +189,12 @@ describe('ChangedHostKeyDialog', () => {
     'evilgithub.com',
     'gist.github.com',
     'bitbucket.org.example',
-    'git.example.com'
+    'git.example.com',
+    // Names of an object's inherited properties.
+    'constructor',
+    'toString',
+    'valueOf',
+    '__proto__'
   ])(
     'links only for the exact provider hosts: not %s',
     async host => {

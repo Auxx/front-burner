@@ -8,3 +8,17 @@ export function unknownHostKey(apiError: ApiError): HostKey | undefined {
   const parsed = HostKeySchema.safeParse(apiError.params);
   return parsed.success ? parsed.data : undefined;
 }
+
+const SSH_PORT = 22;
+
+/**
+ * A server as the host key dialogs show it: the host, and the port unless it
+ * is SSH's own, with an IPv6 address in brackets before a port, as in
+ * `[fd00::1]:2222`.
+ */
+export function hostLabel(host: string, port: number): string {
+  if (port === SSH_PORT) {
+    return host;
+  }
+  return host.includes(':') ? `[${host}]:${port}` : `${host}:${port}`;
+}
