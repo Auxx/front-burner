@@ -138,6 +138,12 @@ ruleTester.run('attribute-layout', rule, {
       errors: [ { messageId: 'firstAttribute' } ]
     },
     {
+      name: 'bound value with a quoted string spanning lines',
+      code: lines('<div', '       [x]="\'a', '  b\'"></div>'),
+      output: null,
+      errors: [ { messageId: 'firstAttribute' } ]
+    },
+    {
       name: 'bound value with line breaks outside its strings',
       code: lines('<section', '  [x]="cond ? \'a\' :', '    \'b\'"', '  id="y"></section>'),
       output: lines('<section [x]="cond ? \'a\' :', '           \'b\'"', '         id="y"></section>'),

@@ -25,7 +25,7 @@ function breaksInsideString(attributeText) {
         index++;
       } else if (character === quote) {
         quote = null;
-      } else if (character === '\n' && quote === '`') {
+      } else if (character === '\n') {
         return true;
       }
     } else if (character === '`' || ((character === '"' || character === '\'') && character !== delimiter)) {
