@@ -40,19 +40,29 @@ async function connectToAllowed(host: string, port: number, egress: EgressOption
   throw new GitOperationError('host-unreachable', 'host key probe could not connect', { host });
 }
 
+/** The key type each host key algorithm offers, as `known_hosts` names it. */
+const keyTypeOf = (algorithm: string): string => algorithm.startsWith('rsa-sha2-') ? 'ssh-rsa' : algorithm;
+
 /**
- * Fetches the host key of an SSH server that is not known yet, so that the
- * user can decide whether to trust it (AR-32, A-5.6). The connection goes
- * only to addresses the AR-57 rules allow; the handshake stops at the host
- * key, so no login is attempted.
+ * Fetches the host key of an SSH server that is not known yet, or whose key
+ * changed, so that the user can decide whether to trust it (AR-32, RC-21,
+ * A-5.6). The connection goes only to addresses the AR-57 rules allow; the
+ * handshake stops at the host key, so no login is attempted.
  *
+ * @param preferredTypes Key types to ask for first: like `ssh`, for a known
+ *   host, the types already trusted, so that the probe sees the key `ssh` saw.
  * @throws GitOperationError `host-unreachable`
  */
 export async function probeHostKey(
   remote: { host: string; port: number; },
   egress: EgressOptions,
-  lookup?: Lookup
+  lookup?: Lookup,
+  preferredTypes: readonly string[] = []
 ): Promise<HostKey> {
+  const algorithms = [
+    ...HOST_KEY_ALGORITHMS.filter(algorithm => preferredTypes.includes(keyTypeOf(algorithm))),
+    ...HOST_KEY_ALGORITHMS.filter(algorithm => !preferredTypes.includes(keyTypeOf(algorithm)))
+  ];
   const socket = await connectToAllowed(remote.host, remote.port, egress, lookup);
   return new Promise((resolve, reject) => {
     let blob: Buffer | undefined;
@@ -77,7 +87,7 @@ export async function probeHostKey(
       // Required by ssh2; the handshake ends before any login.
       username: 'probe',
       readyTimeout: PROBE_TIMEOUT_MS,
-      algorithms: { serverHostKey: [ ...HOST_KEY_ALGORITHMS ] },
+      algorithms: { serverHostKey: algorithms },
       hostVerifier: (key: Buffer) => {
         blob = key;
         return false;

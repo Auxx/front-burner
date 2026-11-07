@@ -149,12 +149,26 @@ by spike 1 (spikes.md).
   - Host keys on a port other than 22 are written and stored as `[host]:port`,
     so trusting such a port does not trust port 22 or any other port. Like
     `ssh`, the engine looks a port other than 22 up only under `[host]:port`
-    when it tells a changed key from an unknown one.
+    when it tells a changed key from an unknown one, and ignores the case of
+    host names.
   - **Trust** stores a key only for a host and port that neither the user's
     known hosts nor the instance-wide list cover, in the sense above; any other
     key is refused as changed, so the endpoint cannot replace a known key or add
     a second one next to it. Trusting a key that is already known is accepted
-    again. _(Plan 10's call.)_
+    again. _(Plan 10's call.)_ **Replace** is the way to change a trusted key
+    (RC-22): it deletes the user's keys for that host and port and stores the
+    new one, in one transaction, and logs the change at `info` with both
+    fingerprints (RC-24); a key that is already trusted changes nothing. It
+    refuses a host and port that nothing covers yet with `409
+    host-key-not-trusted`: such a host is what **Trust** is for. The
+    instance-wide list never changes: for a built-in host, the user's key is
+    written next to the instance's, and `ssh` accepts a host key that any line
+    matches (RC-23). _(Plan 65's call.)_
+  - On a changed host key, the engine probes the host too, asking for the key
+    types already trusted for it first, as `ssh` does, so that it sees the key
+    `ssh` saw. The error carries the trusted key's type and fingerprint (of the
+    new key's type if one is trusted, the user's own before the instance's) and,
+    when the probe reaches the server, the new key (RC-21). _(Plan 65's call.)_
 
 ## A-5: Address restriction
 

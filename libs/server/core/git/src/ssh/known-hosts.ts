@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fingerprintOf } from './ssh-keys';
 
 /** A server's host key, as the probe found it or a user accepted it (A-5.6). */
 export interface HostKey {
@@ -37,11 +38,31 @@ export function knownHostsLine(entry: Pick<HostKey, 'host' | 'port' | 'type' | '
 
 /**
  * Whether `known_hosts` lines hold any key for a host and port. Like `ssh`, a
- * port other than 22 matches only `[host]:port` entries.
+ * port other than 22 matches only `[host]:port` entries, and case is ignored.
  */
 export function hasHostEntry(knownHosts: readonly string[], target: { host: string; port: number; }): boolean {
-  const name = target.port === 22 ? target.host : `[${target.host}]:${target.port}`;
-  return knownHosts.some(line => (line.split(/\s+/)[0] ?? '').split(',').includes(name));
+  return knownHosts.some(line => isEntryFor(line, target));
+}
+
+/**
+ * The type and fingerprint of every key that `known_hosts` lines trust for a
+ * host and port, in their order, matched as {@link hasHostEntry} does (RC-21).
+ */
+export function trustedKeysFor(
+  knownHosts: readonly string[],
+  target: { host: string; port: number; }
+): { type: string; fingerprint: string; }[] {
+  return knownHosts.filter(line => isEntryFor(line, target)).map(line => {
+    const [ , type = '', key = '' ] = line.split(/\s+/);
+    return { type, fingerprint: fingerprintOf(`${type} ${key}`) };
+  });
+}
+
+/** Like `ssh`, host names match ignoring case. */
+function isEntryFor(line: string, target: { host: string; port: number; }): boolean {
+  const host = target.host.toLowerCase();
+  const name = target.port === 22 ? host : `[${host}]:${target.port}`;
+  return (line.split(/\s+/)[0] ?? '').toLowerCase().split(',').includes(name);
 }
 
 /**

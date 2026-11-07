@@ -60,6 +60,18 @@ describe('probeHostKey', () => {
     }
   });
 
+  it('prefers the key types it is given, as ssh does for a known host', async () => {
+    const server = await sshServer();
+    try {
+      const hostKey = await probeHostKey({ host: '127.0.0.1', port: server.port }, ALLOW, undefined, [ 'ssh-rsa' ]);
+
+      expect(hostKey.type).toBe('ssh-rsa');
+      expect(hostKey.fingerprint).toBe(fingerprintOf(fixture('rsa-2048.pub').trim()));
+    } finally {
+      server.close();
+    }
+  });
+
   it('resolves the host through the lookup', async () => {
     const server = await sshServer();
     try {

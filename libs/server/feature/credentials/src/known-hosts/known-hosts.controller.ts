@@ -1,5 +1,5 @@
 import { authOf } from '@front-burner/server-core-security';
-import { Body, Controller, HttpCode, Post, Req } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, Put, Req } from '@nestjs/common';
 import { ApiNoContentResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { TrustHostRequestDto } from '../saved/credentials.dto';
@@ -17,5 +17,17 @@ export class KnownHostsController {
   @ApiNoContentResponse()
   trust(@Body() body: TrustHostRequestDto, @Req() req: Request): void {
     this.knownHosts.trust(authOf(req).userId, body);
+  }
+
+  /**
+   * Replaces the trusted key of a host and port whose key changed, for the
+   * logged-in user only (RC-22, RC-23); `409 host-key-unknown` for a host and
+   * port that no key is trusted for yet.
+   */
+  @Put()
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  replace(@Body() body: TrustHostRequestDto, @Req() req: Request): void {
+    this.knownHosts.replace(authOf(req).userId, body);
   }
 }

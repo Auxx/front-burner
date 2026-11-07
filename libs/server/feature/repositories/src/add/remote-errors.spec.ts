@@ -77,6 +77,26 @@ describe('toAddRepositoryError', () => {
     expect(fail('host-key-changed')).toEqual(onField('remoteUrl', 'host-key-changed', { host: 'git.example.com' }));
   });
 
+  it('the access check\'s error carries the same params', () => {
+    const changed = {
+      host: 'git.example.com',
+      port: '2222',
+      type: 'ssh-ed25519',
+      key: 'AAAA',
+      fingerprint: 'SHA256:new',
+      trustedType: 'ssh-rsa',
+      trustedFingerprint: 'SHA256:old'
+    };
+    expect(fail('host-key-changed', changed)).toEqual(
+      onField('remoteUrl', 'host-key-changed', { ...changed, port: 2222 })
+    );
+  });
+
+  it('passes on only the changed key\'s params', () => {
+    expect(fail('host-key-changed', { host: 'git.example.com', port: '22', branch: 'main', remoteMessages: 'x' }))
+      .toEqual(onField('remoteUrl', 'host-key-changed', { host: 'git.example.com', port: 22 }));
+  });
+
   it('reports a missing branch on the branch', () => {
     expect(fail('branch-not-found', { host: 'git.example.com', branch: 'main' })).toEqual(
       onField('branch', 'branch-not-found')

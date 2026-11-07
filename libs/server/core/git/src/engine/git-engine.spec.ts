@@ -21,11 +21,18 @@ import { join } from 'node:path';
 import type { GitCredentials } from '../broker/broker';
 import type { GitOptions } from '../git.options';
 import { GitRunner } from '../runner/git-runner';
+import { probeHostKey } from '../ssh/host-key-probe';
 import { fingerprintOf, unlockPrivateKey } from '../ssh/ssh-keys';
 import { GitHttpServer, startGitHttpServer } from '../testing/git-http-server';
 import { GitSshServer, startGitSshServer } from '../testing/git-ssh-server';
 import { GitEngine } from './git-engine';
 import { GitOperationError } from './git-errors';
+
+// Calls the real probe unless a test says otherwise.
+vi.mock('../ssh/host-key-probe', async importOriginal => {
+  const actual = await importOriginal<typeof import('../ssh/host-key-probe')>();
+  return { ...actual, probeHostKey: vi.fn(actual.probeHostKey) };
+});
 
 const TOKEN = 'ghp_sup3r-s3cret-token-value';
 const USER = 'x-access-token';
@@ -2106,6 +2113,86 @@ describe('GitEngine', () => {
         expect(error.code).toBe('host-key-changed');
       }
     );
+
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('reports the trusted and the new fingerprint', async () => {
+      const other = keyText('ed25519-passphrase.pub').trim().split(' ');
+      const [ , type, key ] = ssh.hostKeyLine.split(' ');
+      const error = await failureOf(
+        engine({ knownHosts: [ `127.0.0.1 ${type} ${key}` ] }).accessCheck(url(), SSH, [
+          `[127.0.0.1]:${ssh.port} ${other[0]} ${other[1]}`
+        ])
+      );
+
+      expect(error.code).toBe('host-key-changed');
+      expect(error.params).toEqual({
+        host: '127.0.0.1',
+        port: String(ssh.port),
+        type,
+        key,
+        fingerprint: fingerprintOf(`${type} ${key}`),
+        trustedType: 'ssh-ed25519',
+        trustedFingerprint: fingerprintOf(`${other[0]} ${other[1]}`)
+      });
+      expect(ssh.refusedLogins).toBe(0);
+    });
+
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('reports both key types', async () => {
+      const other = keyText('rsa-2048.pub').trim().split(' ');
+      const error = await failureOf(
+        engine().accessCheck(url(), SSH, [ `[127.0.0.1]:${ssh.port} ${other[0]} ${other[1]}` ])
+      );
+
+      expect(error.code).toBe('host-key-changed');
+      expect(error.params).toMatchObject({
+        type: 'ssh-ed25519',
+        fingerprint: fingerprintOf(ssh.hostKeyLine.split(' ').slice(1).join(' ')),
+        trustedType: 'ssh-rsa',
+        trustedFingerprint: fingerprintOf(`${other[0]} ${other[1]}`)
+      });
+    });
+
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')(
+      'without a key of the new type, names the user\'s own trusted key before the instance\'s',
+      async () => {
+        vi.mocked(probeHostKey).mockRejectedValueOnce(
+          new GitOperationError('host-unreachable', 'no SSH host key received', { host: '127.0.0.1' })
+        );
+        const instance = keyText('ed25519-passphrase.pub').trim().split(' ');
+        const own = keyText('rsa-2048.pub').trim().split(' ');
+        const error = await failureOf(
+          engine({ knownHosts: [ `[127.0.0.1]:${ssh.port} ${instance[0]} ${instance[1]}` ] }).accessCheck(url(), SSH, [
+            `[127.0.0.1]:${ssh.port} ${own[0]} ${own[1]}`
+          ])
+        );
+
+        expect(error.params).toMatchObject({
+          trustedType: 'ssh-rsa',
+          trustedFingerprint: fingerprintOf(`${own[0]} ${own[1]}`)
+        });
+      }
+    );
+
+    // The broker listens on a Unix socket in a POSIX path: not on Windows.
+    it.skipIf(process.platform === 'win32')('still reports the change when the probe fails', async () => {
+      vi.mocked(probeHostKey).mockRejectedValueOnce(
+        new GitOperationError('host-unreachable', 'no SSH host key received', { host: '127.0.0.1' })
+      );
+      const other = keyText('ed25519-passphrase.pub').trim().split(' ');
+      const error = await failureOf(
+        engine().accessCheck(url(), SSH, [ `[127.0.0.1]:${ssh.port} ${other[0]} ${other[1]}` ])
+      );
+
+      expect(error.code).toBe('host-key-changed');
+      expect(error.params).toEqual({
+        host: '127.0.0.1',
+        port: String(ssh.port),
+        trustedType: 'ssh-ed25519',
+        trustedFingerprint: fingerprintOf(`${other[0]} ${other[1]}`)
+      });
+    });
 
     // The broker listens on a Unix socket in a POSIX path: not on Windows.
     it.skipIf(process.platform === 'win32')('does not trust the same host on another port', async () => {

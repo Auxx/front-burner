@@ -30,6 +30,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'remote-timeout': 'The remote didn\'t answer in time. Try again later.',
   'remote-failed': 'Something went wrong while contacting the remote.',
   'host-key-unknown': 'The server\'s host key is not known yet.',
+  'host-key-not-trusted': 'No key is trusted for this server yet, so there is none to replace.',
   'path-refused': 'This path can\'t be used.',
   'entry-not-found': 'This file or folder doesn\'t exist.',
   'repository-not-openable': 'This repository can\'t be opened yet.',

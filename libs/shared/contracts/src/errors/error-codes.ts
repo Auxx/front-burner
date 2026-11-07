@@ -26,6 +26,8 @@ export const ERROR_CODES = [
   'remote-failed',
   /** 409; params are a `HostKey` for the user to trust (AR-32). */
   'host-key-unknown',
+  /** 409; no key is trusted for this host and port yet, so there is none to replace (RC-22); params `{ host, port }`. */
+  'host-key-not-trusted',
   /** 400; a client path the backend refuses to use; params `{ reason }` (FB-5, A-7.6). */
   'path-refused',
   /** 404; no file or folder at a path of a working copy. */

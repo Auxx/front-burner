@@ -12,4 +12,7 @@ export class KnownHostsApi {
   trust(data: TrustHostRequest): Observable<void> {
     return this.http.post<void>(`/api/v1/known-hosts`, data);
   }
+  replace(data: TrustHostRequest): Observable<void> {
+    return this.http.put<void>(`/api/v1/known-hosts`, data);
+  }
 }
