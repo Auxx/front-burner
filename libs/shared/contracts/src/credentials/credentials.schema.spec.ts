@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  ChangedHostKeySchema,
   CREDENTIALS_FIELD_CODES,
   GeneratedSshKeySchema,
   GenerateSshKeyRequestSchema,
@@ -78,6 +79,37 @@ describe('SavedCredentialsSchema', () => {
   });
 });
 
+describe('ChangedHostKeySchema', () => {
+  const changed = {
+    host: 'git.example.com',
+    port: 2222,
+    type: 'ssh-ed25519',
+    key: 'AAAA',
+    fingerprint: 'SHA256:new',
+    trustedType: 'ssh-rsa',
+    trustedFingerprint: 'SHA256:old'
+  };
+
+  it('reads the trusted and the new key, with the port as a push outcome writes it', () => {
+    expect(ChangedHostKeySchema.parse({ ...changed, port: '2222' })).toEqual(changed);
+  });
+
+  it('reads a change whose new key the probe could not fetch', () => {
+    const withoutNewKey = {
+      host: changed.host,
+      port: changed.port,
+      trustedType: changed.trustedType,
+      trustedFingerprint: changed.trustedFingerprint
+    };
+
+    expect(ChangedHostKeySchema.parse(withoutNewKey)).toEqual(withoutNewKey);
+  });
+
+  it('needs the trusted fingerprint', () => {
+    expect(ChangedHostKeySchema.safeParse({ ...changed, trustedFingerprint: undefined }).success).toBe(false);
+  });
+});
+
 describe('TrustHostRequestSchema', () => {
   const host = { host: 'git.example.com', port: 22, type: 'ssh-ed25519', key: 'AAAA' };
 
@@ -132,6 +164,7 @@ describe('ids', () => {
       [ GeneratedSshKeySchema, 'GeneratedSshKey' ],
       [ UnlockSshKeyRequestSchema, 'UnlockSshKeyRequest' ],
       [ HostKeySchema, 'HostKey' ],
+      [ ChangedHostKeySchema, 'ChangedHostKey' ],
       [ TrustHostRequestSchema, 'TrustHostRequest' ]
     ] as const
   )('names %#', (schema, id) => {

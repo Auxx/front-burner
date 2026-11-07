@@ -27,8 +27,15 @@ export function toAddRepositoryError(error: GitOperationError, context: RemoteEr
     case 'tls-untrusted':
     case 'repository-not-found':
       return onField('remoteUrl', error.code);
-    case 'host-key-changed':
-      return onField('remoteUrl', 'host-key-changed', { host });
+    case 'host-key-changed': {
+      // RC-21: what was trusted and, when the probe reached the server, the new key.
+      const { port, ...changed } = error.params;
+      return onField('remoteUrl', 'host-key-changed', {
+        ...changed,
+        host,
+        ...(port === undefined ? {} : { port: Number(port) })
+      });
+    }
     case 'auth-failed':
       return context.credentialsMode === 'none'
         ? onField('credentials', 'credentials-required')

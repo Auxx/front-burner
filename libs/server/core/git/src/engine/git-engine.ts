@@ -10,7 +10,7 @@ import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult, GitRunner } from '../runner/git-runner';
 import { redactCredentials } from '../runner/redact';
 import { probeHostKey } from '../ssh/host-key-probe';
-import { hasHostEntry } from '../ssh/known-hosts';
+import { hasHostEntry, HostKey, trustedKeysFor } from '../ssh/known-hosts';
 import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
 import { parseStatus, WorkingCopyStatus } from './git-status';
@@ -1075,6 +1075,9 @@ export class GitEngine implements BeforeApplicationShutdown {
     } finally {
       await broker?.close();
     }
+    if (failure.code === 'host-key-changed') {
+      throw await this.describeChangedHostKey(failure, knownHosts, { host: remote.host, port: remote.port ?? 22 });
+    }
     if (failure.code === 'host-key-unknown') {
       // AR-32: the user decides whether to trust the key `ssh` was shown.
       const { host, port, type, key, fingerprint } = await probeHostKey(
@@ -1091,5 +1094,35 @@ export class GitEngine implements BeforeApplicationShutdown {
       });
     }
     throw failure;
+  }
+
+  /**
+   * A changed host key with the key that was trusted and, when the probe
+   * reaches the server, the new one (RC-21). Of the trusted keys, the one of
+   * the new key's type, the user's own before the instance's; otherwise the
+   * first.
+   */
+  private async describeChangedHostKey(
+    failure: GitOperationError,
+    knownHosts: string[],
+    target: { host: string; port: number; }
+  ): Promise<GitOperationError> {
+    const trusted = trustedKeysFor(knownHosts, target);
+    let probed: HostKey | undefined;
+    try {
+      probed = await probeHostKey(target, this.options.egress, undefined, trusted.map(({ type }) => type));
+    } catch (error) {
+      // The server went away: the change is still reported, without a key to trust.
+      this.logger.debug(`Host key probe of ${target.host}:${target.port} failed: ${(error as Error).message}`);
+    }
+    const sameType = trusted.filter(({ type }) => type === probed?.type);
+    const shown = sameType.at(-1) ?? trusted[0];
+    return new GitOperationError('host-key-changed', failure.detail, {
+      ...failure.params,
+      host: target.host,
+      port: String(target.port),
+      ...(probed ? { type: probed.type, key: probed.key, fingerprint: probed.fingerprint } : {}),
+      ...(shown ? { trustedType: shown.type, trustedFingerprint: shown.fingerprint } : {})
+    });
   }
 }

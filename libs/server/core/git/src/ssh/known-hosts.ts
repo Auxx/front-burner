@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fingerprintOf } from './ssh-keys';
 
 /** A server's host key, as the probe found it or a user accepted it (A-5.6). */
 export interface HostKey {
@@ -40,8 +41,26 @@ export function knownHostsLine(entry: Pick<HostKey, 'host' | 'port' | 'type' | '
  * port other than 22 matches only `[host]:port` entries.
  */
 export function hasHostEntry(knownHosts: readonly string[], target: { host: string; port: number; }): boolean {
+  return knownHosts.some(line => isEntryFor(line, target));
+}
+
+/**
+ * The type and fingerprint of every key that `known_hosts` lines trust for a
+ * host and port, in their order, matched as {@link hasHostEntry} does (RC-21).
+ */
+export function trustedKeysFor(
+  knownHosts: readonly string[],
+  target: { host: string; port: number; }
+): { type: string; fingerprint: string; }[] {
+  return knownHosts.filter(line => isEntryFor(line, target)).map(line => {
+    const [ , type = '', key = '' ] = line.split(/\s+/);
+    return { type, fingerprint: fingerprintOf(`${type} ${key}`) };
+  });
+}
+
+function isEntryFor(line: string, target: { host: string; port: number; }): boolean {
   const name = target.port === 22 ? target.host : `[${target.host}]:${target.port}`;
-  return knownHosts.some(line => (line.split(/\s+/)[0] ?? '').split(',').includes(name));
+  return (line.split(/\s+/)[0] ?? '').split(',').includes(name);
 }
 
 /**

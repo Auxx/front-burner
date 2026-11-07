@@ -90,6 +90,25 @@ export const HostKeySchema = z
   .object({ ...hostKeyFields, fingerprint: z.string() })
   .meta({ id: 'HostKey' });
 
+/**
+ * A server's host key that differs from the one trusted (RC-21), as the
+ * `host-key-changed` error of an access check or a push describes it. The new
+ * key is missing when the backend could not fetch it; then it cannot be
+ * trusted. A push's outcome writes the port as a string.
+ */
+export const ChangedHostKeySchema = z
+  .object({
+    host: hostKeyFields.host,
+    port: z.coerce.number().pipe(hostKeyFields.port),
+    type: z.string().optional(),
+    key: z.string().optional(),
+    fingerprint: z.string().optional(),
+    /** The key type that was trusted, as `known_hosts` names it. */
+    trustedType: z.string(),
+    trustedFingerprint: z.string()
+  })
+  .meta({ id: 'ChangedHostKey' });
+
 /** Trusts a host key; the backend works out the fingerprint itself. */
 export const TrustHostRequestSchema = z.object(hostKeyFields).meta({ id: 'TrustHostRequest' });
 
@@ -120,4 +139,5 @@ export type GenerateSshKeyRequest = z.infer<typeof GenerateSshKeyRequestSchema>;
 export type GeneratedSshKey = z.infer<typeof GeneratedSshKeySchema>;
 export type UnlockSshKeyRequest = z.infer<typeof UnlockSshKeyRequestSchema>;
 export type HostKey = z.infer<typeof HostKeySchema>;
+export type ChangedHostKey = z.infer<typeof ChangedHostKeySchema>;
 export type TrustHostRequest = z.infer<typeof TrustHostRequestSchema>;

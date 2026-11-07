@@ -1,4 +1,10 @@
-import { BUILT_IN_KNOWN_HOSTS, hasHostEntry, knownHostsLine, loadInstanceKnownHosts } from './known-hosts';
+import {
+  BUILT_IN_KNOWN_HOSTS,
+  hasHostEntry,
+  knownHostsLine,
+  loadInstanceKnownHosts,
+  trustedKeysFor
+} from './known-hosts';
 import { fingerprintOf } from './ssh-keys';
 
 const KEY = 'AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
@@ -85,5 +91,25 @@ describe('hasHostEntry', () => {
     expect(hasHostEntry(lines, { host: 'other.example.com', port: 2222 })).toBe(true);
     expect(hasHostEntry(lines, { host: 'git.example.com', port: 2222 })).toBe(false);
     expect(hasHostEntry(lines, { host: 'other.example.com', port: 22 })).toBe(false);
+  });
+});
+
+describe('trustedKeysFor', () => {
+  const github = BUILT_IN_KNOWN_HOSTS.filter(line => line.startsWith('github.com '));
+  const fingerprint = (line: string) => fingerprintOf(line.split(' ').slice(1).join(' '));
+
+  it('lists the type and fingerprint of every key of a host, in order', () => {
+    expect(trustedKeysFor([ ...BUILT_IN_KNOWN_HOSTS ], { host: 'github.com', port: 22 })).toEqual(
+      github.map(line => ({ type: line.split(' ')[1], fingerprint: fingerprint(line) }))
+    );
+  });
+
+  it('matches a port other than 22 only under [host]:port', () => {
+    const line = `[github.com]:2222 ${github[0]?.split(' ').slice(1).join(' ')}`;
+
+    expect(trustedKeysFor([ ...BUILT_IN_KNOWN_HOSTS, line ], { host: 'github.com', port: 2222 })).toEqual([
+      { type: 'ssh-ed25519', fingerprint: fingerprint(line) }
+    ]);
+    expect(trustedKeysFor([ line ], { host: 'github.com', port: 22 })).toEqual([]);
   });
 });
