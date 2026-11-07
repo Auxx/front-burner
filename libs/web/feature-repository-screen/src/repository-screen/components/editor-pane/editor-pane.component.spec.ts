@@ -312,6 +312,70 @@ describe('EditorPaneComponent', () => {
       .toBeTruthy();
   });
 
+  describe('the notices wrapper', () => {
+    const notices = () => pane().querySelector('.notices');
+
+    it('goes when the draft is no longer offered', async () => {
+      const file = openFile('docs/guide.md');
+      file.draft.set({ content: '# Offline', savedAt: '2026-10-29T10:05:00.000Z' });
+      await show(file);
+      expect(notices()?.querySelector('rs-draft-offer')).toBeTruthy();
+
+      file.draft.set(null);
+      await settle(fixture);
+
+      expect(notices()).toBeNull();
+    });
+
+    it('shows for a file gone elsewhere, and goes when it is back', async () => {
+      const file = openFile('docs/guide.md');
+      file.gone.set(true);
+      await show(file);
+      expect(notices()?.querySelector('rs-gone-elsewhere')).toBeTruthy();
+
+      file.gone.set(false);
+      await settle(fixture);
+
+      expect(notices()).toBeNull();
+    });
+
+    it('shows for a file changed on disk, and goes once the change is settled', async () => {
+      const file = openFile('docs/guide.md');
+      file.changed.set('b'.repeat(64));
+      await show(file);
+      expect(notices()?.querySelector('rs-changed-on-disk')).toBeTruthy();
+
+      file.changed.set(null);
+      await settle(fixture);
+
+      expect(notices()).toBeNull();
+    });
+
+    it('shows for the large file note, and goes when highlighting is turned on', async () => {
+      const file = openFile('big.md', { size: 150_000 });
+      file.largeOnNarrow = true;
+      file.highlight.set(false);
+      await show(file);
+      expect(notices()?.querySelector('rs-large-file-note')).toBeTruthy();
+
+      file.highlight.set(true);
+      await settle(fixture);
+
+      expect(notices()).toBeNull();
+    });
+
+    it('does not show for a large file while the editor is not shown', async () => {
+      const file = openFile('big.md', { size: 150_000 });
+      file.largeOnNarrow = true;
+      file.highlight.set(false);
+      TestBed.inject(ViewModeService).set('preview');
+
+      await show(file);
+
+      expect(notices()).toBeNull();
+    });
+  });
+
   it('gives the preview the editor\'s text and bumps its version on every edit', async () => {
     const file = openFile('README.md');
     await show(file);

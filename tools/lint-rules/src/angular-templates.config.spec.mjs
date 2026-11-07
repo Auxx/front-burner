@@ -128,8 +128,7 @@ describe('angular-templates config', () => {
 });
 
 describe('opt-in', () => {
-  // Turned on by Task 8, once every Angular project spreads the shared config.
-  it.skip('every Angular project lints its templates with angular-templates.config.mjs', () => {
+  it('every Angular project lints its templates with angular-templates.config.mjs', () => {
     const root = join(import.meta.dirname, '../../..');
     const configs = execFileSync('git', [ 'ls-files', '*eslint.config.mjs' ], { cwd: root, encoding: 'utf8' })
       .split('\n')

@@ -16,7 +16,8 @@
       "cache": true,
       "inputs": [
         "default",
-        "^production"
+        "^production",
+        "{workspaceRoot}/**/eslint.config.mjs"
       ],
       "options": {
         "command": "vitest run",
