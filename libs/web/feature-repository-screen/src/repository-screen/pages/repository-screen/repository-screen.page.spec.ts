@@ -1303,6 +1303,26 @@ describe('RepositoryScreenPage', () => {
         expect(fetchButton().getAttribute('aria-disabled')).toBeNull();
       });
 
+      it('shows a failed fetch as a banner, and Try again fetches again', async () => {
+        gitJob.mockReturnValue(of<GitJobState>({
+          status: 'done',
+          outcome: { kind: 'failed', code: 'network', params: {} }
+        }));
+        await visit('/repositories/12');
+        fetchButton().click();
+        await settle(harness.fixture);
+
+        const first = problem() as HTMLElement;
+        expect(first.textContent).toContain('errors.network');
+        expect(first.querySelector('ui-inline-banner')).not.toBeNull();
+
+        (first.querySelector('[uiBannerActions] button') as HTMLButtonElement).click();
+        await settle(harness.fixture);
+
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(push).not.toHaveBeenCalled();
+      });
+
       it('pushes from the bar and shows it running', async () => {
         await visit('/repositories/12');
 

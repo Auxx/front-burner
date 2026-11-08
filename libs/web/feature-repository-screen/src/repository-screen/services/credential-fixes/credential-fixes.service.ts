@@ -18,18 +18,18 @@ import { type GitProblem, NetworkJobService } from '../network-job/network-job.s
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 
 /**
- * The one place that connects the fix of a push problem (RC-4) to what it
+ * The one place that connects the fix of a network job problem (RC-4) to what it
  * does: **Try again** and **Unlock** run through `NetworkJobService`; **Add
  * credentials**, **Fix credentials** and **Use other credentials** open the
- * repository credentials dialog (RC-7), and once it saved, the push runs again
- * on its own (RC-9). **Cancel** changes nothing, and the problem stays.
+ * repository credentials dialog (RC-7), and once it saved, the failed operation
+ * (a push or a fetch) runs again on its own (RC-9). **Cancel** changes nothing, and the problem stays.
  * Refused credentials offer to update the token of saved HTTPS credentials,
  * and a refused key gets RC-14's hint: the dialog shows whichever fits the
  * credentials in use (RC-12, RC-14).
  *
  * **Review the new key** opens the changed host key dialog with the keys from
- * the push's error; once the new key is trusted, or on its **Try again**, the
- * push runs again (RC-21, RC-22). A push that meets an unknown host, such as
+ * the job's error; once the new key is trusted, or on its **Try again**, the
+ * operation runs again (RC-21, RC-22). A job that meets an unknown host, such as
  * after the user's known hosts were lost, asks to trust it as on the Add
  * repository page (AR-32), then runs again. Provided by the page.
  */

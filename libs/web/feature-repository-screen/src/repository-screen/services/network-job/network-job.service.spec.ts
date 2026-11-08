@@ -530,11 +530,45 @@ describe('NetworkJobService', () => {
       await settle();
       expect(service.problem()).toEqual(expect.objectContaining({ operation: 'fetch', quiet: false }));
 
+      const answer = new Subject<GitJobStarted>();
+      fetch.mockReturnValueOnce(answer);
       gitJob.mockReturnValue(of(RUNNING));
-      await service.start('fetch');
+      const started = service.start('fetch');
 
+      // Cleared as the press starts, before the backend answers.
       expect(service.problem()).toBeNull();
       expect(fetch).toHaveBeenCalledTimes(2);
+
+      answer.next({ jobId: 7 });
+      answer.complete();
+      await started;
+      await settle();
+      expect(service.running()).toBe('fetch');
+    });
+
+    it('retries a failed fetch as a fetch, not a push', async () => {
+      gitJob.mockReturnValue(of(failed('network-unreachable')));
+      await service.start('fetch');
+      await settle();
+      expect(service.problem()).toEqual(expect.objectContaining({ operation: 'fetch', quiet: false }));
+
+      gitJob.mockReturnValue(of(RUNNING));
+      await service.retry();
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it('Unlock on a locked-key problem of a fetch fetches again, not pushes', async () => {
+      fetch.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+      unlock.mockRejectedValueOnce(new Error('offline'));
+      await service.start('fetch');
+      expect(service.problem()).toMatchObject({ operation: 'fetch', fix: 'unlock' });
+
+      await service.unlockAndRetry();
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(push).not.toHaveBeenCalled();
     });
   });
 });

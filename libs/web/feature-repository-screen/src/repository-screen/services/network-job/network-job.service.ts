@@ -57,8 +57,9 @@ const OPERATIONS: Readonly<Record<GitNetworkJobType, Operation>> = {
   },
   fetch: {
     start: (api, repositoryId) => api.fetch(repositoryId),
-    // A fetch that moved something says nothing: the counts update. One that moved nothing says so, as it
-    // would otherwise look as if the press did nothing.
+    // `moved` is true when any remote branch changed, and such a fetch says nothing, even when the counts of
+    // this branch stay the same. One that moved nothing says so, as it would otherwise look as if the press
+    // did nothing.
     succeeded: outcome =>
       outcome.kind === 'fetched' && !outcome.moved ? { key: `${KEY}.noNewCommits`, params: {} } : null
   }
@@ -80,14 +81,14 @@ const stringParams = (params: Readonly<Record<string, unknown>>): Record<string,
  *
  * Only the tab that started a job says "Pushed 2 commits to origin/main", or
  * "No new commits" for a fetch that moved nothing (a fetch that moved something
- * says nothing, the counts update). A job
- * that failed becomes `problem`, quiet for a job this tab did not start, so that
- * it is not announced. So does a job the backend refused to start, except `409
- * key-locked`: that asks for the passphrase at once, and the job carries on after
- * the unlock without being started again; cancelling cancels it, with no message
- * (RC-17). It asks once per press, so that a key that is locked again at once
- * shows the problem, with **Unlock**. Nothing is saved first: a push sends what
- * was committed, and a fetch changes no file.
+ * says nothing, the counts update). A job that failed becomes `problem`, quiet
+ * for a job this tab did not start, so that it is not announced. So does a job
+ * the backend refused to start, except `409 key-locked`: that asks for the
+ * passphrase at once, and the job carries on after the unlock without being
+ * started again; cancelling cancels it, with no message (RC-17). It asks once
+ * per press, so that a key that is locked again at once shows the problem, with
+ * **Unlock**. Nothing is saved first: a push sends what was committed, and a
+ * fetch changes no file.
  */
 @Injectable()
 export class NetworkJobService {

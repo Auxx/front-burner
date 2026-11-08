@@ -17,7 +17,7 @@ import { fetchUnavailableReason, pushUnavailableReason } from '../../utils/git-a
  * **Fetch** and **Push** in the repository bar (GA-7 to GA-9). Each is offered
  * when it can run; otherwise it is shown unavailable, with the reason on hover,
  * focus or tap, such as "Nothing to push", "Make a commit first" or "Another
- * action is running". While a network job runs, here or in another tab, its
+ * git action is running". While a network job runs, here or in another tab, its
  * button shows a spinner and "Fetching…" or "Pushing…", which a status region also
  * tells screen readers, and the other one is unavailable (GA-9). On narrow
  * screens both are items of the git actions menu, with their reasons below

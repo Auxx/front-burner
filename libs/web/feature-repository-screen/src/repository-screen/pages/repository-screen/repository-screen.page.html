@@ -29,7 +29,7 @@
       @for (problem of gitProblems(); track problem) {
         <rs-git-problem uiAppShellBanner
                         [problem]="problem"
-                        (fixSelected)="fixPush($event)"
+                        (fixSelected)="fixProblem($event)"
                         (dismissed)="jobs.clearProblem()" />
       }
       @if (lockedKeyShown(); as key) {
