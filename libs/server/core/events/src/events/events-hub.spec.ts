@@ -6,8 +6,8 @@ const event: PushEvent = { type: 'job.progress', jobId: 1, percent: 50 };
 describe('EventsHub', () => {
   let hub: EventsHub;
 
-  const stream = (userId: number, sessionId: string) => {
-    const opened = { userId, sessionId, send: vi.fn(), close: vi.fn() } satisfies EventStream;
+  const stream = (userId: number, sessionId: string, repositoryId: number | null = null) => {
+    const opened = { userId, sessionId, repositoryId, send: vi.fn(), close: vi.fn() } satisfies EventStream;
     const remove = hub.open(opened);
     return { ...opened, remove };
   };
@@ -49,6 +49,34 @@ describe('EventsHub', () => {
     hub.publish(1, event);
 
     expect(tab.send).not.toHaveBeenCalled();
+  });
+
+  it('lists a stream that views a repository', () => {
+    stream(1, 'a1', 7);
+    stream(2, 'b1', 8);
+
+    expect(hub.viewers()).toEqual([
+      { userId: 1, sessionId: 'a1', repositoryId: 7 },
+      { userId: 2, sessionId: 'b1', repositoryId: 8 }
+    ]);
+  });
+
+  it('leaves out a stream that views none', () => {
+    stream(1, 'a1');
+    stream(1, 'a2', 7);
+
+    expect(hub.viewers()).toEqual([ { userId: 1, sessionId: 'a2', repositoryId: 7 } ]);
+  });
+
+  it('forgets a stream that closed', () => {
+    const tab = stream(1, 'a1', 7);
+    stream(1, 'a2', 8);
+
+    tab.remove();
+    expect(hub.viewers()).toEqual([ { userId: 1, sessionId: 'a2', repositoryId: 8 } ]);
+
+    hub.closeSession('a2');
+    expect(hub.viewers()).toEqual([]);
   });
 
   it('closes only the streams of a session', () => {

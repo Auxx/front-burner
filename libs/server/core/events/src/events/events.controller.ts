@@ -17,6 +17,15 @@ export function formatEvent(event: PushEvent): string {
   return `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
+/** The repository a tab views from `?repository=` (A-3.12); `null` unless one decimal positive integer without a leading zero. */
+function parseRepositoryId(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) {
+    return null;
+  }
+  const id = Number(value);
+  return Number.isSafeInteger(id) ? id : null;
+}
+
 /**
  * The push channel (A-3.10): a Server-Sent Events stream of the logged-in
  * user's events. Clients read it with `fetch`, so it is left out of the
@@ -51,6 +60,7 @@ export class EventsController {
     const remove = this.hub.open({
       userId,
       sessionId,
+      repositoryId: parseRepositoryId(req.query['repository']),
       send: event => res.write(formatEvent(event)),
       close: () => end()
     });

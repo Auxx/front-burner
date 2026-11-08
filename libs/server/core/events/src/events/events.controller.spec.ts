@@ -35,10 +35,10 @@ describe('EventsController', () => {
   let hub: EventsHub;
   let port: number;
 
-  function open(userId: number, expiresInMs = 60_000): Promise<OpenStream> {
+  function open(userId: number, expiresInMs = 60_000, query = ''): Promise<OpenStream> {
     return new Promise((resolve, reject) => {
       const headers = { 'x-test-user': String(userId), 'x-test-expires': String(Date.now() + expiresInMs) };
-      get({ port, path: '/api/v1/events', headers }, response => {
+      get({ port, path: `/api/v1/events${query}`, headers }, response => {
         let received = '';
         const waiters: (() => void)[] = [];
         response.setEncoding('utf8');
@@ -148,6 +148,37 @@ describe('EventsController', () => {
     hub.closeSession('session-1');
 
     await stream.ended;
+  });
+
+  it('keeps the repository a stream views', async () => {
+    const stream = await open(1, 60_000, '?repository=7');
+    await stream.waitFor(': connected');
+
+    expect(hub.viewers()).toEqual([ { userId: 1, sessionId: 'session-1', repositoryId: 7 } ]);
+  });
+
+  it('ignores a repository that is not a positive integer', async () => {
+    const queries = [
+      '',
+      '?repository=',
+      '?repository=1&repository=2',
+      '?repository=abc',
+      '?repository=0',
+      '?repository=-1',
+      '?repository=1.5',
+      '?repository=1e3',
+      '?repository=007',
+      '?repository=%2B5',
+      '?repository=%205',
+      '?repository=9007199254740992'
+    ];
+    for (const query of queries) {
+      const stream = await open(1, 60_000, query);
+      expect(stream.response.statusCode, query).toBe(200);
+      await stream.waitFor(': connected');
+    }
+
+    expect(hub.viewers()).toEqual([]);
   });
 
   it('refuses a request without a token', async () => {
