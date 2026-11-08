@@ -9,6 +9,12 @@
                   [narrow]="narrow()"
                   (fetch)="fetch.emit()"
                   (push)="push.emit()" />
+  <rs-fetch-status [problem]="fetchProblem()"
+                   [lockedKeyName]="lockedKeyName()"
+                   [narrow]="narrow()"
+                   (retry)="retryFetch.emit()"
+                   (fix)="fixFetch.emit($event)"
+                   (unlock)="unlock.emit()" />
   <rs-save-status class="status"
                   [status]="saveStatus()" />
 }

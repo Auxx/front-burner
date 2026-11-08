@@ -1,0 +1,51 @@
+// Quiet: muted and a step smaller, as the save status beside it. It takes the room the
+// bar has left and shortens its own text, so that it never squeezes what comes before it.
+:host {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: var(--ui-space-1);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-ui-small);
+}
+
+:host(:empty) {
+  display: none;
+}
+
+// Only the button is in the bar (NV-11).
+:host(.narrow) {
+  flex: none;
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+.text {
+  // Adds nothing to the bar's least width: only the icon and the buttons do.
+  contain: inline-size;
+  flex: 1 1 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failed {
+  color: var(--ui-text-default);
+}
+
+button {
+  flex-shrink: 0;
+}
+
+p {
+  margin-block: 0 var(--ui-space-1);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-1);
+  margin-block-start: var(--ui-space-2);
+}

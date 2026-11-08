@@ -474,6 +474,30 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     expect(await fetchProblem()).toBeNull();
   });
 
+  it('a background fetch keeps its problem in the status too, with what its fix needs', async () => {
+    remote('fetch-gate-background');
+    const credentials = { mode: 'new-https', name: 'Background token', username: 'alice', password: TOKEN };
+    const { id } = await add('fetch-gate-background', `${privateGit.url}/fetch-gate-background.git`, credentials);
+    const fetchProblem = async () =>
+      (await (await api(`/repositories/${id}/git/status`)).json() as { fetchProblem: unknown; }).fetchProblem;
+
+    privateOptions.users = { alice: 'rotated-token' };
+    // A tab viewing the repository (A-3.12).
+    const viewing = new AbortController();
+    const stream = await fetch(`${server.url}/api/v1/events?repository=${id}`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: viewing.signal
+    });
+    expect(stream.status).toBe(200);
+    try {
+      await waitFor(async () => (await fetchProblem()) !== null);
+      expect(await fetchProblem()).toEqual({ code: 'credentials-refused', params: { host: '127.0.0.1' } });
+    } finally {
+      viewing.abort();
+      privateOptions.users = { alice: TOKEN };
+    }
+  });
+
   it('AC-REPO-002.4: with an expired saved token used by four repositories, updating it fixes the push of all four', async () => {
     const names = [ 'rotate-a', 'rotate-b', 'rotate-c', 'rotate-d' ];
     names.forEach(name => remote(name));

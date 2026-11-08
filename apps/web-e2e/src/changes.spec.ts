@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
-import type { Page } from '@playwright/test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -19,7 +19,7 @@ import {
   startGitSshServer
 } from './support/git-ssh-server';
 import { adminAuthToken, confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
-import { addOverApi as addRepository, ADMIN_ID, sshRepository } from './support/repositories';
+import { addOverApi as addRepository, ADMIN_ID, sshRepository, sshRepositoryWithSameKey } from './support/repositories';
 import { gitIn } from './support/working-copy';
 
 test.use({ instanceOptions: { onboarded: true } });
@@ -62,6 +62,28 @@ async function gitAction(page: Page, name: 'Fetch' | 'Push'): Promise<void> {
 }
 
 const push = (page: Page) => gitAction(page, 'Push');
+
+const FETCH_FAILED = 'Couldn\'t check for remote changes';
+const fetchStatus = (page: Page) => page.getByRole('banner').locator('rs-fetch-status');
+
+/** The quiet fetch status's text and actions: in the bar, or in a panel a tap opens on a phone (GA-35, NV-11). */
+async function fetchStatusDetails(page: Page): Promise<Locator> {
+  const trigger = fetchStatus(page).getByRole('button', { name: FETCH_FAILED });
+  const text = fetchStatus(page).getByText(FETCH_FAILED);
+  await expect(trigger.or(text)).toBeVisible();
+  if (!await trigger.isVisible()) {
+    return fetchStatus(page);
+  }
+  const details = page.getByRole('dialog', { name: FETCH_FAILED });
+  if (!await details.isVisible()) {
+    await trigger.click();
+  }
+  await expect(details).toBeVisible();
+  return details;
+}
+
+/** The status is there but says nothing, on any screen. */
+const expectNoFetchProblem = (page: Page) => expect(fetchStatus(page)).toHaveText('');
 
 async function openScreen(page: Page, url: string): Promise<void> {
   await page.goto(url);
@@ -334,6 +356,53 @@ test.describe('pushing', () => {
 
     await problem.getByRole('button', { name: 'Dismiss' }).click();
     await expect(problem).toHaveCount(0);
+  });
+
+  test.describe('the quiet fetch status', () => {
+    test('a background fetch that failed says so in the bar, and Try again that succeeds removes it', async ({ page, instance }) => {
+      const { id, bare } = pushable(instance, 'cloned');
+      const away = `${bare}.away`;
+      renameSync(bare, away);
+      await openScreen(page, `/repositories/${id}`);
+
+      await expect(fetchStatus(page).getByRole('button').first()).toBeVisible();
+      // Nothing opened by itself.
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(bar(page).locator('rs-git-problem')).toHaveCount(0);
+      expect((await new AxeBuilder({ page }).include('rs-fetch-status').analyze()).violations).toEqual([]);
+
+      // It is state, not an event.
+      await page.reload();
+      await expect(await fetchStatusDetails(page)).toContainText(FETCH_FAILED);
+
+      renameSync(away, bare);
+      await (await fetchStatusDetails(page)).getByRole('button', { name: 'Try again' }).click();
+
+      await expectNoFetchProblem(page);
+      await expect(toasts(page).getByText('No new commits')).toBeVisible();
+    });
+
+    test('on a phone it is a button whose tap shows the text, and the save status stays in the bar', async ({ page, instance }) => {
+      await page.setViewportSize({ width: 375, height: 700 });
+      const { id, bare } = pushable(instance, 'cloned');
+      renameSync(bare, `${bare}.away`);
+      await openScreen(page, `/repositories/${id}`);
+
+      const trigger = fetchStatus(page).getByRole('button', { name: FETCH_FAILED });
+      await expect(trigger).toBeVisible();
+      await expect(fetchStatus(page)).toHaveText('');
+
+      await trigger.click();
+      const details = page.getByRole('dialog', { name: FETCH_FAILED });
+      await expect(details).toContainText(FETCH_FAILED);
+      await expect(details.getByRole('button', { name: 'Try again' })).toBeFocused();
+      expect((await new AxeBuilder({ page }).include('ui-popover').analyze()).violations).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+      await details.getByRole('button', { name: 'Try again' }).click();
+      await expect(details).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+    });
   });
 
   test('moves Push into a menu on a phone', async ({ page, instance }) => {
@@ -641,10 +710,11 @@ test.describe('a locked key', () => {
     }
   });
 
-  test('after a backend restart, opening the repository shows the banner', async ({ page, instance }) => {
-    // A second server start.
+  test('AC-REPO-002.8: after a restart, a locked key shows the banner and no background fetch runs; unlocking makes fetches resume and removes the banner from every repository that uses the key', async ({ page, context, instance }) => {
+    // A second server start, and waiting for a fetch that must not run.
     test.slow();
-    const { id } = await lockedRepository(instance);
+    const { id, bare } = await lockedRepository(instance);
+    const other = await sshRepositoryWithSameKey(instance, ssh, remotes, join(root, `locked-${next++}`));
     await openScreen(page, `/repositories/${id}`);
     await banner(page).getByRole('button', { name: 'Unlock' }).click();
     await unlock(page);
@@ -653,9 +723,46 @@ test.describe('a locked key', () => {
     // Away from the screen while the backend is down, so that nothing it asks for meanwhile fails.
     await page.goto('about:blank');
     await instance.restart();
+    // Someone else pushes a commit, which only a fetch can bring.
+    const elsewhere = join(dirname(bare), 'elsewhere');
+    gitIn(dirname(bare), 'clone', '-q', bare, elsewhere);
+    gitIn(elsewhere, 'commit', '-q', '--allow-empty', '-m', 'from elsewhere');
+    gitIn(elsewhere, 'push', '-q', 'origin', 'main');
     await page.goto(`/repositories/${id}`);
+    const otherPage = await context.newPage();
+    await otherPage.goto(`/repositories/${other.id}`);
 
     await expect(banner(page)).toContainText('laptop is locked.');
+    await expect(banner(otherPage)).toContainText('laptop is locked.');
+    const details = await fetchStatusDetails(page);
+    await expect(details).toContainText(FETCH_FAILED);
+    await expect(details).toContainText('Unlock laptop to check for remote changes.');
+    await page.keyboard.press('Escape');
+    await expect(summary(page)).toHaveText(/1 to push/);
+    // Longer than the scheduler's 5 seconds between looks at what is viewed.
+    await page.waitForTimeout(7_000);
+    await expect(summary(page)).not.toHaveText(/to pull/);
+
+    await banner(page).getByRole('button', { name: 'Unlock' }).click();
+    await unlock(page);
+
+    await expect(banner(page)).toHaveCount(0);
+    await expect(banner(otherPage)).toHaveCount(0);
+    await expectNoFetchProblem(page);
+    await expect(summary(page)).toHaveText(/1 to pull/, { timeout: 15_000 });
+  });
+
+  test('a dismissed banner leaves Unlock in the bar', async ({ page, instance }) => {
+    const { id } = await lockedRepository(instance);
+    await openScreen(page, `/repositories/${id}`);
+    await banner(page).getByRole('button', { name: 'Dismiss' }).click();
+    await expect(banner(page)).toHaveCount(0);
+
+    await (await fetchStatusDetails(page)).getByRole('button', { name: 'Unlock' }).click();
+    await unlock(page);
+
+    await expect(dialog(page)).toHaveCount(0);
+    await expectNoFetchProblem(page);
   });
 
   test('a dismissed banner stays away for the visit, and Push still asks', async ({ page, instance, monitor }) => {

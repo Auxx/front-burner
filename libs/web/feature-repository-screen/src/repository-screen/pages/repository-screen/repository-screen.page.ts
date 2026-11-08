@@ -12,7 +12,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
-import type { ApiError, Entry, GitChange } from '@front-burner/shared-contracts';
+import type { ApiError, Entry, GitChange, GitProblemState } from '@front-burner/shared-contracts';
 import {
   ActivityBarComponent,
   ActivityBarItemComponent,
@@ -60,6 +60,7 @@ import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 import { ancestors, fileName } from '../../utils/file-name/file-name';
+import { gitProblem } from '../../utils/git-problem/git-problem';
 
 /** A larger count shows as `99+`; the item's accessible name says it in full. */
 const MAX_BADGE_COUNT = 99;
@@ -100,7 +101,8 @@ const MAX_BADGE_COUNT = 99;
  * **Discard** runs through `DiscardService` (GA-23); it ends the diff of a file it
  * discards. **Push** in the bar runs through `NetworkJobService` (GA-29), and why a push
  * failed is shown below the bar (NV-16), as is the locked-key banner of
- * `LockedKeyService` (RC-15).
+ * `LockedKeyService` (RC-15). The bar also shows, quietly, why background fetches
+ * aren't working (GA-35, RC-6), which stays when the banner is dismissed.
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -402,6 +404,11 @@ export class RepositoryScreenPage {
   /** The fix of a push or fetch problem (RC-4), through `CredentialFixesService`. */
   protected fixProblem(fix: GitProblem['fix']): void {
     void this.credentialFixes.run(fix);
+  }
+
+  /** The fix of the last fetch's problem, from the quiet fetch status in the bar (GA-35, RC-6). */
+  protected fixFetchProblem(problem: GitProblemState): void {
+    void this.credentialFixes.run(gitProblem(problem.code).fix, problem);
   }
 
   /**

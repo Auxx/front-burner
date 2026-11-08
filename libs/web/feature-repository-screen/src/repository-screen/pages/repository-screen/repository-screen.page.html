@@ -19,8 +19,12 @@
                            [gitStatus]="gitStatus.status()"
                            [saveStatus]="saveStatus()"
                            [running]="jobs.running()"
+                           [lockedKeyName]="lockedKey.key()?.name ?? null"
                            (fetch)="jobs.start('fetch')"
-                           (push)="jobs.start('push')" />
+                           (push)="jobs.start('push')"
+                           (retryFetch)="jobs.start('fetch')"
+                           (fixFetch)="fixFetchProblem($event)"
+                           (unlock)="lockedKey.unlock()" />
       } @else if (user(); as user) {
         <shell-app-header uiAppShellHeader
                           [user]="user" />

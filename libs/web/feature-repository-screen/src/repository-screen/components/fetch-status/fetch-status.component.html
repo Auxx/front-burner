@@ -1,0 +1,58 @@
+<ng-container *transloco="let t">
+  @if (shown(); as shown) {
+    @let failed = t('web-feature-repository-screen.FetchStatusComponent.failed');
+    @let reason = t(shown.reasonKey, shown.params);
+    <ng-template #actions>
+      @if (shown.locked) {
+        <button uiButton
+                variant="ghost"
+                size="small"
+                (click)="chooseUnlock()">
+          {{ t('web-feature-repository-screen.GitProblemComponent.fixes.unlock') }}
+        </button>
+      } @else {
+        @if (shown.fix; as fix) {
+          <button uiButton
+                  variant="ghost"
+                  size="small"
+                  (click)="chooseFix()">
+            {{ t('web-feature-repository-screen.GitProblemComponent.fixes.' + fix) }}
+          </button>
+        }
+        <button uiButton
+                variant="ghost"
+                size="small"
+                (click)="chooseRetry()">
+          {{ t('web-feature-repository-screen.GitProblemComponent.fixes.retry') }}
+        </button>
+      }
+    </ng-template>
+    @if (narrow()) {
+      <button #trigger
+              uiIconButton
+              [label]="failed"
+              [uiPopoverTrigger]="details">
+        <ui-icon name="warning" />
+      </button>
+      <ui-popover #details="uiPopover"
+                  [label]="failed">
+        @if (details.open()) {
+          <p class="failed">{{ failed }}</p>
+          <p>{{ reason }}</p>
+          <div class="actions">
+            <ng-container [ngTemplateOutlet]="actions" />
+          </div>
+        }
+      </ui-popover>
+    } @else {
+      <ui-icon class="icon"
+               name="warning" />
+      <!-- Focusable while shortened, so that the keyboard reaches the whole text. -->
+      <span #tip="uiTruncatedTooltip"
+            class="text"
+            [uiTruncatedTooltip]="failed + ' ' + reason"
+            [attr.tabindex]="tip.truncated() ? 0 : null"><span class="failed">{{ failed }}</span>&ngsp;{{ reason }}</span>
+      <ng-container [ngTemplateOutlet]="actions" />
+    }
+  }
+</ng-container>

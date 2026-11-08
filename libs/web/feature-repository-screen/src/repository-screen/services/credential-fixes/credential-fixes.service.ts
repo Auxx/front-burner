@@ -1,5 +1,10 @@
 import { inject, Injectable } from '@angular/core';
-import { type ChangedHostKey, ChangedHostKeySchema, HostKeySchema } from '@front-burner/shared-contracts';
+import {
+  type ChangedHostKey,
+  ChangedHostKeySchema,
+  type GitProblemState,
+  HostKeySchema
+} from '@front-burner/shared-contracts';
 import { DialogService, ToastService } from '@front-burner/ui';
 import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
 import {
@@ -12,9 +17,10 @@ import {
 import { TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 
+import type { GitFix } from '../../utils/git-problem/git-problem';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { LockedKeyService } from '../locked-key/locked-key.service';
-import { type GitProblem, NetworkJobService } from '../network-job/network-job.service';
+import { NetworkJobService } from '../network-job/network-job.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 
 /**
@@ -31,7 +37,9 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
  * the job's error; once the new key is trusted, or on its **Try again**, the
  * operation runs again (RC-21, RC-22). A job that meets an unknown host, such as
  * after the user's known hosts were lost, asks to trust it as on the Add
- * repository page (AR-32), then runs again. Provided by the page.
+ * repository page (AR-32), then runs again. The quiet fetch status has no job
+ * to run again: it gives the problem to fix, and a fetch runs (GA-35, RC-6).
+ * Provided by the page.
  */
 @Injectable()
 export class CredentialFixesService {
@@ -45,27 +53,36 @@ export class CredentialFixesService {
   private readonly errorText = inject(ApiErrorTextService);
   private readonly transloco = inject(TranslocoService);
 
-  async run(fix: GitProblem['fix']): Promise<void> {
+  /**
+   * Runs `fix`, of the job problem in the banner, or of `problem`, the last
+   * fetch's as the status has it, which may be from before a reload.
+   */
+  async run(fix: GitFix, problem?: GitProblemState): Promise<void> {
+    const again = () => problem === undefined ? this.jobs.retry() : this.jobs.start('fetch');
+    const { params } = problem ?? this.jobs.problem() ?? {};
     switch (fix) {
       case 'retry':
-        return this.jobs.retry();
+        return again();
       case 'unlock':
         return this.jobs.unlockAndRetry();
       case 'add-credentials':
       case 'other-credentials':
-        return this.replaceCredentials({});
+        return this.replaceCredentials({}, again);
       case 'fix-credentials':
-        return this.replaceCredentials({ hint: 'refused-key', offerTokenUpdate: true });
+        return this.replaceCredentials({ hint: 'refused-key', offerTokenUpdate: true }, again);
       case 'review-host-key':
-        return this.reviewHostKey();
+        return this.reviewHostKey(params, again);
       case 'trust-host':
-        return this.trustHost();
+        return this.trustHost(params, again);
       default:
         return undefined;
     }
   }
 
-  private async replaceCredentials(options: Omit<RepositoryCredentialsDialogData, 'repository'>): Promise<void> {
+  private async replaceCredentials(
+    options: Omit<RepositoryCredentialsDialogData, 'repository'>,
+    again: () => Promise<void>
+  ): Promise<void> {
     const repository = this.session.repository();
     if (repository === null) {
       return;
@@ -82,11 +99,11 @@ export class CredentialFixesService {
     // The new credentials may be a locked key, for the banner. The push needs no wait for it: it asks
     // for a locked key's passphrase by itself (RC-17).
     void this.lockedKey.reread();
-    await this.jobs.retry();
+    await again();
   }
 
-  private async reviewHostKey(): Promise<void> {
-    const parsed = ChangedHostKeySchema.safeParse(this.jobs.problem()?.params);
+  private async reviewHostKey(params: unknown, again: () => Promise<void>): Promise<void> {
+    const parsed = ChangedHostKeySchema.safeParse(params);
     if (!parsed.success) {
       return;
     }
@@ -97,12 +114,12 @@ export class CredentialFixesService {
     const trusted = await firstValueFrom(ref.closed, { defaultValue: undefined }) === true;
     // Not after a switch to another repository while the dialog was open.
     if (trusted && this.store.followed() === repositoryId) {
-      await this.jobs.retry();
+      await again();
     }
   }
 
-  private async trustHost(): Promise<void> {
-    const parsed = HostKeySchema.safeParse(this.jobs.problem()?.params);
+  private async trustHost(params: unknown, again: () => Promise<void>): Promise<void> {
+    const parsed = HostKeySchema.safeParse(params);
     if (!parsed.success) {
       return;
     }
@@ -120,7 +137,7 @@ export class CredentialFixesService {
       return;
     }
     if (this.store.followed() === repositoryId) {
-      await this.jobs.retry();
+      await again();
     }
   }
 }

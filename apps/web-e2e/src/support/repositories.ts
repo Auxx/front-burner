@@ -93,3 +93,31 @@ export async function sshRepository(
   gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
   return { id, bare };
 }
+
+/**
+ * Another repository as `sshRepository` adds, after it, with the same saved key
+ * `laptop`, which another session of the admin unlocks to add it. The server's
+ * host key is trusted by then.
+ */
+export async function sshRepositoryWithSameKey(
+  instance: { url: string; dataDir: string; },
+  ssh: GitSshServer,
+  remotes: Record<string, string>,
+  parent: string
+): Promise<{ id: number; bare: string; }> {
+  const name = basename(parent);
+  mkdirSync(parent, { recursive: true });
+  const bare = createHandbookRemote(parent);
+  remotes[`${name}.git`] = bare;
+  const authToken = await adminAuthToken(instance.url);
+  const unlocked = await api(instance.url, authToken, 'POST', '/api/v1/credentials/ssh-keys/1/unlock', {
+    passphrase: PROTECTED_KEY_PASSPHRASE
+  });
+  expect(unlocked.status).toBeLessThan(300);
+  const { id } = await addOverApi(instance, {
+    name,
+    remoteUrl: ssh.url(`${name}.git`),
+    credentials: { mode: 'saved', credentialId: 1 }
+  }, authToken);
+  return { id, bare };
+}

@@ -55,6 +55,7 @@ const unknownHostParams = {
 
 describe('CredentialFixesService', () => {
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
+  let fetch: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let open: ReturnType<typeof vi.fn>;
   let closed: Subject<boolean | undefined>;
@@ -89,6 +90,7 @@ describe('CredentialFixesService', () => {
 
   beforeEach(() => {
     push = vi.fn(() => of({ jobId: 7 }));
+    fetch = vi.fn(() => of({ jobId: 8 }));
     gitJob = vi.fn(() => of(failed('remote-failed')));
     closed = new Subject();
     open = vi.fn(() => ({ closed }));
@@ -101,7 +103,7 @@ describe('CredentialFixesService', () => {
       providers: [
         CredentialFixesService,
         NetworkJobService,
-        { provide: GitApi, useValue: { push, gitJob } },
+        { provide: GitApi, useValue: { push, fetch, gitJob } },
         { provide: PushChannelService, useValue: { events: new Subject<PushEvent>(), reconnected: new Subject() } },
         {
           provide: GitStatusStore,
@@ -116,6 +118,61 @@ describe('CredentialFixesService', () => {
     });
     pushes = TestBed.inject(NetworkJobService);
     service = TestBed.inject(CredentialFixesService);
+  });
+
+  describe('a problem of the last fetch, which no job here has shown', () => {
+    const running = async (run: Promise<void>, result: boolean | undefined) => {
+      await settle();
+      closed.next(result);
+      closed.complete();
+      await run;
+      await settle();
+    };
+
+    it('reviews the host key from the problem, and fetches once it is trusted', async () => {
+      gitJob.mockReturnValue(of({ status: 'done', outcome: { kind: 'fetched', moved: false, upstreamMoved: false } }));
+
+      await running(service.run('review-host-key', { code: 'host-key-changed', params: changedKeyParams }), true);
+
+      expect(open).toHaveBeenCalledExactlyOnceWith(ChangedHostKeyDialog, { data: { ...changedKeyParams, port: 2222 } });
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it('fetches after new credentials were saved, and not after Cancel', async () => {
+      gitJob.mockReturnValue(of({ status: 'done', outcome: { kind: 'fetched', moved: false, upstreamMoved: false } }));
+      const problem = { code: 'credentials-refused', params: {} };
+
+      await running(service.run('fix-credentials', problem), undefined);
+      expect(fetch).not.toHaveBeenCalled();
+
+      closed = new Subject();
+      await running(service.run('fix-credentials', problem), true);
+      expect(open).toHaveBeenLastCalledWith(RepositoryCredentialsDialog, {
+        data: { repository: handbook, hint: 'refused-key', offerTokenUpdate: true }
+      });
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+    });
+
+    it('trusts the host from the problem, and fetches', async () => {
+      gitJob.mockReturnValue(of({ status: 'done', outcome: { kind: 'fetched', moved: false, upstreamMoved: false } }));
+
+      await running(service.run('trust-host', { code: 'host-key-unknown', params: unknownHostParams }), true);
+
+      expect(open).toHaveBeenCalledWith(TrustHostDialog, expect.anything());
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+    });
+
+    it('fixes the given problem, not the failed push in the banner', async () => {
+      await failedPush('host-key-changed', { ...changedKeyParams, host: 'push.example.com' });
+      gitJob.mockReturnValue(of({ status: 'done', outcome: { kind: 'fetched', moved: false, upstreamMoved: false } }));
+
+      await running(service.run('review-host-key', { code: 'host-key-changed', params: changedKeyParams }), true);
+
+      expect(open).toHaveBeenCalledWith(ChangedHostKeyDialog, { data: { ...changedKeyParams, port: 2222 } });
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(push).toHaveBeenCalledOnce();
+    });
   });
 
   it('Add credentials opens the dialog, and the push runs again after saving', async () => {
