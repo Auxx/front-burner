@@ -104,10 +104,12 @@ handled by [REQ-REPO-002](repo-credentials.md).
 
   On narrow screens the counts stay visible and the three buttons move into a
   menu. _(My call.)_
-- **GA-8** **Pull** is offered when the branch has an upstream. **Push** is
-  offered when there is something to push or the branch is unpublished.
-  Otherwise they are shown disabled, with the reason available on hover, focus
-  or tap.
+- **GA-8** **Pull** is offered when the branch has an upstream, and also for an
+  unpublished branch when the remote has a branch of its name, as after a push
+  that the remote rejected (GA-30); that pull makes the remote branch the
+  upstream. _(My call.)_ **Push** is offered when there is something to push or
+  the branch is unpublished. Otherwise they are shown disabled, with the reason
+  available on hover, focus or tap.
 - **GA-9** While a fetch, pull or push runs, its button shows progress and the
   others that would conflict with it are disabled.
 
@@ -221,7 +223,8 @@ handled by [REQ-REPO-002](repo-credentials.md).
   becomes its upstream. No tags are pushed.
 - **GA-30** A push is never forced. When the remote rejects it because the
   upstream has commits that the branch does not have, the push says "The remote
-  has new commits. Pull first." with **Pull**.
+  has new commits. Pull first." with **Pull**. Such a push then fetches, so that
+  the remote branch and the counts are known. _(My call.)_
 - **GA-31** When the remote rejects a push for another reason — for example a
   protected branch, a server hook, or unsigned commits (CA-15) — the push says
   so in plain words where it can, and shows the remote's own messages (the

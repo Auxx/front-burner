@@ -1964,6 +1964,24 @@ describe('GitEngine', () => {
         );
       });
 
+      it('keeps the refspec of a rejected push in a single-branch clone', async () => {
+        await cloneIt('single-branch');
+        // The remote has a branch named like the user's unpublished one, which the clone does not fetch.
+        const theirs = git(bare(), 'commit-tree', 'main^{tree}', '-p', 'main', '-m', 'their topic').trim();
+        git(bare(), 'branch', 'topic', theirs);
+        git(work(), 'checkout', '-q', '-b', 'topic');
+        commitIn('topic work');
+
+        const failure = await failureOf(push({ branch: 'topic', singleBranch: true }));
+
+        expect(failure.code).toBe('push-non-fast-forward');
+        // The remote branch exists, so the next fetch gets it, and Pull has something to merge (GA-30, GA-41).
+        expect(git(work(), 'config', '--get-all', 'remote.origin.fetch').trim().split('\n')).toEqual([
+          '+refs/heads/main:refs/remotes/origin/main',
+          '+refs/heads/topic:refs/remotes/origin/topic'
+        ]);
+      });
+
       it('does not report a config it cannot read as unsafe', async () => {
         await cloneIt();
         commitIn('third');

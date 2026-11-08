@@ -22,6 +22,18 @@ describe('GitJobStateSchema', () => {
     expect(GitJobStateSchema.parse(refused)).toEqual(refused);
   });
 
+  it('parses each result of a pull, and refuses another', () => {
+    for (const result of [ 'up-to-date', 'fast-forward', 'merged', 'conflicted' ]) {
+      const pulled = { status: 'done', outcome: { kind: 'pulled', result, commits: 2, upstream: 'origin/main' } };
+      expect(GitJobStateSchema.parse(pulled)).toEqual(pulled);
+    }
+    const rebased = {
+      status: 'done',
+      outcome: { kind: 'pulled', result: 'rebased', commits: 2, upstream: 'origin/main' }
+    };
+    expect(GitJobStateSchema.safeParse(rebased).success).toBe(false);
+  });
+
   it('refuses an unknown status and an outcome of an unknown kind', () => {
     expect(GitJobStateSchema.safeParse({ status: 'paused', outcome: null }).success).toBe(false);
     expect(GitJobStateSchema.safeParse({ status: 'done', outcome: { kind: 'pulled' } }).success).toBe(false);
@@ -31,6 +43,7 @@ describe('GitJobStateSchema', () => {
 describe('GitNetworkJobSchema', () => {
   it('parses a push', () => {
     expect(GitNetworkJobSchema.parse({ id: 4, type: 'push' })).toEqual({ id: 4, type: 'push' });
+    expect(GitNetworkJobSchema.parse({ id: 5, type: 'pull' })).toEqual({ id: 5, type: 'pull' });
     expect(GitNetworkJobSchema.safeParse({ id: 4, type: 'clone' }).success).toBe(false);
   });
 });

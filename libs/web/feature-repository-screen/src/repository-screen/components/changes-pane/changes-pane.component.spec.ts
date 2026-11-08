@@ -20,6 +20,7 @@ function statusOf(changes: GitChange[]): GitStatus {
     noCommits: false,
     upstream: null,
     upstreamGone: false,
+    sameNameRemote: false,
     ahead: 0,
     behind: 0,
     changes,

@@ -10,7 +10,10 @@ export interface WorkingCopyStatus {
   branch: string | null;
   /** With no commit yet, `branch` is `main`, whatever `HEAD` names (GA-42). */
   noCommits: boolean;
-  /** For example `origin/main`; `null` for an unpublished branch. */
+  /**
+   * For example `origin/main`, also when a local branch or tag of that name
+   * exists; `null` for an unpublished branch.
+   */
   upstream: string | null;
   /**
    * The upstream does not exist as of the last fetch: the remote was empty when
@@ -74,7 +77,9 @@ export function parseStatus(stdout: string): WorkingCopyStatus {
     } else if (record.startsWith('# branch.head ')) {
       head = record.slice('# branch.head '.length);
     } else if (record.startsWith('# branch.upstream ')) {
-      upstream = record.slice('# branch.upstream '.length);
+      // git shortens the name only while it is unambiguous: with a local branch or tag named
+      // `origin/main`, it prints `remotes/origin/main`, or `refs/remotes/origin/main`.
+      upstream = record.slice('# branch.upstream '.length).replace(/^(refs\/)?remotes\//, '');
     } else if (record.startsWith('# branch.ab ')) {
       // Absent when the upstream is gone; `+? -?` when git could not count.
       counted = true;

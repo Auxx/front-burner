@@ -11,6 +11,8 @@ import { GitController } from './git/git.controller';
 import { GitJobs } from './jobs/git-jobs.service';
 import { JobCredentials } from './jobs/job-credentials.service';
 import { NetworkJobs } from './jobs/network-jobs.service';
+import { PullJob } from './pull/pull.job';
+import { PullService } from './pull/pull.service';
 import { PushJob } from './push/push.job';
 import { PushService } from './push/push.service';
 import { SyncStateStore } from './state/sync-state.store';
@@ -32,6 +34,8 @@ import { SyncStateStore } from './state/sync-state.store';
     FetchService,
     FetchJob,
     FetchScheduler,
+    PullService,
+    PullJob,
     SyncStateStore
   ]
 })

@@ -65,6 +65,11 @@ const OPERATIONS: Readonly<Record<GitNetworkJobType, Operation>> = {
       }
       return { key: `${KEY}.${outcome.moved ? 'noChangesReceived' : 'noNewCommits'}`, params: {} };
     }
+  },
+  pull: {
+    start: (api, repositoryId) => api.pull(repositoryId),
+    // The client's Pull comes with its notices (GA-28) in a later plan; another tab's pull is followed meanwhile.
+    succeeded: () => null
   }
 };
 

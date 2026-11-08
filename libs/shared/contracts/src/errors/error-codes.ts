@@ -65,6 +65,21 @@ export const ERROR_CODES = [
   'no-commits',
   /** 409; the upstream has every commit of the branch (GA-8). */
   'nothing-to-push',
+  /**
+   * 409; no upstream to pull from: no commits, an upstream that is gone, or an
+   * unpublished branch without a remote branch of its name (GA-8).
+   */
+  'no-upstream',
+  /** 409; the working copy has uncommitted changes, so a pull does not start (GA-26). */
+  'uncommitted-changes',
+  // How a pull job ended, besides the codes above and `merge-in-progress` and `commit-author-not-confirmed`.
+  /** The current branch is not the one the pull was asked for; params `{ branch }`, the one asked for. */
+  'branch-changed',
+  /**
+   * The merge would overwrite files that git does not track, such as ignored
+   * ones; params `{ paths }`, one per line.
+   */
+  'merge-blocked',
   // How a push job ended; params as named, and `branch` (GA-30, GA-31, RC-4, RC-5, CA-15).
   /** The remote needs credentials and the repository has none (RC-4). */
   'no-credentials',

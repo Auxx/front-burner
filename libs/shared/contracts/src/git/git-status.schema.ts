@@ -47,6 +47,12 @@ export const GitStatusSchema = z
      * creates it again (GA-8).
      */
     upstreamGone: z.boolean(),
+    /**
+     * The branch is unpublished and has commits, and the remote has a branch of
+     * its name as of the last fetch: **Pull** merges that branch and makes it
+     * the upstream (GA-8, GA-30).
+     */
+    sameNameRemote: z.boolean(),
     /** **To push**, as of the last fetch. */
     ahead: z.number().int().min(0),
     /** **To pull**, as of the last fetch. */
@@ -56,7 +62,7 @@ export const GitStatusSchema = z
     mergeInProgress: z.boolean(),
     /** `null` without commits. */
     lastCommit: GitLastCommitSchema.nullable(),
-    /** The unfinished push or fetch, or `null` (GA-9). */
+    /** The unfinished push, fetch or pull, or `null` (GA-9). */
     networkJob: GitNetworkJobSchema.nullable(),
     /**
      * Why the last fetch failed, with what its text needs, such as the host;

@@ -9,6 +9,7 @@ function status(changes: Partial<GitStatus> = {}): GitStatus {
     lastCommit: null,
     upstream: 'origin/main',
     upstreamGone: false,
+    sameNameRemote: false,
     ahead: 2,
     behind: 0,
     changes: [],
