@@ -115,10 +115,20 @@ export class GitMerge {
    * the commit, holds the working-tree lock and knows the working copy is clean
    * (GA-26).
    *
+   * The remote-tracking branch is read once, from its full name, and git merges
+   * that commit: a background fetch moves the ref under the network lock only,
+   * and the checks must hold for the commit that is merged. git then labels a
+   * file's `>>>>>>>` with the commit's id, which only files that are not
+   * Markdown keep.
+   *
+   * Anything thrown after git ran, a timeout or a failure while preparing the
+   * conflicts, may leave the merge in progress (`MERGE_HEAD`) or cut short, so
+   * the caller undoes it (`undoCutShort`).
+   *
    * @throws GitOperationError `merge-blocked`, before anything has changed, when
-   *   the merge would write where a file or folder that git does not track is;
-   *   `timeout`, after which the caller undoes the merge (`undoCutShort`);
-   *   `failed` when git stopped for another reason.
+   *   the merge would write where a file or folder that git does not track is,
+   *   or a new path is not valid UTF-8 and cannot be checked;
+   *   `timeout`; `failed` when git stopped for another reason.
    */
   async merge(workingCopy: string, request: MergeRequest): Promise<MergeResult> {
     const ref = remoteRef(request.upstream);
@@ -157,7 +167,8 @@ export class GitMerge {
         '--no-gpg-sign',
         '-m',
         mergeMessage(request),
-        ref
+        // The commit the checks saw, not the ref, which a fetch may have moved since.
+        oid
       ],
       {
         timeoutMs,
@@ -251,6 +262,9 @@ export class GitMerge {
       await this.local.checked(workingCopy, [ 'update-index', '--force-remove', '-z', '--stdin' ], {
         stdin: nulTerminated(baseOnly)
       });
+      // The removal records them as resolved, and resolved files are read from
+      // there; straight after the merge, nothing else is.
+      await this.local.checked(workingCopy, [ 'update-index', '--clear-resolve-undo' ]);
     }
     await inBatches(
       entries.filter(entry => !isBaseOnly(entry) && isMarkdownName(entry[0].split('/').at(-1) ?? '')),
@@ -359,6 +373,13 @@ export class GitMerge {
         { timeoutMs }
       )
     ).split('\0').filter(path => path !== '');
+    // Decoded, such a name is not the one on disk, so what is there cannot be checked.
+    const undecodable = added.filter(path => path.includes(UNDECODABLE));
+    if (undecodable.length > 0) {
+      throw new GitOperationError('merge-blocked', 'The merge would add paths that are not valid UTF-8.', {
+        paths: undecodable.slice(0, MAX_BLOCKING_PATHS).join('\n')
+      });
+    }
     const entries = new Map<string, ReturnType<typeof lstatOrMissing>>();
     const entryAt = (path: string) => {
       let entry = entries.get(path);

@@ -16,7 +16,7 @@ import type { GitOptions } from '../git.options';
 import { GitRunner } from '../runner/git-runner';
 import { GitOperationError } from './git-errors';
 import { GitMerge } from './git-merge';
-import { LocalGit } from './local-git';
+import { LocalGit, LocalRunOptions } from './local-git';
 
 const REF = 'refs/front-burner/pre-merge';
 
@@ -312,7 +312,10 @@ describe('GitMerge', () => {
 
       // git's own markers, in the plain style.
       expect(readFileSync(join(work, 'latin.md'))).toEqual(
-        Buffer.from(`<<<<<<< HEAD\nm\xefne\n=======\nth\xe9irs\n>>>>>>> ${UPSTREAM}\n`, 'latin1')
+        Buffer.from(
+          `<<<<<<< HEAD\nm\xefne\n=======\nth\xe9irs\n>>>>>>> ${git(work, 'rev-parse', UPSTREAM)}\n`,
+          'latin1'
+        )
       );
       expect(git(work, 'ls-files', '-u', '--', 'link.md').split('\n').map(line => line.split(' ')[0])).toEqual([
         '120000',
@@ -358,9 +361,10 @@ describe('GitMerge', () => {
 
       expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
 
-      // Not Markdown: nothing shows its markers, so they stay git's (GC-15).
+      // Not Markdown: nothing shows its markers, so they stay git's (GC-15),
+      // labelled with the commit that was merged.
       expect(readFileSync(join(work, 'notes.txt'), 'utf8')).toBe(
-        `<<<<<<< HEAD\nmine\n=======\ntheirs\n>>>>>>> ${UPSTREAM}\n`
+        `<<<<<<< HEAD\nmine\n=======\ntheirs\n>>>>>>> ${git(work, 'rev-parse', UPSTREAM)}\n`
       );
       expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe(
         '<<<<<<< main\nmine\n=======\ntheirs\n>>>>>>> origin/main\n'
@@ -515,6 +519,58 @@ describe('GitMerge', () => {
         'mine.md',
         'theirs.md'
       ]);
+      // Not a resolved file either.
+      expect(git(work, 'ls-files', '--resolve-undo')).toBe('');
+    });
+
+    it('merges the commit the checks saw, also when a fetch moves the branch meanwhile', async () => {
+      onUpstream(() => write('first.md', 'checked\n'));
+      const checked = git(work, 'rev-parse', UPSTREAM);
+      onUpstream(() => {
+        write('ignored.log', 'theirs\n');
+        git(work, 'add', '-f', 'ignored.log');
+      });
+      const moved = git(work, 'rev-parse', UPSTREAM);
+      git(work, 'update-ref', UPSTREAM, checked);
+      write('ignored.log', 'keep me\n');
+      // A fetch moves the branch just as git starts to merge.
+      class FetchingLocalGit extends LocalGit {
+        override run(cwd: string, args: string[], options?: LocalRunOptions) {
+          if (args.includes('merge')) {
+            git(work, 'update-ref', UPSTREAM, moved);
+          }
+          return super.run(cwd, args, options);
+        }
+      }
+      const racing = new GitMerge(new FetchingLocalGit(new GitRunner()), { gitTimeoutMs: 60_000 } as GitOptions);
+
+      expect(await racing.merge(work, request)).toEqual({ kind: 'fast-forward', commits: 1 });
+
+      expect(head()).toBe(checked);
+      expect(git(work, 'rev-parse', UPSTREAM)).toBe(moved);
+      expect(readFileSync(join(work, 'ignored.log'), 'utf8')).toBe('keep me\n');
+    });
+
+    it('a new path that is not valid UTF-8 stops the merge', async () => {
+      const blob = git(work, 'hash-object', '-w', 'first.md');
+      const tree = execFileSync('git', [ 'mktree', '-z' ], {
+        cwd: work,
+        env: gitEnv,
+        input: Buffer.concat([
+          Buffer.from(git(work, 'ls-tree', '-z', 'HEAD').replace(/\0$/, '') + '\0'),
+          Buffer.from(`100644 blob ${blob}\tcaf`),
+          Buffer.from([ 0xe9 ]),
+          Buffer.from('.md\0')
+        ])
+      }).toString().trim();
+      git(work, 'update-ref', UPSTREAM, git(work, 'commit-tree', tree, '-p', 'HEAD', '-m', 'latin-1 name'));
+      const before = head();
+
+      const failure = await failureOf(merge.merge(work, request));
+
+      expect(failure.code).toBe('merge-blocked');
+      expect(failure.params).toEqual({ paths: 'caf�.md' });
+      expect(head()).toBe(before);
     });
 
     it('knows when a merge commit is needed', async () => {
