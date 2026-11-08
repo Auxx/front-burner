@@ -1229,7 +1229,7 @@ describe('RepositoryScreenPage', () => {
 
     describe('pushing', () => {
       const pushButton = () => page().querySelector('rs-repository-bar rs-push-button button') as HTMLButtonElement;
-      const problem = () => page().querySelector('rs-push-problem');
+      const problem = () => page().querySelector('rs-git-problem');
 
       it('pushes from the bar and shows it running', async () => {
         await visit('/repositories/12');

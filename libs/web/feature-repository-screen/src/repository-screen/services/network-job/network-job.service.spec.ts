@@ -11,7 +11,7 @@ import { translocoTesting } from '../../../testing/transloco-testing';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { LockedKeyService } from '../locked-key/locked-key.service';
 import { OpenFilesService } from '../open-files/open-files.service';
-import { JOB_RETRY_MS, PushService } from './push.service';
+import { JOB_RETRY_MS, NetworkJobService } from './network-job.service';
 
 const RUNNING: GitJobState = { status: 'running', outcome: null };
 const PUSHED: GitJobState = { status: 'done', outcome: { kind: 'pushed', commits: 2, upstream: 'origin/main' } };
@@ -40,7 +40,7 @@ function refused(code: string, params: Record<string, unknown> = {}): HttpErrorR
   return new HttpErrorResponse({ status: 409, error: { code, params, message: code, requestId: 'r' } });
 }
 
-describe('PushService', () => {
+describe('NetworkJobService', () => {
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let events: Subject<PushEvent>;
@@ -51,7 +51,7 @@ describe('PushService', () => {
   let toast: { show: ReturnType<typeof vi.fn>; };
   let flushAll: ReturnType<typeof vi.fn>;
   let unlock: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
-  let service: PushService;
+  let service: NetworkJobService;
 
   const settle = async () => {
     TestBed.tick();
@@ -75,11 +75,11 @@ describe('PushService', () => {
       imports: [
         translocoTesting({
           // The test module has no ICU transpiler; en.json's plural is checked by the web application.
-          'web-feature-repository-screen.PushService.pushed': 'Pushed {{ count }} commits to {{ upstream }}'
+          'web-feature-repository-screen.NetworkJobService.pushed': 'Pushed {{ count }} commits to {{ upstream }}'
         })
       ],
       providers: [
-        PushService,
+        NetworkJobService,
         { provide: GitApi, useValue: { push, gitJob } },
         { provide: PushChannelService, useValue: { events, reconnected } },
         { provide: GitStatusStore, useValue: { followed, status: gitStatus, refresh } },
@@ -88,36 +88,36 @@ describe('PushService', () => {
         { provide: ToastService, useValue: toast }
       ]
     });
-    service = TestBed.inject(PushService);
+    service = TestBed.inject(NetworkJobService);
   });
 
   afterEach(() => vi.useRealTimers());
 
   it('starts a push and follows its job', async () => {
-    await service.start();
+    await service.start('push');
     await settle();
 
     expect(push).toHaveBeenCalledExactlyOnceWith(12);
     expect(gitJob).toHaveBeenCalledWith(12, 7);
-    expect(service.running()).toBe(true);
+    expect(service.running()).toBe('push');
 
-    await service.start();
+    await service.start('push');
     expect(push).toHaveBeenCalledOnce();
   });
 
   it('shows the outcome after job.finished', async () => {
-    await service.start();
+    await service.start('push');
     await settle();
     gitJob.mockReturnValue(of(PUSHED));
 
     finished(8);
     await settle();
-    expect(service.running()).toBe(true);
+    expect(service.running()).toBe('push');
 
     finished();
     await settle();
 
-    expect(service.running()).toBe(false);
+    expect(service.running()).toBeNull();
     expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       message: 'Pushed 2 commits to origin/main',
       status: 'success'
@@ -128,12 +128,13 @@ describe('PushService', () => {
   it('shows a failure as a problem, with its message and fix', async () => {
     gitJob.mockReturnValue(of(failed('credentials-refused', { branch: 'main', remoteMessages: 'denied' })));
 
-    await service.start();
+    await service.start('push');
     await settle();
 
-    expect(service.running()).toBe(false);
+    expect(service.running()).toBeNull();
     expect(toast.show).not.toHaveBeenCalled();
     expect(service.problem()).toEqual({
+      operation: 'push',
       code: 'credentials-refused',
       params: { branch: 'main', remoteMessages: 'denied' },
       messageKey: 'errors.credentials-refused',
@@ -143,7 +144,7 @@ describe('PushService', () => {
   });
 
   it('reads the job again after a reconnect', async () => {
-    await service.start();
+    await service.start('push');
     await settle();
     gitJob.mockReturnValue(of(PUSHED));
 
@@ -151,22 +152,22 @@ describe('PushService', () => {
     reconnected.next();
     await settle();
 
-    expect(service.running()).toBe(false);
+    expect(service.running()).toBeNull();
     expect(toast.show).toHaveBeenCalledOnce();
   });
 
   it('reads a job whose state could not be read again later', async () => {
-    await service.start();
+    await service.start('push');
     await settle();
     gitJob.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
     finished();
     await settle();
-    expect(service.running()).toBe(true);
+    expect(service.running()).toBe('push');
 
     gitJob.mockReturnValue(of(PUSHED));
     await vi.advanceTimersByTimeAsync(JOB_RETRY_MS);
 
-    expect(service.running()).toBe(false);
+    expect(service.running()).toBeNull();
   });
 
   it('takes up a running push from the status', async () => {
@@ -174,13 +175,13 @@ describe('PushService', () => {
     await settle();
 
     expect(gitJob).toHaveBeenCalledWith(12, 9);
-    expect(service.running()).toBe(true);
+    expect(service.running()).toBe('push');
 
     gitJob.mockReturnValue(of(PUSHED));
     finished(9);
     await settle();
 
-    expect(service.running()).toBe(false);
+    expect(service.running()).toBeNull();
     expect(refresh).toHaveBeenCalled();
     // Only the tab that started it says so.
     expect(toast.show).not.toHaveBeenCalled();
@@ -189,9 +190,9 @@ describe('PushService', () => {
   it('shows another tab\'s push as running, and its failure only quietly', async () => {
     gitStatus.set(status({ id: 9, type: 'push' }));
     await settle();
-    expect(service.running()).toBe(true);
+    expect(service.running()).toBe('push');
 
-    await service.start();
+    await service.start('push');
     expect(push).not.toHaveBeenCalled();
 
     gitJob.mockReturnValue(of(failed('push-non-fast-forward')));
@@ -201,9 +202,42 @@ describe('PushService', () => {
     expect(service.problem()).toEqual(expect.objectContaining({ code: 'push-non-fast-forward', quiet: true }));
   });
 
+  it('starts nothing while another job runs', async () => {
+    gitStatus.set(status({ id: 9, type: 'push' }));
+    await settle();
+    expect(service.running()).toBe('push');
+
+    await service.start('push');
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('starts nothing while a job is being started', async () => {
+    push.mockReturnValueOnce(new Subject<GitJobStarted>());
+    void service.start('push');
+    expect(service.running()).toBe('push');
+
+    await service.start('push');
+
+    expect(push).toHaveBeenCalledOnce();
+  });
+
+  it('retries the operation of a job taken up from the status', async () => {
+    gitStatus.set(status({ id: 9, type: 'push' }));
+    await settle();
+    gitJob.mockReturnValue(of(failed('remote-timeout')));
+    finished(9);
+    await settle();
+    expect(service.problem()).toEqual(expect.objectContaining({ operation: 'push', fix: 'retry', quiet: true }));
+    expect(push).not.toHaveBeenCalled();
+
+    await service.retry();
+
+    expect(push).toHaveBeenCalledExactlyOnceWith(12);
+  });
+
   it('does not take up a push again from a status read before it ended', async () => {
     gitJob.mockReturnValue(of(PUSHED));
-    await service.start();
+    await service.start('push');
     await settle();
     gitJob.mockClear();
 
@@ -211,16 +245,17 @@ describe('PushService', () => {
     await settle();
 
     expect(gitJob).not.toHaveBeenCalled();
-    expect(service.running()).toBe(false);
+    expect(service.running()).toBeNull();
   });
 
   it('shows a push the backend refused to start as a problem', async () => {
     push.mockReturnValue(throwError(() => refused('nothing-to-push')));
 
-    await service.start();
+    await service.start('push');
 
-    expect(service.running()).toBe(false);
+    expect(service.running()).toBeNull();
     expect(service.problem()).toEqual({
+      operation: 'push',
       code: 'nothing-to-push',
       params: {},
       messageKey: 'errors.nothing-to-push',
@@ -233,12 +268,12 @@ describe('PushService', () => {
   it('asks for the passphrase of a locked key, and pushes after the unlock without another press', async () => {
     push.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
 
-    await service.start();
+    await service.start('push');
     await settle();
 
     expect(unlock).toHaveBeenCalledOnce();
     expect(push).toHaveBeenCalledTimes(2);
-    expect(service.running()).toBe(true);
+    expect(service.running()).toBe('push');
     expect(service.problem()).toBeNull();
   });
 
@@ -246,24 +281,25 @@ describe('PushService', () => {
     unlock.mockResolvedValue(false);
     push.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
 
-    await service.start();
+    await service.start('push');
 
     expect(push).toHaveBeenCalledOnce();
-    expect(service.running()).toBe(false);
+    expect(service.running()).toBeNull();
     expect(service.problem()).toBeNull();
   });
 
   it('asks once per press: a key locked again at once shows the problem, with Unlock', async () => {
     push.mockReturnValue(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
 
-    await service.start();
+    await service.start('push');
 
     expect(unlock).toHaveBeenCalledOnce();
     expect(push).toHaveBeenCalledTimes(2);
     expect(service.problem()).toEqual({
+      operation: 'push',
       code: 'key-locked',
       params: { keyId: '3', keyName: 'laptop' },
-      messageKey: 'web-feature-repository-screen.pushProblem.key-locked',
+      messageKey: 'web-feature-repository-screen.gitProblem.key-locked',
       fix: 'unlock',
       quiet: false
     });
@@ -271,8 +307,9 @@ describe('PushService', () => {
 
   it('Unlock on the problem pushes again once the key is unlocked', async () => {
     push.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
-    unlock.mockResolvedValueOnce(false);
-    await service.start();
+    unlock.mockRejectedValueOnce(new Error('offline'));
+    await service.start('push');
+    expect(service.problem()).toMatchObject({ operation: 'push', fix: 'unlock' });
 
     await service.unlockAndRetry();
 
@@ -285,7 +322,7 @@ describe('PushService', () => {
     push.mockReturnValue(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
     unlock.mockRejectedValue(new Error('offline'));
 
-    await service.start();
+    await service.start('push');
     expect(service.problem()).toMatchObject({ code: 'key-locked', params: { keyId: '3', keyName: 'laptop' } });
 
     await service.unlockAndRetry();
@@ -295,8 +332,8 @@ describe('PushService', () => {
 
   it('clears a locked-key problem when the key is unlocked from the banner or another tab', async () => {
     push.mockReturnValue(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
-    unlock.mockResolvedValueOnce(false);
-    await service.start();
+    unlock.mockRejectedValueOnce(new Error('offline'));
+    await service.start('push');
     // Unlocked, but locked again at once: the problem shows, with Unlock.
     await service.unlockAndRetry();
     expect(service.problem()?.code).toBe('key-locked');
@@ -315,7 +352,7 @@ describe('PushService', () => {
       return true;
     });
 
-    await service.start();
+    await service.start('push');
 
     expect(push).toHaveBeenCalledOnce();
   });
@@ -323,7 +360,7 @@ describe('PushService', () => {
   it('offers Try again for a network failure, and retry pushes again', async () => {
     push.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 0 })));
 
-    await service.start();
+    await service.start('push');
     expect(service.problem()?.fix).toBe('retry');
 
     await service.retry();
@@ -332,7 +369,7 @@ describe('PushService', () => {
   });
 
   it('refreshes the status when a push ends', async () => {
-    await service.start();
+    await service.start('push');
     await settle();
     refresh.mockClear();
     gitJob.mockReturnValue(of(PUSHED));
@@ -344,7 +381,7 @@ describe('PushService', () => {
   });
 
   it('does not flush saves', async () => {
-    await service.start();
+    await service.start('push');
     await settle();
 
     expect(flushAll).not.toHaveBeenCalled();
@@ -352,7 +389,7 @@ describe('PushService', () => {
 
   it('forgets the push and its problem in another repository', async () => {
     push.mockReturnValueOnce(throwError(() => refused('push-rejected')));
-    await service.start();
+    await service.start('push');
     expect(service.problem()).not.toBeNull();
 
     followed.set(13);
@@ -363,12 +400,12 @@ describe('PushService', () => {
 
   it('clears an old failure when it takes up another tab\'s push', async () => {
     push.mockReturnValueOnce(throwError(() => refused('push-rejected')));
-    await service.start();
+    await service.start('push');
     expect(service.problem()).not.toBeNull();
 
     gitStatus.set(status({ id: 9, type: 'push' }));
     await settle();
-    expect(service.running()).toBe(true);
+    expect(service.running()).toBe('push');
     expect(service.problem()).toBeNull();
 
     gitJob.mockReturnValue(of(PUSHED));
@@ -382,24 +419,24 @@ describe('PushService', () => {
     const first = new Subject<GitJobStarted>();
     const second = new Subject<GitJobStarted>();
     push.mockReturnValueOnce(first).mockReturnValueOnce(second);
-    const started = service.start();
+    const started = service.start('push');
     followed.set(13);
     await settle();
-    void service.start();
+    void service.start('push');
     expect(push).toHaveBeenLastCalledWith(13);
 
     first.next({ jobId: 7 });
     first.complete();
     await started;
 
-    expect(service.running()).toBe(true);
-    await service.start();
+    expect(service.running()).toBe('push');
+    await service.start('push');
     expect(push).toHaveBeenCalledTimes(2);
   });
 
   it('clears the problem', async () => {
     push.mockReturnValueOnce(throwError(() => refused('push-rejected')));
-    await service.start();
+    await service.start('push');
 
     service.clearProblem();
 
