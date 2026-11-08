@@ -8,9 +8,16 @@ import { CheckboxComponent } from './checkbox.component';
 @Component({
   imports: [ CheckboxComponent, ChoiceComponent, FormField ],
   template: `
-    <label uiChoice><input type="checkbox" uiCheckbox [indeterminate]="mixed()" (change)="mixed.set(false)" /> All files</label>
-    <label uiChoice><input type="checkbox" uiCheckbox [formField]="model.understood" /> I understand</label>
-    <label uiChoice><input type="checkbox" uiCheckbox disabled /> Amend last commit</label>
+    <label uiChoice><input type="checkbox"
+                           uiCheckbox
+                           [indeterminate]="mixed()"
+                           (change)="mixed.set(false)" /> All files</label>
+    <label uiChoice><input type="checkbox"
+                           uiCheckbox
+                           [formField]="model.understood" /> I understand</label>
+    <label uiChoice><input type="checkbox"
+                           uiCheckbox
+                           disabled /> Amend last commit</label>
   `
 })
 class HostComponent {

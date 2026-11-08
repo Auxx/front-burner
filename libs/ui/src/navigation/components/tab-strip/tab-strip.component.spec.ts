@@ -36,8 +36,10 @@ class TabGroupHarness extends TabsHarness {
 @Component({
   imports: [ Dir, TabContentDirective, TabGroupDirective, TabStripComponent, TabComponent, TabPanelDirective ],
   template: `
-    <div uiTabGroup [dir]="direction()">
-      <ui-tab-strip label="Left pane" [(selected)]="selected">
+    <div uiTabGroup
+         [dir]="direction()">
+      <ui-tab-strip label="Left pane"
+                    [(selected)]="selected">
         <button uiTab="files">Files</button>
         <button uiTab="changes">Changes (3)</button>
       </ui-tab-strip>

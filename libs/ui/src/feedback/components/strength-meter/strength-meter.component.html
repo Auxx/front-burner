@@ -1,6 +1,8 @@
-<span class="track" aria-hidden="true">
+<span class="track"
+      aria-hidden="true">
   @for (segment of segments; track segment) {
-    <span class="segment" [attr.data-filled]="segment <= filled() || null"></span>
+    <span class="segment"
+          [attr.data-filled]="segment <= filled() || null"></span>
   }
 </span>
 @if (score() !== null) {

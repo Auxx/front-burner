@@ -10,11 +10,18 @@ import { ButtonComponent } from './button.component';
     <form (submit)="submits = submits + 1; $event.preventDefault()">
       <input aria-label="Name" />
       <button uiButton>Cancel</button>
-      <button uiButton variant="primary" type="submit">Add repository</button>
-      <button uiButton variant="danger" size="small" [disabled]="true">Remove</button>
-      <button uiButton wrap>Commit as a very long name</button>
+      <button uiButton
+              variant="primary"
+              type="submit">Add repository</button>
+      <button uiButton
+              variant="danger"
+              size="small"
+              [disabled]="true">Remove</button>
+      <button uiButton
+              wrap>Commit as a very long name</button>
     </form>
-    <a uiButton href="/repositories/new">Add repository</a>
+    <a uiButton
+       href="/repositories/new">Add repository</a>
   `
 })
 class HostComponent {
@@ -84,8 +91,13 @@ describe('ButtonComponent', () => {
 @Component({
   imports: [ ButtonComponent, IconComponent ],
   template: `
-    <button uiButton [busy]="busy()" [unavailable]="unavailable()" (click)="clicks = clicks + 1"><ui-icon name="repo-pull" />Pull</button>
-    <button uiButton unavailable (click)="clicks = clicks + 1">Push</button>
+    <button uiButton
+            [busy]="busy()"
+            [unavailable]="unavailable()"
+            (click)="clicks = clicks + 1"><ui-icon name="repo-pull" />Pull</button>
+    <button uiButton
+            unavailable
+            (click)="clicks = clicks + 1">Push</button>
   `
 })
 class BusyHostComponent {

@@ -184,6 +184,11 @@ export class EditorPaneComponent {
     const file = this.file();
     return file.largeOnNarrow && !file.highlight() && this.viewMode.editorShown();
   });
+  /** Whether any notice shows above the toolbar: a browser draft, a file gone or changed elsewhere, or the large file note. */
+  protected readonly noticesShown = computed(() => {
+    const file = this.file();
+    return Boolean(file.draft()) || file.gone() || file.changed() !== null || this.noteShown();
+  });
 
   constructor() {
     // The switch to the remembered mode at start is not the user's, so it keeps no place.

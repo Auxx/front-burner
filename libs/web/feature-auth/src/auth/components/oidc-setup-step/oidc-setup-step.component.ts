@@ -68,6 +68,12 @@ interface Setup {
 
 type TextField = Exclude<keyof Setup, 'requireVerifiedEmail'>;
 
+/** The text key of a field error, relative to the component's prefix, and its parameters. */
+interface FieldError {
+  key: string;
+  params: Record<string, unknown>;
+}
+
 /** The error codes each field has a text for; any other code gets the generic text. */
 const KNOWN_CODES: Record<TextField, readonly string[]> = {
   issuer: [
@@ -150,19 +156,16 @@ export class OidcSetupStepComponent {
   protected readonly loginFailure = linkedSignal(() => this.failure());
   protected readonly requestFailure = signal<{ text: string; reference: string | null; } | null>(null);
 
-  /** The key and parameters of a field's first error, once the field is touched (AR-6). */
-  protected error(name: TextField): { key: string; params: Record<string, unknown>; } | undefined {
-    const state = this.model[name]();
-    const error = state.touched() ? state.errors()[0] : undefined;
-    if (!error) {
-      return undefined;
-    }
-    const code = fieldErrorCode(error);
-    const params = (error as { params?: Record<string, unknown>; }).params ?? {};
-    return KNOWN_CODES[name].includes(code)
-      ? { key: `fieldErrors.${name}.${code}`, params }
-      : { key: 'fieldErrors.invalid', params };
-  }
+  /** Each text field's first error, once the field is touched (AR-6). */
+  protected readonly fieldErrors = computed(
+    (): Record<TextField, FieldError | undefined> => ({
+      issuer: this.fieldError('issuer'),
+      clientId: this.fieldError('clientId'),
+      clientSecret: this.fieldError('clientSecret'),
+      scopes: this.fieldError('scopes'),
+      adminEmail: this.fieldError('adminEmail')
+    })
+  );
 
   protected async copyRedirectUri(): Promise<void> {
     try {
@@ -228,6 +231,20 @@ export class OidcSetupStepComponent {
       this.requestFailure.set(this.errorText.describe(apiError));
     }
     return fieldErrors;
+  }
+
+  /** The key and parameters of a field's first error, once the field is touched. */
+  private fieldError(name: TextField): FieldError | undefined {
+    const state = this.model[name]();
+    const error = state.touched() ? state.errors()[0] : undefined;
+    if (!error) {
+      return undefined;
+    }
+    const code = fieldErrorCode(error);
+    const params = (error as { params?: Record<string, unknown>; }).params ?? {};
+    return KNOWN_CODES[name].includes(code)
+      ? { key: `fieldErrors.${name}.${code}`, params }
+      : { key: 'fieldErrors.invalid', params };
   }
 
   private fieldTree(path: string): FieldTree<string> | undefined {

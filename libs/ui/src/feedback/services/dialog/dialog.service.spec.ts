@@ -11,11 +11,15 @@ import { DialogService } from './dialog.service';
 @Component({
   imports: [ ButtonComponent, DialogComponent, DialogFooterComponent ],
   template: `
-    <ui-dialog heading="Unlock work-laptop" closeLabel="Close">
+    <ui-dialog heading="Unlock work-laptop"
+               closeLabel="Close">
       <label>Passphrase <input type="password" /></label>
       <div uiDialogFooter>
-        <button uiButton (click)="ref.close()">Cancel</button>
-        <button uiButton variant="primary" (click)="ref.close(data.answer)">Unlock</button>
+        <button uiButton
+                (click)="ref.close()">Cancel</button>
+        <button uiButton
+                variant="primary"
+                (click)="ref.close(data.answer)">Unlock</button>
       </div>
     </ui-dialog>
   `

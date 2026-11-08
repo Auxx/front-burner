@@ -6,6 +6,7 @@ import { FormHostComponent, hostWith } from '../../../../testing/form-host';
 import { choose, control, errorOf, field, radio, radioLabels } from '../../../../testing/form-testing';
 import { settle } from '../../../../testing/settle';
 import { translocoTesting } from '../../../../testing/transloco-testing';
+import { SubmitFailuresService } from '../../services/submit-failures/submit-failures.service';
 import { CredentialsSectionComponent } from '../credentials-section/credentials-section.component';
 
 const KEY = 'web-repository-dialogs.HttpsCredentialsComponent';
@@ -26,14 +27,17 @@ describe('HttpsCredentialsComponent', () => {
   const host = () => fixture.componentInstance;
 
   /** The section as the page shows it, for an HTTPS URL. */
-  async function open(credentials: SavedCredentials = { https: [], sshKeys: [] }): Promise<void> {
+  async function open(
+    credentials: SavedCredentials = { https: [], sshKeys: [] },
+    texts: Record<string, string> = {}
+  ): Promise<void> {
     hostWith(
       '<dlg-credentials-section [protocol]="protocol()" [credentials]="model.credentials" [saved]="shown()" />',
       [ CredentialsSectionComponent ]
     );
     await TestBed.configureTestingModule({
-      imports: [ FormHostComponent, translocoTesting() ],
-      providers: [ { provide: CredentialsApi, useValue: {} } ]
+      imports: [ FormHostComponent, translocoTesting(texts) ],
+      providers: [ { provide: CredentialsApi, useValue: {} }, SubmitFailuresService ]
     }).compileComponents();
     fixture = TestBed.createComponent(FormHostComponent);
     host().saved.set(credentials);
@@ -88,5 +92,25 @@ describe('HttpsCredentialsComponent', () => {
     expect(page().querySelectorAll('ui-field')).toHaveLength(0);
     expect(page().textContent).toContain(`${KEY}.noneHint`);
     expect(host().model.credentials().invalid()).toBe(false);
+  });
+
+  it('shows the backend\'s failures on their fields, with their parameters', async () => {
+    await open(saved, { [`${ERRORS}.credentials.name.too-big`]: 'At most {{ maximum }} characters' });
+    TestBed.inject(SubmitFailuresService).record([
+      { path: 'credentials.savedId', key: 'credentials.savedId.required', params: {} },
+      { path: 'credentials.name', key: 'credentials.name.too-big', params: { maximum: 100 } },
+      { path: 'credentials.username', key: 'credentials.username.too-big', params: {} },
+      { path: 'credentials.password', key: 'credentials.password.too-big', params: {} }
+    ]);
+    await settle(fixture);
+
+    expect(errorOf(page(), `${KEY}.saved`)).toBe(`${ERRORS}.credentials.savedId.required`);
+
+    choose(page(), `${KEY}.choices.new-https`);
+    await settle(fixture);
+
+    expect(errorOf(page(), `${KEY}.name`)).toBe('At most 100 characters');
+    expect(errorOf(page(), `${KEY}.username`)).toBe(`${ERRORS}.credentials.username.too-big`);
+    expect(errorOf(page(), `${KEY}.password`)).toBe(`${ERRORS}.credentials.password.too-big`);
   });
 });

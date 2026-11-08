@@ -2,21 +2,36 @@
   <main>
     <ui-centred-island width="24rem">
       <h1 tabindex="-1">{{ t('title') }}</h1>
-      <form novalidate (submit)="submit($event)">
-        <ui-field [label]="t('email')" [error]="errorKey('email') ? t('errors.' + errorKey('email')) : undefined">
-          <input uiInput type="email" autocomplete="username" spellcheck="false" [formField]="model.email" />
+      <form novalidate
+            (submit)="submit($event)">
+        @let errors = fieldErrors();
+        <ui-field [label]="t('email')"
+                  [error]="errors.email ? t('errors.' + errors.email) : undefined">
+          <input uiInput
+                 type="email"
+                 autocomplete="username"
+                 spellcheck="false"
+                 [formField]="model.email" />
         </ui-field>
-        <ui-field
-          [label]="t('password')"
-          [error]="errorKey('password') ? t('errors.' + errorKey('password')) : undefined"
-        >
-          <input uiInput #password type="password" autocomplete="current-password" [formField]="model.password" />
-          <button uiIconButton [uiPasswordReveal]="password" [label]="t('showPassword')">
+        <ui-field [label]="t('password')"
+                  [error]="errors.password ? t('errors.' + errors.password) : undefined">
+          <input uiInput
+                 #password
+                 type="password"
+                 autocomplete="current-password"
+                 [formField]="model.password" />
+          <button uiIconButton
+                  [uiPasswordReveal]="password"
+                  [label]="t('showPassword')">
             <ui-icon name="eye" />
           </button>
         </ui-field>
         <div class="actions">
-          <button uiButton variant="primary" type="submit" [busy]="busy()" [unavailable]="model().invalid()">
+          <button uiButton
+                  variant="primary"
+                  type="submit"
+                  [busy]="busy()"
+                  [unavailable]="model().invalid()">
             {{ t('submit') }}
           </button>
         </div>
@@ -25,7 +40,9 @@
         @case ('available') {
           <div class="oidc">
             <ui-divider>{{ t('or') }}</ui-divider>
-            <a uiButton [href]="oidcStart" (click)="rememberReturn()">{{ t('oidc') }}</a>
+            <a uiButton
+               [href]="oidcStart"
+               (click)="rememberReturn()">{{ t('oidc') }}</a>
           </div>
         }
         @case ('unavailable') {
@@ -37,7 +54,8 @@
       }
 
       @if (failure(); as failure) {
-        <ui-inline-banner uiCentredIslandAfter status="danger">
+        <ui-inline-banner uiCentredIslandAfter
+                          status="danger">
           {{ failure.text }}
           @if (failure.reference) {
             <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
@@ -45,17 +63,21 @@
         </ui-inline-banner>
       }
       @if (message(); as message) {
-        <ui-inline-banner uiCentredIslandAfter status="info">{{ t('messages.' + message) }}</ui-inline-banner>
+        <ui-inline-banner uiCentredIslandAfter
+                          status="info">{{ t('messages.' + message) }}</ui-inline-banner>
       }
       @if (oidcError; as reason) {
-        <ng-container *transloco="let root" ngProjectAs="[uiCentredIslandAfter]">
-          <ui-inline-banner uiCentredIslandAfter status="danger">{{
+        <ng-container *transloco="let root"
+                      ngProjectAs="[uiCentredIslandAfter]">
+          <ui-inline-banner uiCentredIslandAfter
+                            status="danger">{{
             root('web-feature-auth.oidcErrors.' + reason)
           }}</ui-inline-banner>
         </ng-container>
       }
       @if (insecure) {
-        <ui-inline-banner uiCentredIslandAfter status="warning">
+        <ui-inline-banner uiCentredIslandAfter
+                          status="warning">
           {{ t('insecure') }}
           <a [href]="deploymentGuide">{{ t('insecureHowTo') }}</a>
         </ui-inline-banner>

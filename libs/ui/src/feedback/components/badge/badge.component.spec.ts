@@ -6,7 +6,8 @@ import { BadgeComponent } from './badge.component';
 @Component({
   imports: [ BadgeComponent ],
   template: `
-    <span uiBadge status="danger">Clone failed</span>
+    <span uiBadge
+          status="danger">Clone failed</span>
     <span uiBadge>Cloning</span>
   `
 })

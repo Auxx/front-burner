@@ -2,14 +2,20 @@
   <div class="head">
     <p class="path">{{ path() }}</p>
     @if (canOpen()) {
-      <button uiButton size="small" (click)="openInEditor.emit(path())">{{ t('openInEditor') }}</button>
+      <button uiButton
+              size="small"
+              (click)="openInEditor.emit(path())">{{ t('openInEditor') }}</button>
     }
   </div>
   @if (failed()) {
-    <ui-inline-banner class="message" status="danger" announce>
+    <ui-inline-banner class="message"
+                      status="danger"
+                      announce>
       {{ t('failed') }}
       <div uiBannerActions>
-        <button uiButton size="small" (click)="retry()">{{ t('retry') }}</button>
+        <button uiButton
+                size="small"
+                (click)="retry()">{{ t('retry') }}</button>
       </div>
     </ui-inline-banner>
   }
@@ -32,11 +38,17 @@
           @if (diff.lineEndingsOnly) {
             <p class="line-endings">{{ t('lineEndingsOnly') }}</p>
           }
-          <div #scroller class="scroller" tabindex="0" role="region" [attr.aria-label]="t('label')">
+          <div #scroller
+               class="scroller"
+               tabindex="0"
+               role="region"
+               [attr.aria-label]="t('label')">
             <div class="lines">
               @for (row of rows(); track $index) {
                 @if (row.kind === 'line') {
-                  <div class="row" [class.added]="row.line.type === 'added'" [class.removed]="row.line.type === 'removed'">
+                  <div class="row"
+                       [class.added]="row.line.type === 'added'"
+                       [class.removed]="row.line.type === 'removed'">
                     <span class="old">{{ row.line.oldLine }}</span>
                     <span class="new">{{ row.line.newLine }}</span>
                     <span class="sign">{{ row.line.type === 'added' ? '+' : row.line.type === 'removed' ? '-' : '' }}</span>
@@ -45,7 +57,9 @@
                 } @else {
                   <div class="fold">
                     @if (diff.complete && row.hidden.length > 0) {
-                      <button type="button" class="open-fold" (click)="openFold(row)">
+                      <button type="button"
+                              class="open-fold"
+                              (click)="openFold(row)">
                         {{ t('showMore', { count: row.hidden.length }) }}
                       </button>
                     } @else {
@@ -57,7 +71,9 @@
               @if (nextRows() > 0) {
                 <div class="more">
                   <span class="rows-shown">{{ t('rowsShown', { shown: rows().length, total: totalRows() }) }}</span>
-                  <button uiButton size="small" (click)="showNextRows()">{{ t('showNextRows', { count: nextRows() }) }}</button>
+                  <button uiButton
+                          size="small"
+                          (click)="showNextRows()">{{ t('showNextRows', { count: nextRows() }) }}</button>
                 </div>
               }
             </div>
@@ -66,6 +82,7 @@
       }
     }
   } @else if (!failed() || waiting()) {
-    <ui-spinner class="note" [label]="t('loading')" />
+    <ui-spinner class="note"
+                [label]="t('loading')" />
   }
 </ng-container>

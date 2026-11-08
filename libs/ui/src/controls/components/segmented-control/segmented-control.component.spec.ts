@@ -8,7 +8,10 @@ import { SegmentedControlComponent } from './segmented-control.component';
 @Component({
   imports: [ FormField, SegmentedControlComponent ],
   template: `
-    <ui-segmented-control label="Credentials" [options]="options()" [formField]="model.credentials" (touch)="touches = touches + 1" />
+    <ui-segmented-control label="Credentials"
+                          [options]="options()"
+                          [formField]="model.credentials"
+                          (touch)="touches = touches + 1" />
     <button>Next</button>
   `
 })

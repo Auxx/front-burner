@@ -9,7 +9,9 @@ import { EmptyStateComponent } from './empty-state.component';
 @Component({
   imports: [ ButtonComponent, EmptyStateActionsComponent, EmptyStateComponent ],
   template: `
-    <ui-empty-state [icon]="icon()" [heading]="heading()" [headingLevel]="headingLevel()">
+    <ui-empty-state [icon]="icon()"
+                    [heading]="heading()"
+                    [headingLevel]="headingLevel()">
       Choose a file from the tree, or create one
       <div uiEmptyStateActions><button uiButton>New file</button></div>
     </ui-empty-state>

@@ -5,7 +5,10 @@ import { CollapsibleComponent } from './collapsible.component';
 
 @Component({
   imports: [ CollapsibleComponent ],
-  template: `<ui-collapsible id="region" [open]="open()"><p>Content</p></ui-collapsible>`,
+  template: `
+    <ui-collapsible id="region"
+                    [open]="open()"><p>Content</p></ui-collapsible>
+  `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 class HostComponent {

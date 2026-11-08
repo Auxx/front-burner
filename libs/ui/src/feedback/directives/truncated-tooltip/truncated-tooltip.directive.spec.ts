@@ -7,12 +7,10 @@ import { TruncatedTooltipDirective } from './truncated-tooltip.directive';
 @Component({
   imports: [ TruncatedTooltipDirective ],
   template: `
-    <span
-      #tip="uiTruncatedTooltip"
-      [uiTruncatedTooltip]="name()"
-      uiTruncatedTooltipLongPress
-      [attr.tabindex]="tip.truncated() ? 0 : null"
-    >{{ name() }}</span>
+    <span #tip="uiTruncatedTooltip"
+          [uiTruncatedTooltip]="name()"
+          uiTruncatedTooltipLongPress
+          [attr.tabindex]="tip.truncated() ? 0 : null">{{ name() }}</span>
   `
 })
 class HostComponent {

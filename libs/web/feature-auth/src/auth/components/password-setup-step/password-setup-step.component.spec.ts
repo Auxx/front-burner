@@ -20,8 +20,11 @@ class BlankComponent {}
 
 @Component({
   imports: [ PasswordSetupStepComponent ],
-  template:
-    `<auth-password-setup-step [setupToken]="token" (back)="events.push('back')" (refused)="events.push('refused')" />`
+  template: `
+    <auth-password-setup-step [setupToken]="token"
+                              (back)="events.push('back')"
+                              (refused)="events.push('refused')" />
+  `
 })
 class HostComponent {
   readonly token = TOKEN;
@@ -97,6 +100,15 @@ describe('PasswordSetupStepComponent', () => {
     await submit();
     http.expectNone(SETUP);
     expect(fieldText('password')).toContain(`${KEY}.fieldErrors.password.too-short`);
+  });
+
+  it('shows the email and display name errors on submit', async () => {
+    expect(element().textContent).not.toContain(`${KEY}.fieldErrors`);
+    await fill({ ...valid, email: 'not an email', displayName: '' });
+    await submit();
+    http.expectNone(SETUP);
+    expect(fieldText('email')).toContain(`${KEY}.fieldErrors.email.invalid-format`);
+    expect(fieldText('displayName')).toContain(`${KEY}.fieldErrors.displayName.too-small`);
   });
 
   it('does not submit while the confirmation differs', async () => {

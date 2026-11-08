@@ -8,7 +8,10 @@ import { SwitchComponent } from './switch.component';
   imports: [ ChoiceComponent, SwitchComponent ],
   template: `
     <label uiChoice>
-      <input type="checkbox" uiSwitch [checked]="on()" (change)="on.set($any($event.target).checked)" />
+      <input type="checkbox"
+             uiSwitch
+             [checked]="on()"
+             (change)="on.set($any($event.target).checked)" />
       Use the default author
     </label>
   `

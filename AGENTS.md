@@ -46,6 +46,8 @@ Available skills:
   implement, verify, format, report.
 - `workspace` - how the workspace is organised and how to explore it.
 - `toolkit-nx` - code generators for new Angular artefacts.
+- `angular-templates` - the rules for Angular templates (`.html` and inline),
+  which lint enforces and which are judgement calls.
 - `ai-tools` - command-line tools in `tools/ai-tools` for colour and contrast,
   design tokens, Storybook screenshots, icons and doc IDs. **Load it before
   writing any one-off script**, and use it to add a tool when none fits.

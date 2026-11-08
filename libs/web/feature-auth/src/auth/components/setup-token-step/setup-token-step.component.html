@@ -1,5 +1,6 @@
 <ng-container *transloco="let t; prefix: 'web-feature-auth.SetupTokenStepComponent'">
-  <form novalidate (submit)="submit($event)">
+  <form novalidate
+        (submit)="submit($event)">
     <h2>{{ t('heading') }}</h2>
     <p>{{ t('intro') }}</p>
     @if (failure(); as failure) {
@@ -10,23 +11,27 @@
         }
       </ui-inline-banner>
     }
-    <ui-field [label]="t('label')" [error]="errorKey() ? t('errors.' + errorKey()) : undefined">
-      <input
-        uiInput
-        #secret
-        type="password"
-       
-        autocomplete="off"
-        spellcheck="false"
-        [formField]="model.setupToken"
-        (input)="edited()"
-      />
-      <button uiIconButton [uiPasswordReveal]="secret" [label]="t('show')">
+    @let tokenError = errorKey();
+    <ui-field [label]="t('label')"
+              [error]="tokenError ? t('errors.' + tokenError) : undefined">
+      <input uiInput
+             #secret
+             type="password"
+             autocomplete="off"
+             spellcheck="false"
+             [formField]="model.setupToken"
+             (input)="edited()" />
+      <button uiIconButton
+              [uiPasswordReveal]="secret"
+              [label]="t('show')">
         <ui-icon name="eye" />
       </button>
     </ui-field>
     <div class="actions">
-      <button uiButton variant="primary" type="submit" [busy]="busy()">{{ t('continue') }}</button>
+      <button uiButton
+              variant="primary"
+              type="submit"
+              [busy]="busy()">{{ t('continue') }}</button>
     </div>
   </form>
 </ng-container>

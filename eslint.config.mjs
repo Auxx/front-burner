@@ -30,7 +30,10 @@ export default [
           allow: [
             '^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$',
             // The shared unit-test settings that every vitest.config.mts builds on.
-            '^.*/vitest\\.shared\\.[cm]?[jt]s$'
+            '^.*/vitest\\.shared\\.[cm]?[jt]s$',
+            // The shared lint config for Angular templates, which every
+            // Angular project's eslint.config.mjs spreads.
+            '^.*/angular-templates\\.config\\.mjs$'
           ],
           // A-2.4. Every constraint whose source tags match applies,
           // so one import can be refused by its scope or its type.

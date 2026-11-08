@@ -14,7 +14,10 @@ const ERRORS = 'web-repository-dialogs.errors';
 
 @Component({
   imports: [ CommitAuthorFormComponent ],
-  template: '<dlg-commit-author-form [field]="model" [serverErrors]="serverErrors()" />',
+  template: `
+    <dlg-commit-author-form [field]="model"
+                            [serverErrors]="serverErrors()" />
+  `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 class HostComponent {

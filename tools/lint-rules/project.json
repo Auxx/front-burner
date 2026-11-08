@@ -1,0 +1,28 @@
+{
+  "name": "lint-rules",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/lint-rules/src",
+  "projectType": "library",
+  "tags": [
+    "scope:tools",
+    "type:util"
+  ],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/**/eslint.config.mjs"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "tools/lint-rules"
+      }
+    }
+  }
+}

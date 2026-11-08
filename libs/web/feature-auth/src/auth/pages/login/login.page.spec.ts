@@ -153,6 +153,17 @@ describe('LoginPage', () => {
     expect(page().textContent).toContain(`${KEY}.errors.passwordRequired`);
   });
 
+  it('shows the email errors once the form is submitted', async () => {
+    await open();
+    expect(page().textContent).not.toContain(`${KEY}.errors.`);
+    await submit();
+    expect(page().textContent).toContain(`${KEY}.errors.emailRequired`);
+
+    await type(email(), 'not-an-email');
+    expect(page().textContent).toContain(`${KEY}.errors.emailInvalid`);
+    expect(login).not.toHaveBeenCalled();
+  });
+
   it('logs in and goes to the return target', async () => {
     await open(`/login?returnUrl=${encodeURIComponent('/repositories/3?tab=changes')}`);
     await fillIn();

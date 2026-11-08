@@ -10,15 +10,26 @@ import { TooltipDirective } from './tooltip.directive';
 @Component({
   imports: [ ButtonComponent, IconButtonComponent, IconComponent, TooltipDirective ],
   template: `
-    <button uiButton unavailable uiTooltip="Nothing to push">Push</button>
-    <button uiIconButton label="Ignored" uiTooltip="Ignored by .gitignore. Git won't commit this file." uiTooltipShowOnClick>
+    <button uiButton
+            unavailable
+            uiTooltip="Nothing to push">Push</button>
+    <button uiIconButton
+            label="Ignored"
+            uiTooltip="Ignored by .gitignore. Git won't commit this file."
+            uiTooltipShowOnClick>
       <ui-icon name="diff-ignored" />
     </button>
     <button>Elsewhere</button>
-    <button uiTooltip="handbook-with-a-long-name" uiTooltipLongPress (click)="clicks.set(clicks() + 1)">handbook…</button>
-    <button [uiTooltip]="fullName()" uiTooltipLongPress (click)="clicks.set(clicks() + 1)">notes</button>
-    <button uiTooltip="Fetch from the remote" (click)="clicks.set(clicks() + 1)">Fetch</button>
-    <span uiTooltip="Shown from outside" [uiTooltipShown]="shown()">Row</span>
+    <button uiTooltip="handbook-with-a-long-name"
+            uiTooltipLongPress
+            (click)="clicks.set(clicks() + 1)">handbook…</button>
+    <button [uiTooltip]="fullName()"
+            uiTooltipLongPress
+            (click)="clicks.set(clicks() + 1)">notes</button>
+    <button uiTooltip="Fetch from the remote"
+            (click)="clicks.set(clicks() + 1)">Fetch</button>
+    <span uiTooltip="Shown from outside"
+          [uiTooltipShown]="shown()">Row</span>
   `
 })
 class HostComponent {

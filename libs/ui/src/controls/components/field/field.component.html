@@ -1,18 +1,23 @@
 <!--
   The click only focuses a control that a <label for> cannot label, such as
-  ui-select; keyboard users reach the control itself.
+  ui-select, as a native label would; keyboard users reach the control itself.
 -->
-<!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
-<label class="label" [id]="labelId" [attr.for]="control().labelable ? control().id() : null" (click)="onLabelClick()">{{ label() }}</label>
+<!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -- a label is not a tab stop; keyboard users reach the control itself -->
+<label class="label"
+       [id]="labelId"
+       [attr.for]="labelFor()"
+       (click)="onLabelClick()">{{ label() }}</label>
 <div class="control">
   <ng-content />
 </div>
-@if (hint()) {
-  <div class="hint" [id]="hintId">{{ hint() }}</div>
+@if (hint(); as text) {
+  <div class="hint"
+       [id]="hintId">{{ text }}</div>
 }
-@if (error()) {
-  <div class="error" [id]="errorId">
+@if (error(); as text) {
+  <div class="error"
+       [id]="errorId">
     <ui-icon name="error" />
-    <span>{{ error() }}</span>
+    <span>{{ text }}</span>
   </div>
 }

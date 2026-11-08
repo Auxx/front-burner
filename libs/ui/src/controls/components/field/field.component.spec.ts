@@ -21,18 +21,29 @@ import { FieldComponent } from './field.component';
   ],
   template: `
     <form (submit)="submits = submits + 1; $event.preventDefault()">
-      <ui-field label="Remote URL" hint="HTTPS or SSH" [error]="error()">
-        <input uiInput [formField]="model.url" />
+      <ui-field label="Remote URL"
+                hint="HTTPS or SSH"
+                [error]="error()">
+        <input uiInput
+               [formField]="model.url" />
       </ui-field>
       <ui-field label="Password or token">
-        <input uiInput #secret type="password" value="s3cret" />
-        <button uiIconButton [uiPasswordReveal]="secret" label="Show password"><ui-icon name="eye" /></button>
+        <input uiInput
+               #secret
+               type="password"
+               value="s3cret" />
+        <button uiIconButton
+                [uiPasswordReveal]="secret"
+                label="Show password"><ui-icon name="eye" /></button>
       </ui-field>
       <ui-field label="Private key">
-        <textarea uiTextarea code rows="6"></textarea>
+        <textarea uiTextarea
+                  code
+                  rows="6"></textarea>
       </ui-field>
       <ui-field label="Branch name">
-        <input uiInput id="branch-name" />
+        <input uiInput
+               id="branch-name" />
       </ui-field>
     </form>
   `

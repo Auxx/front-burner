@@ -41,16 +41,16 @@ function source(text: string): PreviewSource {
 
 @Component({
   imports: [ MarkdownPreviewComponent ],
-  template: `<md-preview
-    [source]="source()"
-    [path]="path()"
-    [label]="label()"
-    [fragment]="fragment()"
-    [active]="active()"
-    [repositoryId]="repositoryId()"
-    (openPath)="opened.push($event)"
-    (scrolled)="places.push($event)"
-  />`
+  template: `
+    <md-preview [source]="source()"
+                [path]="path()"
+                [label]="label()"
+                [fragment]="fragment()"
+                [active]="active()"
+                [repositoryId]="repositoryId()"
+                (openPath)="opened.push($event)"
+                (scrolled)="places.push($event)" />
+  `
 })
 class HostComponent {
   readonly source = signal(source('# A'));

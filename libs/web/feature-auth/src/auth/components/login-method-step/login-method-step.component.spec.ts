@@ -8,11 +8,11 @@ const KEY = 'web-feature-auth.LoginMethodStepComponent';
 
 @Component({
   imports: [ LoginMethodStepComponent ],
-  template: `<auth-login-method-step
-    [initial]="initial()"
-    (chosen)="events.push($event)"
-    (back)="events.push('back')"
-  />`
+  template: `
+    <auth-login-method-step [initial]="initial()"
+                            (chosen)="events.push($event)"
+                            (back)="events.push('back')" />
+  `
 })
 class HostComponent {
   readonly initial = signal<'password' | 'oidc'>('password');

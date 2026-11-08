@@ -1,5 +1,7 @@
 <!-- Scopes for reading token values in each scheme, whatever the page's scheme is. -->
-<div class="probe" #probe aria-hidden="true">
+<div class="probe"
+     #probe
+     aria-hidden="true">
   @for (scheme of schemes; track scheme) {
     <div [attr.data-theme]="scheme"></div>
   }
@@ -15,7 +17,8 @@
         <ol>
           @for (token of ramp.tokens; track token) {
             <li>
-              <span class="swatch" [style.background]="ref(token)"></span>
+              <span class="swatch"
+                    [style.background]="token | tokenRef"></span>
               <code>{{ token }}</code>
             </li>
           }
@@ -42,8 +45,9 @@
               <th scope="row"><code>{{ token }}</code></th>
               @for (scheme of schemes; track scheme) {
                 <td [attr.data-theme]="scheme">
-                  <span class="swatch" [style.background]="ref(token)"></span>
-                  <code class="value">{{ value(token, scheme) }}</code>
+                  <span class="swatch"
+                        [style.background]="token | tokenRef"></span>
+                  <code class="value">{{ tokenValues()[scheme][token] }}</code>
                 </td>
               }
             </tr>
@@ -55,7 +59,8 @@
 
   @case ('contrast') {
     <h2>Contrast</h2>
-    <p class="summary" [attr.data-failures]="failures()">
+    <p class="summary"
+       [attr.data-failures]="failures()">
       {{ contrast().length }} pairs checked in both schemes; {{ failures() }} below their minimum.
     </p>
     <table>
@@ -71,22 +76,22 @@
         </tr>
       </thead>
       <tbody>
-        @for (result of contrast(); track $index) {
+        @for (result of contrastRows(); track $index) {
           <tr [attr.data-status]="result.status">
             <th scope="row"><code>{{ result.pair.foreground }}</code></th>
-            <td><code>{{ result.pair.background.join(' + ') }}</code></td>
+            <td><code>{{ result.backgroundNames }}</code></td>
             <td>{{ result.pair.minimum }}:1</td>
             @for (scheme of schemes; track scheme) {
-              <td [attr.data-theme]="scheme" class="contrast">
+              <td [attr.data-theme]="scheme"
+                  class="contrast">
                 @if (result.pair.minimum === 4.5) {
-                  <span
-                    class="text-sample"
-                    [style.color]="ref(result.pair.foreground)"
-                    [style.background]="background(result.pair.background)"
-                  >Aa</span>
+                  <span class="text-sample"
+                        [style.color]="result.pair.foreground | tokenRef"
+                        [style.background]="result.pair.background | tokenLayers">Aa</span>
                 } @else {
-                  <span class="graphic-sample" [style.background]="background(result.pair.background)">
-                    <span [style.border-color]="ref(result.pair.foreground)"></span>
+                  <span class="graphic-sample"
+                        [style.background]="result.pair.background | tokenLayers">
+                    <span [style.border-color]="result.pair.foreground | tokenRef"></span>
                   </span>
                 }
                 {{ (scheme === 'light' ? result.light : result.dark) | number: '1.2-2' }}
@@ -126,10 +131,12 @@
         @for (token of fontSizes(); track token) {
           <tr>
             <th scope="row"><code>{{ token }}</code></th>
-            <td><code>{{ value(token) }}</code></td>
+            <td><code>{{ tokenValues().root[token] }}</code></td>
             <td>
-              <span class="type-sample" [style.font-size]="ref(token)">Front Burner keeps your Markdown in git</span>
-              <span class="type-sample mono" [style.font-size]="ref(token)">git commit -m "Update notes.md"</span>
+              <span class="type-sample"
+                    [style.font-size]="token | tokenRef">Front Burner keeps your Markdown in git</span>
+              <span class="type-sample mono"
+                    [style.font-size]="token | tokenRef">git commit -m "Update notes.md"</span>
             </td>
           </tr>
         }
@@ -147,7 +154,7 @@
         @for (token of typeTokens(); track token) {
           <tr>
             <th scope="row"><code>{{ token }}</code></th>
-            <td><code>{{ value(token) }}</code></td>
+            <td><code>{{ tokenValues().root[token] }}</code></td>
           </tr>
         }
       </tbody>
@@ -170,20 +177,24 @@
           @for (token of group.tokens; track token) {
             <tr>
               <th scope="row"><code>{{ token }}</code></th>
-              <td><code>{{ value(token) }}</code></td>
+              <td><code>{{ tokenValues().root[token] }}</code></td>
               <td>
                 @switch (group.title) {
                   @case ('Space') {
-                    <span class="space-sample" [style.inline-size]="ref(token)"></span>
+                    <span class="space-sample"
+                          [style.inline-size]="token | tokenRef"></span>
                   }
                   @case ('Radius') {
-                    <span class="shape-sample" [style.border-radius]="ref(token)"></span>
+                    <span class="shape-sample"
+                          [style.border-radius]="token | tokenRef"></span>
                   }
                   @case ('Elevation') {
-                    <span class="shape-sample raised" [style.box-shadow]="ref(token)"></span>
+                    <span class="shape-sample raised"
+                          [style.box-shadow]="token | tokenRef"></span>
                   }
                   @case ('Density') {
-                    <span class="space-sample" [style.inline-size]="ref(token)"></span>
+                    <span class="space-sample"
+                          [style.inline-size]="token | tokenRef"></span>
                   }
                 }
               </td>

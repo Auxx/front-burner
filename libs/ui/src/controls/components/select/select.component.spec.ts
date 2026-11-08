@@ -20,8 +20,11 @@ const levels: readonly ChoiceOption<string>[] = [
 @Component({
   imports: [ FieldComponent, FormField, SelectComponent ],
   template: `
-    <ui-field label="Git control level" [error]="error()">
-      <ui-select [options]="options()" [formField]="model.level" placeholder="Choose a level" />
+    <ui-field label="Git control level"
+              [error]="error()">
+      <ui-select [options]="options()"
+                 [formField]="model.level"
+                 placeholder="Choose a level" />
     </ui-field>
     <button>Next</button>
   `
@@ -38,8 +41,11 @@ class HostComponent {
 @Component({
   imports: [ SelectComponent, SelectOptionDirective ],
   template: `
-    <ui-select [options]="options" [(value)]="value" aria-label="Key">
-      <ng-template uiSelectOption let-option><code>{{ option.value }}</code></ng-template>
+    <ui-select [options]="options"
+               [(value)]="value"
+               aria-label="Key">
+      <ng-template uiSelectOption
+                   let-option><code>{{ option.value }}</code></ng-template>
     </ui-select>
   `
 })
@@ -84,6 +90,7 @@ describe('SelectComponent', () => {
 
     expect(await combobox.isOpen()).toBe(false);
     expect(trigger().getAttribute('aria-labelledby')).toBe(label.id);
+    expect(label.hasAttribute('for')).toBe(false);
     expect(text().textContent?.trim()).toBe('Advanced');
   });
 

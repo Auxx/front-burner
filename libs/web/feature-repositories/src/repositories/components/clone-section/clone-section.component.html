@@ -1,7 +1,9 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repositories.CloneSectionComponent'">
   <fieldset class="section">
     <legend class="legend">{{ t('heading') }}</legend>
-    <ui-segmented-control [label]="t('heading')" [options]="modeOptions()" [formField]="cloneMode()" />
+    <ui-segmented-control [label]="t('heading')"
+                          [options]="modeOptions()"
+                          [formField]="cloneMode()" />
     <dl class="descriptions">
       @for (mode of modes; track mode) {
         <div>
@@ -11,21 +13,25 @@
       }
     </dl>
     @if (cloneMode()().value() === 'single-branch') {
-      <ui-field [label]="t('branch')" [error]="branchError()">
-        <ui-select
-          [options]="branchOptions()"
-          [placeholder]="t(placeholder())"
-          [formField]="branch()"
-        />
+      <ui-field [label]="t('branch')"
+                [error]="branchError()">
+        <ui-select [options]="branchOptions()"
+                   [placeholder]="t(placeholder())"
+                   [formField]="branch()" />
       </ui-field>
       @if (branches.state().kind === 'failed') {
         <div class="retry">
-          <button uiButton type="button" size="small" (click)="branches.retry()">{{ t('retry') }}</button>
+          <button uiButton
+                  type="button"
+                  size="small"
+                  (click)="branches.retry()">{{ t('retry') }}</button>
         </div>
       }
       <ui-inline-banner status="warning">{{ t('warning') }}</ui-inline-banner>
       <label uiChoice>
-        <input type="checkbox" uiCheckbox [formField]="understood()" />
+        <input type="checkbox"
+               uiCheckbox
+               [formField]="understood()" />
         {{ t('understood') }}
       </label>
     }

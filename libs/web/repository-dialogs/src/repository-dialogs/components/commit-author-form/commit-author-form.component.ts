@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { type FieldTree, FormField, type ValidationError } from '@angular/forms/signals';
 import { COMMIT_AUTHOR_FIELD_CODES, type CommitAuthor, type FieldError } from '@front-burner/shared-contracts';
 import { FieldComponent, InputComponent } from '@front-burner/ui';
@@ -28,8 +28,14 @@ export class CommitAuthorFormComponent {
   protected readonly githubHelp = COMMIT_EMAIL_HELP.github;
   protected readonly bitbucketHelp = COMMIT_EMAIL_HELP.bitbucket;
 
+  /** The keys, relative to `web-repository-dialogs.errors`, of the reasons to show next to the fields. */
+  protected readonly fieldErrors = computed((): Record<keyof CommitAuthor, string | undefined> => ({
+    name: this.fieldError('name'),
+    email: this.fieldError('email')
+  }));
+
   /** The key, relative to `web-repository-dialogs.errors`, of the reason to show next to the field. */
-  protected error(name: keyof CommitAuthor): string | undefined {
+  private fieldError(name: keyof CommitAuthor): string | undefined {
     const code = this.serverErrors().find(error => error.path === name)?.code ?? this.ownCode(name);
     if (code === undefined) {
       return undefined;

@@ -44,6 +44,8 @@ Modify generated or existing code to deliver the requested functionality:
   not a relative path.
 - Integrate with existing code patterns rather than introducing new ones.
 - Update or add unit tests (`.spec.ts`) for the behaviour you changed.
+- When you create or change an Angular template (a `.html` file or an inline
+  `template:`), load the `angular-templates` skill and follow it.
 
 ## 5. Verify
 
@@ -51,6 +53,10 @@ Verify that the code works. Changes can break projects that depend on the one
 you edited, so verifying only the artefact you touched is not enough. Read
 [verification.md](references/verification.md) for the commands and when to use
 each.
+
+If you changed Angular templates, first run `npx nx run <project>:lint --fix` on
+each Angular project you changed, so that lint fixes what it can, and fix the
+rest by hand.
 
 ## 6. Format
 

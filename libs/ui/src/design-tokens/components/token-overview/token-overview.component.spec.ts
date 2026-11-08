@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { CONTRAST_PAIRS, ContrastPair } from '../../models/contrast-pairs.model';
 import { TokenOverviewComponent, TokenSection } from './token-overview.component';
 
 describe('TokenOverviewComponent', () => {
@@ -50,6 +51,48 @@ describe('TokenOverviewComponent', () => {
     const element = await render('layout');
 
     expect(element.querySelector('tbody td code')?.textContent).toBe('0.25rem');
+  });
+
+  it('paints each primitive swatch with its token', async () => {
+    const element = await render('primitives');
+
+    const swatch = element.querySelector<HTMLElement>('.swatch');
+    expect(swatch?.style.background).toBe('var(--ui-neutral-20)');
+  });
+
+  it('shows the value of each semantic colour in each scheme', async () => {
+    const element = await render('colours');
+
+    const values = Array.from(element.querySelectorAll('tbody code.value')).map(code => code.textContent);
+    expect(values).toEqual([ 'var(--ui-neutral-20)', '' ]);
+  });
+
+  it('shows the root value of each font size', async () => {
+    const element = await render('typography');
+
+    expect(element.querySelector('tbody td code')?.textContent).toBe('0.8125rem');
+  });
+
+  it('shows each contrast pair with its layers and samples', async () => {
+    const context = {
+      fillStyle: '',
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      getImageData: () => ({ data: [ 0, 0, 0, 255 ] })
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never);
+    const pair = CONTRAST_PAIRS.find(candidate => candidate.background.length > 1 && candidate.minimum === 4.5);
+    const index = CONTRAST_PAIRS.indexOf(pair as ContrastPair);
+
+    const element = await render('contrast');
+
+    const row = element.querySelectorAll('tbody tr')[index];
+    const [ bottom, ...overlays ] = pair?.background ?? [];
+    const layers = overlays.reverse().map(layer => `linear-gradient(var(--ui-${layer}), var(--ui-${layer}))`);
+    expect(row.querySelectorAll('td code')[0].textContent).toBe(pair?.background.join(' + '));
+    const sample = row.querySelector<HTMLElement>('.text-sample');
+    expect(sample?.style.color).toBe(`var(--ui-${pair?.foreground})`);
+    expect(sample?.style.background).toBe([ ...layers, `var(--ui-${bottom})` ].join(', '));
   });
 
   it('shows the contrast table even when nothing can be measured', async () => {

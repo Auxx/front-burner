@@ -8,8 +8,11 @@ import { KeyValueListComponent } from './key-value-list.component';
   imports: [ KeyValueComponent, KeyValueListComponent ],
   template: `
     <dl uiKeyValueList>
-      <div uiKeyValue label="Clone mode">Single branch: main</div>
-      <div uiKeyValue label="Fingerprint" mono>SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8</div>
+      <div uiKeyValue
+           label="Clone mode">Single branch: main</div>
+      <div uiKeyValue
+           label="Fingerprint"
+           mono>SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8</div>
     </dl>
   `
 })

@@ -8,13 +8,18 @@ import { PopoverComponent } from './popover.component';
 @Component({
   imports: [ ButtonComponent, PopoverComponent, PopoverTriggerDirective ],
   template: `
-    <button uiButton [uiPopoverTrigger]="info">Couldn't check for remote changes</button>
-    <ui-popover #info="uiPopover" label="Remote check failed">
+    <button uiButton
+            [uiPopoverTrigger]="info">Couldn't check for remote changes</button>
+    <ui-popover #info="uiPopover"
+                label="Remote check failed">
       <p>The server did not answer.</p>
-      <button uiButton size="small">Try again</button>
+      <button uiButton
+              size="small">Try again</button>
     </ui-popover>
-    <button uiButton [uiPopoverTrigger]="plain">Details</button>
-    <ui-popover #plain="uiPopover" label="Details"><p>Only text.</p></ui-popover>
+    <button uiButton
+            [uiPopoverTrigger]="plain">Details</button>
+    <ui-popover #plain="uiPopover"
+                label="Details"><p>Only text.</p></ui-popover>
     <button>Elsewhere</button>
   `
 })

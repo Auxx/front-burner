@@ -12,7 +12,7 @@ import { CredentialsApi, KnownHostsApi, RepositoriesApi } from '@front-burner/we
 import { firstValueFrom, of, Subject, throwError } from 'rxjs';
 
 import { dialogButton, overlay, settleDialog } from '../../../testing/dialog-testing';
-import { choose, control, errorOf, radioLabels, selectValue, type } from '../../../testing/form-testing';
+import { choose, control, errorOf, field, radioLabels, selectValue, type } from '../../../testing/form-testing';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { RepositoryCredentialsDialog, type RepositoryCredentialsDialogData } from './repository-credentials.dialog';
 
@@ -127,7 +127,8 @@ describe('RepositoryCredentialsDialog', () => {
           'errors.host-unreachable': '{{ host }} can\'t be reached.',
           // The test module has no ICU transpiler; en.json's plural is checked by the web application.
           [`${KEY}.usedBy`]: 'Used by {{ count }} of your repositories',
-          [`${KEY}.choices.update`]: 'Update the token of {{ name }}'
+          [`${KEY}.choices.update`]: 'Update the token of {{ name }}',
+          'web-repository-dialogs.errors.credentials.username.too-big': 'At most {{ maximum }} characters'
         })
       ],
       providers: [
@@ -568,6 +569,39 @@ describe('RepositoryCredentialsDialog', () => {
       await settleDialog();
 
       expect(errorOf(dialog(), `${HTTPS}.password`)).toBe('web-repository-dialogs.errors.credentials.password.too-big');
+    });
+
+    it('labels the token\'s fields with the texts of new HTTPS credentials', async () => {
+      await open({ offerTokenUpdate: true });
+
+      const password = field(dialog(), `${HTTPS}.password`);
+      expect(control(dialog(), `${HTTPS}.username`)).toBeTruthy();
+      expect(password.querySelector('.hint')?.textContent?.trim()).toBe(`${HTTPS}.passwordHint`);
+      expect(password.querySelector('button')?.getAttribute('aria-label')).toBe(`${HTTPS}.showPassword`);
+    });
+
+    it('shows the token\'s own errors, and a refused field\'s parameters', async () => {
+      repositoriesApi.updateRepositoryToken.mockReturnValueOnce(
+        throwError(() =>
+          failure(400, 'validation-failed', {
+            fields: [ { path: 'username', code: 'too-big', params: { maximum: 200 } } ]
+          })
+        )
+      );
+      await open({ offerTokenUpdate: true });
+
+      type(control(dialog(), `${HTTPS}.password`), '');
+      await settleDialog();
+      expect(errorOf(dialog(), `${HTTPS}.password`)).toBe(
+        'web-repository-dialogs.errors.credentials.password.too-small'
+      );
+
+      await typeToken('ghp_new');
+      dialogButton(`${KEY}.update`)?.click();
+      await settleDialog();
+
+      expect(errorOf(dialog(), `${HTTPS}.username`)).toBe('At most 200 characters');
+      expect(errorOf(dialog(), `${HTTPS}.password`)).toBeUndefined();
     });
 
     it('offers the update only for saved HTTPS credentials', async () => {

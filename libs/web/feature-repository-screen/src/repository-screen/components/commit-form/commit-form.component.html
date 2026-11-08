@@ -1,66 +1,75 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.CommitFormComponent'">
   @if (commit.error(); as error) {
-    <ui-inline-banner status="danger" announce>
+    <ui-inline-banner status="danger"
+                      announce>
       {{ error.text }}
       @if (error.reference) {
         <span class="reference">{{ t('reference') }} <code>{{ error.reference }}</code></span>
       }
       @if (error.retry) {
         <div uiBannerActions>
-          <button uiButton size="small" class="retry" (click)="retry()">{{ t('retry') }}</button>
+          <button uiButton
+                  size="small"
+                  class="retry"
+                  (click)="retry()">{{ t('retry') }}</button>
         </div>
       }
     </ui-inline-banner>
   }
-  <ui-field [label]="t('message')" [hint]="longSubject() ? t('longSubject', { length: subjectHintLength }) : undefined">
-    <textarea uiTextarea rows="3" [readOnly]="commit.busy()" [value]="commit.message()" (input)="typed($event)"></textarea>
+  <ui-field [label]="t('message')"
+            [hint]="longSubject() ? t('longSubject', { length: subjectHintLength }) : undefined">
+    <textarea uiTextarea
+              rows="3"
+              [readOnly]="commit.busy()"
+              [value]="commit.message()"
+              (input)="typed($event)"></textarea>
   </ui-field>
   @if (gate.author(); as current) {
     <div class="author">
       <span class="author-text">{{ t('committingAs', current.author) }}</span>
-      <button
-        uiButton
-        size="small"
-        class="change"
-        [attr.aria-label]="t('changeLabel')"
-        [unavailable]="commit.busy()"
-        (click)="changeAuthor()"
-      >
+      <button uiButton
+              size="small"
+              class="change"
+              [attr.aria-label]="t('changeLabel')"
+              [unavailable]="commit.busy()"
+              (click)="changeAuthor()">
         {{ t('change') }}
       </button>
     </div>
   } @else if (gate.readFailed()) {
-    <ui-inline-banner class="author-failed" status="warning" announce>
+    <ui-inline-banner class="author-failed"
+                      status="warning"
+                      announce>
       {{ t('authorFailed') }}
       <div uiBannerActions>
-        <button uiButton size="small" class="author-retry" (click)="retryAuthor()">{{ t('retry') }}</button>
+        <button uiButton
+                size="small"
+                class="author-retry"
+                (click)="retryAuthor()">{{ t('retry') }}</button>
       </div>
     </ui-inline-banner>
   }
   @if (commit.canAmend()) {
-    <label uiChoice class="amend">
-      <input
-        type="checkbox"
-        uiCheckbox
-        [checked]="commit.amending()"
-        [disabled]="commit.busy()"
-        (change)="commit.amending.set(!commit.amending())"
-      />
+    <label uiChoice
+           class="amend">
+      <input type="checkbox"
+             uiCheckbox
+             [checked]="commit.amending()"
+             [disabled]="commit.busy()"
+             (change)="commit.amending.set(!commit.amending())" />
       {{ t('amendLast') }}
     </label>
   }
   @let reason = blocked();
-  <button
-    #commitButton
-    uiButton
-    uiTooltipLongPress
-    class="commit"
-    variant="primary"
-    [busy]="commit.busy()"
-    [unavailable]="reason !== null"
-    [uiTooltip]="reason ? t(reason, { count: maxPaths, length: maxMessageLength }) : ''"
-    (click)="submit()"
-  >
+  <button #commitButton
+          uiButton
+          uiTooltipLongPress
+          class="commit"
+          variant="primary"
+          [busy]="commit.busy()"
+          [unavailable]="reason !== null"
+          [uiTooltip]="reason ? t(reason, { count: maxPaths, length: maxMessageLength }) : ''"
+          (click)="submit()">
     {{ commit.amending() ? t('amend') : t(count() === 1 ? 'commitOne' : 'commitMany', { count: count() }) }}
   </button>
 </ng-container>

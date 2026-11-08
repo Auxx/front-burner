@@ -21,7 +21,8 @@ export type ButtonType = 'button' | 'submit' | 'reset';
   selector: 'button[uiButton], a[uiButton]',
   imports: [ SpinnerComponent ],
   template: `
-    <span class="icon" [hidden]="busy()"><ng-content select="ui-icon" /></span>
+    <span class="icon"
+          [hidden]="busy()"><ng-content select="ui-icon" /></span>
     @if (busy()) {
       <ui-spinner />
     }

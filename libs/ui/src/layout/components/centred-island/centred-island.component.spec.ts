@@ -8,7 +8,8 @@ import { CentredIslandComponent } from './centred-island.component';
   template: `
     <ui-centred-island [width]="width()">
       <h1>Log in</h1>
-      <div uiCentredIslandAfter class="banner">A banner</div>
+      <div uiCentredIslandAfter
+           class="banner">A banner</div>
     </ui-centred-island>
   `
 })

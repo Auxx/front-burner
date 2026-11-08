@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { form, FormField, submit, validateStandardSchema } from '@angular/forms/signals';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -107,14 +107,13 @@ export class LoginPage {
     return protocol === 'http:' && !LOCAL_HOSTS.includes(hostname);
   })();
 
-  /** The key of a field's error, once the field is touched. */
-  protected errorKey(name: keyof Credentials): string | undefined {
-    const state = this.model[name]();
-    if (!state.touched() || state.errors().length === 0) {
-      return undefined;
-    }
-    return state.value() === '' ? `${name}Required` : `${name}Invalid`;
-  }
+  /** The key of each field's error, once the field is touched. */
+  protected readonly fieldErrors = computed(
+    (): Record<keyof Credentials, string | undefined> => ({
+      email: this.errorKey('email'),
+      password: this.errorKey('password')
+    })
+  );
 
   protected async submit(event: Event): Promise<void> {
     event.preventDefault();
@@ -157,6 +156,15 @@ export class LoginPage {
       return null;
     }
     return OIDC_FAILURE_REASONS.find(known => known === reason) ?? 'failed';
+  }
+
+  /** The key of a field's error, once the field is touched. */
+  private errorKey(name: keyof Credentials): string | undefined {
+    const state = this.model[name]();
+    if (!state.touched() || state.errors().length === 0) {
+      return undefined;
+    }
+    return state.value() === '' ? `${name}Required` : `${name}Invalid`;
   }
 
   private refusal(error: unknown): void {

@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, input, linkedSignal, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
 import { type FieldTree, FormField } from '@angular/forms/signals';
 import {
   ButtonComponent,
@@ -59,9 +59,9 @@ export class GeneratedKeyComponent {
   });
   protected readonly failure = signal<{ text: string; reference: string | null; } | null>(null);
 
-  protected error(): FieldErrorText | undefined {
-    return this.nameError() ?? credentialsShownError(this.credentials().generateName, 'credentials.generateName');
-  }
+  protected readonly error = computed<FieldErrorText | undefined>(() =>
+    this.nameError() ?? credentialsShownError(this.credentials().generateName, 'credentials.generateName')
+  );
 
   protected async generate(): Promise<void> {
     const name = this.credentials().generateName;

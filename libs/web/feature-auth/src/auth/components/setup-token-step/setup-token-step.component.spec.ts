@@ -12,7 +12,10 @@ const CHECK = '/api/v1/onboarding/setup-token/check';
 
 @Component({
   imports: [ SetupTokenStepComponent ],
-  template: `<auth-setup-token-step [rejected]="rejected()" (accepted)="accepted.push($event)" />`
+  template: `
+    <auth-setup-token-step [rejected]="rejected()"
+                           (accepted)="accepted.push($event)" />
+  `
 })
 class HostComponent {
   readonly rejected = signal(false);

@@ -1,30 +1,37 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.FileTreeComponent'">
   <div class="toolbar">
-    <button uiIconButton size="small" [label]="t('newFile')" (click)="action.emit({ action: 'new-file', path: '' })">
+    <button uiIconButton
+            size="small"
+            [label]="t('newFile')"
+            (click)="action.emit({ action: 'new-file', path: '' })">
       <ui-icon name="new-file" />
     </button>
-    <button uiIconButton size="small" [label]="t('newFolder')" (click)="action.emit({ action: 'new-folder', path: '' })">
+    <button uiIconButton
+            size="small"
+            [label]="t('newFolder')"
+            (click)="action.emit({ action: 'new-folder', path: '' })">
       <ui-icon name="new-folder" />
     </button>
   </div>
-  <ui-tree
-    class="tree"
-    [label]="t('label')"
-    [nodes]="store.nodes()"
-    [selected]="selected()"
-    (activated)="onActivated($event)"
-    [(expanded)]="store.expanded"
-    (loadChildren)="store.load($event)"
-  >
-    <ng-template uiTreeNode let-node let-active="active">
-      @let item = row(node);
+  <ui-tree class="tree"
+           [label]="t('label')"
+           [nodes]="store.nodes()"
+           [selected]="selected()"
+           (activated)="onActivated($event)"
+           [(expanded)]="store.expanded"
+           (loadChildren)="store.load($event)">
+    <ng-template uiTreeNode
+                 let-node
+                 let-active="active">
+      @let item = node | treeEntry;
       @switch (item.kind) {
         @case ('loading') {
           <ui-spinner />
           <span class="name note">{{ item.label }}</span>
         }
         @case ('error') {
-          <ui-icon class="danger" name="error" />
+          <ui-icon class="danger"
+                   name="error" />
           <span class="name">{{ item.label }}</span>
           <span class="retry">{{ t('retry') }}</span>
         }
@@ -35,43 +42,41 @@
           <span class="name note">{{ item.label }}</span>
         }
         @default {
-          <ui-icon class="kind" [name]="icon(item)" />
-          <span class="name" [class.ignored]="item.entry?.ignored">{{ item.label }}</span>
+          <ui-icon class="kind"
+                   [name]="item | entryIcon" />
+          <span class="name"
+                [class.ignored]="item.entry?.ignored">{{ item.label }}</span>
           @if (item.entry?.ignored) {
             <!--
               The row's accessible name says "ignored"; the button only explains it,
               and does not take the focus from the tree.
             -->
-            <button
-              uiIconButton
-              class="ignored-icon"
-              tabindex="-1"
-              aria-hidden="true"
-              [label]="t(item.kind === 'folder' ? 'ignoredFolder' : 'ignoredFile')"
-              [uiTooltip]="t(item.kind === 'folder' ? 'ignoredFolder' : 'ignoredFile')"
-              uiTooltipShowOnClick
-              [uiTooltipShown]="active"
-              (mousedown)="$event.preventDefault()"
-              (click)="$event.stopPropagation()"
-            >
+            <button uiIconButton
+                    class="ignored-icon"
+                    tabindex="-1"
+                    aria-hidden="true"
+                    [label]="t(item.kind === 'folder' ? 'ignoredFolder' : 'ignoredFile')"
+                    [uiTooltip]="t(item.kind === 'folder' ? 'ignoredFolder' : 'ignoredFile')"
+                    uiTooltipShowOnClick
+                    [uiTooltipShown]="active"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="$event.stopPropagation()">
               <ui-icon name="diff-ignored" />
             </button>
           }
           @if (item.deleting) {
             <ui-spinner />
             <span class="deleting">{{ t('deleting') }}</span>
-          } @else if (actions(item).length > 0) {
+          } @else if ((item | rowActions).length > 0) {
             <!-- Not a tab stop: Shift+F10 or the ContextMenu key on the row opens it (FB-24). -->
-            <button
-              uiIconButton
-              uiTreeItemMenu
-              class="actions"
-              size="small"
-              [uiMenuTrigger]="menu.aria"
-              [label]="t('actionsFor', { name: item.label })"
-              (pointerdown)="menuRow.set(item)"
-              (click)="menuRow.set(item)"
-            >
+            <button uiIconButton
+                    uiTreeItemMenu
+                    class="actions"
+                    size="small"
+                    [uiMenuTrigger]="menu.aria"
+                    [label]="t('actionsFor', { name: item.label })"
+                    (pointerdown)="menuRow.set(item)"
+                    (click)="menuRow.set(item)">
               <ui-icon name="ellipsis" />
             </button>
           }
@@ -79,7 +84,8 @@
       }
     </ng-template>
   </ui-tree>
-  <ui-menu #menu="uiMenu" (itemSelected)="onMenuItem($event)">
+  <ui-menu #menu="uiMenu"
+           (itemSelected)="onMenuItem($event)">
     @for (item of menuActions(); track item) {
       <button [uiMenuItem]="item">{{ t('actions.' + item) }}</button>
     }

@@ -12,7 +12,9 @@ import { ICON_SPRITE_URL } from '../../tokens/icon-sprite-url.token';
 @Component({
   selector: 'ui-icon',
   template: `
-    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><use [attr.href]="href()" /></svg>
+    <svg viewBox="0 0 16 16"
+         fill="currentColor"
+         aria-hidden="true"><use [attr.href]="href()" /></svg>
   `,
   styleUrl: './icon.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
