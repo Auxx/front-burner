@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import {
   type ChangedHostKey,
   ChangedHostKeySchema,
+  type GitNetworkJobType,
   type GitProblemState,
   HostKeySchema
 } from '@front-burner/shared-contracts';
@@ -17,7 +18,7 @@ import {
 import { TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 
-import type { GitFix } from '../../utils/git-problem/git-problem';
+import { fetchProblemFix, type GitFix } from '../../utils/git-problem/git-problem';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { LockedKeyService } from '../locked-key/locked-key.service';
 import { NetworkJobService } from '../network-job/network-job.service';
@@ -38,8 +39,8 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
  * operation runs again (RC-21, RC-22). A job that meets an unknown host, such as
  * after the user's known hosts were lost, asks to trust it as on the Add
  * repository page (AR-32), then runs again. The quiet fetch status has no job
- * to run again: it gives the problem to fix, and a fetch runs (GA-35, RC-6).
- * Provided by the page.
+ * to run again: `runFetchFix` takes the problem to fix, and a fetch runs (GA-35,
+ * RC-6). Provided by the page.
  */
 @Injectable()
 export class CredentialFixesService {
@@ -53,18 +54,32 @@ export class CredentialFixesService {
   private readonly errorText = inject(ApiErrorTextService);
   private readonly transloco = inject(TranslocoService);
 
-  /**
-   * Runs `fix`, of the job problem in the banner, or of `problem`, the last
-   * fetch's as the status has it, which may be from before a reload.
-   */
-  async run(fix: GitFix, problem?: GitProblemState): Promise<void> {
-    const again = () => problem === undefined ? this.jobs.retry() : this.jobs.start('fetch');
-    const { params } = problem ?? this.jobs.problem() ?? {};
+  /** Runs `fix`, of the job problem in the banner. */
+  async run(fix: GitFix): Promise<void> {
+    const problem = this.jobs.problem();
     switch (fix) {
       case 'retry':
-        return again();
+        return this.jobs.retry();
       case 'unlock':
         return this.jobs.unlockAndRetry();
+      default:
+        return this.runDialogFix(fix, problem?.params, problem?.operation);
+    }
+  }
+
+  /** Runs the fix of `problem`, the last fetch's as the status has it, which may be from before a reload. */
+  async runFetchFix(problem: GitProblemState): Promise<void> {
+    return this.runDialogFix(fetchProblemFix(problem.code), problem.params, 'fetch');
+  }
+
+  private async runDialogFix(
+    fix: GitFix,
+    params: unknown,
+    operation: GitNetworkJobType | undefined
+  ): Promise<void> {
+    // The operation as of now: a job started while a dialog is open clears the banner's problem.
+    const again = () => this.runAgain(operation);
+    switch (fix) {
       case 'add-credentials':
       case 'other-credentials':
         return this.replaceCredentials({}, again);
@@ -76,6 +91,21 @@ export class CredentialFixesService {
         return this.trustHost(params, again);
       default:
         return undefined;
+    }
+  }
+
+  /**
+   * The fixed operation again, after any job that runs now (RC-9). A fix made for
+   * a push may also have fixed the last fetch's problem, which only a fetch can
+   * clear from the status, so one follows, saying nothing.
+   */
+  private async runAgain(operation: GitNetworkJobType | undefined): Promise<void> {
+    if (operation === undefined) {
+      return;
+    }
+    await this.jobs.startWhenFree(operation);
+    if (operation !== 'fetch' && this.store.status()?.fetchProblem) {
+      await this.jobs.startWhenFree('fetch', { background: true });
     }
   }
 

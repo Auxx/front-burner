@@ -46,6 +46,15 @@ const FIXES: Readonly<Record<string, GitFix>> = {
 const KNOWN_CODES: ReadonlySet<string> = new Set<string>([ ...ERROR_CODES, 'network' ]);
 
 /**
+ * The fix the quiet fetch status offers beside **Try again**, which it always
+ * has; a locked key is never a stored problem (GA-35, RC-6).
+ */
+export function fetchProblemFix(code: string): GitFix {
+  const { fix } = gitProblem(code);
+  return fix === 'retry' || fix === 'unlock' ? null : fix;
+}
+
+/**
  * The one table from a network job's error code to its message and fix (RC-4,
  * GA-30, GA-31, GA-43). The push is never forced, so "The remote has new commits.
  * Pull first." offers no fix until step 4 brings **Pull**. A code the web client

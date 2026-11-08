@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, output } from '@angular/core';
 import type { GitNetworkJobType, GitStatus } from '@front-burner/shared-contracts';
 import {
   ButtonComponent,
@@ -51,6 +51,8 @@ export class GitActionsComponent {
   /** **Push** was chosen while it was offered. */
   readonly push = output<void>();
 
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+
   protected readonly fetching = computed(() => this.running() === 'fetch');
   protected readonly pushing = computed(() => this.running() === 'push');
 
@@ -68,6 +70,11 @@ export class GitActionsComponent {
   protected readonly pushReason = computed(() =>
     this.pushing() ? null : (pushUnavailableReason(this.status()) ?? this.busyReason())
   );
+
+  /** Takes the focus, such as when what had it in the bar went away. */
+  focus(): void {
+    this.host.querySelector('button')?.focus();
+  }
 
   private busyReason(): string | null {
     return this.running() === null ? null : 'busy';

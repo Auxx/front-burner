@@ -15,6 +15,7 @@ import { JOB_RETRY_MS, NetworkJobService } from './network-job.service';
 
 const RUNNING: GitJobState = { status: 'running', outcome: null };
 const PUSHED: GitJobState = { status: 'done', outcome: { kind: 'pushed', commits: 2, upstream: 'origin/main' } };
+const FETCHED: GitJobState = { status: 'done', outcome: { kind: 'fetched', moved: false, upstreamMoved: false } };
 
 function failed(code: string, params: Record<string, string> = {}): GitJobState {
   return { status: 'done', outcome: { kind: 'failed', code, params } };
@@ -107,6 +108,91 @@ describe('NetworkJobService', () => {
 
     await service.start('push');
     expect(push).toHaveBeenCalledOnce();
+  });
+
+  describe('startWhenFree', () => {
+    it('starts at once when nothing runs', async () => {
+      await service.startWhenFree('fetch');
+      await settle();
+
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+    });
+
+    it('waits for the running job, instead of being dropped', async () => {
+      await service.start('push');
+      await settle();
+
+      await service.startWhenFree('fetch');
+      await settle();
+      expect(fetch).not.toHaveBeenCalled();
+
+      gitJob.mockReturnValue(of(PUSHED));
+      finished();
+      await settle();
+      await settle();
+
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+    });
+
+    it('runs what waits in order', async () => {
+      await service.start('fetch');
+      await settle();
+      await service.startWhenFree('push');
+      await service.startWhenFree('fetch', { background: true });
+
+      gitJob.mockReturnValueOnce(of(failed('remote-failed')));
+      finished();
+      await settle();
+      await settle();
+      expect(push).toHaveBeenCalledOnce();
+      expect(fetch).toHaveBeenCalledOnce();
+
+      gitJob.mockReturnValueOnce(of(failed('push-rejected')));
+      finished();
+      await settle();
+      await settle();
+      expect(fetch).toHaveBeenCalledTimes(2);
+      // The background fetch leaves the push's problem where it is.
+      expect(service.problem()?.code).toBe('push-rejected');
+    });
+
+    it('forgets what waits after a switch to another repository', async () => {
+      await service.start('push');
+      await settle();
+      await service.startWhenFree('fetch');
+
+      followed.set(13);
+      await settle();
+      await settle();
+
+      expect(service.running()).toBeNull();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('a background fetch says nothing: no toast and no banner, whatever its end', async () => {
+      gitJob.mockReturnValue(of(FETCHED));
+      await service.startWhenFree('fetch', { background: true });
+      await settle();
+      expect(toast.show).not.toHaveBeenCalled();
+
+      gitJob.mockReturnValue(of(failed('credentials-refused')));
+      await service.startWhenFree('fetch', { background: true });
+      await settle();
+      expect(service.problem()).toBeNull();
+    });
+
+    it('a background fetch that is refused says nothing, and asks for no passphrase', async () => {
+      fetch.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+      await service.startWhenFree('fetch', { background: true });
+      await settle();
+      expect(unlock).not.toHaveBeenCalled();
+      expect(service.problem()).toBeNull();
+
+      fetch.mockReturnValueOnce(throwError(() => refused('too-many-jobs')));
+      await service.startWhenFree('fetch', { background: true });
+      await settle();
+      expect(service.problem()).toBeNull();
+    });
   });
 
   it('shows the outcome after job.finished', async () => {

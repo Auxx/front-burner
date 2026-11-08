@@ -64,17 +64,18 @@ async function gitAction(page: Page, name: 'Fetch' | 'Push'): Promise<void> {
 const push = (page: Page) => gitAction(page, 'Push');
 
 const FETCH_FAILED = 'Couldn\'t check for remote changes';
+const KEY_LOCKED = 'Unlock laptop to check for remote changes.';
 const fetchStatus = (page: Page) => page.getByRole('banner').locator('rs-fetch-status');
 
 /** The quiet fetch status's text and actions: in the bar, or in a panel a tap opens on a phone (GA-35, NV-11). */
-async function fetchStatusDetails(page: Page): Promise<Locator> {
-  const trigger = fetchStatus(page).getByRole('button', { name: FETCH_FAILED });
-  const text = fetchStatus(page).getByText(FETCH_FAILED);
+async function fetchStatusDetails(page: Page, headline = FETCH_FAILED): Promise<Locator> {
+  const trigger = fetchStatus(page).getByRole('button', { name: headline });
+  const text = fetchStatus(page).getByText(headline);
   await expect(trigger.or(text)).toBeVisible();
   if (!await trigger.isVisible()) {
     return fetchStatus(page);
   }
-  const details = page.getByRole('dialog', { name: FETCH_FAILED });
+  const details = page.getByRole('dialog', { name: headline });
   if (!await details.isVisible()) {
     await trigger.click();
   }
@@ -734,9 +735,9 @@ test.describe('a locked key', () => {
 
     await expect(banner(page)).toContainText('laptop is locked.');
     await expect(banner(otherPage)).toContainText('laptop is locked.');
-    const details = await fetchStatusDetails(page);
-    await expect(details).toContainText(FETCH_FAILED);
-    await expect(details).toContainText('Unlock laptop to check for remote changes.');
+    const details = await fetchStatusDetails(page, KEY_LOCKED);
+    await expect(details).toContainText(KEY_LOCKED);
+    await expect(details).not.toContainText(FETCH_FAILED);
     await page.keyboard.press('Escape');
     await expect(summary(page)).toHaveText(/1 to push/);
     // Longer than the scheduler's 5 seconds between looks at what is viewed.
@@ -752,13 +753,30 @@ test.describe('a locked key', () => {
     await expect(summary(page)).toHaveText(/1 to pull/, { timeout: 15_000 });
   });
 
+  test.describe('an unlock that ends by its idle time', () => {
+    test.use({ instanceOptions: { onboarded: true, env: { FRONT_BURNER_KEY_UNLOCK_IDLE: '5s' } } });
+
+    test('says so without a reload, and asks for nothing', async ({ page, instance }) => {
+      const { id } = await lockedRepository(instance);
+      await openScreen(page, `/repositories/${id}`);
+      await banner(page).getByRole('button', { name: 'Unlock' }).click();
+      await unlock(page);
+      await expectNoFetchProblem(page);
+
+      await expect(banner(page)).toContainText('laptop is locked.', { timeout: 15_000 });
+      await expect(await fetchStatusDetails(page, KEY_LOCKED)).toContainText(KEY_LOCKED);
+      // Not `dialog`, whose name also matches the panel of a phone.
+      await expect(page.locator('dlg-unlock-key')).toHaveCount(0);
+    });
+  });
+
   test('a dismissed banner leaves Unlock in the bar', async ({ page, instance }) => {
     const { id } = await lockedRepository(instance);
     await openScreen(page, `/repositories/${id}`);
     await banner(page).getByRole('button', { name: 'Dismiss' }).click();
     await expect(banner(page)).toHaveCount(0);
 
-    await (await fetchStatusDetails(page)).getByRole('button', { name: 'Unlock' }).click();
+    await (await fetchStatusDetails(page, KEY_LOCKED)).getByRole('button', { name: 'Unlock' }).click();
     await unlock(page);
 
     await expect(dialog(page)).toHaveCount(0);

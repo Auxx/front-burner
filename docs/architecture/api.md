@@ -90,8 +90,10 @@ numbering conventions.
     pull or a branch switch; FB-41, ED-23, GA-12), `merge.state` (repository ID,
     started, file resolved, ended; GC-2, GC-21), `repository.removed`
     (repository ID; RM-20), `repository.warning` (repository ID, the warnings of
-    RM-8) and `key.unlocked` (key ID, to the streams of the session that
-    unlocked it; RC-16).
+    RM-8), `key.unlocked` (key ID, to the streams of the session that unlocked
+    it; RC-16) and `key.locked` (key ID, to the streams of that session, when
+    its unlock ended by the idle time, so that the screen says why fetches
+    stopped; AR-31, RC-15, GA-35).
   - `git.changed` (repository ID) says that git state changed. It is an event of
     its own, since a commit or a push changes no files. _(Plan's call.)_ It is
     also sent when a push is queued, so that the user's other tabs read the

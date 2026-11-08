@@ -1398,6 +1398,44 @@ describe('RepositoryScreenPage', () => {
         expect(push).not.toHaveBeenCalled();
       });
 
+      it('Try again that succeeds leaves the focus on the git actions', async () => {
+        gitStatusAnswer = of(failedFetch('network'));
+        await visit('/repositories/12');
+        statusButton(`${FIXES}.retry`).focus();
+
+        gitStatusAnswer = of(baseStatus());
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(status().textContent?.trim()).toBe('');
+        expect(document.activeElement).toBe(page().querySelector('rs-git-actions button'));
+      });
+
+      it('Try again is unavailable while a push runs', async () => {
+        gitStatusAnswer = of({ ...failedFetch('network'), networkJob: { id: 9, type: 'push' } });
+        await visit('/repositories/12');
+
+        statusButton(`${FIXES}.retry`).click();
+        await settle(harness.fixture);
+
+        expect(statusButton(`${FIXES}.retry`).getAttribute('aria-disabled')).toBe('true');
+        expect(fetch).not.toHaveBeenCalled();
+      });
+
+      it('shows the locked key when key.locked says the unlock ended while the screen was open', async () => {
+        await visit('/repositories/12');
+        expect(status().textContent?.trim()).toBe('');
+
+        credentialsInfo = lockedInfo();
+        events.next({ type: 'key.locked', keyId: 3 });
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(status().textContent).toContain(`${STATUS}.locked`);
+        expect(anyDialog()).toBeNull();
+      });
+
       it('the fix opens the dialog for its code', async () => {
         gitStatusAnswer = of(failedFetch('host-key-changed', {
           host: 'git.example.com',

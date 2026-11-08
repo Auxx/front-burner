@@ -77,6 +77,29 @@ describe('KeyUnlockStore', () => {
     expect(store.get('s1', 7, { touch: true })).toBeUndefined();
   });
 
+  it('tells only its own session when an unlock ends by its idle time', () => {
+    const tab = { userId: 1, sessionId: 's1', repositoryId: null, send: vi.fn(), close: vi.fn() };
+    const otherDevice = { userId: 1, sessionId: 's2', repositoryId: null, send: vi.fn(), close: vi.fn() };
+    events.open(tab);
+    events.open(otherDevice);
+    store.unlock('s1', 7, PROTECTED, FIXTURE_PASSPHRASE);
+    tab.send.mockClear();
+
+    vi.advanceTimersByTime(IDLE);
+
+    expect(tab.send).toHaveBeenCalledExactlyOnceWith({ type: 'key.locked', keyId: 7 });
+    expect(otherDevice.send).not.toHaveBeenCalled();
+  });
+
+  it('says nothing when a key is unlocked again, or locked on purpose', () => {
+    const publish = vi.spyOn(events, 'publishToSession');
+    store.unlock('s1', 7, PROTECTED, FIXTURE_PASSPHRASE);
+    store.unlock('s1', 7, PROTECTED, FIXTURE_PASSPHRASE);
+    store.lock('s1', 7);
+
+    expect(publish.mock.calls.map(([ , event ]) => event.type)).toEqual([ 'key.unlocked', 'key.unlocked' ]);
+  });
+
   it('extends the unlock on a git operation', () => {
     store.unlock('s1', 7, PROTECTED, FIXTURE_PASSPHRASE);
 

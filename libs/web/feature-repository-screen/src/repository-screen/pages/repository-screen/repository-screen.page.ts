@@ -60,7 +60,6 @@ import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import type { EntryAction } from '../../utils/entry-actions/entry-actions';
 import { ancestors, fileName } from '../../utils/file-name/file-name';
-import { gitProblem } from '../../utils/git-problem/git-problem';
 
 /** A larger count shows as `99+`; the item's accessible name says it in full. */
 const MAX_BADGE_COUNT = 99;
@@ -408,7 +407,7 @@ export class RepositoryScreenPage {
 
   /** The fix of the last fetch's problem, from the quiet fetch status in the bar (GA-35, RC-6). */
   protected fixFetchProblem(problem: GitProblemState): void {
-    void this.credentialFixes.run(gitProblem(problem.code).fix, problem);
+    void this.credentialFixes.runFetchFix(problem);
   }
 
   /**

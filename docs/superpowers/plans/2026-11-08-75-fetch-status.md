@@ -27,8 +27,12 @@ AC-REPO-002.8, AC-REPO-002.13); `docs/requirements/navigation.md` (NV-11).
 - The shared constraints of [the step 4 index](2026-11-08-00-roadmap-step-4.md)
   apply.
 - Exact text: "Couldn't check for remote changes", followed by the reason:
-  `errors.<code>`. For a locked key the reason is "Unlock _&lt;key name&gt;_ to
-  check for remote changes."
+  `errors.<code>`. For a locked key the whole text is "Unlock _&lt;key name&gt;_
+  to check for remote changes.": fetches may be running on another session's
+  unlock (RC-20), so "Couldn't check" could be false _(review's call)_.
+- An unlock that ends by its idle time publishes `key.locked` to its session, as
+  otherwise nothing would say why fetches stopped until a reload _(review's
+  call)_.
 - It is never an alert: no focus change, no dialog, no `announce` (GA-35). On
   narrow screens it is an icon button whose tap shows the text and the actions,
   and the bar keeps NV-11's order.
@@ -73,7 +77,11 @@ AC-REPO-002.8, AC-REPO-002.13); `docs/requirements/navigation.md` (NV-11).
   - `FetchStatusComponent` (`rs-fetch-status`): inputs `problem: GitProblemState
     | null`, `lockedKeyName: string | null`, `narrow: boolean`; outputs `retry`,
     `fix` (`GitProblemState`), `unlock`.
-  - `CredentialFixesService.run(fix: GitFix, problem?: GitProblemState)`.
+  - `CredentialFixesService.runFetchFix(problem: GitProblemState)`, beside
+    `run(fix: GitFix)` _(review's call)_.
+  - `NetworkJobService.startWhenFree(operation, { background? })`: what a fix
+    runs again waits for a running job rather than being dropped _(review's
+    call)_.
 
 - [ ] **Step 1: Write the failing tests**: `AC-GIT-002.14: a failed background
       fetch shows Couldn't check for remote changes in the header and opens no

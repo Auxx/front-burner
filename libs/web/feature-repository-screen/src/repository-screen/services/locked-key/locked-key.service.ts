@@ -29,8 +29,10 @@ function lockedKeyOf(info: RepositoryCredentialsInfo): LockedKey | null {
  * It reads the repository's credentials when the repository is ready and after
  * every (re)connect, since events are never replayed (A-3.11): a backend
  * restart forgets every unlock. `key.unlocked` comes only from this session
- * (RC-20), and removes the banner at once. A key whose secret is `missing`
- * (NF-8.6) is never offered: unlocking it can only fail.
+ * (RC-20), and removes the banner at once. `key.locked` says that an unlock
+ * ended by its idle time, and the key is read again, as it may be another
+ * repository's. A key whose secret is `missing` (NF-8.6) is never offered:
+ * unlocking it can only fail.
  *
  * The banner can be dismissed for the rest of the visit: until another
  * repository is opened, or the page is left.
@@ -86,6 +88,12 @@ export class LockedKeyService {
       }
     });
     this.push.events.pipe(takeUntilDestroyed()).subscribe(event => {
+      if (event.type === 'key.locked') {
+        const id = this.repositoryId();
+        if (id !== null) {
+          void this.read(id);
+        }
+      }
       if (event.type !== 'key.unlocked') {
         return;
       }

@@ -48,6 +48,11 @@ export const PushEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('key.unlocked'),
     keyId: z.number().int()
+  }),
+  /** An unlock ended by its idle time; sent only to the streams of that session (AR-31, RC-15, GA-35). */
+  z.object({
+    type: z.literal('key.locked'),
+    keyId: z.number().int()
   })
 ]);
 

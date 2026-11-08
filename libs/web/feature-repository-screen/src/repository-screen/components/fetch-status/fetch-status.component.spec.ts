@@ -98,10 +98,96 @@ describe('FetchStatusComponent', () => {
     expect(retries).toBe(0);
   });
 
+  it('Try again is unavailable while a network job runs, and says why', async () => {
+    await show({ problem: { code: 'credentials-refused', params: {} } });
+    fixture.componentRef.setInput('running', 'push');
+    await settle(fixture);
+
+    const again = button(host(), `${FIXES}.retry`);
+    expect(again.getAttribute('aria-disabled')).toBe('true');
+    again.click();
+    expect(retries).toBe(0);
+
+    // A fix only waits for the job: nothing about it conflicts (GA-9).
+    const fix = button(host(), `${FIXES}.fix-credentials`);
+    expect(fix.getAttribute('aria-disabled')).toBeNull();
+
+    fixture.componentRef.setInput('running', null);
+    await settle(fixture);
+    expect(again.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  describe('where the focus goes', () => {
+    let vacated: number;
+
+    async function showFocusable(inputs: Parameters<typeof show>[0]): Promise<void> {
+      await show(inputs);
+      vacated = 0;
+      fixture.componentInstance.vacate.subscribe(() => vacated++);
+    }
+
+    it('asks to move it when the status goes away with the focus inside', async () => {
+      await showFocusable({ problem: { code: 'network', params: {} } });
+      button(host(), `${FIXES}.retry`).focus();
+
+      fixture.componentRef.setInput('problem', null);
+      await settle(fixture);
+
+      expect(vacated).toBe(1);
+    });
+
+    it('leaves it alone when the status goes away with the focus elsewhere', async () => {
+      await showFocusable({ problem: { code: 'network', params: {} } });
+
+      fixture.componentRef.setInput('problem', null);
+      await settle(fixture);
+
+      expect(vacated).toBe(0);
+    });
+
+    it('stays in place when the problem only changes', async () => {
+      await showFocusable({ problem: { code: 'network', params: {} } });
+      button(host(), `${FIXES}.retry`).focus();
+
+      fixture.componentRef.setInput('problem', { code: 'remote-failed', params: {} });
+      await settle(fixture);
+
+      expect(vacated).toBe(0);
+    });
+
+    it.each([
+      [ 'Unlock', { lockedKeyName: 'laptop' }, `${FIXES}.unlock` ],
+      [ 'a fix', { problem: { code: 'credentials-refused', params: {} } }, `${FIXES}.fix-credentials` ]
+    ])('%s moves it before its dialog opens, as the dialog may outlive the status', async (_name, inputs, label) => {
+      await showFocusable(inputs);
+      let vacatedBeforeAction = 0;
+      const seen = () => vacatedBeforeAction = vacated;
+      fixture.componentInstance.unlock.subscribe(seen);
+      fixture.componentInstance.fix.subscribe(seen);
+
+      button(host(), label).click();
+
+      expect(vacatedBeforeAction).toBe(1);
+    });
+
+    it('asks to move it when the panel of a phone goes away with the focus inside', async () => {
+      await showFocusable({ problem: { code: 'network', params: {} }, narrow: true });
+      (host().querySelector('button') as HTMLButtonElement).click();
+      await settle(fixture);
+      button(popover() as HTMLElement, `${FIXES}.retry`).focus();
+
+      fixture.componentRef.setInput('problem', null);
+      await settle(fixture);
+
+      expect(vacated).toBe(1);
+    });
+  });
+
   it('a locked key comes before a stored problem', async () => {
     await show({ problem: { code: 'credentials-refused', params: {} }, lockedKeyName: 'laptop' });
 
-    expect(text(host())).toContain(`${KEY}.failed`);
+    // Not that it could not check: fetches may run on another session's unlock (RC-20).
+    expect(text(host())).not.toContain(`${KEY}.failed`);
     expect(text(host())).toContain(`${KEY}.locked`);
     expect(text(host())).not.toContain('errors.credentials-refused');
     expect(buttons(host()).map(text)).toEqual([ `${FIXES}.unlock` ]);
@@ -145,8 +231,11 @@ describe('FetchStatusComponent', () => {
 
     it('offers Unlock for a locked key', async () => {
       await show({ lockedKeyName: 'laptop', narrow: true });
+      expect(trigger().getAttribute('aria-label')).toBe(`${KEY}.locked`);
       trigger().click();
       await settle(fixture);
+
+      expect(text(popover())).not.toContain(`${KEY}.failed`);
 
       button(popover() as HTMLElement, `${FIXES}.unlock`).click();
 

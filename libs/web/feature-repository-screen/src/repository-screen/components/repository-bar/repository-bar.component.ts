@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import type {
   CurrentUser,
   GitNetworkJobType,
@@ -63,6 +63,4 @@ export class RepositoryBarComponent {
   readonly fixFetch = output<GitProblemState>();
   /** **Unlock** was chosen in the quiet fetch status. */
   readonly unlock = output<void>();
-
-  protected readonly fetchProblem = computed(() => this.gitStatus()?.fetchProblem ?? null);
 }
