@@ -32,6 +32,12 @@ export const GIT_ERROR_CODES = [
   'amend-not-allowed',
   /** Restoring a deleted file would replace a file or folder that is not being discarded. */
   'discard-blocked',
+  /**
+   * A merge would overwrite files that git does not track, or add paths that
+   * are not valid UTF-8 and cannot be checked, listed in the `paths` param;
+   * refused before anything changed.
+   */
+  'merge-blocked',
   'failed'
 ] as const;
 
