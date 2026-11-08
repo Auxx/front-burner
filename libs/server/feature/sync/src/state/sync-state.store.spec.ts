@@ -34,6 +34,46 @@ describe('SyncStateStore', () => {
     expect(store.setFetchProblem(repositoryId, null)).toBe(false);
   });
 
+  it('keeps the record through a merge', () => {
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: null, mergeCommit: null, applying: false });
+    store.startMerge(repositoryId, 'aaa');
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: 'aaa', mergeCommit: null, applying: true });
+    store.mergeStopped(repositoryId);
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: 'aaa', mergeCommit: null, applying: false });
+    store.mergeCommitted(repositoryId, 'mmm');
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: 'aaa', mergeCommit: 'mmm', applying: false });
+  });
+
+  it('forgets it', () => {
+    store.startMerge(repositoryId, 'aaa');
+    store.mergeCommitted(repositoryId, 'mmm');
+    store.forgetRecord(repositoryId);
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: null, mergeCommit: null, applying: false });
+    expect(() => store.forgetRecord(repositoryId + 1)).not.toThrow();
+  });
+
+  it('replaces the record of an earlier merge once committed', () => {
+    store.startMerge(repositoryId, 'aaa');
+    store.mergeCommitted(repositoryId, 'mmm');
+    store.startMerge(repositoryId, 'bbb');
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: 'bbb', mergeCommit: null, applying: true });
+    store.mergeCommitted(repositoryId, 'nnn');
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: 'bbb', mergeCommit: 'nnn', applying: false });
+    expect(store.restoreEarlier(repositoryId)).toBeNull();
+  });
+
+  it('gives the earlier record back', () => {
+    store.startMerge(repositoryId, 'aaa');
+    store.mergeCommitted(repositoryId, 'mmm');
+    store.startMerge(repositoryId, 'bbb');
+    expect(store.restoreEarlier(repositoryId)).toBe('aaa');
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: 'aaa', mergeCommit: 'mmm', applying: false });
+    store.startMerge(repositoryId, 'ccc');
+    store.forgetRecord(repositoryId);
+    expect(store.restoreEarlier(repositoryId)).toBeNull();
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: null, mergeCommit: null, applying: false });
+  });
+
   it('is deleted with its repository', () => {
     store.setFetchProblem(repositoryId, { code: 'x', params: {} });
     database.db.delete(repositories).where(eq(repositories.id, repositoryId)).run();
