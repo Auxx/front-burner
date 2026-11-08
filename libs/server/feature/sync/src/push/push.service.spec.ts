@@ -29,7 +29,6 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
   let restoreCa: () => void;
   let harness: PushHarness;
   let app: INestApplication;
-  let userId: number;
 
   const http = () => request(app.getHttpServer());
   const push = (id = harness.repositoryId) => http().post(`/repositories/${id}/git/push`);
@@ -55,7 +54,7 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
     app = moduleRef.createNestApplication({ logger: false });
     // Stands in for the auth middleware.
     app.use((req: Request, _res: Response, next: NextFunction) => {
-      req.auth = { userId, sessionId: SESSION } as Request['auth'];
+      req.auth = { userId: harness.alice, sessionId: SESSION } as Request['auth'];
       next();
     });
     await app.init();
@@ -71,7 +70,6 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
 
   beforeEach(async () => {
     harness = await PushHarness.start();
-    userId = harness.alice;
     await startApp();
   });
 
@@ -97,6 +95,15 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
         dedupeKey: `push:${harness.repositoryId}:main`
       })
     ]);
+  });
+
+  it('reports the running push in the status', async () => {
+    harness.commit('second');
+    const { body } = await push().expect(202);
+
+    const status = await http().get(`/repositories/${harness.repositoryId}/git/status`).expect(200);
+
+    expect(status.body).toMatchObject({ networkJob: { id: body.jobId, type: 'push' } });
   });
 
   it('publishes git.changed when it queues a push, so that other tabs show it running', async () => {
