@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
-import type { CurrentUser, GitStatus, RepositorySummary } from '@front-burner/shared-contracts';
+import type { CurrentUser, GitNetworkJobType, GitStatus, RepositorySummary } from '@front-burner/shared-contracts';
 import type { SaveStatus } from '@front-burner/web-core';
 import { BrandLinkComponent, UserMenuComponent } from '@front-burner/web-shell';
 
+import { GitActionsComponent } from '../git-actions/git-actions.component';
 import { GitStatusSummaryComponent } from '../git-status-summary/git-status-summary.component';
-import { PushButtonComponent } from '../push-button/push-button.component';
 import { RepositorySwitcherComponent } from '../repository-switcher/repository-switcher.component';
 import { SaveStatusComponent } from '../save-status/save-status.component';
 
@@ -12,7 +12,7 @@ import { SaveStatusComponent } from '../save-status/save-status.component';
  * The repository screen's one bar, the app header and the repository's header
  * in one (NV-9, FB-10): the product's icon as a link to the dashboard, the
  * repository name, which opens the repository switcher (NV-10), the current
- * branch and its counts and **Push** (GA-7), the open file's save status (ED-18), and the
+ * branch and its counts and **Fetch** and **Push** (GA-7), the open file's save status (ED-18), and the
  * user menu. The **Files** toggle is in the activity bar (FB-7, FB-9).
  */
 @Component({
@@ -22,7 +22,7 @@ import { SaveStatusComponent } from '../save-status/save-status.component';
     UserMenuComponent,
     RepositorySwitcherComponent,
     GitStatusSummaryComponent,
-    PushButtonComponent,
+    GitActionsComponent,
     SaveStatusComponent
   ],
   templateUrl: './repository-bar.component.html',
@@ -41,8 +41,10 @@ export class RepositoryBarComponent {
   readonly gitStatus = input<GitStatus | null>(null);
   /** The open file's save status; `null` without one. */
   readonly saveStatus = input<SaveStatus | null>(null);
-  /** Whether a push is being started or runs (GA-9). */
-  readonly pushing = input(false);
+  /** The network job being started or running, here or in another tab (GA-9). */
+  readonly running = input<GitNetworkJobType | null>(null);
+  /** **Fetch** was chosen. */
+  readonly fetch = output<void>();
   /** **Push** was chosen. */
   readonly push = output<void>();
 }

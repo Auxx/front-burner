@@ -31,8 +31,9 @@ GA-43); `docs/requirements/repo-credentials.md` (RC-4, RC-9, RC-17);
 - While it runs: a spinner and "Fetching…", and the status says so to screen
   readers.
 - A fetch the user pressed that moved nothing shows a toast, "No new commits",
-  as otherwise nothing shows that it ran; one that moved something updates the
-  counts _(plan's call)_. Only the tab that started it says so.
+  as otherwise nothing shows that it ran; one that moved only another branch
+  shows "No changes received for this branch"; one that moved the upstream
+  updates the counts _(plan's call)_. Only the tab that started it says so.
 - RC-4's first row says "Add credentials to push." for a push; a private
   repository that refuses an anonymous fetch shows the same words, as the fix is
   the same.

@@ -114,7 +114,7 @@ describe.skipIf(process.platform === 'win32')('FetchService', () => {
     await harness.finished(first.body.jobId);
     expect((await jobState(first.body.jobId).expect(200)).body).toEqual({
       status: 'done',
-      outcome: { kind: 'fetched', moved: false }
+      outcome: { kind: 'fetched', moved: false, upstreamMoved: false }
     });
   });
 

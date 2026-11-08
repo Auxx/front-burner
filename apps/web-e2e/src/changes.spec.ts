@@ -47,19 +47,21 @@ function unconfirmedHandbook(instance: { dataDir: string; }, name = 'handbook'):
   return { id, dir: join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)) };
 }
 
-/** **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
-async function push(page: Page): Promise<void> {
+/** **Fetch** or **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
+async function gitAction(page: Page, name: 'Fetch' | 'Push'): Promise<void> {
   const bar = page.getByRole('banner');
-  const button = bar.getByRole('button', { name: 'Push', exact: true });
+  const button = bar.getByRole('button', { name, exact: true });
   const gitActions = bar.getByRole('button', { name: 'Git actions' });
   await expect(button.or(gitActions)).toBeVisible();
   if (await gitActions.isVisible()) {
     await gitActions.click();
-    await page.getByRole('menuitem', { name: 'Push' }).click();
+    await page.getByRole('menuitem', { name }).click();
   } else {
     await button.click();
   }
 }
+
+const push = (page: Page) => gitAction(page, 'Push');
 
 async function openScreen(page: Page, url: string): Promise<void> {
   await page.goto(url);
@@ -292,6 +294,22 @@ test.describe('pushing', () => {
     await expect(toasts(page).getByText('Pushed 2 commits to origin/main')).toBeVisible();
     await expect(summary(page)).toHaveText('main');
     expect(gitIn(bare, 'log', '-1', '--format=%s', 'main').trim()).toBe('third');
+  });
+
+  test('Fetch brings the counts of a commit pushed elsewhere', async ({ page, instance }) => {
+    const { id, bare } = pushable(instance, 'cloned');
+    await openScreen(page, `/repositories/${id}`);
+    await expect(summary(page)).toHaveText('main');
+
+    // Someone else pushes a commit to the remote.
+    const elsewhere = join(dirname(bare), 'elsewhere');
+    gitIn(dirname(bare), 'clone', '-q', bare, elsewhere);
+    gitIn(elsewhere, 'commit', '-q', '--allow-empty', '-m', 'from elsewhere');
+    gitIn(elsewhere, 'push', '-q', 'origin', 'main');
+
+    await gitAction(page, 'Fetch');
+
+    await expect(summary(page)).toHaveText(/main\s*·\s*1 to pull/);
   });
 
   test('AC-GIT-002.12: shows a hook\'s lines as text', async ({ page, instance }) => {

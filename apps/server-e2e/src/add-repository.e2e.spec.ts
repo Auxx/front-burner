@@ -108,6 +108,11 @@ class Client {
     return (await this.statusOf(id)) as Summary;
   }
 
+  /** Waits until no repository is cloning, as a user may have 3 clones unfinished (NF-11.4). */
+  async allSettled(): Promise<void> {
+    await waitFor(async () => (await this.recent()).every(summary => summary.status !== 'cloning'));
+  }
+
   /** Trusts the host key of an SSH remote, as the dialog's **Trust** does (AR-32). */
   async trust(remoteUrl: string, credentials: unknown): Promise<void> {
     const check = await this.post(ACCESS_CHECK, { remoteUrl, credentials });
@@ -234,6 +239,8 @@ describe('adding a repository (REQ-REPO-001)', () => {
     });
 
     it('AC-REPO-001.7: adds a public repository without credentials; a private one needs some', async () => {
+      // The earlier tests of this group leave 3 clones behind, which a slow machine may not have finished.
+      await admin.allSettled();
       const before = (await admin.get('/api/v1/credentials')).body;
 
       expect((await admin.add({ remoteUrl: publicUrl(), name: 'Public' })).status).toBe(201);

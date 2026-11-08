@@ -822,12 +822,14 @@ export class GitEngine implements BeforeApplicationShutdown {
    * remote deleted is removed with its ref and upstream, and the fetch tried
    * again, so that the branch is unpublished (GA-41).
    *
-   * @returns whether any remote-tracking branch moved.
+   * @returns whether any remote-tracking branch moved, and whether the current
+   * branch's upstream did: its commit changed, or it was created or deleted.
    * @throws GitOperationError `unsafe-repository-config` when `origin` is not
    * the stored remote, and the codes of A-5.10.
    */
-  async fetch(workingCopy: string, request: FetchRequest): Promise<{ moved: boolean; }> {
+  async fetch(workingCopy: string, request: FetchRequest): Promise<{ moved: boolean; upstreamMoved: boolean; }> {
     const before = await this.remoteRefs(workingCopy);
+    const upstreamBefore = await this.upstreamCommit(workingCopy);
     const removed = new Set<string>();
     for (;;) {
       try {
@@ -857,7 +859,22 @@ export class GitEngine implements BeforeApplicationShutdown {
         removed.add(ref);
       }
     }
-    return { moved: await this.remoteRefs(workingCopy) !== before };
+    return {
+      moved: await this.remoteRefs(workingCopy) !== before,
+      upstreamMoved: await this.upstreamCommit(workingCopy) !== upstreamBefore
+    };
+  }
+
+  /** The commit of the current branch's upstream; `null` on a detached `HEAD`, or without an upstream or its ref. */
+  private async upstreamCommit(workingCopy: string): Promise<string | null> {
+    const result = await this.local.run(
+      workingCopy,
+      [ '--no-optional-locks', 'rev-parse', '--verify', '--quiet', '@{upstream}^{commit}' ]
+    );
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    return result.exitCode === 0 ? result.stdout.trim() : null;
   }
 
   /**

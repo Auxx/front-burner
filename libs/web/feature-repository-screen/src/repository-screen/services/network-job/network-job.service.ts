@@ -57,8 +57,14 @@ const OPERATIONS: Readonly<Record<GitNetworkJobType, Operation>> = {
   },
   fetch: {
     start: (api, repositoryId) => api.fetch(repositoryId),
-    // Plan 74 says "No new commits" for a fetch that moved nothing; until then a fetch's success is silent.
-    succeeded: () => null
+    // A fetch that moved this branch's upstream shows in the counts. Otherwise it says so, also when only another
+    // branch moved (`moved`), as it would look as if the press did nothing.
+    succeeded: outcome => {
+      if (outcome.kind !== 'fetched' || outcome.upstreamMoved) {
+        return null;
+      }
+      return { key: `${KEY}.${outcome.moved ? 'noChangesReceived' : 'noNewCommits'}`, params: {} };
+    }
   },
   pull: {
     start: (api, repositoryId) => api.pull(repositoryId),
@@ -81,14 +87,18 @@ const stringParams = (params: Readonly<Record<string, unknown>>): Record<string,
  * (A-3.11), so that a `job.finished` missed while offline still ends it. When
  * the job ends, the status is read again, so that the counts update (GA-32).
  *
- * Only the tab that started a job says "Pushed 2 commits to origin/main". A job
- * that failed becomes `problem`, quiet for a job this tab did not start, so that
- * it is not announced. So does a job the backend refused to start, except `409
- * key-locked`: that asks for the passphrase at once, and the job carries on after
- * the unlock without being started again; cancelling cancels it, with no message
- * (RC-17). It asks once per press, so that a key that is locked again at once
- * shows the problem, with **Unlock**. Nothing is saved first: a push sends what
- * was committed.
+ * Only the tab that started a job says "Pushed 2 commits to origin/main", or
+ * "No new commits" for a fetch that moved nothing, or "No changes received for
+ * this branch" for one that moved only another branch (a fetch that moved the
+ * upstream says nothing, the counts update). A job that failed becomes
+ * `problem`, quiet for a job this tab did not start, so that it is not
+ * announced. So does a job
+ * the backend refused to start, except `409 key-locked`: that asks for the
+ * passphrase at once, and the job carries on after the unlock without being
+ * started again; cancelling cancels it, with no message (RC-17). It asks once
+ * per press, so that a key that is locked again at once shows the problem, with
+ * **Unlock**. Nothing is saved first: a push sends what was committed, and a
+ * fetch changes no file.
  */
 @Injectable()
 export class NetworkJobService {
@@ -169,7 +179,7 @@ export class NetworkJobService {
   }
 
   /**
-   * Starts a network job of the current branch, such as a push (GA-29). Nothing
+   * Starts a network job of the current branch, a push or a fetch (GA-29). Nothing
    * happens while any network job is being started or runs. Settles once the
    * backend has queued it, or refused it, and after the passphrase was asked for,
    * if it was (RC-17).

@@ -3,9 +3,11 @@ import { GitJobStateSchema, GitNetworkJobSchema } from './git-push.schema';
 
 describe('GitFetchedSchema', () => {
   it('parses a fetch, which is a git job\'s outcome', () => {
-    expect(GitFetchedSchema.parse({ kind: 'fetched', moved: true })).toEqual({ kind: 'fetched', moved: true });
+    const moved = { kind: 'fetched', moved: true, upstreamMoved: false };
+    expect(GitFetchedSchema.parse(moved)).toEqual(moved);
     expect(GitFetchedSchema.safeParse({ kind: 'fetched' }).success).toBe(false);
-    const fetched = { status: 'done', outcome: { kind: 'fetched', moved: false } };
+    expect(GitFetchedSchema.safeParse({ kind: 'fetched', moved: true }).success).toBe(false);
+    const fetched = { status: 'done', outcome: { kind: 'fetched', moved: false, upstreamMoved: false } };
     expect(GitJobStateSchema.parse(fetched)).toEqual(fetched);
   });
 

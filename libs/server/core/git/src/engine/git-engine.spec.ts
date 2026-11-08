@@ -2053,7 +2053,7 @@ describe('GitEngine', () => {
         const head = git(work(), 'rev-parse', 'HEAD').trim();
         const theirs = commitOnRemote('main', { 'notes.md': 'theirs\n' });
 
-        expect(await fetch()).toEqual({ moved: true });
+        expect(await fetch()).toEqual({ moved: true, upstreamMoved: true });
 
         expect(git(work(), 'rev-parse', 'refs/remotes/origin/main').trim()).toBe(theirs);
         expect(git(work(), 'rev-parse', 'HEAD').trim()).toBe(head);
@@ -2067,7 +2067,7 @@ describe('GitEngine', () => {
         await cloneIt();
         git(bare(), 'update-ref', '-d', 'refs/heads/feature/x');
 
-        expect(await fetch()).toEqual({ moved: true });
+        expect(await fetch()).toEqual({ moved: true, upstreamMoved: false });
 
         expect(remoteBranches()).not.toContain('refs/remotes/origin/feature/x');
         expect(remoteBranches()).toContain('refs/remotes/origin/main');
@@ -2076,7 +2076,32 @@ describe('GitEngine', () => {
       it('says when nothing moved', async () => {
         await cloneIt();
 
-        expect(await fetch()).toEqual({ moved: false });
+        expect(await fetch()).toEqual({ moved: false, upstreamMoved: false });
+      });
+
+      it('says when only another branch moved', async () => {
+        await cloneIt();
+        commitOnRemote('feature/x', { 'notes.md': 'theirs\n' });
+
+        expect(await fetch()).toEqual({ moved: true, upstreamMoved: false });
+      });
+
+      it('says the upstream moved when it was force-pushed to a commit of the same distance', async () => {
+        await cloneIt();
+        commitOnRemote('main', { 'one.md': 'one\n' });
+        await fetch();
+        git(bare(), 'update-ref', 'refs/heads/main', 'refs/heads/main~1');
+        commitOnRemote('main', { 'two.md': 'two\n' });
+
+        expect(await fetch()).toEqual({ moved: true, upstreamMoved: true });
+      });
+
+      it('has no upstream to move on a detached HEAD', async () => {
+        await cloneIt();
+        git(work(), 'checkout', '-q', '--detach');
+        commitOnRemote('main', {});
+
+        expect(await fetch()).toEqual({ moved: true, upstreamMoved: false });
       });
 
       it('fetches no tags', async () => {
@@ -2093,7 +2118,7 @@ describe('GitEngine', () => {
         await cloneIt('single-branch');
         const theirs = commitOnRemote('main', { 'notes.md': 'theirs\n' });
 
-        expect(await fetch()).toEqual({ moved: true });
+        expect(await fetch()).toEqual({ moved: true, upstreamMoved: true });
 
         expect(git(work(), 'rev-parse', 'refs/remotes/origin/main').trim()).toBe(theirs);
         expect(git(work(), 'rev-parse', '--is-shallow-repository').trim()).toBe('true');
@@ -2109,7 +2134,8 @@ describe('GitEngine', () => {
         git(bare(), 'update-ref', '-d', 'refs/heads/topic');
         const theirs = commitOnRemote('main', {});
 
-        expect(await fetch()).toEqual({ moved: true });
+        // The current branch, `topic`, lost its upstream.
+        expect(await fetch()).toEqual({ moved: true, upstreamMoved: true });
 
         expect(fetchRefspecs()).toBe('+refs/heads/main:refs/remotes/origin/main');
         expect(remoteBranches()).toBe('refs/remotes/origin/main');
@@ -2143,14 +2169,14 @@ describe('GitEngine', () => {
         git(bare(), 'symbolic-ref', 'HEAD', 'refs/heads/feature/x');
         git(bare(), 'update-ref', '-d', 'refs/heads/main');
 
-        expect(await fetch()).toEqual({ moved: true });
+        expect(await fetch()).toEqual({ moved: true, upstreamMoved: false });
 
         expect(fetchRefspecs()).toBe('+refs/heads/topic:refs/remotes/origin/topic');
         expect(remoteBranches()).toBe('refs/remotes/origin/topic');
         expect(git(work(), 'config', '--get-regexp', '^branch\\.').trim()).toBe(
           'branch.topic.remote origin\nbranch.topic.merge refs/heads/topic'
         );
-        expect(await fetch()).toEqual({ moved: false });
+        expect(await fetch()).toEqual({ moved: false, upstreamMoved: false });
       });
 
       it('refuses an unsafe config', async () => {
