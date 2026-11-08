@@ -1,7 +1,7 @@
 import { inBatches, lstatOrMissing, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
 import { isMarkdownName } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
-import { rm, writeFile } from 'node:fs/promises';
+import { readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult } from '../runner/git-runner';
@@ -92,7 +92,7 @@ export class GitMerge {
    * knows the working copy was clean when the commit was recorded (GA-26).
    */
   async resetTo(workingCopy: string, oid: string): Promise<void> {
-    await this.local.checked(workingCopy, [ 'reset', '-q', '--hard', oid ]);
+    await this.local.checked(workingCopy, [ 'reset', '-q', '--hard', oid ], { timeoutMs: this.options.gitTimeoutMs });
   }
 
   /**
@@ -104,7 +104,37 @@ export class GitMerge {
   async undoCutShort(workingCopy: string, oid: string): Promise<void> {
     await rm(join(workingCopy, '.git', 'index.lock'), { force: true });
     await this.resetTo(workingCopy, oid);
-    await this.local.checked(workingCopy, [ 'clean', '-fdq' ]);
+    await this.local.checked(workingCopy, [ 'clean', '-fdq' ], { timeoutMs: this.options.gitTimeoutMs });
+  }
+
+  /**
+   * Removes every `*.lock` directly in `.git` and under `.git/refs`: a killed git
+   * can leave `HEAD.lock`, `ORIG_HEAD.lock` or a ref's lock as well as
+   * `index.lock`. Only for the start, when no git command runs (NF-9.4): at any
+   * other time a fetch may hold a ref's lock.
+   */
+  async removeStaleLocks(workingCopy: string): Promise<void> {
+    const gitDir = join(workingCopy, '.git');
+    const entries = [
+      ...await readdir(gitDir, { withFileTypes: true }),
+      ...await readdir(join(gitDir, 'refs'), { withFileTypes: true, recursive: true })
+    ];
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.endsWith('.lock')) {
+        await rm(join(entry.parentPath, entry.name), { force: true });
+      }
+    }
+  }
+
+  /**
+   * Writes what a status would otherwise work out every time, which can take as
+   * long as hashing every file (A-5.14). `--unmerged` is needed because git
+   * otherwise fails at the conflicting files of a merge waiting for the user.
+   */
+  async refreshIndex(workingCopy: string): Promise<void> {
+    await this.local.checked(workingCopy, [ 'update-index', '-q', '--unmerged', '--refresh' ], {
+      timeoutMs: this.options.gitTimeoutMs
+    });
   }
 
   /**

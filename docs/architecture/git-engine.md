@@ -310,11 +310,20 @@ Confirmed by spike 2 (spikes.md).
 ## A-5: Recovery
 
 - **A-5.15** On start, each working copy is checked and returned to a known
-  state as NF-9.4 and NF-9.5 describe: stale `index.lock` files removed, an
-  interrupted automatic merge aborted, an interrupted user merge reset to the
-  recorded commit, a merge or rebase waiting for resolution left alone. Each
-  index is then refreshed with `git update-index -q --refresh`, under
-  `FRONT_BURNER_GIT_TIMEOUT`, as it can take as long as hashing every file. It
-  costs about one status when nothing is stale. A refresh that fails is logged
-  and does not stop the start, since status still works, only slowly. _(My
-  call.)_
+  state as NF-9.4 and NF-9.5 describe: stale locks removed (every `*.lock`
+  directly in `.git` and under `.git/refs`), an interrupted automatic merge
+  aborted, an interrupted user merge reset to the recorded commit, a merge or
+  rebase waiting for resolution left alone. Each index is then refreshed with
+  `git update-index -q --unmerged --refresh`, under `FRONT_BURNER_GIT_TIMEOUT`,
+  as it can take as long as hashing every file; without `--unmerged`, git fails
+  at the conflicting files of a waiting merge. It costs about one status when
+  nothing is stale. A refresh that fails is logged and does not stop the start,
+  since status still works, only slowly. _(My call.)_
+  - `merge_applying` (A-4.5a) tells the merges apart. While it is set, nothing
+    has been resolved, so the merge is reset to the recorded commit, even if git
+    got as far as a `MERGE_HEAD`, and the earlier record comes back. Otherwise a
+    `MERGE_HEAD` is a merge waiting for the user.
+  - Recovery runs in `onModuleInit`, one working copy at a time. Nest awaits it
+    before any `onApplicationBootstrap`, where the job runner starts, so no job
+    runs git meanwhile and a lock on a ref can only be stale. A working copy
+    that fails is logged and stops neither the others nor the start.

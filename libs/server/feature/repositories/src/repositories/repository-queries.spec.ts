@@ -16,6 +16,15 @@ describe('RepositoryQueries', () => {
 
   afterEach(() => database.sqlite.close());
 
+  it('lists the ready repositories of every user', () => {
+    const bob = insertUser(database, 'bob@example.com');
+    const handbook = insertRepository(database, alice, { name: 'handbook' });
+    insertRepository(database, alice, { name: 'cloning', status: 'cloning' });
+    const notes = insertRepository(database, bob, { name: 'notes' });
+
+    expect(queries.ready()).toEqual([ { id: handbook, userId: alice }, { id: notes, userId: bob } ]);
+  });
+
   it('indexes every repository of the user by name and remote', () => {
     const bob = insertUser(database, 'bob@example.com');
     insertRepository(database, alice, { name: 'Handbook', remoteUrl: 'https://GitHub.com/acme/handbook.git/' });

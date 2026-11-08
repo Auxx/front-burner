@@ -7,6 +7,7 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -131,6 +132,43 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
     expect(readFileSync(join(work, 'clean.md'), 'utf8')).toBe('A\nb\nc\n');
     expect(readFileSync(join(work, 'both.md'), 'utf8')).toBe('mine\n');
     expect(readFileSync(join(work, 'gone.md'), 'utf8')).toBe('x changed\n');
+  });
+
+  it('removeStaleLocks removes locks in .git and under refs, and nothing else', async () => {
+    const gitDir = join(work, '.git');
+    mkdirSync(join(gitDir, 'refs', 'remotes', 'origin'), { recursive: true });
+    for (const lock of [ 'index.lock', 'HEAD.lock', 'ORIG_HEAD.lock', 'refs/heads/main.lock', 'refs/remotes/origin/a.lock' ]) {
+      writeFileSync(join(gitDir, lock), '');
+    }
+    write('notes.lock', 'the user\'s file\n');
+    const object = join(gitDir, 'objects', 'kept.lock');
+    writeFileSync(object, '');
+
+    await merge.removeStaleLocks(work);
+
+    for (const lock of [ 'index.lock', 'HEAD.lock', 'ORIG_HEAD.lock', 'refs/heads/main.lock', 'refs/remotes/origin/a.lock' ]) {
+      expect(existsSync(join(gitDir, lock)), lock).toBe(false);
+    }
+    expect(existsSync(join(work, 'notes.lock'))).toBe(true);
+    expect(existsSync(object)).toBe(true);
+    expect(existsSync(join(gitDir, 'HEAD'))).toBe(true);
+    expect(git(work, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main');
+  });
+
+  it('refreshIndex updates stale entries, and accepts modified and conflicting files', async () => {
+    utimesSync(join(work, 'first.md'), new Date(1_000_000), new Date(1_000_000));
+    expect(git(work, 'diff-files', '--name-only')).toBe('first.md');
+
+    await merge.refreshIndex(work);
+
+    expect(git(work, 'diff-files', '--name-only')).toBe('');
+    write('first.md', 'changed\n');
+    await expect(merge.refreshIndex(work)).resolves.toBeUndefined();
+    git(work, 'checkout', '-q', '--', 'first.md');
+
+    conflictingMerge();
+    await expect(merge.refreshIndex(work)).resolves.toBeUndefined();
+    expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(true);
   });
 
   it('undoCutShort works with a stale lock, removes untracked files and keeps ignored ones', async () => {

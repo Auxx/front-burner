@@ -4,7 +4,7 @@ import { remoteDisplay } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 
-/** Reads a user's repositories; every query is limited to that user (DS-3, A-7.3). */
+/** Reads a user's repositories; every query but `ready` is limited to that user (DS-3, A-7.3). */
 @Injectable()
 export class RepositoryQueries {
   constructor(@Inject(DATABASE) private readonly database: Database) {}
@@ -18,6 +18,15 @@ export class RepositoryQueries {
       .all();
     // The display form is the remote's key for every URL that parses (AR-12, DS-18).
     return { repositories: rows.map(row => ({ name: row.name, remoteKey: remoteDisplay(row.remoteUrl) })) };
+  }
+
+  /** Every user's ready repositories, for work the instance does on its own; never for a user's request. */
+  ready(): Pick<Repository, 'id' | 'userId'>[] {
+    return this.database.db.select({ id: repositories.id, userId: repositories.userId })
+      .from(repositories)
+      .where(eq(repositories.status, 'ready'))
+      .orderBy(asc(repositories.id))
+      .all();
   }
 
   /** One of the user's repositories; another user's is not found, like a missing one (FB-2). */
