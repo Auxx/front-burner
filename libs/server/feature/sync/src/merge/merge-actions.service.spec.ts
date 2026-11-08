@@ -283,6 +283,55 @@ describe.skipIf(process.platform === 'win32')('MergeActions', () => {
       expect(refAt()).toBe(older);
     });
 
+    // A pull's merge waits with no merge commit: this record is of a merge that is over.
+    it('never goes back to the record of a committed merge, even when it is HEAD', async () => {
+      diverged({ 'both.md': 'base\n', 'other.md': 'base\n' }, { 'both.md': 'mine\n' }, { 'both.md': 'theirs\n' });
+      const recorded = await merges.record(work);
+      syncState.startMerge(repositoryId, recorded);
+      syncState.mergeCommitted(repositoryId, 'the-merge-commit');
+      writeFileSync(join(work, 'other.md'), 'not committed\n');
+      await mergeThatConflicts();
+
+      await actions.abort(userId, repositoryId);
+
+      expect(await merges.mergeInProgress(work)).toBe(false);
+      expect(readFileSync(join(work, 'other.md'), 'utf8')).toBe('not committed\n');
+      expect(syncState.record(repositoryId)).toMatchObject({
+        recordedCommit: recorded,
+        mergeCommit: 'the-merge-commit'
+      });
+      expect(refAt()).toBe(recorded);
+    });
+
+    it('ends a merge with no record even when git refuses to abort it', async () => {
+      conflicting();
+      const before = snapshot();
+      await mergeThatConflicts();
+      writeFileSync(join(work, 'resolved.md'), 'resolved by hand\n');
+      git(work, 'add', 'resolved.md');
+      writeFileSync(join(work, 'resolved.md'), 'edited again after resolving\n');
+
+      await actions.abort(userId, repositoryId);
+
+      expect(snapshot()).toEqual(before);
+      expect(mergeFiles()).toEqual([]);
+    });
+
+    it('says with a code that git failed, and keeps the merge and its record', async () => {
+      conflicting();
+      const recorded = await pullThatConflicts();
+      vi.spyOn(merges, 'resetTo').mockRejectedValueOnce(new Error('disk full'));
+
+      await expect(actions.abort(userId, repositoryId)).rejects.toMatchObject({
+        status: 500,
+        code: 'merge-abort-failed'
+      });
+
+      expect(await merges.mergeInProgress(work)).toBe(true);
+      expect(syncState.record(repositoryId)).toMatchObject({ recordedCommit: recorded });
+      expect(refAt()).toBe(recorded);
+    });
+
     it('a second abort is refused', async () => {
       conflicting();
       await pullThatConflicts();

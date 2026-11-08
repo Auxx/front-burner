@@ -120,15 +120,49 @@ export class GitMerge {
    * knows the working copy was clean when the commit was recorded (GA-26).
    */
   async resetTo(workingCopy: string, oid: string): Promise<void> {
-    await this.local.checked(workingCopy, [ 'reset', '-q', '--hard', oid ], { timeoutMs: this.options.gitTimeoutMs });
+    await this.freeingLocksAtTimeout(
+      workingCopy,
+      () => this.local.checked(workingCopy, [ 'reset', '-q', '--hard', oid ], { timeoutMs: this.options.gitTimeoutMs })
+    );
   }
 
   /**
-   * `git merge --abort`, for a merge with no record to go back to (A-5.12). Keeps
-   * changes that were there before the merge, unlike `resetTo`.
+   * For a merge with no record to go back to (A-5.12). `git merge --abort` keeps
+   * changes that were there before the merge, unlike `resetTo`. It refuses with
+   * "Entry not uptodate" when a resolved file differs from the index, and the
+   * merge must still end (GC-23), so it then goes back to `HEAD`. That loses such
+   * changes, but only in a merge that the product did not start: a pull's working
+   * copy was clean (GA-26).
+   *
+   * @throws GitOperationError `timeout`
    */
   async abort(workingCopy: string): Promise<void> {
-    await this.local.checked(workingCopy, [ 'merge', '--abort' ], { timeoutMs: this.options.gitTimeoutMs });
+    const result = await this.freeingLocksAtTimeout(workingCopy, async () => {
+      const run = await this.local.run(workingCopy, [ 'merge', '--abort' ], { timeoutMs: this.options.gitTimeoutMs });
+      if (run.timedOut) {
+        throw new GitOperationError('timeout', run.stderr);
+      }
+      return run;
+    });
+    if (result.exitCode === 0) {
+      return;
+    }
+    if (!await this.mergeInProgress(workingCopy)) {
+      throw new Error(`git merge --abort failed: ${result.stderr.trim()}`);
+    }
+    await this.resetTo(workingCopy, 'HEAD');
+  }
+
+  /** A git killed at its timeout can't remove its locks, and they would refuse every retry. */
+  private async freeingLocksAtTimeout<T>(workingCopy: string, command: () => Promise<T>): Promise<T> {
+    try {
+      return await command();
+    } catch (error) {
+      if (error instanceof GitOperationError && error.code === 'timeout') {
+        await this.removeOwnLocks(workingCopy);
+      }
+      throw error;
+    }
   }
 
   /**

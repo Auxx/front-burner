@@ -295,10 +295,13 @@ Confirmed by spike 2 (spikes.md).
 - **A-5.12** Before a merge or rebase, the engine records the current commit in
   `sync_state` (D-4.6) and also as the ref `refs/front-burner/pre-merge`, so
   that git's garbage collection keeps it while it may be needed. _(My call.)_
-  Aborting goes back to it only when it is `HEAD`, which a merge never moves;
-  otherwise, or with no record, it uses `git merge --abort` and leaves the
-  record alone, since a record of another commit would take later commits off
-  the branch. _(Plan 80's call.)_
+  Aborting goes back to it only when it has no merge commit and is `HEAD`, which
+  a merge never moves. Otherwise, or with no record, it uses `git merge --abort`
+  and leaves the record alone, since a record of another commit would take later
+  commits off the branch. When git refuses that, as with a resolved file edited
+  again, it goes back to `HEAD`, so that a merge can always be aborted (GC-23).
+  That loses uncommitted changes from before the merge, which only a merge that
+  the product did not start can have. _(Plan 80's call.)_
 - **A-5.13** Clones are made in `tmp/` and moved into place with one rename when
   they succeed (NF-5.3).
 - **A-5.14** Status at 100,000 files (NF-1.4) needs no git setting: about 100 ms

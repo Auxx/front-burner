@@ -45,12 +45,15 @@ numbering conventions.
 - **A-4.5a** The commit recorded before a merge (D-4.6) is kept, in `sync_state`
   and as a ref (A-5.12), until the merge is aborted, or until the merge commit
   is pushed or undone (GC-24 to GC-26). Only then are both removed. _(My call.)_
-  The record is five columns of `sync_state`: `recorded_commit` and
-  `merge_commit` (null until the merge is committed), `earlier_recorded_commit`
-  and `earlier_merge_commit`, which hold the record of the previous merge while
-  a new merge is applied so that a merge that fails can put it back, and
-  `merge_applying` (boolean, false by default), true while a merge is being
-  applied. Committing the merge clears the `earlier_` columns.
+  Aborting puts back the record of the merge before it, if it has one, so that
+  **Undo merge** of that merge comes back, and leaves alone a record that is not
+  the aborted merge's (A-5.12). _(Plan 80's call.)_ The record is five columns
+  of `sync_state`: `recorded_commit` and `merge_commit` (null until the merge is
+  committed), `earlier_recorded_commit` and `earlier_merge_commit`, which hold
+  the record of the previous merge while a new merge is applied so that a merge
+  that fails can put it back, and `merge_applying` (boolean, false by default),
+  true while a merge is being applied. Committing the merge clears the
+  `earlier_` columns.
 - **A-4.5b** Every row that belongs to one repository references it with `ON
   DELETE CASCADE`, so that removing a repository (RM-19) deletes its
   `sync_state`, warnings and jobs in the same transaction. Saved credentials and

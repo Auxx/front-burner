@@ -144,8 +144,63 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
     expect(readFileSync(join(work, 'other.md'), 'utf8')).toBe('not committed\n');
   });
 
-  it('abort fails when there is no merge', async () => {
+  it('abort fails when there is no merge, and changes nothing', async () => {
+    write('first.md', 'not committed\n');
+
     await expect(merge.abort(work)).rejects.toThrow('merge --abort');
+
+    expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe('not committed\n');
+  });
+
+  it('abort still ends a merge that git refuses to abort, as with a resolved file edited again', async () => {
+    const head = conflictingMerge();
+    write('both.md', 'resolved\n');
+    git(work, 'add', 'both.md');
+    write('both.md', 'edited again\n');
+
+    await merge.abort(work);
+
+    expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(false);
+    expect(git(work, 'rev-parse', 'HEAD')).toBe(head);
+    expect(git(work, 'status', '--porcelain')).toBe('');
+    expect(readFileSync(join(work, 'both.md'), 'utf8')).toBe('mine\n');
+  });
+
+  describe('when git is killed at its timeout', () => {
+    /** Leaves what a killed git leaves, once, instead of running the command that has `killed` among its arguments. */
+    class KilledLocalGit extends LocalGit {
+      private done = false;
+
+      constructor(private readonly killed: string) {
+        super(new GitRunner());
+      }
+
+      override async run(cwd: string, args: string[], options?: LocalRunOptions) {
+        if (this.done || !args.includes(this.killed)) {
+          return super.run(cwd, args, options);
+        }
+        this.done = true;
+        writeFileSync(join(work, '.git', 'index.lock'), '');
+        return { ...await super.run(cwd, [ 'version' ]), exitCode: null, timedOut: true };
+      }
+    }
+
+    it.each([
+      [ 'resetTo', 'reset', (killed: GitMerge, oid: string) => killed.resetTo(work, oid) ],
+      [ 'abort', 'merge', (killed: GitMerge) => killed.abort(work) ]
+    ])('%s can be tried again', async (_name, command, act) => {
+      const oid = conflictingMerge();
+      const killed = new GitMerge(new KilledLocalGit(command), { gitTimeoutMs: 60_000 } as GitOptions);
+
+      await expect(act(killed, oid)).rejects.toMatchObject({ code: 'timeout' });
+
+      // Not ended some other way: a timeout says nothing about what git would refuse.
+      expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(true);
+      expect(existsSync(join(work, '.git', 'index.lock'))).toBe(false);
+      await act(killed, oid);
+      expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(false);
+      expect(git(work, 'status', '--porcelain')).toBe('');
+    });
   });
 
   it('resetTo ends a merge and puts every file back', async () => {
