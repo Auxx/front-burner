@@ -48,9 +48,13 @@ export class GitApi {
     return this.call(path, { method, body: JSON.stringify(body) });
   }
 
-  /** Adds a repository and waits for its clone; returns its ID and working copy. */
-  async add(name: string, remoteUrl: string, credentials: object = { mode: 'none' }) {
-    const added = await this.send('POST', '/repositories', { remoteUrl, name, credentials, cloneMode: 'full' });
+  /**
+   * Adds a repository and waits for its clone; returns its ID and working copy.
+   * `clone` is a full clone, or a single-branch clone of `main`.
+   */
+  async add(name: string, remoteUrl: string, credentials: object = { mode: 'none' }, clone: 'full' | 'main' = 'full') {
+    const cloneMode = clone === 'full' ? { cloneMode: 'full' } : { cloneMode: 'single-branch', branch: 'main' };
+    const added = await this.send('POST', '/repositories', { remoteUrl, name, credentials, ...cloneMode });
     expect(added.status).toBe(201);
     const { id } = await added.json() as { id: number; };
     await waitFor(async () => (await this.call(`/repositories/${id}/git/status`)).status === 200);
@@ -76,6 +80,15 @@ export class GitApi {
   /** Fetches and waits for the fetch to finish. */
   fetched(id: number): Promise<JobState> {
     return this.finished(id, this.started(`/repositories/${id}/git/fetch`));
+  }
+
+  startPull(id: number): Promise<number> {
+    return this.started(`/repositories/${id}/git/pull`);
+  }
+
+  /** Pulls and waits for the pull to finish. */
+  pulled(id: number): Promise<JobState> {
+    return this.finished(id, this.startPull(id));
   }
 
   private async started(path: string): Promise<number> {

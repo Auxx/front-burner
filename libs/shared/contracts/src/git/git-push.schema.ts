@@ -8,7 +8,7 @@ export const GIT_JOB_STATUSES = [ 'queued', 'running', 'done', 'failed', 'cancel
 export type GitJobStatus = (typeof GIT_JOB_STATUSES)[number];
 
 /** The kinds of network job a repository runs one at a time (A-5.3). */
-export const GIT_NETWORK_JOB_TYPES = [ 'push', 'fetch' ] as const;
+export const GIT_NETWORK_JOB_TYPES = [ 'push', 'fetch', 'pull' ] as const;
 export type GitNetworkJobType = (typeof GIT_NETWORK_JOB_TYPES)[number];
 
 /** A successful push (GA-32). */
@@ -21,6 +21,24 @@ export const GitPushedSchema = z
     upstream: z.string()
   })
   .meta({ id: 'GitPushed' });
+
+export const GIT_PULL_RESULTS = [ 'up-to-date', 'fast-forward', 'merged', 'conflicted' ] as const;
+export type GitPullResult = (typeof GIT_PULL_RESULTS)[number];
+
+/**
+ * A pull that ran (GA-25, GA-28): nothing to merge, a fast-forward, a merge
+ * commit, or a merge that conflicted and is now in progress (REQ-GIT-003).
+ */
+export const GitPulledSchema = z
+  .object({
+    kind: z.literal('pulled'),
+    result: z.enum(GIT_PULL_RESULTS),
+    /** The commits the upstream had that the branch did not; 0 when up to date. */
+    commits: z.number().int().min(0),
+    /** Such as `origin/main`. */
+    upstream: z.string()
+  })
+  .meta({ id: 'GitPulled' });
 
 /**
  * A git operation that did not succeed: an error code with text under
@@ -36,7 +54,7 @@ export const GitJobFailedSchema = z
   .meta({ id: 'GitJobFailed' });
 
 export const GitJobOutcomeSchema = z
-  .discriminatedUnion('kind', [ GitPushedSchema, GitFetchedSchema, GitJobFailedSchema ])
+  .discriminatedUnion('kind', [ GitPushedSchema, GitFetchedSchema, GitPulledSchema, GitJobFailedSchema ])
   .meta({ id: 'GitJobOutcome' });
 
 /** How a git job stands; `outcome` once it has ended, `null` before and when it was cancelled. */
@@ -47,7 +65,7 @@ export const GitJobStateSchema = z
   })
   .meta({ id: 'GitJobState' });
 
-/** The repository's unfinished network job, a push or a fetch, so that a reloaded page or another tab can follow it (GA-9). */
+/** The repository's unfinished network job, a push, a fetch or a pull, so that a reloaded page or another tab can follow it (GA-9). */
 export const GitNetworkJobSchema = z
   .object({
     id: z.number().int().positive(),
@@ -66,6 +84,7 @@ export const GitJobParamsSchema = z
 export type GitJobParams = z.infer<typeof GitJobParamsSchema>;
 export type GitJobStarted = z.infer<typeof GitJobStartedSchema>;
 export type GitPushed = z.infer<typeof GitPushedSchema>;
+export type GitPulled = z.infer<typeof GitPulledSchema>;
 export type GitJobFailed = z.infer<typeof GitJobFailedSchema>;
 export type GitJobOutcome = z.infer<typeof GitJobOutcomeSchema>;
 export type GitJobState = z.infer<typeof GitJobStateSchema>;

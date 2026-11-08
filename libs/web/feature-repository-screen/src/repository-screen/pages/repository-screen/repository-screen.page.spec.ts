@@ -135,6 +135,7 @@ describe('RepositoryScreenPage', () => {
                 lastCommit: null,
                 upstream: null,
                 upstreamGone: false,
+                sameNameRemote: false,
                 ahead: 0,
                 behind: 0,
                 changes,

@@ -104,10 +104,12 @@ handled by [REQ-REPO-002](repo-credentials.md).
 
   On narrow screens the counts stay visible and the three buttons move into a
   menu. _(My call.)_
-- **GA-8** **Pull** is offered when the branch has an upstream. **Push** is
-  offered when there is something to push or the branch is unpublished.
-  Otherwise they are shown disabled, with the reason available on hover, focus
-  or tap.
+- **GA-8** **Pull** is offered when the branch has an upstream, and also for an
+  unpublished branch when the remote has a branch of its name, as after a push
+  that the remote rejected (GA-30); that pull makes the remote branch the
+  upstream. _(My call.)_ **Push** is offered when there is something to push or
+  the branch is unpublished. Otherwise they are shown disabled, with the reason
+  available on hover, focus or tap.
 - **GA-9** While a fetch, pull or push runs, its button shows progress and the
   others that would conflict with it are disabled.
 

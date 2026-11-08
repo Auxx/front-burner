@@ -1590,6 +1590,39 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/pull": {
+      "post": {
+        "operationId": "pull",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitJobStarted"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/fetch": {
       "post": {
         "operationId": "fetch",
@@ -2945,7 +2978,8 @@
             "type": "string",
             "enum": [
               "push",
-              "fetch"
+              "fetch",
+              "pull"
             ]
           }
         },
@@ -2991,6 +3025,9 @@
             }
           },
           "upstreamGone": {
+            "type": "boolean"
+          },
+          "sameNameRemote": {
             "type": "boolean"
           },
           "ahead": {
@@ -3042,6 +3079,7 @@
           "noCommits",
           "upstream",
           "upstreamGone",
+          "sameNameRemote",
           "ahead",
           "behind",
           "changes",
@@ -3272,6 +3310,9 @@
             "$ref": "#/components/schemas/GitFetched"
           },
           {
+            "$ref": "#/components/schemas/GitPulled"
+          },
+          {
             "$ref": "#/components/schemas/GitJobFailed"
           }
         ]
@@ -3316,6 +3357,40 @@
         "required": [
           "kind",
           "moved"
+        ]
+      },
+      "GitPulled": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pulled"
+            ]
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "up-to-date",
+              "fast-forward",
+              "merged",
+              "conflicted"
+            ]
+          },
+          "commits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "upstream": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "result",
+          "commits",
+          "upstream"
         ]
       },
       "GitJobFailed": {

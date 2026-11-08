@@ -11,6 +11,7 @@ import {
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { FETCH_JOB_TYPE } from '../fetch/fetch.job';
+import { PULL_JOB_TYPE } from '../pull/pull.job';
 import { PUSH_JOB_TYPE } from '../push/push.job';
 
 const KNOWN_CODES: ReadonlySet<string> = new Set(ERROR_CODES);
@@ -21,7 +22,8 @@ const KNOWN_CODES: ReadonlySet<string> = new Set(ERROR_CODES);
  */
 export const GIT_JOB_TYPES: Readonly<Record<string, GitNetworkJobType>> = {
   [PUSH_JOB_TYPE]: 'push',
-  [FETCH_JOB_TYPE]: 'fetch'
+  [FETCH_JOB_TYPE]: 'fetch',
+  [PULL_JOB_TYPE]: 'pull'
 };
 
 /**

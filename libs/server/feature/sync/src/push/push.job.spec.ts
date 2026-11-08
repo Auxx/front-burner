@@ -2,7 +2,9 @@ import { repositories } from '@front-burner/server-core-database';
 import { unlockPrivateKey } from '@front-burner/server-core-git';
 import { sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { eq } from 'drizzle-orm';
-import { refuseWithHook, trustTestCertificate } from '../testing/git-fixtures';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { git, refuseWithHook, trustTestCertificate } from '../testing/git-fixtures';
 import { PushHarness } from '../testing/push-harness';
 import { PUSH_JOB_TYPE } from './push.job';
 
@@ -88,6 +90,33 @@ describe.skipIf(process.platform === 'win32')('PushJob', () => {
       code: 'push-rejected',
       params: expect.objectContaining({ branch: 'main', remoteMessages: 'Pushes are frozen until Monday.' })
     });
+    expect(harness.remoteLog()).toBe('first');
+  });
+
+  it('a push rejected as non-fast-forward fetches, and shows what to pull', async () => {
+    harness.pushFromElsewhere('theirs');
+    harness.commit('mine');
+    harness.runner.start();
+
+    const id = enqueue();
+    await harness.finished(id);
+
+    expect(resultOf(id)).toMatchObject({ kind: 'failed', code: 'push-non-fast-forward' });
+    expect(git(harness.workingCopy, 'log', '-1', '--format=%s', 'origin/main').trim()).toBe('theirs');
+    expect(await harness.engine.status(harness.workingCopy)).toMatchObject({ ahead: 1, behind: 1 });
+  });
+
+  it('a push queued before a merge started does not run during it', async () => {
+    harness.commit('second');
+    const id = enqueue();
+    // A pull's merge that conflicted, after the push was queued.
+    const head = git(harness.workingCopy, 'rev-parse', 'HEAD').trim();
+    writeFileSync(join(harness.workingCopy, '.git', 'MERGE_HEAD'), `${head}\n`);
+    harness.runner.start();
+    await harness.finished(id);
+
+    expect(harness.jobOf(id)?.status).toBe('done');
+    expect(resultOf(id)).toEqual({ kind: 'failed', code: 'merge-in-progress', params: { branch: 'main' } });
     expect(harness.remoteLog()).toBe('first');
   });
 

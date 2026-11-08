@@ -1,5 +1,5 @@
 import { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitOptions, GitRunner, WorkingTreeLock } from '@front-burner/server-core-git';
+import { GitEngine, GitMerge, GitOptions, GitRunner, LocalGit, WorkingTreeLock } from '@front-burner/server-core-git';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
@@ -26,6 +26,7 @@ import request from 'supertest';
 import { FetchScheduler } from '../fetch/fetch-scheduler';
 import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
+import { PullService } from '../pull/pull.service';
 import { PushService } from '../push/push.service';
 import { SyncStateStore } from '../state/sync-state.store';
 import { GitController } from './git.controller';
@@ -109,6 +110,9 @@ describe('GitController', () => {
         { provide: PushService, useValue: {} },
         // So is fetching.
         { provide: FetchService, useValue: {} },
+        // And pulling.
+        { provide: PullService, useValue: {} },
+        { provide: GitMerge, useValue: new GitMerge(new LocalGit(new GitRunner()), options) },
         { provide: FetchScheduler, useValue: { fileOpened } },
         { provide: SyncStateStore, useValue: { fetchProblem: () => null } },
         { provide: GitJobs, useValue: { networkJob: () => null } },
@@ -142,6 +146,7 @@ describe('GitController', () => {
       noCommits: false,
       upstream: null,
       upstreamGone: false,
+      sameNameRemote: false,
       ahead: 0,
       behind: 0,
       mergeInProgress: false,
@@ -157,6 +162,23 @@ describe('GitController', () => {
     const other = await status(9).expect(404);
     expect(other.body).toMatchObject({ code: 'not-found' });
   });
+
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'says when an unpublished branch has a remote branch of its name',
+    async () => {
+      expect((await status().expect(200)).body).toMatchObject({ upstream: null, sameNameRemote: false });
+
+      git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+      expect((await status().expect(200)).body).toMatchObject({ upstream: null, sameNameRemote: true });
+
+      // With an upstream, Pull needs no such branch.
+      git(root, 'remote', 'add', 'origin', 'https://git.invalid/handbook.git');
+      git(root, 'config', 'branch.main.remote', 'origin');
+      git(root, 'config', 'branch.main.merge', 'refs/heads/main');
+      expect((await status().expect(200)).body).toMatchObject({ upstream: 'origin/main', sameNameRemote: false });
+    }
+  );
 
   // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
   it.skipIf(process.platform === 'win32')('reports a merge in progress', async () => {

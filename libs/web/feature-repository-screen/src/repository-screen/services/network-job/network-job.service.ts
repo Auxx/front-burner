@@ -59,6 +59,11 @@ const OPERATIONS: Readonly<Record<GitNetworkJobType, Operation>> = {
     start: (api, repositoryId) => api.fetch(repositoryId),
     // Plan 74 says "No new commits" for a fetch that moved nothing; until then a fetch's success is silent.
     succeeded: () => null
+  },
+  pull: {
+    start: (api, repositoryId) => api.pull(repositoryId),
+    // The client's Pull comes with its notices (GA-28) in a later plan; another tab's pull is followed meanwhile.
+    succeeded: () => null
   }
 };
 

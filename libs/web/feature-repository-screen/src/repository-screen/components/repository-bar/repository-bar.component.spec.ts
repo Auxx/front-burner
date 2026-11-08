@@ -71,6 +71,7 @@ describe('RepositoryBarComponent', () => {
       lastCommit: null,
       upstream: 'origin/main',
       upstreamGone: false,
+      sameNameRemote: false,
       ahead: 0,
       behind: 0,
       changes: [],

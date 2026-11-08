@@ -2,7 +2,15 @@ import type { Config } from '@front-burner/server-core-config';
 import { SecretBox } from '@front-burner/server-core-crypto';
 import { Database, Job, jobs, repositories } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitOptions, GitRunner, NetworkLock, WorkingTreeLock } from '@front-burner/server-core-git';
+import {
+  GitEngine,
+  GitMerge,
+  GitOptions,
+  GitRunner,
+  LocalGit,
+  NetworkLock,
+  WorkingTreeLock
+} from '@front-burner/server-core-git';
 import { GitHttpServer, GitHttpServerOptions, startGitHttpServer } from '@front-burner/server-core-git/testing';
 import { JobRunner } from '@front-burner/server-core-jobs';
 import { SessionLifecycle } from '@front-burner/server-core-security';
@@ -15,10 +23,11 @@ import {
   UnlockAttempts
 } from '@front-burner/server-feature-credentials';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
+import { CommitAuthors } from '@front-burner/server-feature-preferences';
 import { RepositoryQueries } from '@front-burner/server-feature-repositories';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { FetchStep } from '../fetch/fetch-step';
@@ -27,6 +36,8 @@ import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
 import { JobCredentials } from '../jobs/job-credentials.service';
 import { NetworkJobs } from '../jobs/network-jobs.service';
+import { PullJob } from '../pull/pull.job';
+import { PullService } from '../pull/pull.service';
 import { PushJob } from '../push/push.job';
 import { PushService } from '../push/push.service';
 import { SyncStateStore } from '../state/sync-state.store';
@@ -71,13 +82,16 @@ export class PushHarness {
   readonly openable = new OpenableRepository(this.queries, this.layout);
   readonly networkLock = new NetworkLock();
   readonly syncState = new SyncStateStore(this.database);
+  readonly commitAuthors = new CommitAuthors(this.database, this.queries);
   readonly alice = insertUser(this.database, 'alice@x.io');
   readonly bob = insertUser(this.database, 'bob@x.io');
   server!: GitHttpServer;
   runner!: JobRunner;
   engine!: GitEngine;
+  merge!: GitMerge;
   guard!: WorkingTreeGuard;
   service!: PushService;
+  pullService!: PullService;
   fetchStep!: FetchStep;
   fetchService!: FetchService;
   gitJobs!: GitJobs;
@@ -134,18 +148,9 @@ export class PushHarness {
   build(gitOptions: GitOptions = testGitOptions()): void {
     this.runner = new JobRunner(this.database, { cloneConcurrency: 2 } as Config, this.events);
     this.engine = new GitEngine(gitOptions, new GitRunner());
+    this.merge = new GitMerge(new LocalGit(new GitRunner()), gitOptions);
     this.guard = new WorkingTreeGuard(new WorkingTreeLock(), this.engine);
     const knownHosts = new KnownHostsService(this.database, gitOptions);
-    new PushJob(
-      this.runner,
-      this.engine,
-      this.networkLock,
-      this.openable,
-      this.jobCredentials,
-      knownHosts,
-      this.jobKeys,
-      this.events
-    ).onModuleInit();
     this.fetchStep = new FetchStep(
       this.engine,
       this.networkLock,
@@ -155,11 +160,60 @@ export class PushHarness {
       this.syncState,
       this.events
     );
+    new PushJob(
+      this.runner,
+      this.engine,
+      this.networkLock,
+      this.openable,
+      this.jobCredentials,
+      knownHosts,
+      this.fetchStep,
+      this.jobKeys,
+      this.events
+    ).onModuleInit();
     new FetchJob(this.runner, this.fetchStep, this.jobKeys).onModuleInit();
+    new PullJob(
+      this.runner,
+      this.fetchStep,
+      this.openable,
+      this.engine,
+      this.merge,
+      this.guard,
+      this.commitAuthors,
+      this.syncState,
+      this.jobKeys,
+      this.events
+    ).onModuleInit();
     this.networkJobs = new NetworkJobs(this.runner, this.saved, this.jobKeys, this.events);
     this.fetchService = new FetchService(this.openable, this.networkJobs);
     this.gitJobs = new GitJobs(this.database);
     this.service = new PushService(this.engine, this.openable, this.networkJobs);
+    this.pullService = new PullService(this.engine, this.merge, this.openable, this.networkJobs);
+  }
+
+  /** Confirms the user's commit author, as the Preferences page does (CA-13). */
+  confirmAuthor(userId = this.alice): void {
+    this.commitAuthors.setDefault(userId, { name: 'Alice Example', email: 'alice@example.com' });
+  }
+
+  /** Commits `content` to `path` in the seed clone and pushes it to the remote, as another user does. */
+  pushFileFromElsewhere(path: string, content: string, subject = `change ${path}`, branch = 'main'): void {
+    const seed = join(this.root, 'seed');
+    git(seed, 'checkout', '-q', '-B', branch);
+    mkdirSync(dirname(join(seed, path)), { recursive: true });
+    writeFileSync(join(seed, path), content);
+    git(seed, 'add', '--', path);
+    git(seed, 'commit', '-q', '-m', subject);
+    git(seed, 'push', '-q', '-f', this.bare, branch);
+    git(seed, 'checkout', '-q', 'main');
+  }
+
+  /** Commits `content` to `path` in the user's working copy. */
+  commitFile(path: string, content: string, subject = `change ${path}`): void {
+    mkdirSync(dirname(join(this.workingCopy, path)), { recursive: true });
+    writeFileSync(join(this.workingCopy, path), content);
+    git(this.workingCopy, 'add', '--', path);
+    git(this.workingCopy, 'commit', '-q', '-m', subject);
   }
 
   commit(subject: string): void {

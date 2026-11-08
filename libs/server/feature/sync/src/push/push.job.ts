@@ -6,6 +6,7 @@ import { JobKeys, KnownHostsService } from '@front-burner/server-feature-credent
 import { OpenableRepository } from '@front-burner/server-feature-files';
 import type { GitJobOutcome } from '@front-burner/shared-contracts';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { FetchStep, FetchStepJob } from '../fetch/fetch-step';
 import { JobCredentials } from '../jobs/job-credentials.service';
 import { networkFailure } from '../jobs/network-failure';
 
@@ -28,7 +29,9 @@ export const pushDedupeKey = (repositoryId: number, branch: string) => `push:${r
  * finished: its result is `{ kind: 'failed', code, params }`, since
  * `jobs.error_code` has no room for the params and nothing went wrong in the
  * runner _(plan 57's call)_. The job reads its credentials when it runs; a
- * protected key only from the copy held since it was queued (RC-19).
+ * protected key only from the copy held since it was queued (RC-19). It does
+ * not run during a merge that started after it was queued (GC-3), and a push
+ * rejected as non-fast-forward fetches afterwards (GA-30).
  */
 @Injectable()
 export class PushJob implements OnModuleInit {
@@ -41,6 +44,7 @@ export class PushJob implements OnModuleInit {
     private readonly repositories: OpenableRepository,
     private readonly credentials: JobCredentials,
     private readonly knownHosts: KnownHostsService,
+    private readonly fetchStep: FetchStep,
     private readonly jobKeys: JobKeys,
     private readonly events: EventsHub
   ) {}
@@ -58,14 +62,18 @@ export class PushJob implements OnModuleInit {
   }
 
   private async push(job: RunningJob<PushJobPayload>): Promise<GitJobOutcome> {
-    const { userId, repositoryId } = job;
+    const { id, userId, repositoryId } = job;
     if (userId === null || repositoryId === null) {
       throw new Error('A push job needs its user and repository');
     }
     // Network steps take the network lock only, so saves never wait behind the remote (A-5.3).
-    return this.networkLock.run(repositoryId, async () => {
+    const outcome = await this.networkLock.run(repositoryId, async (): Promise<GitJobOutcome> => {
       const { row, root } = this.repositories.open(userId, repositoryId);
       const { branch } = job.payload;
+      // A pull's merge may have started after the push was queued (GC-3).
+      if (await this.engine.mergeInProgress(root)) {
+        return { kind: 'failed', code: 'merge-in-progress', params: { branch } };
+      }
       const resolved = this.credentials.resolve(job.id, userId, row);
       if ('failure' in resolved) {
         return resolved.failure;
@@ -89,6 +97,29 @@ export class PushJob implements OnModuleInit {
         return networkFailure(error, row.credentialId !== null, { branch });
       }
     });
+    if (outcome.kind === 'failed' && outcome.code === 'push-non-fast-forward') {
+      await this.fetchAfterRejection({ id, userId, repositoryId });
+    }
+    return outcome;
+  }
+
+  /**
+   * Fetches once the network lock is free, as `FetchStep` takes it, so that
+   * the remote branch the push was rejected by exists and the counts show what
+   * to pull (GA-30) _(plan 77's call)_. How the fetch ends changes nothing
+   * about the push's outcome.
+   */
+  private async fetchAfterRejection(job: FetchStepJob): Promise<void> {
+    try {
+      const fetched = await this.fetchStep.run(job);
+      if ('failure' in fetched) {
+        this.logger.warn(
+          `Fetch after a rejected push of repository ${job.repositoryId} failed with ${fetched.failure.code}`
+        );
+      }
+    } catch (error) {
+      this.logger.warn(`Fetch after a rejected push of repository ${job.repositoryId} failed: ${String(error)}`);
+    }
   }
 
   /** Every end, the job's key copy goes (RC-19), and clients read the new state (A-3.11). */

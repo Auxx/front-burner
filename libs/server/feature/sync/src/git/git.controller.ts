@@ -1,5 +1,5 @@
 import { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine } from '@front-burner/server-core-git';
+import { GitEngine, GitMerge } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { authOf } from '@front-burner/server-core-security';
 import { inBatches, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
@@ -21,6 +21,8 @@ import { ZodSerializerDto } from 'nestjs-zod';
 import { FetchScheduler } from '../fetch/fetch-scheduler';
 import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
+import { PullService } from '../pull/pull.service';
+import { sameNameRemote } from '../pull/same-name-remote';
 import { PushService } from '../push/push.service';
 import { SyncStateStore } from '../state/sync-state.store';
 import { toGitApiError } from './git-api-errors';
@@ -83,7 +85,9 @@ export class GitController {
     private readonly guard: WorkingTreeGuard,
     private readonly commitAuthors: CommitAuthors,
     private readonly events: EventsHub,
+    private readonly merge: GitMerge,
     private readonly pushes: PushService,
+    private readonly pulls: PullService,
     private readonly fetches: FetchService,
     private readonly fetchScheduler: FetchScheduler,
     private readonly gitJobs: GitJobs,
@@ -91,9 +95,10 @@ export class GitController {
   ) {}
 
   /**
-   * The branch, its counts against the upstream, every changed file, whether
-   * the last commit can be amended, the push or fetch under way, and why the
-   * last fetch failed (GA-7, GA-9, GA-11, GA-22, GA-35, GA-42).
+   * The branch, its counts against the upstream, whether an unpublished branch
+   * has a remote branch of its name to pull, every changed file, whether the
+   * last commit can be amended, the push, fetch or pull under way, and why the
+   * last fetch failed (GA-7 to GA-9, GA-11, GA-22, GA-35, GA-42).
    */
   @Get('status')
   @ApiOkResponse({ type: GitStatusDto })
@@ -108,6 +113,7 @@ export class GitController {
     ]);
     return {
       ...status,
+      sameNameRemote: await sameNameRemote(this.merge, root, status),
       mergeInProgress,
       lastCommit,
       networkJob: this.gitJobs.networkJob(userId, params.id),
@@ -238,6 +244,26 @@ export class GitController {
   }
 
   /**
+   * Fetches, then merges the current branch's upstream into it, as a job
+   * (GA-3, GA-25 to GA-28): a fast-forward, a merge commit as the commit
+   * author, or a merge that conflicts and stays in progress. An unpublished
+   * branch with a remote branch of its name pulls that, and makes it its
+   * upstream (GA-8). A second request while it waits or runs gets the same job.
+   * Refused during a merge (GA-4), on a detached `HEAD`, without an upstream,
+   * with uncommitted changes (GA-26), and for a key that is not unlocked in
+   * this session (RC-4). Follow the job with `job.finished`, then read it with
+   * `gitJob`; a commit author that is not confirmed yet is asked for there
+   * (CA-14), and the client pulls again.
+   */
+  @Post('pull')
+  @HttpCode(202)
+  @ApiAcceptedResponse({ type: GitJobStartedDto })
+  @ZodSerializerDto(GitJobStartedDto)
+  async pull(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<GitJobStarted> {
+    return { jobId: await this.pulls.start(authOf(req), params.id) };
+  }
+
+  /**
    * Fetches the remote as a job (GA-3, GA-33): remote branches only, also
    * during a merge (GC-3). A second request while it waits or runs gets the
    * same job. Refused only for a key that is not unlocked in this session and
@@ -270,8 +296,8 @@ export class GitController {
 
   /**
    * How one of the repository's git jobs stands, and how it ended: a push's
-   * commits and upstream (GA-32), whether a fetch moved a remote branch, or why
-   * it failed (GA-30, GA-31, RC-4).
+   * commits and upstream (GA-32), whether a fetch moved a remote branch, a
+   * pull's result and commits (GA-28), or why it failed (GA-30, GA-31, RC-4).
    */
   @Get('jobs/:jobId')
   @ApiOkResponse({ type: GitJobStateDto })
