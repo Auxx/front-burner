@@ -234,6 +234,208 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
     expect(readFileSync(join(work, 'newdir', 'ignored.log'), 'utf8')).toBe('keep me too\n');
   });
 
+  describe('reading a merge', () => {
+    const sizeOf = (content: string) => Buffer.byteLength(content);
+
+    it('lists unresolved files with their kinds and sizes', async () => {
+      write('edited.md', 'a\n');
+      commitAll('edited');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      write('edited.md', 'theirs!\n');
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      write('edited.md', 'mine\n');
+      commitAll('mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+
+      expect(await merge.conflicts(work)).toEqual([
+        {
+          path: 'edited.md',
+          kind: 'both-changed',
+          resolved: false,
+          mineOid: git(work, 'rev-parse', ':2:edited.md'),
+          theirsOid: git(work, 'rev-parse', ':3:edited.md'),
+          mineMode: '100644',
+          theirsMode: '100644',
+          mineSize: sizeOf('mine\n'),
+          theirsSize: sizeOf('theirs!\n')
+        }
+      ]);
+    });
+
+    it('lists resolved files too', async () => {
+      conflictingMerge();
+      git(work, 'add', 'both.md');
+
+      const conflicts = await merge.conflicts(work);
+
+      expect(conflicts.map(({ path, resolved }) => [ path, resolved ])).toEqual([
+        [ 'both.md', true ],
+        [ 'gone.md', false ]
+      ]);
+    });
+
+    it('keeps the kind of a resolved file', async () => {
+      conflictingMerge();
+      git(work, 'add', 'both.md');
+      git(work, 'rm', '-q', 'gone.md');
+
+      const conflicts = await merge.conflicts(work);
+
+      expect(conflicts).toMatchObject([
+        { path: 'both.md', kind: 'both-added', resolved: true, mineSize: sizeOf('mine\n') },
+        { path: 'gone.md', kind: 'deleted-by-them', resolved: true, theirsOid: null, theirsSize: null }
+      ]);
+    });
+
+    it('gives a kind to a file with one stage', async () => {
+      write('renamed.md', 'text\n');
+      commitAll('base');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      git(work, 'mv', 'renamed.md', 'by-them.md');
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      git(work, 'mv', 'renamed.md', 'by-me.md');
+      commitAll('mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+
+      const conflicts = await merge.conflicts(work);
+
+      expect(conflicts).toMatchObject([
+        { path: 'by-me.md', kind: 'deleted-by-them', mineMode: '100644', theirsMode: null },
+        { path: 'by-them.md', kind: 'deleted-by-me', mineMode: null, theirsMode: '100644' }
+      ]);
+    });
+
+    it('leaves out a file both sides deleted', async () => {
+      write('renamed.md', 'text\n');
+      commitAll('base');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      git(work, 'mv', 'renamed.md', 'by-them.md');
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      git(work, 'mv', 'renamed.md', 'by-me.md');
+      commitAll('mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+      const paths = async () => (await merge.conflicts(work)).map(({ path }) => path);
+
+      // In the index, with only a base; and removed from it, which records it as resolved.
+      expect(git(work, 'ls-files', '-u', 'renamed.md')).toContain('renamed.md');
+      expect(await paths()).toEqual([ 'by-me.md', 'by-them.md' ]);
+      git(work, 'update-index', '--force-remove', 'renamed.md');
+      expect(git(work, 'ls-files', '--resolve-undo')).toContain('renamed.md');
+      expect(await paths()).toEqual([ 'by-me.md', 'by-them.md' ]);
+    });
+
+    it('reads every kind of name', async () => {
+      const names = [ 'tab\there.md', 'line\nbreak.md', 'привет мир.md', 'space and "quote".md' ];
+      names.forEach(name => write(name, 'base\n'));
+      commitAll('base');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      names.forEach(name => write(name, 'theirs\n'));
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      names.forEach(name => write(name, 'mine\n'));
+      commitAll('mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+      git(work, 'add', '--', names[0] ?? '');
+
+      const conflicts = await merge.conflicts(work);
+
+      expect(conflicts.map(({ path }) => path)).toEqual([ ...names ].sort());
+      expect(conflicts.find(({ path }) => path === names[0])).toMatchObject({ kind: 'both-changed', resolved: true });
+      expect(conflicts.find(({ path }) => path === names[1])).toMatchObject({ kind: 'both-changed', resolved: false });
+      expect(await merge.mergedWithoutConflicts(work, new Set(names))).toEqual([]);
+    });
+
+    it('sorts by path, comparing code units', async () => {
+      const names = [ 'b.md', 'B.md', 'a/z.md', 'a.md' ];
+      names.forEach(name => {
+        mkdirSync(join(work, 'a'), { recursive: true });
+        write(name, 'base\n');
+      });
+      commitAll('base');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      names.forEach(name => write(name, 'theirs\n'));
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      names.forEach(name => write(name, 'mine\n'));
+      commitAll('mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+      git(work, 'add', 'a/z.md');
+
+      expect((await merge.conflicts(work)).map(({ path }) => path)).toEqual([ 'B.md', 'a.md', 'a/z.md', 'b.md' ]);
+    });
+
+    it('forgets what an earlier merge resolved', async () => {
+      conflictingMerge();
+      git(work, 'add', 'both.md');
+      git(work, 'rm', '-q', 'gone.md');
+      commitAll('merged');
+      git(work, 'branch', '-q', 'later');
+      write('first.md', 'mine\n');
+      commitAll('mine');
+      git(work, 'switch', '-q', 'later');
+      write('first.md', 'theirs\n');
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      expect(() => git(work, 'merge', '--no-edit', 'later')).toThrow();
+
+      expect((await merge.conflicts(work)).map(({ path }) => path)).toEqual([ 'first.md' ]);
+    });
+
+    it('has no size for a submodule', async () => {
+      const pointAt = (oid: string, message: string) => {
+        git(work, 'update-index', '--add', '--cacheinfo', `160000,${oid},module`);
+        git(work, 'commit', '-q', '-m', message);
+      };
+      const base = git(work, 'rev-parse', 'HEAD');
+      mkdirSync(join(work, 'module'));
+      pointAt(base, 'base');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      write('first.md', 'theirs\n');
+      commitAll('a commit for theirs');
+      pointAt(git(work, 'rev-parse', 'HEAD'), 'theirs');
+      git(work, 'switch', '-q', 'main');
+      write('first.md', 'mine\n');
+      commitAll('a commit for mine');
+      pointAt(git(work, 'rev-parse', 'HEAD'), 'mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+
+      const conflict = (await merge.conflicts(work)).find(({ path }) => path === 'module');
+
+      expect(conflict).toMatchObject({ kind: 'both-changed', mineMode: '160000', mineSize: null, theirsSize: null });
+    });
+
+    it('lists what merged without conflicts', async () => {
+      conflictingMerge();
+      write('theirs-only.md', 'x\n');
+      git(work, 'add', 'theirs-only.md');
+      git(work, 'rm', '-q', '--cached', 'first.md');
+      const conflicting = new Set((await merge.conflicts(work)).map(({ path }) => path));
+
+      expect(await merge.mergedWithoutConflicts(work, conflicting)).toEqual([
+        'clean.md',
+        'first.md',
+        'theirs-only.md'
+      ]);
+    });
+
+    it('leaves the comment lines out of the message', async () => {
+      conflictingMerge();
+      expect(readFileSync(join(work, '.git', 'MERGE_MSG'), 'utf8')).toContain('# Conflicts:');
+
+      expect(await merge.mergeMessage(work)).toBe('Merge branch \'theirs\'');
+    });
+
+    it('has an empty message when git prepared none', async () => {
+      conflictingMerge();
+      rmSync(join(work, '.git', 'MERGE_MSG'));
+
+      expect(await merge.mergeMessage(work)).toBe('');
+    });
+  });
+
   it('refreshIndex updates stale entries, and accepts modified and conflicting files', async () => {
     utimesSync(join(work, 'first.md'), new Date(1_000_000), new Date(1_000_000));
     expect(git(work, 'diff-files', '--name-only')).toBe('first.md');

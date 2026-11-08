@@ -1,7 +1,7 @@
 import { inBatches, lstatOrMissing, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
 import { isMarkdownName } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
-import { readdir, rm, writeFile } from 'node:fs/promises';
+import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult } from '../runner/git-runner';
@@ -34,6 +34,22 @@ export interface MarkerLabels {
   theirs: string;
 }
 
+export type ConflictKind = 'both-changed' | 'both-added' | 'deleted-by-me' | 'deleted-by-them';
+
+/** One file a merge could not combine; `null` for a version that does not exist. */
+export interface ConflictEntry {
+  path: string;
+  kind: ConflictKind;
+  resolved: boolean;
+  mineOid: string | null;
+  theirsOid: string | null;
+  mineMode: string | null;
+  theirsMode: string | null;
+  /** In bytes; also `null` for a submodule, whose commit has no size in this repository. */
+  mineSize: number | null;
+  theirsSize: number | null;
+}
+
 /** The branches whose merge message git writes without ` into <branch>`. */
 const MAIN_BRANCHES = new Set([ 'main', 'master' ]);
 
@@ -44,7 +60,7 @@ const MAX_BLOCKING_PATHS = 20;
 const PATHS_PER_COMMAND = 100;
 
 /** A regular file's mode in the index; a symbolic link (120000) or a submodule (160000) has no markers. */
-const REGULAR_FILE = /^100(644|755)$/;
+export const REGULAR_FILE = /^100(644|755)$/;
 
 /** What a byte that is not valid UTF-8 decodes as. */
 const UNDECODABLE = '�';
@@ -411,9 +427,99 @@ export class GitMerge {
     }
   }
 
+  /**
+   * The files of the merge in progress that git could not combine, sorted by
+   * path, comparing code units: the unresolved ones from the index, and the
+   * resolved ones from what git keeps to undo that (A-4.5). A path with only a
+   * base is left out, as a file both sides deleted (`prepareConflicts`). Takes
+   * no lock (A-5.3).
+   */
+  async conflicts(workingCopy: string): Promise<ConflictEntry[]> {
+    const [ unresolved, resolved ] = await Promise.all([
+      this.unmerged(workingCopy, []),
+      this.stagesFrom(workingCopy, [ '--resolve-undo' ])
+    ]);
+    // A path in both is unresolved: starting a file over makes it so.
+    const byPath = new Map([ ...resolved, ...unresolved ]);
+    const sizes = await this.blobSizes(workingCopy, [ ...byPath.values() ].flatMap(stages => [ ...stages.values() ]));
+    const sizeOf = (stage: Stage | undefined) => stage === undefined ? null : sizes.get(stage.oid) ?? null;
+    return [ ...byPath ].sort(([ a ], [ b ]) => a < b ? -1 : 1).flatMap(([ path, stages ]) => {
+      const kind = kindOf(stages);
+      if (kind === null) {
+        return [];
+      }
+      const mine = stages.get(2);
+      const theirs = stages.get(3);
+      return [ {
+        path,
+        kind,
+        resolved: !unresolved.has(path),
+        mineOid: mine?.oid ?? null,
+        theirsOid: theirs?.oid ?? null,
+        mineMode: mine?.mode ?? null,
+        theirsMode: theirs?.mode ?? null,
+        mineSize: sizeOf(mine),
+        theirsSize: sizeOf(theirs)
+      } ];
+    });
+  }
+
+  /** What the merge has changed apart from `conflicting`, sorted by path: the files git combined by itself (GC-7). */
+  async mergedWithoutConflicts(workingCopy: string, conflicting: ReadonlySet<string>): Promise<string[]> {
+    const output = await this.local.checked(workingCopy, [
+      '--no-optional-locks',
+      'diff-index',
+      '--cached',
+      '--name-only',
+      '-z',
+      '--no-renames',
+      'HEAD'
+    ]);
+    return output.split('\0').filter(path => path !== '' && !conflicting.has(path)).sort();
+  }
+
+  /**
+   * The message git prepared for the merge commit (GC-20), without its comment
+   * lines, such as the "# Conflicts:" list, and trailing blank lines. Empty when
+   * git has none, which the user then writes.
+   */
+  async mergeMessage(workingCopy: string): Promise<string> {
+    const message = await readFile(join(workingCopy, '.git', 'MERGE_MSG'), 'utf8').catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return '';
+      }
+      throw error;
+    });
+    return message.split('\n').filter(line => !line.startsWith('#')).join('\n').trimEnd();
+  }
+
+  /** The size of each blob among `stages`, by id, read with one command. A submodule's commit has none. */
+  private async blobSizes(workingCopy: string, stages: Stage[]): Promise<Map<string, number>> {
+    const oids = [ ...new Set(stages.map(({ oid }) => oid)) ];
+    if (oids.length === 0) {
+      return new Map();
+    }
+    const output = await this.local.checked(workingCopy, [ '--no-optional-locks', 'cat-file', '--batch-check' ], {
+      stdin: `${oids.join('\n')}\n`
+    });
+    const sizes = new Map<string, number>();
+    for (const line of output.split('\n')) {
+      const [ oid = '', type, size ] = line.split(' ');
+      if (type === 'blob') {
+        sizes.set(oid, Number(size));
+      }
+    }
+    return sizes;
+  }
+
   /** The unmerged entries under `pathspec`, by path. */
-  private async unmerged(workingCopy: string, pathspec: string[]): Promise<Map<string, Stages>> {
-    const output = await this.local.checked(workingCopy, [ 'ls-files', '-u', '-z', ...pathspec ]);
+  private unmerged(workingCopy: string, pathspec: string[]): Promise<Map<string, Stages>> {
+    return this.stagesFrom(workingCopy, [ '-u', ...pathspec ]);
+  }
+
+  /** The stages `ls-files` lists with `options`, by path; `--resolve-undo` writes them as `-u` does. */
+  private async stagesFrom(workingCopy: string, options: string[]): Promise<Map<string, Stages>> {
+    const output = await this.local.checked(workingCopy, [ '--no-optional-locks', 'ls-files', '-z', ...options ]);
     const byPath = new Map<string, Stages>();
     for (const record of output.split('\0')) {
       const match = /^(\d+) ([0-9a-f]+) ([123])\t(.*)$/s.exec(record);
@@ -524,6 +630,19 @@ export class GitMerge {
     });
     return exitAsBoolean(result, 'merge-base');
   }
+}
+
+/** The kind that the stages a path has say; `null` for one with only a base, which both sides deleted. */
+function kindOf(stages: Stages): ConflictKind | null {
+  const mine = stages.has(2);
+  const theirs = stages.has(3);
+  if (mine && theirs) {
+    return stages.has(1) ? 'both-changed' : 'both-added';
+  }
+  if (theirs) {
+    return 'deleted-by-me';
+  }
+  return mine ? 'deleted-by-them' : null;
 }
 
 /** The full name: a local branch named `origin/main` would take the short name's place. */
