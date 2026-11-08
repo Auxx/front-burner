@@ -1,5 +1,6 @@
 import { DynamicModule, Module } from '@nestjs/common';
 import { GitEngine } from './engine/git-engine';
+import { LocalGit } from './engine/local-git';
 import { GIT_OPTIONS, GitOptions } from './git.options';
 import { NetworkLock } from './lock/network-lock';
 import { WorkingTreeLock } from './lock/working-tree-lock';
@@ -12,8 +13,15 @@ export class GitModule {
     return {
       module: GitModule,
       global: true,
-      providers: [ { provide: GIT_OPTIONS, useValue: options }, GitRunner, GitEngine, WorkingTreeLock, NetworkLock ],
-      exports: [ GIT_OPTIONS, GitEngine, WorkingTreeLock, NetworkLock ]
+      providers: [
+        { provide: GIT_OPTIONS, useValue: options },
+        GitRunner,
+        LocalGit,
+        GitEngine,
+        WorkingTreeLock,
+        NetworkLock
+      ],
+      exports: [ GIT_OPTIONS, LocalGit, GitEngine, WorkingTreeLock, NetworkLock ]
     };
   }
 }

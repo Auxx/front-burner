@@ -14,18 +14,13 @@ import { hasHostEntry, HostKey, trustedKeysFor } from '../ssh/known-hosts';
 import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
 import { parseStatus, WorkingCopyStatus } from './git-status';
+import { LOCAL_TIMEOUT_MS, LocalGit, NO_LFS, nulTerminated } from './local-git';
 
 /** What `git status` shows for a byte of a name that is not valid UTF-8. */
 const UNDECODABLE = '\uFFFD';
 
-/** Paths for a git command that reads NUL-terminated names from its standard input. */
-const nulTerminated = (paths: readonly string[]) => paths.map(path => `${path}\0`).join('');
-
 /** AR-42. */
 const ACCESS_CHECK_TIMEOUT_MS = 30_000;
-
-/** Submodules are not cloned by `--no-recurse-submodules`; these keep LFS from fetching (AR-50). */
-const NO_LFS = [ '-c', 'filter.lfs.smudge=', '-c', 'filter.lfs.process=', '-c', 'filter.lfs.required=false' ];
 
 export interface AccessCheckResult {
   /** Sorted; empty for an empty remote (AR-37). */
@@ -97,15 +92,6 @@ export interface LastCommit {
   message: string | null;
 }
 
-interface LocalRunOptions {
-  stdin?: string;
-  env?: Record<string, string>;
-  /** `FRONT_BURNER_GIT_TIMEOUT` for commands that read whole files, such as `git add` (NF-11.8). */
-  timeoutMs?: number;
-  /** Per stream; default `LOCAL_MAX_OUTPUT_BYTES`. */
-  maxOutputBytes?: number;
-}
-
 /** GA-16: a diff larger than this, with 3 lines of context, is not shown. */
 const DIFF_LIMIT_BYTES = 1_000_000;
 
@@ -130,12 +116,6 @@ const WHOLE_FILE_CONTEXT = '--unified=2147483647';
 
 /** A file's diff without changed lines. */
 const NO_DIFF: FileDiff = { kind: 'text', lines: [], complete: true, lineEndingsOnly: false };
-
-/** Commands that read only the working copy and its index. */
-const LOCAL_TIMEOUT_MS = 10_000;
-
-/** Enough for the names of a folder of a few hundred thousand entries; output past it would be lost. */
-const LOCAL_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 /** Index entries of submodules (`git ls-files --stage`). */
 const GITLINK_MODE = '160000';
@@ -171,7 +151,11 @@ function parseLsRemote(stdout: string): AccessCheckResult {
 export class GitEngine implements BeforeApplicationShutdown {
   private readonly logger = new Logger(GitEngine.name);
 
-  constructor(@Inject(GIT_OPTIONS) private readonly options: GitOptions, private readonly runner: GitRunner) {}
+  constructor(
+    @Inject(GIT_OPTIONS) private readonly options: GitOptions,
+    private readonly runner: GitRunner,
+    private readonly local: LocalGit = new LocalGit(runner)
+  ) {}
 
   /**
    * Proves the remote can be read and lists its branches (`git ls-remote`, AR-42, A-5.9).
@@ -235,7 +219,7 @@ export class GitEngine implements BeforeApplicationShutdown {
     }
     // check-ignore reads each path as a pathspec, and has no literal mode: `./`
     // keeps a name such as `:!x` from being read as pathspec magic.
-    const result = await this.runLocal(
+    const result = await this.local.run(
       workingCopy,
       [ 'check-ignore', '--stdin', '-z' ],
       { stdin: paths.map(path => `./${path}\0`).join('') }
@@ -255,7 +239,7 @@ export class GitEngine implements BeforeApplicationShutdown {
    */
   async ignoredIn(workingCopy: string, folder: string): Promise<Set<string>> {
     const prefix = folder === '' ? '' : `${folder}/`;
-    const result = await this.runLocal(workingCopy, [
+    const result = await this.local.run(workingCopy, [
       'ls-files',
       '--others',
       '--ignored',
@@ -291,7 +275,7 @@ export class GitEngine implements BeforeApplicationShutdown {
    * it can run outside the working-tree lock.
    */
   async uncommittedUnder(workingCopy: string, path: string): Promise<number> {
-    const result = await this.runLocal(workingCopy, [
+    const result = await this.local.run(workingCopy, [
       '--no-optional-locks',
       'status',
       '--porcelain=v1',
@@ -390,7 +374,7 @@ export class GitEngine implements BeforeApplicationShutdown {
 
   /** `git status` of the entries a pathspec names (`[]` for all), as `status` reads it. */
   private async statusUnder(workingCopy: string, pathspec: string[], timeoutMs: number): Promise<WorkingCopyStatus> {
-    const result = await this.runLocal(workingCopy, [
+    const result = await this.local.run(workingCopy, [
       '--no-optional-locks',
       'status',
       '--porcelain=v2',
@@ -418,10 +402,10 @@ export class GitEngine implements BeforeApplicationShutdown {
   async lastCommit(workingCopy: string): Promise<LastCommit | null> {
     // `--` everywhere: a file named HEAD would make the revision ambiguous.
     const [ head, unpushed, branch ] = await Promise.all([
-      this.runLocal(workingCopy, [ '--no-optional-locks', 'log', '-1', '--format=%H %P%x00%B', 'HEAD', '--' ]),
+      this.local.run(workingCopy, [ '--no-optional-locks', 'log', '-1', '--format=%H %P%x00%B', 'HEAD', '--' ]),
       // Walks only the commits that no remote branch has: nothing printed means HEAD was pushed.
-      this.runLocal(workingCopy, [ '--no-optional-locks', 'rev-list', '-1', 'HEAD', '--not', '--remotes', '--' ]),
-      this.runLocal(workingCopy, [ 'symbolic-ref', '--quiet', 'HEAD' ])
+      this.local.run(workingCopy, [ '--no-optional-locks', 'rev-list', '-1', 'HEAD', '--not', '--remotes', '--' ]),
+      this.local.run(workingCopy, [ 'symbolic-ref', '--quiet', 'HEAD' ])
     ]);
     for (const result of [ head, unpushed, branch ]) {
       if (result.timedOut) {
@@ -429,7 +413,7 @@ export class GitEngine implements BeforeApplicationShutdown {
       }
     }
     if (head.exitCode !== 0) {
-      const resolved = await this.runLocal(workingCopy, [ 'rev-parse', '--verify', '--quiet', 'HEAD' ]);
+      const resolved = await this.local.run(workingCopy, [ 'rev-parse', '--verify', '--quiet', 'HEAD' ]);
       if (resolved.exitCode !== 0 && !resolved.timedOut) {
         // HEAD names a branch that has no commit yet.
         return null;
@@ -484,21 +468,21 @@ export class GitEngine implements BeforeApplicationShutdown {
     // With no commits, HEAD may name any branch; it is put back if the commit fails (GA-43).
     const unbornHead = status.noCommits ? await this.symbolicHead(workingCopy) : undefined;
     try {
-      await this.runChecked(workingCopy, emptyIndex);
+      await this.local.checked(workingCopy, emptyIndex);
       if (unbornHead !== undefined) {
         // GA-42: whatever HEAD names in a new repository, the first commit makes `main`.
-        await this.runChecked(workingCopy, [ 'symbolic-ref', 'HEAD', 'refs/heads/main' ]);
+        await this.local.checked(workingCopy, [ 'symbolic-ref', 'HEAD', 'refs/heads/main' ]);
       }
       if (paths.length > 0) {
         // With no paths at all, `add -A` would add every change.
-        await this.runChecked(
+        await this.local.checked(
           workingCopy,
           [ '--literal-pathspecs', 'add', '-A', '--pathspec-from-file=-', '--pathspec-file-nul' ],
           { stdin: nulTerminated(paths), timeoutMs: this.options.gitTimeoutMs }
         );
       }
       const { name, email } = request.author;
-      await this.runChecked(
+      await this.local.checked(
         workingCopy,
         [
           '-c',
@@ -527,7 +511,7 @@ export class GitEngine implements BeforeApplicationShutdown {
       await this.undoCommit(workingCopy, emptyIndex, unbornHead, error);
       throw error;
     }
-    const head = await this.runLocal(workingCopy, [ 'rev-parse', 'HEAD' ]);
+    const head = await this.local.run(workingCopy, [ 'rev-parse', 'HEAD' ]);
     if (head.exitCode !== 0) {
       throw new Error(`git rev-parse failed: ${head.stderr.trim()}`);
     }
@@ -568,11 +552,11 @@ export class GitEngine implements BeforeApplicationShutdown {
       if (added.length > 0) {
         await inBatches(added, path => this.deleteAdded(workingCopy, path));
         // Takes exact names: `git rm --cached docs` would also mean the files in a folder `docs`.
-        await this.runChecked(workingCopy, [ 'update-index', '--force-remove', '-z', '--stdin' ], onStdin(added));
+        await this.local.checked(workingCopy, [ 'update-index', '--force-remove', '-z', '--stdin' ], onStdin(added));
       }
       // Added files first: one may stand where a deleted file comes back.
       if (tracked.length > 0) {
-        await this.runChecked(
+        await this.local.checked(
           workingCopy,
           [
             '--literal-pathspecs',
@@ -587,7 +571,7 @@ export class GitEngine implements BeforeApplicationShutdown {
         );
       }
     } catch (error) {
-      await this.removeStaleIndexLock(workingCopy, error);
+      await this.local.removeStaleIndexLock(workingCopy, error);
       throw error;
     }
   }
@@ -664,7 +648,7 @@ export class GitEngine implements BeforeApplicationShutdown {
     }
     const segments = path.split('/');
     const folders = segments.map((_, index) => segments.slice(0, index).join('/'));
-    const result = await this.runLocal(workingCopy, [
+    const result = await this.local.run(workingCopy, [
       'ls-files',
       '--stage',
       '-z',
@@ -692,7 +676,7 @@ export class GitEngine implements BeforeApplicationShutdown {
 
   /** True when a submodule (gitlink) of the index lies anywhere inside `folder`, not `''`. */
   async holdsSubmodule(workingCopy: string, folder: string): Promise<boolean> {
-    const result = await this.runLocal(workingCopy, [ 'ls-files', '--stage', '-z', '--', `:(literal)${folder}/` ]);
+    const result = await this.local.run(workingCopy, [ 'ls-files', '--stage', '-z', '--', `:(literal)${folder}/` ]);
     if (result.exitCode !== 0) {
       throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
     }
@@ -725,7 +709,7 @@ export class GitEngine implements BeforeApplicationShutdown {
     // Before anything is written; runNetwork checks again, as for every network command.
     await this.assertSafeWorkingCopy(workingCopy, request.remoteUrl);
     const source = `refs/heads/${branch}`;
-    const target = await this.upstreamOf(workingCopy, branch);
+    const target = await this.local.upstreamOf(workingCopy, branch);
     const commits = await this.commitsToPush(workingCopy, source, target);
     const addedRefspec = target === null && request.singleBranch
       ? await this.fetchAlso(workingCopy, branch)
@@ -753,7 +737,7 @@ export class GitEngine implements BeforeApplicationShutdown {
     } catch (error) {
       if (addedRefspec !== undefined) {
         // A failed push leaves the working copy as it was (GA-43).
-        await this.runChecked(workingCopy, [
+        await this.local.checked(workingCopy, [
           'config',
           '--unset',
           '--fixed-value',
@@ -770,21 +754,10 @@ export class GitEngine implements BeforeApplicationShutdown {
     return { commits, upstream: `origin/${destination.slice('refs/heads/'.length)}` };
   }
 
-  /** The ref the branch's upstream has on `origin`, such as `refs/heads/main`, or `null` when it has none there. */
-  private async upstreamOf(workingCopy: string, branch: string): Promise<string | null> {
-    const [ remote, merge ] = await Promise.all([
-      this.configValues(workingCopy, `branch.${branch}.remote`),
-      this.configValues(workingCopy, `branch.${branch}.merge`)
-    ]);
-    // As git reads them: the last value wins.
-    const ref = merge.at(-1) ?? '';
-    return remote.at(-1) === 'origin' && ref.startsWith('refs/heads/') ? ref : null;
-  }
-
   /** What the remote-tracking branch of `target` lacks, or what no remote branch has. */
   private async commitsToPush(workingCopy: string, source: string, target: string | null): Promise<number> {
     const count = (not: string[]) =>
-      this.runLocal(workingCopy, [ 'rev-list', '--count', source, '--not', ...not, '--' ], {
+      this.local.run(workingCopy, [ 'rev-list', '--count', source, '--not', ...not, '--' ], {
         timeoutMs: this.options.gitTimeoutMs
       });
     let result = target === null
@@ -809,26 +782,11 @@ export class GitEngine implements BeforeApplicationShutdown {
    */
   private async fetchAlso(workingCopy: string, branch: string): Promise<string | undefined> {
     const refspec = `+refs/heads/${branch}:refs/remotes/origin/${branch}`;
-    if ((await this.configValues(workingCopy, 'remote.origin.fetch')).includes(refspec)) {
+    if ((await this.local.configValues(workingCopy, 'remote.origin.fetch')).includes(refspec)) {
       return undefined;
     }
-    await this.runChecked(workingCopy, [ 'config', '--add', 'remote.origin.fetch', refspec ]);
+    await this.local.checked(workingCopy, [ 'config', '--add', 'remote.origin.fetch', refspec ]);
     return refspec;
-  }
-
-  /** Every value of a config key, in order; none when it is not set. */
-  private async configValues(cwd: string, key: string): Promise<string[]> {
-    const result = await this.runLocal(cwd, [ 'config', '--get-all', key ]);
-    if (result.timedOut) {
-      throw new GitOperationError('timeout', result.stderr);
-    }
-    if (result.exitCode === 1) {
-      return [];
-    }
-    if (result.exitCode !== 0) {
-      throw new Error(`git config --get-all ${key} failed: ${result.stderr.trim()}`);
-    }
-    return result.stdout.split('\n').filter(line => line !== '');
   }
 
   /**
@@ -838,7 +796,7 @@ export class GitEngine implements BeforeApplicationShutdown {
    */
   private async assertSafeWorkingCopy(cwd: string, remoteUrl: string): Promise<void> {
     await this.assertSafeConfig(cwd);
-    const urls = await this.configValues(cwd, 'remote.origin.url');
+    const urls = await this.local.configValues(cwd, 'remote.origin.url');
     if (urls.length !== 1 || urls[0] !== remoteUrl) {
       throw new GitOperationError('unsafe-repository-config', 'origin is not the repository\'s remote alone.');
     }
@@ -865,7 +823,7 @@ export class GitEngine implements BeforeApplicationShutdown {
    */
   private async indexEntriesIn(workingCopy: string, folder: string): Promise<Map<string, string>> {
     const prefix = folder === '' ? '' : `${folder}/`;
-    const result = await this.runLocal(workingCopy, [
+    const result = await this.local.run(workingCopy, [
       'ls-files',
       '--stage',
       '-z',
@@ -901,7 +859,7 @@ export class GitEngine implements BeforeApplicationShutdown {
     const args = added
       ? [ ...DIFF_GLOBALS, 'diff', '--no-index', ...DIFF_FLAGS, ...extra, '--', '/dev/null', path ]
       : [ ...DIFF_GLOBALS, '--literal-pathspecs', 'diff', ...DIFF_FLAGS, ...extra, 'HEAD', '--', path ];
-    const result = await this.runLocal(workingCopy, args, { timeoutMs: this.options.gitTimeoutMs, maxOutputBytes });
+    const result = await this.local.run(workingCopy, args, { timeoutMs: this.options.gitTimeoutMs, maxOutputBytes });
     if (result.timedOut) {
       throw new GitOperationError('timeout', result.stderr);
     }
@@ -915,7 +873,7 @@ export class GitEngine implements BeforeApplicationShutdown {
 
   /** True when the file's only change is its line endings (GA-16), for a diff without every line. */
   private async differsOnlyInLineEndings(workingCopy: string, path: string): Promise<boolean> {
-    const result = await this.runLocal(
+    const result = await this.local.run(
       workingCopy,
       [
         ...DIFF_GLOBALS,
@@ -945,7 +903,7 @@ export class GitEngine implements BeforeApplicationShutdown {
    * commit does not have it, as for a file of the other side of a merge.
    */
   private async committedSize(workingCopy: string, path: string): Promise<number | null> {
-    const result = await this.runLocal(workingCopy, [ 'cat-file', '-s', `HEAD:${path}` ]);
+    const result = await this.local.run(workingCopy, [ 'cat-file', '-s', `HEAD:${path}` ]);
     if (result.timedOut) {
       throw new GitOperationError('timeout', result.stderr);
     }
@@ -960,7 +918,7 @@ export class GitEngine implements BeforeApplicationShutdown {
 
   /** The ref HEAD names, for example `refs/heads/trunk`. */
   private async symbolicHead(workingCopy: string): Promise<string> {
-    const result = await this.runLocal(workingCopy, [ 'symbolic-ref', 'HEAD' ]);
+    const result = await this.local.run(workingCopy, [ 'symbolic-ref', 'HEAD' ]);
     if (result.exitCode !== 0) {
       throw new Error(`git symbolic-ref failed: ${result.stderr.trim()}`);
     }
@@ -978,51 +936,14 @@ export class GitEngine implements BeforeApplicationShutdown {
     failure: unknown
   ): Promise<void> {
     try {
-      await this.removeStaleIndexLock(workingCopy, failure);
-      await this.runChecked(workingCopy, emptyIndex);
+      await this.local.removeStaleIndexLock(workingCopy, failure);
+      await this.local.checked(workingCopy, emptyIndex);
       if (unbornHead !== undefined) {
-        await this.runChecked(workingCopy, [ 'symbolic-ref', 'HEAD', unbornHead ]);
+        await this.local.checked(workingCopy, [ 'symbolic-ref', 'HEAD', unbornHead ]);
       }
     } catch (error) {
       this.logger.warn(`Could not undo a failed commit in ${workingCopy}: ${(error as Error).message}`);
     }
-  }
-
-  /**
-   * A git killed at its timeout cannot remove its `index.lock`; the caller holds
-   * the working-tree lock, so no other command of ours is using it, and it is removed.
-   */
-  private async removeStaleIndexLock(workingCopy: string, failure: unknown): Promise<void> {
-    if (failure instanceof GitOperationError && failure.code === 'timeout') {
-      await rm(join(workingCopy, '.git', 'index.lock'), { force: true });
-    }
-  }
-
-  /**
-   * A local command that must succeed; gives its output.
-   *
-   * @throws GitOperationError `timeout` when it ran out of time.
-   */
-  private async runChecked(cwd: string, args: string[], options: LocalRunOptions = {}): Promise<string> {
-    const result = await this.runLocal(cwd, args, options);
-    if (result.timedOut) {
-      throw new GitOperationError('timeout', result.stderr);
-    }
-    if (result.exitCode !== 0) {
-      throw new Error(`git ${args.join(' ')} failed: ${result.stderr.trim()}`);
-    }
-    return result.stdout;
-  }
-
-  /** Runs with `LOCAL_TIMEOUT_MS` unless `options` says otherwise. */
-  private runLocal(cwd: string, args: string[], options: LocalRunOptions = {}): Promise<GitResult> {
-    return this.runner.run(args, {
-      cwd,
-      timeoutMs: options.timeoutMs ?? LOCAL_TIMEOUT_MS,
-      stdin: options.stdin,
-      env: options.env,
-      maxOutputBytes: options.maxOutputBytes ?? LOCAL_MAX_OUTPUT_BYTES
-    });
   }
 
   private async runNetwork(
