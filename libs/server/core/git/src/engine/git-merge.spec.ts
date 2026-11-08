@@ -33,7 +33,8 @@ const gitEnv = {
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', args, { cwd, env: gitEnv, encoding: 'utf8' }).trim();
 
-describe('GitMerge', () => {
+// Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+describe.skipIf(process.platform === 'win32')('GitMerge', () => {
   const merge = new GitMerge(new LocalGit(new GitRunner()), { gitTimeoutMs: 60_000 } as GitOptions);
   let root: string;
   let work: string;
