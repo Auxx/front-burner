@@ -168,6 +168,7 @@ export class RepositoryScreenPage {
   protected readonly pushes = inject(PushService);
   protected readonly lockedKey = inject(LockedKeyService);
   private readonly credentialFixes = inject(CredentialFixesService);
+  private readonly pushChannel = inject(PushChannelService);
 
   protected readonly user = this.currentUser.user;
   /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
@@ -276,6 +277,8 @@ export class RepositoryScreenPage {
       .subscribe(id => {
         // Another repository, through the switcher: its waiting saves are sent at once (NV-12).
         void this.openFiles.flushAll();
+        // Before the services start: they subscribe to the push channel, which then opens with this repository.
+        this.pushChannel.view(id);
         this.session.start(id);
         this.sync.start(id);
         this.gitStatus.start(id);
@@ -288,17 +291,12 @@ export class RepositoryScreenPage {
   }
 
   /**
-   * Tells the push channel which repository this tab views, so that the backend
-   * can fetch it in the background (A-3.12); not viewing once the screen is left.
-   * No cleanup per repository: that would reopen the stream for none in between.
+   * The push channel is told which repository this tab views when the route
+   * changes (A-3.12); not viewing once the screen is left. No cleanup per
+   * repository: that would reopen the stream for none in between.
    */
   private viewRepository(): void {
-    const pushChannel = inject(PushChannelService);
-    effect(() => {
-      const { repositoryId } = this.target();
-      untracked(() => pushChannel.view(repositoryId));
-    });
-    inject(DestroyRef).onDestroy(() => pushChannel.view(null));
+    inject(DestroyRef).onDestroy(() => this.pushChannel.view(null));
   }
 
   /**

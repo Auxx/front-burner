@@ -247,6 +247,18 @@ describe('RepositoryScreenPage', () => {
     expect(view).toHaveBeenLastCalledWith(13);
   });
 
+  it('views the repository before the services start', async () => {
+    const order: string[] = [];
+    view.mockImplementation(() => void order.push('view'));
+    open.mockImplementation((id: number) => {
+      order.push('open');
+      return of({ ...handbook, id });
+    });
+    await visit('/repositories/12');
+
+    expect(order.slice(0, 2)).toEqual([ 'view', 'open' ]);
+  });
+
   it('stops viewing when the page goes', async () => {
     await visit('/repositories/12');
 
