@@ -24,7 +24,7 @@ import {
 } from '@front-burner/server-feature-credentials';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
-import { RepositoryQueries } from '@front-burner/server-feature-repositories';
+import { InstanceRepositories, RepositoryQueries } from '@front-burner/server-feature-repositories';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -40,6 +40,7 @@ import { PullJob } from '../pull/pull.job';
 import { PullService } from '../pull/pull.service';
 import { PushJob } from '../push/push.job';
 import { PushService } from '../push/push.service';
+import { MergeRecord } from '../state/merge-record';
 import { SyncStateStore } from '../state/sync-state.store';
 import { insertRepository, insertUser } from './fixtures';
 import { createRemote, git, testGitOptions } from './git-fixtures';
@@ -181,6 +182,8 @@ export class PushHarness {
       this.guard,
       this.commitAuthors,
       this.syncState,
+      new MergeRecord(this.syncState, this.merge),
+      new InstanceRepositories(this.database),
       this.jobKeys,
       this.events
     ).onModuleInit();

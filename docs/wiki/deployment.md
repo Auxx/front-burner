@@ -149,6 +149,20 @@ and the system settings show them read-only.
 
 ## Troubleshooting
 
+**The instance takes a long time to start, or a health check restarts it.** On
+start, Front Burner checks every working copy before it opens its port, so the
+port refuses connections meanwhile. This usually takes moments, but it can take
+minutes after restoring a backup of large repositories, since git then has to
+read every file again. If your orchestrator checks that the instance is alive,
+give it a generous start period, so that it doesn't restart the instance partway
+through.
+
+**A repository shows "Working copy is missing or damaged" after a failed pull.**
+Front Burner could not undo a merge that failed, and has blocked the repository
+to protect it. The container log gives the reason, such as a full disk. Fix the
+cause and restart the instance: it tries again on every start, and the
+repository comes back by itself when that works.
+
 **Users are logged out every 15 minutes.** The instance is probably opened over
 plain HTTP. See [HTTPS is required](#https-is-required).
 

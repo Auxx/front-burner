@@ -79,6 +79,11 @@ export class SyncStateStore {
     };
   }
 
+  /** The commit recorded before the merge that came before this one, or `null`. */
+  earlierRecordedCommit(repositoryId: number): string | null {
+    return this.row(repositoryId)?.earlierRecordedCommit ?? null;
+  }
+
   /** Forgets the record altogether. */
   forgetRecord(repositoryId: number): void {
     this.change(repositoryId, {

@@ -311,7 +311,8 @@ Confirmed by spike 2 (spikes.md).
 
 - **A-5.15** On start, each working copy is checked and returned to a known
   state as NF-9.4 and NF-9.5 describe: stale locks removed (every `*.lock`
-  directly in `.git` and under `.git/refs`), an interrupted automatic merge
+  directly in `.git` and under `.git/refs`, and `packed-refs.new`, which a
+  killed rewrite of `packed-refs` leaves), an interrupted automatic merge
   aborted, an interrupted user merge reset to the recorded commit, a merge or
   rebase waiting for resolution left alone. Each index is then refreshed with
   `git update-index -q --unmerged --refresh`, under `FRONT_BURNER_GIT_TIMEOUT`,
@@ -323,6 +324,20 @@ Confirmed by spike 2 (spikes.md).
     has been resolved, so the merge is reset to the recorded commit, even if git
     got as far as a `MERGE_HEAD`, and the earlier record comes back. Otherwise a
     `MERGE_HEAD` is a merge waiting for the user.
+  - A repository cannot be used while the flag is set, as a reset would replace
+    the user's work. An undo that fails, here or in a pull, gives the repository
+    the status Error, "Working copy is missing or damaged" (RM-6), and keeps the
+    flag; each start tries again, and the status goes back when the undo works.
+    As a last check, a `HEAD` that is neither the recorded commit nor a merge
+    commit on it is left alone and the record dropped: a fast-forward that
+    finished, as moving the branch is its last step, or commits a reset would
+    lose.
+  - The undo removes only the untracked files and the folders that have them.
+    Ignored files stay, and so do empty folders, which `git status` can't see,
+    so the check before a pull can't have ruled them out.
+  - The record's ref changes before `sync_state`, so that a step that fails is
+    repeated while the flag is set. Each start then makes the ref match
+    `sync_state`, for what a crash left between the two.
   - Recovery runs in `onModuleInit`, one working copy at a time. Nest awaits it
     before any `onApplicationBootstrap`, where the job runner starts, so no job
     runs git meanwhile and a lock on a ref can only be stale. A working copy

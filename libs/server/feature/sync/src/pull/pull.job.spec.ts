@@ -1,5 +1,7 @@
+import { repositories } from '@front-burner/server-core-database';
 import { GitOperationError, unlockPrivateKey } from '@front-burner/server-core-git';
 import { sshKeyFixture } from '@front-burner/server-core-git/testing';
+import { eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { git, trustTestCertificate } from '../testing/git-fixtures';
@@ -271,6 +273,31 @@ describe.skipIf(process.platform === 'win32')('PullJob', () => {
     // Ignored files are not git's to clean.
     expect(readFileSync(join(workingCopy, 'build', 'site.html'), 'utf8')).toBe('built\n');
     expect(record()).toEqual({ recordedCommit: null, mergeCommit: null, applying: false });
+  });
+
+  it('a merge whose undo fails blocks the repository, so that nothing is done on top of it', async () => {
+    harness.confirmAuthor();
+    harness.commitFile('notes.md', 'mine\n');
+    harness.pushFileFromElsewhere('notes.md', 'theirs\n');
+    vi.spyOn(harness.merge, 'merge').mockRejectedValueOnce(new GitOperationError('timeout', 'killed'));
+    vi.spyOn(harness.merge, 'undoCutShort').mockRejectedValueOnce(new Error('disk full'));
+    harness.runner.start();
+
+    const id = enqueue();
+    await harness.finished(id);
+
+    expect(harness.jobOf(id)?.status).toBe('failed');
+    expect(record().applying).toBe(true);
+    expect(harness.database.db.select().from(repositories).where(eq(repositories.id, harness.repositoryId)).get())
+      .toMatchObject({ status: 'error', errorCode: 'working-copy-missing' });
+    expect(published('repository.status').map(({ event }) => event)).toEqual([
+      {
+        type: 'repository.status',
+        repositoryId: harness.repositoryId,
+        status: 'error',
+        error: 'working-copy-missing'
+      }
+    ]);
   });
 
   it('asks for the author only when a merge commit is needed', async () => {

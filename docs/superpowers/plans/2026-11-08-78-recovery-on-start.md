@@ -45,6 +45,19 @@ starts, so no job runs git meanwhile _(implementation's call:
   `index.lock`, and at this point no git command runs (NF-9.4). This is only for
   the start: at any other time a fetch may hold a ref's lock.
 
+- _(Review's calls.)_ A repository cannot be used while `merge_applying` is set:
+  an undo that fails, at the start or in a pull, gives it the status Error
+  (RM-6) until an undo works at a later start. A `HEAD` that is neither the
+  recorded commit nor a merge commit on it is left alone. The undo keeps empty
+  folders. The ref changes before `sync_state`, and each start makes it match.
+- An undo at runtime also removes `HEAD.lock`, `ORIG_HEAD.lock` and the current
+  branch's lock, and recovery also removes `packed-refs.new`.
+- `InstanceRepositories` has the queries across users, so that
+  `RepositoryQueries` stays limited to one user; `MergeRecord` has the steps
+  that change the record in both places.
+- Left for `docs/wiki/todo.md`: a file that a merge cut short wrote and the
+  restored `.gitignore` ignores stays, and blocks the next pull.
+
 ## Review Focus
 
 - **A waiting merge with resolutions made** must survive, with its markers,

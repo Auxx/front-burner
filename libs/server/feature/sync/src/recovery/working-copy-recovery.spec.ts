@@ -1,12 +1,13 @@
 import { Database, repositories } from '@front-burner/server-core-database';
 import { GitMerge, GitOptions, GitRunner, LocalGit } from '@front-burner/server-core-git';
 import { DataLayout } from '@front-burner/server-core-storage';
-import { RepositoryQueries } from '@front-burner/server-feature-repositories';
+import { InstanceRepositories } from '@front-burner/server-feature-repositories';
 import { Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { MergeRecord } from '../state/merge-record';
 import { SyncStateStore } from '../state/sync-state.store';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { git } from '../testing/git-fixtures';
@@ -21,10 +22,14 @@ describe.skipIf(process.platform === 'win32')('WorkingCopyRecovery', () => {
   let database: Database;
   let layout: DataLayout;
   let syncState: SyncStateStore;
+  let merges: GitMerge;
   let recovery: WorkingCopyRecovery;
   let alice: number;
 
   const gitOutput = (cwd: string, ...args: string[]) => git(cwd, ...args).trim();
+  const statusOf = (id: number) =>
+    database.db.select({ status: repositories.status, errorCode: repositories.errorCode })
+      .from(repositories).where(eq(repositories.id, id)).get();
 
   /** A ready repository with a working copy: `first.md` and an ignore rule for `ignored.log`. */
   function workingCopyOf(name: string): { id: number; work: string; } {
@@ -70,10 +75,12 @@ describe.skipIf(process.platform === 'win32')('WorkingCopyRecovery', () => {
     layout = new DataLayout(root);
     syncState = new SyncStateStore(database);
     alice = insertUser(database, 'alice@x.io');
+    merges = new GitMerge(new LocalGit(new GitRunner()), { gitTimeoutMs: 60_000 } as GitOptions);
     recovery = new WorkingCopyRecovery(
-      new RepositoryQueries(database),
-      new GitMerge(new LocalGit(new GitRunner()), { gitTimeoutMs: 60_000 } as GitOptions),
+      new InstanceRepositories(database),
+      merges,
       syncState,
+      new MergeRecord(syncState, merges),
       layout
     );
   });
@@ -219,6 +226,96 @@ describe.skipIf(process.platform === 'win32')('WorkingCopyRecovery', () => {
     expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(true);
     expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe('resolved\n');
     expect(gitOutput(work, 'ls-files', '--resolve-undo')).toBe(resolved);
+  });
+
+  it('leaves later commits and files alone when the flag was left behind', async () => {
+    const { id, work } = workingCopyOf('handbook');
+    const recorded = gitOutput(work, 'rev-parse', 'HEAD');
+    git(work, 'update-ref', REF, recorded);
+    syncState.startMerge(id, recorded);
+    writeFileSync(join(work, 'first.md'), 'committed later\n');
+    commitAll(work, 'later');
+    const later = gitOutput(work, 'rev-parse', 'HEAD');
+    writeFileSync(join(work, 'first.md'), 'not committed\n');
+    writeFileSync(join(work, 'untracked.md'), 'not added\n');
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    await recovery.onModuleInit();
+
+    expect(gitOutput(work, 'rev-parse', 'HEAD')).toBe(later);
+    expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe('not committed\n');
+    expect(readFileSync(join(work, 'untracked.md'), 'utf8')).toBe('not added\n');
+    expect(syncState.record(id)).toEqual({ recordedCommit: null, mergeCommit: null, applying: false });
+    expect(() => git(work, 'rev-parse', '--verify', '-q', REF)).toThrow();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks a repository whose undo fails, and tries again at the next start', async () => {
+    const { id, work } = workingCopyOf('handbook');
+    const recorded = mergeInProgress(id, work);
+    const undo = vi.spyOn(merges, 'undoCutShort').mockRejectedValueOnce(new Error('disk full'));
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    await recovery.onModuleInit();
+
+    expect(statusOf(id)).toEqual({ status: 'error', errorCode: 'working-copy-missing' });
+    expect(syncState.record(id).applying).toBe(true);
+
+    undo.mockRestore();
+    await recovery.onModuleInit();
+
+    expect(statusOf(id)).toEqual({ status: 'ready', errorCode: null });
+    expect(syncState.record(id).applying).toBe(false);
+    expect(gitOutput(work, 'rev-parse', 'HEAD')).toBe(recorded);
+    expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(false);
+  });
+
+  it('blocks a repository whose record cannot be given back', async () => {
+    const { id, work } = workingCopyOf('handbook');
+    mergeInProgress(id, work);
+    vi.spyOn(merges, 'forgetRecord').mockRejectedValueOnce(new Error('disk full'));
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    await recovery.onModuleInit();
+
+    expect(statusOf(id)).toEqual({ status: 'error', errorCode: 'working-copy-missing' });
+    expect(syncState.record(id).applying).toBe(true);
+  });
+
+  it('leaves a damaged repository with no merge to undo alone', async () => {
+    const { id, work } = workingCopyOf('handbook');
+    writeFileSync(join(work, '.git', 'index.lock'), '');
+    database.db.update(repositories).set({ status: 'error', errorCode: 'working-copy-missing' })
+      .where(eq(repositories.id, id)).run();
+
+    await recovery.onModuleInit();
+
+    expect(statusOf(id)).toEqual({ status: 'error', errorCode: 'working-copy-missing' });
+    expect(existsSync(join(work, '.git', 'index.lock'))).toBe(true);
+  });
+
+  it('points the ref at the recorded commit again', async () => {
+    const { id, work } = workingCopyOf('handbook');
+    const recorded = gitOutput(work, 'rev-parse', 'HEAD');
+    syncState.startMerge(id, recorded);
+    syncState.mergeStopped(id);
+    writeFileSync(join(work, 'first.md'), 'two\n');
+    commitAll(work, 'second');
+    // A crash after a new pull moved the ref, before it wrote the database.
+    git(work, 'update-ref', REF, gitOutput(work, 'rev-parse', 'HEAD'));
+
+    await recovery.onModuleInit();
+
+    expect(gitOutput(work, 'rev-parse', REF)).toBe(recorded);
+  });
+
+  it('removes the ref when nothing is recorded', async () => {
+    const { work } = workingCopyOf('handbook');
+    git(work, 'update-ref', REF, gitOutput(work, 'rev-parse', 'HEAD'));
+
+    await recovery.onModuleInit();
+
+    expect(() => git(work, 'rev-parse', '--verify', '-q', REF)).toThrow();
   });
 
   it('refreshes each index', async () => {

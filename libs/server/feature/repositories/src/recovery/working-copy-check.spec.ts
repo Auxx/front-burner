@@ -4,6 +4,7 @@ import { asc } from 'drizzle-orm';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { InstanceRepositories } from '../repositories/instance-repositories';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
 import { WorkingCopyCheck } from './working-copy-check';
@@ -32,7 +33,7 @@ describe('WorkingCopyCheck', () => {
     mkdirSync(join(layout.workingCopy(alice, present), '.git'), { recursive: true });
     mkdirSync(layout.workingCopy(alice, missing), { recursive: true });
 
-    new WorkingCopyCheck(database, layout).onApplicationBootstrap();
+    new WorkingCopyCheck(new InstanceRepositories(database), layout).onApplicationBootstrap();
 
     expect(
       database.db.select({ id: repositories.id, status: repositories.status, errorCode: repositories.errorCode })

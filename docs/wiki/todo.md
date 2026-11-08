@@ -29,6 +29,14 @@ Requirements files deferred until after the MVP:
   Until then the limit is fixed at 100 KB, and **Turn on highlighting** lasts
   only until the file is closed.
 
+Known gaps, left until someone meets them:
+
+- Recovery on start (A-5.15): when a merge is cut short after writing a file
+  that the restored `.gitignore` ignores, as when the incoming commit un-ignores
+  `dist/` and adds `dist/app.js`, the file stays, and every later pull fails
+  with `merge-blocked` until someone removes it on the instance. A fix needs the
+  merge target in `sync_state`, to know which files were the merge's.
+
 Deployment guide (`docs/wiki/deployment.md`), postponed until the MVP runs
 locally in a development environment, so that it describes what was actually
 built:

@@ -171,6 +171,69 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
     expect(git(work, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main');
   });
 
+  it('removeStaleLocks removes what a killed rewrite of packed-refs leaves', async () => {
+    git(work, 'branch', 'gone');
+    git(work, 'pack-refs', '--all');
+    writeFileSync(join(work, '.git', 'packed-refs.lock'), '');
+    writeFileSync(join(work, '.git', 'packed-refs.new'), '');
+
+    await merge.removeStaleLocks(work);
+
+    git(work, 'update-ref', '-d', 'refs/heads/gone');
+    expect(existsSync(join(work, '.git', 'packed-refs'))).toBe(true);
+  });
+
+  it('isCutShort knows the recorded commit and a merge made on it, and nothing else', async () => {
+    const recorded = git(work, 'rev-parse', 'HEAD');
+    expect(await merge.isCutShort(work, recorded)).toBe(true);
+
+    git(work, 'checkout', '-q', '-b', 'theirs');
+    write('theirs.md', 'theirs\n');
+    commitAll('theirs');
+    git(work, 'checkout', '-q', 'main');
+    write('mine.md', 'mine\n');
+    commitAll('mine');
+    const beforeMerge = git(work, 'rev-parse', 'HEAD');
+    expect(await merge.isCutShort(work, recorded)).toBe(false);
+
+    git(work, 'merge', '-q', '--no-edit', 'theirs');
+    expect(await merge.isCutShort(work, beforeMerge)).toBe(true);
+    expect(await merge.isCutShort(work, recorded)).toBe(false);
+  });
+
+  it('undoCutShort works with the locks of the merge\'s own refs', async () => {
+    const oid = conflictingMerge();
+    for (const lock of [ 'HEAD.lock', 'ORIG_HEAD.lock', 'refs/heads/main.lock' ]) {
+      writeFileSync(join(work, '.git', lock), '');
+    }
+    // A fetch may hold this one meanwhile.
+    mkdirSync(join(work, '.git', 'refs', 'remotes', 'origin'), { recursive: true });
+    writeFileSync(join(work, '.git', 'refs', 'remotes', 'origin', 'main.lock'), '');
+
+    await merge.undoCutShort(work, oid);
+
+    expect(git(work, 'status', '--porcelain')).toBe('');
+    expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(false);
+    expect(existsSync(join(work, '.git', 'refs', 'remotes', 'origin', 'main.lock'))).toBe(true);
+  });
+
+  it('undoCutShort keeps the user\'s empty folders and folders with only ignored files', async () => {
+    const oid = conflictingMerge();
+    mkdirSync(join(work, 'empty', 'inner'), { recursive: true });
+    mkdirSync(join(work, 'logs'));
+    write('logs/ignored.log', 'keep me\n');
+    mkdirSync(join(work, 'newdir'));
+    write('newdir/partial.md', 'left by a killed checkout\n');
+    write('newdir/ignored.log', 'keep me too\n');
+
+    await merge.undoCutShort(work, oid);
+
+    expect(existsSync(join(work, 'empty', 'inner'))).toBe(true);
+    expect(readFileSync(join(work, 'logs', 'ignored.log'), 'utf8')).toBe('keep me\n');
+    expect(existsSync(join(work, 'newdir', 'partial.md'))).toBe(false);
+    expect(readFileSync(join(work, 'newdir', 'ignored.log'), 'utf8')).toBe('keep me too\n');
+  });
+
   it('refreshIndex updates stale entries, and accepts modified and conflicting files', async () => {
     utimesSync(join(work, 'first.md'), new Date(1_000_000), new Date(1_000_000));
     expect(git(work, 'diff-files', '--name-only')).toBe('first.md');
