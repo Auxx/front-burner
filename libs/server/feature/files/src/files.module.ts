@@ -30,6 +30,6 @@ import { EntrySummaries } from './summary/entry-summaries';
     FileContents,
     ImageFiles
   ],
-  exports: [ OpenableRepository, WorkingTreeGuard ]
+  exports: [ OpenableRepository, WorkingTreeGuard, FileContents ]
 })
 export class FilesModule {}

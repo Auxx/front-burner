@@ -1435,6 +1435,39 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/merge": {
+      "get": {
+        "operationId": "gitMerge",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitMergeState"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/diff": {
       "get": {
         "operationId": "diff",
@@ -3124,6 +3157,85 @@
         },
         "required": [
           "incoming"
+        ]
+      },
+      "GitConflictFile": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GitConflictKind"
+          },
+          "resolved": {
+            "type": "boolean"
+          },
+          "editable": {
+            "type": "boolean"
+          },
+          "mineSize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "nullable": true
+          },
+          "theirsSize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "nullable": true
+          }
+        },
+        "required": [
+          "path",
+          "kind",
+          "resolved",
+          "editable",
+          "mineSize",
+          "theirsSize"
+        ]
+      },
+      "GitConflictKind": {
+        "type": "string",
+        "enum": [
+          "both-changed",
+          "both-added",
+          "deleted-by-me",
+          "deleted-by-them"
+        ]
+      },
+      "GitMergeState": {
+        "type": "object",
+        "properties": {
+          "into": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitConflictFile"
+            }
+          },
+          "otherFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "into",
+          "from",
+          "files",
+          "otherFiles",
+          "message"
         ]
       },
       "DiffLine": {

@@ -38,11 +38,20 @@ working-tree lock, and with `--no-optional-locks` (A-5.3).
   76 removed it from the index, which leaves that resolve-undo entry behind.
 - A file is `editable` when it is Markdown (`isMarkdownName`), of kind
   `both-changed` or `both-added`, both versions are regular files (mode `100644`
-  or `100755`), and the file on disk, found through `resolveInWorkingCopy`, is a
-  regular file of at most `MAX_FILE_BYTES` and valid UTF-8 (ED-2, GC-9).
+  or `100755`), and `FileContents.read` would open the file on disk (ED-2, GC-9)
+  _(implementation's call: the editor's own check, which goes through
+  `resolveInWorkingCopy`, so that `editable` can't disagree with what opens;
+  `FilesModule` exports it for this)_.
 - `message` is `.git/MERGE_MSG` without lines starting with `#` and trailing
-  blank lines: git's "# Conflicts:" list is not part of the message (GC-20).
-- `into` is the branch and `from` its upstream, from the status.
+  blank lines: git's "# Conflicts:" list is not part of the message (GC-20). It
+  is empty when the file is missing _(implementation's call: the user can still
+  write one)_.
+- `into` is the branch and `from` its upstream, from the status. A merge that
+  has neither, which a pull never leaves, reads as `HEAD` and `MERGE_HEAD`
+  _(implementation's call: the user must still be able to read it to get out of
+  it)_.
+- A submodule's version has no size _(implementation's call: `cat-file` reports
+  its commit's, which is not the file's)_.
 
 ## Review Focus
 

@@ -1,7 +1,8 @@
 import { EventsHub } from '@front-burner/server-core-events';
 import { GitEngine, GitMerge, GitOptions, GitRunner, LocalGit, WorkingTreeLock } from '@front-burner/server-core-git';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
-import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
+import type { DataLayout } from '@front-burner/server-core-storage';
+import { FileContents, OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
 import type { GitStatus, PushEvent, RepositoryCommitAuthor } from '@front-burner/shared-contracts';
 import { INestApplication } from '@nestjs/common';
@@ -26,6 +27,7 @@ import request from 'supertest';
 import { FetchScheduler } from '../fetch/fetch-scheduler';
 import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
+import { MergeStateService } from '../merge/merge-state.service';
 import { PullService } from '../pull/pull.service';
 import { PushService } from '../push/push.service';
 import { SyncStateStore } from '../state/sync-state.store';
@@ -99,6 +101,7 @@ describe('GitController', () => {
       }
     };
     const engine = new GitEngine(options, new GitRunner());
+    const gitMerge = new GitMerge(new LocalGit(new GitRunner()), options);
     const moduleRef = await Test.createTestingModule({
       controllers: [ GitController ],
       providers: [
@@ -112,7 +115,21 @@ describe('GitController', () => {
         { provide: FetchService, useValue: {} },
         // And pulling.
         { provide: PullService, useValue: {} },
-        { provide: GitMerge, useValue: new GitMerge(new LocalGit(new GitRunner()), options) },
+        { provide: GitMerge, useValue: gitMerge },
+        {
+          provide: MergeStateService,
+          useValue: new MergeStateService(
+            engine,
+            gitMerge,
+            new FileContents(
+              {} as OpenableRepository,
+              {} as WorkingTreeGuard,
+              engine,
+              {} as EventsHub,
+              {} as DataLayout
+            )
+          )
+        },
         { provide: FetchScheduler, useValue: { fileOpened } },
         { provide: SyncStateStore, useValue: { fetchProblem: () => null } },
         { provide: GitJobs, useValue: { networkJob: () => null } },
@@ -340,6 +357,43 @@ describe('GitController', () => {
 
     it('answers another user\'s repository like a missing one', async () => {
       expect((await incoming('notes.md', 9).expect(404)).body).toMatchObject({ code: 'not-found' });
+    });
+  });
+
+  describe('merge', () => {
+    const mergeState = (id = READY) => request(app.getHttpServer()).get(`/repositories/${id}/git/merge`);
+
+    it('reads a merge in progress', async () => {
+      git(root, 'switch', '-q', '-c', 'theirs');
+      writeFileSync(join(root, 'notes.md'), 'theirs\n');
+      git(root, 'commit', '-q', '-am', 'theirs');
+      git(root, 'switch', '-q', 'main');
+      writeFileSync(join(root, 'notes.md'), 'mine\n');
+      git(root, 'commit', '-q', '-am', 'mine');
+      expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+      const response = await mergeState().expect(200);
+
+      expect(response.body).toEqual({
+        into: 'main',
+        from: 'MERGE_HEAD',
+        files: [
+          { path: 'notes.md', kind: 'both-changed', resolved: false, editable: true, mineSize: 5, theirsSize: 7 }
+        ],
+        otherFiles: [],
+        message: 'Merge branch \'theirs\''
+      });
+    });
+
+    it('answers no merge and another user\'s repository', async () => {
+      const response = await mergeState().expect(409);
+      expect(response.body.code).toBe('no-merge-in-progress');
+
+      await mergeState(99).expect(404);
+    });
+
+    it('refuses a repository that is not ready', async () => {
+      await mergeState(CLONING).expect(409);
     });
   });
 

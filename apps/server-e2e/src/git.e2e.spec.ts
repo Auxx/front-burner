@@ -851,6 +851,32 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
     });
   });
 
+  it('a pull that conflicts is readable from another session', async () => {
+    const bare = remote('readable');
+    const { id, workingCopy } = await client.add('readable', `${publicGit.url}/readable.git`);
+    pushFileFromElsewhere(bare, 'both.md', 'theirs\n');
+    writeFileSync(join(workingCopy, 'both.md'), 'mine\n');
+    git(workingCopy, 'add', 'both.md');
+    commitIn(workingCopy, 'mine');
+    const readMerge = () => client.call(`/repositories/${id}/git/merge`);
+    expect((await readMerge()).status).toBe(409);
+
+    expect((await client.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
+
+    const otherSession = new GitApi(server, (await login(server, 'body')).authToken);
+    const response = await otherSession.call(`/repositories/${id}/git/merge`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      into: 'main',
+      from: 'origin/main',
+      files: [
+        { path: 'both.md', kind: 'both-added', resolved: false, editable: true, mineSize: 5, theirsSize: 7 }
+      ],
+      otherFiles: [],
+      message: 'Merge remote-tracking branch \'origin/main\''
+    });
+  });
+
   it.each([ [ 'a full clone', 'full' ], [ 'a single-branch clone', 'main' ] ] as const)(
     'a rejected branch can pull and push, in %s',
     async (_label, clone) => {
