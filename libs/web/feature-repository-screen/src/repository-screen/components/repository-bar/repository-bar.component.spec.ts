@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import type { CurrentUser, RepositorySummary } from '@front-burner/shared-contracts';
 import { RepositoriesApi } from '@front-burner/web-api-client';
@@ -7,6 +8,7 @@ import { of } from 'rxjs';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { FetchStatusComponent } from '../fetch-status/fetch-status.component';
 import { RepositoryBarComponent } from './repository-bar.component';
 
 const KEY = 'web-feature-repository-screen.RepositoryBarComponent';
@@ -84,6 +86,48 @@ describe('RepositoryBarComponent', () => {
     const parts = [ ...bar().querySelectorAll('h1, rs-git-status-summary, rs-save-status') ];
     expect(parts.map(part => part.localName)).toEqual([ 'h1', 'rs-git-status-summary', 'rs-save-status' ]);
     expect(bar().querySelector('rs-git-status-summary')?.textContent?.trim()).toBe('main');
+  });
+
+  it('replaces the status and the actions during a merge', async () => {
+    await show();
+    fixture.componentRef.setInput('merging', true);
+    fixture.componentRef.setInput('mergeState', {
+      into: 'main',
+      from: 'origin/main',
+      files: [],
+      otherFiles: [],
+      message: 'Merge'
+    });
+    let aborted = 0;
+    fixture.componentInstance.abortMerge.subscribe(() => aborted++);
+    await settle(fixture);
+
+    expect(bar().querySelector('rs-git-status-summary')).toBeNull();
+    expect(bar().querySelector('rs-git-actions')).toBeNull();
+    expect(bar().querySelector('rs-merge-summary')).not.toBeNull();
+
+    (bar().querySelector('rs-merge-summary button') as HTMLButtonElement).click();
+    expect(aborted).toBe(1);
+
+    fixture.componentRef.setInput('merging', false);
+    await settle(fixture);
+
+    expect(bar().querySelector('rs-merge-summary')).toBeNull();
+    expect(bar().querySelector('rs-git-actions')).not.toBeNull();
+  });
+
+  it.each([ false, true ])('gives the focus to what offers the actions (merging: %s)', async merging => {
+    await show();
+    fixture.componentRef.setInput('merging', merging);
+    await settle(fixture);
+    document.body.append(bar());
+
+    const fetchStatus = fixture.debugElement.query(By.directive(FetchStatusComponent));
+    (fetchStatus.componentInstance as FetchStatusComponent).vacate.emit();
+
+    const parent = merging ? 'rs-merge-summary' : 'rs-git-actions';
+    expect(document.activeElement?.closest(parent)).not.toBeNull();
+    bar().remove();
   });
 
   it('shows no save status for a repository that cannot be opened', async () => {

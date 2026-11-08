@@ -1,0 +1,56 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.MergeSummaryComponent'">
+  @if (state(); as merge) {
+    <!-- The spaces are for the text when copied; the flex layout leaves them out. -->
+    <span class="what">
+      <span class="word">{{ t('merging') }}</span>
+      &ngsp;
+      <!-- Each name is focusable while shortened, so that the keyboard reaches it in full (NV-11). -->
+      <span #from="uiTruncatedTooltip"
+            class="branch"
+            uiTruncatedTooltipLongPress
+            uiTruncatedTooltipShowOnClick
+            [uiTruncatedTooltip]="merge.from"
+            [attr.tabindex]="from.truncated() ? 0 : null">{{ merge.from }}</span>
+      &ngsp;
+      <span class="word">{{ t('into') }}</span>
+      &ngsp;
+      <span #into="uiTruncatedTooltip"
+            class="branch"
+            uiTruncatedTooltipLongPress
+            uiTruncatedTooltipShowOnClick
+            [uiTruncatedTooltip]="merge.into"
+            [attr.tabindex]="into.truncated() ? 0 : null">{{ merge.into }}</span>
+    </span>
+    &ngsp;
+    <span class="separator"
+          aria-hidden="true">·</span>
+    &ngsp;
+    <span class="count">{{ t('resolved', { resolved: resolved(), total: merge.files.length }) }}</span>
+  } @else {
+    <span class="count">{{ t('inProgress') }}</span>
+  }
+  @if (narrow()) {
+    <button uiIconButton
+            [uiMenuTrigger]="actions.aria"
+            [label]="t('gitActions')"
+            [busy]="busy()">
+      <ui-icon name="repo-fetch" />
+    </button>
+    <ui-menu #actions="uiMenu"
+             (itemSelected)="abortMerge.emit()">
+      <button uiMenuItem="abort">
+        <ui-icon name="close" />
+        {{ t('abort') }}
+      </button>
+    </ui-menu>
+  } @else {
+    <button uiButton
+            variant="ghost"
+            size="small"
+            [busy]="busy()"
+            (click)="abortMerge.emit()">
+      <ui-icon name="close" />
+      {{ t('abort') }}
+    </button>
+  }
+</ng-container>

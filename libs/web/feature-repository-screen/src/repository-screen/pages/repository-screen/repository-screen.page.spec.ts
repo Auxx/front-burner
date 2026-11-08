@@ -102,6 +102,7 @@ describe('RepositoryScreenPage', () => {
   let changes: GitChange[];
   /** In place of `changes`, such as a failure. */
   let gitStatusAnswer: Observable<GitStatus> | undefined;
+  let abortMerge: ReturnType<typeof vi.fn>;
 
   const baseStatus = (): GitStatus => ({
     branch: 'main',
@@ -144,7 +145,9 @@ describe('RepositoryScreenPage', () => {
               discards.push(body.paths);
               return discardAnswer(body.paths);
             },
-            gitStatus: (): Observable<GitStatus> => gitStatusAnswer ?? of(baseStatus())
+            gitStatus: (): Observable<GitStatus> => gitStatusAnswer ?? of(baseStatus()),
+            gitMerge: () => of({ into: 'main', from: 'origin/main', files: [], otherFiles: [], message: 'Merge' }),
+            abortMerge
           }
         },
         {
@@ -218,6 +221,7 @@ describe('RepositoryScreenPage', () => {
     gone = new Set();
     changes = [];
     gitStatusAnswer = undefined;
+    abortMerge = vi.fn(() => of(undefined));
     discards = [];
     discardAnswer = () => of(undefined);
     gitDiff = vi.fn(() => of<GitDiff>({ kind: 'text', lines: [], complete: true, lineEndingsOnly: false }));
@@ -1206,6 +1210,36 @@ describe('RepositoryScreenPage', () => {
 
         expect(summary()).toBe(before);
         expect(before).toContain('main');
+      });
+    });
+
+    describe('a merge in progress', () => {
+      const K = 'web-feature-repository-screen.AbortMergeDialog';
+      const merging = () => page().querySelector('rs-merge-summary');
+
+      it('switches the bar without a reload, and back after Abort merge', async () => {
+        await visit('/repositories/12');
+        expect(merging()).toBeNull();
+
+        gitStatusAnswer = of({ ...baseStatus(), mergeInProgress: true });
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+
+        expect(merging()?.textContent).toContain('origin/main');
+        expect(page().querySelector('rs-git-actions')).toBeNull();
+
+        (merging()?.querySelector('button') as HTMLButtonElement).click();
+        await settleDialog();
+        expect(abortMerge).not.toHaveBeenCalled();
+
+        gitStatusAnswer = of(baseStatus());
+        dialogButton(`${K}.abort`)?.click();
+        await settleDialog();
+        await settle(harness.fixture);
+
+        expect(abortMerge).toHaveBeenCalledExactlyOnceWith(12);
+        expect(merging()).toBeNull();
+        expect(page().querySelector('rs-git-actions')).not.toBeNull();
       });
     });
 

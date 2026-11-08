@@ -52,6 +52,7 @@ import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-s
 import { FirstFileService } from '../../services/first-file/first-file.service';
 import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
 import { LockedKeyService } from '../../services/locked-key/locked-key.service';
+import { MergeActionsService } from '../../services/merge-actions/merge-actions.service';
 import { MergeStore } from '../../services/merge-store/merge-store.service';
 import { type GitProblem, NetworkJobService } from '../../services/network-job/network-job.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
@@ -102,7 +103,9 @@ const MAX_BADGE_COUNT = 99;
  * discards. **Push** in the bar runs through `NetworkJobService` (GA-29), and why a push
  * failed is shown below the bar (NV-16), as is the locked-key banner of
  * `LockedKeyService` (RC-15). The bar also shows, quietly, why background fetches
- * aren't working (GA-35, RC-6), which stays when the banner is dismissed.
+ * aren't working (GA-35, RC-6), which stays when the banner is dismissed. During a
+ * merge, followed by `MergeStore`, the bar says what merges and offers **Abort merge**
+ * through `MergeActionsService` (GC-2, GC-6, GC-23).
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -142,6 +145,7 @@ const MAX_BADGE_COUNT = 99;
     DiskChangesService,
     GitStatusStore,
     MergeStore,
+    MergeActionsService,
     CommitTicksService,
     CommitAuthorGate,
     CommitService,
@@ -170,6 +174,7 @@ export class RepositoryScreenPage {
   private readonly diskChanges = inject(DiskChangesService);
   protected readonly gitStatus = inject(GitStatusStore);
   protected readonly merge = inject(MergeStore);
+  protected readonly mergeActions = inject(MergeActionsService);
   private readonly discards = inject(DiscardService);
   protected readonly jobs = inject(NetworkJobService);
   protected readonly lockedKey = inject(LockedKeyService);

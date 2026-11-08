@@ -3,13 +3,19 @@
                         [repository]="repository()"
                         [narrow]="narrow()" />
 @if (withFiles()) {
-  <rs-git-status-summary [status]="gitStatus()" />
-  <rs-git-actions #gitActions
-                  [status]="gitStatus()"
-                  [running]="running()"
-                  [narrow]="narrow()"
-                  (fetch)="fetch.emit()"
-                  (push)="push.emit()" />
+  @if (merging()) {
+    <rs-merge-summary [state]="mergeState()"
+                      [narrow]="narrow()"
+                      [busy]="aborting()"
+                      (abortMerge)="abortMerge.emit()" />
+  } @else {
+    <rs-git-status-summary [status]="gitStatus()" />
+    <rs-git-actions [status]="gitStatus()"
+                    [running]="running()"
+                    [narrow]="narrow()"
+                    (fetch)="fetch.emit()"
+                    (push)="push.emit()" />
+  }
   <rs-fetch-status [problem]="gitStatus()?.fetchProblem ?? null"
                    [lockedKeyName]="lockedKeyName()"
                    [running]="running()"
@@ -17,7 +23,7 @@
                    (retry)="retryFetch.emit()"
                    (fix)="fixFetch.emit($event)"
                    (unlock)="unlock.emit()"
-                   (vacate)="gitActions.focus()" />
+                   (vacate)="focusActions()" />
   <rs-save-status class="status"
                   [status]="saveStatus()" />
 }
