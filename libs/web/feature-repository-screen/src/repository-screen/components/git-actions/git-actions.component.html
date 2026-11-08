@@ -1,0 +1,78 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.GitActionsComponent'">
+  @let fetchWhy = fetchReason();
+  @let pushWhy = pushReason();
+  @let fetchRuns = fetching();
+  @let pushRuns = pushing();
+  @let progressKey = progress();
+  @if (narrow()) {
+    <button uiIconButton
+            [uiMenuTrigger]="actions.aria"
+            [label]="t('gitActions')"
+            [busy]="fetchRuns || pushRuns">
+      <ui-icon name="repo-fetch" />
+    </button>
+    <ui-menu #actions="uiMenu"
+             (itemSelected)="choose($event)">
+      <button uiMenuItem="fetch"
+              [disabled]="fetchRuns || fetchWhy !== null">
+        <ui-icon name="repo-fetch" />
+        {{ fetchRuns ? t('fetching') : t('fetch') }}
+        @if (fetchWhy !== null) {
+          <span class="reason">{{ t('reasons.' + fetchWhy) }}</span>
+        }
+      </button>
+      <button uiMenuItem="push"
+              [disabled]="pushRuns || pushWhy !== null">
+        <ui-icon name="repo-push" />
+        {{ pushRuns ? t('pushing') : t('push') }}
+        @if (pushWhy !== null) {
+          <span class="reason">{{ t('reasons.' + pushWhy) }}</span>
+        }
+      </button>
+    </ui-menu>
+  } @else {
+    @if (fetchWhy !== null) {
+      <button uiButton
+              variant="ghost"
+              size="small"
+              unavailable
+              uiTooltipShowOnClick
+              [uiTooltip]="t('reasons.' + fetchWhy)">
+        <ui-icon name="repo-fetch" />
+        {{ t('fetch') }}
+      </button>
+    } @else {
+      <button uiButton
+              variant="ghost"
+              size="small"
+              [busy]="fetchRuns"
+              (click)="chooseFetch()">
+        <ui-icon name="repo-fetch" />
+        {{ fetchRuns ? t('fetching') : t('fetch') }}
+      </button>
+    }
+    @if (pushWhy !== null) {
+      <button uiButton
+              variant="ghost"
+              size="small"
+              unavailable
+              uiTooltipShowOnClick
+              [uiTooltip]="t('reasons.' + pushWhy)">
+        <ui-icon name="repo-push" />
+        {{ t('push') }}
+      </button>
+    } @else {
+      <button uiButton
+              variant="ghost"
+              size="small"
+              [busy]="pushRuns"
+              (click)="choosePush()">
+        <ui-icon name="repo-push" />
+        {{ pushRuns ? t('pushing') : t('push') }}
+      </button>
+    }
+  }
+  <!-- Not a `status` role: the bar's status is the save status (ED-18). -->
+  <span class="cdk-visually-hidden"
+        aria-live="polite">{{ progressKey ? t(progressKey) : '' }}</span>
+</ng-container>

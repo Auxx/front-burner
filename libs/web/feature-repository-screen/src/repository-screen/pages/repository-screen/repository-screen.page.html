@@ -18,7 +18,8 @@
                            [narrow]="shell.narrow()"
                            [gitStatus]="gitStatus.status()"
                            [saveStatus]="saveStatus()"
-                           [pushing]="jobs.running() !== null"
+                           [running]="jobs.running()"
+                           (fetch)="jobs.start('fetch')"
                            (push)="jobs.start('push')" />
       } @else if (user(); as user) {
         <shell-app-header uiAppShellHeader

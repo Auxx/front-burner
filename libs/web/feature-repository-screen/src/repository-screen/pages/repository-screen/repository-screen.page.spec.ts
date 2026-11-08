@@ -76,6 +76,7 @@ describe('RepositoryScreenPage', () => {
   let saveFile: ReturnType<typeof vi.fn>;
   let gitDiff: ReturnType<typeof vi.fn<(path: string) => Observable<GitDiff>>>;
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
+  let fetch: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let fetchOnFileOpened: ReturnType<typeof vi.fn<(id: number) => Observable<void>>>;
   let recreateFile: ReturnType<typeof vi.fn>;
@@ -102,6 +103,19 @@ describe('RepositoryScreenPage', () => {
   /** In place of `changes`, such as a failure. */
   let gitStatusAnswer: Observable<GitStatus> | undefined;
 
+  const baseStatus = (): GitStatus => ({
+    branch: 'main',
+    noCommits: false,
+    lastCommit: null,
+    upstream: null,
+    upstreamGone: false,
+    ahead: 0,
+    behind: 0,
+    changes,
+    mergeInProgress: false,
+    networkJob: null,
+    fetchProblem: null
+  });
   const page = () => harness.fixture.nativeElement as HTMLElement;
   const button = (text: string) =>
     [ ...page().querySelectorAll('button') ].find(element => element.textContent?.trim() === text);
@@ -122,26 +136,14 @@ describe('RepositoryScreenPage', () => {
           useValue: {
             diff: (_id: number, query: { path: string; }) => gitDiff(query.path),
             push,
+            fetch,
             gitJob,
             fetchOnFileOpened,
             discard: (_id: number, body: { paths: string[]; }) => {
               discards.push(body.paths);
               return discardAnswer(body.paths);
             },
-            gitStatus: (): Observable<GitStatus> =>
-              gitStatusAnswer ?? of({
-                branch: 'main',
-                noCommits: false,
-                lastCommit: null,
-                upstream: null,
-                upstreamGone: false,
-                ahead: 0,
-                behind: 0,
-                changes,
-                mergeInProgress: false,
-                networkJob: null,
-                fetchProblem: null
-              })
+            gitStatus: (): Observable<GitStatus> => gitStatusAnswer ?? of(baseStatus())
           }
         },
         {
@@ -220,6 +222,7 @@ describe('RepositoryScreenPage', () => {
     gitDiff = vi.fn(() => of<GitDiff>({ kind: 'text', lines: [], complete: true, lineEndingsOnly: false }));
     saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
     push = vi.fn(() => of({ jobId: 7 }));
+    fetch = vi.fn(() => of({ jobId: 8 }));
     gitJob = vi.fn(() => of<GitJobState>({ status: 'running', outcome: null }));
     fetchOnFileOpened = vi.fn(() => of(undefined));
     recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
@@ -1260,8 +1263,45 @@ describe('RepositoryScreenPage', () => {
     });
 
     describe('pushing', () => {
-      const pushButton = () => page().querySelector('rs-repository-bar rs-push-button button') as HTMLButtonElement;
+      const KEY_ACTIONS = 'web-feature-repository-screen.GitActionsComponent';
+      const pushButton = () =>
+        [ ...page().querySelectorAll('rs-repository-bar rs-git-actions button') ]
+          .find(button => button.textContent?.trim().startsWith(`${KEY_ACTIONS}.push`)) as HTMLButtonElement;
+      const fetchButton = () =>
+        [ ...page().querySelectorAll('rs-repository-bar rs-git-actions button') ]
+          .find(button => button.textContent?.trim().startsWith(`${KEY_ACTIONS}.fetch`)) as HTMLButtonElement;
       const problem = () => page().querySelector('rs-git-problem');
+
+      it('fetches from the bar and shows it running, with Push unavailable', async () => {
+        await visit('/repositories/12');
+
+        fetchButton().click();
+        await settle(harness.fixture);
+
+        expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+        expect(fetchButton().textContent?.trim()).toBe(`${KEY_ACTIONS}.fetching`);
+        expect(pushButton().getAttribute('aria-disabled')).toBe('true');
+      });
+
+      it('shows another tab\'s fetch as running on the page', async () => {
+        gitStatusAnswer = of({ ...baseStatus(), networkJob: { id: 9, type: 'fetch' } });
+        await visit('/repositories/12');
+
+        expect(fetchButton().textContent?.trim()).toBe(`${KEY_ACTIONS}.fetching`);
+        expect(pushButton().getAttribute('aria-disabled')).toBe('true');
+      });
+
+      it('shows a fetch that failed in another tab as a banner', async () => {
+        gitStatusAnswer = of({ ...baseStatus(), networkJob: { id: 9, type: 'fetch' } });
+        gitJob.mockReturnValue(of<GitJobState>({
+          status: 'failed',
+          outcome: { kind: 'failed', code: 'network', params: {} }
+        }));
+        await visit('/repositories/12');
+
+        expect((problem() as HTMLElement).textContent).toContain('errors.network');
+        expect(fetchButton().getAttribute('aria-disabled')).toBeNull();
+      });
 
       it('pushes from the bar and shows it running', async () => {
         await visit('/repositories/12');
@@ -1270,7 +1310,7 @@ describe('RepositoryScreenPage', () => {
         await settle(harness.fixture);
 
         expect(push).toHaveBeenCalledExactlyOnceWith(12);
-        expect(pushButton().textContent?.trim()).toBe('web-feature-repository-screen.PushButtonComponent.pushing');
+        expect(pushButton().textContent?.trim()).toBe(`${KEY_ACTIONS}.pushing`);
       });
 
       it('shows a new banner for each failure, so that Try again that fails again is announced', async () => {
@@ -1509,7 +1549,7 @@ describe('RepositoryScreenPage', () => {
       await visit('/repositories/12/files/README.md');
       typeAtEnd('More.\n');
 
-      (page().querySelector('rs-repository-bar rs-push-button button') as HTMLButtonElement).click();
+      (page().querySelector('rs-repository-bar rs-git-actions button:last-of-type') as HTMLButtonElement).click();
       await settle(harness.fixture);
 
       expect(push).toHaveBeenCalledOnce();
