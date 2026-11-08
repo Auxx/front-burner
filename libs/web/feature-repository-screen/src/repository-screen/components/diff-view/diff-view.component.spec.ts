@@ -22,7 +22,8 @@ const STATUS: GitStatus = {
   behind: 0,
   changes: [ 'README.md', 'a.md', 'b.md', 'logo.png' ].map(path => ({ path, state: 'modified' as const })),
   mergeInProgress: false,
-  networkJob: null
+  networkJob: null,
+  fetchProblem: null
 };
 
 function context(count: number, from = 1): DiffLine[] {

@@ -12,13 +12,14 @@ numbering conventions.
   only consumer (vision goal 12).
 - **A-3.2** Long operations return `202 Accepted` with a job ID (A-1.13). A git
   job's state is read with `GET /repositories/:id/git/jobs/:jobId`: its status
-  and, once it has ended, its outcome, such as a push's commits and upstream, or
-  an error code with its params. A client reads it after `job.finished`, since
-  events are not state (A-3.11). An operation git refused, such as a push the
-  remote rejected, is a job that finished with a `failed` outcome; a job the
-  runner failed, such as one a restart interrupted, reports its error code
-  without params. Another user's job, or a job of another repository, is
-  answered like a missing one. _(Plan 57's call.)_
+  and, once it has ended, its outcome, such as a push's commits and upstream, a
+  fetch's whether a remote branch moved, or an error code with its params. A
+  client reads it after `job.finished`, since events are not state (A-3.11). An
+  operation git refused, such as a push the remote rejected, is a job that
+  finished with a `failed` outcome; a job the runner failed, such as one a
+  restart interrupted, reports its error code without params. Another user's
+  job, or a job of another repository, is answered like a missing one. _(Plan
+  57's call.)_
 
 ## A-3: Contracts
 
@@ -80,8 +81,7 @@ numbering conventions.
 - **A-3.11** **Events are notifications, not state.** Each says what changed,
   with a small payload, for example `repository.status` (repository ID, new
   status), `job.progress` (job ID, percentage), `job.finished` (job ID,
-  outcome), `remote.changed` (repository ID, changed paths for D-4.2),
-  `sync.state` (repository ID: "not uploaded", conflict episode),
+  outcome), `sync.state` (repository ID: "not uploaded", conflict episode),
   `resolution.lock` (repository ID, taken over). After connecting or
   reconnecting, the client fetches current state over REST; events are never
   replayed.
@@ -96,7 +96,14 @@ numbering conventions.
     its own, since a commit or a push changes no files. _(Plan's call.)_ It is
     also sent when a push is queued, so that the user's other tabs read the
     status's unfinished network job and show the push as running (GA-9). _(Plan
-    58's call.)_
+    58's call.)_ A fetch publishes it when it is queued, as a push does, and
+    when it ends only if a remote branch moved or the stored fetch problem
+    changed, so that an idle tab does not read the status after every background
+    fetch. _(Plan 70's call.)_
+  - There is no `remote.changed` event: when the status's `behind` changes, the
+    client reads `GET /repositories/:id/git/incoming?path=` for the incoming
+    commits and whether they change the open file (GA-34, D-4.2), which also
+    works after a reconnect. _(Plan 70's call.)_
   - `commit-author.changed` says that the user's commit author, a repository's
     override or the confirmation changed, so that every tab shows who commits.
     It names no repository, as the default concerns them all. _(Plan's call.)_
