@@ -5,16 +5,16 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import type { GitProblem } from '../../services/network-job/network-job.service';
 import { gitProblem } from '../../utils/git-problem/git-problem';
-import { PushProblemComponent } from './push-problem.component';
+import { GitProblemComponent } from './git-problem.component';
 
-const KEY = 'web-feature-repository-screen.PushProblemComponent';
+const KEY = 'web-feature-repository-screen.GitProblemComponent';
 
 function problem(code: string, params: Record<string, string> = {}, quiet = false): GitProblem {
   return { code, params, quiet, operation: 'push', ...gitProblem(code) };
 }
 
-describe('PushProblemComponent', () => {
-  let fixture: ComponentFixture<PushProblemComponent>;
+describe('GitProblemComponent', () => {
+  let fixture: ComponentFixture<GitProblemComponent>;
   let announce: ReturnType<typeof vi.fn>;
   let fixes: GitProblem['fix'][];
   let dismissed: number;
@@ -27,7 +27,7 @@ describe('PushProblemComponent', () => {
     announce = vi.fn(async () => undefined);
     TestBed.configureTestingModule({
       imports: [
-        PushProblemComponent,
+        GitProblemComponent,
         translocoTesting({
           'errors.push-non-fast-forward': 'The remote has new commits. Pull first.',
           'errors.push-rejected': 'The remote refused the push.',
@@ -36,7 +36,7 @@ describe('PushProblemComponent', () => {
       ],
       providers: [ { provide: LiveAnnouncer, useValue: { announce } } ]
     });
-    fixture = TestBed.createComponent(PushProblemComponent);
+    fixture = TestBed.createComponent(GitProblemComponent);
     fixture.componentRef.setInput('problem', shown);
     fixes = [];
     dismissed = 0;

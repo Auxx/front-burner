@@ -36,9 +36,9 @@ import { ChangesPaneComponent } from '../../components/changes-pane/changes-pane
 import { DiffViewComponent } from '../../components/diff-view/diff-view.component';
 import { EditorAreaComponent } from '../../components/editor-area/editor-area.component';
 import { FileTreeComponent } from '../../components/file-tree/file-tree.component';
+import { GitProblemComponent } from '../../components/git-problem/git-problem.component';
 import { LockedKeyBannerComponent } from '../../components/locked-key-banner/locked-key-banner.component';
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
-import { PushProblemComponent } from '../../components/push-problem/push-problem.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
 import { CommitAuthorGate } from '../../services/commit-author-gate/commit-author-gate.service';
 import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
@@ -123,7 +123,7 @@ const MAX_BADGE_COUNT = 99;
     FileTreeComponent,
     LockedKeyBannerComponent,
     NotOpenableComponent,
-    PushProblemComponent,
+    GitProblemComponent,
     RepositoryBarComponent
   ],
   providers: [
@@ -386,7 +386,7 @@ export class RepositoryScreenPage {
    * Why the last push failed, as a list of one, so that each new problem gets
    * a banner of its own, which announces it (RC-25).
    */
-  protected readonly pushProblems = computed(() => {
+  protected readonly gitProblems = computed(() => {
     const problem = this.jobs.problem();
     return this.session.state() === 'ready' && problem !== null ? [ problem ] : [];
   });

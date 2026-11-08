@@ -2,7 +2,7 @@
   @let shown = problem();
   <ui-inline-banner status="danger"
                     [announce]="!shown.quiet"
-                    [dismissLabel]="t('web-feature-repository-screen.PushProblemComponent.dismiss')"
+                    [dismissLabel]="t('web-feature-repository-screen.GitProblemComponent.dismiss')"
                     (dismissed)="dismissed.emit()">
     {{ t(shown.messageKey, shown.params) }}
     @if (remoteMessages(); as lines) {
@@ -14,7 +14,7 @@
         <button uiButton
                 size="small"
                 (click)="fixSelected.emit(fix)">
-          {{ t('web-feature-repository-screen.PushProblemComponent.fixes.' + fix) }}
+          {{ t('web-feature-repository-screen.GitProblemComponent.fixes.' + fix) }}
         </button>
       </div>
     }
