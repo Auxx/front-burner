@@ -3,31 +3,31 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
-import type { PushProblem } from '../../services/push/push.service';
-import { pushProblem } from '../../utils/push-problem/push-problem';
-import { PushProblemComponent } from './push-problem.component';
+import type { GitProblem } from '../../services/network-job/network-job.service';
+import { gitProblem } from '../../utils/git-problem/git-problem';
+import { GitProblemComponent } from './git-problem.component';
 
-const KEY = 'web-feature-repository-screen.PushProblemComponent';
+const KEY = 'web-feature-repository-screen.GitProblemComponent';
 
-function problem(code: string, params: Record<string, string> = {}, quiet = false): PushProblem {
-  return { code, params, quiet, ...pushProblem(code) };
+function problem(code: string, params: Record<string, string> = {}, quiet = false): GitProblem {
+  return { code, params, quiet, operation: 'push', ...gitProblem(code) };
 }
 
-describe('PushProblemComponent', () => {
-  let fixture: ComponentFixture<PushProblemComponent>;
+describe('GitProblemComponent', () => {
+  let fixture: ComponentFixture<GitProblemComponent>;
   let announce: ReturnType<typeof vi.fn>;
-  let fixes: PushProblem['fix'][];
+  let fixes: GitProblem['fix'][];
   let dismissed: number;
 
   const element = () => fixture.nativeElement as HTMLElement;
   const text = (node: Element | null) => node?.textContent?.replace(/\s+/g, ' ').trim();
   const buttons = () => [ ...element().querySelectorAll('[uiBannerActions] button') ].map(text);
 
-  async function show(shown: PushProblem): Promise<void> {
+  async function show(shown: GitProblem): Promise<void> {
     announce = vi.fn(async () => undefined);
     TestBed.configureTestingModule({
       imports: [
-        PushProblemComponent,
+        GitProblemComponent,
         translocoTesting({
           'errors.push-non-fast-forward': 'The remote has new commits. Pull first.',
           'errors.push-rejected': 'The remote refused the push.',
@@ -36,7 +36,7 @@ describe('PushProblemComponent', () => {
       ],
       providers: [ { provide: LiveAnnouncer, useValue: { announce } } ]
     });
-    fixture = TestBed.createComponent(PushProblemComponent);
+    fixture = TestBed.createComponent(GitProblemComponent);
     fixture.componentRef.setInput('problem', shown);
     fixes = [];
     dismissed = 0;

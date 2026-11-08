@@ -18,18 +18,18 @@
                            [narrow]="shell.narrow()"
                            [gitStatus]="gitStatus.status()"
                            [saveStatus]="saveStatus()"
-                           [pushing]="pushes.running()"
-                           (push)="pushes.start()" />
+                           [pushing]="jobs.running() !== null"
+                           (push)="jobs.start('push')" />
       } @else if (user(); as user) {
         <shell-app-header uiAppShellHeader
                           [user]="user" />
       }
       <!-- One root element, so that the shell projects it below the bar (NV-16). -->
-      @for (problem of pushProblems(); track problem) {
-        <rs-push-problem uiAppShellBanner
-                         [problem]="problem"
-                         (fixSelected)="fixPush($event)"
-                         (dismissed)="pushes.clearProblem()" />
+      @for (problem of gitProblems(); track problem) {
+        <rs-git-problem uiAppShellBanner
+                        [problem]="problem"
+                        (fixSelected)="fixPush($event)"
+                        (dismissed)="jobs.clearProblem()" />
       }
       @if (lockedKeyShown(); as key) {
         <rs-locked-key-banner uiAppShellBanner

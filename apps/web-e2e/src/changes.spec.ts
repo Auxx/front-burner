@@ -303,7 +303,7 @@ test.describe('pushing', () => {
 
     await push(page);
 
-    const problem = bar(page).locator('rs-push-problem');
+    const problem = bar(page).locator('rs-git-problem');
     await expect(problem).toContainText('The remote refused the push.');
     const lines = problem.locator('pre');
     await expect(lines).toContainText('<b>Pushes to main need a review</b>');
@@ -312,7 +312,7 @@ test.describe('pushing', () => {
     // Nothing was forced, and the commit is still to push.
     expect(gitIn(bare, 'rev-parse', 'main').trim()).toBe(before);
     await expect(summary(page)).toHaveText(/1 to push/);
-    expect((await new AxeBuilder({ page }).include('rs-push-problem').analyze()).violations).toEqual([]);
+    expect((await new AxeBuilder({ page }).include('rs-git-problem').analyze()).violations).toEqual([]);
 
     await problem.getByRole('button', { name: 'Dismiss' }).click();
     await expect(problem).toHaveCount(0);
@@ -360,7 +360,7 @@ test.describe('fixing credentials from a push', () => {
   });
 
   const bar = (page: Page) => page.getByRole('banner');
-  const problem = (page: Page) => bar(page).locator('rs-push-problem');
+  const problem = (page: Page) => bar(page).locator('rs-git-problem');
   const dialog = (page: Page) => page.getByRole('dialog', { name: 'Repository credentials' });
   const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
 
@@ -586,7 +586,7 @@ test.describe('a locked key', () => {
     await expect(dialog(page)).toBeVisible();
     await dialog(page).getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog(page)).toHaveCount(0);
-    await expect(bar(page).locator('rs-push-problem')).toHaveCount(0);
+    await expect(bar(page).locator('rs-git-problem')).toHaveCount(0);
     expect(gitIn(bare, 'rev-parse', 'main').trim()).toBe(before);
 
     await push(page);
@@ -678,7 +678,7 @@ test.describe('a changed host key', () => {
 
   const HEADING = 'The server\'s identity has changed. This may be an attack.';
   const bar = (page: Page) => page.getByRole('banner');
-  const problem = (page: Page) => bar(page).locator('rs-push-problem');
+  const problem = (page: Page) => bar(page).locator('rs-git-problem');
   const dialog = (page: Page) => page.getByRole('dialog', { name: HEADING });
   const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
 

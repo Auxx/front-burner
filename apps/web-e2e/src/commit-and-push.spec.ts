@@ -27,7 +27,7 @@ const SECOND = { username: 'writer', password: 'second-token' };
 
 const bar = (page: Page) => page.getByRole('banner');
 const summary = (page: Page) => bar(page).locator('rs-git-status-summary');
-const problem = (page: Page) => bar(page).locator('rs-push-problem');
+const problem = (page: Page) => bar(page).locator('rs-git-problem');
 const toasts = (page: Page) => page.getByRole('region', { name: 'Notifications' });
 const toolWindows = (page: Page) => page.getByRole('toolbar', { name: 'Tool windows' });
 const filesButton = (page: Page) => toolWindows(page).getByRole('button', { name: 'Files', exact: true });
