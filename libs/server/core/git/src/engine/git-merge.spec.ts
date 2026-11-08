@@ -339,15 +339,18 @@ describe('GitMerge', () => {
     });
 
     it('leaves other files as git wrote them', async () => {
+      write('notes.txt', 'base\n');
       write('clean.md', 'a\nb\nc\n');
       write('gone.md', 'x\n');
       commitAll('base');
       git(work, 'update-ref', UPSTREAM, 'HEAD');
       onUpstream(() => {
+        write('notes.txt', 'theirs\n');
         write('clean.md', 'a\nb\nC\n');
         write('first.md', 'theirs\n');
         git(work, 'rm', '-q', 'gone.md');
       });
+      write('notes.txt', 'mine\n');
       write('clean.md', 'A\nb\nc\n');
       write('first.md', 'mine\n');
       write('gone.md', 'x changed\n');
@@ -355,6 +358,13 @@ describe('GitMerge', () => {
 
       expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
 
+      // Not Markdown: nothing shows its markers, so they stay git's (GC-15).
+      expect(readFileSync(join(work, 'notes.txt'), 'utf8')).toBe(
+        `<<<<<<< HEAD\nmine\n=======\ntheirs\n>>>>>>> ${UPSTREAM}\n`
+      );
+      expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe(
+        '<<<<<<< main\nmine\n=======\ntheirs\n>>>>>>> origin/main\n'
+      );
       expect(readFileSync(join(work, 'clean.md'), 'utf8')).toBe('A\nb\nC\n');
       expect(readFileSync(join(work, 'gone.md'), 'utf8')).toBe('x changed\n');
       await merge.writeMarkers(work, 'gone.md', { mine: 'main', theirs: 'origin/main' });

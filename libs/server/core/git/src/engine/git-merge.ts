@@ -1,4 +1,5 @@
 import { inBatches, lstatOrMissing, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
+import { isMarkdownName } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -110,7 +111,7 @@ export class GitMerge {
    * Merges the upstream's remote-tracking branch into the current branch, as the
    * author, whatever the working copy's configuration says (GC-5, CA-2, D-4.3).
    * At a conflict, the merge stays in progress, with plain markers labelled with
-   * the branch names in each text file (`writeMarkers`). The caller has recorded
+   * the branch names in each Markdown file (`writeMarkers`). The caller has recorded
    * the commit, holds the working-tree lock and knows the working copy is clean
    * (GA-26).
    *
@@ -238,7 +239,9 @@ export class GitMerge {
 
   /**
    * After a conflict: removes each path that has only a base, as a file both
-   * sides deleted (no one could resolve it), and writes the markers of the others.
+   * sides deleted (no one could resolve it), and writes the markers of the
+   * Markdown files among the others. Any other file keeps git's markers, as
+   * nothing shows them (GC-15).
    */
   private async prepareConflicts(workingCopy: string, labels: MarkerLabels): Promise<void> {
     const entries = [ ...await this.unmerged(workingCopy, []) ];
@@ -250,7 +253,7 @@ export class GitMerge {
       });
     }
     await inBatches(
-      entries.filter(entry => !isBaseOnly(entry)),
+      entries.filter(entry => !isBaseOnly(entry) && isMarkdownName(entry[0].split('/').at(-1) ?? '')),
       ([ path, stages ]) => this.writeMarkersFrom(workingCopy, path, stages, labels)
     );
   }

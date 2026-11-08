@@ -275,13 +275,14 @@ Confirmed by spike 2 (spikes.md).
     in a fast-forward, and aborting cannot bring it back.
   - Markers are labelled with the branch names, `<<<<<<< main` and `>>>>>>>
     origin/main` (GC-5): `git merge` labels mine `HEAD`, so after a conflict
-    `GitMerge.writeMarkers` writes each text file again with `git merge-file`
-    from its versions in the index, with the empty blob as the base of a file
-    both sides added. It writes only a regular file, only when `merge-file`
-    exited below 128 and its output is valid UTF-8, so a file with a NUL byte,
-    one that is not valid UTF-8, or a symbolic link keeps what git wrote. A path
-    that has only a base (deleted by both sides of a rename) has nothing to
-    choose from, and is removed from the index.
+    `GitMerge.writeMarkers` writes each conflicting Markdown file again with
+    `git merge-file` from its versions in the index, with the empty blob as the
+    base of a file both sides added. Any other file keeps git's markers, as
+    nothing shows them (GC-15). It writes only a regular file, only when
+    `merge-file` exited below 128 and its output is valid UTF-8, so a file with
+    a NUL byte, one that is not valid UTF-8, or a symbolic link keeps what git
+    wrote. A path that has only a base (deleted by both sides of a rename) has
+    nothing to choose from, and is removed from the index.
 - **A-5.11** Conflicts are read from the index: base, ours and theirs are stages
   1, 2 and 3 (`git show :1:<path>` and so on), giving the one conflict model of
   vision goal 5.
