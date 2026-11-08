@@ -77,6 +77,12 @@ export class GitApi {
       `/api/v1/repositories/${encodeURIComponent(id)}/git/fetch`
     );
   }
+  fetchOnFileOpened(id: number): Observable<void> {
+    return this.http.request<void>(
+      'POST',
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/fetch/file-opened`
+    );
+  }
   gitJob(id: number, jobId: number): Observable<GitJobState> {
     return this.http.get<GitJobState>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/jobs/${encodeURIComponent(jobId)}`

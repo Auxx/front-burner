@@ -25,6 +25,7 @@ import {
   IslandComponent,
   SpinnerComponent
 } from '@front-burner/ui';
+import { GitApi } from '@front-burner/web-api-client';
 import { CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import type { PreviewPathLink } from '@front-burner/web-markdown';
 import { ImageCache } from '@front-burner/web-markdown/images';
@@ -73,7 +74,8 @@ const MAX_BADGE_COUNT = 99;
  *
  * The route's path is the open entry: it is found in the file tree, with the
  * folders that lead to it expanded (FB-14), and a Markdown file is remembered
- * as this device's last file. Without a path, the screen goes to the first
+ * as this device's last file. Opening a file asks the backend for a fetch
+ * (GA-33). Without a path, the screen goes to the first
  * file to open, if there is one (FB-12), except after a navigation with
  * `state: { closed: true }`, which closed the open file because it was
  * deleted: the editor area then shows the empty state (FB-39). A Markdown
@@ -169,6 +171,7 @@ export class RepositoryScreenPage {
   protected readonly lockedKey = inject(LockedKeyService);
   private readonly credentialFixes = inject(CredentialFixesService);
   private readonly pushChannel = inject(PushChannelService);
+  private readonly git = inject(GitApi);
 
   protected readonly user = this.currentUser.user;
   /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
@@ -490,6 +493,10 @@ export class RepositoryScreenPage {
       return;
     }
     this.openEntry.set(found);
+    if (found?.kind === 'file') {
+      // The backend decides whether it fetches (GA-33); nobody waits for it, so a failure to ask is ignored.
+      this.git.fetchOnFileOpened(repositoryId).subscribe({ error: () => undefined });
+    }
     if (found?.kind === 'file' && found.markdown) {
       this.firstFile.remember(repositoryId, path);
       await this.openFile(path, showing);

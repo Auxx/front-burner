@@ -12,17 +12,24 @@ export const FETCH_INTERVAL_MS = 120_000;
 /** How often the scheduler looks at what the push channel streams view. */
 export const VIEWERS_CHECK_MS = 5_000;
 
+/** The least time between two fetches of a repository because a file was opened (GA-33). */
+export const FILE_OPENED_MIN_MS = 30_000;
+
 /**
  * Background fetches (A-6, GA-33): every 2 minutes for each repository a push
  * channel stream views (A-3.12), the first one at once, which also tells a
  * user coming back what changed. It looks at `EventsHub.viewers()` every 5
- * seconds, so a tab that goes away stops causing fetches by itself.
+ * seconds, so a tab that goes away stops causing fetches by itself. Opening a
+ * file also fetches, at most once every 30 seconds per repository, whichever
+ * tab or session opens it; that fetch leaves the 2-minute schedule as it is.
  */
 @Injectable()
 export class FetchScheduler implements OnApplicationBootstrap, BeforeApplicationShutdown {
   private readonly logger = new Logger(FetchScheduler.name);
   /** `<userId>:<repositoryId>` → when its last background fetch was queued, for viewed repositories only. */
   private readonly lastQueued = new Map<string, number>();
+  /** Repository ID → when a file opened in it last queued a fetch, for the last 30 seconds only. */
+  private readonly lastFileOpened = new Map<number, number>();
   private timer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
@@ -82,6 +89,36 @@ export class FetchScheduler implements OnApplicationBootstrap, BeforeApplication
       this.jobKeys.hold(jobId, credentialId, heldKey);
     }
     return true;
+  }
+
+  /**
+   * A file of the user's repository was opened in `sessionId` (GA-33): fetches
+   * unless a file opened in it queued one less than 30 seconds ago. The key's
+   * unlock is that session's, or that of one of the user's sessions viewing the
+   * repository. Nobody waits for this fetch, so a skipped one says nothing
+   * (GA-35) and does not count towards the 30 seconds, nor does a problem,
+   * which is only logged.
+   */
+  fileOpened(userId: number, sessionId: string, repositoryId: number): void {
+    const now = Date.now();
+    for (const [ id, queued ] of this.lastFileOpened) {
+      if (now - queued >= FILE_OPENED_MIN_MS) {
+        this.lastFileOpened.delete(id);
+      }
+    }
+    if (this.lastFileOpened.has(repositoryId)) {
+      return;
+    }
+    const viewing = this.events.viewers()
+      .filter(viewer => viewer.userId === userId && viewer.repositoryId === repositoryId)
+      .map(viewer => viewer.sessionId);
+    try {
+      if (this.enqueueIfUnlocked(userId, repositoryId, [ ...new Set([ sessionId, ...viewing ]) ])) {
+        this.lastFileOpened.set(repositoryId, now);
+      }
+    } catch (error) {
+      this.logger.warn(`Fetch of repository ${repositoryId} for an opened file not queued: ${String(error)}`);
+    }
   }
 
   /**

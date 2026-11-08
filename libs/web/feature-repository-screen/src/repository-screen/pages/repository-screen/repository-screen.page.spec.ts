@@ -77,6 +77,7 @@ describe('RepositoryScreenPage', () => {
   let gitDiff: ReturnType<typeof vi.fn<(path: string) => Observable<GitDiff>>>;
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
+  let fetchOnFileOpened: ReturnType<typeof vi.fn<(id: number) => Observable<void>>>;
   let recreateFile: ReturnType<typeof vi.fn>;
   /** What `RepositoriesApi.repositoryCredentials` answers. */
   let credentialsInfo: RepositoryCredentialsInfo;
@@ -122,6 +123,7 @@ describe('RepositoryScreenPage', () => {
             diff: (_id: number, query: { path: string; }) => gitDiff(query.path),
             push,
             gitJob,
+            fetchOnFileOpened,
             discard: (_id: number, body: { paths: string[]; }) => {
               discards.push(body.paths);
               return discardAnswer(body.paths);
@@ -219,6 +221,7 @@ describe('RepositoryScreenPage', () => {
     saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
     push = vi.fn(() => of({ jobId: 7 }));
     gitJob = vi.fn(() => of<GitJobState>({ status: 'running', outcome: null }));
+    fetchOnFileOpened = vi.fn(() => of(undefined));
     recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
     credentialsInfo = { protocol: 'https', inUse: null };
     unlockSshKey = vi.fn(() => of(undefined));
@@ -557,6 +560,35 @@ describe('RepositoryScreenPage', () => {
       expect(row('docs').getAttribute('aria-expanded')).toBe('true');
       expect(row('guide.md').getAttribute('aria-selected')).toBe('true');
       expect(editorText()).toContain('# docs/guide.md');
+    });
+
+    it('asks for a fetch when a file is opened', async () => {
+      await visit('/repositories/12');
+      expect(fetchOnFileOpened).toHaveBeenCalledTimes(1);
+      expect(fetchOnFileOpened).toHaveBeenLastCalledWith(12);
+
+      await go('/repositories/12/files/docs/guide.md');
+      await go('/repositories/12/files/logo.png');
+      // The backend decides how often it fetches (GA-33).
+      await go('/repositories/12/files/README.md');
+      expect(fetchOnFileOpened).toHaveBeenCalledTimes(4);
+
+      // Not for a folder, or without a file.
+      await go('/repositories/12/files/docs');
+      await TestBed.inject(Router).navigate([ '/repositories', 12 ], { replaceUrl: true, state: { closed: true } });
+      await settle(harness.fixture);
+      expect(fetchOnFileOpened).toHaveBeenCalledTimes(4);
+    });
+
+    it('ignores a failure to ask', async () => {
+      fetchOnFileOpened.mockImplementation(() => failure(500, 'internal'));
+
+      await visit('/repositories/12/files/README.md');
+
+      expect(fetchOnFileOpened).toHaveBeenCalledWith(12);
+      expect(editorText()).toContain('# README.md');
+      expect(page().querySelector('rs-git-problem')).toBeNull();
+      expect(page().textContent).not.toContain('Something went wrong.');
     });
 
     it('falls back to the README when the last file is gone', async () => {

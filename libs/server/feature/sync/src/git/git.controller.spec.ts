@@ -23,6 +23,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
+import { FetchScheduler } from '../fetch/fetch-scheduler';
 import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
 import { PushService } from '../push/push.service';
@@ -61,6 +62,7 @@ describe('GitController', () => {
   let app: INestApplication;
   let commitAuthor: RepositoryCommitAuthor;
   let published: PushEvent[];
+  let fileOpened: ReturnType<typeof vi.fn<FetchScheduler['fileOpened']>>;
 
   const status = (id = READY) => request(app.getHttpServer()).get(`/repositories/${id}/git/status`);
   const commit = (body: object, id = READY) =>
@@ -77,6 +79,7 @@ describe('GitController', () => {
     git(root, 'commit', '-q', '-m', 'base');
     commitAuthor = { author: ADA, source: 'default', confirmed: true };
     published = [];
+    fileOpened = vi.fn();
     const repositories = {
       root: (userId: number, id: number) => {
         if (userId !== USER || (id !== READY && id !== CLONING)) {
@@ -106,6 +109,7 @@ describe('GitController', () => {
         { provide: PushService, useValue: {} },
         // So is fetching.
         { provide: FetchService, useValue: {} },
+        { provide: FetchScheduler, useValue: { fileOpened } },
         { provide: SyncStateStore, useValue: { fetchProblem: () => null } },
         { provide: GitJobs, useValue: { networkJob: () => null } },
         { provide: EventsHub, useValue: { publish: (_userId: number, event: PushEvent) => published.push(event) } },
@@ -117,7 +121,7 @@ describe('GitController', () => {
     app = moduleRef.createNestApplication({ logger: false });
     // Stands in for the auth middleware.
     app.use((req: Request, _res: Response, next: NextFunction) => {
-      req.auth = { userId: USER } as Request['auth'];
+      req.auth = { userId: USER, sessionId: 'session-1' } as Request['auth'];
       next();
     });
     await app.init();
@@ -168,6 +172,24 @@ describe('GitController', () => {
     expect(body).toMatchObject({
       mergeInProgress: true,
       changes: [ { path: 'notes.md', state: 'modified' } ]
+    });
+  });
+
+  describe('fetch on opening a file', () => {
+    const fileOpenedFetch = (id = READY) =>
+      request(app.getHttpServer()).post(`/repositories/${id}/git/fetch/file-opened`);
+
+    it('fetches when a file is opened', async () => {
+      await fileOpenedFetch().expect(204);
+
+      expect(fileOpened).toHaveBeenCalledWith(USER, 'session-1', READY);
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      const { body } = await fileOpenedFetch(9).expect(404);
+
+      expect(body).toMatchObject({ code: 'not-found' });
+      expect(fileOpened).not.toHaveBeenCalled();
     });
   });
 

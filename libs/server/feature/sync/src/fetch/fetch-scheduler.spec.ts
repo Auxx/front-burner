@@ -15,7 +15,7 @@ import { RepositoryQueries } from '@front-burner/server-feature-repositories';
 import { eq } from 'drizzle-orm';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
-import { FETCH_INTERVAL_MS, FetchScheduler, VIEWERS_CHECK_MS } from './fetch-scheduler';
+import { FETCH_INTERVAL_MS, FetchScheduler, FILE_OPENED_MIN_MS, VIEWERS_CHECK_MS } from './fetch-scheduler';
 import { BACKGROUND_FETCH_JOB_TYPE, backgroundFetchDedupeKey } from './fetch.job';
 
 const box = new SecretBox('fetch-scheduler-spec-key-0123456789abcdef');
@@ -191,5 +191,74 @@ describe('FetchScheduler', () => {
     expect(scheduler.enqueueIfUnlocked(bob, handbook, [ 's2' ])).toBe(false);
     expect(scheduler.enqueueIfUnlocked(alice, handbook, [ 's1', 's2' ])).toBe(true);
     expect(fetches()).toHaveLength(1);
+  });
+
+  describe('on opening a file', () => {
+    it('fetches when a file is opened', () => {
+      scheduler.fileOpened(alice, 's1', handbook);
+
+      expect(fetches()).toEqual([
+        {
+          type: BACKGROUND_FETCH_JOB_TYPE,
+          userId: alice,
+          repositoryId: handbook,
+          payload: {},
+          dedupeKey: backgroundFetchDedupeKey(handbook)
+        }
+      ]);
+    });
+
+    it('fetches at most once in 30 seconds', () => {
+      scheduler.fileOpened(alice, 's1', handbook);
+      scheduler.fileOpened(alice, 's1', handbook);
+      // Another tab, of another session, on the same repository.
+      scheduler.fileOpened(alice, 's2', handbook);
+      vi.advanceTimersByTime(FILE_OPENED_MIN_MS - 1);
+      scheduler.fileOpened(alice, 's1', handbook);
+      expect(fetches()).toHaveLength(1);
+
+      vi.advanceTimersByTime(1);
+      scheduler.fileOpened(alice, 's2', handbook);
+
+      expect(FILE_OPENED_MIN_MS).toBe(30_000);
+      expect(fetches()).toHaveLength(2);
+    });
+
+    it('says nothing for a locked key', () => {
+      const key = protectedKey();
+      useCredential(handbook, key);
+
+      expect(() => scheduler.fileOpened(alice, 's1', handbook)).not.toThrow();
+      expect(fetches()).toEqual([]);
+
+      // A skipped fetch does not count towards the 30 seconds.
+      saved.unlock(alice, 's1', key, FIXTURE_PASSPHRASE);
+      scheduler.fileOpened(alice, 's1', handbook);
+      expect(fetches()).toHaveLength(1);
+    });
+
+    it('uses the unlock of the session that asked, or of one viewing the repository', () => {
+      const key = protectedKey();
+      useCredential(handbook, key);
+      saved.unlock(alice, 's2', key, FIXTURE_PASSPHRASE);
+      saved.unlock(alice, 's3', key, FIXTURE_PASSPHRASE);
+      // s3 views another repository: its unlock is never used for this one.
+      view(alice, 's3', insertRepository(database, alice, { name: 'Other' }));
+
+      scheduler.fileOpened(alice, 's1', handbook);
+      expect(fetches()).toEqual([]);
+
+      view(alice, 's2', handbook);
+      scheduler.fileOpened(alice, 's1', handbook);
+
+      expect(fetches()).toHaveLength(1);
+      expect(jobKeys.take(enqueued.length, key)).toBe(unlocks.get('s2', key, { touch: false }));
+    });
+
+    it('queues nothing for another user\'s repository', () => {
+      scheduler.fileOpened(bob, 'b1', handbook);
+
+      expect(fetches()).toEqual([]);
+    });
   });
 });
