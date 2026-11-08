@@ -407,7 +407,10 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     const { id, workingCopy } = await add('fetched', `${publicGit.url}/fetched.git`);
     pushFromElsewhere(bare, 'theirs');
 
-    expect(await client.fetched(id)).toEqual({ status: 'done', outcome: { kind: 'fetched', moved: true } });
+    expect(await client.fetched(id)).toEqual({
+      status: 'done',
+      outcome: { kind: 'fetched', moved: true, upstreamMoved: true }
+    });
 
     const status = await (await api(`/repositories/${id}/git/status`)).json() as Record<string, unknown>;
     expect(status).toMatchObject({ behind: 1, ahead: 0, networkJob: null, fetchProblem: null });
@@ -417,7 +420,10 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     expect(gitOutput(workingCopy, 'log', '--format=%s', 'main')).toBe('first');
     expect((await api(`/repositories/${id}/git/incoming?path=.git/config`)).status).toBe(400);
 
-    expect(await client.fetched(id)).toEqual({ status: 'done', outcome: { kind: 'fetched', moved: false } });
+    expect(await client.fetched(id)).toEqual({
+      status: 'done',
+      outcome: { kind: 'fetched', moved: false, upstreamMoved: false }
+    });
   });
 
   it('a background fetch updates the counts and changes no file', async () => {
@@ -464,7 +470,7 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
       privateOptions.users = { alice: TOKEN };
     }
 
-    expect((await client.fetched(id)).outcome).toEqual({ kind: 'fetched', moved: false });
+    expect((await client.fetched(id)).outcome).toEqual({ kind: 'fetched', moved: false, upstreamMoved: false });
     expect(await fetchProblem()).toBeNull();
   });
 

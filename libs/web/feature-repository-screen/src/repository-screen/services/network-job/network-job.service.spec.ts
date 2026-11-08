@@ -42,6 +42,7 @@ function refused(code: string, params: Record<string, unknown> = {}): HttpErrorR
 
 describe('NetworkJobService', () => {
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
+  let fetch: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let events: Subject<PushEvent>;
   let reconnected: Subject<void>;
@@ -62,6 +63,7 @@ describe('NetworkJobService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     push = vi.fn(() => of({ jobId: 7 }));
+    fetch = vi.fn(() => of({ jobId: 7 }));
     gitJob = vi.fn(() => of(RUNNING));
     events = new Subject();
     reconnected = new Subject();
@@ -75,12 +77,14 @@ describe('NetworkJobService', () => {
       imports: [
         translocoTesting({
           // The test module has no ICU transpiler; en.json's plural is checked by the web application.
-          'web-feature-repository-screen.NetworkJobService.pushed': 'Pushed {{ count }} commits to {{ upstream }}'
+          'web-feature-repository-screen.NetworkJobService.pushed': 'Pushed {{ count }} commits to {{ upstream }}',
+          'web-feature-repository-screen.NetworkJobService.noNewCommits': 'No new commits',
+          'web-feature-repository-screen.NetworkJobService.noChangesReceived': 'No changes received for this branch'
         })
       ],
       providers: [
         NetworkJobService,
-        { provide: GitApi, useValue: { push, gitJob } },
+        { provide: GitApi, useValue: { push, fetch, gitJob } },
         { provide: PushChannelService, useValue: { events, reconnected } },
         { provide: GitStatusStore, useValue: { followed, status: gitStatus, refresh } },
         { provide: OpenFilesService, useValue: { flushAll } },
@@ -441,5 +445,164 @@ describe('NetworkJobService', () => {
     service.clearProblem();
 
     expect(service.problem()).toBeNull();
+  });
+
+  describe('a fetch', () => {
+    const NOTHING_MOVED: GitJobState = {
+      status: 'done',
+      outcome: { kind: 'fetched', moved: false, upstreamMoved: false }
+    };
+    const OTHER_BRANCH_MOVED: GitJobState = {
+      status: 'done',
+      outcome: { kind: 'fetched', moved: true, upstreamMoved: false }
+    };
+    const MOVED: GitJobState = { status: 'done', outcome: { kind: 'fetched', moved: true, upstreamMoved: true } };
+
+    it('starts a fetch and follows its job', async () => {
+      await service.start('fetch');
+      await settle();
+
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+      expect(push).not.toHaveBeenCalled();
+      expect(gitJob).toHaveBeenCalledWith(12, 7);
+      expect(service.running()).toBe('fetch');
+    });
+
+    it('says No new commits when nothing moved', async () => {
+      gitJob.mockReturnValue(of(NOTHING_MOVED));
+
+      await service.start('fetch');
+      await settle();
+
+      expect(service.running()).toBeNull();
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        message: 'No new commits',
+        status: 'success'
+      }));
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it('says no changes were received when only another branch moved', async () => {
+      gitJob.mockReturnValue(of(OTHER_BRANCH_MOVED));
+
+      await service.start('fetch');
+      await settle();
+
+      expect(service.running()).toBeNull();
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        message: 'No changes received for this branch',
+        status: 'success'
+      }));
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it('says nothing when the upstream moved, it only updates the counts', async () => {
+      gitJob.mockReturnValue(of(MOVED));
+
+      await service.start('fetch');
+      await settle();
+
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it('says nothing for another tab\'s fetch that moved only another branch', async () => {
+      gitStatus.set(status({ id: 9, type: 'fetch' }));
+      await settle();
+
+      gitJob.mockReturnValue(of(OTHER_BRANCH_MOVED));
+      finished(9);
+      await settle();
+
+      expect(service.running()).toBeNull();
+      expect(toast.show).not.toHaveBeenCalled();
+    });
+
+    it('says nothing for a fetch taken up from the status', async () => {
+      gitStatus.set(status({ id: 9, type: 'fetch' }));
+      await settle();
+      expect(service.running()).toBe('fetch');
+
+      gitJob.mockReturnValue(of(NOTHING_MOVED));
+      finished(9);
+      await settle();
+
+      expect(service.running()).toBeNull();
+      expect(toast.show).not.toHaveBeenCalled();
+
+      // A failed one is a problem, but a quiet one.
+      gitJob.mockReturnValue(of(RUNNING));
+      gitStatus.set(status({ id: 10, type: 'fetch' }));
+      await settle();
+      expect(service.running()).toBe('fetch');
+      gitJob.mockReturnValue(of(failed('network-unreachable')));
+      finished(10);
+      await settle();
+
+      expect(service.problem()).toEqual(expect.objectContaining({
+        operation: 'fetch',
+        code: 'network-unreachable',
+        quiet: true
+      }));
+    });
+
+    it('asks for a locked key, then fetches', async () => {
+      fetch.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+
+      await service.start('fetch');
+      await settle();
+
+      expect(unlock).toHaveBeenCalledOnce();
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(service.running()).toBe('fetch');
+      expect(service.problem()).toBeNull();
+    });
+
+    it('clears the problem when it runs again', async () => {
+      gitJob.mockReturnValue(of(failed('network-unreachable')));
+      await service.start('fetch');
+      await settle();
+      expect(service.problem()).toEqual(expect.objectContaining({ operation: 'fetch', quiet: false }));
+
+      const answer = new Subject<GitJobStarted>();
+      fetch.mockReturnValueOnce(answer);
+      gitJob.mockReturnValue(of(RUNNING));
+      const started = service.start('fetch');
+
+      // Cleared as the press starts, before the backend answers.
+      expect(service.problem()).toBeNull();
+      expect(fetch).toHaveBeenCalledTimes(2);
+
+      answer.next({ jobId: 7 });
+      answer.complete();
+      await started;
+      await settle();
+      expect(service.running()).toBe('fetch');
+    });
+
+    it('retries a failed fetch as a fetch, not a push', async () => {
+      gitJob.mockReturnValue(of(failed('network-unreachable')));
+      await service.start('fetch');
+      await settle();
+      expect(service.problem()).toEqual(expect.objectContaining({ operation: 'fetch', quiet: false }));
+
+      gitJob.mockReturnValue(of(RUNNING));
+      await service.retry();
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it('Unlock on a locked-key problem of a fetch fetches again, not pushes', async () => {
+      fetch.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+      unlock.mockRejectedValueOnce(new Error('offline'));
+      await service.start('fetch');
+      expect(service.problem()).toMatchObject({ operation: 'fetch', fix: 'unlock' });
+
+      await service.unlockAndRetry();
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(push).not.toHaveBeenCalled();
+    });
   });
 });

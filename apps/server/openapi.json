@@ -3311,11 +3311,15 @@
           },
           "moved": {
             "type": "boolean"
+          },
+          "upstreamMoved": {
+            "type": "boolean"
           }
         },
         "required": [
           "kind",
-          "moved"
+          "moved",
+          "upstreamMoved"
         ]
       },
       "GitJobFailed": {

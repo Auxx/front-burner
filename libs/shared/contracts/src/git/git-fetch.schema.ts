@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import { GIT_PATH_MAX_LENGTH } from './git-paths.schema';
 
-/** A fetch that ran (GA-33): whether any remote branch moved. */
+/** A fetch that ran (GA-33): whether any remote branch moved, and whether the current branch's upstream did. */
 export const GitFetchedSchema = z
   .object({
     kind: z.literal('fetched'),
-    moved: z.boolean()
+    moved: z.boolean(),
+    /** Its commit changed, or it was created or deleted; false on a branch without an upstream. */
+    upstreamMoved: z.boolean()
   })
   .meta({ id: 'GitFetched' });
 

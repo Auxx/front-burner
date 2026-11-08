@@ -15,7 +15,9 @@ export interface FetchStepJob {
   repositoryId: number;
 }
 
-export type FetchStepResult = { ok: true; moved: boolean; } | { ok: false; failure: GitJobFailed; };
+export type FetchStepResult =
+  | { ok: true; moved: boolean; upstreamMoved: boolean; }
+  | { ok: false; failure: GitJobFailed; };
 
 /**
  * One fetch for a job (GA-33): the fetch job's, and a pull's and a background
@@ -56,12 +58,12 @@ export class FetchStep {
         return { ok: false, failure: resolved.failure };
       }
       try {
-        const { moved } = await this.engine.fetch(root, {
+        const { moved, upstreamMoved } = await this.engine.fetch(root, {
           remoteUrl: row.remoteUrl,
           credentials: resolved.credentials,
           knownHosts: this.knownHosts.linesFor(userId)
         });
-        return { ok: true, moved };
+        return { ok: true, moved, upstreamMoved };
       } catch (error) {
         if (!(error instanceof GitOperationError)) {
           throw error;

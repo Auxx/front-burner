@@ -13,13 +13,13 @@ numbering conventions.
 - **A-3.2** Long operations return `202 Accepted` with a job ID (A-1.13). A git
   job's state is read with `GET /repositories/:id/git/jobs/:jobId`: its status
   and, once it has ended, its outcome, such as a push's commits and upstream, a
-  fetch's whether a remote branch moved, or an error code with its params. A
-  client reads it after `job.finished`, since events are not state (A-3.11). An
-  operation git refused, such as a push the remote rejected, is a job that
-  finished with a `failed` outcome; a job the runner failed, such as one a
-  restart interrupted, reports its error code without params. Another user's
-  job, or a job of another repository, is answered like a missing one. _(Plan
-  57's call.)_
+  fetch's whether a remote branch moved and whether the current branch's
+  upstream did, or an error code with its params. A client reads it after
+  `job.finished`, since events are not state (A-3.11). An operation git refused,
+  such as a push the remote rejected, is a job that finished with a `failed`
+  outcome; a job the runner failed, such as one a restart interrupted, reports
+  its error code without params. Another user's job, or a job of another
+  repository, is answered like a missing one. _(Plan 57's call.)_
 
 ## A-3: Contracts
 

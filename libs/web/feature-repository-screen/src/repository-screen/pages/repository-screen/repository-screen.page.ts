@@ -399,8 +399,8 @@ export class RepositoryScreenPage {
     this.session.state() === 'ready' && !this.lockedKey.dismissed() ? this.lockedKey.key() : null
   );
 
-  /** The fix of a push problem (RC-4), through `CredentialFixesService`. */
-  protected fixPush(fix: GitProblem['fix']): void {
+  /** The fix of a push or fetch problem (RC-4), through `CredentialFixesService`. */
+  protected fixProblem(fix: GitProblem['fix']): void {
     void this.credentialFixes.run(fix);
   }
 

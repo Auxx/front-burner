@@ -65,7 +65,9 @@ export class FetchJob implements OnModuleInit {
       throw new Error('A fetch job needs its user and repository');
     }
     const result = await this.step.run({ id, userId, repositoryId });
-    return 'failure' in result ? result.failure : { kind: 'fetched', moved: result.moved };
+    return 'failure' in result
+      ? result.failure
+      : { kind: 'fetched', moved: result.moved, upstreamMoved: result.upstreamMoved };
   }
 
   /**

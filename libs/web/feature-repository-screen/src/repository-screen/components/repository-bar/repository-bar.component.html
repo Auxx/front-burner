@@ -4,9 +4,10 @@
                         [narrow]="narrow()" />
 @if (withFiles()) {
   <rs-git-status-summary [status]="gitStatus()" />
-  <rs-push-button [status]="gitStatus()"
-                  [running]="pushing()"
+  <rs-git-actions [status]="gitStatus()"
+                  [running]="running()"
                   [narrow]="narrow()"
+                  (fetch)="fetch.emit()"
                   (push)="push.emit()" />
   <rs-save-status class="status"
                   [status]="saveStatus()" />
