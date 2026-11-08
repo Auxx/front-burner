@@ -51,9 +51,9 @@ import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-s
 import { FirstFileService } from '../../services/first-file/first-file.service';
 import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
 import { LockedKeyService } from '../../services/locked-key/locked-key.service';
+import { type GitProblem, NetworkJobService } from '../../services/network-job/network-job.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { PaneMemoryService, type SideTool } from '../../services/pane-memory/pane-memory.service';
-import { type PushProblem, PushService } from '../../services/push/push.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
@@ -96,7 +96,7 @@ const MAX_BADGE_COUNT = 99;
  * the URL, which keeps naming the open file, so that a reload opens the file; the
  * editor stays in place, hidden, so that it keeps its scroll position and undo.
  * **Discard** runs through `DiscardService` (GA-23); it ends the diff of a file it
- * discards. **Push** in the bar runs through `PushService` (GA-29), and why a push
+ * discards. **Push** in the bar runs through `NetworkJobService` (GA-29), and why a push
  * failed is shown below the bar (NV-16), as is the locked-key banner of
  * `LockedKeyService` (RC-15).
  */
@@ -142,7 +142,7 @@ const MAX_BADGE_COUNT = 99;
     CommitService,
     DiscardService,
     LockedKeyService,
-    PushService,
+    NetworkJobService,
     CredentialFixesService,
     // One per screen, so that switching files or tabs loads no image again (IM-10).
     ImageCache
@@ -165,7 +165,7 @@ export class RepositoryScreenPage {
   private readonly diskChanges = inject(DiskChangesService);
   protected readonly gitStatus = inject(GitStatusStore);
   private readonly discards = inject(DiscardService);
-  protected readonly pushes = inject(PushService);
+  protected readonly jobs = inject(NetworkJobService);
   protected readonly lockedKey = inject(LockedKeyService);
   private readonly credentialFixes = inject(CredentialFixesService);
   private readonly pushChannel = inject(PushChannelService);
@@ -387,7 +387,7 @@ export class RepositoryScreenPage {
    * a banner of its own, which announces it (RC-25).
    */
   protected readonly pushProblems = computed(() => {
-    const problem = this.pushes.problem();
+    const problem = this.jobs.problem();
     return this.session.state() === 'ready' && problem !== null ? [ problem ] : [];
   });
 
@@ -397,7 +397,7 @@ export class RepositoryScreenPage {
   );
 
   /** The fix of a push problem (RC-4), through `CredentialFixesService`. */
-  protected fixPush(fix: PushProblem['fix']): void {
+  protected fixPush(fix: GitProblem['fix']): void {
     void this.credentialFixes.run(fix);
   }
 

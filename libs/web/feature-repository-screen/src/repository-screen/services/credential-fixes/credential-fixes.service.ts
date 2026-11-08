@@ -14,12 +14,12 @@ import { firstValueFrom } from 'rxjs';
 
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { LockedKeyService } from '../locked-key/locked-key.service';
-import { type PushProblem, PushService } from '../push/push.service';
+import { type GitProblem, NetworkJobService } from '../network-job/network-job.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 
 /**
  * The one place that connects the fix of a push problem (RC-4) to what it
- * does: **Try again** and **Unlock** run through `PushService`; **Add
+ * does: **Try again** and **Unlock** run through `NetworkJobService`; **Add
  * credentials**, **Fix credentials** and **Use other credentials** open the
  * repository credentials dialog (RC-7), and once it saved, the push runs again
  * on its own (RC-9). **Cancel** changes nothing, and the problem stays.
@@ -36,7 +36,7 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
 @Injectable()
 export class CredentialFixesService {
   private readonly dialogs = inject(DialogService);
-  private readonly pushes = inject(PushService);
+  private readonly jobs = inject(NetworkJobService);
   private readonly lockedKey = inject(LockedKeyService);
   private readonly session = inject(RepositorySessionService);
   private readonly store = inject(GitStatusStore);
@@ -45,12 +45,12 @@ export class CredentialFixesService {
   private readonly errorText = inject(ApiErrorTextService);
   private readonly transloco = inject(TranslocoService);
 
-  async run(fix: PushProblem['fix']): Promise<void> {
+  async run(fix: GitProblem['fix']): Promise<void> {
     switch (fix) {
       case 'retry':
-        return this.pushes.retry();
+        return this.jobs.retry();
       case 'unlock':
-        return this.pushes.unlockAndRetry();
+        return this.jobs.unlockAndRetry();
       case 'add-credentials':
       case 'other-credentials':
         return this.replaceCredentials({});
@@ -82,11 +82,11 @@ export class CredentialFixesService {
     // The new credentials may be a locked key, for the banner. The push needs no wait for it: it asks
     // for a locked key's passphrase by itself (RC-17).
     void this.lockedKey.reread();
-    await this.pushes.retry();
+    await this.jobs.retry();
   }
 
   private async reviewHostKey(): Promise<void> {
-    const parsed = ChangedHostKeySchema.safeParse(this.pushes.problem()?.params);
+    const parsed = ChangedHostKeySchema.safeParse(this.jobs.problem()?.params);
     if (!parsed.success) {
       return;
     }
@@ -97,12 +97,12 @@ export class CredentialFixesService {
     const trusted = await firstValueFrom(ref.closed, { defaultValue: undefined }) === true;
     // Not after a switch to another repository while the dialog was open.
     if (trusted && this.store.followed() === repositoryId) {
-      await this.pushes.retry();
+      await this.jobs.retry();
     }
   }
 
   private async trustHost(): Promise<void> {
-    const parsed = HostKeySchema.safeParse(this.pushes.problem()?.params);
+    const parsed = HostKeySchema.safeParse(this.jobs.problem()?.params);
     if (!parsed.success) {
       return;
     }
@@ -120,7 +120,7 @@ export class CredentialFixesService {
       return;
     }
     if (this.store.followed() === repositoryId) {
-      await this.pushes.retry();
+      await this.jobs.retry();
     }
   }
 }

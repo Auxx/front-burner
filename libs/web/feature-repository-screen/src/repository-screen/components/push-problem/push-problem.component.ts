@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { ButtonComponent, InlineBannerComponent } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import type { PushProblem } from '../../services/push/push.service';
+import type { GitProblem } from '../../services/network-job/network-job.service';
 
 /**
  * Why a push failed, below the repository bar and above the panes (NV-16):
@@ -18,8 +18,8 @@ import type { PushProblem } from '../../services/push/push.service';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class PushProblemComponent {
-  readonly problem = input.required<PushProblem>();
-  readonly fixSelected = output<PushProblem['fix']>();
+  readonly problem = input.required<GitProblem>();
+  readonly fixSelected = output<GitProblem['fix']>();
   readonly dismissed = output<void>();
 
   protected readonly remoteMessages = computed(() => this.problem().params['remoteMessages']?.trim() || null);

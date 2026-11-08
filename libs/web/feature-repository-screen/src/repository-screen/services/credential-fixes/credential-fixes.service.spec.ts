@@ -14,7 +14,7 @@ import { type Observable, of, Subject, throwError } from 'rxjs';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { LockedKeyService } from '../locked-key/locked-key.service';
-import { PushService } from '../push/push.service';
+import { NetworkJobService } from '../network-job/network-job.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 import { CredentialFixesService } from './credential-fixes.service';
 
@@ -62,7 +62,7 @@ describe('CredentialFixesService', () => {
   let lockedKey: { unlock: ReturnType<typeof vi.fn>; reread: ReturnType<typeof vi.fn>; };
   let knownHosts: { trust: ReturnType<typeof vi.fn>; };
   let toast: { show: ReturnType<typeof vi.fn>; };
-  let pushes: PushService;
+  let pushes: NetworkJobService;
   let service: CredentialFixesService;
 
   const settle = async () => {
@@ -73,7 +73,7 @@ describe('CredentialFixesService', () => {
   /** A push that failed with `code`, as the banner shows it. */
   async function failedPush(code: string, params: Record<string, string> = {}): Promise<void> {
     gitJob.mockReturnValueOnce(of(failed(code, params)));
-    await pushes.start();
+    await pushes.start('push');
     await settle();
   }
 
@@ -100,7 +100,7 @@ describe('CredentialFixesService', () => {
       imports: [ translocoTesting() ],
       providers: [
         CredentialFixesService,
-        PushService,
+        NetworkJobService,
         { provide: GitApi, useValue: { push, gitJob } },
         { provide: PushChannelService, useValue: { events: new Subject<PushEvent>(), reconnected: new Subject() } },
         {
@@ -114,7 +114,7 @@ describe('CredentialFixesService', () => {
         { provide: KnownHostsApi, useValue: knownHosts }
       ]
     });
-    pushes = TestBed.inject(PushService);
+    pushes = TestBed.inject(NetworkJobService);
     service = TestBed.inject(CredentialFixesService);
   });
 

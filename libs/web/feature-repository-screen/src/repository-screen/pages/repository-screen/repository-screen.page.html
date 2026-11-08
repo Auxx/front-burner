@@ -18,8 +18,8 @@
                            [narrow]="shell.narrow()"
                            [gitStatus]="gitStatus.status()"
                            [saveStatus]="saveStatus()"
-                           [pushing]="pushes.running()"
-                           (push)="pushes.start()" />
+                           [pushing]="jobs.running() !== null"
+                           (push)="jobs.start('push')" />
       } @else if (user(); as user) {
         <shell-app-header uiAppShellHeader
                           [user]="user" />
@@ -29,7 +29,7 @@
         <rs-push-problem uiAppShellBanner
                          [problem]="problem"
                          (fixSelected)="fixPush($event)"
-                         (dismissed)="pushes.clearProblem()" />
+                         (dismissed)="jobs.clearProblem()" />
       }
       @if (lockedKeyShown(); as key) {
         <rs-locked-key-banner uiAppShellBanner
