@@ -86,6 +86,8 @@ describe('RepositoryScreenPage', () => {
   /** The viewport's narrowness, which a test can flip. */
   let viewport: BehaviorSubject<boolean>;
   let events: Subject<PushEvent>;
+  /** What `PushChannelService.view` was told. */
+  let view: ReturnType<typeof vi.fn<(repositoryId: number | null) => void>>;
   /** The folders listed, in order. */
   let listings: string[];
   let drafts: MemoryDraftStore;
@@ -162,7 +164,7 @@ describe('RepositoryScreenPage', () => {
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         provideMemoryDrafts(drafts),
         { provide: AuthSessionService, useValue: { loggedIn: signal(true), logout: vi.fn() } },
-        { provide: PushChannelService, useValue: { events, reconnected: new Subject<void>() } },
+        { provide: PushChannelService, useValue: { events, reconnected: new Subject<void>(), view } },
         {
           provide: BreakpointObserver,
           useValue: {
@@ -201,6 +203,7 @@ describe('RepositoryScreenPage', () => {
     };
     narrow = false;
     events = new Subject();
+    view = vi.fn();
     listings = [];
     localStorage.clear();
     open = vi.fn((id: number) => answers.shift() ?? of({ ...handbook, id }));
@@ -234,6 +237,22 @@ describe('RepositoryScreenPage', () => {
 
     expect(open).toHaveBeenCalledTimes(2);
     expect(open).toHaveBeenLastCalledWith(13);
+  });
+
+  it('views the open repository', async () => {
+    await visit('/repositories/12');
+    expect(view).toHaveBeenLastCalledWith(12);
+
+    await go('/repositories/13/files/README.md');
+    expect(view).toHaveBeenLastCalledWith(13);
+  });
+
+  it('stops viewing when the page goes', async () => {
+    await visit('/repositories/12');
+
+    harness.fixture.destroy();
+
+    expect(view).toHaveBeenLastCalledWith(null);
   });
 
   it('shows Page not found for a missing repository', async () => {

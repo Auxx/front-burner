@@ -1,9 +1,9 @@
 import { DOCUMENT } from '@angular/common';
-import { inject, Injectable } from '@angular/core';
+import { effect, inject, Injectable } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import type { PushEvent } from '@front-burner/shared-contracts';
-import { EMPTY, Observable, share, Subject, switchMap } from 'rxjs';
+import { BehaviorSubject, distinctUntilChanged, EMPTY, Observable, share, Subject, switchMap } from 'rxjs';
 
 import { AuthSessionService } from '../auth-session/auth-session.service';
 import { INITIAL_SSE_STATE, parseSse } from './sse-parser';
@@ -66,14 +66,46 @@ export class PushChannelService {
   /** Emits after every successful connect, the first included. */
   readonly reconnected: Observable<void> = this.reconnectedSubject.asObservable();
 
-  /** Opens with the first subscriber while logged in; closes with the last one or on logout. */
+  /** The repository this tab views, or `null` (A-3.12). */
+  private readonly viewed = new BehaviorSubject<number | null>(null);
+
+  /**
+   * Opens with the first subscriber while logged in; closes with the last one or on logout.
+   * A change of the viewed repository replaces the stream, so that there is one, on the last one (A-3.12).
+   */
   readonly events: Observable<PushEvent> = toObservable(this.auth.loggedIn).pipe(
-    switchMap(loggedIn => loggedIn ? this.connection() : EMPTY),
+    switchMap(loggedIn =>
+      loggedIn
+        ? this.viewed.pipe(distinctUntilChanged(), switchMap(repositoryId => this.connection(repositoryId)))
+        : EMPTY
+    ),
     share()
   );
 
+  constructor() {
+    // The last repository may not be the next user's.
+    let wasLoggedIn = this.auth.loggedIn();
+    effect(() => {
+      const loggedIn = this.auth.loggedIn();
+      if (wasLoggedIn && !loggedIn) {
+        this.viewed.next(null);
+      }
+      wasLoggedIn = loggedIn;
+    });
+  }
+
+  /**
+   * Tells the backend which repository this tab views, or `null` for none (A-3.12): the stream is reopened
+   * with `?repository=<id>`, which counts as a reconnect. Remembered while nothing is connected, and forgotten on
+   * logout. Anything but a positive integer means none.
+   */
+  view(repositoryId: number | null): void {
+    this.viewed.next(repositoryId !== null && Number.isInteger(repositoryId) && repositoryId > 0 ? repositoryId : null);
+  }
+
   /** Connects, and reconnects until unsubscribed or the backend refuses the session. */
-  private connection(): Observable<PushEvent> {
+  private connection(repositoryId: number | null): Observable<PushEvent> {
+    const url = repositoryId === null ? EVENTS_URL : `${EVENTS_URL}?repository=${repositoryId}`;
     return new Observable<PushEvent>(subscriber => {
       let closed = false;
       let controller: AbortController | undefined;
@@ -90,7 +122,7 @@ export class PushChannelService {
         controller = new AbortController();
         const startedAt = Date.now();
         try {
-          const response = await fetch(EVENTS_URL, {
+          const response = await fetch(url, {
             headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
             cache: 'no-store',
             signal: controller.signal

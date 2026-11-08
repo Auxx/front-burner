@@ -25,7 +25,7 @@ import {
   IslandComponent,
   SpinnerComponent
 } from '@front-burner/ui';
-import { CurrentUserService, PageTitleService } from '@front-burner/web-core';
+import { CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import type { PreviewPathLink } from '@front-burner/web-markdown';
 import { ImageCache } from '@front-burner/web-markdown/images';
 import { AppHeaderComponent, PageNotFoundPage, RouteAnnouncerComponent } from '@front-burner/web-shell';
@@ -284,6 +284,21 @@ export class RepositoryScreenPage {
     this.currentUser.load().catch(() => undefined);
     this.updateTitle();
     this.flushWhenLeft();
+    this.viewRepository();
+  }
+
+  /**
+   * Tells the push channel which repository this tab views, so that the backend
+   * can fetch it in the background (A-3.12); not viewing once the screen is left.
+   * No cleanup per repository: that would reopen the stream for none in between.
+   */
+  private viewRepository(): void {
+    const pushChannel = inject(PushChannelService);
+    effect(() => {
+      const { repositoryId } = this.target();
+      untracked(() => pushChannel.view(repositoryId));
+    });
+    inject(DestroyRef).onDestroy(() => pushChannel.view(null));
   }
 
   /**
