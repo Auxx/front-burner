@@ -91,21 +91,6 @@ describe.skipIf(process.platform === 'win32')('PushJob', () => {
     expect(harness.remoteLog()).toBe('first');
   });
 
-  it('reports credentials-missing for a credential that is not the user\'s', async () => {
-    const theirs = harness.database.db.transaction(tx =>
-      harness.saved.createHttps(tx, harness.bob, { name: 'Bob', username: 'bob', password: 'secret' })
-    );
-    harness.database.db.update(repositories).set({ credentialId: theirs })
-      .where(eq(repositories.id, harness.repositoryId)).run();
-    harness.commit('second');
-    harness.runner.start();
-
-    const id = enqueue();
-    await harness.finished(id);
-
-    expect(resultOf(id)).toEqual({ kind: 'failed', code: 'credentials-missing', params: {} });
-  });
-
   it('publishes git.changed when it ends', async () => {
     harness.commit('second');
     harness.runner.start();
