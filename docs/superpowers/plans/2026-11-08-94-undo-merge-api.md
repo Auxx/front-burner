@@ -47,6 +47,10 @@ half, GC-27); `docs/architecture/data.md` A-4.5a; D-4.6.
   test `keeps the record after a failed push`.
 - **A second merge** replaces the record, so that Undo goes back one merge, not
   to before the first → Task 1 test `undoes only the last merge`.
+- **A pull after a committed merge that changes nothing,** fails, or conflicts
+  and is aborted, leaves that merge as the last commit, so Undo must still be
+  offered (GC-25) → Task 1 test `stays offered after a pull that left the merge
+  as it was`, for each.
 - **A fast-forward after a merge** moves the branch so that the last commit is
   not the merge, and Undo is not offered → Task 1 test `is not offered after a
   fast-forward`.
@@ -79,12 +83,13 @@ half, GC-27); `docs/architecture/data.md` A-4.5a; D-4.6.
 
 - [ ] **Step 1: Write the failing tests**: `offers undo after a merge commit`;
       `is not offered after a pull that made no merge commit`; `is not offered
-      after a fast-forward`; `undoes the merge and shows the upstream's commits
-      again`; `undoes only the last merge`; `refuses after another commit`;
-      `refuses with uncommitted changes, checked inside the lock`; `refuses
-      after a push`; `forgets the record after a successful push`; `keeps the
-      record after a failed push`; `publishes files.changed and git.changed`;
-      end to end, `undoes a committed merge over the API`.
+      after a fast-forward`; `stays offered after a pull that left the merge as
+      it was`; `undoes the merge and shows the upstream's commits again`;
+      `undoes only the last merge`; `refuses after another commit`; `refuses
+      with uncommitted changes, checked inside the lock`; `refuses after a
+      push`; `forgets the record after a successful push`; `keeps the record
+      after a failed push`; `publishes files.changed and git.changed`; end to
+      end, `undoes a committed merge over the API`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
       server-core-git server-feature-sync`.
 - [ ] **Step 3: Implement**; `npx nx run web-api-client:generate`.

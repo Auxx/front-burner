@@ -24,9 +24,12 @@ A-5.10; D-4.3.
 
 - The shared constraints of [the step 4 index](2026-11-08-00-roadmap-step-4.md)
   apply.
-- Commands: `git switch --no-guess --no-overwrite-ignore <name>`; `git switch
+- Commands: `git switch --no-guess --no-overwrite-ignore -- <name>`; `git switch
   --no-guess --no-overwrite-ignore --track -c <branch>
   refs/remotes/origin/<branch>`; `git switch --no-guess --no-track -c <name>`.
+- The `--` is not optional: without it, the name `--orphan=boom` from a client's
+  request empties the working copy. `trackRemote` and `create` check the name
+  with `check-ref-format` first, which refuses a leading `-`.
 - A name is valid when `git check-ref-format --branch <name>` exits 0 and prints
   the same name: it expands `@{-1}` to the previous branch, which must not pass.
 - `POST …/switch` refuses, with `409`: `merge-in-progress` (the guard),
@@ -44,6 +47,9 @@ A-5.10; D-4.3.
 
 ## Review Focus
 
+- **A name that looks like an option,** such as `--orphan=boom`, `--detach` or
+  `-c`, on any of the three operations, is refused, with every file still there
+  → Task 1 test `treats a name like an option as a name`.
 - **`bad..name`, `@{-1}`, `HEAD`, `-x` and an empty name** are all refused
   (GA-38) → Task 1 test `refuses every kind of bad name`.
 - **`a/b` when `a` exists,** which git refuses only when it writes the ref, is a
@@ -52,9 +58,6 @@ A-5.10; D-4.3.
 - **Ignored files** do not count as uncommitted changes, and one the new branch
   tracks stops the switch rather than being overwritten → Task 1 test `does not
   overwrite an ignored file`.
-- **A switch in a single-branch clone** to a branch pushed from Front Burner
-  works, and a remote branch that was pruned says it is gone → Task 1 test `says
-  when the remote branch is gone`.
 - **A branch that exists only as `origin/main` next to a local `origin/main`**
   must still track the remote one, from its full ref → Task 1 test `tracks the
   remote branch when a local branch has its name`.
@@ -79,15 +82,16 @@ A-5.10; D-4.3.
     Promise<void>`;
   - `GitBranches.create(workingCopy: string, name: string): Promise<void>`.
 
-- [ ] **Step 1: Write the failing tests**: `switches to a local branch`;
-      `changes the files with the branch`; `says when the branch is gone`;
-      `makes a local branch that tracks a remote one, and switches to it`; `says
-      when the remote branch is gone`; `tracks the remote branch when a local
-      branch has its name`; `refuses a local branch of that name`; `does not
-      overwrite an ignored file`; `creates a branch from the current commit,
-      unpublished, and switches to it`; `keeps uncommitted changes on a new
-      branch`; `refuses every kind of bad name`; `refuses a name in use`;
-      `refuses a name that clashes with a folder of branches`.
+- [ ] **Step 1: Write the failing tests**: `switches to a local branch`; `treats
+      a name like an option as a name`; `changes the files with the branch`;
+      `says when the branch is gone`; `makes a local branch that tracks a remote
+      one, and switches to it`; `says when the remote branch is gone`; `tracks
+      the remote branch when a local branch has its name`; `refuses a local
+      branch of that name`; `does not overwrite an ignored file`; `creates a
+      branch from the current commit, unpublished, and switches to it`; `keeps
+      uncommitted changes on a new branch`; `refuses every kind of bad name`;
+      `refuses a name in use`; `refuses a name that clashes with a folder of
+      branches`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx test server-core-git`.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run them and see them pass** — same command.

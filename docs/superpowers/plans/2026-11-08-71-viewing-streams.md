@@ -39,6 +39,9 @@ so a wrong ID gives nothing away. Plan 72 ignores an ID that is not the user's.
   fetches → Task 2 test `stops viewing when the page goes`.
 - **Logging out and in** must not carry the last repository over, as it may not
   be the next user's → Task 2 test `forgets the repository on logout`.
+- **A reconnect after the auth token expires** (A-3.10) must keep viewing, or
+  fetches stop without a word → Task 2 test `keeps the repository through a
+  reconnect`.
 
 ---
 

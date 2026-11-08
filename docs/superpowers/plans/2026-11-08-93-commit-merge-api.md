@@ -64,7 +64,8 @@ AC-GIT-001.9).
 
 **Interfaces:**
 
-- Consumes: `MergeGuard`, `CommitAuthors.forRepository`, `SyncStateStore`.
+- Consumes: `MergeGuard`, `CommitAuthors.forRepository`,
+  `SyncStateStore.mergeCommitted`.
 - Produces:
   - `GitMerge.commit(workingCopy: string, request: { message: string; author: {
     name: string; email: string } }): Promise<{ oid: string }>`.

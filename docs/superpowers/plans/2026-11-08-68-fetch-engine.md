@@ -28,9 +28,22 @@ counts); `docs/architecture/git-engine.md` A-5.2, A-5.3, A-5.7, A-5.10.
   single-branch clone's configuration says what it fetches (GA-41).
 - A remote-tracking branch is always named by its full ref,
   `refs/remotes/origin/<branch>`.
+- In a single-branch clone, each fetch refspec names one branch, and git fails
+  the whole fetch with "couldn't find remote ref refs/heads/<branch>" once the
+  remote has deleted it, which `--prune` cannot help with. Plan 56 adds such
+  refspecs when a branch is published (GA-41). So on that message the engine
+  removes the refspec (`git config --unset --fixed-value remote.origin.fetch
+  <refspec>`), the remote-tracking ref (`git update-ref -d`) and
+  `branch.<branch>.remote` and `.merge`, as git no longer reports that upstream,
+  and then fetches again, at most once per refspec _(plan's call)_. The branch
+  is then unpublished, and the next push publishes it as new, which adds the
+  refspec back. The same goes for the cloned branch itself.
 
 ## Review Focus
 
+- **A branch deleted on the remote in a single-branch clone** must not stop
+  every later fetch → Task 2 test `carries on after the remote deleted a fetched
+  branch`.
 - **A local branch named `origin/main`** must not change what `incoming` counts
   → Task 2 test `counts the remote branch when a local branch has its name`.
 - **A file renamed upstream** counts as touching both names, since **Changes**
@@ -40,8 +53,6 @@ counts); `docs/architecture/git-engine.md` A-5.2, A-5.3, A-5.7, A-5.10.
   Task 2 test `reads the path literally`.
 - **A shallow single-branch clone** fetches without deepening or failing → Task
   2 test `fetches in a shallow single-branch clone`.
-- **A working copy whose config could bypass the proxy** is refused before git
-  connects (A-5.7) → Task 2 test `refuses an unsafe config`.
 
 ---
 
@@ -100,11 +111,14 @@ counts); `docs/architecture/git-engine.md` A-5.2, A-5.3, A-5.7, A-5.10.
 - [ ] **Step 1: Write the failing tests**: `fetches new commits without changing
       the files or the branch`; `removes remote branches deleted on the remote`;
       `says when nothing moved`; `fetches no tags`; `fetches in a shallow
-      single-branch clone`; `refuses an unsafe config`; `reports a refused token
-      as auth-failed`; `counts what the upstream has`; `counts the remote branch
-      when a local branch has its name`; `says whether the commits touch a
-      path`; `a renamed file touches its old and its new path`; `reads the path
-      literally`; `has nothing to say without an upstream`.
+      single-branch clone`; `carries on after the remote deleted a fetched
+      branch`, with the refspec, the ref and the upstream config gone;
+      `publishes that branch again on the next push`; `carries on after the
+      remote deleted the cloned branch`; `refuses an unsafe config`; `reports a
+      refused token as auth-failed`; `counts what the upstream has`; `counts the
+      remote branch when a local branch has its name`; `says whether the commits
+      touch a path`; `a renamed file touches its old and its new path`; `reads
+      the path literally`; `has nothing to say without an upstream`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx test server-core-git`.
 - [ ] **Step 3: Implement.** A-5.10's list gets `incoming`.
 - [ ] **Step 4: Run them and see them pass** — same command.

@@ -82,7 +82,7 @@ working-tree lock (A-5.3).
 - Modify: `libs/shared/contracts/src/index.ts`,
   `libs/server/feature/sync/src/git/git.controller.ts` (+ spec),
   `libs/server/feature/sync/src/git/git.dto.ts`,
-  `apps/server-e2e/src/git.e2e.spec.ts`
+  `apps/server-e2e/src/git.e2e.spec.ts`, `docs/product/mvp.md`
 
 **Interfaces:**
 
@@ -98,5 +98,8 @@ working-tree lock (A-5.3).
 - [ ] **Step 3: Implement**; `npx nx run web-api-client:generate`.
 - [ ] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
       server-e2e`.
-- [ ] **Step 5: Check and commit** — as in the index's "Verifying"; set this
+- [ ] **Step 5: Update the status**: REQ-GIT-002 adds `branch-list-api`; GA-36
+      and GA-41 "(only the backend is built)". Run `doc-ids.mjs criteria` and
+      copy its result.
+- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(sync): list branches`.

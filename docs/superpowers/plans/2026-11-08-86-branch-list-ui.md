@@ -44,8 +44,6 @@ names).
   1 test `shows the first 200 of 5,000 branches, and says to filter`.
 - **A very long branch name** wraps or shortens without a sideways scroll → Task
   1 test `shows a long name without scrolling sideways`.
-- **The bar's button during a merge** is gone, with the status it belongs to
-  (plan 81) → Task 2 test `shows no branch button during a merge`.
 
 ---
 
@@ -95,8 +93,8 @@ names).
 - [ ] **Step 1: Write the failing tests**: `AC-GIT-002.18: in a single-branch
       clone, the branch list shows the single-branch note` (end to end); `opens
       the list from the branch`; `opens the list on a phone`; `returns focus to
-      the button`; `shows no branch button during a merge`; `shortens a long
-      name, with the full name on hover, focus or long press`.
+      the button`; `shortens a long name, with the full name on hover, focus or
+      long press`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx test
       web-feature-repository-screen`.
 - [ ] **Step 3: Implement.** Selecting a branch only closes the list until

@@ -18,6 +18,9 @@ conflict back. Buttons inside CodeMirror's `contenteditable` can't be reached
 with `Tab`, which the editor keeps for itself, so the widgets serve pointer and
 touch, and plan 99's conflict bar, outside the editor, offers the same three for
 the conflict at the cursor to the keyboard and screen readers _(plan's call)_.
+The extension sits in a `Compartment`, like soft wrap and read-only, since the
+pane keeps one editor state per file: a file already open when a merge starts
+gets it, and loses it when the merge ends.
 
 **Tech Stack:** CodeMirror 6, already a dependency. The colours are the
 `Conflict` tokens of `docs/architecture/design-system.md` (mine, theirs, marker
@@ -43,6 +46,11 @@ NF-13.7.
 - Touch targets of the widget buttons meet NF-13.5: at least 24 by 24 CSS
   pixels.
 - `npx nx run web-code-editor:size-check` stays within its budget.
+- A-8.11 fixes the editor's extensions, and `createEditorState` says that adding
+  one means measuring again. The compartment is empty for every other file, so
+  their typing does not change. Run `node tools/ai-tools/src/bin/typing-test.mjs
+  serve` with the extension on in a desktop browser here; the real phone waits
+  for step 6's hand checks, as the index's "Left out" says.
 
 ## Review Focus
 
@@ -100,7 +108,8 @@ NF-13.7.
   (+ spec)
 - Modify: `libs/web/code-editor/src/code-editor/state/editor-state.ts` (+ spec),
   `libs/web/code-editor/src/code-editor/theme/editor-theme.ts`,
-  `libs/web/code-editor/src/index.ts`
+  `libs/web/code-editor/src/index.ts`, `docs/architecture/web-client.md`,
+  `docs/product/mvp.md`
 
 **Interfaces:**
 
@@ -108,9 +117,11 @@ NF-13.7.
   - `ConflictTexts`: `{ mine: (branch: string) => string; theirs: (branch:
     string) => string; acceptMine: string; acceptTheirs: string; acceptBoth:
     string }`.
-  - `EditorStateOptions.conflicts?: ConflictTexts`, which adds the extension in
-    `createEditorState`.
-  - `conflictsIn(state: EditorState): readonly ConflictRegion[]`.
+  - `EditorStateOptions.conflicts?: ConflictTexts`, which fills the compartment
+    in `createEditorState`, and `setConflicts(texts: ConflictTexts | null):
+    TransactionSpec`, as `setSoftWrap` does.
+  - `conflictsIn(state: EditorState): readonly ConflictRegion[]`, empty when the
+    extension is off.
   - `conflictAtCursor(state: EditorState): number | null`: the index of the
     region the cursor is in, or `null`.
   - `acceptConflict(view: EditorView, index: number, choice: 'mine' | 'theirs' |
@@ -125,10 +136,15 @@ NF-13.7.
       types`; `parses only when the document changed`; `removes a region when a
       marker is deleted`; `says which conflict has the cursor`; `moves the
       cursor to a conflict`; `changes nothing without the option`; `does not
-      offer the widgets in a read-only editor`.
+      offer the widgets in a read-only editor`; `setConflicts turns it on and
+      off, keeping the undo history and the cursor`; `has no conflicts when it
+      is off`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx test web-code-editor`.
-- [ ] **Step 3: Implement.**
+- [ ] **Step 3: Implement.** A-8.11 gets the compartment.
 - [ ] **Step 4: Run them and see them pass** — same command.
-- [ ] **Step 5: Check and commit** — as in the index's "Verifying"; set this
+- [ ] **Step 5: Update the status**: REQ-GIT-003 adds `conflict-markers`; GC-10
+      and GC-11 "(only the editor's part is built)". Run `doc-ids.mjs criteria`
+      and copy its result.
+- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(code-editor): show and accept
       conflicts`.

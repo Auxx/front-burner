@@ -91,12 +91,13 @@ AC-FILE-001.20); `docs/requirements/editor.md` (ED-25).
       merge is in progress, commit, discard, pull, push and branch switching are
       not offered, and the API refuses them` (end to end); `lists the files
       sorted, with their kinds and states in words`; `expands the files merged
-      without conflicts`; `shows the first 200 of 5,000 other files`; `selects
-      the first unresolved file`; `moves the selection when the file leaves the
-      list`; `hides the diff during a merge`; `keeps unsaved edits through a
-      merge` (end to end); `is in the drawer on a phone, and selecting closes
-      it`; `keeps focus in the side pane when the bar goes`; `goes back to the
-      tree and Changes when the merge ends`.
+      without conflicts`; `shows the first 200 of 5,000 other files`; `shows no
+      branch button during a merge`; `selects the first unresolved file`; `moves
+      the selection when the file leaves the list`; `hides the diff during a
+      merge`; `keeps unsaved edits through a merge` (end to end); `is in the
+      drawer on a phone, and selecting closes it`; `keeps focus in the side pane
+      when the bar goes`; `goes back to the tree and Changes when the merge
+      ends`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx test
       web-feature-repository-screen`.
 - [ ] **Step 3: Implement.** Follow the `angular-templates` skill.

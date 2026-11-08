@@ -11,11 +11,12 @@ short undone, and a merge waiting for the user left alone.
 
 **Architecture:** Merges make this urgent: until now, a crash could leave only
 an `index.lock`, and now it can leave half a merge. `merge_applying` (plan 77)
-says whether git was still merging when the backend stopped. If it was, the
-working copy goes back to the recorded commit, whatever git left, as the merge
-started clean (GA-26). If it was not, a `MERGE_HEAD` is a merge waiting for the
-user. Recovery runs in `onApplicationBootstrap`, which Nest awaits before it
-accepts requests, one working copy at a time.
+says whether git was still merging when the backend stopped. If it was,
+`GitMerge.undoCutShort` takes the working copy back to the recorded commit,
+whatever git left, as the merge started clean (GA-26), and `restoreEarlier`
+gives back the record of an earlier merge. If it was not, a `MERGE_HEAD` is a
+merge waiting for the user. Recovery runs in `onApplicationBootstrap`, which
+Nest awaits before it accepts requests, one working copy at a time.
 
 **Tech Stack:** as before. No new packages.
 
@@ -33,6 +34,10 @@ accepts requests, one working copy at a time.
 - Only `ready` repositories whose working copy exists: `WorkingCopyCheck` has
   dealt with the rest (RM-6).
 - A reset is logged at `info`, with the repository ID and the commit.
+- Stale locks are every `*.lock` directly in `.git` and under `.git/refs`: a
+  killed git can leave `HEAD.lock`, `ORIG_HEAD.lock` or a ref's lock as well as
+  `index.lock`, and at this point no git command runs (NF-9.4). This is only for
+  the start: at any other time a fetch may hold a ref's lock.
 
 ## Review Focus
 
@@ -66,17 +71,20 @@ accepts requests, one working copy at a time.
 
 **Interfaces:**
 
-- Consumes: `SyncStateStore.record`, `GitMerge.resetTo`, `RepositoryQueries`,
-  `DATA_LAYOUT`.
+- Consumes: `SyncStateStore.record`, `SyncStateStore.restoreEarlier`,
+  `GitMerge.undoCutShort`, `GitMerge.keepRecord`, `GitMerge.forgetRecord`,
+  `RepositoryQueries`, `DATA_LAYOUT`.
 - Produces: `GitMerge.refreshIndex(workingCopy: string): Promise<void>` and
-  `GitMerge.removeIndexLock(workingCopy: string): Promise<void>`.
+  `GitMerge.removeStaleLocks(workingCopy: string): Promise<void>`.
 
 - [ ] **Step 1: Write the failing tests**: `removes a stale lock without ending
-      a merge`; `undoes a merge cut short`, with a half-written file and the
-      branch moved; `undoes a merge whose flag is still set, even with
-      MERGE_HEAD`; `leaves a merge waiting for the user alone`; `refreshes each
-      index`; `carries on after a working copy fails`; `skips a repository that
-      is not ready`.
+      a merge`; `removes HEAD.lock and a ref's lock`; `undoes a merge cut
+      short`, with a half-written file, an untracked file it left and the branch
+      moved; `keeps ignored files when it undoes a merge`; `gives back the
+      record of an earlier merge`; `undoes a merge whose flag is still set, even
+      with MERGE_HEAD`; `leaves a merge waiting for the user alone`; `refreshes
+      each index`; `carries on after a working copy fails`; `skips a repository
+      that is not ready`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
       server-core-git server-feature-sync`.
 - [ ] **Step 3: Implement.** A-5.15 says how an interrupted merge is told from a

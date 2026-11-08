@@ -28,8 +28,15 @@ GC-27); `docs/architecture/data.md` A-4.5a; D-4.5, D-4.6.
 - The commit to go back to is `sync_state.recorded_commit`, or else the ref.
   With neither, as after a restore that lost them, it is `git merge --abort`
   (A-5.12).
-- It forgets the record and publishes `files.changed` with `folders: 'all'` and
-  `git.changed`.
+- It calls `SyncStateStore.restoreEarlier`, then `GitMerge.keepRecord` with what
+  that returns, or `forgetRecord` for `null`, so that **Undo merge** of an
+  earlier merge comes back (GC-25). It publishes `files.changed` with `folders:
+  'all'` and `git.changed`.
+- A save does not carry the hash it was based on (D-1.3), so a save from another
+  tab or device that reaches the backend just after the abort is written to the
+  clean file. That is accepted _(plan's call)_: it is what last-write-wins
+  means, ED-24 tells that tab, and the file shows in **Changes**, where
+  **Discard** removes it. This tab's own saves are dealt with by plan 81.
 
 ## Review Focus
 
@@ -39,9 +46,9 @@ GC-27); `docs/architecture/data.md` A-4.5a; D-4.5, D-4.6.
   the state before the pull.
 - **A file added by the merge** must be gone, not left as an untracked file →
   Task 1 test `removes what the merge added`.
-- **A save queued behind the abort** must then be refused or apply to the clean
-  file, never bring the merge's content back → Task 1 test `runs inside the
-  lock`.
+- **A save from another device just after the abort** is written, and must show
+  as an ordinary change that can be discarded, with the merge still over → Task
+  1 test `a late save from elsewhere is a change, and no merge`.
 - **The record lost** must still end the merge → Task 1 test `aborts with git's
   own abort when no record is left`.
 - **Two aborts at once, from two devices:** the second answers `409
@@ -75,19 +82,19 @@ GC-27); `docs/architecture/data.md` A-4.5a; D-4.5, D-4.6.
   - `POST /api/v1/repositories/:id/git/merge/abort` (`abortMerge`, `204`).
 
 - [ ] **Step 1: Write the failing tests**: `puts everything back after edits and
-      resolutions`; `removes what the merge added`; `forgets the record`; `shows
-      the upstream's commits as to pull again` (GC-24); `aborts with git's own
-      abort when no record is left`; `a second abort is refused`; `runs inside
-      the lock`; `publishes files.changed and git.changed`; `answers another
-      user's repository like a missing one`.
+      resolutions`; `removes what the merge added`; `forgets the record`; `gives
+      back the record of an earlier merge`; `a late save from elsewhere is a
+      change, and no merge`; `shows the upstream's commits as to pull again`
+      (GC-24); `aborts with git's own abort when no record is left`; `a second
+      abort is refused`; `runs inside the lock`; `publishes files.changed and
+      git.changed`; `answers another user's repository like a missing one`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
       server-core-git server-feature-sync`.
 - [ ] **Step 3: Implement**; `npx nx run web-api-client:generate`.
 - [ ] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
       server-e2e`.
-- [ ] **Step 5: Update the status**: REQ-GIT-003 is **In progress**, Built in
-      `abort-merge-api`; points not built: all except GC-5 and GC-24. Run
-      `doc-ids.mjs criteria` and copy its result. Name AC-GIT-003.12 in plan 96,
-      where files can be resolved first.
+- [ ] **Step 5: Update the status**: REQ-GIT-003 adds `abort-merge-api`, and
+      removes GC-24. Run `doc-ids.mjs criteria` and copy its result. Name
+      AC-GIT-003.12 in plan 96, where files can be resolved first.
 - [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(sync): abort a merge`.

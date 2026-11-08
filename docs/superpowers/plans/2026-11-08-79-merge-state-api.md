@@ -38,8 +38,8 @@ working-tree lock, and with `--no-optional-locks` (A-5.3).
   76 removed it from the index, which leaves that resolve-undo entry behind.
 - A file is `editable` when it is Markdown (`isMarkdownName`), of kind
   `both-changed` or `both-added`, both versions are regular files (mode `100644`
-  or `100755`), and the file on disk is at most `MAX_FILE_BYTES` and valid UTF-8
-  (ED-2, GC-9).
+  or `100755`), and the file on disk, found through `resolveInWorkingCopy`, is a
+  regular file of at most `MAX_FILE_BYTES` and valid UTF-8 (ED-2, GC-9).
 - `message` is `.git/MERGE_MSG` without lines starting with `#` and trailing
   blank lines: git's "# Conflicts:" list is not part of the message (GC-20).
 - `into` is the branch and `from` its upstream, from the status.
@@ -123,14 +123,17 @@ working-tree lock, and with `--no-optional-locks` (A-5.3).
 
 - [ ] **Step 1: Write the failing tests**: `says what merges into what`; `names
       the upstream after a fetch pruned it`; `marks a Markdown file editable`;
-      `a PNG, a large file, a file that is not valid UTF-8 and a symbolic link
-      are not editable`; `a file one side deleted is not editable`; `answers no
-      merge and another user's repository`; end to end, `a pull that conflicts
-      is readable from another session`.
+      `a PNG, a large file, a file that is not valid UTF-8, a symbolic link and
+      a file through a linked folder are not editable`; `a file one side deleted
+      is not editable`; `answers no merge and another user's repository`; end to
+      end, `a pull that conflicts is readable from another session`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx test
       server-feature-sync`.
 - [ ] **Step 3: Implement**; `npx nx run web-api-client:generate`.
 - [ ] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
       server-e2e`.
-- [ ] **Step 5: Check and commit** — as in the index's "Verifying"; set this
+- [ ] **Step 5: Update the status**: REQ-GIT-003 adds `merge-state-api`; GC-6
+      and GC-7 "(only the backend is built)". Run `doc-ids.mjs criteria` and
+      copy its result.
+- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(sync): read a merge in progress`.

@@ -13,9 +13,10 @@ waits until no markers are left.
 **Architecture:** `rs-conflict-file` opens an `editable` file through
 `OpenFilesService`, so that saving, browser drafts and changes from other
 devices all work as they do for any file, and `rs-editor-pane` gets a
-`conflicts` input, which adds plan 98's extension. `rs-conflict-bar`, above the
-editor, reads the regions from the editor's state, and gives the keyboard and
-screen readers what the widgets give to pointer and touch.
+`conflicts` input, which turns plan 98's extension on with `setConflicts`, also
+for a file whose editor state was kept from before the merge. `rs-conflict-bar`,
+above the editor, reads the regions from the editor's state, and gives the
+keyboard and screen readers what the widgets give to pointer and touch.
 
 **Tech Stack:** as before. No new packages.
 
@@ -40,6 +41,11 @@ GC-13, GC-28, AC-GIT-003.2 to AC-GIT-003.5); `docs/requirements/editor.md`
   back to the editor.
 - `hasConflictMarkers` (plan 91) decides the preview, which uses GC-14's rule,
   so that the preview and **Mark as resolved** always agree.
+- A conflicting file is opened without going through the route, which keeps
+  naming the file that was open (plan 95). So when the merge ends, the page
+  opens the route's path again, or goes to the empty state without one. A
+  conflicting file is never remembered as this device's last file (FB-12), and a
+  reload during a merge shows the merge.
 
 ## Review Focus
 
@@ -48,6 +54,11 @@ GC-13, GC-28, AC-GIT-003.2 to AC-GIT-003.5); `docs/requirements/editor.md`
 - **A file that is opened again after the merge ended** has no conflict
   extension or bar, and is not left read-only → Task 2 test `is a normal file
   after the merge`.
+- **A conflicting file that was already open when the merge started** keeps its
+  editor state, which must get the conflict view → Task 2 test `shows conflicts
+  in a file that was already open`.
+- **The screen when the merge ends** must show the file the URL names, not the
+  last conflict → Task 2 test `opens the route's file when the merge ends`.
 - **A phone's on-screen keyboard:** the bar must stay above it, and the editor
   must keep at least its usual height (NF-12.5) → Task 1 test `stays visible
   with the on-screen keyboard open`.
@@ -114,8 +125,10 @@ GC-13, GC-28, AC-GIT-003.2 to AC-GIT-003.5); `docs/requirements/editor.md`
       removed, the preview renders again` (end to end); `saves an edit, which a
       reload shows`; `offers the editor for an editable file, first`; `does not
       offer it for a PNG or a large file`; `follows an edit made on another
-      device`; `is a normal file after the merge`; `shows the note for a
-      lone =======`.
+      device`; `is a normal file after the merge`; `shows conflicts in a file
+      that was already open`; `opens the route's file when the merge ends`;
+      `does not remember a conflicting file as the last file`; `shows the note
+      for a lone =======`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx test
       web-feature-repository-screen`.
 - [ ] **Step 3: Implement.** Follow the `angular-templates` skill.

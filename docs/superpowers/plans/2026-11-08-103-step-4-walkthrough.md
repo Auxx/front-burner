@@ -42,6 +42,8 @@ is merged.
   walkthrough uses the keyboard only.
 - **A reload at each step of a merge** keeps the state: the list, resolved
   files, saved edits → Task 1 test `a reload at each step keeps the merge`.
+- **An ignored file the remote now tracks** is still there after a refused pull
+  → Task 1 test `exit criterion 9`, in a third round.
 - **"Exactly as they were" after an abort** is compared by hash, on every file,
   and on `git status`, `HEAD` and the index → Task 1 tests `exit criterion 9`.
 - **A key that locks in the middle** (a restart during a merge): unlocking
@@ -67,7 +69,8 @@ is merged.
     **Accept theirs** and an edit, and the second with **Use my version**;
     **Commit merge**; **Push**. In a second round, **Abort merge** and compare
     every file, `HEAD`, the index and `git status` with how they were before the
-    pull.
+    pull. In a third round, the remote starts tracking a file the user has
+    ignored: **Pull** refuses, names it, and the file is unchanged.
   - `exit criterion 10, on desktop`: restart the backend with a protected key;
     the banner shows and no fetch runs; **Pull** asks for the passphrase and
     carries on; a restart during a merge keeps it.

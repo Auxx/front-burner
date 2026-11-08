@@ -81,7 +81,8 @@ locked-key banner's.
       on origin/main within about 2 minutes, with This file changed too. when it
       changes the open file; the user's files do not change until they pull`
       (end to end, with `test.setTimeout` of 150 seconds, as A-6.7 keeps the
-      interval a constant).
+      interval a constant, and in one browser of the matrix only, as what it
+      proves does not depend on the browser).
 - [ ] **Step 2: Run them and see them fail** — `npx nx test
       web-feature-repository-screen`.
 - [ ] **Step 3: Implement.** Follow the `angular-templates` skill.
