@@ -54,6 +54,11 @@ const OPERATIONS: Readonly<Record<GitNetworkJobType, Operation>> = {
       outcome.kind === 'pushed'
         ? { key: `${KEY}.pushed`, params: { count: outcome.commits, upstream: outcome.upstream } }
         : null
+  },
+  fetch: {
+    start: (api, repositoryId) => api.fetch(repositoryId),
+    // Plan 74 says "No new commits" for a fetch that moved nothing; until then a fetch's success is silent.
+    succeeded: () => null
   }
 };
 
