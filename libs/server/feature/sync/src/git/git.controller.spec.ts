@@ -191,6 +191,13 @@ describe('GitController', () => {
       expect(body).toMatchObject({ code: 'not-found' });
       expect(fileOpened).not.toHaveBeenCalled();
     });
+
+    it('refuses a repository that is not ready', async () => {
+      const { body } = await fileOpenedFetch(CLONING).expect(409);
+
+      expect(body).toMatchObject({ code: 'repository-not-openable', params: { status: 'cloning' } });
+      expect(fileOpened).not.toHaveBeenCalled();
+    });
   });
 
   describe('diff', () => {
