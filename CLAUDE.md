@@ -28,6 +28,17 @@ frontend.
   architecture documents (module map, API, data, git engine, jobs, security, web
   client, spikes, design system; IDs A-x.y).
 
+## Editing files
+
+Change files with the `Edit` tool (with `replace_all` for repeated text, and
+parallel calls for several files), or with `Write` for new files and full
+rewrites. Never use Python, `sed`, `awk` or heredoc scripts to change files:
+script edits are harder to review, bypass the harness's file tracking and can
+fail silently. If an `Edit` fails, fix the cause (read the file first, or add
+more surrounding text to make the match unique) instead of falling back to a
+script. The command-line tools from the `ai-tools` skill, such as the doc ID
+renumbering tool, are the exception: they are the intended way to do those jobs.
+
 <!-- @hexmode/toolkit-nx:start -->
 
 This is an Nx monorepo. Agent skills for working in it are provided by
