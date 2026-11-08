@@ -11,6 +11,8 @@ import { GitController } from './git/git.controller';
 import { GitJobs } from './jobs/git-jobs.service';
 import { JobCredentials } from './jobs/job-credentials.service';
 import { NetworkJobs } from './jobs/network-jobs.service';
+import { MergeActions } from './merge/merge-actions.service';
+import { MergeGuard } from './merge/merge-guard';
 import { MergeStateService } from './merge/merge-state.service';
 import { PullJob } from './pull/pull.job';
 import { PullService } from './pull/pull.service';
@@ -42,6 +44,8 @@ import { SyncStateStore } from './state/sync-state.store';
     SyncStateStore,
     MergeRecord,
     MergeStateService,
+    MergeGuard,
+    MergeActions,
     WorkingCopyRecovery
   ]
 })

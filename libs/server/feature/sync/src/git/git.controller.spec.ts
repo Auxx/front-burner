@@ -27,9 +27,12 @@ import request from 'supertest';
 import { FetchScheduler } from '../fetch/fetch-scheduler';
 import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
+import { MergeActions } from '../merge/merge-actions.service';
+import { MergeGuard } from '../merge/merge-guard';
 import { MergeStateService } from '../merge/merge-state.service';
 import { PullService } from '../pull/pull.service';
 import { PushService } from '../push/push.service';
+import { MergeRecord } from '../state/merge-record';
 import { SyncStateStore } from '../state/sync-state.store';
 import { GitController } from './git.controller';
 
@@ -129,8 +132,28 @@ describe('GitController', () => {
             )
           )
         },
+        {
+          provide: MergeActions,
+          useFactory: (guard: MergeGuard, syncState: SyncStateStore, events: EventsHub) =>
+            new MergeActions(
+              repositories as unknown as OpenableRepository,
+              guard,
+              gitMerge,
+              syncState,
+              new MergeRecord(syncState, gitMerge),
+              events
+            ),
+          inject: [ MergeGuard, SyncStateStore, EventsHub ]
+        },
+        { provide: MergeGuard, useValue: new MergeGuard(new WorkingTreeLock(), gitMerge) },
         { provide: FetchScheduler, useValue: { fileOpened } },
-        { provide: SyncStateStore, useValue: { fetchProblem: () => null } },
+        {
+          provide: SyncStateStore,
+          useValue: {
+            fetchProblem: () => null,
+            record: () => ({ recordedCommit: null, mergeCommit: null, applying: false })
+          }
+        },
         { provide: GitJobs, useValue: { networkJob: () => null } },
         { provide: EventsHub, useValue: { publish: (_userId: number, event: PushEvent) => published.push(event) } },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
@@ -393,6 +416,37 @@ describe('GitController', () => {
 
     it('refuses a repository that is not ready', async () => {
       await mergeState(CLONING).expect(409);
+    });
+
+    describe('abort', () => {
+      const abort = (id = READY) => request(app.getHttpServer()).post(`/repositories/${id}/git/merge/abort`);
+
+      it('ends the merge and tells clients', async () => {
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'notes.md'), 'theirs\n');
+        git(root, 'commit', '-q', '-am', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), 'mine\n');
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        await abort().expect(204);
+
+        expect(readFileSync(join(root, 'notes.md'), 'utf8')).toBe('mine\n');
+        expect(git(root, 'status', '--porcelain')).toBe('');
+        expect((await mergeState().expect(409)).body.code).toBe('no-merge-in-progress');
+        expect(published).toEqual([
+          { type: 'files.changed', repositoryId: READY, folders: 'all' },
+          { type: 'git.changed', repositoryId: READY }
+        ]);
+      });
+
+      it('answers no merge, and another user\'s repository like a missing one', async () => {
+        expect((await abort().expect(409)).body.code).toBe('no-merge-in-progress');
+        await abort(99).expect(404);
+        await abort(CLONING).expect(409);
+        expect(published).toEqual([]);
+      });
     });
   });
 

@@ -119,6 +119,90 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
     return oid;
   }
 
+  it('says which commit HEAD is and which the ref keeps', async () => {
+    expect(await merge.recordedCommit(work)).toBeNull();
+
+    const oid = await merge.record(work);
+
+    expect(await merge.head(work)).toBe(git(work, 'rev-parse', 'HEAD'));
+    expect(await merge.recordedCommit(work)).toBe(oid);
+  });
+
+  it('abort ends a merge with git\'s own abort, and keeps a change that was there before it', async () => {
+    write('other.md', 'mine alone\n');
+    commitAll('other');
+    const head = conflictingMerge();
+    git(work, 'merge', '--abort');
+    write('other.md', 'not committed\n');
+    expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+
+    await merge.abort(work);
+
+    expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(false);
+    expect(git(work, 'rev-parse', 'HEAD')).toBe(head);
+    expect(git(work, 'status', '--porcelain')).toBe('M other.md');
+    expect(readFileSync(join(work, 'other.md'), 'utf8')).toBe('not committed\n');
+  });
+
+  it('abort fails when there is no merge, and changes nothing', async () => {
+    write('first.md', 'not committed\n');
+
+    await expect(merge.abort(work)).rejects.toThrow('merge --abort');
+
+    expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe('not committed\n');
+  });
+
+  it('abort still ends a merge that git refuses to abort, as with a resolved file edited again', async () => {
+    const head = conflictingMerge();
+    write('both.md', 'resolved\n');
+    git(work, 'add', 'both.md');
+    write('both.md', 'edited again\n');
+
+    await merge.abort(work);
+
+    expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(false);
+    expect(git(work, 'rev-parse', 'HEAD')).toBe(head);
+    expect(git(work, 'status', '--porcelain')).toBe('');
+    expect(readFileSync(join(work, 'both.md'), 'utf8')).toBe('mine\n');
+  });
+
+  describe('when git is killed at its timeout', () => {
+    /** Leaves what a killed git leaves, once, instead of running the command that has `killed` among its arguments. */
+    class KilledLocalGit extends LocalGit {
+      private done = false;
+
+      constructor(private readonly killed: string) {
+        super(new GitRunner());
+      }
+
+      override async run(cwd: string, args: string[], options?: LocalRunOptions) {
+        if (this.done || !args.includes(this.killed)) {
+          return super.run(cwd, args, options);
+        }
+        this.done = true;
+        writeFileSync(join(work, '.git', 'index.lock'), '');
+        return { ...await super.run(cwd, [ 'version' ]), exitCode: null, timedOut: true };
+      }
+    }
+
+    it.each([
+      [ 'resetTo', 'reset', (killed: GitMerge, oid: string) => killed.resetTo(work, oid) ],
+      [ 'abort', 'merge', (killed: GitMerge) => killed.abort(work) ]
+    ])('%s can be tried again', async (_name, command, act) => {
+      const oid = conflictingMerge();
+      const killed = new GitMerge(new KilledLocalGit(command), { gitTimeoutMs: 60_000 } as GitOptions);
+
+      await expect(act(killed, oid)).rejects.toMatchObject({ code: 'timeout' });
+
+      // Not ended some other way: a timeout says nothing about what git would refuse.
+      expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(true);
+      expect(existsSync(join(work, '.git', 'index.lock'))).toBe(false);
+      await act(killed, oid);
+      expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(false);
+      expect(git(work, 'status', '--porcelain')).toBe('');
+    });
+  });
+
   it('resetTo ends a merge and puts every file back', async () => {
     const oid = conflictingMerge();
     expect(git(work, 'status', '--porcelain')).toBe(

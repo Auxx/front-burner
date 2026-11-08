@@ -1468,6 +1468,32 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/merge/abort": {
+      "post": {
+        "operationId": "abortMerge",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/diff": {
       "get": {
         "operationId": "diff",

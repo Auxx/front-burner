@@ -18,6 +18,7 @@ import { FetchScheduler } from '../fetch/fetch-scheduler';
 import { FetchService } from '../fetch/fetch.service';
 import { GitController } from '../git/git.controller';
 import { GitJobs } from '../jobs/git-jobs.service';
+import { MergeActions } from '../merge/merge-actions.service';
 import { MergeStateService } from '../merge/merge-state.service';
 import { PushService } from '../push/push.service';
 import { SyncStateStore } from '../state/sync-state.store';
@@ -66,6 +67,7 @@ describe.skipIf(process.platform === 'win32')('PullService', () => {
         { provide: GitJobs, useValue: harness.gitJobs },
         { provide: SyncStateStore, useValue: harness.syncState },
         { provide: MergeStateService, useValue: {} },
+        { provide: MergeActions, useValue: {} },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
         { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor }

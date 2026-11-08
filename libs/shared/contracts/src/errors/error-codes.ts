@@ -38,6 +38,8 @@ export const ERROR_CODES = [
   'merge-in-progress',
   /** 409; there is no merge in progress to read (GC-6). */
   'no-merge-in-progress',
+  /** 500; git could not abort the merge, which stays in progress (GC-27). */
+  'merge-abort-failed',
   /** 413; a file to read or save is over the editor's limit; params `{ limit }` in bytes (ED-2, ED-19). */
   'file-too-large',
   /** 422; a file to read is not valid UTF-8 (ED-2, FB-21). */

@@ -54,6 +54,14 @@ Known gaps, left until someone meets them:
   between gives a `200` with every file resolved or no files, rather than `409
   no-merge-in-progress`. Checking again after the reads closes it, once plans 80
   and 93 can end a merge.
+- Aborting a merge, when the record can't be put back: the reset comes first, so
+  if the process dies or `update-ref` fails right after it, the merge is over
+  but `sync_state` still has the aborted merge's record, and a retry answers
+  `409 no-merge-in-progress`. Recovery only restores a record while
+  `merge_applying` is set, so the next pull overwrites the `earlier_` columns,
+  and **Undo merge** of the earlier merge (GC-25) is lost. Recovery could
+  restore the earlier record when there is no merge, no merge commit, and the
+  record is `HEAD`; plan 93's end of a merge needs the same thought.
 
 Deployment guide (`docs/wiki/deployment.md`), postponed until the MVP runs
 locally in a development environment, so that it describes what was actually
