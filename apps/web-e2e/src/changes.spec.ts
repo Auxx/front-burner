@@ -67,9 +67,13 @@ const FETCH_FAILED = 'Couldn\'t check for remote changes';
 const KEY_LOCKED = 'Unlock laptop to check for remote changes.';
 const fetchStatus = (page: Page) => page.getByRole('banner').locator('rs-fetch-status');
 
-/** The quiet fetch status's text and actions: in the bar, or in a panel a tap opens on a phone (GA-35, NV-11). */
+/** The git actions menu's button while it says that there is a warning, on a phone (GA-35, NV-11). */
+const warnedActions = (page: Page, headline: string) =>
+  page.getByRole('banner').getByRole('button', { name: `Git actions. ${headline}` });
+
+/** The quiet fetch status's text and actions: in the bar, or in a panel the git actions menu opens on a phone (GA-35, NV-11). */
 async function fetchStatusDetails(page: Page, headline = FETCH_FAILED): Promise<Locator> {
-  const trigger = fetchStatus(page).getByRole('button', { name: headline });
+  const trigger = warnedActions(page, headline);
   const text = fetchStatus(page).getByText(headline);
   await expect(trigger.or(text)).toBeVisible();
   if (!await trigger.isVisible()) {
@@ -78,6 +82,7 @@ async function fetchStatusDetails(page: Page, headline = FETCH_FAILED): Promise<
   const details = page.getByRole('dialog', { name: headline });
   if (!await details.isVisible()) {
     await trigger.click();
+    await page.getByRole('menuitem', { name: headline }).click();
   }
   await expect(details).toBeVisible();
   return details;
@@ -366,7 +371,7 @@ test.describe('pushing', () => {
       renameSync(bare, away);
       await openScreen(page, `/repositories/${id}`);
 
-      await expect(fetchStatus(page).getByRole('button').first()).toBeVisible();
+      await expect(fetchStatus(page).getByRole('button').first().or(warnedActions(page, FETCH_FAILED))).toBeVisible();
       // Nothing opened by itself.
       await expect(page.getByRole('dialog')).toHaveCount(0);
       await expect(bar(page).locator('rs-git-problem')).toHaveCount(0);
@@ -383,17 +388,18 @@ test.describe('pushing', () => {
       await expect(toasts(page).getByText('No new commits')).toBeVisible();
     });
 
-    test('on a phone it is a button whose tap shows the text, and the save status stays in the bar', async ({ page, instance }) => {
+    test('on a phone it is in the git actions menu, whose item shows the text, and the save status stays in the bar', async ({ page, instance }) => {
       await page.setViewportSize({ width: 375, height: 700 });
       const { id, bare } = pushable(instance, 'cloned');
       renameSync(bare, `${bare}.away`);
       await openScreen(page, `/repositories/${id}`);
 
-      const trigger = fetchStatus(page).getByRole('button', { name: FETCH_FAILED });
+      const trigger = warnedActions(page, FETCH_FAILED);
       await expect(trigger).toBeVisible();
       await expect(fetchStatus(page)).toHaveText('');
 
       await trigger.click();
+      await page.getByRole('menuitem', { name: FETCH_FAILED }).click();
       const details = page.getByRole('dialog', { name: FETCH_FAILED });
       await expect(details).toContainText(FETCH_FAILED);
       await expect(details.getByRole('button', { name: 'Try again' })).toBeFocused();

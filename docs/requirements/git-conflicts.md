@@ -217,7 +217,7 @@ has not been pushed (D-4.6). Pushing the merge is a normal push.
 
 - **AC-GIT-003.1** A pull that conflicts on `guide.md` switches the repository
   screen to conflict resolution, with "Merging origin/main into main" and "0 of
-  1 files resolved". Another device that opens the repository sees the same
+  1 file resolved". Another device that opens the repository sees the same
   screen.
 - **AC-GIT-003.2** `guide.md` opens in the editor with plain markers labelled
   `<<<<<<< main` and `>>>>>>> origin/main`, even if the working copy's

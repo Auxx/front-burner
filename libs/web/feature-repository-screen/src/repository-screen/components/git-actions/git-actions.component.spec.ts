@@ -179,6 +179,35 @@ describe('GitActionsComponent', () => {
     expect(menu()).toBeNull();
   });
 
+  it('offers a warning in the menu on a phone, and shows on its button that there is one', async () => {
+    await show({ narrow: true });
+    let shown = 0;
+    fixture.componentInstance.showWarning.subscribe(() => shown++);
+    const trigger = buttons()[0];
+    const icon = () => trigger.querySelector('ui-icon')?.getAttribute('data-name') ?? trigger.innerHTML;
+    const before = icon();
+
+    fixture.componentRef.setInput('warning', 'Couldn\'t check for remote changes');
+    await settle(fixture);
+
+    expect(trigger.getAttribute('aria-label')).toBe(`${KEY}.gitActionsWarning`);
+    expect(icon()).not.toBe(before);
+    trigger.click();
+    await settle(fixture);
+
+    expect(items().map(item => text(item))).toEqual([
+      `${KEY}.fetch`,
+      `${KEY}.push`,
+      'Couldn\'t check for remote changes'
+    ]);
+    items()[2].click();
+    await settle(fixture);
+
+    expect(shown).toBe(1);
+    expect(fetched).toBe(0);
+    expect(pushed).toBe(0);
+  });
+
   it('shows the reasons under the items that are not offered on a phone', async () => {
     await show({ narrow: true, status: status({ ahead: 0 }) });
     buttons()[0].click();

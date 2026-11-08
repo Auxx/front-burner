@@ -1543,6 +1543,8 @@ test.describe('repository screen, kept up to date', () => {
 
     const bar = page.getByRole('banner');
     const counts = bar.getByText('2 to push, 3 to pull', { exact: true });
+    // Once its background fetch has failed, as `git.invalid` always does: the most the bar ever holds (GA-35).
+    await expect(bar.getByRole('button', { name: /^Git actions\. Couldn't check/ })).toBeVisible({ timeout: 30_000 });
     await expect(counts).toBeInViewport({ ratio: 1 });
     await expect(bar.getByRole('button', { name: /^Account menu for / })).toBeInViewport({ ratio: 1 });
     await expect(switcherButton(page)).toBeInViewport({ ratio: 1 });
@@ -1559,6 +1561,52 @@ test.describe('repository screen, kept up to date', () => {
     // The full name, on a long press on a phone and on hover otherwise (NV-11).
     await pointAt(name, isMobile);
     await expect(tooltip(page)).toHaveText(branch);
+  });
+
+  test('a merge stays in the one bar on the smallest phone, and Abort merge ends it', async ({ page, instance, monitor }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    const branch = `notes/${'a-long-branch-name-'.repeat(11)}`.slice(0, 200);
+    const guide = join(dir, 'guide.md');
+    gitIn(dir, 'checkout', '-q', '-b', branch);
+    writeFileSync(guide, 'base\n');
+    gitIn(dir, 'add', 'guide.md');
+    gitIn(dir, 'commit', '-q', '-m', 'base');
+    writeFileSync(guide, 'theirs\n');
+    gitIn(dir, 'commit', '-q', '-am', 'theirs');
+    gitIn(dir, 'remote', 'add', 'origin', seededRemoteUrl('handbook'));
+    gitIn(dir, 'update-ref', `refs/remotes/origin/${branch}`, 'HEAD');
+    gitIn(dir, 'reset', '-q', '--hard', 'HEAD~1');
+    gitIn(dir, 'branch', '-q', `--set-upstream-to=origin/${branch}`);
+    writeFileSync(guide, 'mine\n');
+    gitIn(dir, 'commit', '-q', '-am', 'mine');
+    expect(() => gitIn(dir, 'merge', '-q', `refs/remotes/origin/${branch}`)).toThrow();
+
+    await openScreen(page, `/repositories/${handbook}`);
+
+    const bar = page.getByRole('banner');
+    const count = bar.getByText('0 of 1 file resolved', { exact: true });
+    // With the failed fetch's warning too: the most the bar ever holds (GA-35).
+    const actions = bar.getByRole('button', { name: /^Git actions\. Couldn't check/ });
+    await expect(actions).toBeVisible({ timeout: 30_000 });
+    await expect(count).toBeInViewport({ ratio: 1 });
+    await expect(actions).toBeInViewport({ ratio: 1 });
+    await expect(bar.getByRole('button', { name: /^Account menu for / })).toBeInViewport({ ratio: 1 });
+    expect(await fitsWidth(page)).toBe(true);
+
+    await actions.click();
+    await page.getByRole('menuitem', { name: 'Abort merge' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Abort the merge?' });
+    await expect(dialog).toContainText('the resolutions you made are lost');
+    await dialog.getByRole('button', { name: 'Abort merge' }).click();
+
+    await expect(count).toHaveCount(0);
+    await expect(bar.getByText('1 to push, 1 to pull', { exact: true })).toBeVisible();
+    expect(readFileSync(guide, 'utf8')).toBe('mine\n');
+    expect(existsSync(join(dir, '.git', 'MERGE_HEAD'))).toBe(false);
+    // The abort's own event can read a merge that has just ended, which the store takes as its end.
+    drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/git/merge`);
   });
 
   test('has no axe violations with the switcher open', async ({ page, instance, isMobile }) => {

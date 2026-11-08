@@ -1,0 +1,50 @@
+// In the same place as the git status and its actions, and as quiet. Its parts
+// are the bar's own flex items, so that the names give up their room first and
+// the count and **Abort merge** never do (NV-11).
+:host {
+  display: contents;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-ui-small);
+  white-space: nowrap;
+}
+
+// With no room left in the bar it goes altogether, and the count stays.
+.what {
+  display: inline-flex;
+  flex-shrink: 1000;
+  gap: var(--ui-space-1);
+  align-items: baseline;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.word,
+.count {
+  flex: none;
+}
+
+// A long press shows the tooltip, not the platform's text selection or callout.
+.branch {
+  min-inline-size: 4ch;
+  overflow: hidden;
+  color: var(--ui-text-default);
+  text-overflow: ellipsis;
+  -webkit-touch-callout: none;
+  user-select: none;
+
+  &:focus-visible {
+    border-radius: var(--ui-radius-control);
+    outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
+    outline-offset: calc(0px - var(--ui-focus-ring-width));
+  }
+}
+
+// The bar's gap is wider than the one the separator needs on each side.
+.separator {
+  flex: none;
+  margin-inline: calc(var(--ui-space-1) - var(--ui-space-2));
+}
+
+button {
+  flex-shrink: 0;
+}

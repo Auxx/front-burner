@@ -124,11 +124,11 @@ rules that every page shares.
   call: the list comes from the same API call as the dashboard's list, DS-17.)_
 - **NV-11** On narrow screens the bar keeps, from start to end: the repository
   name, the branch, the **to push** and **to pull** counts (GA-7), the save
-  status and the user menu. The git actions are in a menu (GA-7). Long
-  repository and branch names are shortened with an ellipsis, and the full name
-  is shown on hover, focus or long press. On narrow screens the repository
-  switcher also has **Dashboard**, since the home icon is not in the bar. _(My
-  call.)_
+  status and the user menu. The git actions and the quiet fetch status are in a
+  menu (GA-7, GA-35). Long repository and branch names are shortened with an
+  ellipsis, and the full name is shown on hover, focus or long press. On narrow
+  screens the repository switcher also has **Dashboard**, since the home icon is
+  not in the bar. _(My call.)_
 - **NV-12** Opening another repository from the repository switcher sends a save
   that is waiting for the open file first (ED-17).
 

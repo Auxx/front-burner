@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 
 import { ButtonComponent } from '../../../controls/components/button/button.component';
 import { PopoverTriggerDirective } from '../../directives/popover-trigger/popover-trigger.directive';
@@ -62,6 +63,29 @@ describe('PopoverComponent', () => {
     expect(popover().hidden).toBe(false);
     expect(popover().closest('.cdk-overlay-container')).not.toBeNull();
     expect(document.activeElement).toBe(button('Try again'));
+  });
+
+  it('opens next to the trigger it is given each time, such as one that replaced the last', async () => {
+    const component = fixture.debugElement.query(By.directive(PopoverComponent)).componentInstance as PopoverComponent;
+    const first = document.body.appendChild(document.createElement('button'));
+    const second = document.body.appendChild(document.createElement('button'));
+    const position = vi.spyOn(first, 'getBoundingClientRect');
+
+    component.toggle(first);
+    await stable();
+    expect(popover().hidden).toBe(false);
+    component.toggle(first);
+    await stable();
+    first.remove();
+    position.mockClear();
+
+    component.toggle(second);
+    await stable();
+    second.remove();
+
+    expect(popover().hidden).toBe(false);
+    expect(popover().closest('.cdk-overlay-container')).not.toBeNull();
+    expect(position).not.toHaveBeenCalled();
   });
 
   it('focuses itself when it holds nothing focusable', async () => {

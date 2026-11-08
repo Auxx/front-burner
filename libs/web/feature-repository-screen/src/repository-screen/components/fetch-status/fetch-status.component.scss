@@ -13,9 +13,9 @@
   display: none;
 }
 
-// Only the button is in the bar (NV-11).
+// Nothing of it is in the bar, not even a gap: the git actions menu opens its panel (NV-11).
 :host(.narrow) {
-  flex: none;
+  display: contents;
 }
 
 .icon {

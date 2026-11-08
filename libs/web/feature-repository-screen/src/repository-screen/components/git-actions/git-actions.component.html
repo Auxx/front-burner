@@ -4,12 +4,13 @@
   @let fetchRuns = fetching();
   @let pushRuns = pushing();
   @let progressKey = progress();
+  @let warningText = warning();
   @if (narrow()) {
     <button uiIconButton
             [uiMenuTrigger]="actions.aria"
-            [label]="t('gitActions')"
+            [label]="warningText === null ? t('gitActions') : t('gitActionsWarning', { warning: warningText })"
             [busy]="fetchRuns || pushRuns">
-      <ui-icon name="repo-fetch" />
+      <ui-icon [name]="warningText === null ? 'repo-fetch' : 'warning'" />
     </button>
     <ui-menu #actions="uiMenu"
              (itemSelected)="choose($event)">
@@ -29,6 +30,12 @@
           <span class="reason">{{ t('reasons.' + pushWhy) }}</span>
         }
       </button>
+      @if (warningText !== null) {
+        <button uiMenuItem="warning">
+          <ui-icon name="warning" />
+          {{ warningText }}
+        </button>
+      }
     </ui-menu>
   } @else {
     @if (fetchWhy !== null) {

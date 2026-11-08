@@ -398,6 +398,25 @@ export class OpenFilesService {
   }
 
   /**
+   * Loads again the file at `path`, whose edits `dropForDiscard` dropped. When
+   * that fails, the editor still shows what was dropped, and a save would bring it
+   * back: the file waits for **Reload**, as after any change on disk (ED-24), or
+   * for the next event to load it. Resolves whether it did not fail.
+   */
+  async reloadDropped(path: string): Promise<boolean> {
+    try {
+      await this.reload(path, { discard: true, keepDraft: true });
+      return true;
+    } catch {
+      const file = this.get(path);
+      if (file) {
+        this.changedOnDisk(path, file.hash());
+      }
+      return false;
+    }
+  }
+
+  /**
    * The file at `path`, which has unsaved edits, changed on disk to content
    * with `hash` (ED-24): its saver waits until **Reload** or **Keep mine**.
    */

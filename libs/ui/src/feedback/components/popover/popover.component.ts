@@ -92,6 +92,11 @@ export class PopoverComponent {
 
   /** Opens or closes it from `trigger`. Called by `uiPopoverTrigger`. */
   toggle(trigger: HTMLElement): void {
+    if (trigger !== this.trigger && !this.open()) {
+      // Its position follows the trigger it was made for, which may be gone by now.
+      this.overlayRef?.dispose();
+      this.overlayRef = undefined;
+    }
     this.trigger = trigger;
     this.open.update(open => !open);
   }
