@@ -52,6 +52,7 @@ import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-s
 import { FirstFileService } from '../../services/first-file/first-file.service';
 import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
 import { LockedKeyService } from '../../services/locked-key/locked-key.service';
+import { MergeStore } from '../../services/merge-store/merge-store.service';
 import { type GitProblem, NetworkJobService } from '../../services/network-job/network-job.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { PaneMemoryService, type SideTool } from '../../services/pane-memory/pane-memory.service';
@@ -140,6 +141,7 @@ const MAX_BADGE_COUNT = 99;
     OpenFilesService,
     DiskChangesService,
     GitStatusStore,
+    MergeStore,
     CommitTicksService,
     CommitAuthorGate,
     CommitService,
@@ -167,6 +169,7 @@ export class RepositoryScreenPage {
   protected readonly openFiles = inject(OpenFilesService);
   private readonly diskChanges = inject(DiskChangesService);
   protected readonly gitStatus = inject(GitStatusStore);
+  protected readonly merge = inject(MergeStore);
   private readonly discards = inject(DiscardService);
   protected readonly jobs = inject(NetworkJobService);
   protected readonly lockedKey = inject(LockedKeyService);

@@ -89,8 +89,7 @@ numbering conventions.
   replayed.
   - The MVP requirements add: `files.changed` (repository ID, the folders whose
     entries changed, or "all" after an operation that may change many, such as a
-    pull or a branch switch; FB-41, ED-23, GA-12), `merge.state` (repository ID,
-    started, file resolved, ended; GC-2, GC-21), `repository.removed`
+    pull or a branch switch; FB-41, ED-23, GA-12), `repository.removed`
     (repository ID; RM-20), `repository.warning` (repository ID, the warnings of
     RM-8), `key.unlocked` (key ID, to the streams of the session that unlocked
     it; RC-16) and `key.locked` (key ID, to the streams of that session, when
@@ -110,6 +109,10 @@ numbering conventions.
     client reads `GET /repositories/:id/git/incoming?path=` for the incoming
     commits and whether they change the open file (GA-34, D-4.2), which also
     works after a reconnect. _(Plan 70's call.)_
+  - There is no `merge.state` event: the status's `mergeInProgress` says when a
+    merge starts or ends, here or elsewhere (GC-2, GC-21), and the client reads
+    `GET /repositories/:id/git/merge` then and on every `git.changed`, which
+    resolving a file also publishes, and after a reconnect. _(Plan 81's call.)_
   - `commit-author.changed` says that the user's commit author, a repository's
     override or the confirmation changed, so that every tab shows who commits.
     It names no repository, as the default concerns them all. _(Plan's call.)_
