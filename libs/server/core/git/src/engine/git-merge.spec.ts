@@ -119,6 +119,35 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
     return oid;
   }
 
+  it('says which commit HEAD is and which the ref keeps', async () => {
+    expect(await merge.recordedCommit(work)).toBeNull();
+
+    const oid = await merge.record(work);
+
+    expect(await merge.head(work)).toBe(git(work, 'rev-parse', 'HEAD'));
+    expect(await merge.recordedCommit(work)).toBe(oid);
+  });
+
+  it('abort ends a merge with git\'s own abort, and keeps a change that was there before it', async () => {
+    write('other.md', 'mine alone\n');
+    commitAll('other');
+    const head = conflictingMerge();
+    git(work, 'merge', '--abort');
+    write('other.md', 'not committed\n');
+    expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+
+    await merge.abort(work);
+
+    expect(existsSync(join(work, '.git', 'MERGE_HEAD'))).toBe(false);
+    expect(git(work, 'rev-parse', 'HEAD')).toBe(head);
+    expect(git(work, 'status', '--porcelain')).toBe('M other.md');
+    expect(readFileSync(join(work, 'other.md'), 'utf8')).toBe('not committed\n');
+  });
+
+  it('abort fails when there is no merge', async () => {
+    await expect(merge.abort(work)).rejects.toThrow('merge --abort');
+  });
+
   it('resetTo ends a merge and puts every file back', async () => {
     const oid = conflictingMerge();
     expect(git(work, 'status', '--porcelain')).toBe(

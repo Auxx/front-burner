@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { GitController } from '../git/git.controller';
 import { GitJobs } from '../jobs/git-jobs.service';
+import { MergeActions } from '../merge/merge-actions.service';
 import { MergeStateService } from '../merge/merge-state.service';
 import { PullService } from '../pull/pull.service';
 import { PushService } from '../push/push.service';
@@ -60,6 +61,7 @@ describe.skipIf(process.platform === 'win32')('FetchService', () => {
         { provide: GitJobs, useValue: harness.gitJobs },
         { provide: SyncStateStore, useValue: harness.syncState },
         { provide: MergeStateService, useValue: {} },
+        { provide: MergeActions, useValue: {} },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
         { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor }

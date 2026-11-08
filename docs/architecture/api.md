@@ -103,7 +103,9 @@ numbering conventions.
     58's call.)_ A fetch publishes it when it is queued, as a push does, and
     when it ends only if a remote branch moved or the stored fetch problem
     changed, so that an idle tab does not read the status after every background
-    fetch. _(Plan 70's call.)_
+    fetch. _(Plan 70's call.)_ Aborting a merge publishes it with
+    `files.changed` for "all", also when the abort fails partway, as it may have
+    changed files. _(Plan 80's call.)_
   - There is no `remote.changed` event: when the status's `behind` changes, the
     client reads `GET /repositories/:id/git/incoming?path=` for the incoming
     commits and whether they change the open file (GA-34, D-4.2), which also

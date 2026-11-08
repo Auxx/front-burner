@@ -22,6 +22,7 @@ import { ZodSerializerDto } from 'nestjs-zod';
 import { FetchScheduler } from '../fetch/fetch-scheduler';
 import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
+import { MergeActions } from '../merge/merge-actions.service';
 import { MergeStateService } from '../merge/merge-state.service';
 import { PullService } from '../pull/pull.service';
 import { sameNameRemote } from '../pull/same-name-remote';
@@ -95,7 +96,8 @@ export class GitController {
     private readonly fetchScheduler: FetchScheduler,
     private readonly gitJobs: GitJobs,
     private readonly syncState: SyncStateStore,
-    private readonly mergeState: MergeStateService
+    private readonly mergeState: MergeStateService,
+    private readonly mergeActions: MergeActions
   ) {}
 
   /**
@@ -159,6 +161,19 @@ export class GitController {
   gitMerge(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<GitMergeState> {
     const root = this.repositories.root(authOf(req).userId, params.id);
     return this.mergeState.read(root).catch(toGitApiError);
+  }
+
+  /**
+   * Aborts the merge in progress: the branch, the files and the index go back to
+   * how they were before the pull, and the upstream's commits show as to pull
+   * again (GC-24). Refused with `no-merge-in-progress` when there is none, also
+   * for the second of two aborts.
+   */
+  @Post('merge/abort')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  abortMerge(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<void> {
+    return this.mergeActions.abort(authOf(req).userId, params.id);
   }
 
   /**

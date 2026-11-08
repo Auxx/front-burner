@@ -27,11 +27,15 @@ GC-27); `docs/architecture/data.md` A-4.5a; D-4.5, D-4.6.
   apply.
 - The commit to go back to is `sync_state.recorded_commit`, or else the ref.
   With neither, as after a restore that lost them, it is `git merge --abort`
-  (A-5.12).
-- It calls `SyncStateStore.restoreEarlier`, then `GitMerge.keepRecord` with what
-  that returns, or `forgetRecord` for `null`, so that **Undo merge** of an
-  earlier merge comes back (GC-25). It publishes `files.changed` with `folders:
-  'all'` and `git.changed`.
+  (A-5.12). So it is with a record that is not `HEAD`, which a merge never
+  moves: that record is not this merge's, as after a restore of an older
+  database, and going back to it would take later commits off the branch. It
+  then stays as it is _(implementation's call)_.
+- It calls `MergeRecord.restoreEarlier`, which changes the ref and then
+  `sync_state`, so that **Undo merge** of an earlier merge comes back (GC-25).
+  It publishes `files.changed` with `folders: 'all'` and `git.changed`, also
+  when the abort fails partway, as it may have changed files _(implementation's
+  call)_.
 - A save does not carry the hash it was based on (D-1.3), so a save from another
   tab or device that reaches the backend just after the abort is written to the
   clean file. That is accepted _(plan's call)_: it is what last-write-wins

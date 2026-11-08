@@ -87,13 +87,22 @@ export class GitMerge {
     @Inject(GIT_OPTIONS) private readonly options: GitOptions
   ) {}
 
+  /** The current commit. */
+  async head(workingCopy: string): Promise<string> {
+    return (await this.local.checked(workingCopy, [ 'rev-parse', '--verify', 'HEAD' ])).trim();
+  }
+
   /** Keeps the current commit under `PRE_MERGE_REF`; gives it. */
   async record(workingCopy: string): Promise<string> {
-    const oid = (
-      await this.local.checked(workingCopy, [ 'rev-parse', '--verify', 'HEAD' ])
-    ).trim();
+    const oid = await this.head(workingCopy);
     await this.keepRecord(workingCopy, oid);
     return oid;
+  }
+
+  /** The commit kept under `PRE_MERGE_REF`, or `null` when there is none. */
+  async recordedCommit(workingCopy: string): Promise<string | null> {
+    const result = await this.local.run(workingCopy, [ 'rev-parse', '-q', '--verify', `${PRE_MERGE_REF}^{commit}` ]);
+    return exitAsBoolean(result, 'rev-parse') ? result.stdout.trim() : null;
   }
 
   /** Drops the ref; the commit is then up to garbage collection. */
@@ -112,6 +121,14 @@ export class GitMerge {
    */
   async resetTo(workingCopy: string, oid: string): Promise<void> {
     await this.local.checked(workingCopy, [ 'reset', '-q', '--hard', oid ], { timeoutMs: this.options.gitTimeoutMs });
+  }
+
+  /**
+   * `git merge --abort`, for a merge with no record to go back to (A-5.12). Keeps
+   * changes that were there before the merge, unlike `resetTo`.
+   */
+  async abort(workingCopy: string): Promise<void> {
+    await this.local.checked(workingCopy, [ 'merge', '--abort' ], { timeoutMs: this.options.gitTimeoutMs });
   }
 
   /**
@@ -292,8 +309,7 @@ export class GitMerge {
     if (fastForward) {
       return { kind: 'fast-forward', commits };
     }
-    const head = (await this.local.checked(workingCopy, [ 'rev-parse', 'HEAD' ])).trim();
-    return { kind: 'merged', commits, oid: head };
+    return { kind: 'merged', commits, oid: await this.head(workingCopy) };
   }
 
   /** Neither the branch nor its upstream has every commit of the other. */

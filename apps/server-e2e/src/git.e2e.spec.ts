@@ -877,6 +877,39 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
     });
   });
 
+  it('aborting a pull that conflicts puts everything back, and the commits can be pulled again', async () => {
+    const bare = remote('aborted');
+    const { id, workingCopy } = await client.add('aborted', `${publicGit.url}/aborted.git`);
+    pushFileFromElsewhere(bare, 'both.md', 'theirs\n');
+    pushFileFromElsewhere(bare, 'added-by-merge.md', 'added\n');
+    writeFileSync(join(workingCopy, 'both.md'), 'mine\n');
+    git(workingCopy, 'add', 'both.md');
+    commitIn(workingCopy, 'mine');
+    const head = gitOutput(workingCopy, 'rev-parse', 'HEAD');
+    const abort = () => client.call(`/repositories/${id}/git/merge/abort`, { method: 'POST' });
+    expect((await abort()).status).toBe(409);
+
+    expect((await client.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
+    writeFileSync(join(workingCopy, 'both.md'), 'an edit that goes too\n');
+
+    expect((await abort()).status).toBe(204);
+
+    expect(gitOutput(workingCopy, 'rev-parse', 'HEAD')).toBe(head);
+    expect(gitOutput(workingCopy, 'status', '--porcelain')).toBe('');
+    expect(readFileSync(join(workingCopy, 'both.md'), 'utf8')).toBe('mine\n');
+    expect(existsSync(join(workingCopy, 'added-by-merge.md'))).toBe(false);
+    expect(await (await client.call(`/repositories/${id}/git/status`)).json()).toMatchObject({
+      ahead: 1,
+      behind: 2,
+      changes: [],
+      mergeInProgress: false
+    });
+    const second = await abort();
+    expect(second.status).toBe(409);
+    expect(await second.json()).toMatchObject({ code: 'no-merge-in-progress' });
+    expect((await client.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
+  });
+
   it.each([ [ 'a full clone', 'full' ], [ 'a single-branch clone', 'main' ] ] as const)(
     'a rejected branch can pull and push, in %s',
     async (_label, clone) => {
