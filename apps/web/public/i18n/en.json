@@ -606,6 +606,7 @@
   "web-feature-repository-screen.LockedKeyBannerComponent.message": "{{ name }} is locked. Unlock it to fetch, pull and push.",
   "web-feature-repository-screen.LockedKeyBannerComponent.unlock": "Unlock",
   "web-feature-repository-screen.LockedKeyBannerComponent.dismiss": "Dismiss",
+  "web-feature-repository-screen.NetworkJobService.noNewCommits": "No new commits",
   "web-feature-repository-screen.NetworkJobService.pushed": "{count, plural, one {Pushed # commit to {upstream}} other {Pushed # commits to {upstream}}}",
   "web-feature-repository-screen.NetworkJobService.dismiss": "Dismiss",
   "web-feature-repository-screen.gitProblem.key-locked": "Unlock {{ keyName }} to continue.",
