@@ -4,6 +4,7 @@ export * from './egress/egress-proxy';
 export * from './engine/git-diff';
 export * from './engine/git-engine';
 export * from './engine/git-errors';
+export * from './engine/git-merge';
 export * from './engine/git-status';
 export * from './engine/local-git';
 export * from './git.module';
