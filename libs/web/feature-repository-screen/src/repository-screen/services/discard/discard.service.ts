@@ -118,7 +118,7 @@ export class DiscardService {
         this.openFiles.close(path, { dropPending: true, keepDraft: true });
         this.firstFile.deleted(repositoryId, path);
       } else {
-        reloaded = await this.reload(path);
+        reloaded = await this.openFiles.reloadDropped(path);
       }
       dropped[index]?.release();
       if (reloaded) {
@@ -128,24 +128,6 @@ export class DiscardService {
         release();
       }
     }));
-  }
-
-  /**
-   * Loads the file again. When that fails, the editor still shows what was
-   * discarded, and a save would bring it back: the file waits for **Reload**, as
-   * after any change on disk (ED-24), or for the next event to load it.
-   */
-  private async reload(path: string): Promise<boolean> {
-    try {
-      await this.openFiles.reload(path, { discard: true, keepDraft: true });
-      return true;
-    } catch {
-      const file = this.openFiles.get(path);
-      if (file) {
-        this.openFiles.changedOnDisk(path, file.hash());
-      }
-      return false;
-    }
   }
 
   private routePath(): string {

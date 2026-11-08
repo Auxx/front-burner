@@ -51,6 +51,7 @@ describe('MergeStore', () => {
   let events: Subject<PushEvent>;
   let reconnected: Subject<void>;
   let repository: ReturnType<typeof signal<{ id: number; }>>;
+  let sessionState: ReturnType<typeof signal<string>>;
   let statusStore: GitStatusStore;
   let store: MergeStore;
 
@@ -60,6 +61,7 @@ describe('MergeStore', () => {
     TestBed.tick();
   };
   const gitChanged = (repositoryId = 12) => events.next({ type: 'git.changed', repositoryId });
+  const resolved = () => store.state()?.files.filter(file => file.resolved).length ?? 0;
 
   /** Follows repository 12, whose status says whether a merge is in progress. */
   async function start(merging: boolean): Promise<void> {
@@ -75,13 +77,14 @@ describe('MergeStore', () => {
     events = new Subject();
     reconnected = new Subject();
     repository = signal({ id: 12 });
+    sessionState = signal('ready');
     TestBed.configureTestingModule({
       providers: [
         GitStatusStore,
         MergeStore,
         { provide: GitApi, useValue: { gitStatus, gitMerge } },
         { provide: PushChannelService, useValue: { events, reconnected } },
-        { provide: RepositorySessionService, useValue: { state: signal('ready'), repository } }
+        { provide: RepositorySessionService, useValue: { state: sessionState, repository } }
       ]
     });
     statusStore = TestBed.inject(GitStatusStore);
@@ -98,7 +101,7 @@ describe('MergeStore', () => {
     expect(gitMerge).toHaveBeenCalledExactlyOnceWith(12);
     expect(store.merging()).toBe(true);
     expect(store.state()?.from).toBe('origin/main');
-    expect(store.resolvedCount()).toBe(2);
+    expect(resolved()).toBe(2);
   });
 
   it('reads nothing without a merge', async () => {
@@ -107,7 +110,7 @@ describe('MergeStore', () => {
     expect(gitMerge).not.toHaveBeenCalled();
     expect(store.merging()).toBe(false);
     expect(store.state()).toBeNull();
-    expect(store.resolvedCount()).toBe(0);
+    expect(resolved()).toBe(0);
   });
 
   it('is merging before the first read has been answered', async () => {
@@ -152,7 +155,7 @@ describe('MergeStore', () => {
     await settle();
 
     expect(gitMerge).toHaveBeenCalledOnce();
-    expect(store.resolvedCount()).toBe(3);
+    expect(resolved()).toBe(3);
   });
 
   it('makes good a merge it missed, on reconnect', async () => {
@@ -175,7 +178,7 @@ describe('MergeStore', () => {
     await settle();
 
     expect(gitMerge).toHaveBeenCalledOnce();
-    expect(store.resolvedCount()).toBe(2);
+    expect(resolved()).toBe(2);
   });
 
   it('ignores the git.changed of another repository', async () => {
@@ -285,6 +288,38 @@ describe('MergeStore', () => {
     expect(store.state()?.files).toHaveLength(1);
   });
 
+  it('does not try a refused read again', async () => {
+    gitMerge.mockReturnValue(throwError(() => apiError(404, 'repository-not-found')));
+    await start(true);
+
+    await vi.advanceTimersByTimeAsync(STATUS_RETRY_MS * 2);
+    await settle();
+
+    expect(gitMerge).toHaveBeenCalledOnce();
+    expect(store.merging()).toBe(true);
+  });
+
+  it('reads nothing while the session does not have the repository ready, and again once it has', async () => {
+    gitMerge.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 503 })));
+    await start(true);
+    gitMerge.mockClear();
+
+    sessionState.set('not-openable');
+    await settle();
+    gitChanged();
+    reconnected.next();
+    await vi.advanceTimersByTimeAsync(STATUS_RETRY_MS * 2);
+    await settle();
+
+    expect(gitMerge).not.toHaveBeenCalled();
+
+    sessionState.set('ready');
+    await settle();
+
+    expect(gitMerge).toHaveBeenCalledOnce();
+    expect(store.state()).not.toBeNull();
+  });
+
   it('has nothing after the merge ended', async () => {
     await start(true);
 
@@ -293,7 +328,7 @@ describe('MergeStore', () => {
 
     // Before the effects run: nothing may show the ended merge for a moment.
     expect(store.state()).toBeNull();
-    expect(store.resolvedCount()).toBe(0);
+    expect(resolved()).toBe(0);
     await settle();
     expect(store.state()).toBeNull();
 

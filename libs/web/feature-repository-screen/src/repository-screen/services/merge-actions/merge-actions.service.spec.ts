@@ -1,6 +1,8 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
+import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import type {
   CurrentUser,
   FileContent,
@@ -17,6 +19,7 @@ import { apiError, dialogButton, overlay, settleDialog } from '../../../testing/
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { MergeStore } from '../merge-store/merge-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
@@ -25,6 +28,7 @@ import { MergeActionsService } from './merge-actions.service';
 
 const K = 'web-feature-repository-screen.AbortMergeDialog';
 const ada = { id: 4 } as CurrentUser;
+const RESTORED = 'b'.repeat(64);
 
 function conflicting(...paths: string[]): GitMergeState {
   return {
@@ -51,11 +55,17 @@ describe('MergeActionsService', () => {
   /** Every request that changes or reads files, in order. */
   let requests: string[];
   let abortAnswer: () => Observable<void>;
+  let mergeAnswer: () => Observable<GitMergeState>;
+  let readAnswer: (path: string) => Observable<FileContent>;
   let saves: { request: SaveFileRequest; answer: Subject<FileState>; }[];
   let statusRefresh: ReturnType<typeof vi.fn>;
   let mergeRefresh: ReturnType<typeof vi.fn>;
   let toast: { show: ReturnType<typeof vi.fn>; };
-  let followed: ReturnType<typeof signal<number | null>>;
+  let repository: ReturnType<typeof signal<{ id: number; }>>;
+  let routePath: string;
+  /** The paths marked as this tab's own change, in order, and those released. */
+  let own: string[];
+  let released: string[];
 
   /** Asks to abort, and presses **Abort merge**. */
   async function confirm(): Promise<{ done: Promise<void>; }> {
@@ -66,9 +76,11 @@ describe('MergeActionsService', () => {
     return { done };
   }
 
+  /** Opens `path` as loaded from disk; later reads answer what the abort restored. */
   async function opened(path: string) {
     const file = await openFiles.open(path);
     requests = [];
+    readAnswer = read => of(fileContent(read, { content: 'restored', hash: RESTORED }));
     return file;
   }
 
@@ -77,11 +89,16 @@ describe('MergeActionsService', () => {
     state = signal<GitMergeState | null>(conflicting('guide.md', 'notes.md'));
     requests = [];
     abortAnswer = () => of(undefined);
+    mergeAnswer = () => of(conflicting('guide.md'));
+    readAnswer = path => of(fileContent(path));
     saves = [];
     statusRefresh = vi.fn(() => Promise.resolve());
     mergeRefresh = vi.fn(() => Promise.resolve());
     toast = { show: vi.fn() };
-    followed = signal<number | null>(12);
+    repository = signal({ id: 12 });
+    routePath = '';
+    own = [];
+    released = [];
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
@@ -94,13 +111,34 @@ describe('MergeActionsService', () => {
         OpenFilesService,
         provideMemoryDrafts(drafts),
         { provide: ToastService, useValue: toast },
-        { provide: GitStatusStore, useValue: { refresh: statusRefresh, followed } },
+        { provide: GitStatusStore, useValue: { refresh: statusRefresh } },
         { provide: MergeStore, useValue: { state, refresh: mergeRefresh } },
-        { provide: RepositorySessionService, useValue: { repository: signal({ id: 12 }) } },
+        { provide: RepositorySessionService, useValue: { repository } },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
+        {
+          provide: EntryCommandsService,
+          useValue: {
+            ownChange: (path: string) => {
+              own.push(path);
+              return () => released.push(path);
+            }
+          }
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            get snapshot() {
+              return { paramMap: convertToParamMap({ path: routePath }) };
+            }
+          }
+        },
         {
           provide: GitApi,
           useValue: {
+            gitMerge: () => {
+              requests.push('merge');
+              return mergeAnswer();
+            },
             abortMerge: () => {
               requests.push('abort');
               return abortAnswer();
@@ -110,7 +148,10 @@ describe('MergeActionsService', () => {
         {
           provide: FilesApi,
           useValue: {
-            readFile: (_id: number, query: { path: string; }): Observable<FileContent> => of(fileContent(query.path)),
+            readFile: (_id: number, query: { path: string; }) => {
+              requests.push(`read ${query.path}`);
+              return readAnswer(query.path);
+            },
             saveFile: (_id: number, request: SaveFileRequest) => {
               requests.push(`save ${request.content}`);
               const answer = new Subject<FileState>();
@@ -146,6 +187,7 @@ describe('MergeActionsService', () => {
     expect(requests).toEqual([]);
     expect(file.saver.waiting()).toBe('mine');
     expect(statusRefresh).not.toHaveBeenCalled();
+    expect(own).toEqual([]);
   });
 
   it('aborts, and reads the status', async () => {
@@ -166,7 +208,7 @@ describe('MergeActionsService', () => {
       await (await confirm()).done;
       await vi.advanceTimersByTimeAsync(60_000);
 
-      expect(requests).toEqual([ 'abort' ]);
+      expect(requests).toEqual([ 'abort', 'read guide.md' ]);
       expect(file.saver.unsaved()).toBe(false);
     } finally {
       vi.useRealTimers();
@@ -188,7 +230,76 @@ describe('MergeActionsService', () => {
     saves[0].answer.complete();
     await done;
 
-    expect(requests).toEqual([ 'save mine', 'abort' ]);
+    expect(requests).toEqual([ 'save mine', 'abort', 'read guide.md' ]);
+  });
+
+  it('loads an open conflicting file again before its saves go on, without any event', async () => {
+    const file = await opened('guide.md');
+    const revision = file.revision();
+    file.saver.edit(() => 'mine');
+
+    await (await confirm()).done;
+
+    expect(file.file.content).toBe('restored');
+    expect(file.revision()).toBe(revision + 1);
+    expect(file.saver.held()).toBe(false);
+    expect(file.saver.unsaved()).toBe(false);
+  });
+
+  it('loads it again also when its content on disk is what it last read', async () => {
+    const file = await opened('guide.md');
+    readAnswer = path => of(fileContent(path));
+    const revision = file.revision();
+    file.saver.edit(() => 'mine');
+
+    await (await confirm()).done;
+
+    expect(file.revision()).toBe(revision + 1);
+    expect(file.saver.unsaved()).toBe(false);
+  });
+
+  it('makes the file wait for Reload when it cannot be loaded again, so that typing saves nothing', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const file = await opened('guide.md');
+      readAnswer = () => throwError(() => new HttpErrorResponse({ status: 503 }));
+
+      await (await confirm()).done;
+
+      expect(file.changed()).not.toBeNull();
+
+      file.saver.edit(() => '<<<<<<< main');
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(requests.filter(request => request.startsWith('save'))).toEqual([]);
+      expect(released).toEqual([ 'guide.md' ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('counts the files as its own change from the request until after the reload', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await opened('guide.md');
+      routePath = 'notes.md';
+      const answer = new Subject<void>();
+      abortAnswer = () => answer;
+
+      const { done } = await confirm();
+
+      expect(own).toEqual([ 'guide.md', 'notes.md' ]);
+      expect(released).toEqual([]);
+
+      answer.complete();
+      await done;
+
+      expect(released).toEqual([]);
+      await vi.advanceTimersByTimeAsync(OWN_CHANGE_MS);
+      expect(released.toSorted()).toEqual([ 'guide.md', 'notes.md' ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not touch a file that does not conflict', async () => {
@@ -198,18 +309,49 @@ describe('MergeActionsService', () => {
     await (await confirm()).done;
 
     expect(file.saver.waiting()).toBe('mine');
+    expect(own).not.toContain('other.md');
   });
 
-  it('drops every unsaved file when the merge could not be read', async () => {
+  it('reads the merge first when it has not been read, and drops only what it names', async () => {
     state.set(null);
-    const file = await opened('guide.md');
-    file.saver.edit(() => 'mine');
+    const conflict = await opened('guide.md');
+    const other = await opened('other.md');
+    conflict.saver.edit(() => 'mine');
+    other.saver.edit(() => 'theirs');
+    drafts.drafts.set('4/12/closed.md', { content: '<<<<<<< main', savedAt: '2026-11-08T10:00:00.000Z' });
+    mergeAnswer = () => of(conflicting('guide.md', 'closed.md'));
 
     await (await confirm()).done;
 
-    expect(mergeRefresh).toHaveBeenCalled();
-    expect(file.saver.unsaved()).toBe(false);
-    expect(requests).toEqual([ 'abort' ]);
+    expect(requests).toEqual([ 'merge', 'abort', 'read guide.md' ]);
+    expect(conflict.saver.unsaved()).toBe(false);
+    expect(other.saver.waiting()).toBe('theirs');
+    expect(drafts.at('closed.md')).toBeUndefined();
+  });
+
+  it('says why and changes nothing when the merge cannot be read', async () => {
+    state.set(null);
+    const file = await opened('guide.md');
+    file.saver.edit(() => 'mine');
+    mergeAnswer = () => throwError(() => apiError(500, 'merge-abort-failed'));
+
+    await (await confirm()).done;
+
+    expect(requests).toEqual([ 'merge' ]);
+    expect(file.saver.waiting()).toBe('mine');
+    expect(toast.show).toHaveBeenCalledOnce();
+    expect(service.aborting()).toBe(false);
+  });
+
+  it('says nothing when the read finds that the merge ended', async () => {
+    state.set(null);
+    mergeAnswer = () => throwError(() => apiError(409, 'no-merge-in-progress'));
+
+    await (await confirm()).done;
+
+    expect(requests).toEqual([ 'merge' ]);
+    expect(toast.show).not.toHaveBeenCalled();
+    expect(statusRefresh).toHaveBeenCalled();
   });
 
   it('deletes the drafts of conflicting files, and keeps others', async () => {
@@ -244,6 +386,7 @@ describe('MergeActionsService', () => {
     expect(file.saver.held()).toBe(false);
     expect(file.saver.unsaved()).toBe(true);
     expect(requests).toEqual([ 'abort', 'save mine' ]);
+    expect(released).toEqual([ 'guide.md' ]);
   });
 
   it('says why an abort failed, and the merge stays', async () => {
@@ -261,6 +404,26 @@ describe('MergeActionsService', () => {
     expect(service.aborting()).toBe(false);
   });
 
+  it('treats an abort answered no merge as the merge having ended elsewhere', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const file = await opened('guide.md');
+      file.saver.edit(() => '<<<<<<< main');
+      file.preview.read = () => '<<<<<<< main';
+      abortAnswer = () => throwError(() => apiError(409, 'no-merge-in-progress'));
+
+      await (await confirm()).done;
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(requests).toEqual([ 'abort', 'read guide.md' ]);
+      expect(file.saver.unsaved()).toBe(false);
+      expect(file.file.content).toBe('restored');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('asks once, however often it is chosen', async () => {
     const first = service.abort();
     await settleDialog();
@@ -273,13 +436,45 @@ describe('MergeActionsService', () => {
     await first;
   });
 
-  it('aborts nothing after a switch to another repository', async () => {
+  it('aborts nothing after a switch to another repository while it asks', async () => {
     const done = service.abort();
     await settleDialog();
-    followed.set(13);
+    repository.set({ id: 13 });
     dialogButton(`${K}.abort`)?.click();
     await done;
 
     expect(requests).toEqual([]);
+  });
+
+  it('leaves the other repository\'s file alone after a switch while the merge is read', async () => {
+    state.set(null);
+    const file = await opened('guide.md');
+    file.saver.edit(() => 'mine');
+    const answer = new Subject<GitMergeState>();
+    mergeAnswer = () => answer;
+
+    const { done } = await confirm();
+    repository.set({ id: 13 });
+    answer.next(conflicting('guide.md'));
+    answer.complete();
+    await done;
+
+    expect(requests).toEqual([ 'merge' ]);
+    expect(own).toEqual([]);
+    expect(file.saver.waiting()).toBe('mine');
+  });
+
+  it('does not load anything of the other repository after a switch while it aborts', async () => {
+    await opened('guide.md');
+    const answer = new Subject<void>();
+    abortAnswer = () => answer;
+
+    const { done } = await confirm();
+    repository.set({ id: 13 });
+    answer.complete();
+    await done;
+
+    expect(requests).toEqual([ 'abort' ]);
+    expect(released).toEqual([ 'guide.md' ]);
   });
 });

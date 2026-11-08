@@ -1,4 +1,17 @@
-import { ChangeDetectionStrategy, Component, input, output, viewChild } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  effect,
+  ElementRef,
+  inject,
+  Injector,
+  input,
+  output,
+  untracked,
+  viewChild
+} from '@angular/core';
 import type {
   CurrentUser,
   GitMergeState,
@@ -78,6 +91,32 @@ export class RepositoryBarComponent {
 
   private readonly gitActions = viewChild(GitActionsComponent);
   private readonly mergeSummary = viewChild(MergeSummaryComponent);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
+
+  constructor() {
+    this.keepFocusWhenActionsSwap();
+  }
+
+  /**
+   * A merge starting or ending, also elsewhere, replaces what offers the git
+   * actions. This runs before the bar shows it, so what is focused is still there.
+   */
+  private keepFocusWhenActionsSwap(): void {
+    let wasMerging = this.merging();
+    effect(() => {
+      const merging = this.merging();
+      if (merging !== wasMerging && untracked(() => this.actionsHaveFocus())) {
+        afterNextRender(() => this.focusActions(), { injector: this.injector });
+      }
+      wasMerging = merging;
+    });
+  }
+
+  private actionsHaveFocus(): boolean {
+    return this.host.querySelector('rs-merge-summary, rs-git-actions')?.contains(this.document.activeElement) === true;
+  }
 
   /** Gives the focus to what offers the git actions, when what had it in the bar went away. */
   protected focusActions(): void {

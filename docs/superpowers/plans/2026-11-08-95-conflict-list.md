@@ -83,7 +83,7 @@ AC-FILE-001.20); `docs/requirements/editor.md` (ED-25).
 
 - [ ] **Step 1: Write the failing tests**: `AC-GIT-003.1: a pull that conflicts
       on guide.md switches the repository screen to conflict resolution, with
-      Merging origin/main into main and 0 of 1 files resolved; another device
+      Merging origin/main into main and 0 of 1 file resolved; another device
       that opens the repository sees the same screen` (end to end, two
       contexts); `AC-FILE-001.20: while a merge with conflicts is in progress,
       the file tree is replaced by the list of conflicting files, and the API

@@ -1,7 +1,7 @@
 import { computed, DestroyRef, effect, inject, Injectable, signal, untracked } from '@angular/core';
 import type { GitMergeState } from '@front-burner/shared-contracts';
 import { GitApi } from '@front-burner/web-api-client';
-import { PushChannelService, toApiError } from '@front-burner/web-core';
+import { isRefusal, PushChannelService, toApiError } from '@front-burner/web-core';
 import { finalize, Subscription } from 'rxjs';
 
 import { GitStatusStore, STATUS_RETRY_MS } from '../git-status-store/git-status-store.service';
@@ -15,8 +15,9 @@ import { GitStatusStore, STATUS_RETRY_MS } from '../git-status-store/git-status-
  * after every (re)connect, but not on `files.changed`, as that would read the
  * whole merge after every save. A new read cancels the one still running.
  *
- * A read that fails keeps what is known and is tried again after
- * `STATUS_RETRY_MS`, since a normal branch would offer **Push**. A read answered
+ * It reads only while the session has the repository open and ready. A read that
+ * fails keeps what is known, since a normal branch would offer **Push**, and is
+ * tried again after `STATUS_RETRY_MS`, unless it was refused. A read answered
  * `no-merge-in-progress` means that the merge just ended elsewhere: that counts
  * until the status says there is no merge or an event says something changed.
  * It has to last that long, as the status also says yes during a rebase, which
@@ -40,8 +41,6 @@ export class MergeStore {
     const read = this.read();
     return this.merging() && read?.repositoryId === this.status.followed() ? read.state : null;
   });
-  /** How many of its conflicting files are resolved. */
-  readonly resolvedCount = computed(() => this.state()?.files.filter(file => file.resolved).length ?? 0);
 
   private subscription: Subscription | undefined;
   private request: Subscription | undefined;
@@ -54,17 +53,20 @@ export class MergeStore {
       }
     });
     effect(() => {
-      const repositoryId = this.status.followed();
+      const followed = this.status.followed();
+      const readable = this.status.readable();
       const merging = this.merging();
       untracked(() => {
         // Here and not earlier: the page tells the push channel what it views first (A-3.12).
-        if (repositoryId !== null) {
+        if (followed !== null) {
           this.subscription ??= this.follow();
         }
-        if (merging) {
+        if (merging && readable !== null) {
           void this.refresh();
-        } else {
-          this.cancel();
+          return;
+        }
+        this.cancel();
+        if (!merging) {
           this.read.set(null);
         }
       });
@@ -82,7 +84,7 @@ export class MergeStore {
    */
   refresh(): Promise<void> {
     this.cancel();
-    const repositoryId = this.status.followed();
+    const repositoryId = this.status.readable();
     if (repositoryId === null || !this.merging()) {
       return Promise.resolve();
     }
@@ -98,7 +100,7 @@ export class MergeStore {
     if (toApiError(error).code === 'no-merge-in-progress') {
       this.ended.set(true);
       void this.status.refresh();
-    } else {
+    } else if (!isRefusal(error)) {
       this.retryTimer = setTimeout(() => void this.refresh(), STATUS_RETRY_MS);
     }
   }

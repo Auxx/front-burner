@@ -55,7 +55,7 @@ export class GitStatusStore {
   readonly changeCount = computed(() => this.current()?.changes.length ?? 0);
 
   /** The repository to read: the followed one, while the session has it open and ready. */
-  private readonly readable = computed(() => {
+  readonly readable = computed(() => {
     const id = this.repositoryId();
     return this.session.state() === 'ready' && this.session.repository()?.id === id ? id : null;
   });

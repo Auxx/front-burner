@@ -130,6 +130,33 @@ describe('RepositoryBarComponent', () => {
     bar().remove();
   });
 
+  it.each([ true, false ])('keeps the focus in the bar when the actions swap (merge ends: %s)', async ends => {
+    await show();
+    fixture.componentRef.setInput('merging', ends);
+    await settle(fixture);
+    document.body.append(bar());
+    (bar().querySelector('rs-merge-summary button, rs-git-actions button') as HTMLButtonElement).focus();
+
+    fixture.componentRef.setInput('merging', !ends);
+    await settle(fixture);
+
+    expect(document.activeElement?.closest(ends ? 'rs-git-actions' : 'rs-merge-summary')).not.toBeNull();
+    bar().remove();
+  });
+
+  it('leaves the focus where it is when it was elsewhere while the actions swap', async () => {
+    await show();
+    document.body.append(bar());
+    const name = bar().querySelector('h1 button') as HTMLButtonElement;
+    name.focus();
+
+    fixture.componentRef.setInput('merging', true);
+    await settle(fixture);
+
+    expect(document.activeElement).toBe(name);
+    bar().remove();
+  });
+
   it('shows no save status for a repository that cannot be opened', async () => {
     await show({ withFiles: false });
 
