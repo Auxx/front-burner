@@ -14,6 +14,7 @@ import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import request from 'supertest';
+import { FetchScheduler } from '../fetch/fetch-scheduler';
 import { FetchService } from '../fetch/fetch.service';
 import { GitController } from '../git/git.controller';
 import { GitJobs } from '../jobs/git-jobs.service';
@@ -48,6 +49,7 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
         { provide: EventsHub, useValue: harness.events },
         { provide: PushService, useValue: harness.service },
         { provide: FetchService, useValue: harness.fetchService },
+        { provide: FetchScheduler, useValue: {} },
         { provide: GitJobs, useValue: harness.gitJobs },
         { provide: SyncStateStore, useValue: harness.syncState },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },

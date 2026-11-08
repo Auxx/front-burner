@@ -21,6 +21,7 @@ import { SyncStateStore } from '../state/sync-state.store';
 import { insertRepository } from '../testing/fixtures';
 import { git, trustTestCertificate } from '../testing/git-fixtures';
 import { PushHarness } from '../testing/push-harness';
+import { FetchScheduler } from './fetch-scheduler';
 import { FETCH_JOB_TYPE } from './fetch.job';
 import { FetchService } from './fetch.service';
 
@@ -51,6 +52,7 @@ describe.skipIf(process.platform === 'win32')('FetchService', () => {
         { provide: EventsHub, useValue: harness.events },
         { provide: PushService, useValue: harness.service },
         { provide: FetchService, useValue: harness.fetchService },
+        { provide: FetchScheduler, useValue: {} },
         { provide: GitJobs, useValue: harness.gitJobs },
         { provide: SyncStateStore, useValue: harness.syncState },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
