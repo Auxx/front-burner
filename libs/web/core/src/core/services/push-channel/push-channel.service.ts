@@ -24,7 +24,8 @@ const EVENT_TYPES: Record<PushEvent['type'], true> = {
   'files.changed': true,
   'git.changed': true,
   'commit-author.changed': true,
-  'key.unlocked': true
+  'key.unlocked': true,
+  'key.locked': true
 };
 
 function toPushEvent(type: string, data: string): PushEvent | undefined {

@@ -4,11 +4,20 @@
                         [narrow]="narrow()" />
 @if (withFiles()) {
   <rs-git-status-summary [status]="gitStatus()" />
-  <rs-git-actions [status]="gitStatus()"
+  <rs-git-actions #gitActions
+                  [status]="gitStatus()"
                   [running]="running()"
                   [narrow]="narrow()"
                   (fetch)="fetch.emit()"
                   (push)="push.emit()" />
+  <rs-fetch-status [problem]="gitStatus()?.fetchProblem ?? null"
+                   [lockedKeyName]="lockedKeyName()"
+                   [running]="running()"
+                   [narrow]="narrow()"
+                   (retry)="retryFetch.emit()"
+                   (fix)="fixFetch.emit($event)"
+                   (unlock)="unlock.emit()"
+                   (vacate)="gitActions.focus()" />
   <rs-save-status class="status"
                   [status]="saveStatus()" />
 }

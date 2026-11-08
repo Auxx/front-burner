@@ -32,12 +32,19 @@ interface Followed {
   readonly operation: GitNetworkJobType;
   readonly jobId: number;
   readonly own: boolean;
+  /** Started to bring the status up to date, not by the user: its end says nothing. */
+  readonly background?: boolean;
 }
 
 /** The network job being asked for, until the backend answers. */
 interface Starting {
   readonly repositoryId: number;
   readonly operation: GitNetworkJobType;
+}
+
+/** A network job waiting for the running one to end. */
+interface Waiting extends Starting {
+  readonly background: boolean;
 }
 
 /** What differs between operations: how the job is started, and what its success says. */
@@ -112,6 +119,7 @@ export class NetworkJobService {
   private readonly followed = signal<Followed | null>(null);
   private readonly starting = signal<Starting | null>(null);
   private readonly shownProblem = signal<GitProblem | null>(null);
+  private readonly waiting = signal<readonly Waiting[]>([]);
   /** The jobs that have ended, so that a status read before their end does not take them up again. */
   private readonly ended = new Set<number>();
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -142,6 +150,18 @@ export class NetworkJobService {
           clearTimeout(this.retryTimer);
           this.followed.set(null);
           this.shownProblem.set(null);
+          this.waiting.set([]);
+        });
+      }
+    });
+    effect(() => {
+      const [ next, ...rest ] = this.waiting();
+      if (next !== undefined && this.running() === null) {
+        untracked(() => {
+          this.waiting.set(rest);
+          if (next.repositoryId === this.store.followed()) {
+            void this.startNow(next.operation, next.background);
+          }
         });
       }
     });
@@ -192,25 +212,60 @@ export class NetworkJobService {
   }
 
   /**
+   * As `start`, for what must not be lost to a job that runs meanwhile, such as
+   * the operation a fix runs again (RC-9): it then waits for that job's end, and
+   * for what already waits, unless another repository is opened meanwhile. A
+   * `background` job only brings the status up to date: it says nothing of how
+   * it ended, and asks for no passphrase. Settles once it has started, or waits.
+   */
+  async startWhenFree(operation: GitNetworkJobType, options: { background?: boolean; } = {}): Promise<void> {
+    const repositoryId = this.store.followed();
+    const background = options.background ?? false;
+    if (repositoryId === null) {
+      return;
+    }
+    if (this.running() === null && this.waiting().length === 0) {
+      await this.startNow(operation, background);
+    } else {
+      this.waiting.update(waiting => [ ...waiting, { repositoryId, operation, background } ]);
+    }
+  }
+
+  private async startNow(operation: GitNetworkJobType, background: boolean): Promise<void> {
+    if (background) {
+      await this.request(operation, false, true);
+    } else {
+      await this.start(operation);
+    }
+  }
+
+  /**
    * Asks the backend to start the job; resolves the refusal's params when it
    * refused because the key is locked and `quietLock` is set, which shows
-   * nothing, so that the caller can ask for the passphrase.
+   * nothing, so that the caller can ask for the passphrase. A `background` job
+   * leaves the problem shown alone, and a refusal shows nothing.
    */
-  private async request(operation: GitNetworkJobType, quietLock = true): Promise<Record<string, string> | undefined> {
+  private async request(
+    operation: GitNetworkJobType,
+    quietLock = true,
+    background = false
+  ): Promise<Record<string, string> | undefined> {
     const repositoryId = this.store.followed();
     if (repositoryId === null || this.running() !== null) {
       return undefined;
     }
-    this.shownProblem.set(null);
+    if (!background) {
+      this.shownProblem.set(null);
+    }
     const starting: Starting = { repositoryId, operation };
     this.starting.set(starting);
     try {
       const { jobId } = await firstValueFrom(OPERATIONS[operation].start(this.api, repositoryId));
       if (this.store.followed() === repositoryId) {
-        this.follow({ repositoryId, operation, jobId, own: true });
+        this.follow({ repositoryId, operation, jobId, own: !background, background });
       }
     } catch (error) {
-      if (this.store.followed() === repositoryId) {
+      if (!background && this.store.followed() === repositoryId) {
         const apiError = toApiError(error);
         if (quietLock && apiError.code === 'key-locked') {
           return stringParams(apiError.params);
@@ -278,7 +333,9 @@ export class NetworkJobService {
   private follow(followed: Followed): void {
     clearTimeout(this.retryTimer);
     // A new job makes the last one's failure out of date, also one started in another tab.
-    this.shownProblem.set(null);
+    if (followed.background !== true) {
+      this.shownProblem.set(null);
+    }
     this.followed.set(followed);
     // It may have ended before it was followed: its `job.finished` came first.
     void this.read(followed);
@@ -314,7 +371,7 @@ export class NetworkJobService {
         dismissLabel: this.transloco.translate(`${KEY}.dismiss`),
         status: 'success'
       });
-    } else if (outcome?.kind === 'failed') {
+    } else if (outcome?.kind === 'failed' && followed.background !== true) {
       this.fail(followed.operation, outcome.code, outcome.params, !followed.own);
     }
     void this.store.refresh();

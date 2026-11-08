@@ -1263,6 +1263,208 @@ describe('RepositoryScreenPage', () => {
       });
     });
 
+    describe('the quiet fetch status', () => {
+      const STATUS = 'web-feature-repository-screen.FetchStatusComponent';
+      const FIXES = 'web-feature-repository-screen.GitProblemComponent.fixes';
+      const status = () => page().querySelector('rs-repository-bar rs-fetch-status') as HTMLElement;
+      const statusButton = (label: string) =>
+        [ ...status().querySelectorAll('button') ].find(found =>
+          found.textContent?.trim() === label
+        ) as HTMLButtonElement;
+      const anyDialog = () => document.querySelector('[role="dialog"]:not([hidden])');
+      const failedFetch = (code: string, params: Record<string, string> = {}): GitStatus => ({
+        ...baseStatus(),
+        fetchProblem: { code, params }
+      });
+      const lockedInfo = (): RepositoryCredentialsInfo => ({
+        protocol: 'ssh',
+        inUse: {
+          kind: 'ssh-key',
+          id: 3,
+          name: 'laptop',
+          keyType: 'ed25519',
+          fingerprint: 'SHA256:abc',
+          passphraseProtected: true,
+          unlocked: false,
+          generated: false,
+          missing: false,
+          usedBy: 1
+        }
+      });
+
+      it('AC-GIT-002.14: a failed background fetch shows Couldn\'t check for remote changes in the header and opens no dialog', async () => {
+        gitStatusAnswer = of(failedFetch('network'));
+        await visit('/repositories/12');
+
+        expect(status().closest('header')).toBeTruthy();
+        expect(status().textContent).toContain(`${STATUS}.failed`);
+        expect(status().textContent).toContain('errors.network');
+        expect(anyDialog()).toBeNull();
+        // Not the banner of a fetch the user pressed.
+        expect(page().querySelector('rs-git-problem')).toBeNull();
+      });
+
+      it.each([
+        'no-credentials',
+        'credentials-missing',
+        'credentials-refused',
+        'host-key-changed',
+        'host-key-unknown'
+      ])(
+        'AC-REPO-002.13: a background fetch that meets %s shows it only in the header\'s quiet status and opens no dialog',
+        async code => {
+          gitStatusAnswer = of(failedFetch(code, { host: 'github.com' }));
+          await visit('/repositories/12');
+
+          expect(status().textContent).toContain(`errors.${code}`);
+          expect(anyDialog()).toBeNull();
+          expect(page().querySelector('rs-git-problem')).toBeNull();
+        }
+      );
+
+      it('AC-REPO-002.13: a background fetch that meets a locked key shows it only in the header\'s quiet status and opens no dialog', async () => {
+        credentialsInfo = lockedInfo();
+        await visit('/repositories/12');
+
+        expect(status().textContent).toContain(`${STATUS}.locked`);
+        expect(anyDialog()).toBeNull();
+        expect(page().querySelector('rs-git-problem')).toBeNull();
+      });
+
+      it('a locked key comes before a stored problem', async () => {
+        credentialsInfo = lockedInfo();
+        gitStatusAnswer = of(failedFetch('credentials-refused'));
+        await visit('/repositories/12');
+
+        expect(status().textContent).toContain(`${STATUS}.locked`);
+        expect(status().textContent).not.toContain('errors.credentials-refused');
+      });
+
+      it('goes away when the next fetch succeeds', async () => {
+        gitStatusAnswer = of(failedFetch('network'));
+        await visit('/repositories/12');
+        expect(status().textContent).toContain('errors.network');
+
+        gitStatusAnswer = of(baseStatus());
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(status().textContent?.trim()).toBe('');
+      });
+
+      it('stays after the banner is dismissed', async () => {
+        credentialsInfo = lockedInfo();
+        await visit('/repositories/12');
+
+        const banner = page().querySelector('rs-locked-key-banner') as HTMLElement;
+        (banner.querySelector('button[aria-label$=".dismiss"]') as HTMLButtonElement).click();
+        await settle(harness.fixture);
+
+        expect(page().querySelector('rs-locked-key-banner')).toBeNull();
+        expect(status().textContent).toContain(`${STATUS}.locked`);
+
+        statusButton(`${FIXES}.unlock`).click();
+        await settleDialog();
+
+        expect(document.querySelector('dlg-unlock-key')).not.toBeNull();
+      });
+
+      it('a pressed fetch that failed shows the banner and this status', async () => {
+        gitStatusAnswer = of(baseStatus());
+        gitJob.mockReturnValue(of<GitJobState>({
+          status: 'done',
+          outcome: { kind: 'failed', code: 'network', params: {} }
+        }));
+        await visit('/repositories/12');
+        gitStatusAnswer = of(failedFetch('network'));
+
+        fetch.mockReturnValue(of({ jobId: 8 }));
+        (page().querySelector('rs-git-actions button') as HTMLButtonElement).click();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(page().querySelector('rs-git-problem')?.textContent).toContain('errors.network');
+        expect(status().textContent).toContain('errors.network');
+      });
+
+      it('Try again fetches', async () => {
+        gitStatusAnswer = of(failedFetch('network'));
+        await visit('/repositories/12');
+
+        statusButton(`${FIXES}.retry`).click();
+        await settle(harness.fixture);
+
+        expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+        expect(push).not.toHaveBeenCalled();
+      });
+
+      it('Try again that succeeds leaves the focus on the git actions', async () => {
+        gitStatusAnswer = of(failedFetch('network'));
+        await visit('/repositories/12');
+        statusButton(`${FIXES}.retry`).focus();
+
+        gitStatusAnswer = of(baseStatus());
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(status().textContent?.trim()).toBe('');
+        expect(document.activeElement).toBe(page().querySelector('rs-git-actions button'));
+      });
+
+      it('Try again is unavailable while a push runs', async () => {
+        gitStatusAnswer = of({ ...failedFetch('network'), networkJob: { id: 9, type: 'push' } });
+        await visit('/repositories/12');
+
+        statusButton(`${FIXES}.retry`).click();
+        await settle(harness.fixture);
+
+        expect(statusButton(`${FIXES}.retry`).getAttribute('aria-disabled')).toBe('true');
+        expect(fetch).not.toHaveBeenCalled();
+      });
+
+      it('shows the locked key when key.locked says the unlock ended while the screen was open', async () => {
+        await visit('/repositories/12');
+        expect(status().textContent?.trim()).toBe('');
+
+        credentialsInfo = lockedInfo();
+        events.next({ type: 'key.locked', keyId: 3 });
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(status().textContent).toContain(`${STATUS}.locked`);
+        expect(anyDialog()).toBeNull();
+      });
+
+      it('the fix opens the dialog for its code', async () => {
+        gitStatusAnswer = of(failedFetch('host-key-changed', {
+          host: 'git.example.com',
+          port: '22',
+          type: 'ssh-ed25519',
+          key: 'AAAAC3NzaC1lZDI1NTE5AAAAIH',
+          fingerprint: 'SHA256:new',
+          trustedType: 'ssh-rsa',
+          trustedFingerprint: 'SHA256:old'
+        }));
+        await visit('/repositories/12');
+
+        statusButton(`${FIXES}.review-host-key`).click();
+        await settleDialog();
+
+        expect(document.querySelector('dlg-changed-host-key')?.textContent).toContain('SHA256:new');
+      });
+
+      it('shows it after the git actions and before the save status, also on a phone (NV-11)', async () => {
+        gitStatusAnswer = of(failedFetch('network'));
+        narrow = true;
+        await visit('/repositories/12');
+
+        const parts = [ ...page().querySelectorAll('rs-git-actions, rs-fetch-status, rs-save-status') ];
+        expect(parts.map(part => part.localName)).toEqual([ 'rs-git-actions', 'rs-fetch-status', 'rs-save-status' ]);
+      });
+    });
+
     describe('pushing', () => {
       const KEY_ACTIONS = 'web-feature-repository-screen.GitActionsComponent';
       const pushButton = () =>

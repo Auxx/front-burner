@@ -99,6 +99,10 @@ export class KeyUnlockStore implements OnModuleDestroy {
   }
 
   private idleTimer(sessionId: string, credentialId: number): NodeJS.Timeout {
-    return setTimeout(() => this.lock(sessionId, credentialId), this.config.keyUnlockIdleMs).unref();
+    return setTimeout(() => {
+      this.lock(sessionId, credentialId);
+      // Nobody asked for this one, so the session's tabs can't know: background fetches stop now (RC-15, GA-35).
+      this.events.publishToSession(sessionId, { type: 'key.locked', keyId: credentialId });
+    }, this.config.keyUnlockIdleMs).unref();
   }
 }

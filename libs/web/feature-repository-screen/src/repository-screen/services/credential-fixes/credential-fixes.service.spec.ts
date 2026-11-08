@@ -1,6 +1,12 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { GitJobStarted, GitJobState, PushEvent, RepositorySummary } from '@front-burner/shared-contracts';
+import type {
+  GitJobStarted,
+  GitJobState,
+  GitStatus,
+  PushEvent,
+  RepositorySummary
+} from '@front-burner/shared-contracts';
 import { DialogService, ToastService } from '@front-burner/ui';
 import { GitApi, KnownHostsApi } from '@front-burner/web-api-client';
 import { PushChannelService } from '@front-burner/web-core';
@@ -33,6 +39,7 @@ function failed(code: string, params: Record<string, string> = {}): GitJobState 
 }
 
 const pushed: GitJobState = { status: 'done', outcome: { kind: 'pushed', commits: 1, upstream: 'origin/main' } };
+const RUNNING: GitJobState = { status: 'running', outcome: null };
 
 /** A push outcome's params of a changed host key, where the port is a string. */
 const changedKeyParams = {
@@ -55,10 +62,13 @@ const unknownHostParams = {
 
 describe('CredentialFixesService', () => {
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
+  let fetch: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let open: ReturnType<typeof vi.fn>;
   let closed: Subject<boolean | undefined>;
   let followed: ReturnType<typeof signal<number | null>>;
+  let gitStatus: ReturnType<typeof signal<GitStatus | null>>;
+  let jobEvents: Subject<PushEvent>;
   let lockedKey: { unlock: ReturnType<typeof vi.fn>; reread: ReturnType<typeof vi.fn>; };
   let knownHosts: { trust: ReturnType<typeof vi.fn>; };
   let toast: { show: ReturnType<typeof vi.fn>; };
@@ -89,10 +99,13 @@ describe('CredentialFixesService', () => {
 
   beforeEach(() => {
     push = vi.fn(() => of({ jobId: 7 }));
+    fetch = vi.fn(() => of({ jobId: 8 }));
     gitJob = vi.fn(() => of(failed('remote-failed')));
     closed = new Subject();
     open = vi.fn(() => ({ closed }));
     followed = signal(12);
+    gitStatus = signal(null);
+    jobEvents = new Subject();
     lockedKey = { unlock: vi.fn(async () => true), reread: vi.fn(async () => undefined) };
     knownHosts = { trust: vi.fn(() => of(undefined)) };
     toast = { show: vi.fn() };
@@ -101,11 +114,11 @@ describe('CredentialFixesService', () => {
       providers: [
         CredentialFixesService,
         NetworkJobService,
-        { provide: GitApi, useValue: { push, gitJob } },
-        { provide: PushChannelService, useValue: { events: new Subject<PushEvent>(), reconnected: new Subject() } },
+        { provide: GitApi, useValue: { push, fetch, gitJob } },
+        { provide: PushChannelService, useValue: { events: jobEvents, reconnected: new Subject() } },
         {
           provide: GitStatusStore,
-          useValue: { followed, status: signal(null), refresh: vi.fn(async () => undefined) }
+          useValue: { followed, status: gitStatus, refresh: vi.fn(async () => undefined) }
         },
         { provide: LockedKeyService, useValue: lockedKey },
         { provide: RepositorySessionService, useValue: { repository: signal(handbook) } },
@@ -116,6 +129,135 @@ describe('CredentialFixesService', () => {
     });
     pushes = TestBed.inject(NetworkJobService);
     service = TestBed.inject(CredentialFixesService);
+  });
+
+  describe('a problem of the last fetch, which no job here has shown', () => {
+    const running = async (run: Promise<void>, result: boolean | undefined) => {
+      await settle();
+      closed.next(result);
+      closed.complete();
+      await run;
+      await settle();
+    };
+
+    it('reviews the host key from the problem, and fetches once it is trusted', async () => {
+      gitJob.mockReturnValue(of({ status: 'done', outcome: { kind: 'fetched', moved: false, upstreamMoved: false } }));
+
+      await running(service.runFetchFix({ code: 'host-key-changed', params: changedKeyParams }), true);
+
+      expect(open).toHaveBeenCalledExactlyOnceWith(ChangedHostKeyDialog, { data: { ...changedKeyParams, port: 2222 } });
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it('fetches after new credentials were saved, and not after Cancel', async () => {
+      gitJob.mockReturnValue(of({ status: 'done', outcome: { kind: 'fetched', moved: false, upstreamMoved: false } }));
+      const problem = { code: 'credentials-refused', params: {} };
+
+      await running(service.runFetchFix(problem), undefined);
+      expect(fetch).not.toHaveBeenCalled();
+
+      closed = new Subject();
+      await running(service.runFetchFix(problem), true);
+      expect(open).toHaveBeenLastCalledWith(RepositoryCredentialsDialog, {
+        data: { repository: handbook, hint: 'refused-key', offerTokenUpdate: true }
+      });
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+    });
+
+    it('trusts the host from the problem, and fetches', async () => {
+      gitJob.mockReturnValue(of({ status: 'done', outcome: { kind: 'fetched', moved: false, upstreamMoved: false } }));
+
+      await running(service.runFetchFix({ code: 'host-key-unknown', params: unknownHostParams }), true);
+
+      expect(open).toHaveBeenCalledWith(TrustHostDialog, expect.anything());
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+    });
+
+    it('fixes the given problem, not the failed push in the banner', async () => {
+      await failedPush('host-key-changed', { ...changedKeyParams, host: 'push.example.com' });
+      gitJob.mockReturnValue(of({ status: 'done', outcome: { kind: 'fetched', moved: false, upstreamMoved: false } }));
+
+      await running(service.runFetchFix({ code: 'host-key-changed', params: changedKeyParams }), true);
+
+      expect(open).toHaveBeenCalledWith(ChangedHostKeyDialog, { data: { ...changedKeyParams, port: 2222 } });
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(push).toHaveBeenCalledOnce();
+    });
+
+    it('does nothing for a problem whose fix is only to run it again', async () => {
+      await service.runFetchFix({ code: 'network', params: {} });
+
+      expect(open).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('fetches after the running job, when a job started while the dialog was open', async () => {
+      gitJob.mockReturnValue(of(RUNNING));
+      const fixing = service.runFetchFix({ code: 'credentials-refused', params: {} });
+      await settle();
+      await pushes.start('push');
+      await settle();
+
+      closed.next(true);
+      closed.complete();
+      await fixing;
+      await settle();
+      expect(fetch).not.toHaveBeenCalled();
+
+      gitJob.mockReturnValue(of(pushed));
+      jobEvents.next({ type: 'job.finished', jobId: 7, outcome: 'done' });
+      await settle();
+      await settle();
+
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+    });
+  });
+
+  describe('a credential fix from a push banner', () => {
+    it('also fetches, quietly, while the last fetch\'s problem is stored', async () => {
+      await failedPush('credentials-refused');
+      gitStatus.set({ fetchProblem: { code: 'credentials-refused', params: {} } } as GitStatus);
+      gitJob.mockReturnValue(of(pushed));
+
+      await fix('fix-credentials', true);
+      await settle();
+
+      expect(push).toHaveBeenCalledTimes(2);
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(12);
+    });
+
+    it('fetches nothing when no problem is stored', async () => {
+      await failedPush('credentials-refused');
+      gitJob.mockReturnValue(of(pushed));
+
+      await fix('fix-credentials', true);
+      await settle();
+
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('re-runs the push after a running job, whose start cleared the banner', async () => {
+      await failedPush('credentials-refused');
+      gitJob.mockReturnValue(of(RUNNING));
+      const fixing = service.run('fix-credentials');
+      await settle();
+      await pushes.start('fetch');
+      await settle();
+
+      closed.next(true);
+      closed.complete();
+      await fixing;
+      await settle();
+      expect(push).toHaveBeenCalledOnce();
+
+      gitJob.mockReturnValue(of(pushed));
+      jobEvents.next({ type: 'job.finished', jobId: 8, outcome: 'done' });
+      await settle();
+      await settle();
+
+      expect(push).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('Add credentials opens the dialog, and the push runs again after saving', async () => {

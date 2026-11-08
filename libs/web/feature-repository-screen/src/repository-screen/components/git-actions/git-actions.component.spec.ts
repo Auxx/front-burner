@@ -194,6 +194,14 @@ describe('GitActionsComponent', () => {
     expect(pushed).toBe(0);
   });
 
+  it.each([ false, true ])('focus goes to its first button, on a phone too (%s)', async narrow => {
+    await show({ narrow });
+
+    fixture.componentInstance.focus();
+
+    expect(document.activeElement).toBe(buttons()[0]);
+  });
+
   it('shows progress and the reason of the other item in the menu on a phone', async () => {
     await show({ narrow: true, running: 'fetch' });
 

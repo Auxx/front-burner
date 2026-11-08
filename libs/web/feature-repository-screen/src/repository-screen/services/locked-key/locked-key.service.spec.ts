@@ -149,6 +149,18 @@ describe('LockedKeyService', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
+  it('shows the key again when key.locked says its unlock ended', async () => {
+    await start(unlocked);
+    expect(service.key()).toBeNull();
+
+    repositoryCredentials.mockReturnValue(of(locked));
+    events.next({ type: 'key.locked', keyId: 3 });
+    await settle();
+
+    expect(service.key()).toEqual(laptop);
+    expect(open).not.toHaveBeenCalled();
+  });
+
   it('a dismissed banner stays away for the visit', async () => {
     await start(locked);
     service.dismissed.set(true);

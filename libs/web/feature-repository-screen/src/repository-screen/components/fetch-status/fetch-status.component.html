@@ -1,0 +1,73 @@
+<ng-container *transloco="let t">
+  @if (shown(); as shown) {
+    @let failed = t('web-feature-repository-screen.FetchStatusComponent.failed');
+    @let reason = t(shown.reasonKey, shown.params);
+    @let title = shown.locked ? reason : failed;
+    @let whole = shown.locked ? reason : failed + ' ' + reason;
+    @let isBusy = busy();
+    <ng-template #actions>
+      @if (shown.locked) {
+        <button uiButton
+                variant="ghost"
+                size="small"
+                (click)="chooseUnlock()">
+          {{ t('web-feature-repository-screen.GitProblemComponent.fixes.unlock') }}
+        </button>
+      } @else {
+        @if (shown.fix; as fix) {
+          <button uiButton
+                  variant="ghost"
+                  size="small"
+                  (click)="chooseFix()">
+            {{ t('web-feature-repository-screen.GitProblemComponent.fixes.' + fix) }}
+          </button>
+        }
+        <!-- One button in both states, so that it keeps the focus when it was pressed. -->
+        <button uiButton
+                variant="ghost"
+                size="small"
+                uiTooltipShowOnClick
+                [unavailable]="isBusy"
+                [uiTooltip]="isBusy ? t('web-feature-repository-screen.GitActionsComponent.reasons.busy') : ''"
+                (click)="chooseRetry()">
+          {{ t('web-feature-repository-screen.GitProblemComponent.fixes.retry') }}
+        </button>
+      }
+    </ng-template>
+    @if (narrow()) {
+      <button #trigger
+              uiIconButton
+              [label]="title"
+              [uiPopoverTrigger]="details">
+        <ui-icon name="warning" />
+      </button>
+      <ui-popover #details="uiPopover"
+                  [label]="title">
+        @if (details.open()) {
+          <p class="failed">{{ title }}</p>
+          @if (!shown.locked) {
+            <p>{{ reason }}</p>
+          }
+          <div class="actions">
+            <ng-container [ngTemplateOutlet]="actions" />
+          </div>
+        }
+      </ui-popover>
+    } @else {
+      <ui-icon class="icon"
+               name="warning" />
+      <!-- Focusable while shortened, so that the keyboard reaches the whole text. -->
+      <span #tip="uiTruncatedTooltip"
+            class="text"
+            [uiTruncatedTooltip]="whole"
+            [attr.tabindex]="tip.truncated() ? 0 : null">
+        @if (shown.locked) {
+          {{ reason }}
+        } @else {
+          <span class="failed">{{ failed }}</span>&ngsp;{{ reason }}
+        }
+      </span>
+      <ng-container [ngTemplateOutlet]="actions" />
+    }
+  }
+</ng-container>

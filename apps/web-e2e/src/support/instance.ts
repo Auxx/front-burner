@@ -20,6 +20,9 @@ const TEST_JWT_SECRET = 'web-e2e-jwt-secret-0123456789abcdefghijklmnopqr';
 /** The `FRONT_BURNER_ENCRYPTION_KEY` of every instance. */
 const TEST_ENCRYPTION_KEY = 'web-e2e-encryption-key-0123456789abcdefghijklmn';
 
+/** How long a server may take to stop. */
+const STOP_TIMEOUT_MS = 10_000;
+
 /** The administrator that `onboarded` instances are created with. */
 export const TEST_ADMIN = { email: 'admin@example.com', displayName: 'Admin', password: 'correct horse 1' };
 
@@ -155,10 +158,18 @@ function spawnServer(options: InstanceOptions, dataDir: string, port: number): S
   return { child, output: () => output, exited: new Promise<void>(done => child.on('exit', () => done())) };
 }
 
+/**
+ * Stops the server as a container runtime does: `SIGKILL` after `docker stop`'s
+ * 10 seconds. The HTTP server's close waits for every open connection, and a
+ * browser can hold an unused one open, such as a speculative preconnect, for as
+ * long as the page's context lives.
+ */
 async function kill({ child, exited }: Spawned): Promise<void> {
   if (child.exitCode === null && child.signalCode === null) {
     child.kill('SIGTERM');
+    const killer = setTimeout(() => child.kill('SIGKILL'), STOP_TIMEOUT_MS);
     await exited;
+    clearTimeout(killer);
   }
 }
 
