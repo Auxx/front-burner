@@ -21,6 +21,7 @@ import { eq } from 'drizzle-orm';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { GitJobs } from '../jobs/git-jobs.service';
 import { PushJob } from '../push/push.job';
 import { PushService } from '../push/push.service';
 import { insertRepository, insertUser } from './fixtures';
@@ -69,6 +70,7 @@ export class PushHarness {
   engine!: GitEngine;
   guard!: WorkingTreeGuard;
   service!: PushService;
+  gitJobs!: GitJobs;
   repositoryId = 0;
 
   static async start(serverOptions: Partial<GitHttpServerOptions> = {}): Promise<PushHarness> {
@@ -122,8 +124,8 @@ export class PushHarness {
       this.jobKeys,
       this.events
     ).onModuleInit();
+    this.gitJobs = new GitJobs(this.database);
     this.service = new PushService(
-      this.database,
       this.runner,
       this.engine,
       this.openable,

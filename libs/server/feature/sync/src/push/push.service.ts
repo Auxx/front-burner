@@ -1,4 +1,3 @@
-import { DATABASE, Database, Job, jobs } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
 import { GitEngine } from '@front-burner/server-core-git';
 import { JobRunner } from '@front-burner/server-core-jobs';
@@ -6,27 +5,16 @@ import { ApiErrorException } from '@front-burner/server-core-observability';
 import type { RequestAuth } from '@front-burner/server-core-security';
 import { JobKeys, SavedCredentialsService } from '@front-burner/server-feature-credentials';
 import { OpenableRepository } from '@front-burner/server-feature-files';
-import {
-  ERROR_CODES,
-  GitJobOutcome,
-  GitJobOutcomeSchema,
-  GitJobState,
-  GitNetworkJob
-} from '@front-burner/shared-contracts';
-import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { Injectable } from '@nestjs/common';
 import { PUSH_JOB_TYPE, pushDedupeKey, PushJobPayload } from './push.job';
 
-const KNOWN_CODES: ReadonlySet<string> = new Set(ERROR_CODES);
-
 /**
- * Starting a push, and what a client reads about it (GA-3, GA-9, GA-29). The
- * checks that need the user's session run here, before the job is queued.
+ * Starting a push (GA-3, GA-9, GA-29). The checks that need the user's session
+ * run here, before the job is queued. What a client reads about it is `GitJobs`.
  */
 @Injectable()
 export class PushService {
   constructor(
-    @Inject(DATABASE) private readonly database: Database,
     private readonly runner: JobRunner,
     private readonly engine: GitEngine,
     private readonly repositories: OpenableRepository,
@@ -80,49 +68,4 @@ export class PushService {
     this.events.publish(userId, { type: 'git.changed', repositoryId });
     return jobId;
   }
-
-  /**
-   * One of the repository's git jobs. Another user's job, or one of another
-   * repository, is answered like a missing one (GA-1).
-   */
-  state(userId: number, repositoryId: number, jobId: number): GitJobState {
-    const job = this.database.db.select().from(jobs).where(and(
-      eq(jobs.id, jobId),
-      eq(jobs.userId, userId),
-      eq(jobs.repositoryId, repositoryId),
-      eq(jobs.type, PUSH_JOB_TYPE)
-    )).get();
-    // The job's user and repository match, so the repository is the user's.
-    if (job === undefined) {
-      throw new ApiErrorException(404, 'not-found');
-    }
-    return { status: job.status, outcome: outcomeOf(job) };
-  }
-
-  /** The repository's unfinished push, so that a reloaded page can follow it (GA-9). */
-  networkJob(userId: number, repositoryId: number): GitNetworkJob | null {
-    const job = this.database.db.select({ id: jobs.id }).from(jobs).where(and(
-      eq(jobs.userId, userId),
-      eq(jobs.repositoryId, repositoryId),
-      eq(jobs.type, PUSH_JOB_TYPE),
-      inArray(jobs.status, [ 'queued', 'running' ])
-    )).orderBy(desc(jobs.id)).get();
-    return job === undefined ? null : { id: job.id, type: 'push' };
-  }
-}
-
-/**
- * A finished job's outcome. A job the runner failed, such as one a restart
- * interrupted, has its error code and no params; a code without text is
- * reported as `internal`.
- */
-function outcomeOf(job: Job): GitJobOutcome | null {
-  if (job.status === 'done') {
-    return job.result === null ? null : GitJobOutcomeSchema.parse(JSON.parse(job.result));
-  }
-  if (job.status === 'failed') {
-    const code = job.errorCode !== null && KNOWN_CODES.has(job.errorCode) ? job.errorCode : 'internal';
-    return { kind: 'failed', code, params: {} };
-  }
-  return null;
 }

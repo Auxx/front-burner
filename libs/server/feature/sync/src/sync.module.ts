@@ -4,6 +4,7 @@ import { PreferencesModule } from '@front-burner/server-feature-preferences';
 import { RepositoriesModule } from '@front-burner/server-feature-repositories';
 import { Module } from '@nestjs/common';
 import { GitController } from './git/git.controller';
+import { GitJobs } from './jobs/git-jobs.service';
 import { PushJob } from './push/push.job';
 import { PushService } from './push/push.service';
 
@@ -14,6 +15,6 @@ import { PushService } from './push/push.service';
 @Module({
   imports: [ FilesModule, PreferencesModule, RepositoriesModule, CredentialsModule ],
   controllers: [ GitController ],
-  providers: [ PushService, PushJob ]
+  providers: [ GitJobs, PushService, PushJob ]
 })
 export class SyncModule {}
