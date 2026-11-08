@@ -1392,6 +1392,49 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/incoming": {
+      "get": {
+        "operationId": "incoming",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "path",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 4096,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitIncoming"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/diff": {
       "get": {
         "operationId": "diff",
@@ -1517,6 +1560,39 @@
     "/api/v1/repositories/{id}/git/push": {
       "post": {
         "operationId": "push",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitJobStarted"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/v1/repositories/{id}/git/fetch": {
+      "post": {
+        "operationId": "fetch",
         "parameters": [
           {
             "name": "id",
@@ -2842,13 +2918,32 @@
           "type": {
             "type": "string",
             "enum": [
-              "push"
+              "push",
+              "fetch"
             ]
           }
         },
         "required": [
           "id",
           "type"
+        ]
+      },
+      "GitProblemState": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "params"
         ]
       },
       "GitStatus": {
@@ -2906,6 +3001,14 @@
               }
             ],
             "nullable": true
+          },
+          "fetchProblem": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GitProblemState"
+              }
+            ],
+            "nullable": true
           }
         },
         "required": [
@@ -2918,7 +3021,45 @@
           "changes",
           "mergeInProgress",
           "lastCommit",
-          "networkJob"
+          "networkJob",
+          "fetchProblem"
+        ]
+      },
+      "GitIncomingChanges": {
+        "type": "object",
+        "properties": {
+          "upstream": {
+            "type": "string"
+          },
+          "commits": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "touchesPath": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "upstream",
+          "commits",
+          "touchesPath"
+        ]
+      },
+      "GitIncoming": {
+        "type": "object",
+        "properties": {
+          "incoming": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GitIncomingChanges"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "incoming"
         ]
       },
       "DiffLine": {
@@ -3102,6 +3243,9 @@
             "$ref": "#/components/schemas/GitPushed"
           },
           {
+            "$ref": "#/components/schemas/GitFetched"
+          },
+          {
             "$ref": "#/components/schemas/GitJobFailed"
           }
         ]
@@ -3128,6 +3272,24 @@
           "kind",
           "commits",
           "upstream"
+        ]
+      },
+      "GitFetched": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "fetched"
+            ]
+          },
+          "moved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "moved"
         ]
       },
       "GitJobFailed": {

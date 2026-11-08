@@ -21,10 +21,15 @@ import { eq } from 'drizzle-orm';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { FetchStep } from '../fetch/fetch-step';
+import { FetchJob } from '../fetch/fetch.job';
+import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
 import { JobCredentials } from '../jobs/job-credentials.service';
+import { NetworkJobs } from '../jobs/network-jobs.service';
 import { PushJob } from '../push/push.job';
 import { PushService } from '../push/push.service';
+import { SyncStateStore } from '../state/sync-state.store';
 import { insertRepository, insertUser } from './fixtures';
 import { createRemote, git, testGitOptions } from './git-fixtures';
 import { createTestDatabase } from './test-database';
@@ -43,9 +48,9 @@ export async function waitFor(check: () => boolean): Promise<void> {
 }
 
 /**
- * Everything a push needs, for real: a database, the job runner, the git engine,
- * an HTTPS remote and a working copy of it for one user. Call `close()` after
- * each test.
+ * Everything a push or a fetch needs, for real: a database, the job runner, the
+ * git engine, an HTTPS remote and a working copy of it for one user. Call
+ * `close()` after each test.
  */
 export class PushHarness {
   readonly root = mkdtempSync(join(tmpdir(), 'fb-push-'));
@@ -65,6 +70,7 @@ export class PushHarness {
   readonly queries = new RepositoryQueries(this.database);
   readonly openable = new OpenableRepository(this.queries, this.layout);
   readonly networkLock = new NetworkLock();
+  readonly syncState = new SyncStateStore(this.database);
   readonly alice = insertUser(this.database, 'alice@x.io');
   readonly bob = insertUser(this.database, 'bob@x.io');
   server!: GitHttpServer;
@@ -72,7 +78,10 @@ export class PushHarness {
   engine!: GitEngine;
   guard!: WorkingTreeGuard;
   service!: PushService;
+  fetchStep!: FetchStep;
+  fetchService!: FetchService;
   gitJobs!: GitJobs;
+  networkJobs!: NetworkJobs;
   repositoryId = 0;
 
   static async start(serverOptions: Partial<GitHttpServerOptions> = {}): Promise<PushHarness> {
@@ -104,10 +113,21 @@ export class PushHarness {
     await this.server?.close();
     this.server = await startGitHttpServer({ repositories: { 'handbook.git': this.bare }, ...options });
     if (this.repositoryId !== 0) {
-      this.database.db.update(repositories).set({ remoteUrl: this.remoteUrl })
-        .where(eq(repositories.id, this.repositoryId)).run();
-      git(this.workingCopy, 'remote', 'set-url', 'origin', this.remoteUrl);
+      this.useRemote(this.remoteUrl);
     }
+  }
+
+  /** Points the stored remote and `origin` at `url`. */
+  useRemote(url: string): void {
+    this.database.db.update(repositories).set({ remoteUrl: url }).where(eq(repositories.id, this.repositoryId)).run();
+    git(this.workingCopy, 'remote', 'set-url', 'origin', url);
+  }
+
+  /** Commits what is staged in the seed clone, and pushes it to the remote, as another user does. */
+  pushFromElsewhere(subject: string): void {
+    const seed = join(this.root, 'seed');
+    git(seed, 'commit', '-q', '--allow-empty', '-m', subject);
+    git(seed, 'push', '-q', this.bare, 'main');
   }
 
   /** A new runner and engine over the same database, as after a restart. */
@@ -126,15 +146,20 @@ export class PushHarness {
       this.jobKeys,
       this.events
     ).onModuleInit();
-    this.gitJobs = new GitJobs(this.database);
-    this.service = new PushService(
-      this.runner,
+    this.fetchStep = new FetchStep(
       this.engine,
+      this.networkLock,
       this.openable,
-      this.saved,
-      this.jobKeys,
+      this.jobCredentials,
+      knownHosts,
+      this.syncState,
       this.events
     );
+    new FetchJob(this.runner, this.fetchStep, this.jobKeys).onModuleInit();
+    this.networkJobs = new NetworkJobs(this.runner, this.saved, this.jobKeys, this.events);
+    this.fetchService = new FetchService(this.openable, this.networkJobs);
+    this.gitJobs = new GitJobs(this.database);
+    this.service = new PushService(this.engine, this.openable, this.networkJobs);
   }
 
   commit(subject: string): void {

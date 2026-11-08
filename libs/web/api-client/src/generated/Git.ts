@@ -6,6 +6,7 @@ import type {
   CommitRequest,
   CommitResult,
   GitDiff,
+  GitIncoming,
   GitJobStarted,
   GitJobState,
   GitPaths,
@@ -20,6 +21,21 @@ export class GitApi {
   gitStatus(id: number): Observable<GitStatus> {
     return this.http.get<GitStatus>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/status`
+    );
+  }
+  incoming(
+    id: number,
+    query?: {
+      /**
+       * @minLength 1
+       * @maxLength 4096
+       */
+      path?: string;
+    }
+  ): Observable<GitIncoming> {
+    return this.http.get<GitIncoming>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/incoming`,
+      { params: query }
     );
   }
   diff(
@@ -53,6 +69,12 @@ export class GitApi {
     return this.http.request<GitJobStarted>(
       'POST',
       `/api/v1/repositories/${encodeURIComponent(id)}/git/push`
+    );
+  }
+  fetch(id: number): Observable<GitJobStarted> {
+    return this.http.request<GitJobStarted>(
+      'POST',
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/fetch`
     );
   }
   gitJob(id: number, jobId: number): Observable<GitJobState> {

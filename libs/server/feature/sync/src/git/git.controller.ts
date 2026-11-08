@@ -6,19 +6,30 @@ import { inBatches, PathRefusedError, resolveInWorkingCopy } from '@front-burner
 import { OpenableRepository, toFilesError, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
-import type { CommitResult, GitDiff, GitJobStarted, GitJobState, GitStatus } from '@front-burner/shared-contracts';
+import type {
+  CommitResult,
+  GitDiff,
+  GitIncoming,
+  GitJobStarted,
+  GitJobState,
+  GitStatus
+} from '@front-burner/shared-contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
+import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
 import { PushService } from '../push/push.service';
+import { SyncStateStore } from '../state/sync-state.store';
 import { toGitApiError } from './git-api-errors';
 import {
   CommitRequestDto,
   CommitResultDto,
   GitDiffDto,
   GitDiffQueryDto,
+  GitIncomingDto,
+  GitIncomingQueryDto,
   GitJobParamsDto,
   GitJobStartedDto,
   GitJobStateDto,
@@ -72,13 +83,15 @@ export class GitController {
     private readonly commitAuthors: CommitAuthors,
     private readonly events: EventsHub,
     private readonly pushes: PushService,
-    private readonly gitJobs: GitJobs
+    private readonly fetches: FetchService,
+    private readonly gitJobs: GitJobs,
+    private readonly syncState: SyncStateStore
   ) {}
 
   /**
    * The branch, its counts against the upstream, every changed file, whether
-   * the last commit can be amended, and the push under way (GA-7, GA-9, GA-11,
-   * GA-22, GA-42).
+   * the last commit can be amended, the push or fetch under way, and why the
+   * last fetch failed (GA-7, GA-9, GA-11, GA-22, GA-35, GA-42).
    */
   @Get('status')
   @ApiOkResponse({ type: GitStatusDto })
@@ -91,7 +104,35 @@ export class GitController {
       this.engine.mergeInProgress(root),
       this.engine.lastCommit(root)
     ]);
-    return { ...status, mergeInProgress, lastCommit, networkJob: this.gitJobs.networkJob(userId, params.id) };
+    return {
+      ...status,
+      mergeInProgress,
+      lastCommit,
+      networkJob: this.gitJobs.networkJob(userId, params.id),
+      fetchProblem: this.syncState.fetchProblem(params.id)
+    };
+  }
+
+  /**
+   * How many commits the current branch's upstream has that the branch does
+   * not, as of the last fetch, and whether they change `path` (GA-34). A
+   * client reads it when `behind` changes. The path is refused like any other
+   * (A-7.6), and read literally, never as a pattern; it may be missing, as a
+   * file the user deleted.
+   */
+  @Get('incoming')
+  @ApiOkResponse({ type: GitIncomingDto })
+  @ZodSerializerDto(GitIncomingDto)
+  async incoming(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Query() query: GitIncomingQueryDto
+  ): Promise<GitIncoming> {
+    const root = this.repositories.root(authOf(req).userId, params.id);
+    if (query.path !== undefined) {
+      await checkPath(root, query.path);
+    }
+    return { incoming: await this.engine.incoming(root, query.path).catch(toGitApiError) };
   }
 
   /**
@@ -195,8 +236,24 @@ export class GitController {
   }
 
   /**
+   * Fetches the remote as a job (GA-3, GA-33): remote branches only, also
+   * during a merge (GC-3). A second request while it waits or runs gets the
+   * same job. Refused only for a key that is not unlocked in this session and
+   * for credentials that are gone (RC-4). Follow the job with `job.finished`,
+   * then read it with `gitJob`, and the status for `behind` and `fetchProblem`.
+   */
+  @Post('fetch')
+  @HttpCode(202)
+  @ApiAcceptedResponse({ type: GitJobStartedDto })
+  @ZodSerializerDto(GitJobStartedDto)
+  fetch(@Req() req: Request, @Param() params: RepositoryParamsDto): GitJobStarted {
+    return { jobId: this.fetches.start(authOf(req), params.id) };
+  }
+
+  /**
    * How one of the repository's git jobs stands, and how it ended: a push's
-   * commits and upstream (GA-32), or why it failed (GA-30, GA-31, RC-4).
+   * commits and upstream (GA-32), whether a fetch moved a remote branch, or why
+   * it failed (GA-30, GA-31, RC-4).
    */
   @Get('jobs/:jobId')
   @ApiOkResponse({ type: GitJobStateDto })

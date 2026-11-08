@@ -1,6 +1,15 @@
 import { z } from 'zod';
 import { GitNetworkJobSchema } from './git-push.schema';
 
+/** A problem a client shows with its fix: a code and the values its text needs. */
+export const GitProblemStateSchema = z
+  .object({
+    code: z.string(),
+    params: z.record(z.string(), z.string())
+  })
+  .meta({ id: 'GitProblemState' });
+export type GitProblemState = z.infer<typeof GitProblemStateSchema>;
+
 export const GIT_CHANGE_STATES = [ 'modified', 'added', 'deleted' ] as const;
 export type GitChangeState = (typeof GIT_CHANGE_STATES)[number];
 
@@ -47,8 +56,14 @@ export const GitStatusSchema = z
     mergeInProgress: z.boolean(),
     /** `null` without commits. */
     lastCommit: GitLastCommitSchema.nullable(),
-    /** The unfinished push, or `null` (GA-9). */
-    networkJob: GitNetworkJobSchema.nullable()
+    /** The unfinished push or fetch, or `null` (GA-9). */
+    networkJob: GitNetworkJobSchema.nullable(),
+    /**
+     * Why the last fetch failed, with what its text needs, such as the host;
+     * `null` when it succeeded or none ran yet (GA-35, RC-4). A locked key is
+     * never one: it is locked per session.
+     */
+    fetchProblem: GitProblemStateSchema.nullable()
   })
   .meta({ id: 'GitStatus' });
 

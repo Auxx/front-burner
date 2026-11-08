@@ -98,7 +98,8 @@ describe('git status (REQ-GIT-002)', () => {
       mergeInProgress: false,
       changes: [ { path: 'README.md', state: 'added' } ],
       lastCommit: null,
-      networkJob: null
+      networkJob: null,
+      fetchProblem: null
     });
   });
 
@@ -399,6 +400,47 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     pushFromElsewhere(bare, 'theirs');
     expect((await pushed(id)).outcome).toMatchObject({ kind: 'failed', code: 'push-non-fast-forward' });
     expect(gitOutput(bare, 'log', '--format=%s', 'main')).toBe('theirs\nfirst');
+  });
+
+  it('a fetch without credentials updates the counts and says what is incoming, and leaves the branch', async () => {
+    const bare = remote('fetched');
+    const { id, workingCopy } = await add('fetched', `${publicGit.url}/fetched.git`);
+    pushFromElsewhere(bare, 'theirs');
+
+    expect(await client.fetched(id)).toEqual({ status: 'done', outcome: { kind: 'fetched', moved: true } });
+
+    const status = await (await api(`/repositories/${id}/git/status`)).json() as Record<string, unknown>;
+    expect(status).toMatchObject({ behind: 1, ahead: 0, networkJob: null, fetchProblem: null });
+    const incoming = await api(`/repositories/${id}/git/incoming?path=notes.md`);
+    expect(incoming.status).toBe(200);
+    expect(await incoming.json()).toEqual({ incoming: { upstream: 'origin/main', commits: 1, touchesPath: false } });
+    expect(gitOutput(workingCopy, 'log', '--format=%s', 'main')).toBe('first');
+    expect((await api(`/repositories/${id}/git/incoming?path=.git/config`)).status).toBe(400);
+
+    expect(await client.fetched(id)).toEqual({ status: 'done', outcome: { kind: 'fetched', moved: false } });
+  });
+
+  it('a fetch with refused credentials is kept in the status until a fetch succeeds', async () => {
+    remote('fetch-gate');
+    const credentials = { mode: 'new-https', name: 'Fetch token', username: 'alice', password: TOKEN };
+    const { id } = await add('fetch-gate', `${privateGit.url}/fetch-gate.git`, credentials);
+    const fetchProblem = async () =>
+      (await (await api(`/repositories/${id}/git/status`)).json() as { fetchProblem: unknown; }).fetchProblem;
+
+    privateOptions.users = { alice: 'rotated-token' };
+    try {
+      expect((await client.fetched(id)).outcome).toEqual({
+        kind: 'failed',
+        code: 'credentials-refused',
+        params: { host: '127.0.0.1' }
+      });
+      expect(await fetchProblem()).toEqual({ code: 'credentials-refused', params: { host: '127.0.0.1' } });
+    } finally {
+      privateOptions.users = { alice: TOKEN };
+    }
+
+    expect((await client.fetched(id)).outcome).toEqual({ kind: 'fetched', moved: false });
+    expect(await fetchProblem()).toBeNull();
   });
 
   it('AC-REPO-002.4: with an expired saved token used by four repositories, updating it fixes the push of all four', async () => {

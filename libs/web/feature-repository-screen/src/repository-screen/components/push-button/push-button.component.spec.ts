@@ -19,6 +19,7 @@ function status(changes: Partial<GitStatus> = {}): GitStatus {
     changes: [],
     mergeInProgress: false,
     networkJob: null,
+    fetchProblem: null,
     ...changes
   };
 }

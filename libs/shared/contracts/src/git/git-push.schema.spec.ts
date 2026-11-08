@@ -24,7 +24,7 @@ describe('GitJobStateSchema', () => {
 
   it('refuses an unknown status and an outcome of an unknown kind', () => {
     expect(GitJobStateSchema.safeParse({ status: 'paused', outcome: null }).success).toBe(false);
-    expect(GitJobStateSchema.safeParse({ status: 'done', outcome: { kind: 'fetched' } }).success).toBe(false);
+    expect(GitJobStateSchema.safeParse({ status: 'done', outcome: { kind: 'pulled' } }).success).toBe(false);
   });
 });
 

@@ -23,8 +23,10 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
+import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
 import { PushService } from '../push/push.service';
+import { SyncStateStore } from '../state/sync-state.store';
 import { GitController } from './git.controller';
 
 const gitEnv = {
@@ -102,6 +104,9 @@ describe('GitController', () => {
         { provide: CommitAuthors, useValue: commitAuthors },
         // Pushing has its own spec, with a remote.
         { provide: PushService, useValue: {} },
+        // So is fetching.
+        { provide: FetchService, useValue: {} },
+        { provide: SyncStateStore, useValue: { fetchProblem: () => null } },
         { provide: GitJobs, useValue: { networkJob: () => null } },
         { provide: EventsHub, useValue: { publish: (_userId: number, event: PushEvent) => published.push(event) } },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
@@ -138,7 +143,8 @@ describe('GitController', () => {
       mergeInProgress: false,
       changes: [ { path: 'notes.md', state: 'modified' } ],
       lastCommit: { oid: git(root, 'rev-parse', 'HEAD').trim(), amendable: true, message: 'base' },
-      networkJob: null
+      networkJob: null,
+      fetchProblem: null
     });
 
     const cloning = await status(CLONING).expect(409);
@@ -233,6 +239,56 @@ describe('GitController', () => {
       const { body } = await diff('').expect(400);
 
       expect(body).toMatchObject({ code: 'validation-failed' });
+    });
+  });
+
+  describe('incoming', () => {
+    const incoming = (path: string, id = READY) =>
+      request(app.getHttpServer()).get(`/repositories/${id}/git/incoming`).query({ path });
+
+    beforeEach(() => {
+      // An upstream with one commit that changes notes.md, as after a fetch.
+      git(root, 'checkout', '-q', '-b', 'theirs');
+      writeFileSync(join(root, 'notes.md'), 'theirs\n');
+      git(root, 'commit', '-q', '-am', 'theirs');
+      git(root, 'update-ref', 'refs/remotes/origin/main', 'theirs');
+      git(root, 'checkout', '-q', 'main');
+      git(root, 'config', 'branch.main.remote', 'origin');
+      git(root, 'config', 'branch.main.merge', 'refs/heads/main');
+    });
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('refuses a path inside .git', async () => {
+      const inside = await incoming('.git/config').expect(400);
+      expect(inside.body).toMatchObject({ code: 'path-refused', params: { reason: 'inside-git' } });
+
+      const outside = mkdtempSync(join(tmpdir(), 'fb-git-outside-'));
+      try {
+        symlinkSync(outside, join(root, 'linked'));
+        const through = await incoming('linked/secret.md').expect(400);
+        expect(through.body).toMatchObject({ code: 'path-refused', params: { reason: 'symlink' } });
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+
+      expect((await incoming('../notes.md').expect(400)).body).toMatchObject({ code: 'path-refused' });
+    });
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('reads a path that looks like a pathspec literally', async () => {
+      expect((await incoming('notes.md').expect(200)).body).toEqual({
+        incoming: { upstream: 'origin/main', commits: 1, touchesPath: true }
+      });
+      // As pathspecs, both would match notes.md.
+      for (const path of [ ':(glob)*.md', '*.md' ]) {
+        expect((await incoming(path).expect(200)).body).toEqual({
+          incoming: { upstream: 'origin/main', commits: 1, touchesPath: false }
+        });
+      }
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      expect((await incoming('notes.md', 9).expect(404)).body).toMatchObject({ code: 'not-found' });
     });
   });
 

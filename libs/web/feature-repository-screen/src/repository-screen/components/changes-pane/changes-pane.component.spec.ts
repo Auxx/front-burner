@@ -25,6 +25,7 @@ function statusOf(changes: GitChange[]): GitStatus {
     changes,
     mergeInProgress: false,
     networkJob: null,
+    fetchProblem: null,
     lastCommit: null
   };
 }

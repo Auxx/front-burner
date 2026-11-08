@@ -31,7 +31,8 @@ function status(networkJob: GitStatus['networkJob'] = null): GitStatus {
     behind: 0,
     changes: [],
     mergeInProgress: false,
-    networkJob
+    networkJob,
+    fetchProblem: null
   };
 }
 

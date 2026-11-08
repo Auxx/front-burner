@@ -10,6 +10,7 @@ import {
 } from '@front-burner/shared-contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { FETCH_JOB_TYPE } from '../fetch/fetch.job';
 import { PUSH_JOB_TYPE } from '../push/push.job';
 
 const KNOWN_CODES: ReadonlySet<string> = new Set(ERROR_CODES);
@@ -18,7 +19,10 @@ const KNOWN_CODES: ReadonlySet<string> = new Set(ERROR_CODES);
  * The job types that clients read as git jobs, each with the name clients see.
  * Jobs of a type that is not in it are not served.
  */
-export const GIT_JOB_TYPES: Readonly<Record<string, GitNetworkJobType>> = { [PUSH_JOB_TYPE]: 'push' };
+export const GIT_JOB_TYPES: Readonly<Record<string, GitNetworkJobType>> = {
+  [PUSH_JOB_TYPE]: 'push',
+  [FETCH_JOB_TYPE]: 'fetch'
+};
 
 /**
  * What a client reads about a repository's git jobs (GA-1, GA-9, GA-29): the

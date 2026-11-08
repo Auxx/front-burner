@@ -58,10 +58,8 @@ export class GitApi {
     return { id, workingCopy: join(this.server.dataDir, 'repos', userDir ?? '', String(id)) };
   }
 
-  async startPush(id: number): Promise<number> {
-    const response = await this.call(`/repositories/${id}/git/push`, { method: 'POST' });
-    expect(response.status).toBe(202);
-    return (await response.json() as { jobId: number; }).jobId;
+  startPush(id: number): Promise<number> {
+    return this.started(`/repositories/${id}/git/push`);
   }
 
   async jobState(id: number, jobId: number, authToken = this.authToken): Promise<JobState> {
@@ -71,8 +69,23 @@ export class GitApi {
   }
 
   /** Pushes and waits for the push to finish; `authToken` reads its state. */
-  async pushed(id: number, authToken = this.authToken): Promise<JobState> {
-    const jobId = await this.startPush(id);
+  pushed(id: number, authToken = this.authToken): Promise<JobState> {
+    return this.finished(id, this.startPush(id), authToken);
+  }
+
+  /** Fetches and waits for the fetch to finish. */
+  fetched(id: number): Promise<JobState> {
+    return this.finished(id, this.started(`/repositories/${id}/git/fetch`));
+  }
+
+  private async started(path: string): Promise<number> {
+    const response = await this.call(path, { method: 'POST' });
+    expect(response.status).toBe(202);
+    return (await response.json() as { jobId: number; }).jobId;
+  }
+
+  private async finished(id: number, started: Promise<number>, authToken = this.authToken): Promise<JobState> {
+    const jobId = await started;
     let state = await this.jobState(id, jobId, authToken);
     await waitFor(async () => {
       state = await this.jobState(id, jobId, authToken);

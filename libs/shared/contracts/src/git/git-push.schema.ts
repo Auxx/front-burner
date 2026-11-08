@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { GitFetchedSchema } from './git-fetch.schema';
 
 /** A git operation started as a job (GA-3, A-3.2); follow it with `job.finished` and the job's state. */
 export const GitJobStartedSchema = z.object({ jobId: z.number().int().positive() }).meta({ id: 'GitJobStarted' });
@@ -7,7 +8,7 @@ export const GIT_JOB_STATUSES = [ 'queued', 'running', 'done', 'failed', 'cancel
 export type GitJobStatus = (typeof GIT_JOB_STATUSES)[number];
 
 /** The kinds of network job a repository runs one at a time (A-5.3). */
-export const GIT_NETWORK_JOB_TYPES = [ 'push' ] as const;
+export const GIT_NETWORK_JOB_TYPES = [ 'push', 'fetch' ] as const;
 export type GitNetworkJobType = (typeof GIT_NETWORK_JOB_TYPES)[number];
 
 /** A successful push (GA-32). */
@@ -35,7 +36,7 @@ export const GitJobFailedSchema = z
   .meta({ id: 'GitJobFailed' });
 
 export const GitJobOutcomeSchema = z
-  .discriminatedUnion('kind', [ GitPushedSchema, GitJobFailedSchema ])
+  .discriminatedUnion('kind', [ GitPushedSchema, GitFetchedSchema, GitJobFailedSchema ])
   .meta({ id: 'GitJobOutcome' });
 
 /** How a git job stands; `outcome` once it has ended, `null` before and when it was cancelled. */
@@ -46,7 +47,7 @@ export const GitJobStateSchema = z
   })
   .meta({ id: 'GitJobState' });
 
-/** The repository's unfinished network job, so that a reloaded page or another tab can follow it (GA-9). */
+/** The repository's unfinished network job, a push or a fetch, so that a reloaded page or another tab can follow it (GA-9). */
 export const GitNetworkJobSchema = z
   .object({
     id: z.number().int().positive(),

@@ -14,11 +14,19 @@ describe('GitStatusSchema', () => {
       state: 'deleted'
     } ],
     lastCommit: { oid: '0123456789abcdef0123456789abcdef01234567', amendable: true, message: 'Subject\n\nBody' },
-    networkJob: null
+    networkJob: null,
+    fetchProblem: null
   };
 
   it('parses a status', () => {
     expect(GitStatusSchema.parse(status)).toEqual(status);
+  });
+
+  it('parses the last fetch\'s problem, and needs it', () => {
+    const fetchProblem = { code: 'credentials-refused', params: { host: 'github.com' } };
+    expect(GitStatusSchema.parse({ ...status, fetchProblem }).fetchProblem).toEqual(fetchProblem);
+    const { fetchProblem: _fetchProblem, ...without } = status;
+    expect(GitStatusSchema.safeParse(without).success).toBe(false);
   });
 
   it('parses no commits, and a last commit that cannot be amended', () => {
