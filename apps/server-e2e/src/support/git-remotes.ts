@@ -41,10 +41,23 @@ export function copyRemote(root: string, source: string, name: string): string {
 
 /** Commits to `branch` of the bare repository from another clone, as someone else's push does. */
 export function pushFromElsewhere(bare: string, subject: string, branch = 'main'): void {
+  pushCommit(bare, branch, work => git(work, 'commit', '-q', '--allow-empty', '-m', subject));
+}
+
+/** Commits `content` as `path` to `branch` of the bare repository from another clone. */
+export function pushFileFromElsewhere(bare: string, path: string, content: string, branch = 'main'): void {
+  pushCommit(bare, branch, work => {
+    writeFileSync(join(work, path), content);
+    git(work, 'add', '--', path);
+    git(work, 'commit', '-q', '-m', `theirs: ${path}`);
+  });
+}
+
+function pushCommit(bare: string, branch: string, commit: (work: string) => void): void {
   const work = mkdtempSync(join(tmpdir(), 'front-burner-e2e-elsewhere-'));
   try {
     git(work, 'clone', '-q', '-b', branch, bare, '.');
-    git(work, 'commit', '-q', '--allow-empty', '-m', subject);
+    commit(work);
     git(work, 'push', '-q', 'origin', branch);
   } finally {
     rmSync(work, { recursive: true, force: true });

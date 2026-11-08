@@ -479,7 +479,7 @@
   "web-feature-repository-screen.EditorAreaComponent.empty": "Choose a file from the tree, or create one",
   "web-feature-repository-screen.NotOpenableComponent.cloning": "This repository is still being cloned.",
   "web-feature-repository-screen.NotOpenableComponent.cloneFailed": "This repository's clone failed.",
-  "web-feature-repository-screen.NotOpenableComponent.workingCopyMissing": "This repository's working copy is missing.",
+  "web-feature-repository-screen.NotOpenableComponent.workingCopyMissing": "This repository's working copy is missing or damaged.",
   "web-feature-repository-screen.NotOpenableComponent.needsConfirmation": "This repository needs your confirmation.",
   "web-feature-repository-screen.NotOpenableComponent.settings": "Repository settings",
   "web-feature-repository-screen.FileTreeStoreService.folder": "folder",

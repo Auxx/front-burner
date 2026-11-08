@@ -15,8 +15,10 @@ says whether git was still merging when the backend stopped. If it was,
 `GitMerge.undoCutShort` takes the working copy back to the recorded commit,
 whatever git left, as the merge started clean (GA-26), and `restoreEarlier`
 gives back the record of an earlier merge. If it was not, a `MERGE_HEAD` is a
-merge waiting for the user. Recovery runs in `onApplicationBootstrap`, which
-Nest awaits before it accepts requests, one working copy at a time.
+merge waiting for the user. Recovery runs in `onModuleInit`, one working copy at
+a time: Nest awaits it before any `onApplicationBootstrap`, where the job runner
+starts, so no job runs git meanwhile _(implementation's call:
+`onApplicationBootstrap`, as first planned, could run alongside a queued job)_.
 
 **Tech Stack:** as before. No new packages.
 
@@ -28,9 +30,13 @@ Nest awaits before it accepts requests, one working copy at a time.
 
 - The shared constraints of [the step 4 index](2026-11-08-00-roadmap-step-4.md)
   apply.
-- `git update-index -q --refresh`, under `FRONT_BURNER_GIT_TIMEOUT`. A refresh
-  that fails is logged and stops nothing (A-5.15); nor does a working copy that
-  fails in any other way stop the others.
+- `git update-index -q --unmerged --refresh`, under `FRONT_BURNER_GIT_TIMEOUT`:
+  without `--unmerged`, git exits 1 at a waiting merge's conflicting files. A
+  refresh that fails is logged and stops nothing (A-5.15); nor does a working
+  copy that fails in any other way stop the others.
+- `GitMerge.resetTo` and `undoCutShort` also run under
+  `FRONT_BURNER_GIT_TIMEOUT`: `LOCAL_TIMEOUT_MS` is too short to rewrite a large
+  working copy, and a failed undo would look like a waiting merge.
 - Only `ready` repositories whose working copy exists: `WorkingCopyCheck` has
   dealt with the rest (RM-6).
 - A reset is logged at `info`, with the repository ID and the commit.
@@ -38,6 +44,19 @@ Nest awaits before it accepts requests, one working copy at a time.
   killed git can leave `HEAD.lock`, `ORIG_HEAD.lock` or a ref's lock as well as
   `index.lock`, and at this point no git command runs (NF-9.4). This is only for
   the start: at any other time a fetch may hold a ref's lock.
+
+- _(Review's calls.)_ A repository cannot be used while `merge_applying` is set:
+  an undo that fails, at the start or in a pull, gives it the status Error
+  (RM-6) until an undo works at a later start. A `HEAD` that is neither the
+  recorded commit nor a merge commit on it is left alone. The undo keeps empty
+  folders. The ref changes before `sync_state`, and each start makes it match.
+- An undo at runtime also removes `HEAD.lock`, `ORIG_HEAD.lock` and the current
+  branch's lock, and recovery also removes `packed-refs.new`.
+- `InstanceRepositories` has the queries across users, so that
+  `RepositoryQueries` stays limited to one user; `MergeRecord` has the steps
+  that change the record in both places.
+- Left for `docs/wiki/todo.md`: a file that a merge cut short wrote and the
+  restored `.gitignore` ignores stays, and blocks the next pull.
 
 ## Review Focus
 
@@ -99,11 +118,13 @@ Nest awaits before it accepts requests, one working copy at a time.
 **Files:**
 
 - Modify: `apps/server-e2e/src/git.e2e.spec.ts`,
-  `apps/server-e2e/src/startup.e2e.spec.ts`
+  `apps/server-e2e/src/support/git-remotes.ts`
 
 - [ ] **Step 1: Write the tests**: `a restart during a merge leaves the branch
-      as it was, and the job failed`, using the HTTP server's `delayMs` and a
-      killed backend; `a restart keeps a merge waiting for the user`.
+      as it was, and the job failed`, with a smudge filter that holds git inside
+      the merge (`delayMs` only delays the fetch, before the merge starts), a
+      killed backend and a killed git; `a restart keeps a merge waiting for the
+      user`.
 - [ ] **Step 2: Run them** — `npx nx e2e server-e2e`; all pass.
 - [ ] **Step 3: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `test(sync): restarts during a merge`.

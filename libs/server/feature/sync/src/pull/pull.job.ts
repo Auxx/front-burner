@@ -1,14 +1,16 @@
 import type { Job } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitMerge, GitOperationError, MergeResult } from '@front-burner/server-core-git';
+import { GitEngine, GitMerge, GitOperationError, MergeRequest, MergeResult } from '@front-burner/server-core-git';
 import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { JobKeys } from '@front-burner/server-feature-credentials';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
+import { InstanceRepositories } from '@front-burner/server-feature-repositories';
 import type { GitJobFailed, GitJobOutcome } from '@front-burner/shared-contracts';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { FetchStep } from '../fetch/fetch-step';
+import { MergeRecord } from '../state/merge-record';
 import { SyncStateStore } from '../state/sync-state.store';
 import { pullsFromOrigin, sameNameRemote } from './same-name-remote';
 
@@ -53,6 +55,8 @@ export class PullJob implements OnModuleInit {
     private readonly guard: WorkingTreeGuard,
     private readonly commitAuthors: CommitAuthors,
     private readonly syncState: SyncStateStore,
+    private readonly mergeRecord: MergeRecord,
+    private readonly instance: InstanceRepositories,
     private readonly jobKeys: JobKeys,
     private readonly events: EventsHub
   ) {}
@@ -131,21 +135,54 @@ export class PullJob implements OnModuleInit {
     }
     const recorded = await this.merges.record(root);
     this.syncState.startMerge(repositoryId, recorded);
+    try {
+      return await this.applyMerge(repositoryId, root, recorded, { branch, upstream, author });
+    } catch (error) {
+      this.blockIfStillApplying(userId, repositoryId);
+      throw error;
+    }
+  }
+
+  /**
+   * A repository cannot stay usable with `merge_applying` set: recovery would
+   * undo the merge at the next start, over whatever the user did since. Recovery
+   * tries again then, and the status goes back when that works (RM-6, A-5.15).
+   */
+  private blockIfStillApplying(userId: number, repositoryId: number): void {
+    if (this.syncState.record(repositoryId).applying) {
+      this.logger.error(`Repository ${repositoryId} is left halfway through a merge, and is blocked until a restart`);
+      this.instance.markDamaged(repositoryId);
+      this.events.publish(userId, {
+        type: 'repository.status',
+        repositoryId,
+        status: 'error',
+        error: 'working-copy-missing'
+      });
+    }
+  }
+
+  /** The merge itself, with the record already taken; ends with `merge_applying` cleared, unless it throws. */
+  private async applyMerge(
+    repositoryId: number,
+    root: string,
+    recorded: string,
+    request: MergeRequest
+  ): Promise<GitJobOutcome> {
+    const { upstream } = request;
     let result: MergeResult;
     try {
-      result = await this.merges.merge(root, { branch, upstream, author });
+      result = await this.merges.merge(root, request);
     } catch (error) {
       return this.mergeFailed(repositoryId, root, recorded, error);
     }
     switch (result.kind) {
       case 'up-to-date':
         // A fetch moved the upstream back meanwhile: nothing changed.
-        await this.restoreEarlier(repositoryId, root);
+        await this.mergeRecord.restoreEarlier(repositoryId, root);
         return { kind: 'pulled', result: 'up-to-date', commits: 0, upstream };
       case 'fast-forward':
         // The branch has moved past any earlier merge.
-        this.syncState.forgetRecord(repositoryId);
-        await this.merges.forgetRecord(root);
+        await this.mergeRecord.forget(repositoryId, root);
         break;
       case 'merged':
         this.syncState.mergeCommitted(repositoryId, result.oid);
@@ -162,7 +199,7 @@ export class PullJob implements OnModuleInit {
    * A merge that git refused before it started changed nothing; any other may
    * have stopped partway, and is undone first (GA-43). Either way the earlier
    * record comes back. When the undo itself fails, the record stays as it is,
-   * marked as being applied, for recovery (plan 78).
+   * marked as being applied, and the repository is blocked for recovery (plan 78).
    */
   private async mergeFailed(
     repositoryId: number,
@@ -171,26 +208,16 @@ export class PullJob implements OnModuleInit {
     error: unknown
   ): Promise<GitJobOutcome> {
     if (error instanceof GitOperationError && error.code === 'merge-blocked') {
-      await this.restoreEarlier(repositoryId, root);
+      await this.mergeRecord.restoreEarlier(repositoryId, root);
       return failed('merge-blocked', error.params);
     }
     this.logger.warn(`Merge of repository ${repositoryId} failed; undoing it: ${String(error)}`);
     await this.merges.undoCutShort(root, recorded);
-    await this.restoreEarlier(repositoryId, root);
+    await this.mergeRecord.restoreEarlier(repositoryId, root);
     if (error instanceof GitOperationError && error.code === 'timeout') {
       return failed('git-timeout');
     }
     throw error;
-  }
-
-  /** Puts the earlier record back in `sync_state` and under `PRE_MERGE_REF`, or drops both. */
-  private async restoreEarlier(repositoryId: number, root: string): Promise<void> {
-    const earlier = this.syncState.restoreEarlier(repositoryId);
-    if (earlier === null) {
-      await this.merges.forgetRecord(root);
-    } else {
-      await this.merges.keepRecord(root, earlier);
-    }
   }
 
   /** Every end, the job's key copy goes (RC-19), and clients read the new state (A-3.11). */

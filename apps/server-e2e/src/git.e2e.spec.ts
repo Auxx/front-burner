@@ -8,7 +8,7 @@ import {
 } from '@front-burner/server-core-git/testing';
 import BetterSqlite3 from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -18,6 +18,7 @@ import {
   createRemotes,
   gitOutput,
   type HoldingProxy,
+  pushFileFromElsewhere,
   pushFromElsewhere,
   refuseWithHook,
   startHoldingProxy
@@ -745,6 +746,109 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
     });
     expect(gitOutput(workingCopy, 'log', '--format=%s', 'main')).toBe('first');
     expect(gitOutput(workingCopy, 'status', '--porcelain')).toBe('');
+  });
+
+  /** A server on a data directory of its own, which a test can kill and start again. */
+  async function restartableServer(prefix: string) {
+    const dataDir = mkdtempSync(join(tmpdir(), prefix));
+    cleanups.push(async () => rmSync(dataDir, { recursive: true, force: true }));
+    const env = { FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN, FRONT_BURNER_DATA_DIR: dataDir };
+    const first = await startServerProcess(env);
+    cleanups.push(() => first.stop());
+    await onboard(first);
+    const firstClient = new GitApi(first, (await login(first, 'body')).authToken);
+    const confirmed = await firstClient.send('PUT', '/preferences/commit-author', AUTHOR);
+    expect(confirmed.status).toBe(200);
+    return {
+      first,
+      firstClient,
+      restart: async () => {
+        const second = await startServerProcess(env);
+        cleanups.push(() => second.stop());
+        return new GitApi(second, (await login(second, 'body')).authToken);
+      }
+    };
+  }
+
+  it('a restart during a merge leaves the branch as it was, and the job failed', async () => {
+    const { first, firstClient, restart } = await restartableServer('front-burner-e2e-merge-restart-');
+    const bare = remote('cut-short');
+    const { id, workingCopy } = await firstClient.add('cut-short', `${publicGit.url}/cut-short.git`);
+    commitIn(workingCopy, 'mine');
+    const recorded = gitOutput(workingCopy, 'rev-parse', 'HEAD');
+    pushFileFromElsewhere(bare, 'theirs.md', 'theirs\n');
+
+    // Hooks are off, but a filter runs: this one stops git while it writes
+    // `theirs.md`, deep inside the merge, and says who to kill.
+    const gitDir = join(workingCopy, '.git');
+    const hold = join(root, 'hold-merge.sh');
+    const started = join(root, 'hold-merge.started');
+    const pids = join(root, 'hold-merge.pids');
+    writeFileSync(hold, `#!/bin/sh\necho "$PPID $$" > '${pids}'\ntouch '${started}'\nexec sleep 120\n`);
+    chmodSync(hold, 0o755);
+    git(workingCopy, 'config', 'filter.hold.smudge', hold);
+    writeFileSync(join(gitDir, 'info', 'attributes'), 'theirs.md filter=hold\n');
+
+    const jobId = await firstClient.startPull(id);
+    await waitFor(() => existsSync(started));
+    await waitFor(() => readFileSync(pids, 'utf8').trim().includes(' '));
+    await first.kill();
+    // git first: with the filter gone and git still there, git would finish the merge.
+    for (const pid of readFileSync(pids, 'utf8').trim().split(' ').map(Number)) {
+      process.kill(pid, 'SIGKILL');
+    }
+    git(workingCopy, 'config', '--unset', 'filter.hold.smudge');
+    rmSync(join(gitDir, 'info', 'attributes'));
+    expect(existsSync(join(gitDir, 'index.lock'))).toBe(true);
+
+    const secondClient = await restart();
+
+    expect(await secondClient.jobState(id, jobId)).toEqual({
+      status: 'failed',
+      outcome: { kind: 'failed', code: 'interrupted', params: {} }
+    });
+    expect(gitOutput(workingCopy, 'rev-parse', 'HEAD')).toBe(recorded);
+    expect(gitOutput(workingCopy, 'status', '--porcelain')).toBe('');
+    expect(existsSync(join(gitDir, 'index.lock'))).toBe(false);
+    expect(existsSync(join(gitDir, 'MERGE_HEAD'))).toBe(false);
+    expect(existsSync(join(workingCopy, 'theirs.md'))).toBe(false);
+
+    // The user can simply pull again.
+    expect((await secondClient.pulled(id)).outcome).toEqual({
+      kind: 'pulled',
+      result: 'merged',
+      commits: 1,
+      upstream: 'origin/main'
+    });
+    expect(readFileSync(join(workingCopy, 'theirs.md'), 'utf8')).toBe('theirs\n');
+  });
+
+  it('a restart keeps a merge waiting for the user', async () => {
+    const { first, firstClient, restart } = await restartableServer('front-burner-e2e-merge-wait-');
+    const bare = remote('waiting');
+    const { id, workingCopy } = await firstClient.add('waiting', `${publicGit.url}/waiting.git`);
+    pushFileFromElsewhere(bare, 'both.md', 'theirs\n');
+    writeFileSync(join(workingCopy, 'both.md'), 'mine\n');
+    git(workingCopy, 'add', 'both.md');
+    commitIn(workingCopy, 'mine');
+    const recorded = gitOutput(workingCopy, 'rev-parse', 'HEAD');
+
+    expect((await firstClient.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
+    const markers = readFileSync(join(workingCopy, 'both.md'), 'utf8');
+    expect(markers).toContain('<<<<<<< main');
+    expect(markers).toContain('>>>>>>> origin/main');
+    await first.kill();
+    writeFileSync(join(workingCopy, '.git', 'index.lock'), '');
+
+    const secondClient = await restart();
+
+    expect(existsSync(join(workingCopy, '.git', 'index.lock'))).toBe(false);
+    expect(existsSync(join(workingCopy, '.git', 'MERGE_HEAD'))).toBe(true);
+    expect(gitOutput(workingCopy, 'rev-parse', 'refs/front-burner/pre-merge')).toBe(recorded);
+    expect(readFileSync(join(workingCopy, 'both.md'), 'utf8')).toBe(markers);
+    expect(await (await secondClient.call(`/repositories/${id}/git/status`)).json()).toMatchObject({
+      mergeInProgress: true
+    });
   });
 
   it.each([ [ 'a full clone', 'full' ], [ 'a single-branch clone', 'main' ] ] as const)(

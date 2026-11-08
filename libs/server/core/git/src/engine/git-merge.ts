@@ -1,7 +1,7 @@
 import { inBatches, lstatOrMissing, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
 import { isMarkdownName } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
-import { rm, writeFile } from 'node:fs/promises';
+import { readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult } from '../runner/git-runner';
@@ -92,19 +92,94 @@ export class GitMerge {
    * knows the working copy was clean when the commit was recorded (GA-26).
    */
   async resetTo(workingCopy: string, oid: string): Promise<void> {
-    await this.local.checked(workingCopy, [ 'reset', '-q', '--hard', oid ]);
+    await this.local.checked(workingCopy, [ 'reset', '-q', '--hard', oid ], { timeoutMs: this.options.gitTimeoutMs });
   }
 
   /**
-   * Undoes a merge that git did not finish. A killed git leaves `index.lock`,
-   * which makes `reset` fail, and a checkout killed partway leaves untracked
-   * files that `reset` keeps. `clean` without `-x` leaves ignored files, and the
-   * working copy had nothing else untracked (GA-26).
+   * Whether `HEAD` is what a merge cut short can have left: the recorded commit,
+   * or a merge commit made on it. A fast-forward isn't, as moving the branch is
+   * the last thing it does, so that one finished. Only a merge makes a commit with
+   * two parents, so a commit of the user's on top of the recorded one is never this.
+   */
+  async isCutShort(workingCopy: string, recorded: string): Promise<boolean> {
+    const [ head, firstParent, secondParent ] = (
+      await this.local.checked(workingCopy, [ 'rev-list', '--parents', '-n', '1', 'HEAD', '--' ])
+    ).trim().split(' ');
+    return head === recorded || (firstParent === recorded && secondParent !== undefined);
+  }
+
+  /**
+   * Undoes a merge that git did not finish. A killed git leaves locks that make
+   * `reset` fail, and a checkout killed partway leaves untracked files that
+   * `reset` keeps. The working copy had nothing else untracked (GA-26), except
+   * what `git status` can't see: ignored files and the user's empty folders, which
+   * both stay. A merge's folder always has a file in it, so it goes.
    */
   async undoCutShort(workingCopy: string, oid: string): Promise<void> {
-    await rm(join(workingCopy, '.git', 'index.lock'), { force: true });
+    await this.removeOwnLocks(workingCopy);
     await this.resetTo(workingCopy, oid);
-    await this.local.checked(workingCopy, [ 'clean', '-fdq' ]);
+    const timeoutMs = this.options.gitTimeoutMs;
+    // Without `-d`, it leaves every untracked folder.
+    await this.local.checked(workingCopy, [ 'clean', '-fq' ], { timeoutMs });
+    const folders = (
+      await this.local.checked(
+        workingCopy,
+        [ 'ls-files', '-z', '--others', '--directory', '--no-empty-directory', '--exclude-standard' ],
+        { timeoutMs }
+      )
+    ).split('\0').filter(path => path !== '');
+    for (let start = 0; start < folders.length; start += PATHS_PER_COMMAND) {
+      await this.local.checked(
+        workingCopy,
+        [ '--literal-pathspecs', 'clean', '-fdq', '--', ...folders.slice(start, start + PATHS_PER_COMMAND) ],
+        { timeoutMs }
+      );
+    }
+  }
+
+  /**
+   * The locks that a merge killed partway can have left, and that a reset needs.
+   * The caller holds the working-tree lock, and a fetch, which doesn't need it,
+   * touches no local branch, so these are stale; a remote branch's may not be.
+   */
+  private async removeOwnLocks(workingCopy: string): Promise<void> {
+    const gitDir = join(workingCopy, '.git');
+    const head = await this.local.run(workingCopy, [ 'symbolic-ref', '-q', 'HEAD' ]);
+    const branchLocks = head.exitCode === 0 ? [ `${head.stdout.trim()}.lock` ] : [];
+    for (const lock of [ 'index.lock', 'HEAD.lock', 'ORIG_HEAD.lock', ...branchLocks ]) {
+      await rm(join(gitDir, lock), { force: true });
+    }
+  }
+
+  /**
+   * Removes every `*.lock` directly in `.git` and under `.git/refs`: a killed git
+   * can leave `HEAD.lock`, `ORIG_HEAD.lock` or a ref's lock as well as
+   * `index.lock`. Also `packed-refs.new`, which a killed rewrite of `packed-refs`
+   * leaves, and which then stops every later one. Only for the start, when no git
+   * command runs (NF-9.4): at any other time a fetch may hold a ref's lock.
+   */
+  async removeStaleLocks(workingCopy: string): Promise<void> {
+    const gitDir = join(workingCopy, '.git');
+    const entries = [
+      ...await readdir(gitDir, { withFileTypes: true }),
+      ...await readdir(join(gitDir, 'refs'), { withFileTypes: true, recursive: true })
+    ];
+    for (const entry of entries) {
+      if (entry.isFile() && (entry.name.endsWith('.lock') || entry.name === 'packed-refs.new')) {
+        await rm(join(entry.parentPath, entry.name), { force: true });
+      }
+    }
+  }
+
+  /**
+   * Writes what a status would otherwise work out every time, which can take as
+   * long as hashing every file (A-5.14). `--unmerged` is needed because git
+   * otherwise fails at the conflicting files of a merge waiting for the user.
+   */
+  async refreshIndex(workingCopy: string): Promise<void> {
+    await this.local.checked(workingCopy, [ 'update-index', '-q', '--unmerged', '--refresh' ], {
+      timeoutMs: this.options.gitTimeoutMs
+    });
   }
 
   /**

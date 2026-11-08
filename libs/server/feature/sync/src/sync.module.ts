@@ -15,6 +15,8 @@ import { PullJob } from './pull/pull.job';
 import { PullService } from './pull/pull.service';
 import { PushJob } from './push/push.job';
 import { PushService } from './push/push.service';
+import { WorkingCopyRecovery } from './recovery/working-copy-recovery';
+import { MergeRecord } from './state/merge-record';
 import { SyncStateStore } from './state/sync-state.store';
 
 /**
@@ -36,7 +38,9 @@ import { SyncStateStore } from './state/sync-state.store';
     FetchScheduler,
     PullService,
     PullJob,
-    SyncStateStore
+    SyncStateStore,
+    MergeRecord,
+    WorkingCopyRecovery
   ]
 })
 export class SyncModule {}
