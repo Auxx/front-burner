@@ -78,7 +78,8 @@ describe('NetworkJobService', () => {
         translocoTesting({
           // The test module has no ICU transpiler; en.json's plural is checked by the web application.
           'web-feature-repository-screen.NetworkJobService.pushed': 'Pushed {{ count }} commits to {{ upstream }}',
-          'web-feature-repository-screen.NetworkJobService.noNewCommits': 'No new commits'
+          'web-feature-repository-screen.NetworkJobService.noNewCommits': 'No new commits',
+          'web-feature-repository-screen.NetworkJobService.noChangesReceived': 'No changes received for this branch'
         })
       ],
       providers: [
@@ -447,8 +448,15 @@ describe('NetworkJobService', () => {
   });
 
   describe('a fetch', () => {
-    const NOTHING_MOVED: GitJobState = { status: 'done', outcome: { kind: 'fetched', moved: false } };
-    const MOVED: GitJobState = { status: 'done', outcome: { kind: 'fetched', moved: true } };
+    const NOTHING_MOVED: GitJobState = {
+      status: 'done',
+      outcome: { kind: 'fetched', moved: false, upstreamMoved: false }
+    };
+    const OTHER_BRANCH_MOVED: GitJobState = {
+      status: 'done',
+      outcome: { kind: 'fetched', moved: true, upstreamMoved: false }
+    };
+    const MOVED: GitJobState = { status: 'done', outcome: { kind: 'fetched', moved: true, upstreamMoved: true } };
 
     it('starts a fetch and follows its job', async () => {
       await service.start('fetch');
@@ -474,7 +482,21 @@ describe('NetworkJobService', () => {
       expect(refresh).toHaveBeenCalled();
     });
 
-    it('says nothing when something moved, it only updates the counts', async () => {
+    it('says no changes were received when only another branch moved', async () => {
+      gitJob.mockReturnValue(of(OTHER_BRANCH_MOVED));
+
+      await service.start('fetch');
+      await settle();
+
+      expect(service.running()).toBeNull();
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        message: 'No changes received for this branch',
+        status: 'success'
+      }));
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it('says nothing when the upstream moved, it only updates the counts', async () => {
       gitJob.mockReturnValue(of(MOVED));
 
       await service.start('fetch');
@@ -482,6 +504,18 @@ describe('NetworkJobService', () => {
 
       expect(toast.show).not.toHaveBeenCalled();
       expect(refresh).toHaveBeenCalled();
+    });
+
+    it('says nothing for another tab\'s fetch that moved only another branch', async () => {
+      gitStatus.set(status({ id: 9, type: 'fetch' }));
+      await settle();
+
+      gitJob.mockReturnValue(of(OTHER_BRANCH_MOVED));
+      finished(9);
+      await settle();
+
+      expect(service.running()).toBeNull();
+      expect(toast.show).not.toHaveBeenCalled();
     });
 
     it('says nothing for a fetch taken up from the status', async () => {

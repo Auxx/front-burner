@@ -57,11 +57,14 @@ const OPERATIONS: Readonly<Record<GitNetworkJobType, Operation>> = {
   },
   fetch: {
     start: (api, repositoryId) => api.fetch(repositoryId),
-    // `moved` is true when any remote branch changed, and such a fetch says nothing, even when the counts of
-    // this branch stay the same. One that moved nothing says so, as it would otherwise look as if the press
-    // did nothing.
-    succeeded: outcome =>
-      outcome.kind === 'fetched' && !outcome.moved ? { key: `${KEY}.noNewCommits`, params: {} } : null
+    // A fetch that moved this branch's upstream shows in the counts. Otherwise it says so, also when only another
+    // branch moved (`moved`), as it would look as if the press did nothing.
+    succeeded: outcome => {
+      if (outcome.kind !== 'fetched' || outcome.upstreamMoved) {
+        return null;
+      }
+      return { key: `${KEY}.${outcome.moved ? 'noChangesReceived' : 'noNewCommits'}`, params: {} };
+    }
   }
 };
 
@@ -80,9 +83,11 @@ const stringParams = (params: Readonly<Record<string, unknown>>): Record<string,
  * the job ends, the status is read again, so that the counts update (GA-32).
  *
  * Only the tab that started a job says "Pushed 2 commits to origin/main", or
- * "No new commits" for a fetch that moved nothing (a fetch that moved something
- * says nothing, the counts update). A job that failed becomes `problem`, quiet
- * for a job this tab did not start, so that it is not announced. So does a job
+ * "No new commits" for a fetch that moved nothing, or "No changes received for
+ * this branch" for one that moved only another branch (a fetch that moved the
+ * upstream says nothing, the counts update). A job that failed becomes
+ * `problem`, quiet for a job this tab did not start, so that it is not
+ * announced. So does a job
  * the backend refused to start, except `409 key-locked`: that asks for the
  * passphrase at once, and the job carries on after the unlock without being
  * started again; cancelling cancels it, with no message (RC-17). It asks once

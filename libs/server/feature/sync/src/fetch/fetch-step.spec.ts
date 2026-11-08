@@ -84,7 +84,7 @@ describe.skipIf(process.platform === 'win32')('FetchStep', () => {
     });
 
     await harness.serve({});
-    expect(await run()).toEqual({ ok: true, moved: false });
+    expect(await run()).toEqual({ ok: true, moved: false, upstreamMoved: false });
     expect(harness.syncState.fetchProblem(harness.repositoryId)).toBeNull();
 
     harness.useRemote('https://127.0.0.1:1/handbook.git');
@@ -187,11 +187,11 @@ describe.skipIf(process.platform === 'win32')('FetchStep', () => {
   });
 
   it('publishes git.changed only when something changed', async () => {
-    expect(await run()).toEqual({ ok: true, moved: false });
+    expect(await run()).toEqual({ ok: true, moved: false, upstreamMoved: false });
     expect(gitChanged()).toHaveLength(0);
 
     harness.pushFromElsewhere('theirs');
-    expect(await run()).toEqual({ ok: true, moved: true });
+    expect(await run()).toEqual({ ok: true, moved: true, upstreamMoved: true });
     expect(gitChanged()).toHaveLength(1);
     expect(git(harness.workingCopy, 'log', '-1', '--format=%s', 'origin/main').trim()).toBe('theirs');
 

@@ -47,7 +47,7 @@ describe.skipIf(process.platform === 'win32')('FetchJob', () => {
     await harness.finished(id);
 
     expect(harness.jobOf(id)?.status).toBe('done');
-    expect(resultOf(id)).toEqual({ kind: 'fetched', moved: true });
+    expect(resultOf(id)).toEqual({ kind: 'fetched', moved: true, upstreamMoved: true });
     expect(git(harness.workingCopy, 'log', '-1', '--format=%s', 'origin/main').trim()).toBe('theirs');
     // Remote branches only: the user's branch stays (GA-33).
     expect(git(harness.workingCopy, 'log', '-1', '--format=%s', 'main').trim()).toBe('first');
@@ -84,7 +84,7 @@ describe.skipIf(process.platform === 'win32')('FetchJob', () => {
     const id = enqueue();
     await harness.finished(id);
 
-    expect(resultOf(id)).toEqual({ kind: 'fetched', moved: true });
+    expect(resultOf(id)).toEqual({ kind: 'fetched', moved: true, upstreamMoved: true });
     expect(existsSync(join(workingCopy, '.git', 'MERGE_HEAD'))).toBe(true);
     expect(readFileSync(join(workingCopy, '.git', 'MERGE_HEAD'), 'utf8')).toBe(mergeHead);
     expect(readFileSync(join(workingCopy, 'notes.md'), 'utf8')).toBe(conflicted);
