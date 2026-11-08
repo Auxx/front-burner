@@ -62,6 +62,26 @@ export interface PushResult {
   upstream: string;
 }
 
+export interface FetchRequest {
+  /** The repository's stored remote; `origin` must have this URL. */
+  remoteUrl: string;
+  credentials: GitCredentials;
+  /** For SSH: the user's accepted hosts as `known_hosts` lines; the instance's are always added. */
+  knownHosts: string[];
+}
+
+/** What the current branch's upstream has that the branch does not (GA-34). */
+export interface IncomingChanges {
+  /** Such as `origin/main`. */
+  upstream: string;
+  commits: number;
+  /** Those commits change the path, under either name of a renamed file; false without a path. */
+  touchesPath: boolean;
+}
+
+/** How git says that a fetch refspec names a branch the remote no longer has. */
+const MISSING_REMOTE_REF = /^fatal: couldn't find remote ref (refs\/heads\/\S+)$/m;
+
 interface NetworkRunOptions {
   /** Values for the user's message besides `host`. */
   params?: Record<string, string>;
@@ -787,6 +807,164 @@ export class GitEngine implements BeforeApplicationShutdown {
     }
     await this.local.checked(workingCopy, [ 'config', '--add', 'remote.origin.fetch', refspec ]);
     return refspec;
+  }
+
+  /**
+   * Fetches `origin` as its refspecs say, removing remote branches deleted on
+   * the remote, without tags, submodules or LFS objects; never changes the
+   * user's files or branch (GA-33, A-5.2). Takes no lock: the caller holds the
+   * NetworkLock (A-5.3). In a single-branch clone, a refspec whose branch the
+   * remote deleted is removed with its ref and upstream, and the fetch tried
+   * again, so that the branch is unpublished (GA-41).
+   *
+   * @returns whether any remote-tracking branch moved.
+   * @throws GitOperationError `unsafe-repository-config` when `origin` is not
+   * the stored remote, and the codes of A-5.10.
+   */
+  async fetch(workingCopy: string, request: FetchRequest): Promise<{ moved: boolean; }> {
+    const before = await this.remoteRefs(workingCopy);
+    const removed = new Set<string>();
+    for (;;) {
+      try {
+        await this.runNetwork(
+          'fetch',
+          request.remoteUrl,
+          request.credentials,
+          request.knownHosts,
+          () => [
+            ...NO_LFS,
+            'fetch',
+            '--prune',
+            '--no-tags',
+            '--no-recurse-submodules',
+            '--no-write-fetch-head',
+            'origin'
+          ],
+          this.options.gitTimeoutMs,
+          { cwd: workingCopy }
+        );
+        break;
+      } catch (error) {
+        const ref = error instanceof GitOperationError ? MISSING_REMOTE_REF.exec(error.detail)?.[1] : undefined;
+        if (ref === undefined || removed.has(ref) || !await this.forgetRemoteBranch(workingCopy, ref)) {
+          throw error;
+        }
+        removed.add(ref);
+      }
+    }
+    return { moved: await this.remoteRefs(workingCopy) !== before };
+  }
+
+  /**
+   * Removes the fetch refspecs of a branch the remote deleted, their
+   * remote-tracking refs, and the upstream of every local branch that had it,
+   * as git no longer reports that upstream. False when no refspec names it.
+   */
+  private async forgetRemoteBranch(workingCopy: string, ref: string): Promise<boolean> {
+    const refspecs = (await this.local.configValues(workingCopy, 'remote.origin.fetch'))
+      .filter(refspec => refspec.replace(/^\+/, '').split(':')[0] === ref);
+    if (refspecs.length === 0) {
+      return false;
+    }
+    const merges = await this.local.run(workingCopy, [ 'config', '--get-regexp', '-z', '^branch\\..*\\.merge$' ]);
+    // 1: no branch has an upstream.
+    if (merges.exitCode !== 0 && merges.exitCode !== 1) {
+      throw new Error(`git config --get-regexp failed: ${merges.stderr.trim()}`);
+    }
+    // -z: "<key>\n<value>\0" per entry.
+    const branches = merges.stdout.split('\0').filter(entry => entry !== '')
+      .map(entry => entry.slice('branch.'.length, entry.indexOf('\n') - '.merge'.length));
+    for (const branch of branches) {
+      if (await this.local.upstreamOf(workingCopy, branch) === ref) {
+        await this.local.checked(workingCopy, [ 'config', '--unset-all', `branch.${branch}.remote` ]);
+        await this.local.checked(workingCopy, [ 'config', '--unset-all', `branch.${branch}.merge` ]);
+      }
+    }
+    for (const refspec of new Set(refspecs)) {
+      await this.local.checked(workingCopy, [
+        'config',
+        '--unset-all',
+        '--fixed-value',
+        'remote.origin.fetch',
+        refspec
+      ]);
+      const destination = refspec.split(':')[1];
+      if (destination?.startsWith('refs/remotes/')) {
+        await this.local.checked(workingCopy, [ 'update-ref', '-d', destination ]);
+      }
+    }
+    return true;
+  }
+
+  /** Every remote-tracking branch of `origin` and where it points. */
+  private remoteRefs(workingCopy: string): Promise<string> {
+    return this.local.checked(workingCopy, [
+      '--no-optional-locks',
+      'for-each-ref',
+      '--format=%(objectname) %(refname)',
+      'refs/remotes/origin'
+    ]);
+  }
+
+  /**
+   * What the current branch's upstream has that the branch does not, and
+   * whether those commits change `path` (GA-34); `null` on no branch, before the
+   * first commit, or without an upstream or with one that is gone. Read-only,
+   * so it can run outside the working-tree lock (A-5.3).
+   */
+  async incoming(workingCopy: string, path?: string): Promise<IncomingChanges | null> {
+    const head = await this.local.run(workingCopy, [ 'symbolic-ref', '--quiet', 'HEAD' ]);
+    if (head.timedOut) {
+      throw new GitOperationError('timeout', head.stderr);
+    }
+    const current = head.stdout.trim();
+    if (head.exitCode !== 0 || !current.startsWith('refs/heads/')) {
+      return null;
+    }
+    const target = await this.local.upstreamOf(workingCopy, current.slice('refs/heads/'.length));
+    if (target === null) {
+      return null;
+    }
+    // The full name: a local branch can be called `origin/main`.
+    const branch = target.slice('refs/heads/'.length);
+    const ref = `refs/remotes/origin/${branch}`;
+    const resolved = await Promise.all(
+      [ 'HEAD', ref ].map(name =>
+        this.local.run(workingCopy, [ '--no-optional-locks', 'rev-parse', '--verify', '--quiet', `${name}^{commit}` ])
+      )
+    );
+    for (const result of resolved) {
+      if (result.timedOut) {
+        throw new GitOperationError('timeout', result.stderr);
+      }
+    }
+    // HEAD without a commit yet, or the upstream gone.
+    if (resolved.some(result => result.exitCode !== 0)) {
+      return null;
+    }
+    const options = { timeoutMs: this.options.gitTimeoutMs };
+    const [ count, touchesPath ] = await Promise.all([
+      this.local.checked(workingCopy, [ '--no-optional-locks', 'rev-list', '--count', `HEAD..${ref}`, '--' ], options),
+      path === undefined ? false : this.changesPath(workingCopy, `HEAD...${ref}`, path)
+    ]);
+    return { upstream: `origin/${branch}`, commits: Number.parseInt(count.trim(), 10), touchesPath };
+  }
+
+  /** True when the commits of `range` change `path`, read literally; a rename changes both names. */
+  private async changesPath(workingCopy: string, range: string, path: string): Promise<boolean> {
+    const result = await this.local.run(
+      workingCopy,
+      [ '--no-optional-locks', '--literal-pathspecs', 'diff', '--quiet', ...DIFF_FLAGS, range, '--', path ],
+      { timeoutMs: this.options.gitTimeoutMs }
+    );
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    // --quiet: 0 for no difference, 1 for a difference.
+    if (result.exitCode !== 0 && result.exitCode !== 1) {
+      throw new Error(`git diff failed: ${result.stderr.trim()}`);
+    }
+    return result.exitCode === 1;
   }
 
   /**
