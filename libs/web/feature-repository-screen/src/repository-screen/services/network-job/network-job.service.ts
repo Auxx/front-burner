@@ -7,10 +7,15 @@ import { TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom, type Observable } from 'rxjs';
 
 import { gitProblem, type GitProblemText } from '../../utils/git-problem/git-problem';
+import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { LockedKeyService } from '../locked-key/locked-key.service';
+import { OpenFilesService } from '../open-files/open-files.service';
 
 const KEY = 'web-feature-repository-screen.NetworkJobService';
+
+/** How a pull ends that needs a merge commit from a user who has not confirmed their commit author (CA-14). */
+const AUTHOR_NOT_CONFIRMED = 'commit-author-not-confirmed';
 
 /** The wait before a job whose state could not be read is read again. */
 export const JOB_RETRY_MS = 5000;
@@ -34,6 +39,8 @@ interface Followed {
   readonly own: boolean;
   /** Started to bring the status up to date, not by the user: its end says nothing. */
   readonly background?: boolean;
+  /** The user was already asked for their commit author on this press (CA-14). */
+  readonly authorAsked?: boolean;
 }
 
 /** The network job being asked for, until the backend answers. */
@@ -45,11 +52,14 @@ interface Starting {
 /** A network job waiting for the running one to end. */
 interface Waiting extends Starting {
   readonly background: boolean;
+  readonly authorAsked?: boolean;
 }
 
 /** What differs between operations: how the job is started, and what its success says. */
 interface Operation {
   readonly start: (api: GitApi, repositoryId: number) => Observable<GitJobStarted>;
+  /** Whether what the user typed must reach the disk first, so that the backend judges what the user sees (ED-17). */
+  readonly savesFirst?: boolean;
   /** The toast for a job this tab started that succeeded, or `null` when the outcome is not its success. */
   readonly succeeded: (outcome: GitJobOutcome) => { key: string; params: Record<string, unknown>; } | null;
 }
@@ -75,8 +85,16 @@ const OPERATIONS: Readonly<Record<GitNetworkJobType, Operation>> = {
   },
   pull: {
     start: (api, repositoryId) => api.pull(repositoryId),
-    // The client's Pull comes with its notices (GA-28) in a later plan; another tab's pull is followed meanwhile.
-    succeeded: () => null
+    savesFirst: true,
+    // A merge that conflicted says nothing: the screen switches to it by the status alone (GA-28).
+    succeeded: outcome => {
+      if (outcome.kind !== 'pulled' || outcome.result === 'conflicted') {
+        return null;
+      }
+      return outcome.result === 'up-to-date'
+        ? { key: `${KEY}.upToDate`, params: {} }
+        : { key: `${KEY}.pulled`, params: { count: outcome.commits } };
+    }
   }
 };
 
@@ -97,15 +115,22 @@ const stringParams = (params: Readonly<Record<string, unknown>>): Record<string,
  * Only the tab that started a job says "Pushed 2 commits to origin/main", or
  * "No new commits" for a fetch that moved nothing, or "No changes received for
  * this branch" for one that moved only another branch (a fetch that moved the
- * upstream says nothing, the counts update). A job that failed becomes
+ * upstream says nothing, the counts update), or "Already up to date" or "Pulled
+ * 3 commits" (GA-28). A job that failed becomes
  * `problem`, quiet for a job this tab did not start, so that it is not
  * announced. So does a job
  * the backend refused to start, except `409 key-locked`: that asks for the
  * passphrase at once, and the job carries on after the unlock without being
  * started again; cancelling cancels it, with no message (RC-17). It asks once
  * per press, so that a key that is locked again at once shows the problem, with
- * **Unlock**. Nothing is saved first: a push sends what was committed, and a
- * fetch changes no file.
+ * **Unlock**.
+ *
+ * A pull that needs a merge commit from a user who has not confirmed their
+ * commit author ends as `commit-author-not-confirmed`, as only its fetch can tell
+ * whether it does: this tab then asks, and pulls again, once per press in the same
+ * way; cancelling cancels the pull, with no message (CA-14). Only a pull saves
+ * first, here so that it does from anywhere, and it does not start when a
+ * save failed; a push sends what was committed, and a fetch changes no file.
  */
 @Injectable()
 export class NetworkJobService {
@@ -113,6 +138,8 @@ export class NetworkJobService {
   private readonly channel = inject(PushChannelService);
   private readonly store = inject(GitStatusStore);
   private readonly lockedKey = inject(LockedKeyService);
+  private readonly openFiles = inject(OpenFilesService);
+  private readonly authorGate = inject(CommitAuthorGate);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
 
@@ -160,7 +187,9 @@ export class NetworkJobService {
         untracked(() => {
           this.waiting.set(rest);
           if (next.repositoryId === this.store.followed()) {
-            void this.startNow(next.operation, next.background);
+            void (next.authorAsked === true
+              ? this.requestAfterAsking(next.operation)
+              : this.startNow(next.operation, next.background));
           }
         });
       }
@@ -199,7 +228,7 @@ export class NetworkJobService {
   }
 
   /**
-   * Starts a network job of the current branch, a push or a fetch (GA-29). Nothing
+   * Starts a network job of the current branch, a push, a fetch or a pull (GA-29). Nothing
    * happens while any network job is being started or runs. Settles once the
    * backend has queued it, or refused it, and after the passphrase was asked for,
    * if it was (RC-17).
@@ -239,6 +268,11 @@ export class NetworkJobService {
     }
   }
 
+  /** The operation again after the author question, which this press asks no more. */
+  private async requestAfterAsking(operation: GitNetworkJobType): Promise<void> {
+    await this.request(operation, false, false, true);
+  }
+
   /**
    * Asks the backend to start the job; resolves the refusal's params when it
    * refused because the key is locked and `quietLock` is set, which shows
@@ -248,7 +282,8 @@ export class NetworkJobService {
   private async request(
     operation: GitNetworkJobType,
     quietLock = true,
-    background = false
+    background = false,
+    authorAsked = false
   ): Promise<Record<string, string> | undefined> {
     const repositoryId = this.store.followed();
     if (repositoryId === null || this.running() !== null) {
@@ -260,9 +295,12 @@ export class NetworkJobService {
     const starting: Starting = { repositoryId, operation };
     this.starting.set(starting);
     try {
+      if (OPERATIONS[operation].savesFirst === true && !await this.saved(operation, repositoryId)) {
+        return undefined;
+      }
       const { jobId } = await firstValueFrom(OPERATIONS[operation].start(this.api, repositoryId));
       if (this.store.followed() === repositoryId) {
-        this.follow({ repositoryId, operation, jobId, own: !background, background });
+        this.follow({ repositoryId, operation, jobId, own: !background, background, authorAsked });
       }
     } catch (error) {
       if (!background && this.store.followed() === repositoryId) {
@@ -281,6 +319,23 @@ export class NetworkJobService {
       }
     }
     return undefined;
+  }
+
+  /**
+   * Sends every waiting save (ED-17). Whether the job may start: not after a
+   * switch to another repository meanwhile, nor when a save did not reach the
+   * disk, which then says why; the job would go on without those edits.
+   */
+  private async saved(operation: GitNetworkJobType, repositoryId: number): Promise<boolean> {
+    await this.openFiles.flushAll();
+    if (this.store.followed() !== repositoryId) {
+      return false;
+    }
+    const notSaved = this.openFiles.notSaved(repositoryId, this.openFiles.unsavedPaths(repositoryId));
+    if (notSaved !== null) {
+      this.fail(operation, notSaved.error.code, stringParams(notSaved.error.params), false);
+    }
+    return notSaved === null;
   }
 
   /**
@@ -372,9 +427,46 @@ export class NetworkJobService {
         status: 'success'
       });
     } else if (outcome?.kind === 'failed' && followed.background !== true) {
-      this.fail(followed.operation, outcome.code, outcome.params, !followed.own);
+      if (outcome.code !== AUTHOR_NOT_CONFIRMED) {
+        this.fail(followed.operation, outcome.code, outcome.params, !followed.own);
+      } else if (followed.own) {
+        void this.askForAuthor(followed);
+      }
+      // Another tab's: that tab asks, and it may yet be cancelled.
     }
     void this.store.refresh();
+  }
+
+  /**
+   * The question before a merge commit, then the job again, also when a job
+   * started meanwhile (CA-14). An author still refused after asking shows the
+   * problem, and what is known of the author is read again, so that the next
+   * press asks.
+   */
+  private async askForAuthor({ repositoryId, operation, authorAsked }: Followed): Promise<void> {
+    if (authorAsked === true) {
+      this.fail(operation, AUTHOR_NOT_CONFIRMED, {}, false);
+      this.authorGate.refresh();
+      return;
+    }
+    let confirmed: boolean;
+    try {
+      confirmed = await this.authorGate.ready();
+    } catch (error) {
+      if (this.store.followed() === repositoryId) {
+        const apiError = toApiError(error);
+        this.fail(operation, apiError.code, stringParams(apiError.params), false);
+      }
+      return;
+    }
+    if (!confirmed || this.store.followed() !== repositoryId) {
+      return;
+    }
+    if (this.running() === null && this.waiting().length === 0) {
+      await this.requestAfterAsking(operation);
+    } else {
+      this.waiting.update(waiting => [ ...waiting, { repositoryId, operation, background: false, authorAsked: true } ]);
+    }
   }
 
   private fail(operation: GitNetworkJobType, code: string, params: Record<string, string>, quiet: boolean): void {

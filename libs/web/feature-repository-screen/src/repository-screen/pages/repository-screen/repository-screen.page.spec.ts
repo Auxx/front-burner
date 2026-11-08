@@ -1589,7 +1589,7 @@ describe('RepositoryScreenPage', () => {
       it('shows why a push failed below the bar, above the panes, and dismisses it', async () => {
         gitJob.mockReturnValue(of<GitJobState>({
           status: 'done',
-          outcome: { kind: 'failed', code: 'push-non-fast-forward', params: { branch: 'main' } }
+          outcome: { kind: 'failed', code: 'push-rejected', params: { branch: 'main' } }
         }));
         await visit('/repositories/12');
 
@@ -1599,7 +1599,7 @@ describe('RepositoryScreenPage', () => {
         const shown = problem() as HTMLElement;
         expect(shown.closest('header')).toBeTruthy();
         expect(shown.closest('rs-repository-bar')).toBeNull();
-        expect(shown.textContent).toContain('errors.push-non-fast-forward');
+        expect(shown.textContent).toContain('errors.push-rejected');
 
         (shown.querySelector('ui-inline-banner button') as HTMLButtonElement).click();
         await settle(harness.fixture);

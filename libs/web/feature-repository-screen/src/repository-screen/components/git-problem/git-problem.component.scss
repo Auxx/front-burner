@@ -2,6 +2,17 @@
   display: block;
 }
 
+.paths {
+  max-block-size: 10rem;
+  padding: 0;
+  margin: var(--ui-space-2) 0 0;
+  overflow: auto;
+  font-family: var(--ui-font-family-mono);
+  font-size: var(--ui-font-size-ui-small);
+  overflow-wrap: anywhere;
+  list-style: none;
+}
+
 .remote {
   max-block-size: 10rem;
   margin: var(--ui-space-2) 0 0;

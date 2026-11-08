@@ -9,6 +9,13 @@
       <!-- The remote's lines as text, never as HTML (GA-31). -->
       <pre class="remote">{{ lines }}</pre>
     }
+    @if (paths().length > 0) {
+      <ul class="paths">
+        @for (path of paths(); track path) {
+          <li>{{ path }}</li>
+        }
+      </ul>
+    }
     @if (shown.fix; as fix) {
       <div uiBannerActions>
         <button uiButton

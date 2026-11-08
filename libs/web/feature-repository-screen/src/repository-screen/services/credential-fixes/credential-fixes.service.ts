@@ -16,7 +16,7 @@ import {
   type RepositoryCredentialsDialogData
 } from '@front-burner/web-repository-dialogs';
 import { TranslocoService } from '@jsverse/transloco';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, type Observable, Subject } from 'rxjs';
 
 import { fetchProblemFix, type GitFix } from '../../utils/git-problem/git-problem';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
@@ -26,7 +26,8 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
 
 /**
  * The one place that connects the fix of a network job problem (RC-4) to what it
- * does: **Try again** and **Unlock** run through `NetworkJobService`; **Add
+ * does: **Try again**, **Unlock** and **Pull** (GA-30) run through
+ * `NetworkJobService`; **Show changes** tells the page (GA-26); **Add
  * credentials**, **Fix credentials** and **Use other credentials** open the
  * repository credentials dialog (RC-7), and once it saved, the failed operation
  * (a push or a fetch) runs again on its own (RC-9). **Cancel** changes nothing, and the problem stays.
@@ -53,6 +54,10 @@ export class CredentialFixesService {
   private readonly toast = inject(ToastService);
   private readonly errorText = inject(ApiErrorTextService);
   private readonly transloco = inject(TranslocoService);
+  private readonly changesAsked = new Subject<void>();
+
+  /** **Show changes** was chosen: the page opens **Changes** (GA-26). */
+  readonly showChanges: Observable<void> = this.changesAsked.asObservable();
 
   /** Runs `fix`, of the job problem in the banner. */
   async run(fix: GitFix): Promise<void> {
@@ -62,6 +67,11 @@ export class CredentialFixesService {
         return this.jobs.retry();
       case 'unlock':
         return this.jobs.unlockAndRetry();
+      case 'pull':
+        return this.jobs.startWhenFree('pull');
+      case 'show-changes':
+        this.changesAsked.next();
+        return undefined;
       default:
         return this.runDialogFix(fix, problem?.params, problem?.operation);
     }

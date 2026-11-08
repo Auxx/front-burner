@@ -9,6 +9,8 @@ export type GitFix =
   | 'review-host-key'
   | 'trust-host'
   | 'retry'
+  | 'show-changes'
+  | 'pull'
   | null;
 
 /** What a git problem says, and the fix it offers. */
@@ -20,10 +22,16 @@ export interface GitProblemText {
 
 /** Messages of git problems that `errors.<code>` does not word as RC-4 does. */
 const MESSAGE_KEYS: Readonly<Record<string, string>> = {
-  'key-locked': 'web-feature-repository-screen.gitProblem.key-locked'
+  'key-locked': 'web-feature-repository-screen.gitProblem.key-locked',
+  // As a pull has them: `errors.<code>` speaks of a commit's ticks.
+  'changed-on-disk': 'web-feature-repository-screen.gitProblem.changed-on-disk',
+  'file-gone': 'web-feature-repository-screen.gitProblem.file-gone'
 };
 
-/** RC-4's offers, and **Try again** where the cause is the network or the server (GA-43). */
+/**
+ * RC-4's offers, **Show changes** and **Pull** (GA-26, GA-30), and **Try again**
+ * where the cause is the network or the server (GA-43), or a save held for a moment.
+ */
 const FIXES: Readonly<Record<string, GitFix>> = {
   'no-credentials': 'add-credentials',
   'credentials-missing': 'add-credentials',
@@ -32,6 +40,9 @@ const FIXES: Readonly<Record<string, GitFix>> = {
   'key-locked': 'unlock',
   'host-key-changed': 'review-host-key',
   'host-key-unknown': 'trust-host',
+  'uncommitted-changes': 'show-changes',
+  'push-non-fast-forward': 'pull',
+  'file-held': 'retry',
   'remote-timeout': 'retry',
   'remote-failed': 'retry',
   'host-unreachable': 'retry',
@@ -43,7 +54,14 @@ const FIXES: Readonly<Record<string, GitFix>> = {
   'too-many-jobs': 'retry'
 };
 
-const KNOWN_CODES: ReadonlySet<string> = new Set<string>([ ...ERROR_CODES, 'network' ]);
+/** The codes that have a message; the last three are the web client's own, of a save that stopped a pull. */
+const KNOWN_CODES: ReadonlySet<string> = new Set<string>([
+  ...ERROR_CODES,
+  'network',
+  'changed-on-disk',
+  'file-gone',
+  'file-held'
+]);
 
 /**
  * The fix the quiet fetch status offers beside **Try again**, which it always
@@ -72,8 +90,8 @@ export function fetchStatusHeadline(
 /**
  * The one table from a network job's error code to its message and fix (RC-4,
  * GA-30, GA-31, GA-43). The push is never forced, so "The remote has new commits.
- * Pull first." offers no fix until step 4 brings **Pull**. A code the web client
- * does not know says that something went wrong with the remote.
+ * Pull first." offers **Pull**. A code the web client does not know says that
+ * something went wrong with the remote.
  */
 export function gitProblem(code: string): GitProblemText {
   const messageKey = MESSAGE_KEYS[code] ?? (KNOWN_CODES.has(code) ? `errors.${code}` : 'errors.remote-failed');

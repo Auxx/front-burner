@@ -8,6 +8,7 @@ import { PushChannelService } from '@front-burner/web-core';
 import { type Observable, of, Subject, throwError } from 'rxjs';
 
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { LockedKeyService } from '../locked-key/locked-key.service';
 import { OpenFilesService } from '../open-files/open-files.service';
@@ -45,7 +46,12 @@ function refused(code: string, params: Record<string, unknown> = {}): HttpErrorR
 describe('NetworkJobService', () => {
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let fetch: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
-  let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
+  let pull: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
+  let ready: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+  let gateRefresh: ReturnType<typeof vi.fn>;
+  let unsavedPaths: ReturnType<typeof vi.fn<(id: number) => string[]>>;
+  let notSaved: ReturnType<typeof vi.fn>;
+  let gitJob:ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let events: Subject<PushEvent>;
   let reconnected: Subject<void>;
   let followed: ReturnType<typeof signal<number | null>>;
@@ -66,6 +72,11 @@ describe('NetworkJobService', () => {
     vi.useFakeTimers();
     push = vi.fn(() => of({ jobId: 7 }));
     fetch = vi.fn(() => of({ jobId: 7 }));
+    pull = vi.fn(() => of({ jobId: 7 }));
+    ready = vi.fn(async () => true);
+    gateRefresh = vi.fn();
+    unsavedPaths = vi.fn(() => []);
+    notSaved = vi.fn(() => null);
     gitJob = vi.fn(() => of(RUNNING));
     events = new Subject();
     reconnected = new Subject();
@@ -81,15 +92,18 @@ describe('NetworkJobService', () => {
           // The test module has no ICU transpiler; en.json's plural is checked by the web application.
           'web-feature-repository-screen.NetworkJobService.pushed': 'Pushed {{ count }} commits to {{ upstream }}',
           'web-feature-repository-screen.NetworkJobService.noNewCommits': 'No new commits',
-          'web-feature-repository-screen.NetworkJobService.noChangesReceived': 'No changes received for this branch'
+          'web-feature-repository-screen.NetworkJobService.noChangesReceived': 'No changes received for this branch',
+          'web-feature-repository-screen.NetworkJobService.upToDate': 'Already up to date',
+          'web-feature-repository-screen.NetworkJobService.pulled': 'Pulled {{ count }} commits'
         })
       ],
       providers: [
         NetworkJobService,
-        { provide: GitApi, useValue: { push, fetch, gitJob } },
+        { provide: GitApi, useValue: { push, fetch, pull, gitJob } },
         { provide: PushChannelService, useValue: { events, reconnected } },
         { provide: GitStatusStore, useValue: { followed, status: gitStatus, refresh } },
-        { provide: OpenFilesService, useValue: { flushAll } },
+        { provide: OpenFilesService, useValue: { flushAll, unsavedPaths, notSaved } },
+        { provide: CommitAuthorGate, useValue: { ready, refresh: gateRefresh } },
         { provide: LockedKeyService, useValue: { unlock } },
         { provide: ToastService, useValue: toast }
       ]
@@ -690,6 +704,252 @@ describe('NetworkJobService', () => {
 
       expect(fetch).toHaveBeenCalledTimes(2);
       expect(push).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a pull', () => {
+    const pulled = (result: 'up-to-date' | 'fast-forward' | 'merged' | 'conflicted', commits: number): GitJobState => ({
+      status: 'done',
+      outcome: { kind: 'pulled', result, commits, upstream: 'origin/main' }
+    });
+    const shown = () => toast.show.mock.calls.map(([ options ]) => (options as { message: string; }).message);
+
+    async function pullEndsWith(state: GitJobState): Promise<void> {
+      gitJob.mockReturnValueOnce(of(state));
+      await service.start('pull');
+      await settle();
+    }
+
+    it('says Already up to date', async () => {
+      await pullEndsWith(pulled('up-to-date', 0));
+
+      expect(pull).toHaveBeenCalledExactlyOnceWith(12);
+      expect(shown()).toEqual([ 'Already up to date' ]);
+      expect(service.running()).toBeNull();
+    });
+
+    it('says Pulled 3 commits', async () => {
+      await pullEndsWith(pulled('fast-forward', 3));
+
+      expect(shown()).toEqual([ 'Pulled 3 commits' ]);
+    });
+
+    it('says how many commits a merge commit brought', async () => {
+      await pullEndsWith(pulled('merged', 2));
+
+      expect(shown()).toEqual([ 'Pulled 2 commits' ]);
+    });
+
+    it('says nothing when the merge conflicts', async () => {
+      await pullEndsWith(pulled('conflicted', 3));
+
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(service.problem()).toBeNull();
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it('says nothing of a pull another tab started', async () => {
+      gitJob.mockReturnValueOnce(of(pulled('fast-forward', 3)));
+      gitStatus.set(status({ id: 9, type: 'pull' }));
+      await settle();
+
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(service.running()).toBeNull();
+    });
+
+    it('asks for the author, then pulls again', async () => {
+      await pullEndsWith(failed('commit-author-not-confirmed'));
+
+      expect(ready).toHaveBeenCalledOnce();
+      expect(pull).toHaveBeenCalledTimes(2);
+      expect(service.problem()).toBeNull();
+    });
+
+    it('cancelling the author question cancels the pull', async () => {
+      ready.mockResolvedValueOnce(false);
+
+      await pullEndsWith(failed('commit-author-not-confirmed'));
+
+      expect(pull).toHaveBeenCalledOnce();
+      expect(service.problem()).toBeNull();
+      // What the pull fetched shows in the counts.
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it('asks once per press, so that an author still refused shows the problem', async () => {
+      gitJob.mockReturnValue(of(failed('commit-author-not-confirmed')));
+
+      await service.start('pull');
+      await settle();
+      await settle();
+
+      expect(ready).toHaveBeenCalledOnce();
+      expect(pull).toHaveBeenCalledTimes(2);
+      expect(service.problem()?.code).toBe('commit-author-not-confirmed');
+      expect(gateRefresh).toHaveBeenCalled();
+    });
+
+    it('says why when the author can\'t be read to ask', async () => {
+      ready.mockRejectedValueOnce(new HttpErrorResponse({ status: 0 }));
+
+      await pullEndsWith(failed('commit-author-not-confirmed'));
+
+      expect(pull).toHaveBeenCalledOnce();
+      expect(service.problem()).toMatchObject({ operation: 'pull', fix: 'retry' });
+    });
+
+    it('does not pull after a switch to another repository while asking for the author', async () => {
+      let answer!: (ready: boolean) => void;
+      ready.mockReturnValueOnce(new Promise<boolean>(resolve => (answer = resolve)));
+      await pullEndsWith(failed('commit-author-not-confirmed'));
+
+      followed.set(13);
+      await settle();
+      answer(true);
+      await settle();
+
+      expect(pull).toHaveBeenCalledOnce();
+    });
+
+    it('pulls after a job that started while asking for the author', async () => {
+      let answer!: (ready: boolean) => void;
+      ready.mockReturnValueOnce(new Promise<boolean>(resolve => (answer = resolve)));
+      await pullEndsWith(failed('commit-author-not-confirmed'));
+
+      gitJob.mockReturnValue(of(RUNNING));
+      fetch.mockReturnValueOnce(of({ jobId: 8 }));
+      await service.startWhenFree('fetch', { background: true });
+      await settle();
+      answer(true);
+      await settle();
+      expect(pull).toHaveBeenCalledOnce();
+
+      gitJob.mockReturnValue(of(FETCHED));
+      finished(8);
+      await settle();
+      await settle();
+
+      expect(pull).toHaveBeenCalledTimes(2);
+    });
+
+    it('leaves another tab\'s author question to that tab', async () => {
+      gitJob.mockReturnValueOnce(of(failed('commit-author-not-confirmed')));
+      gitStatus.set(status({ id: 9, type: 'pull' }));
+      await settle();
+
+      expect(ready).not.toHaveBeenCalled();
+      expect(pull).not.toHaveBeenCalled();
+      expect(service.problem()).toBeNull();
+    });
+
+    it('asks for a locked key, then pulls', async () => {
+      pull.mockReturnValueOnce(throwError(() => refused('key-locked', { keyId: 3, keyName: 'laptop' })));
+
+      await service.start('pull');
+      await settle();
+
+      expect(unlock).toHaveBeenCalledOnce();
+      expect(pull).toHaveBeenCalledTimes(2);
+      expect(service.problem()).toBeNull();
+    });
+
+    it('says Commit or discard for uncommitted changes, with no retry of its own', async () => {
+      pull.mockReturnValueOnce(throwError(() => refused('uncommitted-changes')));
+
+      await service.start('pull');
+
+      expect(service.problem()).toMatchObject({
+        operation: 'pull',
+        messageKey: 'errors.uncommitted-changes',
+        fix: 'show-changes'
+      });
+    });
+
+    it('sends a waiting save before pulling, from the banner too', async () => {
+      const calls: string[] = [];
+      flushAll.mockImplementation(async () => {
+        calls.push('flush');
+      });
+      pull.mockImplementation(() => {
+        calls.push('pull');
+        return throwError(() => refused('remote-failed'));
+      });
+
+      await service.start('pull');
+      expect(calls).toEqual([ 'flush', 'pull' ]);
+
+      pull.mockReturnValue(of({ jobId: 7 }));
+      calls.length = 0;
+      flushAll.mockImplementation(async () => {
+        calls.push('flush');
+      });
+      await service.retry();
+
+      expect(calls).toEqual([ 'flush' ]);
+      expect(pull).toHaveBeenCalledTimes(2);
+      expect(flushAll).toHaveBeenCalledTimes(2);
+    });
+
+    it('shows that it runs while the save is sent, so that it can\'t be pressed twice', async () => {
+      let saved!: () => void;
+      flushAll.mockReturnValueOnce(new Promise<void>(resolve => (saved = resolve)));
+
+      const pulling = service.start('pull');
+      await settle();
+
+      expect(service.running()).toBe('pull');
+      expect(pull).not.toHaveBeenCalled();
+
+      await service.start('pull');
+      saved();
+      await pulling;
+
+      expect(flushAll).toHaveBeenCalledOnce();
+      expect(pull).toHaveBeenCalledOnce();
+    });
+
+    it('does not pull when a save failed', async () => {
+      unsavedPaths.mockReturnValueOnce([ 'guide.md' ]);
+      notSaved.mockReturnValueOnce({
+        error: { code: 'changed-on-disk', params: { path: 'guide.md' }, requestId: '', message: '' },
+        retry: false
+      });
+
+      await service.start('pull');
+
+      expect(notSaved).toHaveBeenCalledExactlyOnceWith(12, [ 'guide.md' ]);
+      expect(pull).not.toHaveBeenCalled();
+      expect(service.problem()).toMatchObject({
+        operation: 'pull',
+        code: 'changed-on-disk',
+        params: { path: 'guide.md' }
+      });
+      expect(service.running()).toBeNull();
+    });
+
+    it('does not pull another repository after a switch while the save is sent', async () => {
+      let saved!: () => void;
+      flushAll.mockReturnValueOnce(new Promise<void>(resolve => (saved = resolve)));
+      const pulling = service.start('pull');
+      await settle();
+
+      followed.set(13);
+      await settle();
+      saved();
+      await pulling;
+
+      expect(pull).not.toHaveBeenCalled();
+    });
+
+    it('lists the ignored files a pull would overwrite, as text', async () => {
+      await pullEndsWith(failed('merge-blocked', { paths: 'build/app.js\ndebug.log' }));
+
+      expect(service.problem()).toMatchObject({
+        operation: 'pull',
+        messageKey: 'errors.merge-blocked',
+        fix: null,
+        params: { paths: 'build/app.js\ndebug.log' }
+      });
     });
   });
 });
