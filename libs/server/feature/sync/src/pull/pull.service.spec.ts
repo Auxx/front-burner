@@ -140,6 +140,19 @@ describe.skipIf(process.platform === 'win32')('PullService', () => {
     expect(pullJobs()).toEqual([]);
   });
 
+  it('pulls from origin only, also when a local branch is named like the upstream', async () => {
+    const workingCopy = harness.workingCopy;
+    git(workingCopy, 'branch', 'origin/main');
+    expect((await status()).body).toMatchObject({ upstream: 'origin/main', upstreamGone: false });
+    expect((await pull().expect(202)).body).toEqual({ jobId: expect.any(Number) });
+
+    git(workingCopy, 'remote', 'add', 'other', harness.bare);
+    git(workingCopy, 'fetch', '-q', harness.bare, '+refs/heads/*:refs/remotes/other/*');
+    git(workingCopy, 'checkout', '-q', '-b', 'tracking-other', '--track', 'other/main');
+    expect((await status()).body).toMatchObject({ upstream: 'other/main', upstreamGone: false });
+    expect((await pull().expect(409)).body).toMatchObject({ code: 'no-upstream' });
+  });
+
   it('refuses an unpublished branch without one', async () => {
     git(harness.workingCopy, 'checkout', '-q', '-b', 'topic');
 

@@ -23,6 +23,14 @@ describe('parseStatus', () => {
     expect(status).toMatchObject({ upstream: 'origin/main', ahead: 2, behind: 3 });
   });
 
+  it.each([ 'remotes/origin/main', 'refs/remotes/origin/main' ])(
+    'reads %s, which git prints when a local branch or tag is named origin/main, as origin/main',
+    printed => {
+      const status = parseStatus(output(...onMain, `# branch.upstream ${printed}`, '# branch.ab +0 -1'));
+      expect(status).toMatchObject({ upstream: 'origin/main', upstreamGone: false, behind: 1 });
+    }
+  );
+
   it.each([
     [ '.M', 'modified' ],
     [ 'M.', 'modified' ],

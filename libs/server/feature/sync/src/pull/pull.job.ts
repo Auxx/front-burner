@@ -10,7 +10,7 @@ import type { GitJobFailed, GitJobOutcome } from '@front-burner/shared-contracts
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { FetchStep } from '../fetch/fetch-step';
 import { SyncStateStore } from '../state/sync-state.store';
-import { sameNameRemote } from './same-name-remote';
+import { pullsFromOrigin, sameNameRemote } from './same-name-remote';
 
 export const PULL_JOB_TYPE = 'sync.pull';
 
@@ -106,10 +106,10 @@ export class PullJob implements OnModuleInit {
       return failed('branch-changed', { branch });
     }
     // The fetch may have removed the upstream, or the branch's remote branch.
+    // The same test as the request's.
     const adopting = await sameNameRemote(this.merges, root, status);
-    const upstream = adopting ? `origin/${branch}` : status.upstream;
-    // Only `origin`'s branches are pulled; Front Burner sets no other upstream.
-    if (upstream === null || !upstream.startsWith('origin/') || status.noCommits || status.upstreamGone) {
+    const upstream = adopting ? `origin/${branch}` : pullsFromOrigin(status) ? status.upstream : null;
+    if (upstream === null || status.noCommits) {
       return failed('no-upstream');
     }
     // Ignored files are not changes (GA-11), so a repository with build output can pull.

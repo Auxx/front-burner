@@ -9,3 +9,11 @@ export async function sameNameRemote(merge: GitMerge, root: string, status: Work
   return status.branch !== null && status.upstream === null && !status.noCommits
     && await merge.hasRemoteBranch(root, status.branch);
 }
+
+/**
+ * The upstream is a branch of `origin` that exists as of the last fetch. Only
+ * `origin`'s branches are pulled; Front Burner sets no other upstream.
+ */
+export function pullsFromOrigin(status: WorkingCopyStatus): boolean {
+  return status.upstream !== null && status.upstream.startsWith('origin/') && !status.upstreamGone;
+}

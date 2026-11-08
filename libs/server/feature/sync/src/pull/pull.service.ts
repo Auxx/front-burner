@@ -5,7 +5,7 @@ import { OpenableRepository } from '@front-burner/server-feature-files';
 import { Injectable } from '@nestjs/common';
 import { NetworkJobs } from '../jobs/network-jobs.service';
 import { PULL_JOB_TYPE, pullDedupeKey, PullJobPayload } from './pull.job';
-import { sameNameRemote } from './same-name-remote';
+import { pullsFromOrigin, sameNameRemote } from './same-name-remote';
 
 /**
  * Starting a pull (GA-3, GA-25, GA-26). The checks that need the user's
@@ -26,7 +26,7 @@ export class PullService {
    * already waiting or running, as `NetworkJobs.queue` does.
    *
    * @throws ApiErrorException 409 `merge-in-progress` (GA-4), `no-branch`,
-   * `no-upstream` (no commits, an upstream that is gone, or an unpublished
+   * `no-upstream` (no commits, an upstream that is gone or not `origin`'s, or an unpublished
    * branch without a remote branch of its name), `uncommitted-changes` (GA-26),
    * then `key-locked` or `credentials-missing` (RC-4).
    */
@@ -39,8 +39,8 @@ export class PullService {
     if (status.branch === null) {
       throw new ApiErrorException(409, 'no-branch');
     }
-    const hasUpstream = status.upstream !== null && !status.upstreamGone;
-    if (status.noCommits || !(hasUpstream || await sameNameRemote(this.merge, root, status))) {
+    // The same test as the job's.
+    if (status.noCommits || !(pullsFromOrigin(status) || await sameNameRemote(this.merge, root, status))) {
       throw new ApiErrorException(409, 'no-upstream');
     }
     // Ignored files are not changes (GA-11).

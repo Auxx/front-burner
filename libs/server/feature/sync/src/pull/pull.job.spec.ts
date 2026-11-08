@@ -86,6 +86,18 @@ describe.skipIf(process.platform === 'win32')('PullJob', () => {
     expect(await pulled()).toEqual({ kind: 'pulled', result: 'conflicted', commits: 1, upstream: 'origin/main' });
   });
 
+  it('merges the remote branch when a local branch is named like it', async () => {
+    harness.pushFileFromElsewhere('a.md', 'a\n');
+    // git then prints the upstream as `remotes/origin/main`, and `origin/main` names the local branch.
+    git(harness.workingCopy, 'branch', 'origin/main');
+    harness.runner.start();
+
+    expect(await pulled()).toEqual({ kind: 'pulled', result: 'fast-forward', commits: 1, upstream: 'origin/main' });
+
+    expect(head()).toBe(head('refs/remotes/origin/main'));
+    expect(git(harness.workingCopy, 'log', '-1', '--format=%s').trim()).toBe('change a.md');
+  });
+
   it('leaves a merge in progress on a conflict, with the record kept', async () => {
     harness.confirmAuthor();
     harness.commitFile('notes.md', 'mine\n');

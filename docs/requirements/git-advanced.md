@@ -223,7 +223,8 @@ handled by [REQ-REPO-002](repo-credentials.md).
   becomes its upstream. No tags are pushed.
 - **GA-30** A push is never forced. When the remote rejects it because the
   upstream has commits that the branch does not have, the push says "The remote
-  has new commits. Pull first." with **Pull**.
+  has new commits. Pull first." with **Pull**. Such a push then fetches, so that
+  the remote branch and the counts are known. _(My call.)_
 - **GA-31** When the remote rejects a push for another reason — for example a
   protected branch, a server hook, or unsigned commits (CA-15) — the push says
   so in plain words where it can, and shows the remote's own messages (the
