@@ -1988,6 +1988,250 @@ describe('GitEngine', () => {
     });
   });
 
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  describe.skipIf(process.platform === 'win32')('remote changes', () => {
+    const bare = () => join(root, 'fixture.git');
+    const work = () => join(root, 'repos', 'one');
+    const remoteUrl = () => `${server.url}/fixture.git`;
+    const cloneIt = (mode: 'full' | 'single-branch' = 'full', credentials: GitCredentials = NONE) =>
+      engine().clone({ remoteUrl: remoteUrl(), credentials, mode, branch: 'main', tmpRoot, destination: work() });
+    const fetch = (overrides: Partial<Parameters<GitEngine['fetch']>[1]> = {}) =>
+      engine().fetch(work(), { remoteUrl: remoteUrl(), credentials: NONE, knownHosts: [], ...overrides });
+    const push = (branch: string, singleBranch: boolean) =>
+      engine().push(work(), { remoteUrl: remoteUrl(), credentials: NONE, knownHosts: [], branch, singleBranch });
+    /** The remote-tracking branches, without `origin/HEAD`. */
+    const remoteBranches = () =>
+      git(work(), 'for-each-ref', '--format=%(refname)', 'refs/remotes/origin')
+        .split('\n')
+        .filter(ref => ref !== '' && ref !== 'refs/remotes/origin/HEAD')
+        .join('\n');
+    const fetchRefspecs = () => git(work(), 'config', '--get-all', 'remote.origin.fetch').trim();
+
+    /** Commits `files` on the remote's `branch` from another clone, as someone else would; gives the commit. */
+    const commitOnRemote = (branch: string, files: Record<string, string | null>, message = 'theirs') => {
+      const other = join(root, 'other');
+      if (!existsSync(other)) {
+        git(root, 'clone', '-q', bare(), other);
+      }
+      git(other, 'fetch', '-q', 'origin');
+      git(other, 'checkout', '-q', '-B', branch, `origin/${branch}`);
+      for (const [ path, content ] of Object.entries(files)) {
+        if (content === null) {
+          git(other, 'rm', '-q', '--', path);
+        } else {
+          mkdirSync(join(other, path, '..'), { recursive: true });
+          writeFileSync(join(other, path), content);
+          git(other, 'add', '--', path);
+        }
+      }
+      git(other, 'commit', '-q', '--allow-empty', '-m', message);
+      git(other, 'push', '-q', 'origin', branch);
+      return git(other, 'rev-parse', 'HEAD').trim();
+    };
+
+    describe('fetch', () => {
+      it('fetches new commits without changing the files or the branch', async () => {
+        await cloneIt();
+        const head = git(work(), 'rev-parse', 'HEAD').trim();
+        const theirs = commitOnRemote('main', { 'notes.md': 'theirs\n' });
+
+        expect(await fetch()).toEqual({ moved: true });
+
+        expect(git(work(), 'rev-parse', 'refs/remotes/origin/main').trim()).toBe(theirs);
+        expect(git(work(), 'rev-parse', 'HEAD').trim()).toBe(head);
+        expect(git(work(), 'symbolic-ref', 'HEAD').trim()).toBe('refs/heads/main');
+        expect(existsSync(join(work(), 'notes.md'))).toBe(false);
+        expect(git(work(), 'status', '--porcelain')).toBe('');
+        expect(existsSync(join(work(), '.git', 'FETCH_HEAD'))).toBe(false);
+      });
+
+      it('removes remote branches deleted on the remote', async () => {
+        await cloneIt();
+        git(bare(), 'update-ref', '-d', 'refs/heads/feature/x');
+
+        expect(await fetch()).toEqual({ moved: true });
+
+        expect(remoteBranches()).not.toContain('refs/remotes/origin/feature/x');
+        expect(remoteBranches()).toContain('refs/remotes/origin/main');
+      });
+
+      it('says when nothing moved', async () => {
+        await cloneIt();
+
+        expect(await fetch()).toEqual({ moved: false });
+      });
+
+      it('fetches no tags', async () => {
+        await cloneIt();
+        commitOnRemote('main', {});
+        git(bare(), 'tag', 'v1', 'main');
+
+        await fetch();
+
+        expect(git(work(), 'tag', '--list')).toBe('');
+      });
+
+      it('fetches in a shallow single-branch clone', async () => {
+        await cloneIt('single-branch');
+        const theirs = commitOnRemote('main', { 'notes.md': 'theirs\n' });
+
+        expect(await fetch()).toEqual({ moved: true });
+
+        expect(git(work(), 'rev-parse', 'refs/remotes/origin/main').trim()).toBe(theirs);
+        expect(git(work(), 'rev-parse', '--is-shallow-repository').trim()).toBe('true');
+        expect(git(work(), 'rev-list', '--count', 'refs/remotes/origin/main').trim()).toBe('2');
+        expect(remoteBranches()).toBe('refs/remotes/origin/main');
+      });
+
+      it('carries on after the remote deleted a fetched branch', async () => {
+        await cloneIt('single-branch');
+        git(work(), 'checkout', '-q', '-b', 'topic');
+        git(work(), 'commit', '-q', '--allow-empty', '-m', 'topic work');
+        await push('topic', true);
+        git(bare(), 'update-ref', '-d', 'refs/heads/topic');
+        const theirs = commitOnRemote('main', {});
+
+        expect(await fetch()).toEqual({ moved: true });
+
+        expect(fetchRefspecs()).toBe('+refs/heads/main:refs/remotes/origin/main');
+        expect(remoteBranches()).toBe('refs/remotes/origin/main');
+        expect(git(work(), 'rev-parse', 'refs/remotes/origin/main').trim()).toBe(theirs);
+        expect(git(work(), 'config', '--get-regexp', '^branch\\.').trim()).toBe(
+          'branch.main.remote origin\nbranch.main.merge refs/heads/main'
+        );
+      });
+
+      it('publishes that branch again on the next push', async () => {
+        await cloneIt('single-branch');
+        git(work(), 'checkout', '-q', '-b', 'topic');
+        git(work(), 'commit', '-q', '--allow-empty', '-m', 'topic work');
+        await push('topic', true);
+        git(bare(), 'update-ref', '-d', 'refs/heads/topic');
+        await fetch();
+
+        expect(await push('topic', true)).toEqual({ commits: 1, upstream: 'origin/topic' });
+
+        expect(fetchRefspecs()).toBe(
+          '+refs/heads/main:refs/remotes/origin/main\n+refs/heads/topic:refs/remotes/origin/topic'
+        );
+        expect(git(bare(), 'log', '--format=%s', '-1', 'refs/heads/topic').trim()).toBe('topic work');
+        expect(git(work(), 'rev-parse', '--abbrev-ref', 'topic@{upstream}').trim()).toBe('origin/topic');
+      });
+
+      it('carries on after the remote deleted the cloned branch', async () => {
+        await cloneIt('single-branch');
+        git(work(), 'checkout', '-q', '-b', 'topic');
+        await push('topic', true);
+        git(bare(), 'symbolic-ref', 'HEAD', 'refs/heads/feature/x');
+        git(bare(), 'update-ref', '-d', 'refs/heads/main');
+
+        expect(await fetch()).toEqual({ moved: true });
+
+        expect(fetchRefspecs()).toBe('+refs/heads/topic:refs/remotes/origin/topic');
+        expect(remoteBranches()).toBe('refs/remotes/origin/topic');
+        expect(git(work(), 'config', '--get-regexp', '^branch\\.').trim()).toBe(
+          'branch.topic.remote origin\nbranch.topic.merge refs/heads/topic'
+        );
+        expect(await fetch()).toEqual({ moved: false });
+      });
+
+      it('refuses an unsafe config', async () => {
+        await cloneIt();
+        commitOnRemote('main', {});
+        git(work(), 'config', 'http.proxy', '');
+        const before = git(work(), 'rev-parse', 'refs/remotes/origin/main');
+
+        const failure = await failureOf(fetch());
+
+        expect(failure.code).toBe('unsafe-repository-config');
+        expect(git(work(), 'rev-parse', 'refs/remotes/origin/main')).toBe(before);
+      });
+
+      it('reports a refused token as auth-failed', async () => {
+        await serve({ [USER]: TOKEN });
+        await cloneIt('full', HTTPS);
+
+        const failure = await failureOf(fetch({ credentials: { ...HTTPS, password: 'wrong' } }));
+
+        expect(failure.code).toBe('auth-failed');
+      });
+    });
+
+    describe('incoming', () => {
+      it('counts what the upstream has', async () => {
+        await cloneIt();
+        commitOnRemote('main', {}, 'one');
+        commitOnRemote('main', {}, 'two');
+        await fetch();
+
+        expect(await engine().incoming(work())).toEqual({ upstream: 'origin/main', commits: 2, touchesPath: false });
+      });
+
+      it('counts the remote branch when a local branch has its name', async () => {
+        await cloneIt();
+        commitOnRemote('main', {});
+        await fetch();
+        git(work(), 'branch', 'origin/main', 'HEAD~1');
+
+        expect(await engine().incoming(work())).toEqual({ upstream: 'origin/main', commits: 1, touchesPath: false });
+      });
+
+      it('says whether the commits touch a path', async () => {
+        await cloneIt();
+        commitOnRemote('main', { 'docs/a.md': 'a\n' });
+        await fetch();
+
+        expect((await engine().incoming(work(), 'docs/a.md'))?.touchesPath).toBe(true);
+        expect((await engine().incoming(work(), 'docs/b.md'))?.touchesPath).toBe(false);
+      });
+
+      it('a renamed file touches its old and its new path', async () => {
+        commitOnRemote('main', { 'old.md': 'the same text\n' });
+        await cloneIt();
+        commitOnRemote('main', { 'old.md': null, 'new.md': 'the same text\n' });
+        await fetch();
+
+        expect((await engine().incoming(work(), 'old.md'))?.touchesPath).toBe(true);
+        expect((await engine().incoming(work(), 'new.md'))?.touchesPath).toBe(true);
+      });
+
+      it('reads the path literally', async () => {
+        await cloneIt();
+        commitOnRemote('main', { 'x.md': 'x\n', '*.md': 'star\n' });
+        await fetch();
+
+        expect((await engine().incoming(work(), ':(top)x.md'))?.touchesPath).toBe(false);
+        expect((await engine().incoming(work(), '?.md'))?.touchesPath).toBe(false);
+        expect((await engine().incoming(work(), '*.md'))?.touchesPath).toBe(true);
+      });
+
+      it('has nothing to say without an upstream', async () => {
+        await cloneIt();
+        commitOnRemote('main', {});
+        await fetch();
+
+        git(work(), 'checkout', '-q', '-b', 'topic');
+        expect(await engine().incoming(work())).toBeNull();
+
+        git(work(), 'checkout', '-q', '--detach', 'main');
+        expect(await engine().incoming(work())).toBeNull();
+
+        git(work(), 'checkout', '-q', 'main');
+        git(work(), 'update-ref', '-d', 'refs/remotes/origin/main');
+        expect(await engine().incoming(work())).toBeNull();
+      });
+
+      it('has nothing to say before the first commit', async () => {
+        const empty = `${server.url}/empty.git`;
+        await engine().clone({ remoteUrl: empty, credentials: NONE, mode: 'full', tmpRoot, destination: work() });
+        git(join(root, 'work'), 'push', '-q', join(root, 'empty.git'), 'main');
+        await fetch({ remoteUrl: empty });
+
+        expect(await engine().incoming(work())).toBeNull();
+      });
+    });
+  });
+
   describe('over SSH', () => {
     const KEYS = join(__dirname, '../testing/fixtures/keys');
     const keyText = (name: string) => readFileSync(join(KEYS, name), 'utf8');

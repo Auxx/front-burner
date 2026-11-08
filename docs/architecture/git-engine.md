@@ -233,10 +233,11 @@ Confirmed by spike 2 (spikes.md).
 ## A-5: Operations
 
 - **A-5.10** The engine offers operations, not raw git commands: access check,
-  clone (full or single branch, AR-49), status, list branches, fetch, commit
-  (including the automatic commit of D-2.3), merge, rebase, continue and abort,
-  push, read a conflict, resolve a file, create and switch branches. Features
-  never build git command lines themselves.
+  clone (full or single branch, AR-49), status, list branches, fetch, incoming
+  (what the upstream has that the branch lacks, GA-34), commit (including the
+  automatic commit of D-2.3), merge, rebase, continue and abort, push, read a
+  conflict, resolve a file, create and switch branches. Features never build git
+  command lines themselves.
   - The access check (`git ls-remote --symref`) returns the remote's branch
     names, sorted, and its default branch: the branch its `HEAD` points to, if
     that branch exists. An empty remote has no branches and no default branch
