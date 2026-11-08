@@ -199,11 +199,15 @@ test.describe('editor', () => {
     await expect.poll(() => onDisk(dir, 'docs/guide.md')).toBe('# Guide\nTyped just before.');
   });
 
-  test('AC-EDIT-001.5: saves after the network comes back', async ({ page, context, instance, monitor }) => {
+  test('AC-EDIT-001.5: saves after the network comes back', async ({ page, context, instance, monitor, isMobile }) => {
     test.slow();
     const { id, dir } = seedHandbook(instance.dataDir);
     await openScreen(page, `/repositories/${id}/files/README.md`);
     await expect(editor(page, 'README.md')).toBeVisible();
+    if (!isMobile) {
+      // The preview's worker has loaded its chunks: going offline before that fails them, which is not this test's point.
+      await expect(main(page).locator('md-preview')).toContainText('Handbook');
+    }
 
     await context.setOffline(true);
     await typeAtEnd(page, 'README.md', 'Offline edit.');

@@ -3,6 +3,7 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
   ElementRef,
   inject,
@@ -22,6 +23,9 @@ import type {
 } from '@front-burner/shared-contracts';
 import type { SaveStatus } from '@front-burner/web-core';
 import { BrandLinkComponent, UserMenuComponent } from '@front-burner/web-shell';
+import { TranslocoDirective } from '@jsverse/transloco';
+
+import { fetchStatusHeadline } from '../../utils/git-problem/git-problem';
 
 import { FetchStatusComponent } from '../fetch-status/fetch-status.component';
 import { GitActionsComponent } from '../git-actions/git-actions.component';
@@ -41,6 +45,7 @@ import { SaveStatusComponent } from '../save-status/save-status.component';
 @Component({
   selector: 'rs-repository-bar',
   imports: [
+    TranslocoDirective,
     BrandLinkComponent,
     UserMenuComponent,
     RepositorySwitcherComponent,
@@ -91,6 +96,12 @@ export class RepositoryBarComponent {
 
   private readonly gitActions = viewChild(GitActionsComponent);
   private readonly mergeSummary = viewChild(MergeSummaryComponent);
+  private readonly fetchStatus = viewChild(FetchStatusComponent);
+
+  /** What the quiet fetch status says, which on narrow screens the git actions menu says for it (GA-35, NV-11). */
+  protected readonly fetchHeadline = computed(() =>
+    fetchStatusHeadline(this.gitStatus()?.fetchProblem != null, this.lockedKeyName())
+  );
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
@@ -116,6 +127,14 @@ export class RepositoryBarComponent {
 
   private actionsHaveFocus(): boolean {
     return this.host.querySelector('rs-merge-summary, rs-git-actions')?.contains(this.document.activeElement) === true;
+  }
+
+  /** The fetch status's item of the git actions menu was chosen: its panel opens next to the menu's button. */
+  protected showFetchDetails(): void {
+    const anchor = this.host.querySelector<HTMLElement>('rs-merge-summary button, rs-git-actions button');
+    if (anchor) {
+      this.fetchStatus()?.openDetails(anchor);
+    }
   }
 
   /** Gives the focus to what offers the git actions, when what had it in the bar went away. */

@@ -144,6 +144,49 @@ describe('RepositoryBarComponent', () => {
     bar().remove();
   });
 
+  it.each([
+    [
+      'a failed fetch',
+      { problem: { code: 'network', params: {} } },
+      'web-feature-repository-screen.FetchStatusComponent.failed'
+    ],
+    [ 'a locked key', { lockedKeyName: 'laptop' }, 'web-feature-repository-screen.FetchStatusComponent.locked' ]
+  ])('moves %s into the git actions menu on a phone, which opens its panel', async (_case, inputs, title) => {
+    await show({ narrow: true });
+    fixture.componentRef.setInput('gitStatus', {
+      branch: 'main',
+      noCommits: false,
+      lastCommit: null,
+      upstream: 'origin/main',
+      upstreamGone: false,
+      sameNameRemote: false,
+      ahead: 0,
+      behind: 0,
+      changes: [],
+      mergeInProgress: false,
+      networkJob: null,
+      fetchProblem: 'problem' in inputs ? inputs.problem : null
+    });
+    fixture.componentRef.setInput('lockedKeyName', 'lockedKeyName' in inputs ? inputs.lockedKeyName : null);
+    await settle(fixture);
+    document.body.append(bar());
+
+    expect(bar().querySelector('rs-fetch-status button')).toBeNull();
+    const trigger = bar().querySelector('rs-git-actions button') as HTMLButtonElement;
+    trigger.click();
+    await settle(fixture);
+    const item = [ ...document.querySelectorAll<HTMLButtonElement>('.cdk-overlay-container ui-menu button') ].find(
+      button => button.textContent?.trim() === title
+    );
+    item?.click();
+    await settle(fixture);
+
+    const panel = document.querySelector('ui-popover') as HTMLElement;
+    expect(panel.hidden).toBe(false);
+    expect(panel.textContent).toContain(title);
+    bar().remove();
+  });
+
   it('leaves the focus where it is when it was elsewhere while the actions swap', async () => {
     await show();
     document.body.append(bar());

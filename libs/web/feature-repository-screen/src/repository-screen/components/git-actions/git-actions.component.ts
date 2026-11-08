@@ -46,6 +46,10 @@ export class GitActionsComponent {
   readonly running = input<GitNetworkJobType | null>(null);
   /** Whether the screen uses its narrow layout, where the git actions are in a menu. */
   readonly narrow = input(false);
+  /** What the narrow menu warns of, and its button shows that it does, such as a failed fetch (GA-35); `null` without one. */
+  readonly warning = input<string | null>(null);
+  /** The warning was chosen in the narrow menu. */
+  readonly showWarning = output<void>();
   /** **Fetch** was chosen while it was offered. */
   readonly fetch = output<void>();
   /** **Push** was chosen while it was offered. */
@@ -86,6 +90,8 @@ export class GitActionsComponent {
       this.chooseFetch();
     } else if (item === 'push') {
       this.choosePush();
+    } else if (item === 'warning') {
+      this.showWarning.emit();
     }
   }
 

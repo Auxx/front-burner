@@ -42,12 +42,25 @@ export class MergeSummaryComponent {
   readonly narrow = input(false);
   /** Whether an abort is running. */
   readonly busy = input(false);
+  /** What the narrow menu warns of, and its button shows that it does, such as a failed fetch (GA-35); `null` without one. */
+  readonly warning = input<string | null>(null);
   /** **Abort merge** was chosen. */
   readonly abortMerge = output<void>();
+  /** The warning was chosen in the narrow menu. */
+  readonly showWarning = output<void>();
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
 
   protected readonly resolved = computed(() => this.state()?.files.filter(file => file.resolved).length ?? 0);
+
+  /** An item of the narrow menu was chosen. */
+  protected choose(item: unknown): void {
+    if (item === 'warning') {
+      this.showWarning.emit();
+    } else {
+      this.abortMerge.emit();
+    }
+  }
 
   /** Takes the focus, such as when what had it in the bar went away. */
   focus(): void {

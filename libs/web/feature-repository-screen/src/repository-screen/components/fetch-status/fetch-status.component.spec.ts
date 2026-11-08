@@ -172,9 +172,11 @@ describe('FetchStatusComponent', () => {
 
     it('asks to move it when the panel of a phone goes away with the focus inside', async () => {
       await showFocusable({ problem: { code: 'network', params: {} }, narrow: true });
-      (host().querySelector('button') as HTMLButtonElement).click();
+      const anchor = document.body.appendChild(document.createElement('button'));
+      fixture.componentInstance.openDetails(anchor);
       await settle(fixture);
       button(popover() as HTMLElement, `${FIXES}.retry`).focus();
+      anchor.remove();
 
       fixture.componentRef.setInput('problem', null);
       await settle(fixture);
@@ -197,17 +199,22 @@ describe('FetchStatusComponent', () => {
   });
 
   describe('on a phone', () => {
-    const trigger = () => host().querySelector('button') as HTMLButtonElement;
+    let anchor: HTMLButtonElement;
 
-    it('shows the text only after a tap on a phone', async () => {
+    beforeEach(() => {
+      anchor = document.body.appendChild(document.createElement('button'));
+    });
+
+    afterEach(() => anchor.remove());
+
+    it('takes no room in the bar, and shows the text only when asked', async () => {
       await show({ problem: { code: 'network', params: {} }, narrow: true });
 
-      expect(buttons(host())).toHaveLength(1);
-      expect(trigger().getAttribute('aria-label')).toBe(`${KEY}.failed`);
+      expect(buttons(host())).toHaveLength(0);
       expect(host().textContent).not.toContain('The connection was lost.');
       expect(popover()?.hidden).toBe(true);
 
-      trigger().click();
+      fixture.componentInstance.openDetails(anchor);
       await settle(fixture);
 
       expect(popover()?.hidden).toBe(false);
@@ -216,9 +223,9 @@ describe('FetchStatusComponent', () => {
       expect(popover()?.closest('rs-fetch-status')).toBeNull();
     });
 
-    it('an action closes the panel, and the focus goes back to the button', async () => {
+    it('an action closes the panel, and the focus goes back to what opened it', async () => {
       await show({ problem: { code: 'network', params: {} }, narrow: true });
-      trigger().click();
+      fixture.componentInstance.openDetails(anchor);
       await settle(fixture);
 
       button(popover() as HTMLElement, `${FIXES}.retry`).click();
@@ -226,13 +233,12 @@ describe('FetchStatusComponent', () => {
 
       expect(retries).toBe(1);
       expect(popover()?.hidden).toBe(true);
-      expect(document.activeElement).toBe(trigger());
+      expect(document.activeElement).toBe(anchor);
     });
 
     it('offers Unlock for a locked key', async () => {
       await show({ lockedKeyName: 'laptop', narrow: true });
-      expect(trigger().getAttribute('aria-label')).toBe(`${KEY}.locked`);
-      trigger().click();
+      fixture.componentInstance.openDetails(anchor);
       await settle(fixture);
 
       expect(text(popover())).not.toContain(`${KEY}.failed`);

@@ -30,18 +30,25 @@
     <span class="count">{{ t('inProgress') }}</span>
   }
   @if (narrow()) {
+    @let warningText = warning();
     <button uiIconButton
             [uiMenuTrigger]="actions.aria"
-            [label]="t('gitActions')"
+            [label]="warningText === null ? t('gitActions') : t('gitActionsWarning', { warning: warningText })"
             [busy]="busy()">
-      <ui-icon name="repo-fetch" />
+      <ui-icon [name]="warningText === null ? 'repo-fetch' : 'warning'" />
     </button>
     <ui-menu #actions="uiMenu"
-             (itemSelected)="abortMerge.emit()">
+             (itemSelected)="choose($event)">
       <button uiMenuItem="abort">
         <ui-icon name="close" />
         {{ t('abort') }}
       </button>
+      @if (warningText !== null) {
+        <button uiMenuItem="warning">
+          <ui-icon name="warning" />
+          {{ warningText }}
+        </button>
+      }
     </ui-menu>
   } @else {
     <button uiButton

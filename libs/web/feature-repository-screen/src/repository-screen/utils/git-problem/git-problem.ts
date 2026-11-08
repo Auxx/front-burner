@@ -55,6 +55,21 @@ export function fetchProblemFix(code: string): GitFix {
 }
 
 /**
+ * The headline of the quiet fetch status, as a message key and its params;
+ * `null` while it has nothing to say. A locked key comes first, as a stored
+ * problem is out of date while no fetch runs here (GA-35, RC-15).
+ */
+export function fetchStatusHeadline(
+  hasProblem: boolean,
+  lockedKeyName: string | null
+): { key: string; params: Record<string, string>; } | null {
+  if (lockedKeyName !== null) {
+    return { key: 'web-feature-repository-screen.FetchStatusComponent.locked', params: { name: lockedKeyName } };
+  }
+  return hasProblem ? { key: 'web-feature-repository-screen.FetchStatusComponent.failed', params: {} } : null;
+}
+
+/**
  * The one table from a network job's error code to its message and fix (RC-4,
  * GA-30, GA-31, GA-43). The push is never forced, so "The remote has new commits.
  * Pull first." offers no fix until step 4 brings **Pull**. A code the web client

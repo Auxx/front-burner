@@ -35,12 +35,6 @@
       }
     </ng-template>
     @if (narrow()) {
-      <button #trigger
-              uiIconButton
-              [label]="title"
-              [uiPopoverTrigger]="details">
-        <ui-icon name="warning" />
-      </button>
       <ui-popover #details="uiPopover"
                   [label]="title">
         @if (details.open()) {

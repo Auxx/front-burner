@@ -17,10 +17,8 @@ import {
 import type { GitNetworkJobType, GitProblemState } from '@front-burner/shared-contracts';
 import {
   ButtonComponent,
-  IconButtonComponent,
   IconComponent,
   PopoverComponent,
-  PopoverTriggerDirective,
   TooltipDirective,
   TruncatedTooltipDirective
 } from '@front-burner/ui';
@@ -40,9 +38,10 @@ const KEY = 'web-feature-repository-screen.FetchStatusComponent';
  * job runs (GA-9).
  *
  * It is never an alert: no live region, no focus change and no dialog of its
- * own. On narrow screens it is an icon button, whose tap shows all of it in a
- * popover, so that a long reason cannot push the save status out of the bar
- * (NV-11). It goes away once its problem is fixed, so it says when the focus must
+ * own. On narrow screens nothing of it is in the bar, which has no room for even
+ * a button at the smallest widths (NV-11): an item of the git actions menu, whose
+ * button then shows a warning icon, calls `openDetails`, which shows all of it in
+ * a popover. It goes away once its problem is fixed, so it says when the focus must
  * go elsewhere: as that happens, or before a dialog opens that would give it back.
  */
 @Component({
@@ -51,10 +50,8 @@ const KEY = 'web-feature-repository-screen.FetchStatusComponent';
     NgTemplateOutlet,
     TranslocoDirective,
     ButtonComponent,
-    IconButtonComponent,
     IconComponent,
     PopoverComponent,
-    PopoverTriggerDirective,
     TooltipDirective,
     TruncatedTooltipDirective
   ],
@@ -86,7 +83,8 @@ export class FetchStatusComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly details = viewChild(PopoverComponent);
   private readonly detailsElement = viewChild(PopoverComponent, { read: ElementRef });
-  private readonly trigger = viewChild('trigger', { read: ElementRef });
+  /** What opened the panel, which gets the focus back. */
+  private anchor: HTMLElement | undefined;
 
   /** What to say and offer; `null` while there is nothing to say. */
   protected readonly shown = computed(() => {
@@ -121,6 +119,15 @@ export class FetchStatusComponent {
     });
   }
 
+  /** On narrow screens, shows all of it in a panel next to `anchor`. */
+  openDetails(anchor: HTMLElement): void {
+    const details = this.details();
+    if (details && !details.open()) {
+      this.anchor = anchor;
+      details.toggle(anchor);
+    }
+  }
+
   protected chooseRetry(): void {
     if (!this.busy()) {
       this.closeDetails();
@@ -148,9 +155,9 @@ export class FetchStatusComponent {
     return this.host.contains(active) || this.detailsElement()?.nativeElement.contains(active) === true;
   }
 
-  /** On narrow screens, with the focus back on the button. */
+  /** On narrow screens, with the focus back on what opened it. */
   private closeDetails(): void {
     this.details()?.open.set(false);
-    this.trigger()?.nativeElement.focus();
+    this.anchor?.focus();
   }
 }

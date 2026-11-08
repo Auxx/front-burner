@@ -51,7 +51,8 @@ describe('MergeSummaryComponent', () => {
           [`${K}.resolved`]: '{{ resolved }} of {{ total }} files resolved',
           [`${K}.inProgress`]: 'Merge in progress',
           [`${K}.abort`]: 'Abort merge',
-          [`${K}.gitActions`]: 'Git actions'
+          [`${K}.gitActions`]: 'Git actions',
+          [`${K}.gitActionsWarning`]: 'Git actions. {{ warning }}'
         })
       ]
     });
@@ -121,6 +122,27 @@ describe('MergeSummaryComponent', () => {
     await settle(fixture);
 
     expect(aborted).toBe(1);
+  });
+
+  it('offers a warning in the menu on a phone, and shows on its button that there is one', async () => {
+    await show({ narrow: true });
+    let shown = 0;
+    fixture.componentInstance.showWarning.subscribe(() => shown++);
+
+    fixture.componentRef.setInput('warning', 'Couldn\'t check');
+    await settle(fixture);
+
+    expect(barButton().getAttribute('aria-label')).toBe('Git actions. Couldn\'t check');
+    barButton().click();
+    await settle(fixture);
+    const items = [ ...(menu()?.querySelectorAll('button') ?? []) ] as HTMLButtonElement[];
+    expect(items.map(item => item.textContent?.trim())).toEqual([ 'Abort merge', 'Couldn\'t check' ]);
+
+    items[1].click();
+    await settle(fixture);
+
+    expect(shown).toBe(1);
+    expect(aborted).toBe(0);
   });
 
   it.each([ false, true ])('takes the focus on its button, on a phone too (%s)', async narrow => {

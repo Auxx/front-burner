@@ -251,7 +251,10 @@ handled by [REQ-REPO-002](repo-credentials.md).
 - **GA-35** A failed background fetch does not interrupt the user: the header
   shows a quiet "Couldn't check for remote changes" with the reason and **Try
   again**. A fetch that needs a locked key to be unlocked says so there, without
-  opening a dialog by itself.
+  opening a dialog by itself. On narrow screens this is an item of the git
+  actions menu (GA-7), whose button then shows a warning icon, and the item
+  shows the reason and the actions in a panel. _(My call: the bar has no room
+  for it at 320 pixels, NV-11.)_
 
 ### Branches
 
