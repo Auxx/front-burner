@@ -26,6 +26,7 @@ import { FetchJob } from '../fetch/fetch.job';
 import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
 import { JobCredentials } from '../jobs/job-credentials.service';
+import { NetworkJobs } from '../jobs/network-jobs.service';
 import { PushJob } from '../push/push.job';
 import { PushService } from '../push/push.service';
 import { SyncStateStore } from '../state/sync-state.store';
@@ -80,6 +81,7 @@ export class PushHarness {
   fetchStep!: FetchStep;
   fetchService!: FetchService;
   gitJobs!: GitJobs;
+  networkJobs!: NetworkJobs;
   repositoryId = 0;
 
   static async start(serverOptions: Partial<GitHttpServerOptions> = {}): Promise<PushHarness> {
@@ -154,16 +156,10 @@ export class PushHarness {
       this.events
     );
     new FetchJob(this.runner, this.fetchStep, this.jobKeys).onModuleInit();
-    this.fetchService = new FetchService(this.runner, this.openable, this.saved, this.jobKeys, this.events);
+    this.networkJobs = new NetworkJobs(this.runner, this.saved, this.jobKeys, this.events);
+    this.fetchService = new FetchService(this.openable, this.networkJobs);
     this.gitJobs = new GitJobs(this.database);
-    this.service = new PushService(
-      this.runner,
-      this.engine,
-      this.openable,
-      this.saved,
-      this.jobKeys,
-      this.events
-    );
+    this.service = new PushService(this.engine, this.openable, this.networkJobs);
   }
 
   commit(subject: string): void {

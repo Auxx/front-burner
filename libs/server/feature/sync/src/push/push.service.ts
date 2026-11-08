@@ -1,11 +1,9 @@
-import { EventsHub } from '@front-burner/server-core-events';
 import { GitEngine } from '@front-burner/server-core-git';
-import { JobRunner } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import type { RequestAuth } from '@front-burner/server-core-security';
-import { JobKeys, SavedCredentialsService } from '@front-burner/server-feature-credentials';
 import { OpenableRepository } from '@front-burner/server-feature-files';
 import { Injectable } from '@nestjs/common';
+import { NetworkJobs } from '../jobs/network-jobs.service';
 import { PUSH_JOB_TYPE, pushDedupeKey, PushJobPayload } from './push.job';
 
 /**
@@ -15,27 +13,20 @@ import { PUSH_JOB_TYPE, pushDedupeKey, PushJobPayload } from './push.job';
 @Injectable()
 export class PushService {
   constructor(
-    private readonly runner: JobRunner,
     private readonly engine: GitEngine,
     private readonly repositories: OpenableRepository,
-    private readonly saved: SavedCredentialsService,
-    private readonly jobKeys: JobKeys,
-    private readonly events: EventsHub
+    private readonly networkJobs: NetworkJobs
   ) {}
 
   /**
    * Queues a push of the current branch, or returns the push of that branch
-   * already waiting or running. A protected key must be unlocked in this session; the job gets
-   * its own copy (RC-19), and the request keeps the unlock alive (AR-31). Publishes
-   * `git.changed`, so that the user's other tabs read the status's `networkJob` and
-   * show the push as running (GA-9) _(plan 58's call)_.
+   * already waiting or running, as `NetworkJobs.queue` does.
    *
    * @throws ApiErrorException 409 `merge-in-progress` (GA-4), `no-branch`,
    * `no-commits`, `nothing-to-push`, then `key-locked` or `credentials-missing`.
    */
   async start(auth: Pick<RequestAuth, 'userId' | 'sessionId'>, repositoryId: number): Promise<number> {
-    const { userId, sessionId } = auth;
-    const { row, root } = this.repositories.open(userId, repositoryId);
+    const { row, root } = this.repositories.open(auth.userId, repositoryId);
     const [ merging, status ] = await Promise.all([ this.engine.mergeInProgress(root), this.engine.status(root) ]);
     if (merging) {
       throw new ApiErrorException(409, 'merge-in-progress');
@@ -50,22 +41,11 @@ export class PushService {
     if (status.upstream !== null && !status.upstreamGone && status.ahead === 0) {
       throw new ApiErrorException(409, 'nothing-to-push');
     }
-    const heldKey = row.credentialId === null
-      ? undefined
-      : this.saved.keyForJob(userId, sessionId, row.credentialId);
     const payload: PushJobPayload = { branch: status.branch };
-    const jobId = this.runner.enqueue({
+    return this.networkJobs.queue(auth, row, {
       type: PUSH_JOB_TYPE,
-      userId,
-      repositoryId,
       payload,
       dedupeKey: pushDedupeKey(repositoryId, status.branch)
     });
-    // Synchronously after queueing, before the runner's loop can start the job.
-    if (heldKey !== undefined && row.credentialId !== null) {
-      this.jobKeys.hold(jobId, row.credentialId, heldKey);
-    }
-    this.events.publish(userId, { type: 'git.changed', repositoryId });
-    return jobId;
   }
 }

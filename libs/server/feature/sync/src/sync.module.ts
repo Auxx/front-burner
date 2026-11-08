@@ -9,6 +9,7 @@ import { FetchService } from './fetch/fetch.service';
 import { GitController } from './git/git.controller';
 import { GitJobs } from './jobs/git-jobs.service';
 import { JobCredentials } from './jobs/job-credentials.service';
+import { NetworkJobs } from './jobs/network-jobs.service';
 import { PushJob } from './push/push.job';
 import { PushService } from './push/push.service';
 import { SyncStateStore } from './state/sync-state.store';
@@ -20,6 +21,16 @@ import { SyncStateStore } from './state/sync-state.store';
 @Module({
   imports: [ FilesModule, PreferencesModule, RepositoriesModule, CredentialsModule ],
   controllers: [ GitController ],
-  providers: [ GitJobs, JobCredentials, PushService, PushJob, FetchStep, FetchService, FetchJob, SyncStateStore ]
+  providers: [
+    GitJobs,
+    JobCredentials,
+    NetworkJobs,
+    PushService,
+    PushJob,
+    FetchStep,
+    FetchService,
+    FetchJob,
+    SyncStateStore
+  ]
 })
 export class SyncModule {}
