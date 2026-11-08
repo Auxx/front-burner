@@ -8,6 +8,7 @@ export * from './login-audit';
 export * from './repositories';
 export * from './saved-credentials';
 export * from './sessions';
+export * from './sync-state';
 export * from './system-settings';
 export * from './user-preferences';
 export * from './users';

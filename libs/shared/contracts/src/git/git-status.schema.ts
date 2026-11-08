@@ -1,6 +1,15 @@
 import { z } from 'zod';
 import { GitNetworkJobSchema } from './git-push.schema';
 
+/** A problem a client shows with its fix: a code and the values its text needs. */
+export const GitProblemStateSchema = z
+  .object({
+    code: z.string(),
+    params: z.record(z.string(), z.string())
+  })
+  .meta({ id: 'GitProblemState' });
+export type GitProblemState = z.infer<typeof GitProblemStateSchema>;
+
 export const GIT_CHANGE_STATES = [ 'modified', 'added', 'deleted' ] as const;
 export type GitChangeState = (typeof GIT_CHANGE_STATES)[number];
 
