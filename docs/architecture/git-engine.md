@@ -260,12 +260,34 @@ Confirmed by spike 2 (spikes.md).
   - Every operation that writes a commit sets the commit author itself (CA-2),
     and every merge sets `merge.conflictStyle=merge` (GC-5), so the working
     copy's own configuration decides neither.
+  - The merge (`GitMerge.merge`, plan 76) merges the full name
+    `refs/remotes/origin/<branch>`, never `origin/<branch>`, which a local
+    branch of that name would stand for. It passes `-c
+    merge.conflictStyle=merge`, `-c rerere.enabled=false`, `-c
+    commit.gpgsign=false`, `--ff`, `--no-autostash`, `--no-overwrite-ignore`,
+    `--allow-unrelated-histories` and the author's `GIT_AUTHOR_*` and
+    `GIT_COMMITTER_*` variables, whatever the working copy's configuration says,
+    and git's own message for the short name: `Merge remote-tracking branch
+    'origin/<branch>'`, with ` into <branch>` unless the branch is `main` or
+    `master`. Before it starts, it refuses with `merge-blocked` (naming at most
+    20 `paths`) when a new file would go where an entry that git does not track
+    is, or where a folder on the way must be: git protects an ignored file only
+    in a fast-forward, and aborting cannot bring it back.
+  - Markers are labelled with the branch names, `<<<<<<< main` and `>>>>>>>
+    origin/main` (GC-5): `git merge` labels mine `HEAD`, so after a conflict
+    `GitMerge.writeMarkers` writes each text file again with `git merge-file`
+    from its versions in the index, with the empty blob as the base of a file
+    both sides added. It writes only a regular file, only when `merge-file`
+    exited below 128 and its output is valid UTF-8, so a file with a NUL byte,
+    one that is not valid UTF-8, or a symbolic link keeps what git wrote. A path
+    that has only a base (deleted by both sides of a rename) has nothing to
+    choose from, and is removed from the index.
 - **A-5.11** Conflicts are read from the index: base, ours and theirs are stages
   1, 2 and 3 (`git show :1:<path>` and so on), giving the one conflict model of
   vision goal 5.
 - **A-5.12** Before a merge or rebase, the engine records the current commit in
-  `sync_state` (D-4.6) and also as a ref under `refs/front-burner/`, so that
-  git's garbage collection keeps it while it may be needed. _(My call.)_
+  `sync_state` (D-4.6) and also as the ref `refs/front-burner/pre-merge`, so
+  that git's garbage collection keeps it while it may be needed. _(My call.)_
 - **A-5.13** Clones are made in `tmp/` and moved into place with one rename when
   they succeed (NF-5.3).
 - **A-5.14** Status at 100,000 files (NF-1.4) needs no git setting: about 100 ms

@@ -1,8 +1,20 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import type { GitOptions } from '../git.options';
 import { GitRunner } from '../runner/git-runner';
+import { GitOperationError } from './git-errors';
 import { GitMerge } from './git-merge';
 import { LocalGit } from './local-git';
 
@@ -22,7 +34,7 @@ const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', args, { cwd, env: gitEnv, encoding: 'utf8' }).trim();
 
 describe('GitMerge', () => {
-  const merge = new GitMerge(new LocalGit(new GitRunner()));
+  const merge = new GitMerge(new LocalGit(new GitRunner()), { gitTimeoutMs: 60_000 } as GitOptions);
   let root: string;
   let work: string;
 
@@ -136,5 +148,394 @@ describe('GitMerge', () => {
     expect(existsSync(join(work, 'newdir'))).toBe(false);
     expect(readFileSync(join(work, 'ignored.log'), 'utf8')).toBe('keep me\n');
     expect(git(work, 'status', '--porcelain')).toBe('');
+  });
+
+  describe('merge', () => {
+    const UPSTREAM = 'refs/remotes/origin/main';
+    const author = { name: 'Ada Lovelace', email: 'ada@example.com' };
+    const request = { branch: 'main', upstream: 'origin/main', author };
+
+    /** Makes a commit on `origin/main` as a fetch would bring it, and goes back to `main`. */
+    const onUpstream = (change: () => void, message = 'theirs') => {
+      git(work, 'checkout', '-q', '--detach', UPSTREAM);
+      change();
+      commitAll(message);
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      git(work, 'checkout', '-q', 'main');
+    };
+    /** A symbolic link in the index and on disk, also where git checks links out as plain files. */
+    const writeLink = (name: string, target: string) => {
+      const oid = execFileSync('git', [ 'hash-object', '-w', '--stdin' ], {
+        cwd: work,
+        env: gitEnv,
+        encoding: 'utf8',
+        input: target
+      }).trim();
+      rmSync(join(work, name), { force: true });
+      git(work, 'update-index', '--add', '--cacheinfo', `120000,${oid},${name}`);
+      git(work, 'checkout', '--', name);
+    };
+    const linkTarget = (name: string) =>
+      lstatSync(join(work, name)).isSymbolicLink()
+        ? readlinkSync(join(work, name))
+        : readFileSync(join(work, name), 'utf8');
+    const head = () => git(work, 'rev-parse', 'HEAD');
+    const mergeHead = () => existsSync(join(work, '.git', 'MERGE_HEAD'));
+    const failureOf = (promise: Promise<unknown>) =>
+      promise.then(() => {
+        throw new Error('expected a failure');
+      }, (error: unknown) => error as GitOperationError);
+
+    beforeEach(() => {
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      // The working copy's own identity, which a merge must not use (CA-2).
+      git(work, 'config', 'user.name', 'Config Name');
+      git(work, 'config', 'user.email', 'config@example.com');
+    });
+
+    it('says already up to date', async () => {
+      write('first.md', 'mine\n');
+      commitAll('mine');
+      const before = head();
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'up-to-date' });
+      expect(head()).toBe(before);
+    });
+
+    it('fast-forwards and counts the commits', async () => {
+      onUpstream(() => write('first.md', 'two\n'));
+      onUpstream(() => write('first.md', 'three\n'));
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'fast-forward', commits: 2 });
+      expect(head()).toBe(git(work, 'rev-parse', UPSTREAM));
+      expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe('three\n');
+    });
+
+    it('makes a merge commit with git\'s words, as the author', async () => {
+      onUpstream(() => write('theirs.md', 'theirs\n'));
+      write('mine.md', 'mine\n');
+      commitAll('mine');
+
+      const result = await merge.merge(work, request);
+
+      expect(result).toEqual({ kind: 'merged', commits: 1, oid: head() });
+      expect(git(work, 'log', '-1', '--format=%B')).toBe('Merge remote-tracking branch \'origin/main\'');
+      expect(git(work, 'log', '-1', '--format=%an <%ae>|%cn <%ce>')).toBe(
+        'Ada Lovelace <ada@example.com>|Ada Lovelace <ada@example.com>'
+      );
+      expect(git(work, 'rev-parse', 'HEAD^2')).toBe(git(work, 'rev-parse', UPSTREAM));
+    });
+
+    it('says into for a branch other than main', async () => {
+      git(work, 'checkout', '-q', '-b', 'feature');
+      git(work, 'update-ref', 'refs/remotes/origin/feature', 'HEAD');
+      git(work, 'checkout', '-q', '--detach', 'refs/remotes/origin/feature');
+      write('theirs.md', 'theirs\n');
+      commitAll('theirs');
+      git(work, 'update-ref', 'refs/remotes/origin/feature', 'HEAD');
+      git(work, 'checkout', '-q', 'feature');
+      write('mine.md', 'mine\n');
+      commitAll('mine');
+
+      await merge.merge(work, { branch: 'feature', upstream: 'origin/feature', author });
+
+      expect(git(work, 'log', '-1', '--format=%B')).toBe(
+        'Merge remote-tracking branch \'origin/feature\' into feature'
+      );
+    });
+
+    it('stops at a conflict and leaves MERGE_HEAD, with the same message', async () => {
+      onUpstream(() => write('first.md', 'theirs\n'));
+      write('first.md', 'mine\n');
+      commitAll('mine');
+      const before = head();
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
+      expect(head()).toBe(before);
+      expect(git(work, 'rev-parse', 'MERGE_HEAD')).toBe(git(work, 'rev-parse', UPSTREAM));
+      expect(readFileSync(join(work, '.git', 'MERGE_MSG'), 'utf8').split('\n')[0]).toBe(
+        'Merge remote-tracking branch \'origin/main\''
+      );
+    });
+
+    it('writes plain markers with branch names, whatever the config says', async () => {
+      git(work, 'config', 'merge.conflictStyle', 'zdiff3');
+      onUpstream(() => write('first.md', 'theirs\n'));
+      write('first.md', 'mine\n');
+      commitAll('mine');
+
+      await merge.merge(work, request);
+
+      expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe(
+        '<<<<<<< main\nmine\n=======\ntheirs\n>>>>>>> origin/main\n'
+      );
+
+      write('first.md', 'edited\n');
+      await merge.writeMarkers(work, 'first.md', { mine: 'mine', theirs: 'theirs' });
+
+      expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe(
+        '<<<<<<< mine\nmine\n=======\ntheirs\n>>>>>>> theirs\n'
+      );
+    });
+
+    it('labels Both added too', async () => {
+      onUpstream(() => write('new.md', 'theirs\n'));
+      write('new.md', 'mine\n');
+      commitAll('mine');
+
+      await merge.merge(work, request);
+
+      expect(git(work, 'ls-files', '-u', '--', 'new.md').split('\n').map(line => line.split('\t')[0].at(-1))).toEqual([
+        '2',
+        '3'
+      ]);
+      expect(readFileSync(join(work, 'new.md'), 'utf8')).toBe(
+        '<<<<<<< main\nmine\n=======\ntheirs\n>>>>>>> origin/main\n'
+      );
+    });
+
+    it('leaves a file that is not valid UTF-8 as git wrote it', async () => {
+      git(work, 'config', 'merge.conflictStyle', 'zdiff3');
+      writeFileSync(join(work, 'latin.md'), Buffer.from('caf\xe9\n', 'latin1'));
+      writeLink('link.md', 'base.md');
+      commitAll('base');
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      onUpstream(() => {
+        writeFileSync(join(work, 'latin.md'), Buffer.from('th\xe9irs\n', 'latin1'));
+        writeLink('link.md', 'theirs.md');
+      });
+      writeFileSync(join(work, 'latin.md'), Buffer.from('m\xefne\n', 'latin1'));
+      writeLink('link.md', 'mine.md');
+      commitAll('mine');
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
+
+      // git's own markers, in the plain style.
+      expect(readFileSync(join(work, 'latin.md'))).toEqual(
+        Buffer.from(`<<<<<<< HEAD\nm\xefne\n=======\nth\xe9irs\n>>>>>>> ${UPSTREAM}\n`, 'latin1')
+      );
+      expect(git(work, 'ls-files', '-u', '--', 'link.md').split('\n').map(line => line.split(' ')[0])).toEqual([
+        '120000',
+        '120000',
+        '120000'
+      ]);
+      expect(linkTarget('link.md')).toBe('mine.md');
+    });
+
+    it('leaves a Markdown file with a NUL byte as git wrote it', async () => {
+      // Not `nul.md`, which Windows does not allow.
+      writeFileSync(join(work, 'binary.md'), Buffer.from('base\0\n'));
+      commitAll('base');
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      onUpstream(() => writeFileSync(join(work, 'binary.md'), Buffer.from('theirs\0\n')));
+      writeFileSync(join(work, 'binary.md'), Buffer.from('mine\0\n'));
+      commitAll('mine');
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
+
+      expect(readFileSync(join(work, 'binary.md'))).toEqual(Buffer.from('mine\0\n'));
+      await merge.writeMarkers(work, 'binary.md', { mine: 'main', theirs: 'origin/main' });
+      expect(readFileSync(join(work, 'binary.md'))).toEqual(Buffer.from('mine\0\n'));
+    });
+
+    it('leaves other files as git wrote them', async () => {
+      write('clean.md', 'a\nb\nc\n');
+      write('gone.md', 'x\n');
+      commitAll('base');
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      onUpstream(() => {
+        write('clean.md', 'a\nb\nC\n');
+        write('first.md', 'theirs\n');
+        git(work, 'rm', '-q', 'gone.md');
+      });
+      write('clean.md', 'A\nb\nc\n');
+      write('first.md', 'mine\n');
+      write('gone.md', 'x changed\n');
+      commitAll('mine');
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
+
+      expect(readFileSync(join(work, 'clean.md'), 'utf8')).toBe('A\nb\nC\n');
+      expect(readFileSync(join(work, 'gone.md'), 'utf8')).toBe('x changed\n');
+      await merge.writeMarkers(work, 'gone.md', { mine: 'main', theirs: 'origin/main' });
+      expect(readFileSync(join(work, 'gone.md'), 'utf8')).toBe('x changed\n');
+    });
+
+    it('merges the remote branch when a local branch has its name', async () => {
+      git(work, 'branch', 'origin/main');
+      onUpstream(() => write('first.md', 'two\n'));
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'fast-forward', commits: 1 });
+      expect(head()).toBe(git(work, 'rev-parse', UPSTREAM));
+    });
+
+    it('merges in a shallow single-branch clone', async () => {
+      const remote = join(root, 'remote.git');
+      git(root, 'clone', '-q', '--bare', work, remote);
+      const shallow = join(root, 'shallow');
+      git(
+        root,
+        'clone',
+        '-q',
+        '--depth',
+        '1',
+        '--single-branch',
+        '--branch',
+        'main',
+        pathToFileURL(remote).href,
+        shallow
+      );
+      write('first.md', 'theirs\n');
+      commitAll('theirs');
+      git(work, 'push', '-q', remote, 'main');
+      writeFileSync(join(shallow, 'mine.md'), 'mine\n');
+      git(shallow, 'add', '-A');
+      git(shallow, 'commit', '-q', '-m', 'mine');
+      git(shallow, 'fetch', '-q');
+
+      const result = await merge.merge(shallow, request);
+
+      expect(result).toEqual({ kind: 'merged', commits: 1, oid: git(shallow, 'rev-parse', 'HEAD') });
+      expect(readFileSync(join(shallow, 'first.md'), 'utf8')).toBe('theirs\n');
+      expect(readFileSync(join(shallow, 'mine.md'), 'utf8')).toBe('mine\n');
+    });
+
+    it('merges unrelated histories', async () => {
+      git(work, 'checkout', '-q', '--orphan', 'other');
+      git(work, 'rm', '-q', '-r', '--cached', '.');
+      rmSync(join(work, 'first.md'));
+      rmSync(join(work, '.gitignore'));
+      write('other.md', 'other\n');
+      commitAll('other');
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      git(work, 'checkout', '-q', 'main');
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'merged', commits: 1, oid: head() });
+      expect(readFileSync(join(work, 'other.md'), 'utf8')).toBe('other\n');
+    });
+
+    it('ignores merge.ff=only and merge.autoStash in the config', async () => {
+      git(work, 'config', 'merge.ff', 'only');
+      git(work, 'config', 'merge.autoStash', 'true');
+      onUpstream(() => write('theirs.md', 'theirs\n'));
+      write('mine.md', 'mine\n');
+      commitAll('mine');
+
+      expect(await merge.merge(work, request)).toMatchObject({ kind: 'merged' });
+      expect(git(work, 'stash', 'list')).toBe('');
+    });
+
+    it('a fast-forward does not overwrite an ignored file', async () => {
+      onUpstream(() => {
+        write('ignored.log', 'theirs\n');
+        git(work, 'add', '-f', 'ignored.log');
+      });
+      write('ignored.log', 'keep me\n');
+      const before = head();
+
+      const failure = await failureOf(merge.merge(work, request));
+
+      expect(failure).toBeInstanceOf(GitOperationError);
+      expect(failure.code).toBe('merge-blocked');
+      expect(failure.params).toEqual({ paths: 'ignored.log' });
+      expect(head()).toBe(before);
+      expect(readFileSync(join(work, 'ignored.log'), 'utf8')).toBe('keep me\n');
+    });
+
+    it('a true merge does not overwrite an ignored file, or an ignored folder', async () => {
+      write('.gitignore', 'ignored.log\nbuild/\n');
+      commitAll('ignore build');
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      onUpstream(() => {
+        write('ignored.log', 'theirs\n');
+        write('build', 'a file\n');
+        git(work, 'add', '-f', 'ignored.log', 'build');
+      });
+      write('mine.md', 'mine\n');
+      commitAll('mine');
+      write('ignored.log', 'keep me\n');
+      mkdirSync(join(work, 'build'));
+      write('build/out.txt', 'keep me too\n');
+      const before = head();
+
+      const failure = await failureOf(merge.merge(work, request));
+
+      expect(failure.code).toBe('merge-blocked');
+      expect(failure.params['paths']?.split('\n').sort()).toEqual([ 'build', 'ignored.log' ]);
+      expect(head()).toBe(before);
+      expect(mergeHead()).toBe(false);
+      expect(readFileSync(join(work, 'ignored.log'), 'utf8')).toBe('keep me\n');
+      expect(readFileSync(join(work, 'build', 'out.txt'), 'utf8')).toBe('keep me too\n');
+    });
+
+    it('a file where a folder on the way must be stops the merge', async () => {
+      write('.gitignore', 'ignored.log\nnotes\n');
+      commitAll('ignore notes');
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      onUpstream(() => {
+        mkdirSync(join(work, 'notes'));
+        write('notes/a.md', 'theirs\n');
+        git(work, 'add', '-f', 'notes/a.md');
+      });
+      // A checkout of `main` keeps the ignored folder; the user's file replaces it.
+      rmSync(join(work, 'notes'), { recursive: true, force: true });
+      write('notes', 'keep me\n');
+      const before = head();
+
+      const failure = await failureOf(merge.merge(work, request));
+
+      expect(failure.code).toBe('merge-blocked');
+      expect(failure.params).toEqual({ paths: 'notes' });
+      expect(head()).toBe(before);
+      expect(readFileSync(join(work, 'notes'), 'utf8')).toBe('keep me\n');
+    });
+
+    it('removes a file both sides deleted', async () => {
+      write('old.md', 'old\n');
+      commitAll('base');
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      onUpstream(() => git(work, 'mv', 'old.md', 'theirs.md'));
+      git(work, 'mv', 'old.md', 'mine.md');
+      commitAll('mine');
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
+
+      expect(git(work, 'ls-files', '-s', '--', 'old.md')).toBe('');
+      expect(git(work, 'ls-files', '-u').split('\n').map(line => line.split('\t')[1])).toEqual([
+        'mine.md',
+        'theirs.md'
+      ]);
+    });
+
+    it('knows when a merge commit is needed', async () => {
+      expect(await merge.needsMergeCommit(work, 'origin/main')).toBe(false);
+      onUpstream(() => write('theirs.md', 'theirs\n'));
+      expect(await merge.needsMergeCommit(work, 'origin/main')).toBe(false);
+      write('mine.md', 'mine\n');
+      commitAll('mine');
+      expect(await merge.needsMergeCommit(work, 'origin/main')).toBe(true);
+    });
+
+    it('knows when there is nothing to merge', async () => {
+      expect(await merge.isUpToDate(work, 'origin/main')).toBe(true);
+      expect(await merge.hasRemoteBranch(work, 'main')).toBe(true);
+      expect(await merge.hasRemoteBranch(work, 'missing')).toBe(false);
+      write('mine.md', 'mine\n');
+      commitAll('mine');
+      expect(await merge.isUpToDate(work, 'origin/main')).toBe(true);
+      onUpstream(() => write('theirs.md', 'theirs\n'));
+      expect(await merge.isUpToDate(work, 'origin/main')).toBe(false);
+    });
+
+    it('adopts an upstream, also for a branch with a dot in its name', async () => {
+      const local = new LocalGit(new GitRunner());
+
+      await merge.adoptUpstream(work, 'main');
+      await merge.adoptUpstream(work, 'release.1');
+
+      expect(await local.upstreamOf(work, 'main')).toBe('refs/heads/main');
+      expect(await local.upstreamOf(work, 'release.1')).toBe('refs/heads/release.1');
+      expect(git(work, 'config', '--get', 'branch.release.1.remote')).toBe('origin');
+    });
   });
 });
