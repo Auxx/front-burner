@@ -11,6 +11,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestj
 import { ApiAcceptedResponse, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
+import { GitJobs } from '../jobs/git-jobs.service';
 import { PushService } from '../push/push.service';
 import { toGitApiError } from './git-api-errors';
 import {
@@ -70,7 +71,8 @@ export class GitController {
     private readonly guard: WorkingTreeGuard,
     private readonly commitAuthors: CommitAuthors,
     private readonly events: EventsHub,
-    private readonly pushes: PushService
+    private readonly pushes: PushService,
+    private readonly gitJobs: GitJobs
   ) {}
 
   /**
@@ -89,7 +91,7 @@ export class GitController {
       this.engine.mergeInProgress(root),
       this.engine.lastCommit(root)
     ]);
-    return { ...status, mergeInProgress, lastCommit, networkJob: this.pushes.networkJob(userId, params.id) };
+    return { ...status, mergeInProgress, lastCommit, networkJob: this.gitJobs.networkJob(userId, params.id) };
   }
 
   /**
@@ -200,6 +202,6 @@ export class GitController {
   @ApiOkResponse({ type: GitJobStateDto })
   @ZodSerializerDto(GitJobStateDto)
   gitJob(@Req() req: Request, @Param() params: GitJobParamsDto): GitJobState {
-    return this.pushes.state(authOf(req).userId, params.id, params.jobId);
+    return this.gitJobs.state(authOf(req).userId, params.id, params.jobId);
   }
 }

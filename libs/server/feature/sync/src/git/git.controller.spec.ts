@@ -23,6 +23,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
+import { GitJobs } from '../jobs/git-jobs.service';
 import { PushService } from '../push/push.service';
 import { GitController } from './git.controller';
 
@@ -100,7 +101,8 @@ describe('GitController', () => {
         { provide: OpenableRepository, useValue: repositories },
         { provide: CommitAuthors, useValue: commitAuthors },
         // Pushing has its own spec, with a remote.
-        { provide: PushService, useValue: { networkJob: () => null } },
+        { provide: PushService, useValue: {} },
+        { provide: GitJobs, useValue: { networkJob: () => null } },
         { provide: EventsHub, useValue: { publish: (_userId: number, event: PushEvent) => published.push(event) } },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe },

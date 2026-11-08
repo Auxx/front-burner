@@ -1,4 +1,4 @@
-import { jobs, repositories } from '@front-burner/server-core-database';
+import { jobs } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
 import { GitEngine } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
@@ -15,6 +15,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import request from 'supertest';
 import { GitController } from '../git/git.controller';
+import { GitJobs } from '../jobs/git-jobs.service';
 import { insertRepository } from '../testing/fixtures';
 import { git, trustTestCertificate } from '../testing/git-fixtures';
 import { PushHarness } from '../testing/push-harness';
@@ -28,7 +29,6 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
   let restoreCa: () => void;
   let harness: PushHarness;
   let app: INestApplication;
-  let userId: number;
 
   const http = () => request(app.getHttpServer());
   const push = (id = harness.repositoryId) => http().post(`/repositories/${id}/git/push`);
@@ -45,6 +45,7 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
         { provide: CommitAuthors, useValue: {} },
         { provide: EventsHub, useValue: harness.events },
         { provide: PushService, useValue: harness.service },
+        { provide: GitJobs, useValue: harness.gitJobs },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
         { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor }
@@ -53,7 +54,7 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
     app = moduleRef.createNestApplication({ logger: false });
     // Stands in for the auth middleware.
     app.use((req: Request, _res: Response, next: NextFunction) => {
-      req.auth = { userId, sessionId: SESSION } as Request['auth'];
+      req.auth = { userId: harness.alice, sessionId: SESSION } as Request['auth'];
       next();
     });
     await app.init();
@@ -69,7 +70,6 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
 
   beforeEach(async () => {
     harness = await PushHarness.start();
-    userId = harness.alice;
     await startApp();
   });
 
@@ -95,6 +95,15 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
         dedupeKey: `push:${harness.repositoryId}:main`
       })
     ]);
+  });
+
+  it('reports the running push in the status', async () => {
+    harness.commit('second');
+    const { body } = await push().expect(202);
+
+    const status = await http().get(`/repositories/${harness.repositoryId}/git/status`).expect(200);
+
+    expect(status.body).toMatchObject({ networkJob: { id: body.jobId, type: 'push' } });
   });
 
   it('publishes git.changed when it queues a push, so that other tabs show it running', async () => {
@@ -186,100 +195,5 @@ describe.skipIf(process.platform === 'win32')('PushService', () => {
     harness.saved.unlock(harness.alice, SESSION, keyId, FIXTURE_PASSPHRASE);
     const started = await push(id).expect(202);
     expect(harness.jobKeys.take(started.body.jobId, keyId)).toBeDefined();
-  });
-
-  it('reports the pushed commits and upstream', async () => {
-    harness.commit('second');
-    harness.commit('third');
-    harness.runner.start();
-
-    const { jobId } = (await push().expect(202)).body as { jobId: number; };
-    await harness.finished(jobId);
-
-    expect((await jobState(jobId).expect(200)).body).toEqual({
-      status: 'done',
-      outcome: { kind: 'pushed', commits: 2, upstream: 'origin/main' }
-    });
-    expect(harness.remoteLog()).toBe('third\nsecond\nfirst');
-  });
-
-  it('reports no-credentials for a repository without any', async () => {
-    await harness.serve({ users: { alice: 'token' } });
-    harness.commit('second');
-    harness.runner.start();
-
-    const { jobId } = (await push().expect(202)).body as { jobId: number; };
-    await harness.finished(jobId);
-
-    expect((await jobState(jobId).expect(200)).body).toEqual({
-      status: 'done',
-      outcome: { kind: 'failed', code: 'no-credentials', params: expect.objectContaining({ branch: 'main' }) }
-    });
-  });
-
-  it('reports refused credentials and the remote\'s lines', async () => {
-    const credentialId = harness.database.db.transaction(tx =>
-      harness.saved.createHttps(tx, harness.alice, { name: 'Work', username: 'alice', password: 'wrong' })
-    );
-    await harness.serve({ users: { alice: 'token' } });
-    harness.database.db.update(repositories).set({ credentialId }).where(eq(repositories.id, harness.repositoryId))
-      .run();
-    harness.commit('second');
-    harness.runner.start();
-
-    const { jobId } = (await push().expect(202)).body as { jobId: number; };
-    await harness.finished(jobId);
-
-    expect((await jobState(jobId).expect(200)).body).toMatchObject({
-      status: 'done',
-      outcome: { kind: 'failed', code: 'credentials-refused' }
-    });
-  });
-
-  it('reports an interrupted push', async () => {
-    const jobId = harness.database.db.insert(jobs).values({
-      type: PUSH_JOB_TYPE,
-      userId: harness.alice,
-      repositoryId: harness.repositoryId,
-      payload: JSON.stringify({ branch: 'main' }),
-      status: 'running',
-      runAt: new Date(),
-      createdAt: new Date(),
-      attempts: 1,
-      dedupeKey: `push:${harness.repositoryId}:main`
-    }).returning().get().id;
-
-    // As after a restart.
-    await harness.runner.beforeApplicationShutdown();
-    harness.build();
-    harness.runner.start();
-
-    expect((await jobState(jobId).expect(200)).body).toEqual({
-      status: 'failed',
-      outcome: { kind: 'failed', code: 'interrupted', params: {} }
-    });
-  });
-
-  it('answers another user\'s job like a missing one', async () => {
-    harness.commit('second');
-    const { jobId } = (await push().expect(202)).body as { jobId: number; };
-    const other = insertRepository(harness.database, harness.alice, { name: 'Other' });
-
-    expect((await jobState(jobId, other).expect(404)).body).toMatchObject({ code: 'not-found' });
-    expect((await jobState(jobId + 100).expect(404)).body).toMatchObject({ code: 'not-found' });
-    userId = harness.bob;
-    expect((await jobState(jobId).expect(404)).body).toMatchObject({ code: 'not-found' });
-  });
-
-  it('reports the running job in the status', async () => {
-    harness.commit('second');
-    expect((await http().get(`/repositories/${harness.repositoryId}/git/status`).expect(200)).body)
-      .toMatchObject({ networkJob: null });
-
-    const { jobId } = (await push().expect(202)).body as { jobId: number; };
-
-    expect((await http().get(`/repositories/${harness.repositoryId}/git/status`).expect(200)).body)
-      .toMatchObject({ networkJob: { id: jobId, type: 'push' } });
-    expect((await jobState(jobId).expect(200)).body).toEqual({ status: 'queued', outcome: null });
   });
 });

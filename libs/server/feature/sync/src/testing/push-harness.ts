@@ -21,6 +21,8 @@ import { eq } from 'drizzle-orm';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { GitJobs } from '../jobs/git-jobs.service';
+import { JobCredentials } from '../jobs/job-credentials.service';
 import { PushJob } from '../push/push.job';
 import { PushService } from '../push/push.service';
 import { insertRepository, insertUser } from './fixtures';
@@ -59,6 +61,7 @@ export class PushHarness {
   readonly unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, this.lifecycle, this.events);
   readonly saved = new SavedCredentialsService(this.database, box, this.unlocks, new UnlockAttempts());
   readonly jobKeys = new JobKeys();
+  readonly jobCredentials = new JobCredentials(this.saved, this.jobKeys);
   readonly queries = new RepositoryQueries(this.database);
   readonly openable = new OpenableRepository(this.queries, this.layout);
   readonly networkLock = new NetworkLock();
@@ -69,6 +72,7 @@ export class PushHarness {
   engine!: GitEngine;
   guard!: WorkingTreeGuard;
   service!: PushService;
+  gitJobs!: GitJobs;
   repositoryId = 0;
 
   static async start(serverOptions: Partial<GitHttpServerOptions> = {}): Promise<PushHarness> {
@@ -117,13 +121,13 @@ export class PushHarness {
       this.engine,
       this.networkLock,
       this.openable,
-      this.saved,
+      this.jobCredentials,
       knownHosts,
       this.jobKeys,
       this.events
     ).onModuleInit();
+    this.gitJobs = new GitJobs(this.database);
     this.service = new PushService(
-      this.database,
       this.runner,
       this.engine,
       this.openable,
