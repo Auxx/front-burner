@@ -67,7 +67,7 @@ GC-19, GC-27); `docs/architecture/git-engine.md` A-5.10.
 
 - Produces:
   - `GitMerge.startOver(workingCopy: string, entry: ConflictEntry, labels: {
-    mine: string; theirs: string }): Promise<void>`.
+    ours: string; theirs: string }): Promise<void>`.
   - `ConflictEntry.edited: boolean`, and `GitConflictFile.edited: boolean`.
   - `POST /api/v1/repositories/:id/git/merge/start-over` (`startConflictOver`,
     `204`, `GitConflictPath`: `{ path: string }`).

@@ -23,7 +23,7 @@ A-5.11.
 
 - The shared constraints of [the step 4 index](2026-11-08-00-roadmap-step-4.md)
   apply.
-- `side` is `mine` or `theirs`, the words of the glossary.
+- `side` is `ours` or `theirs`, the words of the glossary.
 - It refuses, with `409`: `no-merge-in-progress`, `not-conflicting` (the path is
   not one of the merge's conflicting files), and `version-not-readable` (not
   Markdown, a symbolic link, over `MAX_FILE_BYTES`, not valid UTF-8, or that

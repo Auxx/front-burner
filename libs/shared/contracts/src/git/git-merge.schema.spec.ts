@@ -3,10 +3,10 @@ import { GitConflictFileSchema, GitMergeStateSchema } from './git-merge.schema';
 describe('GitMergeStateSchema', () => {
   const file = {
     path: 'docs/a.md',
-    kind: 'deleted-by-me',
+    kind: 'deleted-by-us',
     resolved: false,
     editable: false,
-    mineSize: null,
+    oursSize: null,
     theirsSize: 12
   };
 

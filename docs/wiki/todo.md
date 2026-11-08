@@ -36,6 +36,24 @@ Known gaps, left until someone meets them:
   `dist/` and adds `dist/app.js`, the file stays, and every later pull fails
   with `merge-blocked` until someone removes it on the instance. A fix needs the
   merge target in `sync_state`, to know which files were the merge's.
+- Merge state (`GET …/git/merge`), for a merge that a pull did not start, which
+  the product itself never leaves:
+  - `from` is the branch's configured upstream, not what is merging: after a
+    `git merge feature` on `main` it says `origin/main`, next to the message
+    "Merge branch 'feature'". Without an upstream or on a detached `HEAD`,
+    `from` and `into` are git's words `MERGE_HEAD` and `HEAD`, which a client
+    can't tell from branch names. Nullable fields would let it word these cases
+    itself.
+  - A file left with only a base version, as after a rename on both sides, is
+    left out of `files` but listed in `otherFiles` as merged without conflicts.
+    With every listed file resolved, **Commit merge** would be enabled, git
+    would refuse, and nothing would say why. In a pull, `prepareConflicts`
+    removes these files.
+- Merge state, when a merge ends during a read: `read` checks for a merge once
+  and then reads without a lock (A-5.3), so another device's commit or abort in
+  between gives a `200` with every file resolved or no files, rather than `409
+  no-merge-in-progress`. Checking again after the reads closes it, once plans 80
+  and 93 can end a merge.
 
 Deployment guide (`docs/wiki/deployment.md`), postponed until the MVP runs
 locally in a development environment, so that it describes what was actually

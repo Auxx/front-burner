@@ -253,11 +253,12 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
           path: 'edited.md',
           kind: 'both-changed',
           resolved: false,
-          mineOid: git(work, 'rev-parse', ':2:edited.md'),
+          baseOid: git(work, 'rev-parse', ':1:edited.md'),
+          oursOid: git(work, 'rev-parse', ':2:edited.md'),
           theirsOid: git(work, 'rev-parse', ':3:edited.md'),
-          mineMode: '100644',
+          oursMode: '100644',
           theirsMode: '100644',
-          mineSize: sizeOf('mine\n'),
+          oursSize: sizeOf('mine\n'),
           theirsSize: sizeOf('theirs!\n')
         }
       ]);
@@ -283,7 +284,7 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       const conflicts = await merge.conflicts(work);
 
       expect(conflicts).toMatchObject([
-        { path: 'both.md', kind: 'both-added', resolved: true, mineSize: sizeOf('mine\n') },
+        { path: 'both.md', kind: 'both-added', resolved: true, oursSize: sizeOf('mine\n') },
         { path: 'gone.md', kind: 'deleted-by-them', resolved: true, theirsOid: null, theirsSize: null }
       ]);
     });
@@ -302,8 +303,8 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       const conflicts = await merge.conflicts(work);
 
       expect(conflicts).toMatchObject([
-        { path: 'by-me.md', kind: 'deleted-by-them', mineMode: '100644', theirsMode: null },
-        { path: 'by-them.md', kind: 'deleted-by-me', mineMode: null, theirsMode: '100644' }
+        { path: 'by-me.md', kind: 'deleted-by-them', oursMode: '100644', theirsMode: null },
+        { path: 'by-them.md', kind: 'deleted-by-us', oursMode: null, theirsMode: '100644' }
       ]);
     });
 
@@ -404,7 +405,7 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
 
       const conflict = (await merge.conflicts(work)).find(({ path }) => path === 'module');
 
-      expect(conflict).toMatchObject({ kind: 'both-changed', mineMode: '160000', mineSize: null, theirsSize: null });
+      expect(conflict).toMatchObject({ kind: 'both-changed', oursMode: '160000', oursSize: null, theirsSize: null });
     });
 
     it('lists what merged without conflicts', async () => {
@@ -426,6 +427,74 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       expect(readFileSync(join(work, '.git', 'MERGE_MSG'), 'utf8')).toContain('# Conflicts:');
 
       expect(await merge.mergeMessage(work)).toBe('Merge branch \'theirs\'');
+    });
+
+    describe('canWriteMarkers', () => {
+      /** A conflict in `a.md` with these contents, with git's `merge` to bring it about. */
+      const conflictWith = async (mine: string, theirs: string) => {
+        write('a.md', 'base\n');
+        commitAll('base');
+        git(work, 'switch', '-q', '-c', 'theirs');
+        write('a.md', theirs);
+        commitAll('theirs');
+        git(work, 'switch', '-q', 'main');
+        write('a.md', mine);
+        commitAll('mine');
+        expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+        const [ entry ] = await merge.conflicts(work);
+        if (entry === undefined) {
+          throw new Error('expected a conflict');
+        }
+        return entry;
+      };
+
+      it('is true for text', async () => {
+        expect(await merge.canWriteMarkers(work, await conflictWith('mine\n', 'theirs\n'))).toBe(true);
+      });
+
+      it('is false when our version has a NUL byte', async () => {
+        expect(await merge.canWriteMarkers(work, await conflictWith('mi\0ne\n', 'theirs\n'))).toBe(false);
+      });
+
+      it('is false when only their version has a NUL byte', async () => {
+        expect(await merge.canWriteMarkers(work, await conflictWith('mine\n', 'thei\0rs\n'))).toBe(false);
+      });
+
+      it('is true for a file both added, which has no base', async () => {
+        conflictingMerge();
+        const both = (await merge.conflicts(work)).find(({ path }) => path === 'both.md');
+        expect(both?.baseOid).toBeNull();
+
+        expect(both !== undefined && await merge.canWriteMarkers(work, both)).toBe(true);
+      });
+
+      it('is false for a file one side deleted', async () => {
+        conflictingMerge();
+        const gone = (await merge.conflicts(work)).find(({ path }) => path === 'gone.md');
+
+        expect(gone !== undefined && await merge.canWriteMarkers(work, gone)).toBe(false);
+      });
+    });
+
+    it('tells a merge from a rebase', async () => {
+      expect(await merge.mergeInProgress(work)).toBe(false);
+      mkdirSync(join(work, '.git', 'rebase-merge'));
+      expect(await merge.mergeInProgress(work)).toBe(false);
+      rmSync(join(work, '.git', 'rebase-merge'), { recursive: true });
+
+      conflictingMerge();
+
+      expect(await merge.mergeInProgress(work)).toBe(true);
+    });
+
+    it('names the branch and its upstream', async () => {
+      expect(await merge.branchAndUpstream(work)).toEqual({ branch: 'main', upstream: null });
+
+      await merge.adoptUpstream(work, 'main');
+      expect(await merge.branchAndUpstream(work)).toEqual({ branch: 'main', upstream: 'origin/main' });
+
+      git(work, 'checkout', '-q', '--detach');
+      expect(await merge.branchAndUpstream(work)).toEqual({ branch: null, upstream: null });
     });
 
     it('has an empty message when git prepared none', async () => {
@@ -513,6 +582,18 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       git(work, 'config', 'user.email', 'config@example.com');
     });
 
+    it('comments its conflict list with #, whatever the working copy\'s configuration says', async () => {
+      git(work, 'config', 'core.commentChar', ';');
+      onUpstream(() => write('first.md', 'theirs\n'));
+      write('first.md', 'mine\n');
+      commitAll('mine');
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
+
+      expect(readFileSync(join(work, '.git', 'MERGE_MSG'), 'utf8')).toContain('# Conflicts:');
+      expect(await merge.mergeMessage(work)).toBe('Merge remote-tracking branch \'origin/main\'');
+    });
+
     it('says already up to date', async () => {
       write('first.md', 'mine\n');
       commitAll('mine');
@@ -591,7 +672,7 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       );
 
       write('first.md', 'edited\n');
-      await merge.writeMarkers(work, 'first.md', { mine: 'mine', theirs: 'theirs' });
+      await merge.writeMarkers(work, 'first.md', { ours: 'mine', theirs: 'theirs' });
 
       expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe(
         '<<<<<<< mine\nmine\n=======\ntheirs\n>>>>>>> theirs\n'
@@ -657,7 +738,7 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
 
       expect(readFileSync(join(work, 'binary.md'))).toEqual(Buffer.from('mine\0\n'));
-      await merge.writeMarkers(work, 'binary.md', { mine: 'main', theirs: 'origin/main' });
+      await merge.writeMarkers(work, 'binary.md', { ours: 'main', theirs: 'origin/main' });
       expect(readFileSync(join(work, 'binary.md'))).toEqual(Buffer.from('mine\0\n'));
     });
 
@@ -691,7 +772,7 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       );
       expect(readFileSync(join(work, 'clean.md'), 'utf8')).toBe('A\nb\nC\n');
       expect(readFileSync(join(work, 'gone.md'), 'utf8')).toBe('x changed\n');
-      await merge.writeMarkers(work, 'gone.md', { mine: 'main', theirs: 'origin/main' });
+      await merge.writeMarkers(work, 'gone.md', { ours: 'main', theirs: 'origin/main' });
       expect(readFileSync(join(work, 'gone.md'), 'utf8')).toBe('x changed\n');
     });
 

@@ -121,6 +121,28 @@ describe('FileContents', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
+  describe('readTracked', () => {
+    it('gives the text as the editor edits it', async () => {
+      writeFileSync(join(root, 'docs', 'a.md'), Buffer.concat([ BOM, Buffer.from('# A\r\nb\r\n') ]));
+
+      expect(await contents.readTracked(root, 'docs/a.md')).toBe('# A\nb\n');
+    });
+
+    it('refuses what the editor refuses', async () => {
+      writeFileSync(join(root, 'docs', 'large.md'), 'x'.repeat(EDITABLE_FILE_LIMIT + 1));
+      writeFileSync(join(root, 'docs', 'latin.md'), Buffer.from([ 0xe9 ]));
+      writeFileSync(join(root, 'docs', 'a.txt'), 'text\n');
+      symlinkSync('readme.md', join(root, 'docs', 'link.md'));
+      symlinkSync('docs', join(root, 'linked'));
+
+      await expect(contents.readTracked(root, 'docs/large.md')).rejects.toMatchObject({ code: 'file-too-large' });
+      await expect(contents.readTracked(root, 'docs/latin.md')).rejects.toMatchObject({ code: 'file-not-utf8' });
+      await expect(contents.readTracked(root, 'docs/a.txt')).rejects.toMatchObject({ code: 'entry-not-editable' });
+      await expect(contents.readTracked(root, 'docs/link.md')).rejects.toMatchObject({ reason: 'symlink' });
+      await expect(contents.readTracked(root, 'linked/readme.md')).rejects.toMatchObject({ reason: 'symlink' });
+    });
+  });
+
   // Runs git and reads /proc/self/fd, which only Linux has.
   it.skipIf(process.platform !== 'linux')('reads a file with its line ending, BOM and hash', async () => {
     const bytes = Buffer.concat([ BOM, Buffer.from('# A\r\nb\r\n') ]);

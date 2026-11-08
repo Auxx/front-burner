@@ -15,13 +15,17 @@ type Content = string | Buffer | { link: string; };
 
 describe('MergeStateService', () => {
   const options = testGitOptions();
-  const engine = new GitEngine(options, new GitRunner());
-  const merge = new GitMerge(new LocalGit(new GitRunner()), options);
-  const service = new MergeStateService(
+  const runner = new GitRunner();
+  const engine = new GitEngine(options, runner);
+  const merge = new GitMerge(new LocalGit(runner), options);
+  const contents = new FileContents(
+    {} as OpenableRepository,
+    {} as WorkingTreeGuard,
     engine,
-    merge,
-    new FileContents({} as OpenableRepository, {} as WorkingTreeGuard, engine, {} as EventsHub, {} as DataLayout)
+    {} as EventsHub,
+    {} as DataLayout
   );
+  const service = new MergeStateService(merge, contents);
   let root: string;
   let bare: string;
   let work: string;
@@ -75,7 +79,62 @@ describe('MergeStateService', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     rmSync(root, { recursive: true, force: true });
+  });
+
+  it('answers that a rebase is no merge', async () => {
+    mkdirSync(join(work, '.git', 'rebase-merge'));
+
+    await expect(service.read(work)).rejects.toMatchObject({ code: 'no-merge-in-progress' });
+  });
+
+  it('a file git could not merge as text is not editable, on either side', async () => {
+    await merged(
+      { 'mine-binary.md': 'base\n', 'theirs-binary.md': 'base\n', 'text.md': 'base\n' },
+      { 'mine-binary.md': 'mi\0ne\n', 'theirs-binary.md': 'mine\n', 'text.md': 'mine\n' },
+      { 'mine-binary.md': 'theirs\n', 'theirs-binary.md': 'thei\0rs\n', 'text.md': 'theirs\n' }
+    );
+
+    expect(await editableOf()).toEqual({ 'mine-binary.md': false, 'text.md': true, 'theirs-binary.md': false });
+  });
+
+  it('a file the user took the markers out of stays editable', async () => {
+    await merged({ 'a.md': 'base\n' }, { 'a.md': 'mine\n' }, { 'a.md': 'theirs\n' });
+    writeFileSync(join(work, 'a.md'), 'both of them\n');
+
+    expect(await editableOf()).toEqual({ 'a.md': true });
+  });
+
+  it('a problem with one file leaves it not editable, and the others readable', async () => {
+    await merged(
+      { 'a.md': 'base\n', 'b.md': 'base\n' },
+      { 'a.md': 'mine\n', 'b.md': 'mine\n' },
+      { 'a.md': 'theirs\n', 'b.md': 'theirs\n' }
+    );
+    const readTracked = contents.readTracked.bind(contents);
+    vi.spyOn(contents, 'readTracked').mockImplementation((folder, path) =>
+      path === 'a.md' ? Promise.reject(new Error('EACCES')) : readTracked(folder, path)
+    );
+
+    expect(await editableOf()).toEqual({ 'a.md': false, 'b.md': true });
+  });
+
+  it('asks git nothing per file that has its markers, and scans no working tree', async () => {
+    await merged(
+      { 'a.md': 'base\n', 'b.md': 'base\n' },
+      { 'a.md': 'mine\n', 'b.md': 'mine\n' },
+      { 'a.md': 'theirs\n', 'b.md': 'theirs\n' }
+    );
+    const run = vi.spyOn(runner, 'run');
+
+    await service.read(work);
+
+    const words = run.mock.calls.flatMap(([ args ]) => args);
+    expect(words).toContain('ls-files');
+    expect(words).not.toContain('status');
+    expect(words).not.toContain('merge-file');
+    expect(words).not.toContain('--stage');
   });
 
   it('says what merges into what', async () => {
@@ -89,7 +148,7 @@ describe('MergeStateService', () => {
       into: 'main',
       from: 'origin/main',
       files: [
-        { path: 'a.md', kind: 'both-changed', resolved: false, editable: true, mineSize: 5, theirsSize: 11 }
+        { path: 'a.md', kind: 'both-changed', resolved: false, editable: true, oursSize: 5, theirsSize: 11 }
       ],
       otherFiles: [ 'clean.md', 'new.md' ],
       message: 'Merge remote-tracking branch \'origin/main\''
@@ -180,8 +239,8 @@ describe('MergeStateService', () => {
     const { files } = await service.read(work);
 
     expect(files).toEqual([
-      { path: 'by-me.md', kind: 'deleted-by-me', resolved: false, editable: false, mineSize: null, theirsSize: 7 },
-      { path: 'by-them.md', kind: 'deleted-by-them', resolved: false, editable: false, mineSize: 5, theirsSize: null }
+      { path: 'by-me.md', kind: 'deleted-by-us', resolved: false, editable: false, oursSize: null, theirsSize: 7 },
+      { path: 'by-them.md', kind: 'deleted-by-them', resolved: false, editable: false, oursSize: 5, theirsSize: null }
     ]);
   });
 
@@ -191,7 +250,7 @@ describe('MergeStateService', () => {
     git(work, 'add', 'a.md');
 
     expect((await service.read(work)).files).toEqual([
-      { path: 'a.md', kind: 'both-changed', resolved: true, editable: true, mineSize: 5, theirsSize: 7 }
+      { path: 'a.md', kind: 'both-changed', resolved: true, editable: true, oursSize: 5, theirsSize: 7 }
     ]);
   });
 });

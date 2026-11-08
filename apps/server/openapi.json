@@ -3174,7 +3174,7 @@
           "editable": {
             "type": "boolean"
           },
-          "mineSize": {
+          "oursSize": {
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991,
@@ -3192,7 +3192,7 @@
           "kind",
           "resolved",
           "editable",
-          "mineSize",
+          "oursSize",
           "theirsSize"
         ]
       },
@@ -3201,7 +3201,7 @@
         "enum": [
           "both-changed",
           "both-added",
-          "deleted-by-me",
+          "deleted-by-us",
           "deleted-by-them"
         ]
       },

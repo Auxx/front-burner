@@ -5,6 +5,7 @@ import {
   DataLayout,
   openInWorkingCopy,
   PathRefusedError,
+  ResolvedPath,
   resolveInWorkingCopy
 } from '@front-burner/server-core-storage';
 import { EDITABLE_FILE_LIMIT } from '@front-burner/shared-contracts';
@@ -62,6 +63,24 @@ export class FileContents {
       throw fileNotUtf8();
     }
     return { path, ...text, hash: hashBytes(bytes), size: bytes.length };
+  }
+
+  /**
+   * The text of a Markdown file that the index names, for many files at a time:
+   * `read` without the hash, and without asking git about submodules, as a path
+   * in the index is not inside one.
+   *
+   * @throws PathRefusedError
+   * @throws ApiErrorException
+   */
+  async readTracked(root: string, path: string): Promise<string> {
+    markdownPath(path);
+    const entry = await resolveInWorkingCopy(root, path, { symlinkLeaf: true });
+    const text = decodeMarkdown(await this.bytesOf(root, entry));
+    if (text === 'not-utf8') {
+      throw fileNotUtf8();
+    }
+    return text.content;
   }
 
   /**
@@ -191,10 +210,17 @@ export class FileContents {
   private async readBytes(root: string, path: string): Promise<Buffer> {
     markdownPath(path);
     const { entry, submodule } = await resolveEntry(this.git, root, path);
+    if (submodule) {
+      throw entryNotEditable();
+    }
+    return this.bytesOf(root, entry);
+  }
+
+  private async bytesOf(root: string, entry: ResolvedPath): Promise<Buffer> {
     if (entry.type === 'symlink') {
       throw new PathRefusedError('symlink');
     }
-    if (submodule || entry.type !== 'file') {
+    if (entry.type !== 'file') {
       throw entryNotEditable();
     }
     const opened = await openInWorkingCopy(root, entry);

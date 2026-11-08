@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /** Which sides have the file: both changed or added it, or one side deleted it (GC-15, GC-16). */
 export const GitConflictKindSchema = z
-  .enum([ 'both-changed', 'both-added', 'deleted-by-me', 'deleted-by-them' ])
+  .enum([ 'both-changed', 'both-added', 'deleted-by-us', 'deleted-by-them' ])
   .meta({ id: 'GitConflictKind' });
 
 /** One file the merge could not combine, resolved or not (GC-7, GC-17). */
@@ -11,10 +11,13 @@ export const GitConflictFileSchema = z
     path: z.string(),
     kind: GitConflictKindSchema,
     resolved: z.boolean(),
-    /** It can be opened with its conflict markers: Markdown, in both versions a regular file, and ED-2 holds (GC-9). */
+    /**
+     * It can be opened with its conflict markers: Markdown, in both versions a
+     * regular file that git can merge as text, and ED-2 holds (GC-9).
+     */
     editable: z.boolean(),
     /** In bytes; `null` when this version does not exist or is a submodule. */
-    mineSize: z.number().int().min(0).nullable(),
+    oursSize: z.number().int().min(0).nullable(),
     theirsSize: z.number().int().min(0).nullable()
   })
   .meta({ id: 'GitConflictFile' });

@@ -870,7 +870,7 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
       into: 'main',
       from: 'origin/main',
       files: [
-        { path: 'both.md', kind: 'both-added', resolved: false, editable: true, mineSize: 5, theirsSize: 7 }
+        { path: 'both.md', kind: 'both-added', resolved: false, editable: true, oursSize: 5, theirsSize: 7 }
       ],
       otherFiles: [],
       message: 'Merge remote-tracking branch \'origin/main\''

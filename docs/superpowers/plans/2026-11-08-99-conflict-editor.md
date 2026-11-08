@@ -84,7 +84,7 @@ GC-13, GC-28, AC-GIT-003.2 to AC-GIT-003.5); `docs/requirements/editor.md`
 - Consumes: `conflictsIn`, `conflictAtCursor`, `acceptConflict`, `goToConflict`.
 - Produces: `ConflictBarComponent` (`rs-conflict-bar`): input `state:
   EditorState`; outputs `move` (region index) and `accept` (`{ index: number;
-  choice: 'mine' | 'theirs' | 'both' }`).
+  choice: 'ours' | 'theirs' | 'both' }`).
 
 - [ ] **Step 1: Write the failing tests**: `says which conflict has the cursor`;
       `moves to the next and the previous`; `goes to the nearest with the cursor

@@ -31,25 +31,36 @@ working-tree lock, and with `--no-optional-locks` (A-5.3).
   | ---------- | ----------------- |
   | 1, 2, 3    | `both-changed`    |
   | 2, 3       | `both-added`      |
-  | 1, 3, or 3 | `deleted-by-me`   |
+  | 1, 3, or 3 | `deleted-by-us`   |
   | 1, 2, or 2 | `deleted-by-them` |
 
 - An entry with only stage 1 is left out: both sides deleted the file, and plan
   76 removed it from the index, which leaves that resolve-undo entry behind.
 - A file is `editable` when it is Markdown (`isMarkdownName`), of kind
   `both-changed` or `both-added`, both versions are regular files (mode `100644`
-  or `100755`), and `FileContents.read` would open the file on disk (ED-2, GC-9)
-  _(implementation's call: the editor's own check, which goes through
-  `resolveInWorkingCopy`, so that `editable` can't disagree with what opens;
-  `FilesModule` exports it for this)_.
+  or `100755`), `FileContents.readTracked` reads the file on disk (ED-2, GC-9)
+  and git can merge the versions as text _(implementation's call: the editor's
+  own limits, through `resolveInWorkingCopy`, without the hash and a git command
+  per file. A file with a conflict marker needs no more; another asks `git
+  merge-file`, as one the user took the markers out of must stay editable, and a
+  NUL byte in either version leaves the file with no markers, where **Mark as
+  resolved** would silently drop a version)_. A file that can't be checked for
+  any other reason is logged and not editable, so that it can't keep the user
+  from the merge.
+- There is no merge when `MERGE_HEAD` is missing, also during a rebase, which
+  `GitEngine.mergeInProgress` answers yes to.
 - `message` is `.git/MERGE_MSG` without lines starting with `#` and trailing
-  blank lines: git's "# Conflicts:" list is not part of the message (GC-20). It
-  is empty when the file is missing _(implementation's call: the user can still
-  write one)_.
-- `into` is the branch and `from` its upstream, from the status. A merge that
-  has neither, which a pull never leaves, reads as `HEAD` and `MERGE_HEAD`
-  _(implementation's call: the user must still be able to read it to get out of
-  it)_.
+  blank lines: git's "# Conflicts:" list is not part of the message (GC-20). A
+  merge passes `-c core.commentChar=#`, so that the working copy's configuration
+  can't change that. It is empty when the file is missing _(implementation's
+  call: the user can still write one)_.
+- `into` is the branch and `from` its upstream, from `symbolic-ref` and the
+  configuration _(review's call: the status scans the whole working tree, which
+  can time out and hide the merge)_. A merge that has neither, which a pull
+  never leaves, reads as `HEAD` and `MERGE_HEAD` _(implementation's call: the
+  user must still be able to read it to get out of it)_.
+- The API and code say ours and theirs, as the glossary has it _(review's call:
+  this plan first said `mineSize` and `deleted-by-me`)_.
 - A submodule's version has no size _(implementation's call: `cat-file` reports
   its commit's, which is not the file's)_.
 
@@ -81,12 +92,15 @@ working-tree lock, and with `--no-optional-locks` (A-5.3).
 **Interfaces:**
 
 - Produces:
-  - `ConflictKind`: `'both-changed' | 'both-added' | 'deleted-by-me' |
+  - `ConflictKind`: `'both-changed' | 'both-added' | 'deleted-by-us' |
     'deleted-by-them'`.
   - `ConflictEntry`: `{ path: string; kind: ConflictKind; resolved: boolean;
-    mineOid: string | null; theirsOid: string | null; mineMode: string | null;
-    theirsMode: string | null; mineSize: number | null; theirsSize: number |
-    null }`.
+    baseOid: string | null; oursOid: string | null; theirsOid: string | null;
+    oursMode: string | null; theirsMode: string | null; oursSize: number | null;
+    theirsSize: number | null }`.
+  - `GitMerge.canWriteMarkers(workingCopy: string, entry: ConflictEntry):
+    Promise<boolean>`, `GitMerge.branchAndUpstream(workingCopy: string)` and the
+    public `GitMerge.mergeInProgress(workingCopy: string)`.
   - `GitMerge.conflicts(workingCopy: string): Promise<ConflictEntry[]>`, sorted
     by path. Sizes come from one `git cat-file --batch-check`.
   - `GitMerge.mergedWithoutConflicts(workingCopy: string, conflicting:
@@ -126,7 +140,7 @@ working-tree lock, and with `--no-optional-locks` (A-5.3).
     into: string; from: string; files: GitConflictFile[]; otherFiles: string[];
     message: string }`).
   - `GitConflictFile`: `{ path: string; kind: GitConflictKind; resolved:
-    boolean; editable: boolean; mineSize: number | null; theirsSize: number |
+    boolean; editable: boolean; oursSize: number | null; theirsSize: number |
     null }`.
   - Error code `no-merge-in-progress`, `409`.
 

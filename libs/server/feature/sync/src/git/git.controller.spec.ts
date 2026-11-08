@@ -119,7 +119,6 @@ describe('GitController', () => {
         {
           provide: MergeStateService,
           useValue: new MergeStateService(
-            engine,
             gitMerge,
             new FileContents(
               {} as OpenableRepository,
@@ -378,7 +377,7 @@ describe('GitController', () => {
         into: 'main',
         from: 'MERGE_HEAD',
         files: [
-          { path: 'notes.md', kind: 'both-changed', resolved: false, editable: true, mineSize: 5, theirsSize: 7 }
+          { path: 'notes.md', kind: 'both-changed', resolved: false, editable: true, oursSize: 5, theirsSize: 7 }
         ],
         otherFiles: [],
         message: 'Merge branch \'theirs\''

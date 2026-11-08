@@ -29,26 +29,29 @@ export type MergeResult =
 
 export interface MarkerLabels {
   /** After `<<<<<<<`, such as `main`. */
-  mine: string;
+  ours: string;
   /** After `>>>>>>>`, such as `origin/main`. */
   theirs: string;
 }
 
-export type ConflictKind = 'both-changed' | 'both-added' | 'deleted-by-me' | 'deleted-by-them';
+export type ConflictKind = 'both-changed' | 'both-added' | 'deleted-by-us' | 'deleted-by-them';
 
 /** One file a merge could not combine; `null` for a version that does not exist. */
 export interface ConflictEntry {
   path: string;
   kind: ConflictKind;
   resolved: boolean;
-  mineOid: string | null;
+  baseOid: string | null;
+  oursOid: string | null;
   theirsOid: string | null;
-  mineMode: string | null;
+  oursMode: string | null;
   theirsMode: string | null;
   /** In bytes; also `null` for a submodule, whose commit has no size in this repository. */
-  mineSize: number | null;
+  oursSize: number | null;
   theirsSize: number | null;
 }
+
+const BRANCH_PREFIX = 'refs/heads/';
 
 /** The branches whose merge message git writes without ` into <branch>`. */
 const MAIN_BRANCHES = new Set([ 'main', 'master' ]);
@@ -70,7 +73,7 @@ interface Stage {
   oid: string;
 }
 
-/** A path's entries in the index during a merge: 1 base, 2 mine, 3 theirs (A-5.11). */
+/** A path's entries in the index during a merge: 1 base, 2 ours, 3 theirs (A-5.11). */
 type Stages = Map<number, Stage>;
 
 /**
@@ -247,6 +250,9 @@ export class GitMerge {
         'rerere.enabled=false',
         '-c',
         'commit.gpgsign=false',
+        // What `mergeMessage` takes out of the conflict list in MERGE_MSG.
+        '-c',
+        'core.commentChar=#',
         'merge',
         '--ff',
         '--no-squash',
@@ -280,7 +286,7 @@ export class GitMerge {
       if (!await this.mergeInProgress(workingCopy)) {
         throw new GitOperationError('failed', result.stderr);
       }
-      await this.prepareConflicts(workingCopy, { mine: request.branch, theirs: request.upstream });
+      await this.prepareConflicts(workingCopy, { ours: request.branch, theirs: request.upstream });
       return { kind: 'conflicted', commits };
     }
     if (fastForward) {
@@ -327,8 +333,8 @@ export class GitMerge {
   /**
    * Writes a conflicting file's plain markers, labelled `labels`, from its
    * versions in the index (GC-5): the one way to write the markers that a user
-   * sees, since `git merge` labels mine `HEAD`. Does nothing for a file that
-   * lacks mine or theirs, or that is not a regular file in the index or on disk,
+   * sees, since `git merge` labels ours `HEAD`. Does nothing for a file that
+   * lacks ours or theirs, or that is not a regular file in the index or on disk,
    * or when git's output is not UTF-8 text: a file with a NUL byte, or one that
    * is not valid UTF-8, keeps what git wrote.
    */
@@ -369,46 +375,15 @@ export class GitMerge {
     stages: Stages,
     labels: MarkerLabels
   ): Promise<void> {
-    const mine = stages.get(2);
+    const ours = stages.get(2);
     const theirs = stages.get(3);
     if (
-      mine === undefined || theirs === undefined || !REGULAR_FILE.test(mine.mode) || !REGULAR_FILE.test(theirs.mode)
+      ours === undefined || theirs === undefined || !REGULAR_FILE.test(ours.mode) || !REGULAR_FILE.test(theirs.mode)
     ) {
       return;
     }
-    // Both added: no base, so every line is a conflict, as `git merge` has it.
-    const base = stages.get(1)?.oid ?? await this.emptyBlob(workingCopy);
-    const result = await this.local.run(
-      workingCopy,
-      [
-        // `merge-file` obeys the working copy's `merge.conflictStyle` too.
-        '-c',
-        'merge.conflictStyle=merge',
-        'merge-file',
-        '--object-id',
-        '-p',
-        '-L',
-        labels.mine,
-        '-L',
-        'base',
-        '-L',
-        labels.theirs,
-        mine.oid,
-        base,
-        theirs.oid
-      ],
-      { timeoutMs: this.options.gitTimeoutMs }
-    );
-    if (result.timedOut) {
-      throw new GitOperationError('timeout', result.stderr);
-    }
-    // Below 128 it is the number of conflicts. A file with a NUL byte exits 255
-    // with no output, which must never replace the file.
-    const usable = result.exitCode !== null
-      && result.exitCode < 128
-      && result.stdoutBytes <= LOCAL_MAX_OUTPUT_BYTES
-      && !result.stdout.includes(UNDECODABLE);
-    if (!usable) {
+    const text = await this.textWithMarkers(workingCopy, stages.get(1)?.oid ?? null, ours.oid, theirs.oid, labels);
+    if (text === null) {
       return;
     }
     let entry;
@@ -423,8 +398,53 @@ export class GitMerge {
     }
     if (entry.type === 'file') {
       // The caller holds the working-tree lock, so the entry is still the file just found.
-      await writeFile(entry.absolute, result.stdout);
+      await writeFile(entry.absolute, text);
     }
+  }
+
+  /**
+   * The versions merged with plain markers, or `null` when git's output is not
+   * UTF-8 text, which must never replace a file.
+   */
+  private async textWithMarkers(
+    workingCopy: string,
+    baseOid: string | null,
+    oursOid: string,
+    theirsOid: string,
+    labels: MarkerLabels
+  ): Promise<string | null> {
+    // Both added: no base, so every line is a conflict, as `git merge` has it.
+    const base = baseOid ?? await this.emptyBlob(workingCopy);
+    const result = await this.local.run(
+      workingCopy,
+      [
+        // `merge-file` obeys the working copy's `merge.conflictStyle` too.
+        '-c',
+        'merge.conflictStyle=merge',
+        'merge-file',
+        '--object-id',
+        '-p',
+        '-L',
+        labels.ours,
+        '-L',
+        'base',
+        '-L',
+        labels.theirs,
+        oursOid,
+        base,
+        theirsOid
+      ],
+      { timeoutMs: this.options.gitTimeoutMs }
+    );
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    // Below 128 it is the number of conflicts. A file with a NUL byte exits 255 with no output.
+    const usable = result.exitCode !== null
+      && result.exitCode < 128
+      && result.stdoutBytes <= LOCAL_MAX_OUTPUT_BYTES
+      && !result.stdout.includes(UNDECODABLE);
+    return usable ? result.stdout : null;
   }
 
   /**
@@ -448,20 +468,54 @@ export class GitMerge {
       if (kind === null) {
         return [];
       }
-      const mine = stages.get(2);
+      const ours = stages.get(2);
       const theirs = stages.get(3);
       return [ {
         path,
         kind,
         resolved: !unresolved.has(path),
-        mineOid: mine?.oid ?? null,
+        baseOid: stages.get(1)?.oid ?? null,
+        oursOid: ours?.oid ?? null,
         theirsOid: theirs?.oid ?? null,
-        mineMode: mine?.mode ?? null,
+        oursMode: ours?.mode ?? null,
         theirsMode: theirs?.mode ?? null,
-        mineSize: sizeOf(mine),
+        oursSize: sizeOf(ours),
         theirsSize: sizeOf(theirs)
       } ];
     });
+  }
+
+  /**
+   * Whether git can merge the entry's versions as text, so with markers. It can't
+   * when a version has a NUL byte, which leaves the file as we had it, with no
+   * sign of the conflict: only one side's file, to the user's eye.
+   */
+  async canWriteMarkers(workingCopy: string, entry: ConflictEntry): Promise<boolean> {
+    if (entry.oursOid === null || entry.theirsOid === null) {
+      return false;
+    }
+    const labels = { ours: 'ours', theirs: 'theirs' };
+    const text = await this.textWithMarkers(workingCopy, entry.baseOid, entry.oursOid, entry.theirsOid, labels);
+    return text !== null;
+  }
+
+  /**
+   * The current branch and its upstream, such as `origin/main`, which the
+   * configuration keeps after a fetch pruned it; each `null` when there is none.
+   * Reads no file of the working tree, so its size doesn't matter.
+   */
+  async branchAndUpstream(workingCopy: string): Promise<{ branch: string | null; upstream: string | null; }> {
+    const head = await this.local.run(workingCopy, [ 'symbolic-ref', '--quiet', 'HEAD' ]);
+    if (head.timedOut) {
+      throw new GitOperationError('timeout', head.stderr);
+    }
+    const ref = head.stdout.trim();
+    if (head.exitCode !== 0 || !ref.startsWith(BRANCH_PREFIX)) {
+      return { branch: null, upstream: null };
+    }
+    const branch = ref.slice(BRANCH_PREFIX.length);
+    const target = await this.local.upstreamOf(workingCopy, branch);
+    return { branch, upstream: target === null ? null : `origin/${target.slice(BRANCH_PREFIX.length)}` };
   }
 
   /** What the merge has changed apart from `conflicting`, sorted by path: the files git combined by itself (GC-7). */
@@ -619,7 +673,8 @@ export class GitMerge {
     }
   }
 
-  private async mergeInProgress(workingCopy: string): Promise<boolean> {
+  /** A merge, as opposed to `GitEngine.mergeInProgress`, which a rebase also answers yes to. */
+  async mergeInProgress(workingCopy: string): Promise<boolean> {
     const result = await this.local.run(workingCopy, [ 'rev-parse', '-q', '--verify', 'MERGE_HEAD' ]);
     return exitAsBoolean(result, 'rev-parse');
   }
@@ -634,15 +689,15 @@ export class GitMerge {
 
 /** The kind that the stages a path has say; `null` for one with only a base, which both sides deleted. */
 function kindOf(stages: Stages): ConflictKind | null {
-  const mine = stages.has(2);
+  const ours = stages.has(2);
   const theirs = stages.has(3);
-  if (mine && theirs) {
+  if (ours && theirs) {
     return stages.has(1) ? 'both-changed' : 'both-added';
   }
   if (theirs) {
-    return 'deleted-by-me';
+    return 'deleted-by-us';
   }
-  return mine ? 'deleted-by-them' : null;
+  return ours ? 'deleted-by-them' : null;
 }
 
 /** The full name: a local branch named `origin/main` would take the short name's place. */
