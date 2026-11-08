@@ -25,7 +25,7 @@ import {
   IslandComponent,
   SpinnerComponent
 } from '@front-burner/ui';
-import { CurrentUserService, PageTitleService } from '@front-burner/web-core';
+import { CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import type { PreviewPathLink } from '@front-burner/web-markdown';
 import { ImageCache } from '@front-burner/web-markdown/images';
 import { AppHeaderComponent, PageNotFoundPage, RouteAnnouncerComponent } from '@front-burner/web-shell';
@@ -168,6 +168,7 @@ export class RepositoryScreenPage {
   protected readonly pushes = inject(PushService);
   protected readonly lockedKey = inject(LockedKeyService);
   private readonly credentialFixes = inject(CredentialFixesService);
+  private readonly pushChannel = inject(PushChannelService);
 
   protected readonly user = this.currentUser.user;
   /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
@@ -276,6 +277,8 @@ export class RepositoryScreenPage {
       .subscribe(id => {
         // Another repository, through the switcher: its waiting saves are sent at once (NV-12).
         void this.openFiles.flushAll();
+        // Before the services start: they subscribe to the push channel, which then opens with this repository.
+        this.pushChannel.view(id);
         this.session.start(id);
         this.sync.start(id);
         this.gitStatus.start(id);
@@ -284,6 +287,16 @@ export class RepositoryScreenPage {
     this.currentUser.load().catch(() => undefined);
     this.updateTitle();
     this.flushWhenLeft();
+    this.viewRepository();
+  }
+
+  /**
+   * The push channel is told which repository this tab views when the route
+   * changes (A-3.12); not viewing once the screen is left. No cleanup per
+   * repository: that would reopen the stream for none in between.
+   */
+  private viewRepository(): void {
+    inject(DestroyRef).onDestroy(() => this.pushChannel.view(null));
   }
 
   /**

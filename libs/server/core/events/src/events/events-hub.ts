@@ -5,6 +5,8 @@ import { BeforeApplicationShutdown, Injectable } from '@nestjs/common';
 export interface EventStream {
   readonly userId: number;
   readonly sessionId: string;
+  /** The repository the tab views, or `null` when it names none (A-3.12). Not checked: the hub knows no repositories. */
+  readonly repositoryId: number | null;
   send(event: PushEvent): void;
   /** Ends the stream; the hub has already forgotten it. */
   close(): void;
@@ -44,6 +46,17 @@ export class EventsHub implements BeforeApplicationShutdown {
         stream.send(event);
       }
     }
+  }
+
+  /** One entry per open stream that views a repository (A-3.12). */
+  viewers(): { userId: number; sessionId: string; repositoryId: number; }[] {
+    const viewers: { userId: number; sessionId: string; repositoryId: number; }[] = [];
+    for (const { userId, sessionId, repositoryId } of this.streams) {
+      if (repositoryId !== null) {
+        viewers.push({ userId, sessionId, repositoryId });
+      }
+    }
+    return viewers;
   }
 
   /** Closes the streams of a revoked session, so that it keeps no authenticated channel (A-7.2). */

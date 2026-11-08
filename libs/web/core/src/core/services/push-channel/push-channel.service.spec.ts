@@ -286,6 +286,113 @@ describe('PushChannelService', () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
 
+  describe('viewing a repository (A-3.12)', () => {
+    const urls = () => fetch.mock.calls.map(([ url ]) => url);
+
+    it('opens the stream for the repository', async () => {
+      service.view(7);
+      subscribe();
+      await settle();
+
+      expect(urls()).toEqual([ '/api/v1/events?repository=7' ]);
+    });
+
+    it('ignores what is not a positive integer', async () => {
+      service.view(0);
+      service.view(1.5);
+      service.view(Number.NaN);
+      subscribe();
+      await settle();
+
+      expect(urls()).toEqual([ '/api/v1/events' ]);
+    });
+
+    it('reopens the stream when the repository changes, and says it reconnected', async () => {
+      const reconnects = vi.fn();
+      service.reconnected.subscribe(reconnects);
+      service.view(7);
+      subscribe();
+      await settle();
+
+      service.view(8);
+      await settle();
+
+      expect(urls()).toEqual([ '/api/v1/events?repository=7', '/api/v1/events?repository=8' ]);
+      expect(streams[0]?.init.signal?.aborted).toBe(true);
+      expect(reconnects).toHaveBeenCalledTimes(2);
+
+      service.view(null);
+      await settle();
+      expect(urls().at(-1)).toBe('/api/v1/events');
+    });
+
+    it('keeps one stream, on the last repository', async () => {
+      subscribe();
+      await settle();
+
+      service.view(1);
+      service.view(2);
+      service.view(3);
+      await settle();
+
+      expect(streams.filter(stream => stream.init.signal?.aborted === false)).toHaveLength(1);
+      expect(urls().at(-1)).toBe('/api/v1/events?repository=3');
+      expect(fetch.mock.calls.at(-1)?.[1].signal?.aborted).toBe(false);
+    });
+
+    it('does not reopen for the same repository', async () => {
+      service.view(7);
+      subscribe();
+      await settle();
+
+      service.view(7);
+      service.view(7);
+      await settle();
+
+      expect(fetch).toHaveBeenCalledOnce();
+    });
+
+    it('keeps the repository through a reconnect', async () => {
+      service.view(7);
+      answers = [ refused('auth-token-expired') ];
+      subscribe();
+      await settle();
+      expect(urls()).toEqual([ '/api/v1/events?repository=7', '/api/v1/events?repository=7' ]);
+
+      streams[0]?.end();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(urls().at(-1)).toBe('/api/v1/events?repository=7');
+      expect(fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('forgets the repository on logout', async () => {
+      service.view(7);
+      subscribe();
+      await settle();
+
+      loggedIn.set(false);
+      TestBed.tick();
+      loggedIn.set(true);
+      TestBed.tick();
+      await settle();
+
+      expect(urls().at(-1)).toBe('/api/v1/events');
+    });
+
+    it('remembers the repository viewed while logged out', async () => {
+      loggedIn.set(false);
+      TestBed.tick();
+      service.view(7);
+      subscribe();
+      loggedIn.set(true);
+      TestBed.tick();
+      await settle();
+
+      expect(urls()).toEqual([ '/api/v1/events?repository=7' ]);
+    });
+  });
+
   it('reconnects when the page becomes visible', async () => {
     answers = [ () => {
       throw new TypeError('Failed to fetch');

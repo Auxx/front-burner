@@ -33,8 +33,8 @@ describe('KeyUnlockStore', () => {
   });
 
   it('an unlock reaches only its own session', () => {
-    const tab = { userId: 1, sessionId: 's1', send: vi.fn(), close: vi.fn() };
-    const otherDevice = { userId: 1, sessionId: 's2', send: vi.fn(), close: vi.fn() };
+    const tab = { userId: 1, sessionId: 's1', repositoryId: null, send: vi.fn(), close: vi.fn() };
+    const otherDevice = { userId: 1, sessionId: 's2', repositoryId: null, send: vi.fn(), close: vi.fn() };
     events.open(tab);
     events.open(otherDevice);
 

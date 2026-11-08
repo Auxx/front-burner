@@ -107,6 +107,13 @@ numbering conventions.
   opening the stream with `?repository=<id>` and reopening it when that changes.
   The backend uses this to schedule background fetches (A-6, job types). _(My
   call.)_
+  - A `repository` that is not a positive integer is ignored, not refused, so it
+    is parsed by hand rather than with a Zod schema (A-3.3). _(Plan 71's call.)_
+  - Reopening counts as a reconnect (A-3.11): `reconnected` fires and the client
+    reloads its state over REST. _(Plan 71's call.)_
+  - The backend does not check the ID against the user's repositories, so
+    whatever uses it must ignore an ID that is not the user's. _(Plan 71's
+    call.)_
 - **A-3.13** Over HTTP/1.1, browsers allow 6 connections per origin. Reverse
   proxies normally serve HTTP/2, where this does not apply. If it becomes a
   problem, one tab can share its stream with the others through

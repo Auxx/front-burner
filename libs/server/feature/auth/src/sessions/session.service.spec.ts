@@ -169,7 +169,7 @@ describe('SessionService', () => {
   describe('push channel streams', () => {
     const openStream = (sessionId: string) => {
       const close = vi.fn();
-      events.open({ userId, sessionId, send: vi.fn(), close });
+      events.open({ userId, sessionId, repositoryId: null, send: vi.fn(), close });
       return close;
     };
 

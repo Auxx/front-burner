@@ -73,6 +73,21 @@ describe('push channel', () => {
     expect(await endsWithin(response, 1000)).toBe(false);
   });
 
+  it.each([ '7', 'abc' ])('opens normally with ?repository=%s', async repository => {
+    const server = await onboarded();
+    const { authToken } = await login(server, 'body');
+
+    const response = await fetch(`${server.url}${EVENTS}?repository=${repository}`, {
+      headers: { authorization: `Bearer ${authToken}` }
+    });
+
+    expect(response.status).toBe(200);
+    const reader = response.body?.getReader();
+    const first = await reader?.read();
+    expect(new TextDecoder().decode(first?.value)).toContain(': connected');
+    await reader?.cancel();
+  });
+
   it('closes the stream on logout', async () => {
     const server = await onboarded();
     const { authToken, refreshToken } = await login(server, 'body');
