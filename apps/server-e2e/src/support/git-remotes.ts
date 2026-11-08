@@ -51,6 +51,20 @@ export function pushFromElsewhere(bare: string, subject: string, branch = 'main'
   }
 }
 
+/** Commits `content` as `path` to `branch` of the bare repository from another clone. */
+export function pushFileFromElsewhere(bare: string, path: string, content: string, branch = 'main'): void {
+  const work = mkdtempSync(join(tmpdir(), 'front-burner-e2e-elsewhere-'));
+  try {
+    git(work, 'clone', '-q', '-b', branch, bare, '.');
+    writeFileSync(join(work, path), content);
+    git(work, 'add', '--', path);
+    git(work, 'commit', '-q', '-m', `theirs: ${path}`);
+    git(work, 'push', '-q', 'origin', branch);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
 /** Makes the bare repository refuse every push, printing `lines` as a server hook does. */
 export function refuseWithHook(bare: string, lines: string[]): void {
   const hook = join(bare, 'hooks', 'pre-receive');

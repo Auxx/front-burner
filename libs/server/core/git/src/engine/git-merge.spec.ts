@@ -137,7 +137,15 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
   it('removeStaleLocks removes locks in .git and under refs, and nothing else', async () => {
     const gitDir = join(work, '.git');
     mkdirSync(join(gitDir, 'refs', 'remotes', 'origin'), { recursive: true });
-    for (const lock of [ 'index.lock', 'HEAD.lock', 'ORIG_HEAD.lock', 'refs/heads/main.lock', 'refs/remotes/origin/a.lock' ]) {
+    for (
+      const lock of [
+        'index.lock',
+        'HEAD.lock',
+        'ORIG_HEAD.lock',
+        'refs/heads/main.lock',
+        'refs/remotes/origin/a.lock'
+      ]
+    ) {
       writeFileSync(join(gitDir, lock), '');
     }
     write('notes.lock', 'the user\'s file\n');
@@ -146,7 +154,15 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
 
     await merge.removeStaleLocks(work);
 
-    for (const lock of [ 'index.lock', 'HEAD.lock', 'ORIG_HEAD.lock', 'refs/heads/main.lock', 'refs/remotes/origin/a.lock' ]) {
+    for (
+      const lock of [
+        'index.lock',
+        'HEAD.lock',
+        'ORIG_HEAD.lock',
+        'refs/heads/main.lock',
+        'refs/remotes/origin/a.lock'
+      ]
+    ) {
       expect(existsSync(join(gitDir, lock)), lock).toBe(false);
     }
     expect(existsSync(join(work, 'notes.lock'))).toBe(true);
