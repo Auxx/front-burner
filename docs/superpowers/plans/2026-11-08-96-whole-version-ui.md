@@ -28,7 +28,7 @@ sizes, GC-19, GC-27, AC-GIT-003.7, AC-GIT-003.12); D-6.2, D-6.5.
   | Kind                         | Offers                                    |
   | ---------------------------- | ----------------------------------------- |
   | `both-changed`, `both-added` | **Use my version**, **Use their version** |
-  | `deleted-by-me`              | **Keep the file**, **Delete the file**    |
+  | `deleted-by-us`              | **Keep the file**, **Delete the file**    |
   | `deleted-by-them`            | **Keep the file**, **Delete the file**    |
 
 - Exact words: "You deleted this file; _origin/main_ changed it." and

@@ -25,7 +25,7 @@ for a comparison of source lines.
 - The shared constraints of [the step 4 index](2026-11-08-00-roadmap-step-4.md)
   apply.
 - Offered for a Markdown file on each side that exists and is at most 1 MB
-  (`mineSize`, `theirsSize`). Otherwise there is no button: a size is enough.
+  (`oursSize`, `theirsSize`). Otherwise there is no button: a size is enough.
 - The banner says "This is your version, read-only." or "This is their version
   (_origin/main_), read-only.", with **Back** (ED-25).
 
@@ -57,7 +57,7 @@ for a comparison of source lines.
 - Consumes: `GitApi.gitMergeVersion`, `createEditorState`,
   `CodeEditorComponent`.
 - Produces: `ConflictVersionComponent` (`rs-conflict-version`): inputs
-  `repositoryId`, `path`, `side: 'mine' | 'theirs'`, `from: string`; output
+  `repositoryId`, `path`, `side: 'ours' | 'theirs'`, `from: string`; output
   `back`.
 
 - [ ] **Step 1: Write the failing tests**: `AC-GIT-003.16: Show mine and Show

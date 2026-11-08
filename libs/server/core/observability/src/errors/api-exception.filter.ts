@@ -35,6 +35,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'entry-not-found': 'This file or folder doesn\'t exist.',
   'repository-not-openable': 'This repository can\'t be opened yet.',
   'merge-in-progress': 'A merge is in progress. Finish or abort it first.',
+  'no-merge-in-progress': 'No merge is in progress any more.',
   'file-too-large': 'This file is too large to edit (the limit is 1 MB).',
   'file-not-utf8': 'This file isn\'t UTF-8 text, so it can\'t be edited safely.',
   'entry-not-editable': 'Only Markdown files can be opened in Front Burner.',

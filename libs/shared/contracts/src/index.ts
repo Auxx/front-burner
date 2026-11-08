@@ -13,6 +13,7 @@ export * from './files/image.schema';
 export * from './git/git-commit.schema';
 export * from './git/git-diff.schema';
 export * from './git/git-fetch.schema';
+export * from './git/git-merge.schema';
 export * from './git/git-paths.schema';
 export * from './git/git-push.schema';
 export * from './git/git-status.schema';

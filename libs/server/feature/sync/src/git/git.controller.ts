@@ -12,6 +12,7 @@ import type {
   GitIncoming,
   GitJobStarted,
   GitJobState,
+  GitMergeState,
   GitStatus
 } from '@front-burner/shared-contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
@@ -21,6 +22,7 @@ import { ZodSerializerDto } from 'nestjs-zod';
 import { FetchScheduler } from '../fetch/fetch-scheduler';
 import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
+import { MergeStateService } from '../merge/merge-state.service';
 import { PullService } from '../pull/pull.service';
 import { sameNameRemote } from '../pull/same-name-remote';
 import { PushService } from '../push/push.service';
@@ -36,6 +38,7 @@ import {
   GitJobParamsDto,
   GitJobStartedDto,
   GitJobStateDto,
+  GitMergeStateDto,
   GitPathsDto,
   GitStatusDto
 } from './git.dto';
@@ -91,7 +94,8 @@ export class GitController {
     private readonly fetches: FetchService,
     private readonly fetchScheduler: FetchScheduler,
     private readonly gitJobs: GitJobs,
-    private readonly syncState: SyncStateStore
+    private readonly syncState: SyncStateStore,
+    private readonly mergeState: MergeStateService
   ) {}
 
   /**
@@ -141,6 +145,20 @@ export class GitController {
       await checkPath(root, query.path);
     }
     return { incoming: await this.engine.incoming(root, query.path).catch(toGitApiError) };
+  }
+
+  /**
+   * The merge in progress: what merges into what, which files conflict, how and
+   * whether they are resolved, what merged by itself, and the merge commit's
+   * message (GC-6, GC-7, GC-17, GC-20). Read from git, so any device can carry on
+   * (A-4.5). Refused with `no-merge-in-progress` when there is none.
+   */
+  @Get('merge')
+  @ApiOkResponse({ type: GitMergeStateDto })
+  @ZodSerializerDto(GitMergeStateDto)
+  gitMerge(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<GitMergeState> {
+    const root = this.repositories.root(authOf(req).userId, params.id);
+    return this.mergeState.read(root).catch(toGitApiError);
   }
 
   /**

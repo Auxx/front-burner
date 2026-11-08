@@ -36,6 +36,8 @@ export const ERROR_CODES = [
   'repository-not-openable',
   /** 409; a merge or rebase is in progress, so the working tree can't be changed (FB-26). */
   'merge-in-progress',
+  /** 409; there is no merge in progress to read (GC-6). */
+  'no-merge-in-progress',
   /** 413; a file to read or save is over the editor's limit; params `{ limit }` in bytes (ED-2, ED-19). */
   'file-too-large',
   /** 422; a file to read is not valid UTF-8 (ED-2, FB-21). */

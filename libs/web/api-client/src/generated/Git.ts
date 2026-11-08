@@ -9,6 +9,7 @@ import type {
   GitIncoming,
   GitJobStarted,
   GitJobState,
+  GitMergeState,
   GitPaths,
   GitStatus
 } from '@front-burner/shared-contracts';
@@ -36,6 +37,11 @@ export class GitApi {
     return this.http.get<GitIncoming>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/incoming`,
       { params: query }
+    );
+  }
+  gitMerge(id: number): Observable<GitMergeState> {
+    return this.http.get<GitMergeState>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/merge`
     );
   }
   diff(

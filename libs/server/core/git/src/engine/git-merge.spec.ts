@@ -234,6 +234,277 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
     expect(readFileSync(join(work, 'newdir', 'ignored.log'), 'utf8')).toBe('keep me too\n');
   });
 
+  describe('reading a merge', () => {
+    const sizeOf = (content: string) => Buffer.byteLength(content);
+
+    it('lists unresolved files with their kinds and sizes', async () => {
+      write('edited.md', 'a\n');
+      commitAll('edited');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      write('edited.md', 'theirs!\n');
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      write('edited.md', 'mine\n');
+      commitAll('mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+
+      expect(await merge.conflicts(work)).toEqual([
+        {
+          path: 'edited.md',
+          kind: 'both-changed',
+          resolved: false,
+          baseOid: git(work, 'rev-parse', ':1:edited.md'),
+          oursOid: git(work, 'rev-parse', ':2:edited.md'),
+          theirsOid: git(work, 'rev-parse', ':3:edited.md'),
+          oursMode: '100644',
+          theirsMode: '100644',
+          oursSize: sizeOf('mine\n'),
+          theirsSize: sizeOf('theirs!\n')
+        }
+      ]);
+    });
+
+    it('lists resolved files too', async () => {
+      conflictingMerge();
+      git(work, 'add', 'both.md');
+
+      const conflicts = await merge.conflicts(work);
+
+      expect(conflicts.map(({ path, resolved }) => [ path, resolved ])).toEqual([
+        [ 'both.md', true ],
+        [ 'gone.md', false ]
+      ]);
+    });
+
+    it('keeps the kind of a resolved file', async () => {
+      conflictingMerge();
+      git(work, 'add', 'both.md');
+      git(work, 'rm', '-q', 'gone.md');
+
+      const conflicts = await merge.conflicts(work);
+
+      expect(conflicts).toMatchObject([
+        { path: 'both.md', kind: 'both-added', resolved: true, oursSize: sizeOf('mine\n') },
+        { path: 'gone.md', kind: 'deleted-by-them', resolved: true, theirsOid: null, theirsSize: null }
+      ]);
+    });
+
+    it('gives a kind to a file with one stage', async () => {
+      write('renamed.md', 'text\n');
+      commitAll('base');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      git(work, 'mv', 'renamed.md', 'by-them.md');
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      git(work, 'mv', 'renamed.md', 'by-me.md');
+      commitAll('mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+
+      const conflicts = await merge.conflicts(work);
+
+      expect(conflicts).toMatchObject([
+        { path: 'by-me.md', kind: 'deleted-by-them', oursMode: '100644', theirsMode: null },
+        { path: 'by-them.md', kind: 'deleted-by-us', oursMode: null, theirsMode: '100644' }
+      ]);
+    });
+
+    it('leaves out a file both sides deleted', async () => {
+      write('renamed.md', 'text\n');
+      commitAll('base');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      git(work, 'mv', 'renamed.md', 'by-them.md');
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      git(work, 'mv', 'renamed.md', 'by-me.md');
+      commitAll('mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+      const paths = async () => (await merge.conflicts(work)).map(({ path }) => path);
+
+      // In the index, with only a base; and removed from it, which records it as resolved.
+      expect(git(work, 'ls-files', '-u', 'renamed.md')).toContain('renamed.md');
+      expect(await paths()).toEqual([ 'by-me.md', 'by-them.md' ]);
+      git(work, 'update-index', '--force-remove', 'renamed.md');
+      expect(git(work, 'ls-files', '--resolve-undo')).toContain('renamed.md');
+      expect(await paths()).toEqual([ 'by-me.md', 'by-them.md' ]);
+    });
+
+    it('reads every kind of name', async () => {
+      const names = [ 'tab\there.md', 'line\nbreak.md', 'привет мир.md', 'space and "quote".md' ];
+      names.forEach(name => write(name, 'base\n'));
+      commitAll('base');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      names.forEach(name => write(name, 'theirs\n'));
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      names.forEach(name => write(name, 'mine\n'));
+      commitAll('mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+      git(work, 'add', '--', names[0] ?? '');
+
+      const conflicts = await merge.conflicts(work);
+
+      expect(conflicts.map(({ path }) => path)).toEqual([ ...names ].sort());
+      expect(conflicts.find(({ path }) => path === names[0])).toMatchObject({ kind: 'both-changed', resolved: true });
+      expect(conflicts.find(({ path }) => path === names[1])).toMatchObject({ kind: 'both-changed', resolved: false });
+      expect(await merge.mergedWithoutConflicts(work, new Set(names))).toEqual([]);
+    });
+
+    it('sorts by path, comparing code units', async () => {
+      const names = [ 'b.md', 'B.md', 'a/z.md', 'a.md' ];
+      names.forEach(name => {
+        mkdirSync(join(work, 'a'), { recursive: true });
+        write(name, 'base\n');
+      });
+      commitAll('base');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      names.forEach(name => write(name, 'theirs\n'));
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      names.forEach(name => write(name, 'mine\n'));
+      commitAll('mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+      git(work, 'add', 'a/z.md');
+
+      expect((await merge.conflicts(work)).map(({ path }) => path)).toEqual([ 'B.md', 'a.md', 'a/z.md', 'b.md' ]);
+    });
+
+    it('forgets what an earlier merge resolved', async () => {
+      conflictingMerge();
+      git(work, 'add', 'both.md');
+      git(work, 'rm', '-q', 'gone.md');
+      commitAll('merged');
+      git(work, 'branch', '-q', 'later');
+      write('first.md', 'mine\n');
+      commitAll('mine');
+      git(work, 'switch', '-q', 'later');
+      write('first.md', 'theirs\n');
+      commitAll('theirs');
+      git(work, 'switch', '-q', 'main');
+      expect(() => git(work, 'merge', '--no-edit', 'later')).toThrow();
+
+      expect((await merge.conflicts(work)).map(({ path }) => path)).toEqual([ 'first.md' ]);
+    });
+
+    it('has no size for a submodule', async () => {
+      const pointAt = (oid: string, message: string) => {
+        git(work, 'update-index', '--add', '--cacheinfo', `160000,${oid},module`);
+        git(work, 'commit', '-q', '-m', message);
+      };
+      const base = git(work, 'rev-parse', 'HEAD');
+      mkdirSync(join(work, 'module'));
+      pointAt(base, 'base');
+      git(work, 'switch', '-q', '-c', 'theirs');
+      write('first.md', 'theirs\n');
+      commitAll('a commit for theirs');
+      pointAt(git(work, 'rev-parse', 'HEAD'), 'theirs');
+      git(work, 'switch', '-q', 'main');
+      write('first.md', 'mine\n');
+      commitAll('a commit for mine');
+      pointAt(git(work, 'rev-parse', 'HEAD'), 'mine');
+      expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+
+      const conflict = (await merge.conflicts(work)).find(({ path }) => path === 'module');
+
+      expect(conflict).toMatchObject({ kind: 'both-changed', oursMode: '160000', oursSize: null, theirsSize: null });
+    });
+
+    it('lists what merged without conflicts', async () => {
+      conflictingMerge();
+      write('theirs-only.md', 'x\n');
+      git(work, 'add', 'theirs-only.md');
+      git(work, 'rm', '-q', '--cached', 'first.md');
+      const conflicting = new Set((await merge.conflicts(work)).map(({ path }) => path));
+
+      expect(await merge.mergedWithoutConflicts(work, conflicting)).toEqual([
+        'clean.md',
+        'first.md',
+        'theirs-only.md'
+      ]);
+    });
+
+    it('leaves the comment lines out of the message', async () => {
+      conflictingMerge();
+      expect(readFileSync(join(work, '.git', 'MERGE_MSG'), 'utf8')).toContain('# Conflicts:');
+
+      expect(await merge.mergeMessage(work)).toBe('Merge branch \'theirs\'');
+    });
+
+    describe('canWriteMarkers', () => {
+      /** A conflict in `a.md` with these contents, with git's `merge` to bring it about. */
+      const conflictWith = async (mine: string, theirs: string) => {
+        write('a.md', 'base\n');
+        commitAll('base');
+        git(work, 'switch', '-q', '-c', 'theirs');
+        write('a.md', theirs);
+        commitAll('theirs');
+        git(work, 'switch', '-q', 'main');
+        write('a.md', mine);
+        commitAll('mine');
+        expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+        const [ entry ] = await merge.conflicts(work);
+        if (entry === undefined) {
+          throw new Error('expected a conflict');
+        }
+        return entry;
+      };
+
+      it('is true for text', async () => {
+        expect(await merge.canWriteMarkers(work, await conflictWith('mine\n', 'theirs\n'))).toBe(true);
+      });
+
+      it('is false when our version has a NUL byte', async () => {
+        expect(await merge.canWriteMarkers(work, await conflictWith('mi\0ne\n', 'theirs\n'))).toBe(false);
+      });
+
+      it('is false when only their version has a NUL byte', async () => {
+        expect(await merge.canWriteMarkers(work, await conflictWith('mine\n', 'thei\0rs\n'))).toBe(false);
+      });
+
+      it('is true for a file both added, which has no base', async () => {
+        conflictingMerge();
+        const both = (await merge.conflicts(work)).find(({ path }) => path === 'both.md');
+        expect(both?.baseOid).toBeNull();
+
+        expect(both !== undefined && await merge.canWriteMarkers(work, both)).toBe(true);
+      });
+
+      it('is false for a file one side deleted', async () => {
+        conflictingMerge();
+        const gone = (await merge.conflicts(work)).find(({ path }) => path === 'gone.md');
+
+        expect(gone !== undefined && await merge.canWriteMarkers(work, gone)).toBe(false);
+      });
+    });
+
+    it('tells a merge from a rebase', async () => {
+      expect(await merge.mergeInProgress(work)).toBe(false);
+      mkdirSync(join(work, '.git', 'rebase-merge'));
+      expect(await merge.mergeInProgress(work)).toBe(false);
+      rmSync(join(work, '.git', 'rebase-merge'), { recursive: true });
+
+      conflictingMerge();
+
+      expect(await merge.mergeInProgress(work)).toBe(true);
+    });
+
+    it('names the branch and its upstream', async () => {
+      expect(await merge.branchAndUpstream(work)).toEqual({ branch: 'main', upstream: null });
+
+      await merge.adoptUpstream(work, 'main');
+      expect(await merge.branchAndUpstream(work)).toEqual({ branch: 'main', upstream: 'origin/main' });
+
+      git(work, 'checkout', '-q', '--detach');
+      expect(await merge.branchAndUpstream(work)).toEqual({ branch: null, upstream: null });
+    });
+
+    it('has an empty message when git prepared none', async () => {
+      conflictingMerge();
+      rmSync(join(work, '.git', 'MERGE_MSG'));
+
+      expect(await merge.mergeMessage(work)).toBe('');
+    });
+  });
+
   it('refreshIndex updates stale entries, and accepts modified and conflicting files', async () => {
     utimesSync(join(work, 'first.md'), new Date(1_000_000), new Date(1_000_000));
     expect(git(work, 'diff-files', '--name-only')).toBe('first.md');
@@ -309,6 +580,18 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       // The working copy's own identity, which a merge must not use (CA-2).
       git(work, 'config', 'user.name', 'Config Name');
       git(work, 'config', 'user.email', 'config@example.com');
+    });
+
+    it('comments its conflict list with #, whatever the working copy\'s configuration says', async () => {
+      git(work, 'config', 'core.commentChar', ';');
+      onUpstream(() => write('first.md', 'theirs\n'));
+      write('first.md', 'mine\n');
+      commitAll('mine');
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
+
+      expect(readFileSync(join(work, '.git', 'MERGE_MSG'), 'utf8')).toContain('# Conflicts:');
+      expect(await merge.mergeMessage(work)).toBe('Merge remote-tracking branch \'origin/main\'');
     });
 
     it('says already up to date', async () => {
@@ -389,7 +672,7 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       );
 
       write('first.md', 'edited\n');
-      await merge.writeMarkers(work, 'first.md', { mine: 'mine', theirs: 'theirs' });
+      await merge.writeMarkers(work, 'first.md', { ours: 'mine', theirs: 'theirs' });
 
       expect(readFileSync(join(work, 'first.md'), 'utf8')).toBe(
         '<<<<<<< mine\nmine\n=======\ntheirs\n>>>>>>> theirs\n'
@@ -455,7 +738,7 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
 
       expect(readFileSync(join(work, 'binary.md'))).toEqual(Buffer.from('mine\0\n'));
-      await merge.writeMarkers(work, 'binary.md', { mine: 'main', theirs: 'origin/main' });
+      await merge.writeMarkers(work, 'binary.md', { ours: 'main', theirs: 'origin/main' });
       expect(readFileSync(join(work, 'binary.md'))).toEqual(Buffer.from('mine\0\n'));
     });
 
@@ -489,7 +772,7 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       );
       expect(readFileSync(join(work, 'clean.md'), 'utf8')).toBe('A\nb\nC\n');
       expect(readFileSync(join(work, 'gone.md'), 'utf8')).toBe('x changed\n');
-      await merge.writeMarkers(work, 'gone.md', { mine: 'main', theirs: 'origin/main' });
+      await merge.writeMarkers(work, 'gone.md', { ours: 'main', theirs: 'origin/main' });
       expect(readFileSync(join(work, 'gone.md'), 'utf8')).toBe('x changed\n');
     });
 

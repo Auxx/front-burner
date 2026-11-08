@@ -8,6 +8,7 @@ import {
   GitJobParamsSchema,
   GitJobStartedSchema,
   GitJobStateSchema,
+  GitMergeStateSchema,
   GitPathsSchema,
   GitStatusSchema,
   hasPathsUnlessAmending
@@ -55,3 +56,6 @@ export class GitIncomingQueryDto extends createZodDto(z.object(GitIncomingQueryS
 
 @ApiSchema({ name: 'GitIncoming' })
 export class GitIncomingDto extends createZodDto(z.object(GitIncomingSchema.shape)) {}
+
+@ApiSchema({ name: 'GitMergeState' })
+export class GitMergeStateDto extends createZodDto(z.object(GitMergeStateSchema.shape)) {}

@@ -83,8 +83,8 @@ NF-13.7.
 
 **Interfaces:**
 
-- Produces: `ConflictRegion`: `{ from: number; to: number; mine: { from: number;
-  to: number }; theirs: { from: number; to: number }; mineLabel: string;
+- Produces: `ConflictRegion`: `{ from: number; to: number; ours: { from: number;
+  to: number }; theirs: { from: number; to: number }; oursLabel: string;
   theirsLabel: string }`, as document offsets, with the labels read from the
   markers; and `conflictRegions(text: string): ConflictRegion[]`.
 
@@ -114,8 +114,8 @@ NF-13.7.
 **Interfaces:**
 
 - Produces:
-  - `ConflictTexts`: `{ mine: (branch: string) => string; theirs: (branch:
-    string) => string; acceptMine: string; acceptTheirs: string; acceptBoth:
+  - `ConflictTexts`: `{ ours: (branch: string) => string; theirs: (branch:
+    string) => string; acceptOurs: string; acceptTheirs: string; acceptBoth:
     string }`.
   - `EditorStateOptions.conflicts?: ConflictTexts`, which fills the compartment
     in `createEditorState`, and `setConflicts(texts: ConflictTexts | null):
@@ -124,7 +124,7 @@ NF-13.7.
     extension is off.
   - `conflictAtCursor(state: EditorState): number | null`: the index of the
     region the cursor is in, or `null`.
-  - `acceptConflict(view: EditorView, index: number, choice: 'mine' | 'theirs' |
+  - `acceptConflict(view: EditorView, index: number, choice: 'ours' | 'theirs' |
     'both'): void`.
   - `goToConflict(view: EditorView, index: number): void`: moves the cursor to
     the start of the region, and scrolls to it.
