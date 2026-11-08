@@ -71,6 +71,12 @@ export class GitApi {
       `/api/v1/repositories/${encodeURIComponent(id)}/git/push`
     );
   }
+  pull(id: number): Observable<GitJobStarted> {
+    return this.http.request<GitJobStarted>(
+      'POST',
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/pull`
+    );
+  }
   fetch(id: number): Observable<GitJobStarted> {
     return this.http.request<GitJobStarted>(
       'POST',

@@ -71,6 +71,13 @@
       "when": 1794142687396,
       "tag": "0009_sync_state",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794157064469,
+      "tag": "0010_pull_record",
+      "breakpoints": true
     }
   ]
 }

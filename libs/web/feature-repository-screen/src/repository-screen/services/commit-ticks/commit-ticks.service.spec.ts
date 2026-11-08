@@ -15,6 +15,7 @@ function statusOf(...paths: string[]): GitStatus {
     lastCommit: null,
     upstream: null,
     upstreamGone: false,
+    sameNameRemote: false,
     ahead: 0,
     behind: 0,
     changes: paths.map(path => ({ path, state: 'modified' as const })),

@@ -1,6 +1,6 @@
 import { jobs } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine } from '@front-burner/server-core-git';
+import { GitEngine, GitMerge } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { ApiExceptionFilter } from '@front-burner/server-core-observability';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { GitController } from '../git/git.controller';
 import { GitJobs } from '../jobs/git-jobs.service';
+import { PullService } from '../pull/pull.service';
 import { PushService } from '../push/push.service';
 import { SyncStateStore } from '../state/sync-state.store';
 import { insertRepository } from '../testing/fixtures';
@@ -51,6 +52,8 @@ describe.skipIf(process.platform === 'win32')('FetchService', () => {
         { provide: CommitAuthors, useValue: {} },
         { provide: EventsHub, useValue: harness.events },
         { provide: PushService, useValue: harness.service },
+        { provide: GitMerge, useValue: harness.merge },
+        { provide: PullService, useValue: harness.pullService },
         { provide: FetchService, useValue: harness.fetchService },
         { provide: FetchScheduler, useValue: {} },
         { provide: GitJobs, useValue: harness.gitJobs },

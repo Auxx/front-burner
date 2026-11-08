@@ -6,6 +6,7 @@ describe('GitStatusSchema', () => {
     noCommits: false,
     upstream: 'origin/main',
     upstreamGone: false,
+    sameNameRemote: false,
     ahead: 2,
     behind: 3,
     mergeInProgress: false,

@@ -28,6 +28,7 @@ function status(networkJob: GitStatus['networkJob'] = null): GitStatus {
     lastCommit: null,
     upstream: 'origin/main',
     upstreamGone: false,
+    sameNameRemote: false,
     ahead: 2,
     behind: 0,
     changes: [],

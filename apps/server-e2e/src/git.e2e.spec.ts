@@ -93,6 +93,7 @@ describe('git status (REQ-GIT-002)', () => {
       noCommits: true,
       upstream: null,
       upstreamGone: false,
+      sameNameRemote: false,
       ahead: 0,
       behind: 0,
       mergeInProgress: false,
@@ -605,6 +606,176 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
       'The remote accepts only signed commits. Front Burner doesn\'t sign commits.'
     );
   });
+});
+
+describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
+  const TOKEN = 'ghp_e2e-pull-token-value';
+  const AUTHOR = { name: 'Admin Example', email: 'admin.example@example.com' };
+  let root: string;
+  let source: string;
+  let server: ServerProcess;
+  let client: GitApi;
+  let publicGit: GitHttpServer;
+  let privateGit: GitHttpServer;
+  const publicOptions: GitHttpServerOptions = { repositories: {} };
+  const privateOptions: GitHttpServerOptions = { repositories: {}, users: { alice: TOKEN } };
+  const cleanups: (() => Promise<void>)[] = [];
+
+  /** A copy of the handbook served under `name` by both test servers. */
+  function remote(name: string): string {
+    const bare = copyRemote(root, source, name);
+    publicOptions.repositories[`${name}.git`] = bare;
+    privateOptions.repositories[`${name}.git`] = bare;
+    return bare;
+  }
+
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync('git', args, {
+      cwd,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'A',
+        GIT_AUTHOR_EMAIL: 'a@x.io',
+        GIT_COMMITTER_NAME: 'A',
+        GIT_COMMITTER_EMAIL: 'a@x.io'
+      }
+    });
+  const commitIn = (workingCopy: string, subject: string) =>
+    git(workingCopy, 'commit', '-q', '--allow-empty', '-m', subject);
+  const statusOf = async (id: number) =>
+    await (await client.call(`/repositories/${id}/git/status`)).json() as Record<string, unknown>;
+
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-e2e-pull-'));
+    source = createRemotes(root).handbook;
+    publicGit = await startGitHttpServer(publicOptions);
+    privateGit = await startGitHttpServer(privateOptions);
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
+    await onboard(server);
+    client = new GitApi(server, (await login(server, 'body')).authToken);
+    const confirmed = await client.send('PUT', '/preferences/commit-author', AUTHOR);
+    expect(confirmed.status).toBe(200);
+  });
+
+  afterEach(async () => {
+    for (const cleanup of cleanups.splice(0).reverse()) {
+      await cleanup();
+    }
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+    await Promise.all([ publicGit?.close(), privateGit?.close() ]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('a pull fast-forwards and makes a merge commit as the user\'s commit author', async () => {
+    const bare = remote('pulled');
+    const credentials = { mode: 'new-https', name: 'Pull token', username: 'alice', password: TOKEN };
+    const { id, workingCopy } = await client.add('pulled', `${privateGit.url}/pulled.git`, credentials);
+    pushFromElsewhere(bare, 'theirs');
+
+    expect(await client.pulled(id)).toEqual({
+      status: 'done',
+      outcome: { kind: 'pulled', result: 'fast-forward', commits: 1, upstream: 'origin/main' }
+    });
+    expect(gitOutput(workingCopy, 'log', '--format=%s', 'main')).toBe('theirs\nfirst');
+
+    commitIn(workingCopy, 'mine');
+    pushFromElsewhere(bare, 'theirs again');
+    expect(await client.pulled(id)).toEqual({
+      status: 'done',
+      outcome: { kind: 'pulled', result: 'merged', commits: 1, upstream: 'origin/main' }
+    });
+    const author = `${AUTHOR.name} <${AUTHOR.email}>`;
+    expect(gitOutput(workingCopy, 'log', '-1', '--format=%an <%ae>%n%cn <%ce>%n%s').split('\n')).toEqual([
+      author,
+      author,
+      'Merge remote-tracking branch \'origin/main\''
+    ]);
+    expect(gitOutput(workingCopy, 'log', '-1', '--format=%P').split(' ')).toHaveLength(2);
+    expect(await statusOf(id)).toMatchObject({ ahead: 2, behind: 0, changes: [], mergeInProgress: false });
+  });
+
+  it('pulls a public repository without credentials', async () => {
+    const bare = remote('public-pull');
+    const { id, workingCopy } = await client.add('public-pull', `${publicGit.url}/public-pull.git`);
+    pushFromElsewhere(bare, 'theirs');
+
+    expect((await client.pulled(id)).outcome).toEqual({
+      kind: 'pulled',
+      result: 'fast-forward',
+      commits: 1,
+      upstream: 'origin/main'
+    });
+    expect(gitOutput(workingCopy, 'log', '--format=%s', 'main')).toBe('theirs\nfirst');
+    expect((await client.pulled(id)).outcome).toEqual({
+      kind: 'pulled',
+      result: 'up-to-date',
+      commits: 0,
+      upstream: 'origin/main'
+    });
+  });
+
+  it('an interrupted pull ends failed', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'front-burner-e2e-pull-restart-'));
+    cleanups.push(async () => rmSync(dataDir, { recursive: true, force: true }));
+    const env = { FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN, FRONT_BURNER_DATA_DIR: dataDir };
+    const first = await startServerProcess(env);
+    await onboard(first);
+    const firstClient = new GitApi(first, (await login(first, 'body')).authToken);
+    const bare = remote('interrupted');
+    const proxy = await startHoldingProxy(Number(new URL(publicGit.url).port));
+    cleanups.push(() => proxy.close());
+    const { id, workingCopy } = await firstClient.add('interrupted', `https://127.0.0.1:${proxy.port}/interrupted.git`);
+    pushFromElsewhere(bare, 'theirs');
+    proxy.holdFrom(proxy.connections);
+
+    const jobId = await firstClient.startPull(id);
+    await waitFor(async () => (await firstClient.jobState(id, jobId)).status === 'running' && proxy.connections > 0);
+    await first.kill();
+
+    const second = await startServerProcess(env);
+    cleanups.push(() => second.stop());
+    const secondClient = new GitApi(second, (await login(second, 'body')).authToken);
+
+    expect(await secondClient.jobState(id, jobId)).toEqual({
+      status: 'failed',
+      outcome: { kind: 'failed', code: 'interrupted', params: {} }
+    });
+    expect(gitOutput(workingCopy, 'log', '--format=%s', 'main')).toBe('first');
+    expect(gitOutput(workingCopy, 'status', '--porcelain')).toBe('');
+  });
+
+  it.each([ [ 'a full clone', 'full' ], [ 'a single-branch clone', 'main' ] ] as const)(
+    'a rejected branch can pull and push, in %s',
+    async (_label, clone) => {
+      const name = `rejected-${clone}`;
+      const bare = remote(name);
+      const { id, workingCopy } = await client.add(name, `${publicGit.url}/${name}.git`, { mode: 'none' }, clone);
+      git(workingCopy, 'checkout', '-q', '-b', 'topic');
+      commitIn(workingCopy, 'my topic');
+      // The remote has a branch of the same name, newer than the last fetch.
+      git(bare, 'branch', 'topic', 'main');
+      pushFromElsewhere(bare, 'their topic', 'topic');
+
+      expect((await client.pushed(id)).outcome).toMatchObject({ kind: 'failed', code: 'push-non-fast-forward' });
+      expect(await statusOf(id)).toMatchObject({ branch: 'topic', upstream: null, sameNameRemote: true });
+
+      expect((await client.pulled(id)).outcome).toEqual({
+        kind: 'pulled',
+        result: 'merged',
+        commits: 1,
+        upstream: 'origin/topic'
+      });
+      expect(await statusOf(id)).toMatchObject({ upstream: 'origin/topic', ahead: 2, behind: 0 });
+
+      expect((await client.pushed(id)).outcome).toEqual({ kind: 'pushed', commits: 2, upstream: 'origin/topic' });
+      const [ merge, ...merged ] = gitOutput(bare, 'log', '--format=%s', 'topic').split('\n');
+      expect(merge).toBe('Merge remote-tracking branch \'origin/topic\' into topic');
+      expect(merged.sort()).toEqual([ 'first', 'my topic', 'their topic' ]);
+    }
+  );
 });
 
 describe('secrets in a push (REQ-REPO-002)', () => {

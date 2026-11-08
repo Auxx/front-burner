@@ -18,6 +18,7 @@ const STATUS: GitStatus = {
   lastCommit: null,
   upstream: null,
   upstreamGone: false,
+  sameNameRemote: false,
   ahead: 0,
   behind: 0,
   changes: [ 'README.md', 'a.md', 'b.md', 'logo.png' ].map(path => ({ path, state: 'modified' as const })),

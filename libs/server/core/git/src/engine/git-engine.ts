@@ -718,7 +718,9 @@ export class GitEngine implements BeforeApplicationShutdown {
    * Pushes the current branch to its upstream on `origin`, or publishes it
    * under its own name and makes that its upstream; never forced, without tags
    * (GA-29, GA-30). In a single-branch clone, a published branch is added to
-   * what is fetched (GA-41). Takes no lock: the caller holds the NetworkLock.
+   * what is fetched (GA-41), and stays added when the remote rejects the push
+   * as non-fast-forward, as its branch exists. Takes no lock: the caller holds
+   * the NetworkLock.
    *
    * @throws GitOperationError `unsafe-repository-config` when `origin` is not
    * the stored remote, and push-* codes with `remoteMessages` when the remote
@@ -755,8 +757,11 @@ export class GitEngine implements BeforeApplicationShutdown {
         { cwd: workingCopy, push: true, params: { branch } }
       );
     } catch (error) {
-      if (addedRefspec !== undefined) {
-        // A failed push leaves the working copy as it was (GA-43).
+      // Rejected as non-fast-forward, the remote branch exists: the next fetch must get it, so that Pull has
+      // something to merge (GA-30, GA-41).
+      const remoteBranchExists = error instanceof GitOperationError && error.code === 'push-non-fast-forward';
+      if (addedRefspec !== undefined && !remoteBranchExists) {
+        // Any other failed push leaves the working copy as it was (GA-43).
         await this.local.checked(workingCopy, [
           'config',
           '--unset',
