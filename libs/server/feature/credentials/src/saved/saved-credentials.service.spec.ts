@@ -266,6 +266,32 @@ describe('SavedCredentialsService', () => {
     expect(() => service.keyForJob(bob, 's1', https)).toThrow(NotFoundException);
   });
 
+  it('gives a background job the session\'s unlock without keeping it alive', () => {
+    const https = createHttps();
+    const plain = createKey(PLAIN, undefined, 'Plain');
+    const locked = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+    const get = vi.spyOn(unlocks, 'get');
+
+    expect(service.keyForBackgroundJob(alice, 's1', https)).toEqual({ usable: true, key: undefined });
+    expect(service.keyForBackgroundJob(alice, 's1', plain)).toEqual({ usable: true, key: undefined });
+    expect(service.keyForBackgroundJob(alice, 's1', locked)).toEqual({ usable: false, key: undefined });
+    service.unlock(alice, 's1', locked, FIXTURE_PASSPHRASE);
+    const key = unlocks.get('s1', locked, { touch: false });
+    expect(service.keyForBackgroundJob(alice, 's1', locked)).toEqual({ usable: true, key });
+    expect(service.keyForBackgroundJob(alice, 's2', locked)).toEqual({ usable: false, key: undefined });
+    expect(get).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), { touch: true });
+    expect(() => service.keyForBackgroundJob(bob, 's1', https)).toThrow(NotFoundException);
+  });
+
+  it('lets a background job report a secret that is gone', () => {
+    const https = createHttps();
+    const locked = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+    database.db.update(savedCredentials).set({ secret: null }).run();
+
+    expect(service.keyForBackgroundJob(alice, 's1', https)).toEqual({ usable: true, key: undefined });
+    expect(service.keyForBackgroundJob(alice, 's1', locked)).toEqual({ usable: true, key: undefined });
+  });
+
   it('refuses a job credentials whose secret is gone', () => {
     const https = createHttps();
     database.db.update(savedCredentials).set({ secret: null }).where(eq(savedCredentials.id, https)).run();

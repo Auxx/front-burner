@@ -3,6 +3,7 @@ import { FilesModule } from '@front-burner/server-feature-files';
 import { PreferencesModule } from '@front-burner/server-feature-preferences';
 import { RepositoriesModule } from '@front-burner/server-feature-repositories';
 import { Module } from '@nestjs/common';
+import { FetchScheduler } from './fetch/fetch-scheduler';
 import { FetchStep } from './fetch/fetch-step';
 import { FetchJob } from './fetch/fetch.job';
 import { FetchService } from './fetch/fetch.service';
@@ -30,6 +31,7 @@ import { SyncStateStore } from './state/sync-state.store';
     FetchStep,
     FetchService,
     FetchJob,
+    FetchScheduler,
     SyncStateStore
   ]
 })

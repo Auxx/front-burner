@@ -1,10 +1,12 @@
+import { jobs, repositories } from '@front-burner/server-core-database';
 import { unlockPrivateKey } from '@front-burner/server-core-git';
-import { sshKeyFixture } from '@front-burner/server-core-git/testing';
+import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
+import { eq } from 'drizzle-orm';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { git, trustTestCertificate } from '../testing/git-fixtures';
 import { PushHarness } from '../testing/push-harness';
-import { FETCH_JOB_TYPE, fetchDedupeKey } from './fetch.job';
+import { BACKGROUND_FETCH_JOB_TYPE, backgroundFetchDedupeKey, FETCH_JOB_TYPE, fetchDedupeKey } from './fetch.job';
 
 // The broker listens on a Unix socket in a POSIX path: not on Windows.
 describe.skipIf(process.platform === 'win32')('FetchJob', () => {
@@ -100,5 +102,56 @@ describe.skipIf(process.platform === 'win32')('FetchJob', () => {
     expect(harness.jobKeys.take(id, 1)).toBeUndefined();
     // Nothing moved and no problem changed.
     expect(harness.published.filter(({ event }) => event.type === 'git.changed')).toEqual([]);
+  });
+
+  describe('in the background', () => {
+    it('fetches with a job type of its own', async () => {
+      harness.pushFromElsewhere('theirs');
+
+      const id = harness.runner.enqueue({
+        type: BACKGROUND_FETCH_JOB_TYPE,
+        userId: harness.alice,
+        repositoryId: harness.repositoryId,
+        payload: {},
+        dedupeKey: backgroundFetchDedupeKey(harness.repositoryId)
+      });
+      // Not the network job the status reports (GA-9 is about what the user started).
+      expect(harness.gitJobs.networkJob(harness.alice, harness.repositoryId)).toBeNull();
+      harness.runner.start();
+      await harness.finished(id);
+
+      expect(harness.jobOf(id)?.status).toBe('done');
+      expect(git(harness.workingCopy, 'log', '-1', '--format=%s', 'origin/main').trim()).toBe('theirs');
+    });
+
+    it('skips a requeued job whose key is gone', async () => {
+      const keyId = harness.database.db.transaction(tx =>
+        harness.saved.createPastedKey(tx, harness.alice, {
+          name: 'Laptop',
+          privateKey: sshKeyFixture('ed25519-passphrase'),
+          passphrase: FIXTURE_PASSPHRASE
+        })
+      );
+      harness.database.db.update(repositories).set({ credentialId: keyId })
+        .where(eq(repositories.id, harness.repositoryId)).run();
+      // Left running by a backend that stopped: its key copy went with it.
+      const id = harness.database.db.insert(jobs).values({
+        type: BACKGROUND_FETCH_JOB_TYPE,
+        userId: harness.alice,
+        repositoryId: harness.repositoryId,
+        status: 'running',
+        runAt: new Date(),
+        createdAt: new Date(),
+        attempts: 1,
+        dedupeKey: backgroundFetchDedupeKey(harness.repositoryId)
+      }).returning().get().id;
+
+      harness.runner.start();
+      await harness.finished(id);
+
+      expect(harness.jobOf(id)?.status).toBe('done');
+      expect(harness.syncState.fetchProblem(harness.repositoryId)).toBeNull();
+      expect(harness.published.filter(({ event }) => event.type === 'git.changed')).toEqual([]);
+    });
   });
 });
