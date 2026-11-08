@@ -12,7 +12,7 @@ import {
   startGitHttpServer,
   TEST_CERTIFICATE_FILE
 } from './support/git-http-server';
-import { logIn, seed, type SeedRepository } from './support/instance';
+import { logIn, seed, seededRemoteUrl, type SeedRepository } from './support/instance';
 import { gitIn } from './support/working-copy';
 
 test.use({ instanceOptions: { onboarded: true } });
@@ -1531,7 +1531,7 @@ test.describe('repository screen, kept up to date', () => {
     for (let index = 0; index < 3; index++) {
       gitIn(dir, 'commit', '-q', '--allow-empty', '-m', `theirs ${index}`);
     }
-    gitIn(dir, 'remote', 'add', 'origin', 'https://git.example.com/handbook.git');
+    gitIn(dir, 'remote', 'add', 'origin', seededRemoteUrl('handbook'));
     gitIn(dir, 'update-ref', `refs/remotes/origin/${branch}`, 'HEAD');
     gitIn(dir, 'reset', '-q', '--soft', 'main');
     for (let index = 0; index < 2; index++) {

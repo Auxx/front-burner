@@ -18,6 +18,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestj
 import { ApiAcceptedResponse, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
+import { FetchScheduler } from '../fetch/fetch-scheduler';
 import { FetchService } from '../fetch/fetch.service';
 import { GitJobs } from '../jobs/git-jobs.service';
 import { PushService } from '../push/push.service';
@@ -84,6 +85,7 @@ export class GitController {
     private readonly events: EventsHub,
     private readonly pushes: PushService,
     private readonly fetches: FetchService,
+    private readonly fetchScheduler: FetchScheduler,
     private readonly gitJobs: GitJobs,
     private readonly syncState: SyncStateStore
   ) {}
@@ -248,6 +250,22 @@ export class GitController {
   @ZodSerializerDto(GitJobStartedDto)
   fetch(@Req() req: Request, @Param() params: RepositoryParamsDto): GitJobStarted {
     return { jobId: this.fetches.start(authOf(req), params.id) };
+  }
+
+  /**
+   * Says that a file of the repository was opened, so that the backend
+   * fetches, at most once every 30 seconds per repository for every client
+   * (GA-33). It decides whether it fetches: nobody waits for this fetch, so it
+   * is never refused for a locked key, and a key it cannot use skips it
+   * (GA-35, RC-15). How it ends shows as a background fetch does.
+   */
+  @Post('fetch/file-opened')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  fetchOnFileOpened(@Req() req: Request, @Param() params: RepositoryParamsDto): void {
+    const { userId, sessionId } = authOf(req);
+    this.repositories.root(userId, params.id);
+    this.fetchScheduler.fileOpened(userId, sessionId, params.id);
   }
 
   /**

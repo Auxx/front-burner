@@ -420,6 +420,31 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     expect(await client.fetched(id)).toEqual({ status: 'done', outcome: { kind: 'fetched', moved: false } });
   });
 
+  it('a background fetch updates the counts and changes no file', async () => {
+    const bare = remote('background');
+    const { id, workingCopy } = await add('background', `${publicGit.url}/background.git`);
+    pushFromElsewhere(bare, 'theirs');
+    const status = async () => await (await api(`/repositories/${id}/git/status`)).json() as Record<string, unknown>;
+    expect(await status()).toMatchObject({ behind: 0 });
+
+    // A tab viewing the repository (A-3.12).
+    const viewing = new AbortController();
+    const stream = await fetch(`${server.url}/api/v1/events?repository=${id}`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: viewing.signal
+    });
+    expect(stream.status).toBe(200);
+    try {
+      await waitFor(async () => (await status()).behind === 1);
+    } finally {
+      viewing.abort();
+    }
+
+    expect(await status()).toMatchObject({ behind: 1, ahead: 0, networkJob: null, fetchProblem: null, changes: [] });
+    expect(gitOutput(workingCopy, 'log', '--format=%s', 'main')).toBe('first');
+    expect(gitOutput(workingCopy, 'status', '--porcelain')).toBe('');
+  });
+
   it('a fetch with refused credentials is kept in the status until a fetch succeeds', async () => {
     remote('fetch-gate');
     const credentials = { mode: 'new-https', name: 'Fetch token', username: 'alice', password: TOKEN };

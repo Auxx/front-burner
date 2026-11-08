@@ -14,9 +14,20 @@ export type FetchJobPayload = Record<string, never>;
 export const fetchDedupeKey = (repositoryId: number) => `fetch-now:${repositoryId}`;
 
 /**
- * The fetch the user started with **Fetch** (GA-33). Allowed during a merge,
- * which a fetch leaves alone (GC-3). A fetch git refused is a job that
- * finished, with a `failed` outcome, as a push's is (plan 57's call).
+ * The fetch `FetchScheduler` queues (A-6, GA-33). A type of its own, not in
+ * `GIT_JOB_TYPES`, so that the status does not report it as a network job and
+ * **Fetch** does not flicker every 2 minutes (GA-9 is about what the user started).
+ */
+export const BACKGROUND_FETCH_JOB_TYPE = 'sync.fetch-background';
+
+/** The dedupe key of a background fetch, so that many tabs on one repository queue one job. */
+export const backgroundFetchDedupeKey = (repositoryId: number) => `fetch:${repositoryId}`;
+
+/**
+ * The fetch the user started with **Fetch** (GA-33), and the background fetch.
+ * Allowed during a merge, which a fetch leaves alone (GC-3). A fetch git
+ * refused is a job that finished, with a `failed` outcome, as a push's is
+ * (plan 57's call).
  */
 @Injectable()
 export class FetchJob implements OnModuleInit {
@@ -32,6 +43,16 @@ export class FetchJob implements OnModuleInit {
       pool: 'fetch',
       // Not repeated on its own after a restart: the user asked for this one, then.
       onInterrupted: 'fail',
+      maxAttempts: 1,
+      handler: job => this.fetch(job),
+      onFinished: job => this.finished(job)
+    });
+    this.runner.register<FetchJobPayload, GitJobOutcome>({
+      type: BACKGROUND_FETCH_JOB_TYPE,
+      pool: 'fetch',
+      // Queued again after a restart (NF-9.5). Its key copy is gone then, so a
+      // protected key's fetch ends as `key-locked`, which the step never stores.
+      onInterrupted: 'requeue',
       maxAttempts: 1,
       handler: job => this.fetch(job),
       onFinished: job => this.finished(job)

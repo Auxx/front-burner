@@ -245,6 +245,16 @@ export interface SeedRepository {
 }
 
 /**
+ * The remote of a seeded repository that names none. Its host is in the
+ * `.invalid` top-level domain (RFC 6761), which never resolves, so that the
+ * background fetches of a repository screen (GA-33) fail at once and never
+ * reach a real git hosting provider.
+ */
+export function seededRemoteUrl(name: string): string {
+  return `https://git.invalid/acme/${name}.git`;
+}
+
+/**
  * Inserts users and repositories into a running instance's database, which the
  * server has migrated (WAL lets both write). Every seeded user is a password
  * user with `TEST_ADMIN`'s password, so the instance must be onboarded. A ready
@@ -284,7 +294,7 @@ export function seed(
         insertRepository.run(
           repository.userId,
           repository.name,
-          repository.remoteUrl ?? `https://github.com/acme/${repository.name}.git`,
+          repository.remoteUrl ?? seededRemoteUrl(repository.name),
           repository.status ?? 'ready',
           repository.errorCode ?? null,
           at,

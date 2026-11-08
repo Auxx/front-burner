@@ -12,7 +12,7 @@ import {
   PROTECTED_KEY_PUBLIC,
   startGitSshServer
 } from './support/git-ssh-server';
-import { confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
+import { confirmCommitAuthor, logIn, seed, seededRemoteUrl, TEST_ADMIN } from './support/instance';
 import { addOverApi, ADMIN_ID, escapeRegExp, sshRepository, workingCopyOf } from './support/repositories';
 import { createWorkingCopy, gitIn } from './support/working-copy';
 
@@ -525,7 +525,7 @@ test.describe('every action, by touch and by keyboard', () => {
     const lines = Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n');
     writeFileSync(join(dir, 'README.md'), `# Handbook\n${lines}\n`);
     gitIn(dir, 'commit', '-qam', 'longer');
-    gitIn(dir, 'remote', 'add', 'origin', 'https://github.com/acme/handbook.git');
+    gitIn(dir, 'remote', 'add', 'origin', seededRemoteUrl('handbook'));
     gitIn(dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
     gitIn(dir, 'branch', '-q', '--set-upstream-to=origin/main');
     writeFileSync(join(dir, 'README.md'), `# Handbook\n${lines}\nThe end.\n`);

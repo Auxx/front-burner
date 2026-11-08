@@ -197,6 +197,30 @@ export class SavedCredentialsService {
   }
 
   /**
+   * Whether a background job, such as a background fetch, can use the
+   * credentials for this session, and the decrypted key of a protected key
+   * unlocked in it, for the job to hold (RC-19). Unlike `keyForJob`, this does
+   * not keep the unlock alive, so that an open tab never keeps a key unlocked
+   * on its own (A-5.5, D-2.7). `usable` is false only for a protected key not
+   * unlocked in this session; a missing secret is usable, so that the job
+   * reports it.
+   *
+   * @throws NotFoundException for an unknown ID or another user's (AR-56).
+   */
+  keyForBackgroundJob(
+    userId: number,
+    sessionId: string,
+    id: number
+  ): { usable: boolean; key: UnlockedKey | undefined; } {
+    const row = this.findOwned(userId, id);
+    if (row.secret === null || row.kind !== 'ssh-key' || !row.sshPassphraseProtected) {
+      return { usable: true, key: undefined };
+    }
+    const key = this.unlocks.get(sessionId, row.id, { touch: false });
+    return { usable: key !== undefined, key };
+  }
+
+  /**
    * The credentials for a job's git operation, read when it runs, so that
    * credentials replaced since it was queued are used (RC-19). A protected key
    * comes only from the copy held for the job since it was queued (JobKeys).
