@@ -563,9 +563,9 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
     describe('readVersion', () => {
       it('reads a blob by its oid', async () => {
         const oid = git(work, 'rev-parse', ':first.md');
-        const content = await merge.readVersion(work, oid);
+        const bytes = await merge.readVersion(work, oid);
 
-        expect(content).toBe('one\n');
+        expect(bytes).toEqual(Buffer.from('one\n', 'utf8'));
       });
 
       it('throws for an oid that is not a blob', async () => {
@@ -574,20 +574,20 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
         await expect(merge.readVersion(work, head)).rejects.toThrow('git cat-file blob');
       });
 
-      it('returns null for a blob that is not valid UTF-8', async () => {
+      it('returns the raw bytes of a blob that is not valid UTF-8', async () => {
         writeFileSync(join(work, 'latin.md'), Buffer.from([ 0x63, 0xe9, 0x0a ]));
         git(work, 'add', 'latin.md');
         const oid = git(work, 'rev-parse', ':latin.md');
 
-        expect(await merge.readVersion(work, oid)).toBeNull();
+        expect(await merge.readVersion(work, oid)).toEqual(Buffer.from([ 0x63, 0xe9, 0x0a ]));
       });
 
-      it('returns the content of a blob that contains U+FFFD', async () => {
+      it('returns the raw bytes of a blob that contains U+FFFD', async () => {
         writeFileSync(join(work, 'replacement.md'), Buffer.from([ 0x61, 0xef, 0xbf, 0xbd, 0x62, 0x0a ]));
         git(work, 'add', 'replacement.md');
         const oid = git(work, 'rev-parse', ':replacement.md');
 
-        expect(await merge.readVersion(work, oid)).toBe('a\ufffdb\n');
+        expect(await merge.readVersion(work, oid)).toEqual(Buffer.from([ 0x61, 0xef, 0xbf, 0xbd, 0x62, 0x0a ]));
       });
 
       it('throws for a non-existent oid', async () => {
@@ -596,21 +596,21 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
         );
       });
 
-      it('strips the BOM from a blob that starts with one', async () => {
+      it('returns the raw bytes including BOM', async () => {
         const BOM = Buffer.from([ 0xef, 0xbb, 0xbf ]);
         writeFileSync(join(work, 'bom.md'), Buffer.concat([ BOM, Buffer.from('hello\n', 'utf8') ]));
         git(work, 'add', 'bom.md');
         const oid = git(work, 'rev-parse', ':bom.md');
 
-        expect(await merge.readVersion(work, oid)).toBe('hello\n');
+        expect(await merge.readVersion(work, oid)).toEqual(Buffer.concat([ BOM, Buffer.from('hello\n', 'utf8') ]));
       });
 
-      it('converts CRLF line endings to LF', async () => {
+      it('returns the raw bytes with CRLF line endings', async () => {
         writeFileSync(join(work, 'crlf.md'), 'line1\r\nline2\r\n');
         git(work, 'add', 'crlf.md');
         const oid = git(work, 'rev-parse', ':crlf.md');
 
-        expect(await merge.readVersion(work, oid)).toBe('line1\nline2\n');
+        expect(await merge.readVersion(work, oid)).toEqual(Buffer.from('line1\r\nline2\r\n', 'utf8'));
       });
 
       it('throws when git itself fails', async () => {

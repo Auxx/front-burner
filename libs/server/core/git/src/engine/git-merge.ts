@@ -8,12 +8,6 @@ import { GitResult } from '../runner/git-runner';
 import { GitOperationError } from './git-errors';
 import { LOCAL_MAX_OUTPUT_BYTES, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
-/** UTF-8 BOM byte sequence. */
-const BOM = Buffer.from([ 0xef, 0xbb, 0xbf ]);
-
-/** Fatal decoder — throws when the input contains bytes that are not valid UTF-8, preserves BOM. */
-const utf8Fatal = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-
 /** Where the commit before a merge is kept, so that git's garbage collection keeps it (A-5.12). */
 export const PRE_MERGE_REF = 'refs/front-burner/pre-merge';
 
@@ -711,16 +705,17 @@ export class GitMerge {
   }
 
   /**
-   * Read a blob by its object id, returning its text content, or `null` when it
-   * is not valid UTF-8 or too large (A-5.11). The object id comes from the index,
-   * so any git failure (missing object, corrupt store, permissions) is abnormal
-   * and throws. Used outside the working-tree lock.
+   * Read a blob by its object id, returning its raw bytes, or `null` when too
+   * large (A-5.11). The object id comes from the index, so any git failure
+   * (missing object, corrupt store, permissions) is abnormal and throws.
+   * The caller decodes the bytes with `decodeMarkdown` from the files library.
+   * Used outside the working-tree lock.
    *
    * @throws GitOperationError `timeout` when it ran out of time.
    * @throws Error when git fails for any reason (non-zero exit, spawn error, killed process,
    *          corrupt store, missing object, permissions).
    */
-  async readVersion(workingCopy: string, oid: string): Promise<string | null> {
+  async readVersion(workingCopy: string, oid: string): Promise<Buffer | null> {
     const result = await this.local.run(
       workingCopy,
       [ 'cat-file', 'blob', oid ],
@@ -737,17 +732,7 @@ export class GitMerge {
     if (result.stdoutBytes > LOCAL_MAX_OUTPUT_BYTES) {
       return null;
     }
-    try {
-      // Strip BOM at the byte level, like the editor's decodeMarkdown, so that a
-      // blob with two BOMs keeps the second one (which the decoder turns into
-      // U+FEFF) — matching the editor behaviour.
-      const raw = result.stdoutRaw;
-      const hasBom = raw.subarray(0, BOM.length).equals(BOM);
-      const text = utf8Fatal.decode(hasBom ? raw.subarray(BOM.length) : raw);
-      return text.replace(/\r\n/g, '\n');
-    } catch {
-      return null;
-    }
+    return result.stdoutRaw;
   }
 
   /** A merge, as opposed to `GitEngine.mergeInProgress`, which a rebase also answers yes to. */

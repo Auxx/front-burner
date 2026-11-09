@@ -1,7 +1,7 @@
 import { ConflictEntry, GitMerge, REGULAR_FILE } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { inBatches, PathRefusedError } from '@front-burner/server-core-storage';
-import { FileContents } from '@front-burner/server-feature-files';
+import { decodeMarkdown, FileContents } from '@front-burner/server-feature-files';
 import { EDITABLE_FILE_LIMIT } from '@front-burner/shared-contracts';
 import type { GitConflictFile, GitMergeState, GitMergeVersion } from '@front-burner/shared-contracts';
 import { isMarkdownName } from '@front-burner/shared-util';
@@ -56,11 +56,15 @@ export class MergeStateService {
     if (sideValues.size !== null && sideValues.size > EDITABLE_FILE_LIMIT) {
       throw new ApiErrorException(409, 'version-not-readable');
     }
-    const content = await this.merge.readVersion(root, sideValues.oid);
-    if (content === null) {
+    const bytes = await this.merge.readVersion(root, sideValues.oid);
+    if (bytes === null) {
       throw new ApiErrorException(409, 'version-not-readable');
     }
-    return { content };
+    const decoded = decodeMarkdown(bytes);
+    if (decoded === 'not-utf8') {
+      throw new ApiErrorException(409, 'version-not-readable');
+    }
+    return { content: decoded.content };
   }
 
   /**
