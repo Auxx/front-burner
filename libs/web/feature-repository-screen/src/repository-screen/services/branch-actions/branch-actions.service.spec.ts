@@ -1,0 +1,384 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import type {
+  CurrentUser,
+  FileContent,
+  FileState,
+  GitBranchList,
+  GitStatus,
+  GitSwitchRequest,
+  SaveFileRequest
+} from '@front-burner/shared-contracts';
+import { DialogService, ToastService } from '@front-burner/ui';
+import { FilesApi, GitApi } from '@front-burner/web-api-client';
+import { CurrentUserService } from '@front-burner/web-core';
+import { type Observable, of, Subject, throwError } from 'rxjs';
+
+import { apiError, dialogButton, overlay, settleDialog } from '../../../testing/dialog-testing';
+import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
+import { fileContent } from '../../../testing/open-files';
+import { translocoTesting } from '../../../testing/transloco-testing';
+import { GitStatusStore } from '../git-status-store/git-status-store.service';
+import { OpenFilesService } from '../open-files/open-files.service';
+import { RepositorySessionService } from '../repository-session/repository-session.service';
+import { BranchActionsService } from './branch-actions.service';
+
+const K = 'web-feature-repository-screen.BranchActionsService';
+const REFUSED = 'web-feature-repository-screen.SwitchRefusedDialog';
+const ada = { id: 4 } as CurrentUser;
+
+const BRANCHES: GitBranchList = {
+  current: 'main',
+  local: [ { name: 'docs', upstream: null }, { name: 'main', upstream: null } ],
+  remote: [ { name: 'origin/feature', branch: 'feature' } ],
+  singleBranch: false
+};
+
+function changed(...paths: string[]): GitStatus {
+  return { changes: paths.map(path => ({ path, state: 'modified' })) } as GitStatus;
+}
+
+describe('BranchActionsService', () => {
+  let service: BranchActionsService;
+  let openFiles: OpenFilesService;
+  let repository: ReturnType<typeof signal<{ id: number; }>>;
+  let status: ReturnType<typeof signal<GitStatus | null>>;
+  let statusAfterRefresh: GitStatus | null;
+  /** The requests that change something, in order. */
+  let requests: string[];
+  let switches: GitSwitchRequest[];
+  let switchAnswer: () => Observable<void>;
+  let saves: { request: SaveFileRequest; answer: Subject<FileState>; }[];
+  let toast: { show: ReturnType<typeof vi.fn>; };
+
+  const row = (text: string) =>
+    [ ...overlay().querySelectorAll<HTMLButtonElement>('rs-branch-list li button') ].find(button =>
+      button.textContent?.includes(text)
+    );
+
+  /** Opens the list and selects the row that shows `text`. */
+  async function choose(text: string): Promise<{ done: Promise<void>; }> {
+    const done = service.open();
+    await settleDialog();
+    row(text)?.click();
+    await settleDialog();
+    return { done };
+  }
+
+  const refused = () => overlay().querySelector('rs-switch-refused');
+  const lastToast = () => toast.show.mock.calls.at(-1)?.[0];
+
+  beforeEach(() => {
+    repository = signal({ id: 12 });
+    status = signal<GitStatus | null>(changed());
+    statusAfterRefresh = null;
+    requests = [];
+    switches = [];
+    switchAnswer = () => of(undefined);
+    saves = [];
+    toast = { show: vi.fn() };
+    TestBed.configureTestingModule({
+      imports: [
+        translocoTesting({
+          'errors.git-busy': 'Git is busy.',
+          'errors.internal': 'Something went wrong.',
+          'errors.branch-not-found': 'This branch does not exist any more.',
+          'errors.file-held': '{{ path }} can not be saved just now.',
+          [`${K}.file-gone`]: '{{ path }} was deleted elsewhere.',
+          [`${K}.reference`]: 'Reference: {{ reference }}'
+        })
+      ],
+      providers: [
+        BranchActionsService,
+        OpenFilesService,
+        provideMemoryDrafts(new MemoryDraftStore()),
+        { provide: ToastService, useValue: toast },
+        { provide: RepositorySessionService, useValue: { repository } },
+        { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
+        {
+          provide: GitStatusStore,
+          useValue: {
+            status,
+            refresh: () => {
+              requests.push('status');
+              if (statusAfterRefresh !== null) {
+                status.set(statusAfterRefresh);
+              }
+              return Promise.resolve();
+            }
+          }
+        },
+        {
+          provide: GitApi,
+          useValue: {
+            gitBranches: () => of(BRANCHES),
+            switchBranch: (_id: number, request: GitSwitchRequest) => {
+              requests.push('switch');
+              switches.push(request);
+              return switchAnswer();
+            }
+          }
+        },
+        {
+          provide: FilesApi,
+          useValue: {
+            readFile: (_id: number, query: { path: string; }): Observable<FileContent> => of(fileContent(query.path)),
+            saveFile: (_id: number, request: SaveFileRequest) => {
+              requests.push(`save ${request.content}`);
+              const answer = new Subject<FileState>();
+              saves.push({ request, answer });
+              return answer;
+            }
+          }
+        },
+        {
+          provide: BreakpointObserver,
+          useValue: { observe: () => of({ matches: false, breakpoints: {} }), isMatched: () => false }
+        }
+      ]
+    });
+    service = TestBed.inject(BranchActionsService);
+    openFiles = TestBed.inject(OpenFilesService);
+  });
+
+  afterEach(() => TestBed.inject(DialogService).closeAll());
+
+  it('switches to a local branch', async () => {
+    await (await choose('docs')).done;
+
+    expect(switches).toEqual([ { name: 'docs', remote: false } ]);
+    expect(toast.show).not.toHaveBeenCalled();
+    expect(refused()).toBeNull();
+  });
+
+  it('tracks a remote branch', async () => {
+    await (await choose('origin/feature')).done;
+
+    expect(switches).toEqual([ { name: 'feature', remote: true } ]);
+  });
+
+  it('reads the status after a switch, also without the push channel', async () => {
+    await (await choose('docs')).done;
+
+    expect(requests).toEqual([ 'switch', 'status' ]);
+  });
+
+  it('does nothing when the list is closed without a choice', async () => {
+    const done = service.open();
+    await settleDialog();
+
+    TestBed.inject(DialogService).closeAll();
+    await done;
+
+    expect(requests).toEqual([]);
+  });
+
+  it('does nothing for the current branch', async () => {
+    await (await choose('main')).done;
+
+    expect(requests).toEqual([]);
+    expect(overlay().querySelector('rs-branch-list')).toBeNull();
+  });
+
+  it('opens one list at a time', async () => {
+    const gitBranches = vi.spyOn(TestBed.inject(GitApi), 'gitBranches');
+    const first = service.open();
+    await settleDialog();
+
+    await service.open();
+
+    expect(gitBranches).toHaveBeenCalledTimes(1);
+    TestBed.inject(DialogService).closeAll();
+    await first;
+  });
+
+  it('closes an open list on request, and says whether there was one', async () => {
+    expect(service.closeList()).toBe(false);
+    const done = service.open();
+    await settleDialog();
+
+    expect(service.closeList()).toBe(true);
+    await done;
+
+    expect(overlay().querySelector('rs-branch-list')).toBeNull();
+    expect(requests).toEqual([]);
+  });
+
+  it('sends a waiting save first, and is then refused', async () => {
+    const file = await openFiles.open('guide.md');
+    file.saver.edit(() => 'mine');
+    switchAnswer = () => throwError(() => apiError(409, 'switch-uncommitted-changes'));
+    statusAfterRefresh = changed('guide.md');
+
+    const { done } = await choose('docs');
+
+    expect(requests).toEqual([ 'save mine' ]);
+
+    saves[0].answer.next({ hash: 'a'.repeat(64), size: 4 } as FileState);
+    saves[0].answer.complete();
+    await settleDialog();
+
+    expect(requests).toEqual([ 'save mine', 'switch', 'status' ]);
+    expect(refused()?.textContent).toContain('guide.md');
+
+    dialogButton(`${REFUSED}.close`)?.click();
+    await done;
+  });
+
+  it('does not switch when a save failed', async () => {
+    const file = await openFiles.open('guide.md');
+    file.saver.edit(() => 'mine');
+
+    const { done } = await choose('docs');
+    saves[0].answer.error(apiError(413, 'file-too-large'));
+    await done;
+
+    expect(requests).toEqual([ 'save mine' ]);
+    expect(lastToast()?.status).toBe('danger');
+    expect(lastToast()?.actions).toBeUndefined();
+  });
+
+  it('does not switch when a save did not reach the backend, and Try again goes on', async () => {
+    const file = await openFiles.open('guide.md');
+    file.saver.edit(() => 'mine');
+
+    const { done } = await choose('docs');
+    saves[0].answer.error(apiError(503, 'internal'));
+    await done;
+
+    expect(switches).toEqual([]);
+    expect(lastToast()?.actions).toHaveLength(1);
+
+    lastToast().actions[0].run();
+    await settleDialog();
+    saves[1].answer.next({ hash: 'a'.repeat(64), size: 4 } as FileState);
+    saves[1].answer.complete();
+    await settleDialog();
+
+    expect(switches).toEqual([ { name: 'docs', remote: false } ]);
+  });
+
+  it('says what to do about a file gone elsewhere, not what only a commit can do', async () => {
+    const file = await openFiles.open('guide.md');
+    file.saver.edit(() => 'mine');
+    openFiles.markGone('guide.md');
+
+    await (await choose('docs')).done;
+
+    expect(switches).toEqual([]);
+    expect(lastToast()?.message).toBe('guide.md was deleted elsewhere.');
+  });
+
+  it('does not switch after going to another repository', async () => {
+    const file = await openFiles.open('guide.md');
+    file.saver.edit(() => 'mine');
+
+    const { done } = await choose('docs');
+    repository.set({ id: 13 });
+    saves[0].answer.error(apiError(413, 'file-too-large'));
+    await done;
+
+    expect(switches).toEqual([]);
+    expect(toast.show).not.toHaveBeenCalled();
+  });
+
+  it('says why with the changed files', async () => {
+    switchAnswer = () => throwError(() => apiError(409, 'switch-uncommitted-changes'));
+    status.set(changed('old.md'));
+    statusAfterRefresh = changed('docs/guide.md', 'README.md');
+
+    const { done } = await choose('docs');
+
+    expect(refused()?.textContent).toContain(`${REFUSED}.message`);
+    expect(refused()?.textContent).toContain('docs/guide.md');
+    expect(refused()?.textContent).toContain('README.md');
+    expect(refused()?.textContent).not.toContain('old.md');
+    expect(toast.show).not.toHaveBeenCalled();
+
+    dialogButton(`${REFUSED}.close`)?.click();
+    await done;
+  });
+
+  it('shows many files in a scrolling list', async () => {
+    switchAnswer = () => throwError(() => apiError(409, 'switch-uncommitted-changes'));
+    const paths = Array.from({ length: 150 }, (_, index) => `file-${index}.md`);
+    statusAfterRefresh = changed(...paths);
+
+    const { done } = await choose('docs');
+
+    const body = refused()?.querySelector('.body');
+    expect(body?.querySelectorAll('li')).toHaveLength(150);
+    // The footer stays out of what scrolls, so that **Show changes** stays in sight.
+    expect(body?.querySelector('[uiDialogFooter]')).toBeNull();
+    expect(refused()?.querySelector('[uiDialogFooter]')).not.toBeNull();
+
+    dialogButton(`${REFUSED}.close`)?.click();
+    await done;
+  });
+
+  it('Show changes opens Changes', async () => {
+    switchAnswer = () => throwError(() => apiError(409, 'switch-uncommitted-changes'));
+    statusAfterRefresh = changed('guide.md');
+    const shown = vi.fn();
+    service.showChanges.subscribe(shown);
+
+    const { done } = await choose('docs');
+    dialogButton(`${REFUSED}.showChanges`)?.click();
+    await done;
+
+    expect(shown).toHaveBeenCalledTimes(1);
+    expect(refused()).toBeNull();
+  });
+
+  it('closing the refusal does not open Changes', async () => {
+    switchAnswer = () => throwError(() => apiError(409, 'switch-uncommitted-changes'));
+    const shown = vi.fn();
+    service.showChanges.subscribe(shown);
+
+    const { done } = await choose('docs');
+    dialogButton(`${REFUSED}.close`)?.click();
+    await done;
+
+    expect(shown).not.toHaveBeenCalled();
+  });
+
+  it('says why any other failure happened', async () => {
+    switchAnswer = () => throwError(() => apiError(409, 'branch-not-found'));
+
+    await (await choose('docs')).done;
+
+    expect(lastToast()?.message).toBe('This branch does not exist any more. Reference: abcdef01');
+    expect(lastToast()?.status).toBe('danger');
+    expect(lastToast()?.actions).toBeUndefined();
+    expect(refused()).toBeNull();
+    expect(requests).toEqual([ 'switch', 'status' ]);
+  });
+
+  it('offers Try again after a server error, with its reference, and it switches', async () => {
+    switchAnswer = () => throwError(() => apiError(500, 'internal'));
+
+    await (await choose('docs')).done;
+
+    expect(lastToast()?.message).toBe('Something went wrong. Reference: abcdef01');
+    expect(lastToast()?.actions).toEqual([ expect.objectContaining({ label: `${K}.retry` }) ]);
+
+    switchAnswer = () => of(undefined);
+    lastToast().actions[0].run();
+    await settleDialog();
+
+    expect(switches).toEqual([ { name: 'docs', remote: false }, { name: 'docs', remote: false } ]);
+    expect(toast.show).toHaveBeenCalledTimes(1);
+  });
+
+  it('Try again does nothing after going to another repository', async () => {
+    switchAnswer = () => throwError(() => apiError(500, 'internal'));
+    await (await choose('docs')).done;
+
+    repository.set({ id: 13 });
+    lastToast().actions[0].run();
+    await settleDialog();
+
+    expect(switches).toHaveLength(1);
+  });
+});

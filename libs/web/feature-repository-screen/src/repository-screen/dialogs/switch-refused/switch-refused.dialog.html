@@ -1,0 +1,25 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.SwitchRefusedDialog'">
+  <ui-dialog [heading]="t('heading')">
+    <p class="message"
+       id="rs-switch-refused-message">{{ t('message') }}</p>
+    @if (paths.length) {
+      <ul class="files"
+          aria-labelledby="rs-switch-refused-message">
+        @for (path of paths; track path) {
+          <li>{{ path }}</li>
+        }
+      </ul>
+    }
+    @if (hidden) {
+      <p class="more">{{ t('more', { hidden }) }}</p>
+    }
+    <div uiDialogFooter>
+      <button uiButton
+              (click)="ref.close(false)">{{ t('close') }}</button>
+      <button uiButton
+              variant="primary"
+              data-autofocus
+              (click)="ref.close(true)">{{ t('showChanges') }}</button>
+    </div>
+  </ui-dialog>
+</ng-container>
