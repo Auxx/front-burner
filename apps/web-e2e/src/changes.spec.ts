@@ -295,6 +295,66 @@ test.describe('the branch list', () => {
       expect(gitIn(dir, 'rev-parse', '--abbrev-ref', 'feature@{upstream}').trim()).toBe('origin/feature');
     });
 
+    test('AC-GIT-002.16: New branch creates a branch from the current commit and switches to it; the names bad..name and the name of an existing local branch are refused', async ({ page, instance, monitor }) => {
+      const { id, dir } = unconfirmedHandbook(instance);
+      await openScreen(page, `/repositories/${id}`);
+
+      await branchButton(page, 'main').click();
+      await expect(list(page).getByRole('button', { name: 'New branch' })).toBeVisible();
+      await list(page).getByRole('button', { name: 'New branch' }).click();
+
+      const newBranch = page.getByRole('dialog', { name: 'New branch' });
+      await expect(newBranch).toBeVisible();
+      const nameInput = newBranch.getByRole('textbox', { name: 'Name' });
+      await expect(nameInput).toBeFocused();
+      expect((await new AxeBuilder({ page }).include('rs-new-branch').analyze()).violations).toEqual([]);
+
+      await nameInput.fill('bad..name');
+      await newBranch.getByRole('button', { name: 'Create branch' }).click();
+      await expect(newBranch.getByText('This isn\'t a valid branch name.')).toBeVisible();
+      await expect(nameInput).toBeFocused();
+      await expect(nameInput).toHaveValue('bad..name');
+
+      await nameInput.fill('main');
+      await newBranch.getByRole('button', { name: 'Create branch' }).click();
+      await expect(newBranch.getByText('A branch with this name already exists.')).toBeVisible();
+      await expect(nameInput).toBeFocused();
+      await expect(nameInput).toHaveValue('main');
+
+      await nameInput.fill('  my-feature  ');
+      await newBranch.getByRole('button', { name: 'Create branch' }).click();
+
+      await expect(newBranch).toHaveCount(0);
+      await expect(branchButton(page, 'my-feature')).toBeVisible();
+      expect(gitIn(dir, 'branch', '--show-current').trim()).toBe('my-feature');
+
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/branches`);
+    });
+
+    test('keeps the changes on the new branch and shows the new branch as Not published', async ({ page, instance }) => {
+      const { id, dir } = unconfirmedHandbook(instance);
+      writeFileSync(join(dir, 'README.md'), '# Uncommitted Changes\n');
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await expect(editor(page, 'README.md')).toContainText('# Uncommitted Changes');
+
+      await branchButton(page, 'main').click();
+      await list(page).getByRole('button', { name: 'New branch' }).click();
+
+      const newBranch = page.getByRole('dialog', { name: 'New branch' });
+      await newBranch.getByRole('textbox', { name: 'Name' }).fill('experiment');
+      await newBranch.getByRole('button', { name: 'Create branch' }).click();
+
+      await expect(newBranch).toHaveCount(0);
+      await expect(branchButton(page, 'experiment')).toBeVisible();
+      expect(gitIn(dir, 'branch', '--show-current').trim()).toBe('experiment');
+
+      await expect(editor(page, 'README.md')).toContainText('# Uncommitted Changes');
+      expect(readFileSync(join(dir, 'README.md'), 'utf8')).toBe('# Uncommitted Changes\n');
+
+      const bar = page.locator('rs-repository-bar');
+      await expect(bar.getByText('Not published')).toBeVisible();
+    });
+
     test('AC-GIT-002.17: switching branches with uncommitted changes is refused with the list of changed files; without changes, the switch updates the tree and the open file', async ({ page, instance, monitor }) => {
       const { id, dir } = unconfirmedHandbook(instance);
       featureBranch(dir);

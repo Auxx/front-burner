@@ -1,0 +1,9 @@
+form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+}
+
+.reference {
+  display: block;
+}

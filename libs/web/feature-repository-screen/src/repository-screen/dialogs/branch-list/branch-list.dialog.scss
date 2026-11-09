@@ -1,3 +1,11 @@
+.actions {
+  margin-block-end: var(--ui-space-2);
+}
+
+.new-branch {
+  inline-size: 100%;
+}
+
 // The filter stays in sight while a long list scrolls below it.
 .filter {
   position: sticky;

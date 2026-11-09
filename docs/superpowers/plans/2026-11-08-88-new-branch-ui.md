@@ -61,19 +61,19 @@ shows the refusal next to the field. Nothing is checked as the user types.
 - Consumes: `GitApi.createBranch`, `BranchActionsService`.
 - Produces: `BranchChoice` gains `{ kind: 'new' }`, which the list closes with.
 
-- [ ] **Step 1: Write the failing tests**: `AC-GIT-002.16: New branch creates a
+- [x] **Step 1: Write the failing tests**: `AC-GIT-002.16: New branch creates a
       branch from the current commit and switches to it; the names bad..name and
       the name of an existing local branch are refused` (end to end); `two quick
       submits create one branch`; `keeps the changes on the new branch` (end to
       end); `keeps the name and the focus after a refusal`; `sends a waiting
       save first`; `is unavailable before the first commit`; `shows the new
       branch as Not published`.
-- [ ] **Step 2: Run them and see them fail** — `npx nx test
+- [x] **Step 2: Run them and see them fail** — `npx nx test
       web-feature-repository-screen`.
-- [ ] **Step 3: Implement.** Follow the `angular-templates` skill.
-- [ ] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
+- [x] **Step 3: Implement.** Follow the `angular-templates` skill.
+- [x] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
       web-e2e`.
-- [ ] **Step 5: Update the status**: REQ-GIT-002 adds `new-branch-ui`, and
+- [x] **Step 5: Update the status**: REQ-GIT-002 adds `new-branch-ui`, and
       removes GA-38. Run `doc-ids.mjs criteria` and copy its result.
-- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
+- [x] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(repository-screen): New branch`.
