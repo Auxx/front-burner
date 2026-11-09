@@ -13,7 +13,7 @@ describe('SwitchRefusedDialog', () => {
 
   const rows = () => [ ...overlay().querySelectorAll('li') ].map(row => row.textContent?.trim());
 
-  async function open(paths: readonly string[]): Promise<void> {
+  async function open(paths: readonly string[] | null): Promise<void> {
     ref = TestBed.inject(DialogService).open<SwitchRefusedDialog, SwitchRefusedData, boolean>(SwitchRefusedDialog, {
       data: { paths }
     });
@@ -46,11 +46,21 @@ describe('SwitchRefusedDialog', () => {
     );
   });
 
-  it('has no list when the status does not know the files', async () => {
+  it('has no list when no file has changed any more', async () => {
     await open([]);
 
     expect(overlay().querySelector('p')?.textContent?.trim()).toBe(`${K}.message`);
     expect(overlay().querySelector('ul')).toBeNull();
+    expect(overlay().textContent).not.toContain(`${K}.listFailed`);
+  });
+
+  it('says so when the files could not be read', async () => {
+    await open(null);
+
+    expect(overlay().textContent).toContain(`${K}.message`);
+    expect(overlay().textContent).toContain(`${K}.listFailed`);
+    expect(overlay().querySelector('ul')).toBeNull();
+    expect(dialogButton(`${K}.showChanges`)).toBeDefined();
   });
 
   it('shows 200 files, and says how many more there are', async () => {

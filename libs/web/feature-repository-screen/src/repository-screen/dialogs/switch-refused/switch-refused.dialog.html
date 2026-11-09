@@ -2,6 +2,9 @@
   <ui-dialog [heading]="t('heading')">
     <p class="message"
        id="rs-switch-refused-message">{{ t('message') }}</p>
+    @if (listFailed) {
+      <p class="more">{{ t('listFailed') }}</p>
+    }
     @if (paths.length) {
       <ul class="files"
           aria-labelledby="rs-switch-refused-message">

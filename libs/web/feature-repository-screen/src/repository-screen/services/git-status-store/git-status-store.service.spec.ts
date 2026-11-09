@@ -108,6 +108,48 @@ describe('GitStatusStore', () => {
     expect(gitStatus).toHaveBeenCalledOnce();
   });
 
+  describe('readFresh', () => {
+    it('says that the status is up to date once the read has been answered', async () => {
+      await start();
+      gitStatus.mockReturnValue(of(status('a.md')));
+
+      await expect(store.readFresh()).resolves.toBe(true);
+
+      expect(store.changeCount()).toBe(1);
+    });
+
+    it('says so when the read failed', async () => {
+      await start();
+      gitStatus.mockReturnValue(throwError(() => new Error('no')));
+
+      await expect(store.readFresh()).resolves.toBe(false);
+    });
+
+    it('waits for a newer read that cancelled it', async () => {
+      await start();
+      const first = new Subject<GitStatus>();
+      const second = new Subject<GitStatus>();
+      gitStatus.mockReturnValueOnce(first).mockReturnValueOnce(second);
+      let result: boolean | undefined;
+
+      void store.readFresh().then(fresh => (result = fresh));
+      events.next({ type: 'git.changed', repositoryId: 12 });
+      await settle();
+      expect(result).toBeUndefined();
+
+      second.next(status('a.md', 'b.md'));
+      second.complete();
+      await settle();
+
+      expect(result).toBe(true);
+      expect(store.changeCount()).toBe(2);
+    });
+
+    it('says no when nothing can be read', async () => {
+      await expect(store.readFresh()).resolves.toBe(false);
+    });
+  });
+
   it('reads at once on git.changed', async () => {
     await start();
     gitStatus.mockReturnValue(of(status('a.md', 'b.md')));

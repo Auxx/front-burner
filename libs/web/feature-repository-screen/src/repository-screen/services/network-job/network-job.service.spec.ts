@@ -50,7 +50,7 @@ describe('NetworkJobService', () => {
   let ready: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
   let gateRefresh: ReturnType<typeof vi.fn>;
   let unsavedPaths: ReturnType<typeof vi.fn<(id: number) => string[]>>;
-  let notSaved: ReturnType<typeof vi.fn>;
+  let notSaved: ReturnType<typeof vi.fn<(id: number, paths: readonly string[]) => unknown>>;
   let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let events: Subject<PushEvent>;
   let reconnected: Subject<void>;
@@ -59,7 +59,7 @@ describe('NetworkJobService', () => {
   let refresh: ReturnType<typeof vi.fn>;
   let reading: ReturnType<typeof signal<boolean>>;
   let toast: { show: ReturnType<typeof vi.fn>; };
-  let flushAll: ReturnType<typeof vi.fn>;
+  let flushAll: ReturnType<typeof vi.fn<() => Promise<void>>>;
   let unlock: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
   let service: NetworkJobService;
 
@@ -104,7 +104,16 @@ describe('NetworkJobService', () => {
         { provide: GitApi, useValue: { push, fetch, pull, gitJob } },
         { provide: PushChannelService, useValue: { events, reconnected } },
         { provide: GitStatusStore, useValue: { followed, status: gitStatus, refresh, reading } },
-        { provide: OpenFilesService, useValue: { flushAll, unsavedPaths, notSaved } },
+        {
+          provide: OpenFilesService,
+          useValue: {
+            notSaved,
+            flushed: async (id: number) => {
+              await flushAll();
+              return notSaved(id, unsavedPaths(id));
+            }
+          }
+        },
         { provide: CommitAuthorGate, useValue: { ready, refresh: gateRefresh } },
         { provide: LockedKeyService, useValue: { unlock } },
         { provide: ToastService, useValue: toast }

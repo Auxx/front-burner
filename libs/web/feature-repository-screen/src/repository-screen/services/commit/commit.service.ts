@@ -149,8 +149,7 @@ export class CommitService {
       if (!await this.gate.ready() || !stayed()) {
         return false;
       }
-      await this.openFiles.flushAll();
-      const notSaved = this.openFiles.notSaved(repositoryId, paths);
+      const notSaved = await this.openFiles.flushed(repositoryId, paths);
       if (notSaved !== null) {
         if (stayed()) {
           this.fail(notSaved.error, notSaved.retry);

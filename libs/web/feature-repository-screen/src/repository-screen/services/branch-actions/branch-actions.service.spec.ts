@@ -19,6 +19,7 @@ import { apiError, dialogButton, overlay, settleDialog } from '../../../testing/
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
@@ -51,6 +52,12 @@ describe('BranchActionsService', () => {
   let switchAnswer: () => Observable<void>;
   let saves: { request: SaveFileRequest; answer: Subject<FileState>; }[];
   let toast: { show: ReturnType<typeof vi.fn>; };
+  let dismiss: ReturnType<typeof vi.fn>;
+  let statusRead: boolean;
+  let drafts: MemoryDraftStore;
+  let diskChanges: { notice: ReturnType<typeof vi.fn>; settled: ReturnType<typeof vi.fn>; };
+  let branches: GitBranchList;
+  let branchesAnswer: (() => Observable<GitBranchList>) | null;
 
   const row = (text: string) =>
     [ ...overlay().querySelectorAll<HTMLButtonElement>('rs-branch-list li button') ].find(button =>
@@ -77,7 +84,13 @@ describe('BranchActionsService', () => {
     switches = [];
     switchAnswer = () => of(undefined);
     saves = [];
-    toast = { show: vi.fn() };
+    dismiss = vi.fn();
+    toast = { show: vi.fn(() => ({ dismiss })) };
+    statusRead = true;
+    drafts = new MemoryDraftStore();
+    diskChanges = { notice: vi.fn(), settled: vi.fn(() => Promise.resolve()) };
+    branches = BRANCHES;
+    branchesAnswer = null;
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
@@ -85,14 +98,16 @@ describe('BranchActionsService', () => {
           'errors.internal': 'Something went wrong.',
           'errors.branch-not-found': 'This branch does not exist any more.',
           'errors.file-held': '{{ path }} can not be saved just now.',
+          'errors.draft-offered': '{{ path }} has unsaved changes from earlier.',
           [`${K}.file-gone`]: '{{ path }} was deleted elsewhere.',
-          [`${K}.reference`]: 'Reference: {{ reference }}'
+          'web-feature-repository-screen.FailureToastService.reference': 'Reference: {{ reference }}'
         })
       ],
       providers: [
         BranchActionsService,
         OpenFilesService,
-        provideMemoryDrafts(new MemoryDraftStore()),
+        provideMemoryDrafts(drafts),
+        { provide: DiskChangesService, useValue: diskChanges },
         { provide: ToastService, useValue: toast },
         { provide: RepositorySessionService, useValue: { repository } },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
@@ -100,19 +115,19 @@ describe('BranchActionsService', () => {
           provide: GitStatusStore,
           useValue: {
             status,
-            refresh: () => {
+            readFresh: () => {
               requests.push('status');
               if (statusAfterRefresh !== null) {
                 status.set(statusAfterRefresh);
               }
-              return Promise.resolve();
+              return Promise.resolve(statusRead);
             }
           }
         },
         {
           provide: GitApi,
           useValue: {
-            gitBranches: () => of(BRANCHES),
+            gitBranches: () => branchesAnswer?.() ?? of(branches),
             switchBranch: (_id: number, request: GitSwitchRequest) => {
               requests.push('switch');
               switches.push(request);
@@ -158,10 +173,88 @@ describe('BranchActionsService', () => {
     expect(switches).toEqual([ { name: 'feature', remote: true } ]);
   });
 
-  it('reads the status after a switch, also without the push channel', async () => {
+  it('leaves the status to the events after a switch', async () => {
     await (await choose('docs')).done;
 
-    expect(requests).toEqual([ 'switch', 'status' ]);
+    expect(requests).toEqual([ 'switch' ]);
+  });
+
+  it('says that it is switching until the answer comes, and not during a refusal', async () => {
+    const answer = new Subject<void>();
+    switchAnswer = () => answer;
+    statusAfterRefresh = changed('guide.md');
+
+    const { done } = await choose('docs');
+    expect(service.switching()).toBe(true);
+
+    answer.error(apiError(409, 'switch-uncommitted-changes'));
+    await settleDialog();
+
+    expect(refused()).not.toBeNull();
+    expect(service.switching()).toBe(false);
+
+    dialogButton(`${REFUSED}.close`)?.click();
+    await done;
+  });
+
+  it('holds an edit made during the switch until the file was compared with the disk', async () => {
+    const file = await openFiles.open('guide.md');
+    const answer = new Subject<void>();
+    switchAnswer = () => answer;
+    let compared: () => void = () => undefined;
+    diskChanges.settled.mockReturnValue(new Promise<void>(resolve => (compared = resolve)));
+
+    const { done } = await choose('docs');
+    file.saver.edit(() => 'typed during the switch');
+    expect(file.saver.held()).toBe(true);
+
+    answer.next();
+    answer.complete();
+    await settleDialog();
+
+    expect(diskChanges.notice).toHaveBeenCalledExactlyOnceWith('guide.md');
+    expect(file.saver.held()).toBe(true);
+    expect(saves).toEqual([]);
+
+    compared();
+    await done;
+
+    expect(file.saver.held()).toBe(false);
+  });
+
+  it('also releases the savers when the switch fails', async () => {
+    const file = await openFiles.open('guide.md');
+    const answer = new Subject<void>();
+    switchAnswer = () => answer;
+
+    const { done } = await choose('docs');
+    file.saver.edit(() => 'typed during the switch');
+    answer.error(apiError(409, 'branch-not-found'));
+    await done;
+
+    expect(file.saver.held()).toBe(false);
+  });
+
+  it('compares nothing with the disk without an edit', async () => {
+    await openFiles.open('guide.md');
+
+    await (await choose('docs')).done;
+
+    expect(diskChanges.notice).not.toHaveBeenCalled();
+  });
+
+  it('does not switch while a browser draft is on offer, and says what to do', async () => {
+    await drafts.put({ userId: 4, repositoryId: 12, path: 'guide.md' }, {
+      content: 'from before',
+      savedAt: '2026-10-29T10:05:00.000Z'
+    });
+    await openFiles.open('guide.md');
+
+    await (await choose('docs')).done;
+
+    expect(switches).toEqual([]);
+    expect(lastToast()?.message).toBe('guide.md has unsaved changes from earlier.');
+    expect(lastToast()?.actions).toBeUndefined();
   });
 
   it('does nothing when the list is closed without a choice', async () => {
@@ -352,7 +445,125 @@ describe('BranchActionsService', () => {
     expect(lastToast()?.status).toBe('danger');
     expect(lastToast()?.actions).toBeUndefined();
     expect(refused()).toBeNull();
-    expect(requests).toEqual([ 'switch', 'status' ]);
+    expect(requests).toEqual([ 'switch' ]);
+  });
+
+  it('says so when the changed files could not be read', async () => {
+    switchAnswer = () => throwError(() => apiError(409, 'switch-uncommitted-changes'));
+    status.set(changed('old.md'));
+    statusRead = false;
+
+    const { done } = await choose('docs');
+
+    expect(refused()?.textContent).toContain(`${REFUSED}.listFailed`);
+    expect(refused()?.textContent).not.toContain('old.md');
+
+    dialogButton(`${REFUSED}.close`)?.click();
+    await done;
+  });
+
+  it('shows no refusal after leaving the screen during the switch', async () => {
+    const answer = new Subject<void>();
+    switchAnswer = () => answer;
+    const { done } = await choose('docs');
+    requests = [];
+
+    TestBed.resetTestingModule();
+    answer.error(apiError(409, 'switch-uncommitted-changes'));
+    await done;
+
+    expect(requests).toEqual([]);
+    expect(document.querySelector('rs-switch-refused')).toBeNull();
+  });
+
+  describe('the toast of a failure', () => {
+    beforeEach(() => {
+      switchAnswer = () => throwError(() => apiError(500, 'internal'));
+    });
+
+    it('goes when another attempt starts', async () => {
+      await (await choose('docs')).done;
+      expect(dismiss).not.toHaveBeenCalled();
+
+      const done = service.open();
+      await settleDialog();
+
+      expect(dismiss).toHaveBeenCalledOnce();
+      TestBed.inject(DialogService).closeAll();
+      await done;
+    });
+
+    it('goes when another repository opens, and not when this one is only read again', async () => {
+      await (await choose('docs')).done;
+
+      repository.set({ id: 12 });
+      TestBed.tick();
+      expect(dismiss).not.toHaveBeenCalled();
+
+      repository.set({ id: 13 });
+      TestBed.tick();
+      expect(dismiss).toHaveBeenCalledOnce();
+    });
+
+    it('goes when the screen is left, and Try again then does nothing', async () => {
+      await (await choose('docs')).done;
+      const { actions } = lastToast();
+
+      TestBed.resetTestingModule();
+
+      expect(dismiss).toHaveBeenCalledOnce();
+      actions[0].run();
+      await settleDialog();
+      expect(switches).toHaveLength(1);
+    });
+
+    it('replaces the one before it', async () => {
+      await (await choose('docs')).done;
+
+      expect(lastToast()?.key).toEqual(expect.any(String));
+    });
+  });
+
+  describe('Try again, when the answer that got lost may have been a success', () => {
+    beforeEach(() => {
+      switchAnswer = () => throwError(() => apiError(503, 'internal'));
+    });
+
+    it('does nothing when already on the branch', async () => {
+      await (await choose('docs')).done;
+      switches = [];
+      branches = { ...BRANCHES, current: 'docs' };
+
+      lastToast().actions[0].run();
+      await settleDialog();
+
+      expect(switches).toEqual([]);
+      expect(service.switching()).toBe(false);
+    });
+
+    it('switches to the local branch that was made, rather than making it again', async () => {
+      await (await choose('origin/feature')).done;
+      switches = [];
+      branches = { ...BRANCHES, local: [ ...BRANCHES.local, { name: 'feature', upstream: 'origin/feature' } ] };
+      switchAnswer = () => of(undefined);
+
+      lastToast().actions[0].run();
+      await settleDialog();
+
+      expect(switches).toEqual([ { name: 'feature', remote: false } ]);
+    });
+
+    it('says why when it can\'t read the branches', async () => {
+      await (await choose('docs')).done;
+      switches = [];
+      branchesAnswer = () => throwError(() => apiError(503, 'internal'));
+
+      lastToast().actions[0].run();
+      await settleDialog();
+
+      expect(switches).toEqual([]);
+      expect(toast.show).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('offers Try again after a server error, with its reference, and it switches', async () => {

@@ -73,6 +73,8 @@ export class RepositoryBarComponent {
   readonly saveStatus = input<SaveStatus | null>(null);
   /** The network job being started or running, here or in another tab (GA-9). */
   readonly running = input<GitNetworkJobType | null>(null);
+  /** Whether a branch switch is on its way. */
+  readonly switching = input(false);
   /** The name of the repository's key while it is locked in this session (RC-15). */
   readonly lockedKeyName = input<string | null>(null);
   /** Whether a merge is in progress, which replaces the git status and actions (GC-6). */

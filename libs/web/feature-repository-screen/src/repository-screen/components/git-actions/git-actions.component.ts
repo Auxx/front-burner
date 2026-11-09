@@ -48,6 +48,8 @@ export class GitActionsComponent {
   readonly status = input.required<GitStatus | null>();
   /** The network job being started or running, here or in another tab; `null` without one. */
   readonly running = input<GitNetworkJobType | null>(null);
+  /** Whether a branch switch is on its way, which would refuse them all. */
+  readonly switching = input(false);
   /** Whether the screen uses its narrow layout, where the git actions are in a menu. */
   readonly narrow = input(false);
   /** What the narrow menu warns of, and its button shows that it does, such as a failed fetch (GA-35); `null` without one. */
@@ -92,7 +94,7 @@ export class GitActionsComponent {
   }
 
   private busyReason(): string | null {
-    return this.running() === null ? null : 'busy';
+    return this.running() === null && !this.switching() ? null : 'busy';
   }
 
   /** An item of the narrow menu was chosen. */

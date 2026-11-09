@@ -15,9 +15,11 @@
                         (showWarning)="showFetchDetails()" />
     } @else {
       <rs-git-status-summary [status]="gitStatus()"
+                             [switching]="switching()"
                              (openBranches)="openBranches.emit()" />
       <rs-git-actions [status]="gitStatus()"
                       [running]="running()"
+                      [switching]="switching()"
                       [narrow]="narrow()"
                       [warning]="warning"
                       (fetch)="fetch.emit()"

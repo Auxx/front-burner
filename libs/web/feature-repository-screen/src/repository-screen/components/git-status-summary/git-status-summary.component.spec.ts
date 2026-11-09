@@ -54,6 +54,24 @@ describe('GitStatusSummaryComponent', () => {
     fixture = TestBed.createComponent(GitStatusSummaryComponent);
   });
 
+  it('says that a switch is on its way, in the button and to screen readers', async () => {
+    const button = () => host().querySelector('button') as HTMLButtonElement;
+    const live = () => host().querySelector('[aria-live]');
+    await show(published);
+    expect(button().textContent).toBe('main');
+    expect(button().getAttribute('aria-disabled')).toBeNull();
+    expect(live()?.textContent).toBe('');
+
+    fixture.componentRef.setInput('switching', true);
+    await settle(fixture);
+
+    expect(button().textContent).toBe(`${K}.switching`);
+    expect(button().getAttribute('aria-label')).toBe(`${K}.switching`);
+    expect(button().getAttribute('aria-disabled')).toBe('true');
+    expect(button().disabled).toBe(false);
+    expect(live()?.textContent).toBe(`${K}.switching`);
+  });
+
   it('shows the branch and 2 to push, 3 to pull', async () => {
     await show({ ...published, ahead: 2, behind: 3 });
 

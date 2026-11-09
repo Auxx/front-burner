@@ -38,9 +38,10 @@ FB-42); `docs/requirements/editor.md` (ED-17, ED-24).
   Task 1 test `sends a waiting save first, and is then refused`.
 - **A save that fails first** stops the switch → Task 1 test `does not switch
   when a save failed`.
-- **An open file that is not on the new branch** closes and says so (FB-42), and
-  the route does not point at a file that is gone → Task 2 test (end to end)
-  `closes a file the new branch does not have`.
+- **An open file that is not on the new branch** closes and says so (FB-42). The
+  route stays, as FB-13 and AC-FILE-001.21 have it, so that switching back shows
+  the file again → Task 2 test (end to end) `closes a file the new branch does
+  not have`.
 - **A long list of changed files** scrolls inside the dialog → Task 1 test
   `shows many files in a scrolling list`.
 - **A switch from another tab** updates this tab without a reload → Task 2 test

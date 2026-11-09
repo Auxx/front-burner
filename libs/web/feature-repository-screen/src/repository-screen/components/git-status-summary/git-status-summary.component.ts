@@ -26,6 +26,8 @@ type Detail = { key: string; params: Record<string, number>; } | null;
 export class GitStatusSummaryComponent {
   /** The last status read; `null` until one has been read. */
   readonly status = input.required<GitStatus | null>();
+  /** Whether a switch is on its way: the button says so, and keeps the focus. */
+  readonly switching = input(false);
   /** The branch was chosen, to open the branch list. */
   readonly openBranches = output<void>();
 

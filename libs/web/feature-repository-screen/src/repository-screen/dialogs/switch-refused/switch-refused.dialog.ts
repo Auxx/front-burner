@@ -3,8 +3,8 @@ import { ButtonComponent, DIALOG_DATA, DialogComponent, DialogFooterComponent, D
 import { TranslocoDirective } from '@jsverse/transloco';
 
 export interface SwitchRefusedData {
-  /** The changed files, as of the status read after the refusal. */
-  readonly paths: readonly string[];
+  /** The changed files, as of the status read after the refusal, or `null` when that read failed. */
+  readonly paths: readonly string[] | null;
 }
 
 /** More would freeze a phone; **Changes** lists them all. */
@@ -26,6 +26,7 @@ export class SwitchRefusedDialog {
   protected readonly ref = inject<DialogRef<boolean>>(DialogRef);
   private readonly data = inject(DIALOG_DATA) as SwitchRefusedData;
 
-  protected readonly paths = this.data.paths.slice(0, MAX_SHOWN);
-  protected readonly hidden = this.data.paths.length - this.paths.length;
+  protected readonly listFailed = this.data.paths === null;
+  protected readonly paths = this.data.paths?.slice(0, MAX_SHOWN) ?? [];
+  protected readonly hidden = (this.data.paths?.length ?? 0) - this.paths.length;
 }

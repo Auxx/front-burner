@@ -3,6 +3,10 @@
   margin: 0;
 }
 
+.message + .more {
+  margin-block-start: var(--ui-space-2);
+}
+
 .files {
   margin: var(--ui-space-2) 0;
   padding: 0;

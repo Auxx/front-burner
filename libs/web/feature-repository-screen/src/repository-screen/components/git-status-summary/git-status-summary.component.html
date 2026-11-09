@@ -1,12 +1,14 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.GitStatusSummaryComponent'">
   @if (status(); as status) {
     @let branch = status.branch;
-    @let name = branch ?? t('noBranch');
+    @let moving = switching();
+    @let name = moving ? t('switching') : (branch ?? t('noBranch'));
     <!-- One button with or without a branch, so that it keeps the focus. -->
     <button class="branch"
             uiTruncatedTooltipLongPress
             [uiTruncatedTooltip]="name"
-            [attr.aria-label]="branch ? t('openList', { branch }) : t('openListNoBranch')"
+            [attr.aria-disabled]="moving ? 'true' : null"
+            [attr.aria-label]="moving ? name : branch ? t('openList', { branch }) : t('openListNoBranch')"
             (click)="openBranches.emit()">{{ name }}</button>
     @if (detail(); as detail) {
       <!-- Spaces for the text when copied; the flex layout leaves them out. -->
@@ -14,4 +16,7 @@
                   aria-hidden="true">·</span>&ngsp;<span class="detail">{{ t(detail.key, detail.params) }}</span>
     }
   }
+  <!-- Always there, so that what it comes to say is announced. Not a `status` role: the bar's status is the save status (ED-18). -->
+  <span class="cdk-visually-hidden"
+        aria-live="polite">{{ switching() ? t('switching') : '' }}</span>
 </ng-container>

@@ -423,6 +423,31 @@ describe('OpenFilesService', () => {
       expect(file.file.content).toBe('# README.md');
     });
 
+    it('keeps a draft on offer when the file changes on disk, as a branch switch or a pull does', async () => {
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'README.md' }, DRAFT);
+      const file = await service.open('README.md');
+      reads['README.md'] = () => of(content('README.md', { content: 'theirs', hash: 'c'.repeat(64), size: 6 }));
+
+      await service.reload('README.md', { discard: false });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(file.draft()).toEqual(DRAFT);
+      expect(await drafts.get({ userId: 4, repositoryId: 12, path: 'README.md' })).toEqual(DRAFT);
+    });
+
+    it('names the file whose draft is on offer', async () => {
+      expect(service.offeredDraft(12)).toBeNull();
+
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'README.md' }, DRAFT);
+      await service.open('README.md');
+
+      expect(service.offeredDraft(12)).toBe('README.md');
+
+      service.discardDraft('README.md');
+
+      expect(service.offeredDraft(12)).toBeNull();
+    });
+
     it('restores a draft and saves it at once', async () => {
       await drafts.put({ userId: 4, repositoryId: 12, path: 'README.md' }, DRAFT);
       const file = await service.open('README.md');

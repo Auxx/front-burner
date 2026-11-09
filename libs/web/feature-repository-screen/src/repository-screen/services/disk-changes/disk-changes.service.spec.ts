@@ -96,6 +96,24 @@ describe('DiskChangesService', () => {
     vi.useRealTimers();
   }
 
+  it('settles once what was noticed has been followed', async () => {
+    const answer = new Subject<{ hash: string; size: number; }>();
+    fileState.mockReturnValue(answer);
+    let settled = false;
+
+    service.notice(file.path());
+    void service.settled().then(() => (settled = true));
+    await new Promise(resolve => setTimeout(resolve));
+    expect(settled).toBe(false);
+
+    answer.next({ hash: NEW, size: 10 });
+    answer.complete();
+    await new Promise(resolve => setTimeout(resolve));
+
+    expect(settled).toBe(true);
+    expect(openFiles.reload).toHaveBeenCalled();
+  });
+
   it('ignores its own save', async () => {
     await sendSave('mine');
     sends[0].resolve({ hash: NEW });
