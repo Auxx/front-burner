@@ -27,6 +27,8 @@
   "errors.repository-not-openable": "This repository can't be opened yet.",
   "errors.merge-in-progress": "A merge is in progress. Finish or abort it first.",
   "errors.no-merge-in-progress": "No merge is in progress any more.",
+  "errors.not-conflicting": "This file is not one of the conflicting files in this merge.",
+  "errors.version-not-readable": "This version of the file cannot be read.",
   "errors.merge-abort-failed": "The merge couldn't be aborted, so it is still in progress. Try again.",
   "errors.entry-not-deletable": "This can't be deleted.",
   "errors.file-too-large": "This file is too large to edit (the limit is 1 MB).",

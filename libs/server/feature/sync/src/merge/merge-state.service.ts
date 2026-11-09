@@ -2,7 +2,8 @@ import { ConflictEntry, GitMerge, REGULAR_FILE } from '@front-burner/server-core
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { inBatches, PathRefusedError } from '@front-burner/server-core-storage';
 import { FileContents } from '@front-burner/server-feature-files';
-import type { GitConflictFile, GitMergeState } from '@front-burner/shared-contracts';
+import { EDITABLE_FILE_LIMIT } from '@front-burner/shared-contracts';
+import type { GitConflictFile, GitMergeState, GitMergeVersion } from '@front-burner/shared-contracts';
 import { isMarkdownName } from '@front-burner/shared-util';
 import { Injectable, Logger } from '@nestjs/common';
 
@@ -21,6 +22,39 @@ export class MergeStateService {
     private readonly merge: GitMerge,
     private readonly contents: FileContents
   ) {}
+
+  /**
+   * Read one version of a conflicting file for the user to compare (GC-17).
+   * @throws ApiErrorException `no-merge-in-progress`, `not-conflicting`, `version-not-readable`
+   */
+  async readVersion(root: string, path: string, side: 'ours' | 'theirs'): Promise<GitMergeVersion> {
+    if (!await this.merge.mergeInProgress(root)) {
+      throw new ApiErrorException(409, 'no-merge-in-progress');
+    }
+    const conflicts = await this.merge.conflicts(root);
+    const entry = conflicts.find(c => c.path === path);
+    if (entry === undefined) {
+      throw new ApiErrorException(409, 'not-conflicting');
+    }
+    const oid = side === 'ours' ? entry.oursOid : entry.theirsOid;
+    if (oid === null) {
+      throw new ApiErrorException(409, 'version-not-readable');
+    }
+    const mode = side === 'ours' ? entry.oursMode : entry.theirsMode;
+    if (!REGULAR_FILE.test(mode ?? '')) {
+      throw new ApiErrorException(409, 'version-not-readable');
+    }
+    // Check size before reading the blob (plan review focus).
+    const size = side === 'ours' ? entry.oursSize : entry.theirsSize;
+    if (size !== null && size > EDITABLE_FILE_LIMIT) {
+      throw new ApiErrorException(409, 'version-not-readable');
+    }
+    const content = await this.merge.readVersion(root, oid);
+    if (content === null) {
+      throw new ApiErrorException(409, 'version-not-readable');
+    }
+    return { content };
+  }
 
   /**
    * @throws ApiErrorException `no-merge-in-progress`

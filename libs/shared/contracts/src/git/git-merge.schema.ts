@@ -38,6 +38,14 @@ export const GitMergeStateSchema = z
   })
   .meta({ id: 'GitMergeState' });
 
+/** One version of a conflicting file for the user to compare (GC-17). */
+export const GitMergeVersionSchema = z
+  .object({
+    content: z.string()
+  })
+  .meta({ id: 'GitMergeVersion' });
+
 export type GitConflictKind = z.infer<typeof GitConflictKindSchema>;
 export type GitConflictFile = z.infer<typeof GitConflictFileSchema>;
 export type GitMergeState = z.infer<typeof GitMergeStateSchema>;
+export type GitMergeVersion = z.infer<typeof GitMergeVersionSchema>;

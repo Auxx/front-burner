@@ -701,6 +701,28 @@ export class GitMerge {
     }
   }
 
+  /**
+   * Read a blob by its object id, returning its text content, or `null` when it
+   * is not valid UTF-8 (A-5.11). Used outside the working-tree lock.
+   */
+  async readVersion(workingCopy: string, oid: string): Promise<string | null> {
+    const result = await this.local.run(
+      workingCopy,
+      [ 'cat-file', 'blob', oid ],
+      { timeoutMs: this.options.gitTimeoutMs }
+    );
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    if (result.exitCode !== 0) {
+      return null;
+    }
+    if (result.stdoutBytes > LOCAL_MAX_OUTPUT_BYTES || result.stdout.includes(UNDECODABLE)) {
+      return null;
+    }
+    return result.stdout;
+  }
+
   /** A merge, as opposed to `GitEngine.mergeInProgress`, which a rebase also answers yes to. */
   async mergeInProgress(workingCopy: string): Promise<boolean> {
     // The file, not `rev-parse`: that also finds a branch called `MERGE_HEAD`.

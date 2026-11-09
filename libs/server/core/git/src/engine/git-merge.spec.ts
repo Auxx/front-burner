@@ -560,6 +560,33 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       });
     });
 
+    describe('readVersion', () => {
+      it('reads a blob by its oid', async () => {
+        const oid = git(work, 'rev-parse', ':first.md');
+        const content = await merge.readVersion(work, oid);
+
+        expect(content).toBe('one\n');
+      });
+
+      it('returns null for an oid that is not a blob', async () => {
+        const head = git(work, 'rev-parse', 'HEAD');
+
+        expect(await merge.readVersion(work, head)).toBeNull();
+      });
+
+      it('returns null for a blob that is not valid UTF-8', async () => {
+        writeFileSync(join(work, 'latin.md'), Buffer.from([ 0x63, 0xe9, 0x0a ]));
+        git(work, 'add', 'latin.md');
+        const oid = git(work, 'rev-parse', ':latin.md');
+
+        expect(await merge.readVersion(work, oid)).toBeNull();
+      });
+
+      it('returns null for a non-existent oid', async () => {
+        expect(await merge.readVersion(work, '0000000000000000000000000000000000000000')).toBeNull();
+      });
+    });
+
     it('tells a merge from a rebase', async () => {
       expect(await merge.mergeInProgress(work)).toBe(false);
       mkdirSync(join(work, '.git', 'rebase-merge'));

@@ -63,19 +63,19 @@ A-5.11.
   - `GET /api/v1/repositories/:id/git/merge/version?path=&side=`
     (`gitMergeVersion`, `GitMergeVersion`: `{ content: string }`).
 
-- [ ] **Step 1: Write the failing tests**: `reads my version and their version`;
+- [x] **Step 1: Write the failing tests**: `reads my version and their version`;
       `reads a version of a resolved file`; `refuses a path that is not
       conflicting`; `refuses a large version without reading it`; `refuses a
       version that is not valid UTF-8`; `refuses the side that deleted the
       file`; `refuses without a merge`; `answers another user's repository like
       a missing one`.
-- [ ] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
+- [x] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
       server-core-git server-feature-sync`.
-- [ ] **Step 3: Implement**; `npx nx run web-api-client:generate`.
-- [ ] **Step 4: Run them and see them pass** — same command.
-- [ ] **Step 5: Update the status**: REQ-GIT-003 adds `merge-versions-api`;
+- [x] **Step 3: Implement**; `npx nx run web-api-client:generate`.
+- [x] **Step 4: Run them and see them pass** — same command.
+- [x] **Step 5: Update the status**: REQ-GIT-003 adds `merge-versions-api`;
       GC-17 "(only the backend is built)". Run `doc-ids.mjs criteria` and copy
       its result.
-- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
+- [x] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(sync): read a version of a
       conflicting file`.

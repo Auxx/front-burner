@@ -14,6 +14,7 @@ import type {
   GitJobStarted,
   GitJobState,
   GitMergeState,
+  GitMergeVersion,
   GitStatus
 } from '@front-burner/shared-contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
@@ -42,6 +43,8 @@ import {
   GitJobStartedDto,
   GitJobStateDto,
   GitMergeStateDto,
+  GitMergeVersionDto,
+  GitMergeVersionQueryDto,
   GitNewBranchRequestDto,
   GitPathsDto,
   GitStatusDto,
@@ -266,6 +269,24 @@ export class GitController {
   gitMerge(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<GitMergeState> {
     const root = this.repositories.root(authOf(req).userId, params.id);
     return this.mergeState.read(root).catch(toGitApiError);
+  }
+
+  /**
+   * One version of a conflicting file for the user to compare before choosing
+   * (GC-17). `side` is `ours` or `theirs`. Refused with `no-merge-in-progress`,
+   * `not-conflicting` (the path is not a conflicting file), and `version-not-readable`
+   * (not a regular file, over the limit, not valid UTF-8, or that side deleted it).
+   */
+  @Get('merge/version')
+  @ApiOkResponse({ type: GitMergeVersionDto })
+  @ZodSerializerDto(GitMergeVersionDto)
+  async gitMergeVersion(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Query() query: GitMergeVersionQueryDto
+  ): Promise<GitMergeVersion> {
+    const root = this.repositories.root(authOf(req).userId, params.id);
+    return this.mergeState.readVersion(root, query.path, query.side).catch(toGitApiError);
   }
 
   /**
