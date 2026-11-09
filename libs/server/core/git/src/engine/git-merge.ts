@@ -56,6 +56,9 @@ const BRANCH_PREFIX = 'refs/heads/';
 /** The branches whose merge message git writes without ` into <branch>`. */
 const MAIN_BRANCHES = new Set([ 'main', 'master' ]);
 
+/** Throws on bytes that are not UTF-8. `ignoreBOM` keeps a BOM, as this text replaces the file. */
+const utf8Fatal = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
 /** At most this many paths are named in `merge-blocked`. */
 const MAX_BLOCKING_PATHS = 20;
 
