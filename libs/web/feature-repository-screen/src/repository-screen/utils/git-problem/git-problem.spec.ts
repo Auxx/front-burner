@@ -15,6 +15,10 @@ describe('gitProblem', () => {
     expect(gitProblem('uncommitted-changes').fix).toBe('show-changes');
   });
 
+  it('offers Try again for an author not confirmed, which asks', () => {
+    expect(gitProblem('commit-author-not-confirmed').fix).toBe('retry');
+  });
+
   it('offers Pull for a push the remote refused', () => {
     expect(gitProblem('push-non-fast-forward').fix).toBe('pull');
   });

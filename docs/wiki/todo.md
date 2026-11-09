@@ -14,6 +14,12 @@ Requirements files deferred until after the MVP:
 - The Simple and Guided levels, and pull requests.
 - Conflict markers in the `zdiff3` style (with the common ancestor) as a user
   preference. The MVP always uses the plain merge style (GC-5).
+- Pull: a merge refused for incoming paths that are not valid UTF-8 uses
+  `merge-blocked`, whose message speaks of ignored files. It needs its own error
+  code and message, since there is nothing to move.
+- Pull: the waiting saves it sends first include other repositories' open files
+  (`OpenFilesService.flushAll`), so a slow one elsewhere keeps "Pulling…"
+  showing. It needs a flush per repository; a commit waits in the same way.
 - Editor: basic code formatting from the repository's `.editorconfig` (for
   example indent style and size, line endings, final newline and trimming
   trailing spaces), applied while typing and on save. Until then the editor

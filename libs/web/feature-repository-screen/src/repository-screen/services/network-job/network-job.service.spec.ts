@@ -832,14 +832,134 @@ describe('NetworkJobService', () => {
       expect(pull).toHaveBeenCalledTimes(2);
     });
 
-    it('leaves another tab\'s author question to that tab', async () => {
+    it('says so quietly when a pull it took up needs the author, as the tab that started it may be gone', async () => {
       gitJob.mockReturnValueOnce(of(failed('commit-author-not-confirmed')));
       gitStatus.set(status({ id: 9, type: 'pull' }));
       await settle();
 
       expect(ready).not.toHaveBeenCalled();
       expect(pull).not.toHaveBeenCalled();
+      expect(service.problem()).toMatchObject({
+        operation: 'pull',
+        code: 'commit-author-not-confirmed',
+        quiet: true,
+        fix: 'retry'
+      });
+    });
+
+    it('Try again on a pull it took up asks for the author, then pulls', async () => {
+      gitJob.mockReturnValueOnce(of(failed('commit-author-not-confirmed')));
+      gitStatus.set(status({ id: 9, type: 'pull' }));
+      await settle();
+
+      gitJob.mockReturnValueOnce(of(failed('commit-author-not-confirmed')));
+      await service.retry();
+      await settle();
+
+      expect(ready).toHaveBeenCalledOnce();
+      expect(pull).toHaveBeenCalledTimes(2);
+    });
+
+    it('drops that quiet problem when the other tab\'s answer starts a pull', async () => {
+      gitJob.mockReturnValueOnce(of(failed('commit-author-not-confirmed')));
+      gitStatus.set(status({ id: 9, type: 'pull' }));
+      await settle();
+
+      gitStatus.set(status({ id: 10, type: 'pull' }));
+      await settle();
+
       expect(service.problem()).toBeNull();
+    });
+
+    it('does not queue a job that already waits', async () => {
+      await service.start('fetch');
+      await settle();
+
+      await service.startWhenFree('pull');
+      await service.startWhenFree('pull');
+      expect(pull).not.toHaveBeenCalled();
+
+      gitJob.mockReturnValue(of(pulled('up-to-date', 0)));
+      finished();
+      await settle();
+      await settle();
+      await settle();
+
+      expect(pull).toHaveBeenCalledOnce();
+    });
+
+    describe('a banner whose cause is gone', () => {
+      const dirty = (): GitStatus => ({ ...status(), changes: [ { path: 'a.md' } as GitStatus['changes'][number] ] });
+
+      async function refusedForChanges(): Promise<void> {
+        pull.mockReturnValueOnce(throwError(() => refused('uncommitted-changes')));
+        await service.start('pull');
+        await settle();
+      }
+
+      it('drops Commit or discard once the changes are committed or discarded', async () => {
+        gitStatus.set(dirty());
+        await refusedForChanges();
+        expect(service.problem()?.code).toBe('uncommitted-changes');
+
+        gitStatus.set(status());
+        await settle();
+
+        expect(service.problem()).toBeNull();
+      });
+
+      it('keeps it while a status from before the refusal says clean, as a save just made it dirty', async () => {
+        await refusedForChanges();
+
+        expect(service.problem()?.code).toBe('uncommitted-changes');
+
+        gitStatus.set(dirty());
+        await settle();
+        expect(service.problem()?.code).toBe('uncommitted-changes');
+
+        gitStatus.set(status());
+        await settle();
+        expect(service.problem()).toBeNull();
+      });
+
+      it('keeps it while changes remain', async () => {
+        gitStatus.set(dirty());
+        await refusedForChanges();
+
+        gitStatus.set({ ...dirty(), ahead: 3 });
+        await settle();
+
+        expect(service.problem()?.code).toBe('uncommitted-changes');
+      });
+
+      it.each([ 'changed-on-disk', 'file-gone' ])('drops %s once the choice is made in the editor', async code => {
+        const waiting = signal(true);
+        unsavedPaths.mockReturnValue([ 'guide.md' ]);
+        notSaved.mockImplementation(() =>
+          waiting()
+            ? { error: { code, params: { path: 'guide.md' }, requestId: '', message: '' }, retry: false }
+            : null
+        );
+        await service.start('pull');
+        await settle();
+        expect(service.problem()?.code).toBe(code);
+
+        waiting.set(false);
+        await settle();
+
+        expect(service.problem()).toBeNull();
+        expect(pull).not.toHaveBeenCalled();
+      });
+
+      it('leaves other problems alone when the status is clean', async () => {
+        await pullEndsWith(failed('merge-blocked', { paths: 'debug.log' }));
+        gitStatus.set(dirty());
+        await settle();
+        gitStatus.set(status());
+        await settle();
+
+        expect(service.problem()?.code).toBe('merge-blocked');
+      });
     });
 
     it('asks for a locked key, then pulls', async () => {
@@ -909,15 +1029,16 @@ describe('NetworkJobService', () => {
     });
 
     it('does not pull when a save failed', async () => {
-      unsavedPaths.mockReturnValueOnce([ 'guide.md' ]);
-      notSaved.mockReturnValueOnce({
+      unsavedPaths.mockReturnValue([ 'guide.md' ]);
+      notSaved.mockReturnValue({
         error: { code: 'changed-on-disk', params: { path: 'guide.md' }, requestId: '', message: '' },
         retry: false
       });
 
       await service.start('pull');
+      await settle();
 
-      expect(notSaved).toHaveBeenCalledExactlyOnceWith(12, [ 'guide.md' ]);
+      expect(notSaved).toHaveBeenCalledWith(12, [ 'guide.md' ]);
       expect(pull).not.toHaveBeenCalled();
       expect(service.problem()).toMatchObject({
         operation: 'pull',

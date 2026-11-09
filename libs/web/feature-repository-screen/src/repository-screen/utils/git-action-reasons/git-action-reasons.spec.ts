@@ -44,7 +44,7 @@ describe('pullUnavailableReason', () => {
     }, null ],
     [ 'no upstream, and a remote branch of its name', { upstream: null, sameNameRemote: true }, null ],
     [ 'no upstream', { upstream: null }, 'noUpstream' ],
-    [ 'an upstream that is gone', { upstreamGone: true }, 'noUpstream' ],
+    [ 'an upstream that is gone', { upstreamGone: true }, 'upstreamGone' ],
     [ 'no commits', { noCommits: true, upstream: null, ahead: 0 }, 'noCommits' ],
     [ 'no branch', { branch: null, upstream: null }, 'noBranch' ],
     [ 'a merge in progress', { mergeInProgress: true }, 'merging' ]

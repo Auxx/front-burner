@@ -226,7 +226,7 @@ describe('CredentialFixesService', () => {
   describe('a credential fix from a push banner', () => {
     it('also fetches, quietly, while the last fetch\'s problem is stored', async () => {
       await failedPush('credentials-refused');
-      gitStatus.set({ fetchProblem: { code: 'credentials-refused', params: {} } } as GitStatus);
+      gitStatus.set({ changes: [], fetchProblem: { code: 'credentials-refused', params: {} } } as unknown as GitStatus);
       gitJob.mockReturnValue(of(pushed));
 
       await fix('fix-credentials', true);

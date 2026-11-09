@@ -17,6 +17,9 @@ const KEY = 'web-feature-repository-screen.NetworkJobService';
 /** How a pull ends that needs a merge commit from a user who has not confirmed their commit author (CA-14). */
 const AUTHOR_NOT_CONFIRMED = 'commit-author-not-confirmed';
 
+/** The problems of a save that stopped a pull that only a choice in the editor ends (ED-21, ED-24). */
+const WAITS_IN_EDITOR: ReadonlySet<string> = new Set([ 'changed-on-disk', 'file-gone' ]);
+
 /** The wait before a job whose state could not be read is read again. */
 export const JOB_RETRY_MS = 5000;
 
@@ -49,10 +52,17 @@ interface Starting {
   readonly operation: GitNetworkJobType;
 }
 
+/** How a network job is asked for. */
+interface RequestOptions {
+  /** Started to bring the status up to date: it says nothing of how it ended, and asks for no passphrase. */
+  readonly background?: boolean;
+  /** The user was already asked for their commit author on this press (CA-14). */
+  readonly authorAsked?: boolean;
+}
+
 /** A network job waiting for the running one to end. */
 interface Waiting extends Starting {
-  readonly background: boolean;
-  readonly authorAsked?: boolean;
+  readonly options: RequestOptions;
 }
 
 /** What differs between operations: how the job is started, and what its success says. */
@@ -187,9 +197,7 @@ export class NetworkJobService {
         untracked(() => {
           this.waiting.set(rest);
           if (next.repositoryId === this.store.followed()) {
-            void (next.authorAsked === true
-              ? this.requestAfterAsking(next.operation)
-              : this.startNow(next.operation, next.background));
+            void this.startNow(next.operation, next.options);
           }
         });
       }
@@ -206,6 +214,7 @@ export class NetworkJobService {
         }
       });
     });
+    this.dropProblemsWhoseCauseIsGone();
     const subscription = this.channel.reconnected.subscribe(() => {
       const followed = this.followed();
       if (followed !== null) {
@@ -228,6 +237,39 @@ export class NetworkJobService {
   }
 
   /**
+   * "Commit or discard your changes" goes once the changes have, and what waited
+   * for a choice in the editor once it is made, as the banner would contradict
+   * the screen. A status that was clean before the refusal says nothing: it may be
+   * from before the save that made the working copy dirty, so the changes must have
+   * been seen first.
+   */
+  private dropProblemsWhoseCauseIsGone(): void {
+    let watched: GitProblem | null = null;
+    let changesSeen = false;
+    effect(() => {
+      const problem = this.shownProblem();
+      const repositoryId = this.store.followed();
+      const changes = this.store.status()?.changes.length ?? 0;
+      if (problem !== watched) {
+        watched = problem;
+        changesSeen = false;
+      }
+      if (problem?.code === 'uncommitted-changes') {
+        const gone = changesSeen && changes === 0;
+        changesSeen = changes > 0;
+        if (gone) {
+          untracked(() => this.shownProblem.set(null));
+        }
+      } else if (
+        problem !== null && repositoryId !== null && WAITS_IN_EDITOR.has(problem.code)
+        && this.openFiles.notSaved(repositoryId, [ problem.params['path'] ?? '' ]) === null
+      ) {
+        untracked(() => this.shownProblem.set(null));
+      }
+    });
+  }
+
+  /**
    * Starts a network job of the current branch, a push, a fetch or a pull (GA-29). Nothing
    * happens while any network job is being started or runs. Settles once the
    * backend has queued it, or refused it, and after the passphrase was asked for,
@@ -246,31 +288,32 @@ export class NetworkJobService {
    * for what already waits, unless another repository is opened meanwhile. A
    * `background` job only brings the status up to date: it says nothing of how
    * it ended, and asks for no passphrase. Settles once it has started, or waits.
+   * The same job waits only once, so that a second press runs it only once.
    */
-  async startWhenFree(operation: GitNetworkJobType, options: { background?: boolean; } = {}): Promise<void> {
+  async startWhenFree(operation: GitNetworkJobType, options: RequestOptions = {}): Promise<void> {
     const repositoryId = this.store.followed();
-    const background = options.background ?? false;
     if (repositoryId === null) {
       return;
     }
     if (this.running() === null && this.waiting().length === 0) {
-      await this.startNow(operation, background);
-    } else {
-      this.waiting.update(waiting => [ ...waiting, { repositoryId, operation, background } ]);
+      await this.startNow(operation, options);
+      return;
+    }
+    const background = options.background === true;
+    const alreadyWaits = this.waiting().some(waiting =>
+      waiting.operation === operation && (waiting.options.background === true) === background
+    );
+    if (!alreadyWaits) {
+      this.waiting.update(waiting => [ ...waiting, { repositoryId, operation, options } ]);
     }
   }
 
-  private async startNow(operation: GitNetworkJobType, background: boolean): Promise<void> {
-    if (background) {
-      await this.request(operation, false, true);
+  private async startNow(operation: GitNetworkJobType, options: RequestOptions): Promise<void> {
+    if (options.background === true || options.authorAsked === true) {
+      await this.request(operation, { ...options, quietLock: false });
     } else {
       await this.start(operation);
     }
-  }
-
-  /** The operation again after the author question, which this press asks no more. */
-  private async requestAfterAsking(operation: GitNetworkJobType): Promise<void> {
-    await this.request(operation, false, false, true);
   }
 
   /**
@@ -281,9 +324,7 @@ export class NetworkJobService {
    */
   private async request(
     operation: GitNetworkJobType,
-    quietLock = true,
-    background = false,
-    authorAsked = false
+    { quietLock = true, background = false, authorAsked = false }: RequestOptions & { quietLock?: boolean; } = {}
   ): Promise<Record<string, string> | undefined> {
     const repositoryId = this.store.followed();
     if (repositoryId === null || this.running() !== null) {
@@ -377,7 +418,7 @@ export class NetworkJobService {
     }
     // Not after a switch to another repository while the dialog was open.
     if (unlocked && this.store.followed() === repositoryId) {
-      await this.request(operation, false);
+      await this.request(operation, { quietLock: false });
     }
   }
 
@@ -427,12 +468,12 @@ export class NetworkJobService {
         status: 'success'
       });
     } else if (outcome?.kind === 'failed' && followed.background !== true) {
-      if (outcome.code !== AUTHOR_NOT_CONFIRMED) {
-        this.fail(followed.operation, outcome.code, outcome.params, !followed.own);
-      } else if (followed.own) {
+      // A job taken up says so, with **Try again**: the tab that started it may be gone, as after a reload.
+      if (outcome.code === AUTHOR_NOT_CONFIRMED && followed.own) {
         void this.askForAuthor(followed);
+      } else {
+        this.fail(followed.operation, outcome.code, outcome.params, !followed.own);
       }
-      // Another tab's: that tab asks, and it may yet be cancelled.
     }
     void this.store.refresh();
   }
@@ -459,13 +500,8 @@ export class NetworkJobService {
       }
       return;
     }
-    if (!confirmed || this.store.followed() !== repositoryId) {
-      return;
-    }
-    if (this.running() === null && this.waiting().length === 0) {
-      await this.requestAfterAsking(operation);
-    } else {
-      this.waiting.update(waiting => [ ...waiting, { repositoryId, operation, background: false, authorAsked: true } ]);
+    if (confirmed && this.store.followed() === repositoryId) {
+      await this.startWhenFree(operation, { authorAsked: true });
     }
   }
 

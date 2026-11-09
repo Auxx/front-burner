@@ -43,6 +43,8 @@ const FIXES: Readonly<Record<string, GitFix>> = {
   'uncommitted-changes': 'show-changes',
   'push-non-fast-forward': 'pull',
   'file-held': 'retry',
+  // A pull that needs it asks at once; this is one taken up in another tab or after a reload (CA-14).
+  'commit-author-not-confirmed': 'retry',
   'remote-timeout': 'retry',
   'remote-failed': 'retry',
   'host-unreachable': 'retry',

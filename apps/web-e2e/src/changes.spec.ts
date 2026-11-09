@@ -640,6 +640,22 @@ test.describe('pushing', () => {
       await expect(toasts(page).getByText('Pushed 2 commits to origin/notes')).toBeVisible();
     });
 
+    test('Commit or discard goes away once the changes are committed', async ({ page, instance, monitor }) => {
+      await confirmCommitAuthor(instance.url);
+      const { id, dir } = pushable(instance, 'cloned');
+      writeFileSync(join(dir, 'mine.md'), 'mine\n');
+      await openScreen(page, `/repositories/${id}`);
+
+      await gitAction(page, 'Pull');
+      await expect(problem(page)).toContainText(NOT_CLEAN);
+      await problem(page).getByRole('button', { name: 'Show changes' }).click();
+      await message(page).fill('mine');
+      await commitButton(page, 'Commit 1 file').click();
+
+      await expect(problem(page)).toHaveCount(0);
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/pull`);
+    });
+
     test('reloads the open file after a pull', async ({ page, instance }) => {
       await confirmCommitAuthor(instance.url);
       const { id, dir, bare } = pushable(instance, 'cloned');

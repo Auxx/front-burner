@@ -29,8 +29,10 @@ export function pullUnavailableReason(status: GitStatus | null): string | null {
   if (status.noCommits) {
     return 'noCommits';
   }
-  const hasUpstream = status.upstream !== null && !status.upstreamGone;
-  return hasUpstream || status.sameNameRemote ? null : 'noUpstream';
+  if (status.upstream !== null) {
+    return status.upstreamGone ? 'upstreamGone' : null;
+  }
+  return status.sameNameRemote ? null : 'noUpstream';
 }
 
 /** Why **Push** is not offered, as a message key, or `null` when it is (GA-8). */
