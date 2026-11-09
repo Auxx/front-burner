@@ -62,6 +62,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'branch-name-invalid': 'This isn\'t a valid branch name.',
   'branch-name-conflict': 'This name clashes with another branch\'s name.',
   'switch-blocked': 'This switch would overwrite ignored files. Move them first.',
+  'git-busy': 'Git is busy with this repository. Try again in a moment.',
   'branch-changed': 'The branch changed, so it was not pulled.',
   'merge-blocked': 'The merge would overwrite files that git does not track.',
   'no-credentials': 'This repository has no credentials. Add credentials to push.',

@@ -1,8 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
-import { classifySwitchFailure, GitOperationError } from './git-errors';
+import { classifyBranchFailure, GitOperationError } from './git-errors';
+import { GitMerge } from './git-merge';
 import { FIRST_BRANCH } from './git-status';
 import { LocalGit, NO_LFS, UNDECODABLE } from './local-git';
 
@@ -32,6 +31,26 @@ const HEADS = 'refs/heads/';
 const REMOTES = 'refs/remotes/';
 const ORIGIN = `${REMOTES}origin/`;
 
+/** A ref is a file, with `.lock` added while it is written; most file systems allow 255 bytes per name. */
+const MAX_SEGMENT_BYTES = 250;
+/** Far above any real branch, and well below what a path may be with the data folder before it. */
+const MAX_NAME_BYTES = 1024;
+/** Git looks for these before branches, so a branch of such a name changes what they mean (see `git rev-parse`). */
+const GITS_OWN_REF =
+  /^([A-Z_-]*_HEAD|AUTO_MERGE|BISECT_EXPECTED_REV|NOTES_MERGE_PARTIAL|NOTES_MERGE_REF|MERGE_AUTOSTASH)$/;
+
+/**
+ * What `git check-ref-format --branch` allows, or can't be asked, and git can't
+ * use as a branch: a NUL, which can't be in a process's argument; `@`, which it
+ * reads as `HEAD` when switching; its own refs; and a name too long for a file.
+ */
+const isUnusableName = (name: string) =>
+  name.includes('\0')
+  || name === '@'
+  || GITS_OWN_REF.test(name)
+  || Buffer.byteLength(name) > MAX_NAME_BYTES
+  || name.split('/').some(segment => Buffer.byteLength(segment) > MAX_SEGMENT_BYTES);
+
 const byName = (a: { name: string; }, b: { name: string; }) => {
   if (a.name === b.name) {
     return 0;
@@ -46,21 +65,29 @@ const byName = (a: { name: string; }, b: { name: string; }) => {
  */
 @Injectable()
 export class GitBranches {
-  constructor(private readonly local: LocalGit, @Inject(GIT_OPTIONS) private readonly options: GitOptions) {}
+  constructor(
+    private readonly local: LocalGit,
+    private readonly merge: GitMerge,
+    @Inject(GIT_OPTIONS) private readonly options: GitOptions
+  ) {}
 
   /**
    * Switches to a local branch (GA-37). The caller checks that the working copy
-   * is clean (GA-39). Only a branch of exactly this name will do: git also reads
-   * `-` and `@{-1}` as the previous branch.
+   * is clean (GA-39), which is what makes it safe to put the files back after a
+   * timeout. Only a branch of exactly this name will do: git also reads `-` and
+   * `@{-1}` as the previous branch. Before the first commit, `main` is the branch
+   * the list gives (GA-42), and has no ref: the working copy is already there.
    *
-   * @throws GitOperationError `branch-not-found`, `switch-blocked`, `timeout`
+   * @throws GitOperationError `branch-not-found`, `switch-blocked`, `git-busy`, `timeout`
    */
   async switchTo(workingCopy: string, name: string): Promise<void> {
     if (!await this.isLocalBranch(workingCopy, name)) {
+      if (name === FIRST_BRANCH && await this.hasNoCommits(workingCopy)) {
+        return;
+      }
       throw new GitOperationError('branch-not-found', `no local branch ${name}`);
     }
-    // The `--` is not optional: without it, `--orphan=boom` empties the working copy.
-    await this.switchWith(workingCopy, name, [ '--no-overwrite-ignore', '--', name ]);
+    await this.switchFiles(workingCopy, name);
   }
 
   /**
@@ -68,30 +95,52 @@ export class GitBranches {
    * switches to it (GA-37). As `switchTo`, for the caller and for ignored files.
    * The full ref, as a local branch can be called `origin/<branch>`.
    *
-   * @throws GitOperationError `branch-name-invalid`, `branch-exists`,
-   *   `branch-name-conflict`, `branch-not-found`, `switch-blocked`, `timeout`
+   * Two steps, not `git switch --track -c`: that changes the files first, and
+   * leaves them changed when it then can't make the branch. A branch that can't
+   * be switched to, or whose upstream can't be set, doesn't stay.
+   *
+   * @throws GitOperationError `branch-name-invalid`, `branch-exists`, `branch-name-conflict`,
+   *   `branch-not-found`, `switch-blocked`, `git-busy`, `timeout`
    */
   async trackRemote(workingCopy: string, branch: string): Promise<void> {
     await this.checkName(workingCopy, branch);
-    await this.switchWith(workingCopy, branch, [
-      '--no-overwrite-ignore',
-      '--track',
-      '-c',
-      branch,
-      `${ORIGIN}${branch}`
-    ]);
+    if (await this.isLocalBranch(workingCopy, branch)) {
+      throw new GitOperationError('branch-exists', `a local branch ${branch}`);
+    }
+    try {
+      await this.branchCommand(workingCopy, branch, [ 'branch', '--quiet', '--track', branch, `${ORIGIN}${branch}` ]);
+      await this.switchFiles(workingCopy, branch);
+    } catch (error) {
+      // Git refuses to delete the current branch, which a switch killed at its very end has made it.
+      await this.local.run(workingCopy, [ 'branch', '--quiet', '-D', '--', branch ]);
+      throw error;
+    }
   }
 
   /**
    * Makes a branch from the current commit and switches to it, keeping any
    * uncommitted changes; it is unpublished until its first push (GA-38), also
-   * when `origin` has a branch of that name.
+   * when `origin` has a branch of that name. Refused without commits, as the
+   * first commit makes `main` whatever the branch is called (GA-42).
    *
-   * @throws GitOperationError `branch-name-invalid`, `branch-exists`, `branch-name-conflict`, `timeout`
+   * @throws GitOperationError `branch-name-invalid`, `no-commits`, `branch-exists`,
+   *   `branch-name-conflict`, `git-busy`, `timeout`
    */
   async create(workingCopy: string, name: string): Promise<void> {
     await this.checkName(workingCopy, name);
-    await this.switchWith(workingCopy, name, [ '--no-track', '-c', name ]);
+    if (await this.hasNoCommits(workingCopy)) {
+      throw new GitOperationError('no-commits', 'nothing to start a branch from');
+    }
+    // No `git reset` after a timeout: no file changes, and the uncommitted changes are the user's.
+    await this.branchCommand(workingCopy, name, [
+      ...NO_LFS,
+      'switch',
+      '--quiet',
+      '--no-guess',
+      '--no-track',
+      '-c',
+      name
+    ]);
   }
 
   /** A NUL can't be in a process's argument, and can't be in a branch's name. */
@@ -108,11 +157,13 @@ export class GitBranches {
 
   /**
    * Git's own rules (GA-38), which also refuse a leading `-`. `--branch` expands
-   * `@{-1}` and prints what it means, so a name passes only when it comes back the same.
+   * `@{-1}` and prints what it means, so a name passes only when it comes back the
+   * same. Those rules let through what git then can't use as a branch: see
+   * `isUnusableName`.
    */
   private async checkName(workingCopy: string, name: string): Promise<void> {
-    const invalid = new GitOperationError('branch-name-invalid', `not a branch name: ${name}`);
-    if (name.includes('\0')) {
+    const invalid = new GitOperationError('branch-name-invalid', `not a branch name: ${name.slice(0, 300)}`);
+    if (isUnusableName(name)) {
       throw invalid;
     }
     const result = await this.local.run(workingCopy, [ 'check-ref-format', '--branch', name ]);
@@ -125,28 +176,39 @@ export class GitBranches {
   }
 
   /**
-   * Runs `git switch` for the branch it ends up on. A git killed at its timeout
-   * can leave its locks; the caller holds the working-tree lock, so no other
-   * command of ours is using them. Fetches touch only remote branches.
+   * Switches a clean working copy to an existing branch. A git killed at its
+   * timeout has rewritten only some of the files, so they go back to `HEAD`. If
+   * that fails too, the timeout is still what happened, and **Changes** shows the rest.
    */
-  private async switchWith(workingCopy: string, branch: string, args: string[]): Promise<void> {
-    const result = await this.local.run(
-      workingCopy,
-      [ ...NO_LFS, 'switch', '--quiet', '--no-guess', ...args ],
-      { timeoutMs: this.options.gitTimeoutMs }
-    );
-    if (result.timedOut) {
-      const gitDir = join(workingCopy, '.git');
-      // `config.lock`: `--track` writes the upstream there.
-      for (const lock of [ 'index.lock', 'HEAD.lock', 'config.lock', `${HEADS}${branch}.lock` ]) {
-        await rm(join(gitDir, lock), { force: true });
+  private async switchFiles(workingCopy: string, branch: string): Promise<void> {
+    try {
+      // The `--` is not optional: without it, `--orphan=boom` empties the working copy.
+      await this.branchCommand(
+        workingCopy,
+        branch,
+        [ ...NO_LFS, 'switch', '--quiet', '--no-guess', '--no-overwrite-ignore', '--', branch ]
+      );
+    } catch (error) {
+      if (error instanceof GitOperationError && error.code === 'timeout') {
+        await this.merge.undoCutShort(workingCopy, 'HEAD').catch(() => undefined);
       }
+      throw error;
+    }
+  }
+
+  /** Runs a command that makes or moves to `branch`, giving its failure a code, and freeing its locks at a timeout. */
+  private async branchCommand(workingCopy: string, branch: string, args: string[]): Promise<void> {
+    const result = await this.local.run(workingCopy, args, { timeoutMs: this.options.gitTimeoutMs });
+    if (result.timedOut) {
+      await this.local.removeOwnLocks(workingCopy, [ `${HEADS}${branch}` ]);
       throw new GitOperationError('timeout', result.stderr);
     }
     if (result.exitCode !== 0) {
-      const code = classifySwitchFailure(result.stderr);
+      const code = classifyBranchFailure(result.stderr);
       if (code === null) {
-        throw new Error(`git switch failed: ${result.stderr.trim()}`);
+        throw new Error(
+          `git ${args.find(arg => arg === 'switch' || arg === 'branch')} failed: ${result.stderr.trim()}`
+        );
       }
       throw new GitOperationError(code, result.stderr);
     }

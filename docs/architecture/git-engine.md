@@ -255,10 +255,18 @@ Confirmed by spike 2 (spikes.md).
     job later (GA-3). Git reads more than branch names (`--orphan=boom` as an
     option, `-` and `@{-1}` as the previous branch), so a name to switch to must
     be a local branch's exact name, and a new one must pass `git
-    check-ref-format --branch` and come back unchanged. A remote branch is named
-    by its full ref, as a local branch can be called `origin/main`. A switch
-    never overwrites or loses an ignored file (`switch-blocked`), and doesn't
-    run LFS. _(Plan 85's call.)_
+    check-ref-format --branch` and come back unchanged. That check lets through
+    `@`, git's own refs such as `MERGE_HEAD`, and names too long for a file,
+    which are refused too. A remote branch is named by its full ref, as a local
+    branch can be called `origin/main`, and is tracked in two steps, `git branch
+    --track` then `git switch`, as `git switch --track -c` changes the files
+    before it finds that it can't make the branch. A switch never overwrites or
+    loses an ignored file (`switch-blocked`), and doesn't run LFS. One killed at
+    its timeout is undone as a merge cut short is (A-5.15), since the working
+    copy was clean. A lock that another git holds is `git-busy`. `config.lock`
+    is never removed at a timeout, as a push or a fetch writes the config
+    without the working-tree lock; a stale one goes at the next start (NF-9.4).
+    _(Plan 85's call.)_
   - The MVP requirements add: which entries of a folder are ignored (`git
     check-ignore`, FB-16); the diff of one file against the last commit (GA-14
     to GA-16); discarding selected files (GA-23), refused as `discard-blocked`

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GitResult, GitRunner } from '../runner/git-runner';
@@ -77,5 +77,28 @@ describe.skipIf(process.platform === 'win32')('LocalGit.currentBranch', () => {
     const slow = new LocalGit({ run: () => Promise.resolve(late) } as unknown as GitRunner);
 
     await expect(slow.currentBranch(work)).rejects.toBeInstanceOf(GitOperationError);
+  });
+
+  describe('removeOwnLocks', () => {
+    const lock = (name: string) => join(work, '.git', name);
+
+    it('removes what a killed git can have left, with the current branch\'s lock and those it is told', async () => {
+      const locks = [ 'index.lock', 'HEAD.lock', 'ORIG_HEAD.lock', 'refs/heads/trunk.lock', 'refs/heads/topic.lock' ];
+      locks.forEach(name => writeFileSync(lock(name), ''));
+
+      await new LocalGit(new GitRunner()).removeOwnLocks(work, [ 'refs/heads/topic' ]);
+
+      expect(locks.filter(name => existsSync(lock(name)))).toEqual([]);
+    });
+
+    it('leaves what a push or a fetch may hold: the config, and a remote branch', async () => {
+      mkdirSync(lock('refs/remotes/origin'), { recursive: true });
+      const locks = [ 'config.lock', 'refs/remotes/origin/main.lock' ];
+      locks.forEach(name => writeFileSync(lock(name), ''));
+
+      await new LocalGit(new GitRunner()).removeOwnLocks(work);
+
+      expect(locks.filter(name => existsSync(lock(name)))).toEqual(locks);
+    });
   });
 });

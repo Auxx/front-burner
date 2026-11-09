@@ -52,6 +52,7 @@ const FIXES: Readonly<Record<string, GitFix>> = {
   network: 'retry',
   internal: 'retry',
   'git-timeout': 'retry',
+  'git-busy': 'retry',
   'rate-limited': 'retry',
   'too-many-jobs': 'retry'
 };

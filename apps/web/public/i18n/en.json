@@ -55,6 +55,7 @@
   "errors.branch-name-invalid": "This isn't a valid branch name.",
   "errors.branch-name-conflict": "This name clashes with another branch's name.",
   "errors.switch-blocked": "This switch would overwrite ignored files. Move them first.",
+  "errors.git-busy": "Git is busy with this repository. Try again in a moment.",
   "errors.branch-changed": "You switched branch, so {{ branch }} was not pulled. Pull again.",
   "errors.merge-blocked": "This pull would overwrite ignored files. Move them first.",
   "errors.no-credentials": "This repository has no credentials. Add credentials to push.",

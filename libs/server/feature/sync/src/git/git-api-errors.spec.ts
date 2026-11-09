@@ -23,6 +23,8 @@ describe('toGitApiError', () => {
       [ 'branch-exists', 409, 'branch-exists' ],
       [ 'branch-name-conflict', 409, 'branch-name-conflict' ],
       [ 'switch-blocked', 409, 'switch-blocked' ],
+      [ 'git-busy', 409, 'git-busy' ],
+      [ 'no-commits', 409, 'no-commits' ],
       [ 'timeout', 504, 'git-timeout' ]
     ] as const
   )('answers %s with %i %s', (code, status, apiCode) => {

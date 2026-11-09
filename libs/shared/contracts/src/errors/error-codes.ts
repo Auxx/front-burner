@@ -88,6 +88,8 @@ export const ERROR_CODES = [
   'branch-name-conflict',
   /** 409; the switch would overwrite or lose a file that git does not track; nothing changed (GA-43). */
   'switch-blocked',
+  /** 409; another git holds a lock this needs, such as a push writing the upstream; nothing changed, so try again. */
+  'git-busy',
   // How a pull job ended, besides the codes above and `merge-in-progress` and `commit-author-not-confirmed`.
   /** The current branch is not the one the pull was asked for; params `{ branch }`, the one asked for. */
   'branch-changed',

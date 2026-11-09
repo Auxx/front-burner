@@ -26,6 +26,10 @@ export function toGitApiError(error: unknown): never {
         throw new ApiErrorException(409, 'branch-name-conflict');
       case 'switch-blocked':
         throw new ApiErrorException(409, 'switch-blocked');
+      case 'git-busy':
+        throw new ApiErrorException(409, 'git-busy');
+      case 'no-commits':
+        throw new ApiErrorException(409, 'no-commits');
       case 'timeout':
         throw new ApiErrorException(504, 'git-timeout');
     }

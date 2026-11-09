@@ -6,6 +6,7 @@ import type { GitOptions } from '../git.options';
 import { GitRunner } from '../runner/git-runner';
 import { GitBranches } from './git-branches';
 import { GitOperationError } from './git-errors';
+import { GitMerge } from './git-merge';
 import { LocalGit } from './local-git';
 
 const options: GitOptions = {
@@ -31,7 +32,8 @@ const git = (cwd: string, ...args: string[]) =>
 
 // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
 describe.skipIf(process.platform === 'win32')('GitBranches', () => {
-  const branches = new GitBranches(new LocalGit(new GitRunner()), options);
+  const branchesOn = (local: LocalGit) => new GitBranches(local, new GitMerge(local, options), options);
+  const branches = branchesOn(new LocalGit(new GitRunner()));
   let work: string;
 
   /** A remote branch as a fetch leaves it, without needing a remote. */
@@ -232,14 +234,14 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
     const local = new LocalGit(new GitRunner());
     vi.spyOn(local, 'checked').mockResolvedValue('');
 
-    expect(await new GitBranches(local, options).list(work)).toEqual({ current: 'trunk', local: [], remote: [] });
+    expect(await branchesOn(local).list(work)).toEqual({ current: 'trunk', local: [], remote: [] });
   });
 
   it('reads HEAD before the refs, so that the refs include what it named', async () => {
     const local = new LocalGit(new GitRunner());
     const run = vi.spyOn(local, 'run');
 
-    await new GitBranches(local, options).list(work);
+    await branchesOn(local).list(work);
 
     expect(run.mock.calls.map(([ , args ]) => args.find(arg => !arg.startsWith('-')))).toEqual([
       'rev-parse',
@@ -424,18 +426,78 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
           return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
         });
 
-        expect(await codeOf(new GitBranches(local, options).switchTo(work, 'other'))).toBe('timeout');
+        expect(await codeOf(branchesOn(local).switchTo(work, 'other'))).toBe('timeout');
 
         expect(existsSync(join(work, '.git', 'index.lock'))).toBe(false);
         expect(existsSync(join(work, '.git', 'HEAD.lock'))).toBe(false);
       });
 
+      it('puts the files back after a switch that ran out of time', async () => {
+        git(work, 'branch', 'other');
+        const local = new LocalGit(new GitRunner());
+        const run = local.run.bind(local);
+        vi.spyOn(local, 'run').mockImplementation(async (cwd, args, runOptions) => {
+          if (!args.includes('switch')) {
+            return run(cwd, args, runOptions);
+          }
+          write('notes.md', 'half of the other branch\n');
+          write('only-on-other.md', 'written before it was killed\n');
+          write('.git/index.lock', '');
+          return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
+        });
+
+        expect(await codeOf(branchesOn(local).switchTo(work, 'other'))).toBe('timeout');
+
+        expect(read('notes.md')).toBe('on main\n');
+        expect(git(work, 'status', '--porcelain')).toBe('');
+        expect(current()).toBe('main');
+      });
+
       it('gives a failure it does not know as an error of its own', async () => {
         git(work, 'branch', 'other');
-        // Another git of the same working copy, which the working-tree lock doesn't cover.
+        const local = new LocalGit(new GitRunner());
+        const run = local.run.bind(local);
+        vi.spyOn(local, 'run').mockImplementation(async (cwd, args, runOptions) => {
+          if (!args.includes('switch')) {
+            return run(cwd, args, runOptions);
+          }
+          return { exitCode: 128, stdout: '', stdoutBytes: 0, stderr: 'fatal: something new\n', timedOut: false };
+        });
+
+        expect(await codeOf(branchesOn(local).switchTo(work, 'other'))).toBeInstanceOf(Error);
+      });
+
+      it('says that git is busy when another git holds the index', async () => {
+        git(work, 'branch', 'other');
         write('.git/index.lock', '');
 
-        expect(await codeOf(branches.switchTo(work, 'other'))).toBeInstanceOf(Error);
+        expect(await codeOf(branches.switchTo(work, 'other'))).toBe('git-busy');
+
+        expect(current()).toBe('main');
+      });
+
+      it('says that a branch git will not switch to by its name is gone', async () => {
+        git(work, 'update-ref', 'refs/heads/@', 'HEAD');
+
+        expect(await codeOf(branches.switchTo(work, '@'))).toBe('branch-not-found');
+      });
+
+      it('refuses a name too long to be a file', async () => {
+        expect(await codeOf(branches.switchTo(work, 'x'.repeat(300)))).toBe('branch-not-found');
+      });
+
+      it('switches to the main that the list gives before the first commit, as there already', async () => {
+        const empty = mkdtempSync(join(tmpdir(), 'git-branches-'));
+        try {
+          git(empty, 'init', '-q', '-b', 'main');
+
+          await branches.switchTo(empty, 'main');
+
+          expect(git(empty, 'symbolic-ref', '--short', 'HEAD')).toBe('main');
+          expect(await codeOf(branches.switchTo(empty, 'other'))).toBe('branch-not-found');
+        } finally {
+          rmSync(empty, { recursive: true, force: true });
+        }
       });
     });
 
@@ -454,20 +516,80 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
         expect((await branches.list(work)).local).toContainEqual({ name: 'feature', upstream: 'origin/feature' });
       });
 
-      it('frees the config\'s lock when it ran out of time setting the upstream', async () => {
+      it('leaves the config\'s lock when it ran out of time, as a push may hold it', async () => {
+        fetched('origin/feature');
+        write('.git/config.lock', '');
+        const local = new LocalGit(new GitRunner());
+        const run = local.run.bind(local);
+        vi.spyOn(local, 'run').mockImplementation(async (cwd, args, runOptions) => {
+          if (!args.includes('--track')) {
+            return run(cwd, args, runOptions);
+          }
+          write('.git/refs/heads/feature.lock', '');
+          return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
+        });
+
+        expect(await codeOf(branchesOn(local).trackRemote(work, 'feature'))).toBe('timeout');
+
+        expect(existsSync(join(work, '.git', 'config.lock'))).toBe(true);
+        expect(existsSync(join(work, '.git', 'refs', 'heads', 'feature.lock'))).toBe(false);
+      });
+
+      it('says that git is busy when a push holds the config, and leaves no branch and no change', async () => {
+        branchWith('published', 'notes.md', 'published\n');
+        git(work, 'update-ref', 'refs/remotes/origin/feature', 'published');
+        write('.git/config.lock', '');
+
+        expect(await codeOf(branches.trackRemote(work, 'feature'))).toBe('git-busy');
+
+        expect(hasBranch('feature')).toBe(false);
+        expect(git(work, 'status', '--porcelain')).toBe('');
+        expect(current()).toBe('main');
+      });
+
+      it('leaves no upstream behind when the switch is blocked', async () => {
+        branchWith('published', 'secret.txt', 'from the remote\n');
+        git(work, 'update-ref', 'refs/remotes/origin/feature', 'published');
+        write('.git/info/exclude', 'secret.txt\n');
+        write('secret.txt', 'mine\n');
+
+        await codeOf(branches.trackRemote(work, 'feature'));
+
+        expect(() => git(work, 'config', '--get', 'branch.feature.remote')).toThrow();
+      });
+
+      it('puts the files back and leaves no branch after a switch that ran out of time', async () => {
+        fetched('origin/feature');
         const local = new LocalGit(new GitRunner());
         const run = local.run.bind(local);
         vi.spyOn(local, 'run').mockImplementation(async (cwd, args, runOptions) => {
           if (!args.includes('switch')) {
             return run(cwd, args, runOptions);
           }
-          write('.git/config.lock', '');
+          write('notes.md', 'half of the other branch\n');
           return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
         });
 
-        expect(await codeOf(new GitBranches(local, options).trackRemote(work, 'feature'))).toBe('timeout');
+        expect(await codeOf(branchesOn(local).trackRemote(work, 'feature'))).toBe('timeout');
 
-        expect(existsSync(join(work, '.git', 'config.lock'))).toBe(false);
+        expect(read('notes.md')).toBe('on main\n');
+        expect(hasBranch('feature')).toBe(false);
+      });
+
+      it('tracks a remote branch before the first commit', async () => {
+        const commit = head();
+        const empty = mkdtempSync(join(tmpdir(), 'git-branches-'));
+        try {
+          git(empty, 'init', '-q', '-b', 'main');
+          git(empty, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*');
+          git(empty, 'fetch', '-q', work, `+${commit}:refs/remotes/origin/feature`);
+
+          await branches.trackRemote(empty, 'feature');
+
+          expect(git(empty, 'symbolic-ref', '--short', 'HEAD')).toBe('feature');
+        } finally {
+          rmSync(empty, { recursive: true, force: true });
+        }
       });
 
       it('says when the remote branch is gone', async () => {
@@ -476,11 +598,14 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
       });
 
       it('says that a remote branch the working copy does not fetch is gone', async () => {
-        fetched('origin/feature');
+        branchWith('published', 'notes.md', 'published\n');
+        git(work, 'update-ref', 'refs/remotes/origin/feature', 'published');
         git(work, 'config', '--replace-all', 'remote.origin.fetch', '+refs/heads/main:refs/remotes/origin/main');
 
         expect(await codeOf(branches.trackRemote(work, 'feature'))).toBe('branch-not-found');
         expect(hasBranch('feature')).toBe(false);
+        // Git changes the files first when it is asked to do both at once.
+        expect(git(work, 'status', '--porcelain')).toBe('');
       });
 
       it('tracks the remote branch when a local branch has its name', async () => {
@@ -524,10 +649,15 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
 
       it('refuses a name that clashes with a folder of branches', async () => {
         git(work, 'branch', 'a');
-        fetched('origin/x');
-        git(work, 'update-ref', 'refs/remotes/origin/a/b', 'HEAD');
+        branchWith('published', 'notes.md', 'published\n');
+        git(work, 'update-ref', 'refs/remotes/origin/a/b', 'published');
 
         expect(await codeOf(branches.trackRemote(work, 'a/b'))).toBe('branch-name-conflict');
+
+        // Git changes the files first when it is asked to do both at once.
+        expect(git(work, 'status', '--porcelain')).toBe('');
+        expect(read('notes.md')).toBe('on main\n');
+        expect(current()).toBe('main');
       });
     });
 
@@ -557,10 +687,80 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
       });
 
       it('refuses every kind of bad name', async () => {
-        for (const name of [ 'bad..name', '@{-1}', 'HEAD', '-x', '', 'with space', 'a\0b' ]) {
+        for (const name of [ 'bad..name', '@{-1}', 'HEAD', '-x', '-', '', 'with space', 'a\0b' ]) {
           expect(await codeOf(branches.create(work, name)), name).toBe('branch-name-invalid');
           expect(await codeOf(branches.trackRemote(work, name)), name).toBe('branch-name-invalid');
         }
+        expect(current()).toBe('main');
+      });
+
+      it('refuses @, which git can\'t switch to by its name', async () => {
+        expect(await codeOf(branches.create(work, '@'))).toBe('branch-name-invalid');
+        expect(await codeOf(branches.trackRemote(work, '@'))).toBe('branch-name-invalid');
+        expect(current()).toBe('main');
+      });
+
+      it('refuses the names of git\'s own refs, which git would read as a merge or a pull', async () => {
+        for (const name of [ 'MERGE_HEAD', 'ORIG_HEAD', 'FETCH_HEAD', 'CHERRY_PICK_HEAD', 'AUTO_MERGE' ]) {
+          expect(await codeOf(branches.create(work, name)), name).toBe('branch-name-invalid');
+          expect(await codeOf(branches.trackRemote(work, name)), name).toBe('branch-name-invalid');
+        }
+        expect(current()).toBe('main');
+      });
+
+      it('keeps a name that only looks like one of them', async () => {
+        await branches.create(work, 'feature/MERGE_HEAD');
+        await branches.create(work, 'Head');
+
+        expect(current()).toBe('Head');
+      });
+
+      it('refuses a name too long for a ref\'s file', async () => {
+        for (const name of [ 'x'.repeat(300), `a/${'x'.repeat(251)}`, `${'é'.repeat(126)}`, 'a/'.repeat(600) + 'a' ]) {
+          expect(await codeOf(branches.create(work, name)), name.slice(0, 8)).toBe('branch-name-invalid');
+        }
+        expect(current()).toBe('main');
+      });
+
+      it('takes the longest name that fits', async () => {
+        await branches.create(work, 'x'.repeat(250));
+
+        expect(current()).toBe('x'.repeat(250));
+      });
+
+      it('says when there are no commits to start from, reading no files', async () => {
+        const empty = mkdtempSync(join(tmpdir(), 'git-branches-'));
+        try {
+          git(empty, 'init', '-q', '-b', 'main');
+
+          expect(await codeOf(branches.create(empty, 'topic'))).toBe('no-commits');
+          expect(git(empty, 'symbolic-ref', '--short', 'HEAD')).toBe('main');
+        } finally {
+          rmSync(empty, { recursive: true, force: true });
+        }
+      });
+
+      it('leaves uncommitted changes alone after running out of time', async () => {
+        write('notes.md', 'unsaved work\n');
+        const local = new LocalGit(new GitRunner());
+        const run = local.run.bind(local);
+        vi.spyOn(local, 'run').mockImplementation(async (cwd, args, runOptions) => {
+          if (!args.includes('switch')) {
+            return run(cwd, args, runOptions);
+          }
+          return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
+        });
+
+        expect(await codeOf(branchesOn(local).create(work, 'topic'))).toBe('timeout');
+
+        expect(read('notes.md')).toBe('unsaved work\n');
+      });
+
+      it('says that git is busy when another git holds the branch\'s lock', async () => {
+        write('.git/refs/heads/topic.lock', '');
+
+        expect(await codeOf(branches.create(work, 'topic'))).toBe('git-busy');
+
         expect(current()).toBe('main');
       });
 
@@ -594,7 +794,7 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
           return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
         });
 
-        expect(await codeOf(new GitBranches(local, options).create(work, 'dir/topic'))).toBe('timeout');
+        expect(await codeOf(branchesOn(local).create(work, 'dir/topic'))).toBe('timeout');
 
         expect(existsSync(join(work, '.git', 'refs', 'heads', 'dir', 'topic.lock'))).toBe(false);
       });

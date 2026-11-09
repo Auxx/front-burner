@@ -3,6 +3,7 @@ import {
   GitBranches,
   GitEngine,
   GitMerge,
+  GitOperationError,
   GitOptions,
   GitRunner,
   LocalGit,
@@ -130,7 +131,7 @@ describe('GitController', () => {
         // And pulling.
         { provide: PullService, useValue: {} },
         { provide: GitMerge, useValue: gitMerge },
-        { provide: GitBranches, useValue: new GitBranches(new LocalGit(new GitRunner()), options) },
+        { provide: GitBranches, useValue: new GitBranches(new LocalGit(new GitRunner()), gitMerge, options) },
         {
           provide: MergeStateService,
           useValue: new MergeStateService(
@@ -506,6 +507,59 @@ describe('GitController', () => {
       await create({ name: 'topic' }).expect(204);
 
       expect(published).toEqual([ { type: 'git.changed', repositoryId: READY } ]);
+    });
+
+    it('tells clients after a switch that ran out of time, as files may have changed', async () => {
+      vi.spyOn(app.get(GitBranches), 'switchTo').mockRejectedValue(new GitOperationError('timeout', ''));
+
+      expect((await switchTo({ name: 'other', remote: false }).expect(504)).body.code).toBe('git-timeout');
+
+      expect(published).toEqual([
+        { type: 'files.changed', repositoryId: READY, folders: 'all' },
+        { type: 'git.changed', repositoryId: READY }
+      ]);
+    });
+
+    it('tells clients after a tracking switch that ran out of time', async () => {
+      vi.spyOn(app.get(GitBranches), 'trackRemote').mockRejectedValue(new GitOperationError('timeout', ''));
+
+      await switchTo({ name: 'feature', remote: true }).expect(504);
+
+      expect(published).toEqual([
+        { type: 'files.changed', repositoryId: READY, folders: 'all' },
+        { type: 'git.changed', repositoryId: READY }
+      ]);
+    });
+
+    it('tells clients after a new branch that ran out of time, as it may be current', async () => {
+      vi.spyOn(app.get(GitBranches), 'create').mockRejectedValue(new GitOperationError('timeout', ''));
+
+      await create({ name: 'topic' }).expect(504);
+
+      expect(published).toEqual([ { type: 'git.changed', repositoryId: READY } ]);
+    });
+
+    it('does not read the status to create a branch, which a large working copy would make slow', async () => {
+      const status = vi.spyOn(app.get(GitEngine), 'status');
+
+      await create({ name: 'topic' }).expect(204);
+
+      expect(status).not.toHaveBeenCalled();
+    });
+
+    it('leaves a switch to a clashing remote branch without any change', async () => {
+      git(root, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*');
+      git(root, 'checkout', '-q', '-b', 'published');
+      writeFileSync(join(root, 'notes.md'), 'published\n');
+      git(root, 'commit', '-q', '-am', 'published');
+      git(root, 'checkout', '-q', 'main');
+      git(root, 'update-ref', 'refs/remotes/origin/other/topic', 'published');
+
+      expect((await switchTo({ name: 'other/topic', remote: true }).expect(409)).body.code)
+        .toBe('branch-name-conflict');
+
+      expect(git(root, 'status', '--porcelain')).toBe('');
+      expect(published).toEqual([]);
     });
 
     it('answers another user\'s repository like a missing one', async () => {
