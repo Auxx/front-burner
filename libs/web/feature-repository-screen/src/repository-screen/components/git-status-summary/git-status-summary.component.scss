@@ -15,15 +15,27 @@
 // A long press shows the tooltip, not the platform's text selection or callout.
 .branch {
   flex-shrink: 1000;
-  min-inline-size: 4ch;
+  min-inline-size: calc(4ch + 2 * var(--ui-space-1));
+  min-block-size: var(--ui-control-height);
+  padding-block: 0;
+  padding-inline: var(--ui-space-1);
   overflow: hidden;
+  border: 0;
+  border-radius: var(--ui-radius-control);
+  background: none;
   color: var(--ui-text-default);
+  font: inherit;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
   -webkit-touch-callout: none;
   user-select: none;
 
+  &:hover {
+    background: var(--ui-surface-hover);
+  }
+
   &:focus-visible {
-    border-radius: var(--ui-radius-control);
     outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
   }
 }

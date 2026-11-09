@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import type { GitStatus } from '@front-burner/shared-contracts';
 import { TruncatedTooltipDirective } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
@@ -13,8 +13,8 @@ type Detail = { key: string; params: Record<string, number>; } | null;
  * repository without commits (GA-42), and "No branch" for a detached `HEAD`.
  * Empty until the first status has loaded. A branch name too long for the bar
  * is shortened with an ellipsis, and its full name is in a tooltip, on hover,
- * focus, tap or long press (NV-11). Plain text for now: step 4 makes the branch
- * the button that opens the branch list (GA-36).
+ * focus or long press (NV-11). The branch is the button that opens the branch
+ * list (GA-7, GA-36), also without a branch, as the list is the way back to one.
  */
 @Component({
   selector: 'rs-git-status-summary',
@@ -26,6 +26,8 @@ type Detail = { key: string; params: Record<string, number>; } | null;
 export class GitStatusSummaryComponent {
   /** The last status read; `null` until one has been read. */
   readonly status = input.required<GitStatus | null>();
+  /** The branch was chosen, to open the branch list. */
+  readonly openBranches = output<void>();
 
   protected readonly detail = computed((): Detail => {
     const status = this.status();

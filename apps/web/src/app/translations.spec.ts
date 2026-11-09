@@ -165,7 +165,8 @@ describe('i18n/en.json', () => {
     [ 'toPushAndPull', { ahead: 2, behind: 3 }, '2 to push, 3 to pull' ],
     [ 'notPublished', {}, 'Not published' ],
     [ 'noCommits', {}, 'no commits yet' ],
-    [ 'noBranch', {}, 'No branch' ]
+    [ 'noBranch', {}, 'No branch' ],
+    [ 'openListNoBranch', {}, 'No branch: open the branch list' ]
   ])('formats the git status text %s', (key, values, text) => {
     const message = texts[`${SCREEN}.GitStatusSummaryComponent.${key}`] as string;
 

@@ -45,7 +45,9 @@ describe('GitStatusSummaryComponent', () => {
           [`${K}.toPushAndPull`]: '{{ ahead }} to push, {{ behind }} to pull',
           [`${K}.notPublished`]: 'Not published',
           [`${K}.noCommits`]: 'no commits yet',
-          [`${K}.noBranch`]: 'No branch'
+          [`${K}.noBranch`]: 'No branch',
+          [`${K}.openList`]: 'Branch {{ branch }}: open the branch list',
+          [`${K}.openListNoBranch`]: 'No branch: open the branch list'
         })
       ]
     });
@@ -123,22 +125,20 @@ describe('GitStatusSummaryComponent', () => {
       vi.restoreAllMocks();
     });
 
-    it('puts its full name in a tooltip that a tap or long press shows, and lets the keyboard reach it', async () => {
+    it('shortens a long name, with the full name on hover, focus or long press', async () => {
       await show({ ...published, branch });
 
-      const element = host().querySelector('.branch') as HTMLElement;
       expect(tooltip().text()).toBe(branch);
       expect(tooltip().truncated()).toBe(true);
       expect(tooltip().longPress()).toBe(true);
-      expect(tooltip().showOnClick()).toBe(true);
-      expect(element.getAttribute('tabindex')).toBe('0');
+      // A tap opens the list, so it can't show the tooltip too.
+      expect(tooltip().showOnClick()).toBe(false);
     });
 
-    it('is not focusable for a branch that fits', async () => {
+    it('has no tooltip for a branch that fits', async () => {
       await show(published);
 
       expect(tooltip().truncated()).toBe(false);
-      expect(host().querySelector('.branch')?.getAttribute('tabindex')).toBeNull();
     });
 
     it('keeps nothing of a long branch after a detached HEAD', async () => {
@@ -147,7 +147,61 @@ describe('GitStatusSummaryComponent', () => {
       await show(published);
 
       expect(tooltip().truncated()).toBe(false);
-      expect(host().querySelector('.branch')?.getAttribute('tabindex')).toBeNull();
+    });
+  });
+
+  describe('the button', () => {
+    const button = () => host().querySelector('button') as HTMLButtonElement;
+
+    it('opens the list from the branch', async () => {
+      const opened = vi.fn();
+      fixture.componentInstance.openBranches.subscribe(opened);
+      await show(published);
+
+      button().click();
+
+      expect(opened).toHaveBeenCalledOnce();
+    });
+
+    it('says in its name what it does', async () => {
+      await show(published);
+
+      expect(button().textContent?.trim()).toBe('main');
+      expect(button().getAttribute('aria-label')).toBe('Branch main: open the branch list');
+    });
+
+    it('opens the list without a branch too, as that is the way back', async () => {
+      const opened = vi.fn();
+      fixture.componentInstance.openBranches.subscribe(opened);
+      await show({ ...published, branch: null, upstream: null });
+
+      expect(button().textContent?.trim()).toBe('No branch');
+      expect(button().getAttribute('aria-label')).toBe('No branch: open the branch list');
+
+      button().click();
+
+      expect(opened).toHaveBeenCalledOnce();
+    });
+
+    it('stays the same element when the branch goes away, so that it keeps the focus', async () => {
+      await show(published);
+      const before = button();
+
+      await show({ ...published, branch: null, upstream: null });
+
+      expect(button()).toBe(before);
+    });
+
+    it('leaves the counts out of the button', async () => {
+      await show({ ...published, ahead: 2 });
+
+      expect(button().textContent).not.toContain('to push');
+    });
+
+    it('is not there until the status has loaded', async () => {
+      await show(null);
+
+      expect(host().querySelector('button')).toBeNull();
     });
   });
 });

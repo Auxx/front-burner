@@ -106,6 +106,119 @@ async function showChanges(page: Page): Promise<void> {
   await expect(changesPane(page)).toBeVisible();
 }
 
+test.describe('the branch list', () => {
+  const branchButton = (page: Page, name: string) =>
+    page.getByRole('banner').getByRole('button', { name: `Branch ${name}: open the branch list` });
+  const list = (page: Page) => page.getByRole('dialog', { name: 'Branches' });
+  const filter = (page: Page) => list(page).getByRole('textbox', { name: 'Filter branches' });
+
+  test('AC-GIT-002.18: in a single-branch clone, the branch list shows the single-branch note', async ({ page, instance }) => {
+    const [ id ] = seed(instance.dataDir, {
+      repositories: [ { userId: ADMIN_ID, name: 'single', workingCopy: 'handbook', cloneMode: 'single-branch' } ]
+    }).repositoryIds;
+    await openScreen(page, `/repositories/${id}`);
+
+    await branchButton(page, 'main').click();
+
+    await expect(
+      list(page).getByText(
+        'This is a single-branch clone, so other remote branches aren\'t available.',
+        { exact: true }
+      )
+    ).toBeVisible();
+    expect((await new AxeBuilder({ page }).include('rs-branch-list').analyze()).violations).toEqual([]);
+  });
+
+  test('lists and filters the branches, with the current one marked, and returns the focus', async ({ page, instance }) => {
+    const { id, dir } = unconfirmedHandbook(instance);
+    gitIn(dir, 'branch', 'Docs');
+    gitIn(dir, 'update-ref', 'refs/remotes/origin/feature', 'HEAD');
+    await openScreen(page, `/repositories/${id}`);
+
+    await branchButton(page, 'main').click();
+
+    await expect(filter(page)).toBeFocused();
+    const rows = list(page).getByRole('listitem');
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(0)).toHaveText('Docs');
+    await expect(rows.nth(1)).toHaveText(/main\s*Current branch/);
+    await expect(rows.nth(2)).toHaveText('origin/feature');
+    await expect(list(page).getByRole('button', { name: /^main/ })).toHaveAttribute('aria-current', 'true');
+    expect((await new AxeBuilder({ page }).include('rs-branch-list').analyze()).violations).toEqual([]);
+
+    await filter(page).fill('docs');
+    await expect(rows).toHaveCount(1);
+    await filter(page).fill('nothing like this');
+    await expect(rows).toHaveCount(0);
+    await expect(list(page).getByRole('status')).toHaveText('No branches match this filter.');
+
+    await page.keyboard.press('Escape');
+    await expect(list(page)).toHaveCount(0);
+    await expect(branchButton(page, 'main')).toBeFocused();
+  });
+
+  test('works with the keyboard alone', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'A phone has no keyboard.');
+    const { id, dir } = unconfirmedHandbook(instance);
+    gitIn(dir, 'branch', 'Docs');
+    await openScreen(page, `/repositories/${id}`);
+    await expect(branchButton(page, 'main')).toBeVisible();
+
+    await branchButton(page, 'main').focus();
+    await page.keyboard.press('Enter');
+    await expect(filter(page)).toBeFocused();
+    // The filter has the focus at once, and the rows come with the list's read.
+    await expect(list(page).getByRole('button', { name: 'Docs' })).toBeVisible();
+
+    await page.keyboard.press('Tab');
+    await expect(list(page).getByRole('button', { name: 'Docs' })).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    // Selecting a branch only closes the list until plan 87.
+    await expect(list(page)).toHaveCount(0);
+    await expect(branchButton(page, 'main')).toBeFocused();
+  });
+
+  test('shows a long name without scrolling sideways', async ({ page, instance }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    const { id, dir } = unconfirmedHandbook(instance);
+    const branch = `notes/${'a-long-branch-name-'.repeat(11)}`.slice(0, 200);
+    gitIn(dir, 'checkout', '-q', '-b', branch);
+    await openScreen(page, `/repositories/${id}`);
+
+    await branchButton(page, branch).click();
+
+    const row = list(page).getByRole('listitem').filter({ hasText: branch });
+    await expect(row).toBeVisible();
+    expect(await list(page).locator('.body').evaluate(body => body.scrollWidth <= body.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const box = await row.boundingBox();
+    expect((box?.x ?? Infinity) + (box?.width ?? Infinity)).toBeLessThanOrEqual(320);
+  });
+
+  test('says why the list cannot be read, and Try again reads it', async ({ page, instance, monitor }) => {
+    const { id } = unconfirmedHandbook(instance);
+    await openScreen(page, `/repositories/${id}`);
+    await expect(branchButton(page, 'main')).toBeVisible();
+    await page.route('**/git/branches', route =>
+      route.fulfill({
+        status: 500,
+        json: { code: 'internal', params: {}, requestId: 'abcdef0123456789', message: 'internal' }
+      }), { times: 1 });
+
+    await branchButton(page, 'main').click();
+
+    await expect(list(page).getByRole('button', { name: 'Try again' })).toBeVisible();
+    await expect(list(page).getByRole('listitem')).toHaveCount(0);
+
+    await list(page).getByRole('button', { name: 'Try again' }).click();
+
+    await expect(list(page).getByRole('listitem')).toHaveCount(1);
+    await expect(filter(page)).toBeFocused();
+    drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/branches`);
+  });
+});
+
 test.describe('committing', () => {
   test('AC-GIT-002.4: unticking one of three files commits the two ticked files as the commit author, and the third stays in Changes', async ({ page, instance }) => {
     const { id, dir } = await handbook(instance);

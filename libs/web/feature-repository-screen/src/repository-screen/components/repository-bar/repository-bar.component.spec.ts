@@ -142,6 +142,47 @@ describe('RepositoryBarComponent', () => {
     bar().remove();
   });
 
+  const withBranch = async (): Promise<void> => {
+    await show();
+    fixture.componentRef.setInput('gitStatus', {
+      branch: 'main',
+      noCommits: false,
+      lastCommit: null,
+      upstream: 'origin/main',
+      upstreamGone: false,
+      sameNameRemote: false,
+      ahead: 0,
+      behind: 0,
+      changes: [],
+      mergeInProgress: false,
+      networkJob: null,
+      fetchProblem: null
+    });
+    await settle(fixture);
+  };
+
+  it('passes on that the branch was chosen', async () => {
+    await withBranch();
+    const opened = vi.fn();
+    fixture.componentInstance.openBranches.subscribe(opened);
+
+    (bar().querySelector('rs-git-status-summary button') as HTMLButtonElement).click();
+
+    expect(opened).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the focus in the bar when a merge takes the branch button away', async () => {
+    await withBranch();
+    document.body.append(bar());
+    (bar().querySelector('rs-git-status-summary button') as HTMLButtonElement).focus();
+
+    fixture.componentRef.setInput('merging', true);
+    await settle(fixture);
+
+    expect(document.activeElement?.closest('rs-merge-summary')).not.toBeNull();
+    bar().remove();
+  });
+
   it.each([ true, false ])('keeps the focus in the bar when the actions swap (merge ends: %s)', async ends => {
     await show();
     fixture.componentRef.setInput('merging', ends);

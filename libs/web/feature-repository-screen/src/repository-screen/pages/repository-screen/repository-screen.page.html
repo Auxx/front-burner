@@ -24,6 +24,7 @@
                            [mergeState]="merge.state()"
                            [aborting]="mergeActions.aborting()"
                            (abortMerge)="mergeActions.abort()"
+                           (openBranches)="openBranches()"
                            (fetch)="jobs.start('fetch')"
                            (pull)="jobs.start('pull')"
                            (push)="jobs.start('push')"

@@ -6,7 +6,7 @@ import { firstValueFrom, type Observable, of, Subject, throwError } from 'rxjs';
 
 import { apiError, dialogButton, overlay, settleDialog, type } from '../../../testing/dialog-testing';
 import { translocoTesting } from '../../../testing/transloco-testing';
-import { type BranchChoice, BranchListDialog, type BranchListData } from './branch-list.dialog';
+import { type BranchChoice, type BranchListData, BranchListDialog } from './branch-list.dialog';
 
 const K = 'web-feature-repository-screen.BranchListDialog';
 

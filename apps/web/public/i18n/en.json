@@ -590,6 +590,8 @@
   "web-feature-repository-screen.GitStatusSummaryComponent.notPublished": "Not published",
   "web-feature-repository-screen.GitStatusSummaryComponent.noCommits": "no commits yet",
   "web-feature-repository-screen.GitStatusSummaryComponent.noBranch": "No branch",
+  "web-feature-repository-screen.GitStatusSummaryComponent.openList": "Branch {{ branch }}: open the branch list",
+  "web-feature-repository-screen.GitStatusSummaryComponent.openListNoBranch": "No branch: open the branch list",
   "web-feature-repository-screen.SaveStatusComponent.saved": "Saved",
   "web-feature-repository-screen.SaveStatusComponent.saving": "Saving…",
   "web-feature-repository-screen.SaveStatusComponent.offline": "Not saved — offline, retrying",
