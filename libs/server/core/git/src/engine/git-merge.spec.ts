@@ -905,6 +905,24 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       expect(readFileSync(join(work, 'binary.md'))).toEqual(Buffer.from('mine\0\n'));
     });
 
+    it('preserves the BOM on a conflicting Markdown file', async () => {
+      const BOM = Buffer.from([ 0xef, 0xbb, 0xbf ]);
+      writeFileSync(join(work, 'bom.md'), Buffer.concat([ BOM, Buffer.from('# Title\nbase\n', 'utf8') ]));
+      commitAll('base');
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      onUpstream(() => {
+        writeFileSync(join(work, 'bom.md'), Buffer.concat([ BOM, Buffer.from('# Title\ntheirs\n', 'utf8') ]));
+      });
+      writeFileSync(join(work, 'bom.md'), Buffer.concat([ BOM, Buffer.from('# Title\nmine\n', 'utf8') ]));
+      commitAll('mine');
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
+
+      const content = readFileSync(join(work, 'bom.md'));
+      expect(content.slice(0, 3)).toEqual(BOM);
+      expect(content.toString('utf8')).toContain('<<<<<<< main');
+    });
+
     it('leaves other files as git wrote them', async () => {
       write('notes.txt', 'base\n');
       write('clean.md', 'a\nb\nc\n');

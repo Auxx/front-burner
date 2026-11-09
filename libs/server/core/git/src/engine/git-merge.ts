@@ -8,8 +8,8 @@ import { GitResult } from '../runner/git-runner';
 import { GitOperationError } from './git-errors';
 import { LOCAL_MAX_OUTPUT_BYTES, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
-/** Fatal decoder — throws when the input contains bytes that are not valid UTF-8. */
-const utf8Fatal = new TextDecoder('utf-8', { fatal: true });
+/** Fatal decoder — throws when the input contains bytes that are not valid UTF-8, preserves BOM. */
+const utf8Fatal = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 /** Where the commit before a merge is kept, so that git's garbage collection keeps it (A-5.12). */
 export const PRE_MERGE_REF = 'refs/front-burner/pre-merge';
