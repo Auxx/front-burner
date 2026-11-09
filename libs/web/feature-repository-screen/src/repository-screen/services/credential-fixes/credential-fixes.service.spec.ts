@@ -121,7 +121,7 @@ describe('CredentialFixesService', () => {
         { provide: GitApi, useValue: { push, fetch, pull, gitJob } },
         {
           provide: OpenFilesService,
-          useValue: { flushAll: vi.fn(async () => undefined), unsavedPaths: () => [], notSaved: () => null }
+          useValue: { flushed: vi.fn(async () => null), notSaved: () => null }
         },
         { provide: CommitAuthorGate, useValue: { ready: vi.fn(async () => true), refresh: vi.fn() } },
         { provide: PushChannelService, useValue: { events: jobEvents, reconnected: new Subject() } },

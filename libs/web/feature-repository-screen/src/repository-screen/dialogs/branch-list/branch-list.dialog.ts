@@ -63,7 +63,8 @@ function firstWithCurrent(
  * note about what is missing (GA-41). A dialog rather than a menu, since a filter
  * field in a menu breaks the ARIA menu pattern (NV-19), and it works the same way
  * on a phone. It reads the branches each time it opens, so it can't be out of
- * date, and closes with the branch that was chosen, if any.
+ * date, and closes with the branch that was chosen, if any and if it is not the
+ * current one.
  *
  * The filter is always shown, and looks for the name as it is listed, ignoring
  * case. Only 200 matches are rendered: the first ones by name, always with the
@@ -137,8 +138,9 @@ export class BranchListDialog {
     this.filterInput().nativeElement.focus();
   }
 
+  /** The current branch as this read has it, which the status may not know yet: there is nothing to switch to. */
   protected chooseLocal(name: string): void {
-    this.ref.close({ kind: 'local', name });
+    this.ref.close(name === this.shown()?.current ? undefined : { kind: 'local', name });
   }
 
   protected chooseRemote(branch: string): void {

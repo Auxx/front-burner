@@ -75,6 +75,11 @@ export class DiskChangesService {
     this.follow(path, () => this.check(path, known), () => this.waiting.delete(key));
   }
 
+  /** Resolves once the changes noticed so far have been found and followed. */
+  settled(): Promise<void> {
+    return this.queue;
+  }
+
   /**
    * How the file at `path` differs on disk from its last load or save, or
    * `null` when it does not, when it is not open, or when this tab is

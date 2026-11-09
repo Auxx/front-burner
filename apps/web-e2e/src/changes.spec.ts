@@ -174,9 +174,9 @@ test.describe('the branch list', () => {
     await expect(list(page).getByRole('button', { name: 'Docs' })).toBeFocused();
     await page.keyboard.press('Enter');
 
-    // Selecting a branch only closes the list until plan 87.
     await expect(list(page)).toHaveCount(0);
-    await expect(branchButton(page, 'main')).toBeFocused();
+    await expect(branchButton(page, 'Docs')).toBeFocused();
+    expect(gitIn(dir, 'branch', '--show-current').trim()).toBe('Docs');
   });
 
   test('keeps a row reached with Shift+Tab clear of the filter', async ({ page, instance, isMobile }) => {
@@ -239,6 +239,185 @@ test.describe('the branch list', () => {
     await expect(list(page).getByRole('listitem')).toHaveCount(1);
     await expect(filter(page)).toBeFocused();
     drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/branches`);
+  });
+
+  test.describe('switching', () => {
+    const REFUSAL = 'Commit or discard your changes before switching branches.';
+    const editor = (page: Page, name: string) =>
+      page.getByRole('main', { name: 'Editor' }).getByRole('textbox', { name, exact: true });
+    const refusal = (page: Page) => page.getByRole('dialog', { name: 'Can\'t switch branches' });
+    const treeEntry = (page: Page, name: string) =>
+      page.getByRole('tree', { name: 'Files' }).getByRole('treeitem', {
+        name: new RegExp(`^${name.replace('.', '\\.')},`)
+      });
+    const filesButton = (page: Page) =>
+      page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files' });
+
+    async function select(page: Page, from: string, to: string): Promise<void> {
+      await branchButton(page, from).click();
+      await list(page).getByRole('button', { name: to }).click();
+      await expect(list(page)).toHaveCount(0);
+    }
+
+    /** Shows the file tree: beside the editor on wide screens, and a drawer on phones. */
+    async function showTree(page: Page): Promise<void> {
+      if (await filesButton(page).getAttribute('aria-pressed') === 'false') {
+        await filesButton(page).click();
+      }
+      await expect(page.getByRole('tree', { name: 'Files' })).toBeVisible();
+    }
+
+    /** The branch `feature`, whose `README.md` differs, with `feature.md` added and `docs/guide.md` removed. */
+    function featureBranch(dir: string): void {
+      gitIn(dir, 'checkout', '-q', '-b', 'feature');
+      writeFileSync(join(dir, 'README.md'), '# On feature\n');
+      writeFileSync(join(dir, 'feature.md'), '# Feature\n');
+      rmSync(join(dir, 'docs/guide.md'));
+      gitIn(dir, 'add', '.');
+      gitIn(dir, 'commit', '-q', '-m', 'On feature');
+      gitIn(dir, 'checkout', '-q', 'main');
+    }
+
+    test('AC-GIT-002.15: the branch list shows local and remote branches and filters them by name; selecting origin/feature creates and switches to a local feature that tracks it', async ({ page, instance }) => {
+      const { id, dir } = unconfirmedHandbook(instance);
+      gitIn(dir, 'remote', 'add', 'origin', 'https://example.invalid/handbook.git');
+      gitIn(dir, 'branch', 'docs');
+      gitIn(dir, 'update-ref', 'refs/remotes/origin/feature', 'HEAD');
+      await openScreen(page, `/repositories/${id}`);
+
+      await branchButton(page, 'main').click();
+      await expect(list(page).getByRole('listitem')).toHaveCount(3);
+      await filter(page).fill('FEAT');
+      await expect(list(page).getByRole('listitem')).toHaveCount(1);
+      await list(page).getByRole('button', { name: 'origin/feature' }).click();
+
+      await expect(branchButton(page, 'feature')).toBeVisible();
+      expect(gitIn(dir, 'rev-parse', '--abbrev-ref', 'feature@{upstream}').trim()).toBe('origin/feature');
+    });
+
+    test('AC-GIT-002.17: switching branches with uncommitted changes is refused with the list of changed files; without changes, the switch updates the tree and the open file', async ({ page, instance, monitor }) => {
+      const { id, dir } = unconfirmedHandbook(instance);
+      featureBranch(dir);
+      writeFileSync(join(dir, 'README.md'), '# Changed\n');
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await expect(editor(page, 'README.md')).toContainText('# Changed');
+
+      await select(page, 'main', 'feature');
+
+      await expect(refusal(page).getByText(REFUSAL)).toBeVisible();
+      await expect(refusal(page).getByRole('listitem')).toHaveText([ 'README.md' ]);
+      expect((await new AxeBuilder({ page }).include('rs-switch-refused').analyze()).violations).toEqual([]);
+      expect(gitIn(dir, 'branch', '--show-current').trim()).toBe('main');
+
+      await refusal(page).getByRole('button', { name: 'Show changes' }).click();
+
+      await expect(refusal(page)).toHaveCount(0);
+      await expect(changesPane(page)).toBeVisible();
+      await expect(rows(page)).toHaveCount(1);
+
+      gitIn(dir, 'checkout', '-q', '--', 'README.md');
+      await page.reload();
+      await expect(editor(page, 'README.md')).toContainText('# Handbook');
+
+      await select(page, 'main', 'feature');
+
+      await expect(branchButton(page, 'feature')).toBeVisible();
+      await expect(editor(page, 'README.md')).toContainText('# On feature');
+      await showTree(page);
+      await expect(treeEntry(page, 'feature.md')).toBeVisible();
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/switch`);
+    });
+
+    test('sends a waiting save first, so that it refuses the switch', async ({ page, instance, isMobile, monitor }) => {
+      test.skip(isMobile, 'Typing is covered by the editor\'s tests.');
+      const { id, dir } = unconfirmedHandbook(instance);
+      featureBranch(dir);
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await editor(page, 'README.md').click();
+      await page.keyboard.type('Typed. ');
+
+      await select(page, 'main', 'feature');
+
+      await expect(refusal(page).getByRole('listitem')).toHaveText([ 'README.md' ]);
+      expect(gitIn(dir, 'branch', '--show-current').trim()).toBe('main');
+      expect(readFileSync(join(dir, 'README.md'), 'utf8')).toContain('Typed. ');
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/switch`);
+    });
+
+    test('shows many files in a list that scrolls inside the dialog', async ({ page, instance, monitor }) => {
+      await page.setViewportSize({ width: 320, height: 480 });
+      const { id, dir } = unconfirmedHandbook(instance);
+      gitIn(dir, 'branch', 'other');
+      for (let index = 0; index < 60; index++) {
+        writeFileSync(join(dir, `new-${index}.md`), '# New\n');
+      }
+      await openScreen(page, `/repositories/${id}`);
+
+      await select(page, 'main', 'other');
+
+      await expect(refusal(page).getByRole('listitem')).toHaveCount(60);
+      const body = refusal(page).locator('.body');
+      expect(await body.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+      await expect(refusal(page).getByRole('button', { name: 'Show changes' })).toBeInViewport();
+      expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/switch`);
+    });
+
+    test('says why a switch failed, and leaves the working copy as it was', async ({ page, instance, monitor }) => {
+      const { id, dir } = unconfirmedHandbook(instance);
+      gitIn(dir, 'branch', 'other');
+      await openScreen(page, `/repositories/${id}`);
+      await expect(branchButton(page, 'main')).toBeVisible();
+      await branchButton(page, 'main').click();
+      await expect(list(page).getByRole('button', { name: 'other' })).toBeVisible();
+      gitIn(dir, 'branch', '-D', 'other');
+
+      await list(page).getByRole('button', { name: 'other' }).click();
+
+      await expect(page.getByText('This branch doesn\'t exist any more.')).toBeVisible();
+      await expect(branchButton(page, 'main')).toBeVisible();
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/switch`);
+    });
+
+    test('closes a file the new branch does not have', async ({ page, instance, monitor }) => {
+      const { id, dir } = unconfirmedHandbook(instance);
+      featureBranch(dir);
+      await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
+      await expect(editor(page, 'guide.md')).toBeVisible();
+
+      await select(page, 'main', 'feature');
+
+      await expect(page.getByRole('main', { name: 'Editor' }).getByText('This file was deleted or renamed elsewhere.'))
+        .toBeVisible();
+      await expect(editor(page, 'guide.md')).toHaveCount(0);
+      // The route stays, as after a delete elsewhere (FB-13, AC-FILE-001.21), so going back shows the file again.
+      await expect(page).toHaveURL(new RegExp(`/repositories/${id}/files/docs/guide.md$`));
+
+      await select(page, 'feature', 'main');
+
+      await expect(editor(page, 'guide.md')).toContainText('# Guide');
+      // The editor's check of the file gone elsewhere (ED-21), and the listing that found its folder gone (FB-42).
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/file/state`);
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/folder`);
+    });
+
+    test('follows a switch made in another tab', async ({ page, instance }) => {
+      const { id, dir } = unconfirmedHandbook(instance);
+      featureBranch(dir);
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await expect(editor(page, 'README.md')).toContainText('# Handbook');
+      const other = await page.context().newPage();
+      try {
+        await other.goto(`/repositories/${id}/files/README.md`);
+        await select(other, 'main', 'feature');
+        await expect(branchButton(other, 'feature')).toBeVisible();
+      } finally {
+        await other.close();
+      }
+
+      await expect(branchButton(page, 'feature')).toBeVisible();
+      await expect(editor(page, 'README.md')).toContainText('# On feature');
+    });
   });
 });
 

@@ -380,11 +380,10 @@ export class NetworkJobService {
    * disk, which then says why; the job would go on without those edits.
    */
   private async saved(operation: GitNetworkJobType, repositoryId: number): Promise<boolean> {
-    await this.openFiles.flushAll();
+    const notSaved = await this.openFiles.flushed(repositoryId);
     if (this.store.followed() !== repositoryId) {
       return false;
     }
-    const notSaved = this.openFiles.notSaved(repositoryId, this.openFiles.unsavedPaths(repositoryId));
     if (notSaved !== null) {
       this.fail(operation, notSaved.error.code, stringParams(notSaved.error.params), false);
     }

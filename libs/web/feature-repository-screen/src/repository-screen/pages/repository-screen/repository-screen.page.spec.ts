@@ -106,6 +106,7 @@ describe('RepositoryScreenPage', () => {
   let gitStatusAnswer: Observable<GitStatus> | undefined;
   let abortMerge: ReturnType<typeof vi.fn>;
   let gitBranches: ReturnType<typeof vi.fn<(id: number) => Observable<GitBranchList>>>;
+  let switchBranch: ReturnType<typeof vi.fn<() => Observable<void>>>;
 
   const baseStatus = (): GitStatus => ({
     branch: 'main',
@@ -152,6 +153,7 @@ describe('RepositoryScreenPage', () => {
             },
             gitStatus: (): Observable<GitStatus> => gitStatusAnswer ?? of(baseStatus()),
             gitBranches,
+            switchBranch,
             gitMerge: () => of({ into: 'main', from: 'origin/main', files: [], otherFiles: [], message: 'Merge' }),
             abortMerge
           }
@@ -228,6 +230,7 @@ describe('RepositoryScreenPage', () => {
     changes = [];
     gitStatusAnswer = undefined;
     abortMerge = vi.fn(() => of(undefined));
+    switchBranch = vi.fn(() => of(undefined));
     gitBranches = vi.fn(() =>
       of<GitBranchList>({
         current: 'main',
@@ -1276,6 +1279,46 @@ describe('RepositoryScreenPage', () => {
 
         expect(list()).toBeNull();
         expect(document.activeElement).toBe(branchButton());
+      });
+
+      it('switches to the branch selected in the list', async () => {
+        gitBranches.mockReturnValue(of<GitBranchList>({
+          current: 'main',
+          local: [ { name: 'docs', upstream: null } ],
+          remote: [],
+          singleBranch: false
+        }));
+        await visit('/repositories/12');
+
+        branchButton().click();
+        await settleDialog();
+        overlay().querySelector<HTMLButtonElement>('li button')?.click();
+        await settleDialog();
+
+        expect(switchBranch).toHaveBeenCalledExactlyOnceWith(12, { name: 'docs', remote: false });
+      });
+
+      it('shows Changes when asked to from a refused switch', async () => {
+        gitBranches.mockReturnValue(of<GitBranchList>({
+          current: 'main',
+          local: [ { name: 'docs', upstream: null } ],
+          remote: [],
+          singleBranch: false
+        }));
+        switchBranch.mockReturnValue(failure(409, 'switch-uncommitted-changes'));
+        await visit('/repositories/12');
+        expect(page().querySelector('rs-changes-pane')?.hasAttribute('hidden')).toBe(true);
+
+        branchButton().click();
+        await settleDialog();
+        overlay().querySelector<HTMLButtonElement>('li button')?.click();
+        await settleDialog();
+        dialogButton('web-feature-repository-screen.SwitchRefusedDialog.showChanges')?.click();
+        await settle(harness.fixture);
+        await settleDialog();
+
+        expect(overlay().querySelector('rs-switch-refused')).toBeNull();
+        expect(page().querySelector('rs-changes-pane')?.hasAttribute('hidden')).toBe(false);
       });
 
       it('closes the list when a merge starts, and gives the focus to the merge bar', async () => {

@@ -182,6 +182,15 @@ describe('i18n/en.json', () => {
     expect(new IntlMessageFormat(message, 'en').format({ hidden })).toBe(text);
   });
 
+  it.each([
+    [ 1, 'and one more file' ],
+    [ 4800, 'and 4,800 more files' ]
+  ])('says %i more files were refused for a switch', (hidden, text) => {
+    const message = texts[`${SCREEN}.SwitchRefusedDialog.more`] as string;
+
+    expect(new IntlMessageFormat(message, 'en').format({ hidden })).toBe(text);
+  });
+
   it.each([ 0, 1, 2, 3, 4 ])('has the strength text for score %i', score => {
     expect(texts[`${AUTH}.PasswordSetupStepComponent.strengths.${score}`]).toEqual(expect.any(String));
   });

@@ -22,8 +22,6 @@ import {
   AppShellSideDirective,
   ButtonComponent,
   CentredIslandComponent,
-  type DialogRef,
-  DialogService,
   IconComponent,
   InlineBannerComponent,
   IslandComponent,
@@ -35,7 +33,7 @@ import type { PreviewPathLink } from '@front-burner/web-markdown';
 import { ImageCache } from '@front-burner/web-markdown/images';
 import { AppHeaderComponent, PageNotFoundPage, RouteAnnouncerComponent } from '@front-burner/web-shell';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
-import { map, take } from 'rxjs';
+import { map, merge, take } from 'rxjs';
 
 import { ChangesPaneComponent } from '../../components/changes-pane/changes-pane.component';
 import { DiffViewComponent } from '../../components/diff-view/diff-view.component';
@@ -46,7 +44,7 @@ import { LockedKeyBannerComponent } from '../../components/locked-key-banner/loc
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
 import { RemoteChangeNoticeComponent } from '../../components/remote-change-notice/remote-change-notice.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
-import { type BranchChoice, type BranchListData, BranchListDialog } from '../../dialogs/branch-list/branch-list.dialog';
+import { BranchActionsService } from '../../services/branch-actions/branch-actions.service';
 import { CommitAuthorGate } from '../../services/commit-author-gate/commit-author-gate.service';
 import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
 import { CommitService } from '../../services/commit/commit.service';
@@ -115,7 +113,9 @@ const MAX_BADGE_COUNT = 99;
  * through `MergeActionsService` (GC-2, GC-6, GC-23). Below the bar too, `RemoteChangesService`'s
  * notice says when a fetch found new commits, with **Pull** (GA-34); the focus goes to the
  * git actions when it goes away with the focus in it. The branch in the bar opens the
- * branch list (GA-36).
+ * branch list, and `BranchActionsService` switches to the branch chosen there, or says
+ * why not, with **Show changes** (GA-36, GA-37, GA-39). What follows a switch needs
+ * nothing of its own: to `TreeSyncService` it is a change made elsewhere (GA-40).
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -165,6 +165,7 @@ const MAX_BADGE_COUNT = 99;
     NetworkJobService,
     RemoteChangesService,
     CredentialFixesService,
+    BranchActionsService,
     // One per screen, so that switching files or tabs loads no image again (IM-10).
     ImageCache
   ],
@@ -194,9 +195,7 @@ export class RepositoryScreenPage {
   private readonly credentialFixes = inject(CredentialFixesService);
   private readonly pushChannel = inject(PushChannelService);
   private readonly git = inject(GitApi);
-  private readonly dialogs = inject(DialogService);
-  /** The branch list while it is open. */
-  private branchList: DialogRef<BranchChoice> | null = null;
+  protected readonly branchActions = inject(BranchActionsService);
 
   protected readonly user = this.currentUser.user;
   /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
@@ -314,7 +313,7 @@ export class RepositoryScreenPage {
       });
     // The app header's loader is not on this screen (NV-9).
     this.currentUser.load().catch(() => undefined);
-    this.credentialFixes.showChanges
+    merge(this.credentialFixes.showChanges, this.branchActions.showChanges)
       .pipe(takeUntilDestroyed())
       .subscribe(() => this.selectSideTool('changes', this.shell()?.narrow() ?? false));
     this.updateTitle();
@@ -332,8 +331,7 @@ export class RepositoryScreenPage {
   private closeBranchListWhenMergeStarts(): void {
     const injector = inject(Injector);
     effect(() => {
-      if (this.merge.merging() && this.branchList) {
-        this.branchList.close();
+      if (this.merge.merging() && this.branchActions.closeList()) {
         afterNextRender(() => this.bar()?.focusActions(), { injector });
       }
     });
@@ -460,22 +458,6 @@ export class RepositoryScreenPage {
   protected readonly lockedKeyShown = computed(() =>
     this.session.state() === 'ready' && !this.lockedKey.dismissed() ? this.lockedKey.key() : null
   );
-
-  /** The branch in the bar was chosen. What the list closes with is not used yet: plan 87 switches to it. */
-  protected openBranches(): void {
-    const repositoryId = this.session.repository()?.id;
-    if (repositoryId !== undefined) {
-      const ref = this.dialogs.open<BranchListDialog, BranchListData, BranchChoice>(BranchListDialog, {
-        data: { repositoryId }
-      });
-      this.branchList = ref;
-      ref.closed.subscribe(() => {
-        if (this.branchList === ref) {
-          this.branchList = null;
-        }
-      });
-    }
-  }
 
   /** The fix of a push or fetch problem (RC-4), through `CredentialFixesService`. */
   protected fixProblem(fix: GitProblem['fix']): void {

@@ -325,6 +325,26 @@ export class OpenFilesService {
       .map(file => file.path());
   }
 
+  /** The path of the repository's first open file whose browser draft is on offer (ED-7), or `null`. */
+  offeredDraft(repositoryId: number): string | null {
+    this.all();
+    const files = [ ...this.files.get(repositoryId)?.values() ?? [] ];
+    return files.find(file => file.draft() !== null)?.path() ?? null;
+  }
+
+  /**
+   * Sends every waiting save, for a git operation to start from what is on disk,
+   * and says why the newest edits of the first of `paths` that has any did not get
+   * there; without `paths`, of any file (see `notSaved`).
+   */
+  async flushed(
+    repositoryId: number,
+    paths?: readonly string[]
+  ): Promise<ReturnType<OpenFilesService['notSaved']>> {
+    await this.flushAll();
+    return this.notSaved(repositoryId, paths ?? this.unsavedPaths(repositoryId));
+  }
+
   /**
    * Why the newest edits of the first of `paths` that has any did not reach the
    * disk, after a flush: its save failed, it waits for the user, or it is held,
@@ -392,7 +412,8 @@ export class OpenFilesService {
     file.saver.rebase(content.content, content.hash);
     file.file = content;
     file.size = content.size;
-    this.settle(file, repositoryId, content, options.keepDraft);
+    // A draft on offer is the user's to decide about (ED-7), whatever happened to the file on disk.
+    this.settle(file, repositoryId, content, options.keepDraft || (!options.discard && file.draft() !== null));
     file.revision.update(revision => revision + 1);
     return true;
   }

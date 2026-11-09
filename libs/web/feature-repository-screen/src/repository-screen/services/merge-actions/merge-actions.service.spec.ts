@@ -103,7 +103,7 @@ describe('MergeActionsService', () => {
       imports: [
         translocoTesting({
           'errors.merge-abort-failed': 'The merge could not be aborted.',
-          'web-feature-repository-screen.MergeActionsService.reference': 'Reference: {{ reference }}'
+          'web-feature-repository-screen.FailureToastService.reference': 'Reference: {{ reference }}'
         })
       ],
       providers: [

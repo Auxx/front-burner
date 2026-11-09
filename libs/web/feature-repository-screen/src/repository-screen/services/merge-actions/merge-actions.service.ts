@@ -1,13 +1,13 @@
 import { inject, Injectable, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { DialogService, ToastService } from '@front-burner/ui';
+import { DialogService } from '@front-burner/ui';
 import { GitApi } from '@front-burner/web-api-client';
-import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
-import { TranslocoService } from '@jsverse/transloco';
+import { toApiError } from '@front-burner/web-core';
 import { firstValueFrom } from 'rxjs';
 
 import { AbortMergeDialog } from '../../dialogs/abort-merge/abort-merge.dialog';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
+import { FailureToastService } from '../failure-toast/failure-toast.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { MergeStore } from '../merge-store/merge-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
@@ -45,9 +45,7 @@ export class MergeActionsService {
   private readonly commands = inject(EntryCommandsService);
   private readonly session = inject(RepositorySessionService);
   private readonly route = inject(ActivatedRoute);
-  private readonly toast = inject(ToastService);
-  private readonly errorText = inject(ApiErrorTextService);
-  private readonly transloco = inject(TranslocoService);
+  private readonly failures = inject(FailureToastService);
 
   private readonly abortRunning = signal(false);
   private asking = false;
@@ -138,7 +136,7 @@ export class MergeActionsService {
   /** Says why, unless the merge turned out to have ended, and reads what is true now. */
   private async failed(error: unknown): Promise<void> {
     if (!this.mergeEnded(error)) {
-      this.showFailure(error);
+      this.failures.show(toApiError(error));
     }
     await Promise.all([ this.status.refresh(), this.store.refresh() ]);
   }
@@ -153,15 +151,5 @@ export class MergeActionsService {
 
   private routePath(): string {
     return this.route.snapshot.paramMap.get('path') ?? '';
-  }
-
-  private showFailure(error: unknown): void {
-    const { text, reference } = this.errorText.describe(toApiError(error));
-    const key = 'web-feature-repository-screen.MergeActionsService';
-    this.toast.show({
-      message: reference === null ? text : `${text} ${this.transloco.translate(`${key}.reference`, { reference })}`,
-      dismissLabel: this.transloco.translate(`${key}.dismiss`),
-      status: 'danger'
-    });
   }
 }

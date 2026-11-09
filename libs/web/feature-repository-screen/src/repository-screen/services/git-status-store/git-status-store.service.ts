@@ -68,6 +68,7 @@ export class GitStatusStore {
   /** When the first `files.changed` of the current wait came, or `null` without a wait. */
   private waitingSince: number | null = null;
   private request: Subscription | undefined;
+  private latestRead: Promise<void> = Promise.resolve();
 
   constructor() {
     effect(() => {
@@ -110,7 +111,7 @@ export class GitStatusStore {
     if (id === null) {
       return Promise.resolve();
     }
-    return new Promise(resolve => {
+    this.latestRead = new Promise(resolve => {
       this.request?.unsubscribe();
       this.readRunning.set(true);
       const ended = () => {
@@ -128,6 +129,19 @@ export class GitStatusStore {
         }
       });
     });
+    return this.latestRead;
+  }
+
+  /**
+   * Reads the status at once and waits for the read that counts, as a newer one can
+   * cancel it. Resolves whether `status` is now up to date; `refresh` doesn't tell.
+   */
+  async readFresh(): Promise<boolean> {
+    await this.refresh();
+    while (this.readRunning()) {
+      await this.latestRead;
+    }
+    return this.readable() !== null && !this.readFailed();
   }
 
   private follow(): Subscription {

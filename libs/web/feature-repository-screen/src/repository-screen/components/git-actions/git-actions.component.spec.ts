@@ -61,6 +61,20 @@ describe('GitActionsComponent', () => {
 
   afterEach(() => element().remove());
 
+  it('offers no action during a branch switch, and says why', async () => {
+    await show();
+    expect(element().querySelector('[aria-disabled="true"]')).toBeNull();
+
+    fixture.componentRef.setInput('switching', true);
+    await fixture.whenStable();
+
+    const shown = [ ...element().querySelectorAll('button') ];
+    expect(shown).toHaveLength(3);
+    for (const button of shown) {
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+    }
+  });
+
   it('offers Fetch once the status is read', async () => {
     await show({ status: status({ ahead: 0, upstream: null }) });
     expect(named('fetch').getAttribute('aria-disabled')).toBeNull();
