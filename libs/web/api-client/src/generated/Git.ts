@@ -68,6 +68,10 @@ export class GitApi {
   gitMergeVersion(
     id: number,
     query: {
+      /**
+       * @minLength 1
+       * @maxLength 4096
+       */
       path: string;
       side: 'ours' | 'theirs';
     }
