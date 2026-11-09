@@ -37,6 +37,12 @@ const browsers = (process.env['E2E_BROWSERS'] || 'chromium,firefox')
 
 export default defineConfig({
   ...nxE2EPreset(import.meta.dirname, { testDir: './src' }),
+  /*
+   * The preset runs one worker on CI. Every test starts its own server, on its
+   * own port and data directory, so tests can run side by side; two leave the
+   * runner's other cores to the servers and git.
+   */
+  workers: process.env['CI'] ? 2 : undefined,
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     trace: 'on-first-retry'
