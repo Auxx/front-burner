@@ -1,5 +1,13 @@
 import { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitMerge, GitOptions, GitRunner, LocalGit, WorkingTreeLock } from '@front-burner/server-core-git';
+import {
+  GitBranches,
+  GitEngine,
+  GitMerge,
+  GitOptions,
+  GitRunner,
+  LocalGit,
+  WorkingTreeLock
+} from '@front-burner/server-core-git';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
 import type { DataLayout } from '@front-burner/server-core-storage';
 import { FileContents, OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
@@ -69,6 +77,7 @@ describe('GitController', () => {
   let commitAuthor: RepositoryCommitAuthor;
   let published: PushEvent[];
   let fileOpened: ReturnType<typeof vi.fn<FetchScheduler['fileOpened']>>;
+  let cloneMode: 'full' | 'single-branch';
 
   const status = (id = READY) => request(app.getHttpServer()).get(`/repositories/${id}/git/status`);
   const commit = (body: object, id = READY) =>
@@ -86,6 +95,7 @@ describe('GitController', () => {
     commitAuthor = { author: ADA, source: 'default', confirmed: true };
     published = [];
     fileOpened = vi.fn();
+    cloneMode = 'full';
     const repositories = {
       root: (userId: number, id: number) => {
         if (userId !== USER || (id !== READY && id !== CLONING)) {
@@ -95,7 +105,8 @@ describe('GitController', () => {
           throw new ApiErrorException(409, 'repository-not-openable', { status: 'cloning' });
         }
         return root;
-      }
+      },
+      open: (userId: number, id: number) => ({ row: { cloneMode }, root: repositories.root(userId, id) })
     };
     const commitAuthors = {
       forRepository: (userId: number, id: number) => {
@@ -119,6 +130,7 @@ describe('GitController', () => {
         // And pulling.
         { provide: PullService, useValue: {} },
         { provide: GitMerge, useValue: gitMerge },
+        { provide: GitBranches, useValue: new GitBranches(new LocalGit(new GitRunner())) },
         {
           provide: MergeStateService,
           useValue: new MergeStateService(
@@ -329,6 +341,34 @@ describe('GitController', () => {
       const { body } = await diff('').expect(400);
 
       expect(body).toMatchObject({ code: 'validation-failed' });
+    });
+  });
+
+  describe('branches', () => {
+    const branches = (id = READY) => request(app.getHttpServer()).get(`/repositories/${id}/git/branches`);
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')('lists the branches and says what kind of clone it is', async () => {
+      git(root, 'branch', 'draft');
+      git(root, 'update-ref', 'refs/remotes/origin/feature', 'main');
+
+      expect((await branches().expect(200)).body).toEqual({
+        current: 'main',
+        local: [ { name: 'draft', upstream: null }, { name: 'main', upstream: null } ],
+        remote: [ { name: 'origin/feature', branch: 'feature' } ],
+        singleBranch: false
+      });
+
+      cloneMode = 'single-branch';
+      expect((await branches().expect(200)).body).toMatchObject({ singleBranch: true });
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      expect((await branches(9).expect(404)).body).toMatchObject({ code: 'not-found' });
+    });
+
+    it('refuses a repository that is not ready', async () => {
+      expect((await branches(CLONING).expect(409)).body).toMatchObject({ code: 'repository-not-openable' });
     });
   });
 

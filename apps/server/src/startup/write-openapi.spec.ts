@@ -54,6 +54,18 @@ describe.skipIf(process.platform === 'win32')('writeOpenApi', () => {
     expect(document.components.schemas).toHaveProperty('PasswordSetupRequest');
   });
 
+  it('describes a nullable string as one, at the top of a schema and inside another', () => {
+    const file = join(root, 'openapi.json');
+
+    writeOpenApi(app, file);
+
+    const { schemas } = JSON.parse(readFileSync(file, 'utf8')).components;
+    const nullableString = { type: 'string', nullable: true };
+    expect(schemas.GitBranchList.properties.current).toEqual(nullableString);
+    expect(schemas.GitStatus.properties.branch).toEqual(nullableString);
+    expect(schemas.GitLocalBranch.properties.upstream).toEqual(nullableString);
+  });
+
   it('is byte-stable across runs', () => {
     const first = join(root, 'one.json');
     const second = join(root, 'two.json');

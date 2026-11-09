@@ -1,3 +1,6 @@
+/** The branch that the first commit makes, and what it is called until then, whatever `HEAD` names (GA-42). */
+export const FIRST_BRANCH = 'main';
+
 export type WorkingCopyChangeState = 'modified' | 'added' | 'deleted';
 
 export interface WorkingCopyChange {
@@ -100,7 +103,7 @@ export function parseStatus(stdout: string): WorkingCopyStatus {
   // A detached HEAD can report the upstream of the branch it left, and an unborn one the upstream of what HEAD names.
   const current = branch !== null && !noCommits;
   return {
-    branch: noCommits ? 'main' : branch,
+    branch: noCommits ? FIRST_BRANCH : branch,
     noCommits,
     upstream: current ? upstream : null,
     upstreamGone: current && upstream !== null && !counted,

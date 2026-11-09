@@ -10,6 +10,11 @@ export const nulTerminated = (paths: readonly string[]) => paths.map(path => `${
 /** Submodules are not cloned by `--no-recurse-submodules`; these keep LFS from fetching (AR-50). */
 export const NO_LFS = [ '-c', 'filter.lfs.smudge=', '-c', 'filter.lfs.process=', '-c', 'filter.lfs.required=false' ];
 
+/** What a byte of a name that is not valid UTF-8 decodes as, since git's output is read as UTF-8. */
+export const UNDECODABLE = '�';
+
+const BRANCH_PREFIX = 'refs/heads/';
+
 /** Commands that read only the working copy and its index. */
 export const LOCAL_TIMEOUT_MS = 10_000;
 
@@ -70,6 +75,29 @@ export class LocalGit {
       throw new Error(`git config --get-all ${key} failed: ${result.stderr.trim()}`);
     }
     return result.stdout.split('\n').filter(line => line !== '');
+  }
+
+  /**
+   * The branch `HEAD` names, as git follows it, also before that branch's first
+   * commit; `null` when `HEAD` is detached or names something else.
+   *
+   * @throws GitOperationError `timeout` when it ran out of time.
+   * @throws Error when git could not read `HEAD`, which is not the same as detached.
+   */
+  async currentBranch(cwd: string): Promise<string | null> {
+    const head = await this.run(cwd, [ 'symbolic-ref', '--quiet', 'HEAD' ]);
+    if (head.timedOut) {
+      throw new GitOperationError('timeout', head.stderr);
+    }
+    // With `--quiet`, 1 means only that `HEAD` is not a symbolic ref.
+    if (head.exitCode === 1) {
+      return null;
+    }
+    if (head.exitCode !== 0) {
+      throw new Error(`git symbolic-ref failed: ${head.stderr.trim()}`);
+    }
+    const ref = head.stdout.trim();
+    return ref.startsWith(BRANCH_PREFIX) ? ref.slice(BRANCH_PREFIX.length) : null;
   }
 
   /** The ref the branch's upstream has on `origin`, such as `refs/heads/main`, or `null` when it has none there. */

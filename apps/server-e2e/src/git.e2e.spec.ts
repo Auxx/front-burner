@@ -941,6 +941,111 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
   );
 });
 
+describe('branches (REQ-GIT-002)', () => {
+  let root: string;
+  let source: string;
+  let server: ServerProcess;
+  let client: GitApi;
+  let publicGit: GitHttpServer;
+  const publicOptions: GitHttpServerOptions = { repositories: {} };
+
+  /** A copy of the handbook, with `main` and `draft`, served under `name`. */
+  function remote(name: string): void {
+    publicOptions.repositories[`${name}.git`] = copyRemote(root, source, name);
+  }
+
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync('git', args, {
+      cwd,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'A',
+        GIT_AUTHOR_EMAIL: 'a@x.io',
+        GIT_COMMITTER_NAME: 'A',
+        GIT_COMMITTER_EMAIL: 'a@x.io'
+      }
+    });
+  const branchesOf = async (id: number) => {
+    const response = await client.call(`/repositories/${id}/git/branches`);
+    expect(response.status).toBe(200);
+    return await response.json() as Record<string, unknown>;
+  };
+
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-e2e-branches-'));
+    source = createRemotes(root).handbook;
+    publicGit = await startGitHttpServer(publicOptions);
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
+    await onboard(server);
+    client = new GitApi(server, (await login(server, 'body')).authToken);
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+    await publicGit?.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('lists a full clone\'s branches', async () => {
+    remote('full');
+    const { id } = await client.add('full', `${publicGit.url}/full.git`);
+
+    expect(await branchesOf(id)).toEqual({
+      current: 'main',
+      local: [ { name: 'main', upstream: 'origin/main' } ],
+      remote: [ { name: 'origin/draft', branch: 'draft' } ],
+      singleBranch: false
+    });
+  });
+
+  it('lists what a single-branch clone has', async () => {
+    remote('single');
+    const { id, workingCopy } = await client.add('single', `${publicGit.url}/single.git`, { mode: 'none' }, 'main');
+
+    // `draft` is on the remote, and a single-branch clone doesn't fetch it.
+    expect(await branchesOf(id)).toEqual({
+      current: 'main',
+      local: [ { name: 'main', upstream: 'origin/main' } ],
+      remote: [],
+      singleBranch: true
+    });
+
+    git(workingCopy, 'checkout', '-q', '-b', 'topic');
+    git(workingCopy, 'commit', '-q', '--allow-empty', '-m', 'my topic');
+    expect((await client.pushed(id)).outcome).toMatchObject({ kind: 'pushed', upstream: 'origin/topic' });
+    expect(await branchesOf(id)).toMatchObject({
+      current: 'topic',
+      local: [ { name: 'main', upstream: 'origin/main' }, { name: 'topic', upstream: 'origin/topic' } ],
+      remote: []
+    });
+
+    // Without its local branch, what was pushed is a remote branch, and stays one after a fetch.
+    git(workingCopy, 'checkout', '-q', 'main');
+    git(workingCopy, 'branch', '-q', '-D', 'topic');
+    expect(await client.fetched(id)).toMatchObject({ status: 'done' });
+    expect(await branchesOf(id)).toEqual({
+      current: 'main',
+      local: [ { name: 'main', upstream: 'origin/main' } ],
+      remote: [ { name: 'origin/topic', branch: 'topic' } ],
+      singleBranch: true
+    });
+  });
+
+  it('answers a repository of no commits with main', async () => {
+    const bare = join(root, 'no-commits.git');
+    git(root, 'init', '-q', '--bare', '-b', 'main', bare);
+    publicOptions.repositories['no-commits.git'] = bare;
+    const { id } = await client.add('no-commits', `${publicGit.url}/no-commits.git`);
+
+    expect(await branchesOf(id)).toEqual({
+      current: 'main',
+      local: [ { name: 'main', upstream: null } ],
+      remote: [],
+      singleBranch: false
+    });
+  });
+});
+
 describe('secrets in a push (REQ-REPO-002)', () => {
   const TOKEN = 'ghp_e2e-leak-first-token';
   const REPLACED = 'ghp_e2e-leak-replaced-token';

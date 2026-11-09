@@ -1,5 +1,5 @@
 import { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitMerge } from '@front-burner/server-core-git';
+import { GitBranches, GitEngine, GitMerge } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { authOf } from '@front-burner/server-core-security';
 import { inBatches, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
@@ -8,6 +8,7 @@ import { CommitAuthors } from '@front-burner/server-feature-preferences';
 import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
 import type {
   CommitResult,
+  GitBranchList,
   GitDiff,
   GitIncoming,
   GitJobStarted,
@@ -32,6 +33,7 @@ import { toGitApiError } from './git-api-errors';
 import {
   CommitRequestDto,
   CommitResultDto,
+  GitBranchListDto,
   GitDiffDto,
   GitDiffQueryDto,
   GitIncomingDto,
@@ -90,6 +92,7 @@ export class GitController {
     private readonly commitAuthors: CommitAuthors,
     private readonly events: EventsHub,
     private readonly merge: GitMerge,
+    private readonly branches: GitBranches,
     private readonly pushes: PushService,
     private readonly pulls: PullService,
     private readonly fetches: FetchService,
@@ -125,6 +128,21 @@ export class GitController {
       networkJob: this.gitJobs.networkJob(userId, params.id),
       fetchProblem: this.syncState.fetchProblem(params.id)
     };
+  }
+
+  /**
+   * The local branches with the current one, and the remote branches that no
+   * local branch has the name of or tracks, as of the last fetch (GA-36). Before
+   * the first commit, the current branch is `main` (GA-42). `singleBranch` says
+   * that other remote branches aren't available (GA-41).
+   */
+  @Get('branches')
+  @ApiOkResponse({ type: GitBranchListDto })
+  @ZodSerializerDto(GitBranchListDto)
+  async gitBranches(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<GitBranchList> {
+    const { row, root } = this.repositories.open(authOf(req).userId, params.id);
+    const list = await this.branches.list(root).catch(toGitApiError);
+    return { ...list, singleBranch: row.cloneMode === 'single-branch' };
   }
 
   /**

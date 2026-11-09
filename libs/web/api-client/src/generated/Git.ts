@@ -5,6 +5,7 @@ import { inject, Injectable } from '@angular/core';
 import type {
   CommitRequest,
   CommitResult,
+  GitBranchList,
   GitDiff,
   GitIncoming,
   GitJobStarted,
@@ -22,6 +23,11 @@ export class GitApi {
   gitStatus(id: number): Observable<GitStatus> {
     return this.http.get<GitStatus>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/status`
+    );
+  }
+  gitBranches(id: number): Observable<GitBranchList> {
+    return this.http.get<GitBranchList>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/branches`
     );
   }
   incoming(

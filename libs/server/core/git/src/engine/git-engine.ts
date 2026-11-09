@@ -13,11 +13,8 @@ import { probeHostKey } from '../ssh/host-key-probe';
 import { hasHostEntry, HostKey, trustedKeysFor } from '../ssh/known-hosts';
 import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
-import { parseStatus, WorkingCopyStatus } from './git-status';
-import { LOCAL_TIMEOUT_MS, LocalGit, NO_LFS, nulTerminated } from './local-git';
-
-/** What `git status` shows for a byte of a name that is not valid UTF-8. */
-const UNDECODABLE = '\uFFFD';
+import { FIRST_BRANCH, parseStatus, WorkingCopyStatus } from './git-status';
+import { LOCAL_TIMEOUT_MS, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
 /** AR-42. */
 const ACCESS_CHECK_TIMEOUT_MS = 30_000;
@@ -491,7 +488,7 @@ export class GitEngine implements BeforeApplicationShutdown {
       await this.local.checked(workingCopy, emptyIndex);
       if (unbornHead !== undefined) {
         // GA-42: whatever HEAD names in a new repository, the first commit makes `main`.
-        await this.local.checked(workingCopy, [ 'symbolic-ref', 'HEAD', 'refs/heads/main' ]);
+        await this.local.checked(workingCopy, [ 'symbolic-ref', 'HEAD', `refs/heads/${FIRST_BRANCH}` ]);
       }
       if (paths.length > 0) {
         // With no paths at all, `add -A` would add every change.
@@ -935,15 +932,11 @@ export class GitEngine implements BeforeApplicationShutdown {
    * so it can run outside the working-tree lock (A-5.3).
    */
   async incoming(workingCopy: string, path?: string): Promise<IncomingChanges | null> {
-    const head = await this.local.run(workingCopy, [ 'symbolic-ref', '--quiet', 'HEAD' ]);
-    if (head.timedOut) {
-      throw new GitOperationError('timeout', head.stderr);
-    }
-    const current = head.stdout.trim();
-    if (head.exitCode !== 0 || !current.startsWith('refs/heads/')) {
+    const current = await this.local.currentBranch(workingCopy);
+    if (current === null) {
       return null;
     }
-    const target = await this.local.upstreamOf(workingCopy, current.slice('refs/heads/'.length));
+    const target = await this.local.upstreamOf(workingCopy, current);
     if (target === null) {
       return null;
     }

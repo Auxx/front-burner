@@ -246,6 +246,10 @@ Confirmed by spike 2 (spikes.md).
     `branch-not-found`, `unsafe-repository-config`, `failed`, and with SSH
     `host-key-unknown` and `host-key-changed`); an egress refusal is
     `host-unreachable` (AR-57). _(My call.)_
+  - Listing branches leaves out a name that is not valid UTF-8: JSON can't carry
+    it, and an altered name matches no branch. On such a branch, nothing is
+    marked as current. What the branch tracks is still not offered as a remote
+    branch. _(Plan 84's call.)_
   - The MVP requirements add: which entries of a folder are ignored (`git
     check-ignore`, FB-16); the diff of one file against the last commit (GA-14
     to GA-16); discarding selected files (GA-23), refused as `discard-blocked`

@@ -1,4 +1,5 @@
 import { DynamicModule, Module } from '@nestjs/common';
+import { GitBranches } from './engine/git-branches';
 import { GitEngine } from './engine/git-engine';
 import { GitMerge } from './engine/git-merge';
 import { LocalGit } from './engine/local-git';
@@ -20,6 +21,7 @@ export class GitModule {
         LocalGit,
         GitEngine,
         GitMerge,
+        GitBranches,
         WorkingTreeLock,
         NetworkLock
       ],
@@ -28,6 +30,7 @@ export class GitModule {
         LocalGit,
         GitEngine,
         GitMerge,
+        GitBranches,
         WorkingTreeLock,
         NetworkLock
       ]

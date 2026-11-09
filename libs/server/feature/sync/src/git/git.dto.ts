@@ -1,6 +1,7 @@
 import {
   CommitRequestSchema,
   CommitResultSchema,
+  GitBranchListSchema,
   GitDiffQuerySchema,
   GitDiffSchema,
   GitIncomingQuerySchema,
@@ -59,3 +60,6 @@ export class GitIncomingDto extends createZodDto(z.object(GitIncomingSchema.shap
 
 @ApiSchema({ name: 'GitMergeState' })
 export class GitMergeStateDto extends createZodDto(z.object(GitMergeStateSchema.shape)) {}
+
+@ApiSchema({ name: 'GitBranchList' })
+export class GitBranchListDto extends createZodDto(z.object(GitBranchListSchema.shape)) {}
