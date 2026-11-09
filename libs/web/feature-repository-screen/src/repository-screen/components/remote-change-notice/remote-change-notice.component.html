@@ -1,0 +1,20 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.RemoteChangeNoticeComponent'">
+  @let shown = notice();
+  @let pullWaits = waiting();
+  <ui-inline-banner [announce]="shown.announce"
+                    [dismissLabel]="t('dismiss')"
+                    (dismissed)="dismissed.emit()">
+    {{ t('commits', { count: shown.commits, upstream: shown.upstream }) }}
+    @if (shown.touchesOpenFile) {
+      {{ t('openFileChanged') }}
+    }
+    <div uiBannerActions>
+      <button uiButton
+              size="small"
+              [busy]="pullWaits"
+              (click)="pull.emit()">{{ pullWaits ? t('waiting') : t('pull') }}</button>
+      <span class="cdk-visually-hidden"
+            aria-live="polite">{{ pullWaits ? t('waiting') : '' }}</span>
+    </div>
+  </ui-inline-banner>
+</ng-container>

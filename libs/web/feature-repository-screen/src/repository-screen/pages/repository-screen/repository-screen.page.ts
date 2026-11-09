@@ -1,11 +1,13 @@
 import { DOCUMENT } from '@angular/common';
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
   effect,
   inject,
+  Injector,
   signal,
   untracked,
   viewChild
@@ -40,6 +42,7 @@ import { FileTreeComponent } from '../../components/file-tree/file-tree.componen
 import { GitProblemComponent } from '../../components/git-problem/git-problem.component';
 import { LockedKeyBannerComponent } from '../../components/locked-key-banner/locked-key-banner.component';
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
+import { RemoteChangeNoticeComponent } from '../../components/remote-change-notice/remote-change-notice.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
 import { CommitAuthorGate } from '../../services/commit-author-gate/commit-author-gate.service';
 import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
@@ -57,6 +60,7 @@ import { MergeStore } from '../../services/merge-store/merge-store.service';
 import { type GitProblem, NetworkJobService } from '../../services/network-job/network-job.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { PaneMemoryService, type SideTool } from '../../services/pane-memory/pane-memory.service';
+import { RemoteChangesService } from '../../services/remote-changes/remote-changes.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { TreeSyncService } from '../../services/tree-sync/tree-sync.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
@@ -105,7 +109,9 @@ const MAX_BADGE_COUNT = 99;
  * `LockedKeyService` (RC-15). The bar also shows, quietly, why background fetches
  * aren't working (GA-35, RC-6), which stays when the banner is dismissed. During a
  * merge, followed by `MergeStore`, the bar says what merges and offers **Abort merge**
- * through `MergeActionsService` (GC-2, GC-6, GC-23).
+ * through `MergeActionsService` (GC-2, GC-6, GC-23). Below the bar too, `RemoteChangesService`'s
+ * notice says when a fetch found new commits, with **Pull** (GA-34); the focus goes to the
+ * git actions when it goes away with the focus in it.
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -131,6 +137,7 @@ const MAX_BADGE_COUNT = 99;
     LockedKeyBannerComponent,
     NotOpenableComponent,
     GitProblemComponent,
+    RemoteChangeNoticeComponent,
     RepositoryBarComponent
   ],
   providers: [
@@ -152,6 +159,7 @@ const MAX_BADGE_COUNT = 99;
     DiscardService,
     LockedKeyService,
     NetworkJobService,
+    RemoteChangesService,
     CredentialFixesService,
     // One per screen, so that switching files or tabs loads no image again (IM-10).
     ImageCache
@@ -178,6 +186,7 @@ export class RepositoryScreenPage {
   private readonly discards = inject(DiscardService);
   protected readonly jobs = inject(NetworkJobService);
   protected readonly lockedKey = inject(LockedKeyService);
+  protected readonly remoteChanges = inject(RemoteChangesService);
   private readonly credentialFixes = inject(CredentialFixesService);
   private readonly pushChannel = inject(PushChannelService);
   private readonly git = inject(GitApi);
@@ -190,6 +199,7 @@ export class RepositoryScreenPage {
   /** The page's app shell, once there is one; it knows whether the layout is narrow. */
   private readonly shell = viewChild(AppShellComponent);
   private readonly changesPane = viewChild(ChangesPaneComponent);
+  private readonly bar = viewChild(RepositoryBarComponent);
   /** The activity bar's selected item: the tool window shown, beside the editor or as the drawer (FB-7, FB-9, GA-10). */
   protected readonly sideTool = computed(() => {
     const narrow = this.shell()?.narrow() ?? false;
@@ -303,6 +313,23 @@ export class RepositoryScreenPage {
     this.updateTitle();
     this.flushWhenLeft();
     this.viewRepository();
+    this.keepFocusWhenNoticeGoes();
+  }
+
+  /**
+   * **Pull** or dismissing removes the remote-change notice, with the button that
+   * has the focus. This runs before the page shows it, so what is focused is still there.
+   */
+  private keepFocusWhenNoticeGoes(): void {
+    const injector = inject(Injector);
+    let shown = false;
+    effect(() => {
+      const nowShown = this.remoteChanges.notice() !== null;
+      if (shown && !nowShown && this.document.activeElement?.closest('rs-remote-change-notice')) {
+        afterNextRender(() => this.bar()?.focusActions(), { injector });
+      }
+      shown = nowShown;
+    });
   }
 
   /**

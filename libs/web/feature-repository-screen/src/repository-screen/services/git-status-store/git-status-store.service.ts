@@ -43,12 +43,15 @@ export class GitStatusStore {
 
   private readonly current = signal<GitStatus | null>(null);
   private readonly readFailed = signal(false);
+  private readonly readRunning = signal(false);
   private readonly repositoryId = signal<number | null>(null);
 
   /** The repository followed, which changes together with `status`. */
   readonly followed = this.repositoryId.asReadonly();
   /** The last status read; `null` until one has been read for this repository. */
   readonly status = this.current.asReadonly();
+  /** Whether a read is on its way, so that `status` may be about to change. */
+  readonly reading = this.readRunning.asReadonly();
   /** Whether the latest read failed. */
   readonly failed = this.readFailed.asReadonly();
   /** How many files have changed, as of the last status read. */
@@ -109,7 +112,12 @@ export class GitStatusStore {
     }
     return new Promise(resolve => {
       this.request?.unsubscribe();
-      this.request = this.api.gitStatus(id).pipe(finalize(resolve)).subscribe({
+      this.readRunning.set(true);
+      const ended = () => {
+        this.readRunning.set(false);
+        resolve();
+      };
+      this.request = this.api.gitStatus(id).pipe(finalize(ended)).subscribe({
         next: status => {
           this.current.set(status);
           this.readFailed.set(false);
