@@ -50,7 +50,8 @@ function unconfirmedHandbook(instance: { dataDir: string; }, name = 'handbook'):
 
 /** **Fetch**, **Pull**, **Push** or **Abort merge**: in the bar, or in the git actions menu on a phone (GA-7, GC-6). */
 async function gitAction(page: Page, name: 'Fetch' | 'Pull' | 'Push' | 'Abort merge'): Promise<void> {
-  const bar = page.getByRole('banner');
+  // Not the banner landmark: the notices below the bar have a Pull of their own.
+  const bar = page.locator('rs-repository-bar');
   const button = bar.getByRole('button', { name, exact: true });
   const gitActions = bar.getByRole('button', { name: 'Git actions' });
   await expect(button.or(gitActions)).toBeVisible();
@@ -457,14 +458,15 @@ test.describe('pushing', () => {
       await gitAction(page, 'Fetch');
 
       await expect(summary(page)).toHaveText(/main\s*·\s*2 to push, 3 to pull/);
+      const actions = page.locator('rs-git-actions');
       for (const name of [ 'Fetch', 'Pull', 'Push' ]) {
-        await expect(bar(page).getByRole('button', { name, exact: true })).toBeVisible();
+        await expect(actions.getByRole('button', { name, exact: true })).toBeVisible();
       }
 
       await page.setViewportSize({ width: 375, height: 700 });
 
       await expect(summary(page)).toHaveText(/main\s*·\s*2 to push, 3 to pull/);
-      await expect(bar(page).getByRole('button', { name: 'Pull', exact: true })).toHaveCount(0);
+      await expect(actions.getByRole('button', { name: 'Pull', exact: true })).toHaveCount(0);
       await gitActions(page).click();
       for (const name of [ 'Fetch', 'Pull', 'Push' ]) {
         await expect(page.getByRole('menuitem', { name })).toBeVisible();
@@ -654,6 +656,61 @@ test.describe('pushing', () => {
 
       await expect(problem(page)).toHaveCount(0);
       drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/pull`);
+    });
+
+    test.describe('the remote-change notice', () => {
+      const notice = (page: Page) => page.locator('rs-remote-change-notice');
+      const FILE_CHANGED = 'This file changed too.';
+
+      test('AC-GIT-002.13: while the repository is viewed, a commit pushed to the upstream from elsewhere shows 1 new commit on origin/main within about 2 minutes, with This file changed too. when it changes the open file; the user\'s files do not change until they pull', async ({ page, instance, browserName, isMobile }) => {
+        test.skip(
+          browserName !== 'chromium' || isMobile,
+          'It waits for a whole fetch interval, and what it proves does not depend on the browser.'
+        );
+        // The interval is a constant (A-6.7).
+        test.setTimeout(150_000);
+        const { id, dir, bare } = pushable(instance, 'cloned');
+        publishGuide(dir, bare);
+        await openScreen(page, `/repositories/${id}/files/guide.md`);
+        await expect(page.locator('.cm-content')).toContainText('before');
+        // Past the fetches of opening the file and of starting to view it, which the scheduler
+        // queues within 5 seconds, so that only the next one, 2 minutes later, can find the commit.
+        await page.waitForTimeout(7_000);
+
+        pushFromElsewhere(bare, 'main', [ { 'guide.md': 'from elsewhere\n' } ]);
+
+        await expect(notice(page)).toContainText('1 new commit on origin/main', { timeout: 130_000 });
+        await expect(notice(page)).toContainText(FILE_CHANGED);
+        await expect(page.locator('.cm-content')).toContainText('before');
+        expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toBe('before\n');
+      });
+
+      test('a commit to another file does not name the open file; dismissed, it comes back with more commits, and its Pull pulls', async ({ page, instance }) => {
+        const { id, dir, bare } = pushable(instance, 'cloned');
+        publishGuide(dir, bare);
+        pushFromElsewhere(bare, 'main', [ { 'elsewhere.md': 'other\n' } ]);
+        await openScreen(page, `/repositories/${id}/files/guide.md`);
+
+        await gitAction(page, 'Fetch');
+
+        await expect(notice(page)).toContainText('1 new commit on origin/main');
+        await expect(notice(page)).not.toContainText(FILE_CHANGED);
+
+        await notice(page).getByRole('button', { name: 'Dismiss' }).click();
+        await expect(notice(page)).toHaveCount(0);
+
+        pushFromElsewhere(bare, 'main', [ { 'guide.md': 'from elsewhere\n' } ]);
+        await gitAction(page, 'Fetch');
+
+        await expect(notice(page)).toContainText('2 new commits on origin/main');
+        await expect(notice(page)).toContainText(FILE_CHANGED);
+
+        await notice(page).getByRole('button', { name: 'Pull', exact: true }).click();
+
+        await expect(toasts(page).getByText('Pulled 2 commits', { exact: true })).toBeVisible();
+        await expect(notice(page)).toHaveCount(0);
+        await expect(page.locator('.cm-content')).toContainText('from elsewhere');
+      });
     });
 
     test('reloads the open file after a pull', async ({ page, instance }) => {

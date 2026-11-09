@@ -1,0 +1,16 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.RemoteChangeNoticeComponent'">
+  @let shown = notice();
+  <ui-inline-banner announce
+                    [dismissLabel]="t('dismiss')"
+                    (dismissed)="dismissed.emit()">
+    {{ t('commits', { count: shown.commits, upstream: shown.upstream }) }}
+    @if (shown.touchesOpenFile) {
+      {{ t('openFileChanged') }}
+    }
+    <div uiBannerActions>
+      <button uiButton
+              size="small"
+              (click)="pull.emit()">{{ t('pull') }}</button>
+    </div>
+  </ui-inline-banner>
+</ng-container>

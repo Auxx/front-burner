@@ -141,6 +141,7 @@ describe('RepositoryScreenPage', () => {
             push,
             fetch,
             pull,
+            incoming: () => of({ incoming: { upstream: 'origin/main', commits: 3, touchesPath: false } }),
             gitJob,
             fetchOnFileOpened,
             discard: (_id: number, body: { paths: string[]; }) => {
@@ -1243,6 +1244,80 @@ describe('RepositoryScreenPage', () => {
         expect(abortMerge).toHaveBeenCalledExactlyOnceWith(12);
         expect(merging()).toBeNull();
         expect(page().querySelector('rs-git-actions')).not.toBeNull();
+      });
+    });
+
+    describe('the remote-change notice', () => {
+      const notice = () => page().querySelector('rs-remote-change-notice');
+      const NOTICE = 'web-feature-repository-screen.RemoteChangeNoticeComponent';
+      const noticeButton = (text: string) =>
+        [ ...(notice()?.querySelectorAll('button') ?? []) ].find(found =>
+          found.textContent?.trim() === text || found.getAttribute('aria-label') === text
+        ) as HTMLButtonElement;
+
+      beforeEach(() => {
+        gitStatusAnswer = of({ ...baseStatus(), upstream: 'origin/main', behind: 3 });
+      });
+
+      it('shows below the bar, above the panes', async () => {
+        await visit('/repositories/12');
+
+        const shown = notice() as HTMLElement;
+        expect(shown.closest('header')).toBeTruthy();
+        expect(shown.previousElementSibling?.contains(page().querySelector('rs-repository-bar'))).toBe(true);
+      });
+
+      it('shows nothing when nothing is new', async () => {
+        gitStatusAnswer = of({ ...baseStatus(), upstream: 'origin/main' });
+
+        await visit('/repositories/12');
+
+        expect(notice()).toBeNull();
+      });
+
+      it('Pull in the notice pulls', async () => {
+        await visit('/repositories/12');
+
+        noticeButton(`${NOTICE}.pull`).click();
+        // The waiting saves go first.
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(pull).toHaveBeenCalledExactlyOnceWith(12);
+      });
+
+      it('Pull in the notice waits for the fetch that found the commits, which may not have ended yet', async () => {
+        const started = new Subject<GitJobStarted>();
+        fetch.mockReturnValue(started);
+        gitJob.mockReturnValue(of<GitJobState>({
+          status: 'done',
+          outcome: { kind: 'fetched', moved: true, upstreamMoved: true }
+        }));
+        await visit('/repositories/12');
+        ([ ...page().querySelectorAll<HTMLButtonElement>('rs-git-actions button') ]
+          .find(found => found.textContent?.trim().endsWith('.fetch')) as HTMLButtonElement).click();
+        await settle(harness.fixture);
+
+        noticeButton(`${NOTICE}.pull`).click();
+        await settle(harness.fixture);
+        expect(pull).not.toHaveBeenCalled();
+
+        started.next({ jobId: 9 });
+        started.complete();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(pull).toHaveBeenCalledExactlyOnceWith(12);
+      });
+
+      it('goes when dismissed', async () => {
+        await visit('/repositories/12');
+
+        noticeButton(`${NOTICE}.dismiss`).click();
+        await settle(harness.fixture);
+
+        expect(notice()).toBeNull();
       });
     });
 

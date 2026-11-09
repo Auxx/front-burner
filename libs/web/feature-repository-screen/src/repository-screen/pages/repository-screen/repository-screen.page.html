@@ -47,6 +47,12 @@
                               (unlock)="lockedKey.unlock()"
                               (dismissed)="lockedKey.dismissed.set(true)" />
       }
+      @if (remoteChanges.notice(); as notice) {
+        <rs-remote-change-notice uiAppShellBanner
+                                 [notice]="notice"
+                                 (pull)="jobs.startWhenFree('pull')"
+                                 (dismissed)="remoteChanges.dismiss()" />
+      }
       @switch (state) {
         @case ('missing') {
           <shell-page-not-found />

@@ -662,7 +662,7 @@ test.describe('editor', () => {
         await expect(main(page).getByText(CHANGED)).toBeVisible();
 
         const bar = page.getByRole('banner');
-        const pull = bar.getByRole('button', { name: 'Pull', exact: true });
+        const pull = page.locator('rs-git-actions').getByRole('button', { name: 'Pull', exact: true });
         const gitActions = bar.getByRole('button', { name: /^Git actions/ });
         await expect(pull.or(gitActions)).toBeVisible();
         if (await gitActions.isVisible()) {
