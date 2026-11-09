@@ -22,6 +22,7 @@ import {
   AppShellSideDirective,
   ButtonComponent,
   CentredIslandComponent,
+  type DialogRef,
   DialogService,
   IconComponent,
   InlineBannerComponent,
@@ -194,6 +195,8 @@ export class RepositoryScreenPage {
   private readonly pushChannel = inject(PushChannelService);
   private readonly git = inject(GitApi);
   private readonly dialogs = inject(DialogService);
+  /** The branch list while it is open. */
+  private branchList: DialogRef<BranchChoice> | null = null;
 
   protected readonly user = this.currentUser.user;
   /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
@@ -318,6 +321,22 @@ export class RepositoryScreenPage {
     this.flushWhenLeft();
     this.viewRepository();
     this.keepFocusWhenNoticeGoes();
+    this.closeBranchListWhenMergeStarts();
+  }
+
+  /**
+   * A merge starting, also elsewhere, closes the branch list, since switching isn't
+   * offered during one (AC-GIT-002.20). It takes away the button that the focus
+   * would return to, so the focus goes to what replaces it.
+   */
+  private closeBranchListWhenMergeStarts(): void {
+    const injector = inject(Injector);
+    effect(() => {
+      if (this.merge.merging() && this.branchList) {
+        this.branchList.close();
+        afterNextRender(() => this.bar()?.focusActions(), { injector });
+      }
+    });
   }
 
   /**
@@ -442,17 +461,23 @@ export class RepositoryScreenPage {
     this.session.state() === 'ready' && !this.lockedKey.dismissed() ? this.lockedKey.key() : null
   );
 
-  /** The fix of a push or fetch problem (RC-4), through `CredentialFixesService`. */
   /** The branch in the bar was chosen. What the list closes with is not used yet: plan 87 switches to it. */
   protected openBranches(): void {
     const repositoryId = this.session.repository()?.id;
     if (repositoryId !== undefined) {
-      this.dialogs.open<BranchListDialog, BranchListData, BranchChoice>(BranchListDialog, {
+      const ref = this.dialogs.open<BranchListDialog, BranchListData, BranchChoice>(BranchListDialog, {
         data: { repositoryId }
+      });
+      this.branchList = ref;
+      ref.closed.subscribe(() => {
+        if (this.branchList === ref) {
+          this.branchList = null;
+        }
       });
     }
   }
 
+  /** The fix of a push or fetch problem (RC-4), through `CredentialFixesService`. */
   protected fixProblem(fix: GitProblem['fix']): void {
     void this.credentialFixes.run(fix);
   }

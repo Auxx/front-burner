@@ -3,7 +3,6 @@
   position: sticky;
   z-index: 1;
   inset-block-start: 0;
-  display: block;
   padding-block-end: var(--ui-space-2);
   background: var(--ui-surface-raised);
 }
@@ -30,8 +29,11 @@ ui-inline-banner {
   margin-block-end: var(--ui-space-2);
 }
 
-// A long name wraps, so that nothing scrolls sideways.
+// A long name wraps, so that nothing scrolls sideways. A row that gets the focus
+// scrolls to below the filter, whose height is its label, the space around the
+// field and the field itself, rather than behind it.
 .branch {
+  scroll-margin-block-start: calc(1lh + 2 * var(--ui-space-2) + var(--ui-control-height));
   display: flex;
   align-items: center;
   gap: var(--ui-space-2);
@@ -76,6 +78,7 @@ ui-inline-banner {
 }
 
 .status {
+  margin: 0;
   padding-block: var(--ui-space-2);
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-ui-small);

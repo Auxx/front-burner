@@ -1,6 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  ElementRef,
+  inject,
+  signal,
+  viewChild
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { form, FormField } from '@angular/forms/signals';
-import type { GitBranchList } from '@front-burner/shared-contracts';
+import type { GitBranchList, GitLocalBranch } from '@front-burner/shared-contracts';
 import {
   BannerActionsComponent,
   ButtonComponent,
@@ -16,7 +26,6 @@ import {
 import { GitApi } from '@front-burner/web-api-client';
 import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { firstValueFrom } from 'rxjs';
 
 export interface BranchListData {
   readonly repositoryId: number;
@@ -35,6 +44,18 @@ type Read =
 
 /** More would freeze a phone; the filter finds the others. */
 const MAX_SHOWN = 200;
+/** How many of those rows local branches leave to remote ones, so that many local ones don't hide them all. */
+const REMOTE_ROOM = 50;
+
+/** The first `count` branches, the last being the current one when it comes later, so that it is always marked (GA-36). */
+function firstWithCurrent(
+  branches: readonly GitLocalBranch[],
+  count: number,
+  current: string | null
+): readonly GitLocalBranch[] {
+  const index = branches.findIndex(branch => branch.name === current);
+  return index >= count ? [ ...branches.slice(0, count - 1), branches[index] ] : branches.slice(0, count);
+}
 
 /**
  * The branch list (GA-36): the local branches with the current one marked, then
@@ -45,7 +66,8 @@ const MAX_SHOWN = 200;
  * date, and closes with the branch that was chosen, if any.
  *
  * The filter is always shown, and looks for the name as it is listed, ignoring
- * case. Only the first 200 matches are rendered.
+ * case. Only 200 matches are rendered: the first ones by name, always with the
+ * current branch and with room for remote branches.
  */
 @Component({
   selector: 'rs-branch-list',
@@ -70,37 +92,47 @@ export class BranchListDialog {
   private readonly data = inject(DIALOG_DATA) as BranchListData;
   private readonly api = inject(GitApi);
   private readonly errorText = inject(ApiErrorTextService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly filterInput = viewChild.required('filter', { read: ElementRef<HTMLInputElement> });
 
   protected readonly model = form(signal({ filter: '' }));
   protected readonly read = signal<Read>({ kind: 'loading' });
 
-  /** What the list shows: the branches that match, up to the limit, and how many more there are. */
+  /** What the list shows: the branches that match, up to the limit, how many more there are, and why there are none. */
   protected readonly shown = computed(() => {
     const read = this.read();
     if (read.kind !== 'loaded') {
       return null;
     }
+    const { branches } = read;
     const wanted = this.model.filter().value().trim().toLowerCase();
     const matches = ({ name }: { name: string; }) => name.toLowerCase().includes(wanted);
-    const local = read.branches.local.filter(matches);
-    const remote = read.branches.remote.filter(matches);
+    const matchingLocal = branches.local.filter(matches);
+    const matchingRemote = branches.remote.filter(matches);
+    const total = matchingLocal.length + matchingRemote.length;
+    const local = firstWithCurrent(
+      matchingLocal,
+      MAX_SHOWN - Math.min(matchingRemote.length, REMOTE_ROOM),
+      branches.current
+    );
+    const remote = matchingRemote.slice(0, MAX_SHOWN - local.length);
+    const none = branches.local.length + branches.remote.length === 0 ? 'noBranches' : 'noMatches';
     return {
-      current: read.branches.current,
-      singleBranch: read.branches.singleBranch,
-      local: local.slice(0, MAX_SHOWN),
-      remote: remote.slice(0, Math.max(0, MAX_SHOWN - local.length)),
-      hidden: Math.max(0, local.length + remote.length - MAX_SHOWN),
-      nothing: local.length + remote.length === 0
+      current: branches.current,
+      singleBranch: branches.singleBranch,
+      local,
+      remote,
+      hidden: total - local.length - remote.length,
+      empty: total === 0 ? none : null
     };
   });
 
   constructor() {
-    void this.load();
+    this.load();
   }
 
   protected retry(): void {
-    void this.load();
+    this.load();
     // **Try again** goes away with the focus on it.
     this.filterInput().nativeElement.focus();
   }
@@ -113,13 +145,14 @@ export class BranchListDialog {
     this.ref.close({ kind: 'remote', name: branch });
   }
 
-  private async load(): Promise<void> {
+  /** Ends with the dialog, so that closing it leaves no read running. */
+  private load(): void {
     this.read.set({ kind: 'loading' });
-    try {
-      const branches = await firstValueFrom(this.api.gitBranches(this.data.repositoryId));
-      this.read.set({ kind: 'loaded', branches });
-    } catch (error) {
-      this.read.set({ kind: 'failed', ...this.errorText.describe(toApiError(error)) });
-    }
+    this.api.gitBranches(this.data.repositoryId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: branches => this.read.set({ kind: 'loaded', branches }),
+        error: (error: unknown) => this.read.set({ kind: 'failed', ...this.errorText.describe(toApiError(error)) })
+      });
   }
 }

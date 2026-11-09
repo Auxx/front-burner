@@ -32,7 +32,8 @@ function many(count: number): GitBranchList {
 describe('BranchListDialog', () => {
   let gitBranches: ReturnType<typeof vi.fn<(id: number) => Observable<GitBranchList>>>;
 
-  async function open(): Promise<Promise<BranchChoice | undefined>> {
+  /** Opens the list and waits for it to render; `closed` settles when it closes. */
+  async function open(): Promise<{ closed: Promise<BranchChoice | undefined>; }> {
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
@@ -47,7 +48,7 @@ describe('BranchListDialog', () => {
     });
     const closed = firstValueFrom(ref.closed, { defaultValue: undefined });
     await settleDialog();
-    return closed;
+    return { closed };
   }
 
   const filter = () => overlay().querySelector('input') as HTMLInputElement;
@@ -68,8 +69,7 @@ describe('BranchListDialog', () => {
   afterEach(() => TestBed.inject(DialogService).closeAll());
 
   it('lists local branches with the current one marked, then remote ones', async () => {
-    void open();
-    await settleDialog();
+    await open();
 
     expect(gitBranches).toHaveBeenCalledExactlyOnceWith(12);
     expect(names()).toEqual([ 'Docs', 'main', 'origin/feature' ]);
@@ -87,8 +87,7 @@ describe('BranchListDialog', () => {
 
   it('marks no branch on a detached HEAD', async () => {
     gitBranches = vi.fn(() => of({ ...branches, current: null }));
-    void open();
-    await settleDialog();
+    await open();
 
     expect(names()).toEqual([ 'Docs', 'main', 'origin/feature' ]);
     expect(text()).not.toContain(`${K}.current`);
@@ -97,8 +96,7 @@ describe('BranchListDialog', () => {
   it('shows that it is loading until the list has been read', async () => {
     const answer = new Subject<GitBranchList>();
     gitBranches = vi.fn(() => answer);
-    void open();
-    await settleDialog();
+    await open();
 
     expect(overlay().querySelector('ui-spinner')).not.toBeNull();
     expect(rows()).toEqual([]);
@@ -112,8 +110,7 @@ describe('BranchListDialog', () => {
   });
 
   it('filters by name, ignoring case', async () => {
-    void open();
-    await settleDialog();
+    await open();
 
     await typeFilter('DOC');
     expect(names()).toEqual([ 'Docs' ]);
@@ -129,8 +126,7 @@ describe('BranchListDialog', () => {
   });
 
   it('leaves out the heading of a group that nothing matches', async () => {
-    void open();
-    await settleDialog();
+    await open();
 
     await typeFilter('feature');
 
@@ -139,8 +135,7 @@ describe('BranchListDialog', () => {
   });
 
   it('says when nothing matches', async () => {
-    void open();
-    await settleDialog();
+    await open();
     expect(text()).not.toContain(`${K}.noMatches`);
 
     await typeFilter('nothing like this');
@@ -154,8 +149,7 @@ describe('BranchListDialog', () => {
     gitBranches = vi.fn()
       .mockReturnValueOnce(throwError(() => apiError(500, 'internal')))
       .mockReturnValue(of(branches));
-    void open();
-    await settleDialog();
+    await open();
 
     expect(text()).toContain('Something went wrong.');
     expect(text()).toContain('abcdef01');
@@ -174,8 +168,7 @@ describe('BranchListDialog', () => {
 
   it('says why again when Try again fails too', async () => {
     gitBranches = vi.fn(() => throwError(() => apiError(500, 'internal')));
-    void open();
-    await settleDialog();
+    await open();
 
     dialogButton(`${K}.retry`)?.click();
     await settleDialog();
@@ -186,8 +179,7 @@ describe('BranchListDialog', () => {
 
   it('shows the first 200 of 5,000 branches, and says to filter', async () => {
     gitBranches = vi.fn(() => of(many(5000)));
-    void open();
-    await settleDialog();
+    await open();
 
     expect(rows()).toHaveLength(200);
     expect(names().at(-1)).toBe('branch-0199');
@@ -206,18 +198,109 @@ describe('BranchListDialog', () => {
       branch: `remote-${String(index).padStart(2, '0')}`
     }));
     gitBranches = vi.fn(() => of({ current: null, local, remote, singleBranch: false }));
-    void open();
-    await settleDialog();
+    await open();
 
     expect(rows()).toHaveLength(200);
     expect(names().at(-1)).toBe('origin/remote-49');
     expect(text()).toContain('Filter to find the other 50');
   });
 
+  it('keeps the current branch in the first 200, in its place by name', async () => {
+    gitBranches = vi.fn(() => of({ ...many(5000), current: 'branch-4000' }));
+    await open();
+
+    expect(rows()).toHaveLength(200);
+    expect(names().at(0)).toBe('branch-0000');
+    expect(names().at(-1)).toBe('branch-4000');
+    expect(row('branch-4000')?.getAttribute('aria-current')).toBe('true');
+    expect(text()).toContain('Filter to find the other 4800');
+  });
+
+  it('leaves the current branch out when the filter does not match it', async () => {
+    gitBranches = vi.fn(() => of({ ...many(5000), current: 'branch-4000' }));
+    await open();
+
+    await typeFilter('branch-49');
+
+    expect(names()).not.toContain('branch-4000');
+  });
+
+  it('leaves room for remote branches among the first 200', async () => {
+    const { local } = many(300);
+    const remote = Array.from({ length: 100 }, (_, index) => ({
+      name: `origin/remote-${String(index).padStart(2, '0')}`,
+      branch: `remote-${String(index).padStart(2, '0')}`
+    }));
+    gitBranches = vi.fn(() => of({ current: null, local, remote, singleBranch: false }));
+    await open();
+
+    expect(rows()).toHaveLength(200);
+    expect(names().filter(name => name?.startsWith('origin/'))).toHaveLength(50);
+    expect(text()).toContain('Filter to find the other 200');
+  });
+
+  it('gives the rows that local branches leave to remote ones', async () => {
+    const { local } = many(10);
+    const remote = Array.from({ length: 300 }, (_, index) => ({
+      name: `origin/remote-${String(index).padStart(3, '0')}`,
+      branch: `remote-${String(index).padStart(3, '0')}`
+    }));
+    gitBranches = vi.fn(() => of({ current: null, local, remote, singleBranch: false }));
+    await open();
+
+    expect(rows()).toHaveLength(200);
+    expect(names().filter(name => name?.startsWith('origin/'))).toHaveLength(190);
+    expect(text()).toContain('Filter to find the other 110');
+  });
+
+  it('says when there are no branches at all, which no filter explains', async () => {
+    gitBranches = vi.fn(() => of({ current: null, local: [], remote: [], singleBranch: false }));
+    await open();
+
+    const status = overlay().querySelector('[role="status"]');
+    expect(status?.textContent).toContain(`${K}.noBranches`);
+    expect(status?.textContent).not.toContain(`${K}.noMatches`);
+  });
+
+  it('has its status region before the list arrives, so that what it then says is announced', async () => {
+    const answer = new Subject<GitBranchList>();
+    gitBranches = vi.fn(() => answer);
+    await open();
+    const status = overlay().querySelector('[role="status"]');
+    expect(status).not.toBeNull();
+
+    await typeFilter('nothing like this');
+    answer.next(branches);
+    answer.complete();
+    await settleDialog();
+
+    expect(overlay().querySelector('[role="status"]')).toBe(status);
+    expect(status?.textContent).toContain(`${K}.noMatches`);
+  });
+
+  it('keeps its status region when the read fails', async () => {
+    gitBranches = vi.fn(() => throwError(() => apiError(500, 'internal')));
+    await open();
+
+    expect(overlay().querySelector('[role="status"]')).not.toBeNull();
+  });
+
+  it('stops reading when it closes', async () => {
+    const answer = new Subject<GitBranchList>();
+    gitBranches = vi.fn(() => answer);
+    const { closed } = await open();
+    expect(answer.observed).toBe(true);
+
+    TestBed.inject(DialogService).closeAll();
+    await closed;
+    await settleDialog();
+
+    expect(answer.observed).toBe(false);
+  });
+
   it('shows exactly 200 branches without saying to filter', async () => {
     gitBranches = vi.fn(() => of(many(200)));
-    void open();
-    await settleDialog();
+    await open();
 
     expect(rows()).toHaveLength(200);
     expect(text()).not.toContain('Filter to find');
@@ -227,30 +310,26 @@ describe('BranchListDialog', () => {
   it('shows a long name in full', async () => {
     const name = `notes/${'a-long-branch-name-'.repeat(11)}`.slice(0, 200);
     gitBranches = vi.fn(() => of({ ...branches, current: name, local: [ { name, upstream: null } ] }));
-    void open();
-    await settleDialog();
+    await open();
 
     expect(names()).toContain(name);
   });
 
   it('shows the note in a single-branch clone', async () => {
     gitBranches = vi.fn(() => of({ ...branches, singleBranch: true }));
-    void open();
-    await settleDialog();
+    await open();
 
     expect(text()).toContain(`${K}.singleBranch`);
   });
 
   it('shows no note in a full clone', async () => {
-    void open();
-    await settleDialog();
+    await open();
 
     expect(text()).not.toContain(`${K}.singleBranch`);
   });
 
   it('moves focus to the filter, and works with the keyboard alone', async () => {
-    const closed = open();
-    await settleDialog();
+    const { closed } = await open();
 
     expect(document.activeElement).toBe(filter());
     // Native buttons: Tab reaches them, and Enter and Space press them.
@@ -258,33 +337,30 @@ describe('BranchListDialog', () => {
 
     filter().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
-    expect(await (await closed)).toBeUndefined();
+    expect(await closed).toBeUndefined();
   });
 
   it('closes with the local branch that was chosen', async () => {
-    const closed = open();
-    await settleDialog();
+    const { closed } = await open();
 
     row('Docs')?.click();
 
-    expect(await (await closed)).toEqual({ kind: 'local', name: 'Docs' });
+    expect(await closed).toEqual({ kind: 'local', name: 'Docs' });
   });
 
   it('closes with the remote branch that was chosen, without origin/', async () => {
-    const closed = open();
-    await settleDialog();
+    const { closed } = await open();
 
     row('origin/feature')?.click();
 
-    expect(await (await closed)).toEqual({ kind: 'remote', name: 'feature' });
+    expect(await closed).toEqual({ kind: 'remote', name: 'feature' });
   });
 
   it('closes with nothing from its close button', async () => {
-    const closed = open();
-    await settleDialog();
+    const { closed } = await open();
 
     overlay().querySelector<HTMLButtonElement>('.header button')?.click();
 
-    expect(await (await closed)).toBeUndefined();
+    expect(await closed).toBeUndefined();
   });
 });

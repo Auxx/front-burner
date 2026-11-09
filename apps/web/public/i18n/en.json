@@ -618,6 +618,7 @@
   "web-feature-repository-screen.BranchListDialog.remote": "Remote branches",
   "web-feature-repository-screen.BranchListDialog.current": "Current branch",
   "web-feature-repository-screen.BranchListDialog.noMatches": "No branches match this filter.",
+  "web-feature-repository-screen.BranchListDialog.noBranches": "This repository has no branches to list.",
   "web-feature-repository-screen.BranchListDialog.filterMore": "{hidden, plural, one {Filter to find the other one} other {Filter to find the other #}}",
   "web-feature-repository-screen.BranchListDialog.singleBranch": "This is a single-branch clone, so other remote branches aren't available.",
   "web-feature-repository-screen.AbortMergeDialog.heading": "Abort the merge?",

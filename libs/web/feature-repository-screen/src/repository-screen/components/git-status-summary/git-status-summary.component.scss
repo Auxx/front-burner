@@ -12,10 +12,12 @@
 
 // Gives up its room before the repository name and the save status, which
 // shrink in proportion only once it is as short as it gets: a few characters.
-// A long press shows the tooltip, not the platform's text selection or callout.
+// As short as it gets, it is still a touch target (NF-13.5, NV-19), whose size
+// the control height follows. A long press shows the tooltip, not the platform's
+// text selection or callout.
 .branch {
   flex-shrink: 1000;
-  min-inline-size: calc(4ch + 2 * var(--ui-space-1));
+  min-inline-size: max(var(--ui-control-height), calc(4ch + 2 * var(--ui-space-1)));
   min-block-size: var(--ui-control-height);
   padding-block: 0;
   padding-inline: var(--ui-space-1);

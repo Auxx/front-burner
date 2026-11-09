@@ -1277,6 +1277,34 @@ describe('RepositoryScreenPage', () => {
         expect(list()).toBeNull();
         expect(document.activeElement).toBe(branchButton());
       });
+
+      it('closes the list when a merge starts, and gives the focus to the merge bar', async () => {
+        await visit('/repositories/12');
+        branchButton().focus();
+        branchButton().click();
+        await settleDialog();
+
+        gitStatusAnswer = of({ ...baseStatus(), mergeInProgress: true });
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+        await settleDialog();
+
+        expect(list()).toBeNull();
+        expect(document.activeElement?.closest('rs-merge-summary')).not.toBeNull();
+      });
+
+      it('leaves an open list alone when the status changes without a merge', async () => {
+        await visit('/repositories/12');
+        branchButton().click();
+        await settleDialog();
+
+        gitStatusAnswer = of({ ...baseStatus(), ahead: 1 });
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+        await settleDialog();
+
+        expect(list()).not.toBeNull();
+      });
     });
 
     describe('a merge in progress', () => {

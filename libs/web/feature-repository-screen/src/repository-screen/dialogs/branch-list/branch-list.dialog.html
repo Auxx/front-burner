@@ -27,7 +27,8 @@
         </div>
       </ui-inline-banner>
     }
-    @if (shown(); as shown) {
+    @let shown = this.shown();
+    @if (shown) {
       @if (shown.singleBranch) {
         <ui-inline-banner status="info">{{ t('singleBranch') }}</ui-inline-banner>
       }
@@ -70,15 +71,14 @@
           }
         </ul>
       }
-      <!-- Always there, so that what it comes to say is announced as the user types. -->
-      <div class="status"
-           role="status">
-        @if (shown.nothing) {
-          {{ t('noMatches') }}
-        } @else if (shown.hidden) {
-          {{ t('filterMore', { hidden: shown.hidden }) }}
-        }
-      </div>
     }
+    <!-- Always there, also before the list arrives, so that what it comes to say is announced. -->
+    <div role="status">
+      @if (shown?.empty; as empty) {
+        <p class="status">{{ t(empty) }}</p>
+      } @else if (shown?.hidden; as hidden) {
+        <p class="status">{{ t('filterMore', { hidden }) }}</p>
+      }
+    </div>
   </ui-dialog>
 </ng-container>

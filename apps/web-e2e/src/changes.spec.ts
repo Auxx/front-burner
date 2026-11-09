@@ -179,6 +179,29 @@ test.describe('the branch list', () => {
     await expect(branchButton(page, 'main')).toBeFocused();
   });
 
+  test('keeps a row reached with Shift+Tab clear of the filter', async ({ page, instance, isMobile }) => {
+    test.skip(isMobile, 'A phone has no keyboard.');
+    await page.setViewportSize({ width: 800, height: 400 });
+    const { id, dir } = unconfirmedHandbook(instance);
+    for (let index = 0; index < 30; index++) {
+      gitIn(dir, 'branch', `branch-${String(index).padStart(2, '0')}`);
+    }
+    await openScreen(page, `/repositories/${id}`);
+    await branchButton(page, 'main').click();
+    await expect(list(page).getByRole('button', { name: 'branch-29' })).toBeVisible();
+
+    // The last branch scrolls the list to its end; each row above it then comes from under the filter.
+    await list(page).getByRole('button', { name: 'branch-29' }).focus();
+    for (let index = 28; index >= 0; index--) {
+      await page.keyboard.press('Shift+Tab');
+      const focused = list(page).getByRole('button', { name: `branch-${String(index).padStart(2, '0')}` });
+      await expect(focused).toBeFocused();
+      const row = await focused.boundingBox();
+      const field = await list(page).locator('.filter').boundingBox();
+      expect(row?.y).toBeGreaterThanOrEqual((field?.y ?? Infinity) + (field?.height ?? Infinity) - 1);
+    }
+  });
+
   test('shows a long name without scrolling sideways', async ({ page, instance }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     const { id, dir } = unconfirmedHandbook(instance);
