@@ -77,6 +77,7 @@ describe('RepositoryScreenPage', () => {
   let gitDiff: ReturnType<typeof vi.fn<(path: string) => Observable<GitDiff>>>;
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let fetch: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
+  let pull: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let fetchOnFileOpened: ReturnType<typeof vi.fn<(id: number) => Observable<void>>>;
   let recreateFile: ReturnType<typeof vi.fn>;
@@ -139,6 +140,7 @@ describe('RepositoryScreenPage', () => {
             diff: (_id: number, query: { path: string; }) => gitDiff(query.path),
             push,
             fetch,
+            pull,
             gitJob,
             fetchOnFileOpened,
             discard: (_id: number, body: { paths: string[]; }) => {
@@ -228,6 +230,7 @@ describe('RepositoryScreenPage', () => {
     saveFile = vi.fn(() => of({ hash: 'b'.repeat(64), size: 10 }));
     push = vi.fn(() => of({ jobId: 7 }));
     fetch = vi.fn(() => of({ jobId: 8 }));
+    pull = vi.fn(() => of({ jobId: 9 }));
     gitJob = vi.fn(() => of<GitJobState>({ status: 'running', outcome: null }));
     fetchOnFileOpened = vi.fn(() => of(undefined));
     recreateFile = vi.fn(() => of({ hash: 'd'.repeat(64), size: 10 }));
@@ -1586,10 +1589,39 @@ describe('RepositoryScreenPage', () => {
         expect(problem()).not.toBe(first);
       });
 
+      it('Show changes opens Changes', async () => {
+        localStorage.setItem('fb.4.sideTool', 'files');
+        gitStatusAnswer = of({ ...baseStatus(), upstream: 'origin/main' });
+        pull.mockReturnValue(throwError(() =>
+          new HttpErrorResponse({
+            status: 409,
+            error: { code: 'uncommitted-changes', params: {}, message: 'x', requestId: 'r' }
+          })
+        ));
+        await visit('/repositories/12');
+
+        const pullButton = [ ...page().querySelectorAll('rs-repository-bar rs-git-actions button') ]
+          .find(button => button.textContent?.trim() === `${KEY_ACTIONS}.pull`) as HTMLButtonElement;
+        pullButton.click();
+        // The waiting saves go first.
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        const shown = problem() as HTMLElement;
+        expect(shown.textContent).toContain('errors.uncommitted-changes');
+        const fix = [ ...shown.querySelectorAll('button') ]
+          .find(button => button.textContent?.includes('fixes.show-changes')) as HTMLButtonElement;
+        fix.click();
+        await settle(harness.fixture);
+
+        expect(page().querySelector('rs-changes-pane')?.hasAttribute('hidden')).toBe(false);
+        expect(page().querySelector('rs-file-tree')?.hasAttribute('hidden')).toBe(true);
+      });
+
       it('shows why a push failed below the bar, above the panes, and dismisses it', async () => {
         gitJob.mockReturnValue(of<GitJobState>({
           status: 'done',
-          outcome: { kind: 'failed', code: 'push-non-fast-forward', params: { branch: 'main' } }
+          outcome: { kind: 'failed', code: 'push-rejected', params: { branch: 'main' } }
         }));
         await visit('/repositories/12');
 
@@ -1599,7 +1631,7 @@ describe('RepositoryScreenPage', () => {
         const shown = problem() as HTMLElement;
         expect(shown.closest('header')).toBeTruthy();
         expect(shown.closest('rs-repository-bar')).toBeNull();
-        expect(shown.textContent).toContain('errors.push-non-fast-forward');
+        expect(shown.textContent).toContain('errors.push-rejected');
 
         (shown.querySelector('ui-inline-banner button') as HTMLButtonElement).click();
         await settle(harness.fixture);

@@ -1,7 +1,9 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.GitActionsComponent'">
   @let fetchWhy = fetchReason();
+  @let pullWhy = pullReason();
   @let pushWhy = pushReason();
   @let fetchRuns = fetching();
+  @let pullRuns = pulling();
   @let pushRuns = pushing();
   @let progressKey = progress();
   @let warningText = warning();
@@ -9,7 +11,7 @@
     <button uiIconButton
             [uiMenuTrigger]="actions.aria"
             [label]="warningText === null ? t('gitActions') : t('gitActionsWarning', { warning: warningText })"
-            [busy]="fetchRuns || pushRuns">
+            [busy]="progressKey !== null">
       <ui-icon [name]="warningText === null ? 'repo-fetch' : 'warning'" />
     </button>
     <ui-menu #actions="uiMenu"
@@ -20,6 +22,14 @@
         {{ fetchRuns ? t('fetching') : t('fetch') }}
         @if (fetchWhy !== null) {
           <span class="reason">{{ t('reasons.' + fetchWhy) }}</span>
+        }
+      </button>
+      <button uiMenuItem="pull"
+              [disabled]="pullRuns || pullWhy !== null">
+        <ui-icon name="repo-pull" />
+        {{ pullRuns ? t('pulling') : t('pull') }}
+        @if (pullWhy !== null) {
+          <span class="reason">{{ t('reasons.' + pullWhy) }}</span>
         }
       </button>
       <button uiMenuItem="push"
@@ -56,6 +66,26 @@
               (click)="chooseFetch()">
         <ui-icon name="repo-fetch" />
         {{ fetchRuns ? t('fetching') : t('fetch') }}
+      </button>
+    }
+    @if (pullWhy !== null) {
+      <button uiButton
+              variant="ghost"
+              size="small"
+              unavailable
+              uiTooltipShowOnClick
+              [uiTooltip]="t('reasons.' + pullWhy)">
+        <ui-icon name="repo-pull" />
+        {{ t('pull') }}
+      </button>
+    } @else {
+      <button uiButton
+              variant="ghost"
+              size="small"
+              [busy]="pullRuns"
+              (click)="choosePull()">
+        <ui-icon name="repo-pull" />
+        {{ pullRuns ? t('pulling') : t('pull') }}
       </button>
     }
     @if (pushWhy !== null) {

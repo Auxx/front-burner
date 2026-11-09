@@ -1,11 +1,11 @@
 import { workspaceRoot } from '@nx/devkit';
 import { execFileSync, spawn } from 'node:child_process';
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createServer } from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 
 // A copy of the server's test certificate and key (web-e2e cannot import
@@ -39,6 +39,40 @@ export function createHandbookRemote(root: string): string {
   git(work, 'branch', 'feature/x');
   git(work, 'push', '-q', handbook, 'main', 'feature/x');
   return handbook;
+}
+
+/**
+ * Someone else pushes to `branch` of the bare repository `bare`: one commit per
+ * entry of `commits`, each writing its files (path → content), or empty without any.
+ */
+export function pushFromElsewhere(
+  bare: string,
+  branch: string,
+  commits: readonly Readonly<Record<string, string>>[]
+): void {
+  const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, env: gitEnv });
+  const elsewhere = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-elsewhere-'));
+  try {
+    git(elsewhere, 'clone', '-q', bare, '.');
+    // A new branch of the remote starts from its default branch.
+    git(elsewhere, 'checkout', '-q', '-B', branch, ...hasBranch(elsewhere, branch) ? [ `origin/${branch}` ] : []);
+    commits.forEach((files, index) => {
+      for (const [ path, content ] of Object.entries(files)) {
+        mkdirSync(dirname(join(elsewhere, path)), { recursive: true });
+        writeFileSync(join(elsewhere, path), content);
+      }
+      git(elsewhere, 'add', '-A');
+      git(elsewhere, 'commit', '-q', '--allow-empty', '-m', `from elsewhere ${index + 1}`);
+    });
+    git(elsewhere, 'push', '-q', 'origin', branch);
+  } finally {
+    rmSync(elsewhere, { recursive: true, force: true });
+  }
+}
+
+function hasBranch(clone: string, branch: string): boolean {
+  const output = execFileSync('git', [ 'branch', '-r', '--list', `origin/${branch}` ], { cwd: clone, env: gitEnv });
+  return output.toString().trim() !== '';
 }
 
 /**

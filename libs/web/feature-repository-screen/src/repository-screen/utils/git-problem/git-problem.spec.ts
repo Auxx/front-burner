@@ -11,7 +11,27 @@ describe('gitProblem', () => {
     expect(gitProblem(code)).toEqual({ messageKey, fix });
   });
 
-  it.each([ 'push-non-fast-forward', 'push-protected-branch', 'push-unsigned', 'push-rejected' ])(
+  it('offers Show changes for uncommitted changes', () => {
+    expect(gitProblem('uncommitted-changes').fix).toBe('show-changes');
+  });
+
+  it('offers Try again for an author not confirmed, which asks', () => {
+    expect(gitProblem('commit-author-not-confirmed').fix).toBe('retry');
+  });
+
+  it('offers Pull for a push the remote refused', () => {
+    expect(gitProblem('push-non-fast-forward').fix).toBe('pull');
+  });
+
+  it.each([
+    [ 'changed-on-disk', 'web-feature-repository-screen.gitProblem.changed-on-disk', null ],
+    [ 'file-gone', 'web-feature-repository-screen.gitProblem.file-gone', null ],
+    [ 'file-held', 'errors.file-held', 'retry' ]
+  ])('says what a save that stopped a pull needs, without Changes\' ticks: %s', (code, messageKey, fix) => {
+    expect(gitProblem(code)).toEqual({ messageKey, fix });
+  });
+
+  it.each([ 'push-protected-branch', 'push-unsigned', 'push-rejected' ])(
     'offers no fix for a refusal of the remote: %s',
     code => {
       expect(gitProblem(code)).toEqual({ messageKey: `errors.${code}`, fix: null });

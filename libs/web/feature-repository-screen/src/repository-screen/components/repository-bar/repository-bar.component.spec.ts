@@ -9,6 +9,7 @@ import { of } from 'rxjs';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { FetchStatusComponent } from '../fetch-status/fetch-status.component';
+import { GitActionsComponent } from '../git-actions/git-actions.component';
 import { RepositoryBarComponent } from './repository-bar.component';
 
 const KEY = 'web-feature-repository-screen.RepositoryBarComponent';
@@ -86,6 +87,17 @@ describe('RepositoryBarComponent', () => {
     const parts = [ ...bar().querySelectorAll('h1, rs-git-status-summary, rs-save-status') ];
     expect(parts.map(part => part.localName)).toEqual([ 'h1', 'rs-git-status-summary', 'rs-save-status' ]);
     expect(bar().querySelector('rs-git-status-summary')?.textContent?.trim()).toBe('main');
+  });
+
+  it('passes on Pull from the git actions', async () => {
+    await show();
+    let pulled = 0;
+    fixture.componentInstance.pull.subscribe(() => pulled++);
+
+    const actions = fixture.debugElement.query(By.directive(GitActionsComponent));
+    (actions.componentInstance as GitActionsComponent).pull.emit();
+
+    expect(pulled).toBe(1);
   });
 
   it('replaces the status and the actions during a merge', async () => {

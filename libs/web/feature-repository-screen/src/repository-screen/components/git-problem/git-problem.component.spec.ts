@@ -49,9 +49,18 @@ describe('GitProblemComponent', () => {
     await show(problem('push-non-fast-forward', { branch: 'main' }));
 
     expect(text(element().querySelector('ui-inline-banner'))).toContain('The remote has new commits. Pull first.');
-    // **Pull** comes with step 4; nothing else is offered, a force push least of all.
-    expect(buttons()).toEqual([]);
+    // **Pull** and nothing else, a force push least of all.
+    expect(buttons()).toEqual([ `${KEY}.fixes.pull` ]);
     expect(announce).toHaveBeenCalledWith(expect.stringContaining('Pull first.'), 'polite');
+  });
+
+  it('lists the files in its paths param, as text', async () => {
+    await show(problem('merge-blocked', { paths: 'build/<b>app</b>.js\ndebug.log' }));
+
+    const items = [ ...element().querySelectorAll('.paths li') ];
+    expect(items.map(item => item.textContent)).toEqual([ 'build/<b>app</b>.js', 'debug.log' ]);
+    expect(element().querySelector('.paths b')).toBeNull();
+    expect(buttons()).toEqual([]);
   });
 
   it('shows the remote\'s lines as text', async () => {

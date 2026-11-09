@@ -1563,6 +1563,44 @@ test.describe('repository screen, kept up to date', () => {
     await expect(tooltip(page)).toHaveText(branch);
   });
 
+  test('AC-APP-001.5: on the repository screen there is one bar, with the home link, the repository name, the branch and counts, the git actions, the save status and the user menu; on a phone, the git actions are in a menu and the save status and counts stay visible', async ({ page, instance }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    const dir = workingCopyOf(instance.dataDir, handbook);
+    gitIn(dir, 'remote', 'add', 'origin', seededRemoteUrl('handbook'));
+    gitIn(dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    gitIn(dir, 'branch', '-q', '--set-upstream-to=origin/main');
+    gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'mine');
+
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+
+    const bar = page.getByRole('banner');
+    await expect(bar).toHaveCount(1);
+    await expect(bar.getByRole('link', { name: /Front Burner|Dashboard/ })).toBeVisible();
+    await expect(switcherButton(page)).toContainText('handbook');
+    const counts = bar.getByText('1 to push', { exact: true });
+    await expect(counts).toBeVisible();
+    for (const name of [ 'Fetch', 'Pull', 'Push' ]) {
+      await expect(bar.getByRole('button', { name, exact: true })).toBeVisible();
+    }
+    await expect(bar.getByRole('button', { name: /^Account menu for / })).toBeVisible();
+    await page.locator('.cm-content').click();
+    await page.keyboard.type('typed ');
+    const saveStatus = bar.locator('rs-save-status');
+    await expect(saveStatus).toHaveText('Saved');
+
+    await page.setViewportSize({ width: 375, height: 700 });
+
+    await expect(bar.getByRole('button', { name: 'Pull', exact: true })).toHaveCount(0);
+    await expect(counts).toBeInViewport({ ratio: 1 });
+    await expect(saveStatus).toBeVisible();
+    await bar.getByRole('button', { name: /^Git actions/ }).click();
+    for (const name of [ 'Fetch', 'Pull', 'Push' ]) {
+      await expect(page.getByRole('menuitem', { name })).toBeVisible();
+    }
+    expect(await fitsWidth(page)).toBe(true);
+  });
+
   test('a merge stays in the one bar on the smallest phone, and Abort merge ends it', async ({ page, instance, monitor }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);

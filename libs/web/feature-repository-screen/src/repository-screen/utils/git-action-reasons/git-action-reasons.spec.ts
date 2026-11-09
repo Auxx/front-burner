@@ -1,6 +1,6 @@
 import type { GitStatus } from '@front-burner/shared-contracts';
 
-import { fetchUnavailableReason, pushUnavailableReason } from './git-action-reasons';
+import { fetchUnavailableReason, pullUnavailableReason, pushUnavailableReason } from './git-action-reasons';
 
 function status(changes: Partial<GitStatus> = {}): GitStatus {
   return {
@@ -32,6 +32,28 @@ describe('fetchUnavailableReason', () => {
 
   it('is not offered until a status has been read', () => {
     expect(fetchUnavailableReason(null)).toBe('loading');
+  });
+});
+
+describe('pullUnavailableReason', () => {
+  it.each<[ string, Partial<GitStatus>, string | null ]>([
+    [ 'an upstream', {}, null ],
+    [ 'nothing to pull, as it fetches first', { ahead: 0, behind: 0 }, null ],
+    [ 'uncommitted changes, which the backend refuses', {
+      changes: [ { path: 'a.md' } as GitStatus['changes'][number] ]
+    }, null ],
+    [ 'no upstream, and a remote branch of its name', { upstream: null, sameNameRemote: true }, null ],
+    [ 'no upstream', { upstream: null }, 'noUpstream' ],
+    [ 'an upstream that is gone', { upstreamGone: true }, 'upstreamGone' ],
+    [ 'no commits', { noCommits: true, upstream: null, ahead: 0 }, 'noCommits' ],
+    [ 'no branch', { branch: null, upstream: null }, 'noBranch' ],
+    [ 'a merge in progress', { mergeInProgress: true }, 'merging' ]
+  ])('with %s', (_name, changes, reason) => {
+    expect(pullUnavailableReason(status(changes))).toBe(reason);
+  });
+
+  it('until a status has been read', () => {
+    expect(pullUnavailableReason(null)).toBe('loading');
   });
 });
 

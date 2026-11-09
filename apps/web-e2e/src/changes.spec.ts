@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -8,6 +8,7 @@ import { drainFailedRequests, expect, test } from './support/fixtures';
 import {
   createHandbookRemote,
   type GitHttpServer,
+  pushFromElsewhere,
   refusePushes,
   startGitHttpServer,
   TEST_CERTIFICATE_FILE
@@ -47,8 +48,8 @@ function unconfirmedHandbook(instance: { dataDir: string; }, name = 'handbook'):
   return { id, dir: join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)) };
 }
 
-/** **Fetch** or **Push**: in the bar, or in the git actions menu on a phone (GA-7). */
-async function gitAction(page: Page, name: 'Fetch' | 'Push'): Promise<void> {
+/** **Fetch**, **Pull**, **Push** or **Abort merge**: in the bar, or in the git actions menu on a phone (GA-7, GC-6). */
+async function gitAction(page: Page, name: 'Fetch' | 'Pull' | 'Push' | 'Abort merge'): Promise<void> {
   const bar = page.getByRole('banner');
   const button = bar.getByRole('button', { name, exact: true });
   const gitActions = bar.getByRole('button', { name: 'Git actions' });
@@ -424,6 +425,267 @@ test.describe('pushing', () => {
 
     await expect(toasts(page).getByText('Pushed 1 commit to origin/main')).toBeVisible();
     await expect(summary(page)).toHaveText('main');
+  });
+
+  test.describe('pulling', () => {
+    const NOT_CLEAN = 'Commit or discard your changes before pulling.';
+    const PULL_FIRST = 'The remote has new commits. Pull first.';
+    const problem = (page: Page) => page.getByRole('banner').locator('rs-git-problem');
+    const commitsOf = (repository: string, ref = 'HEAD') =>
+      gitIn(repository, 'rev-list', '--count', ref).toString().trim();
+
+    /**
+     * Commits `guide.md` and pushes it: to the bare repository itself, as a
+     * blocking git call here would wait for the server that this process runs.
+     */
+    function publishGuide(dir: string, bare: string): void {
+      writeFileSync(join(dir, 'guide.md'), 'before\n');
+      gitIn(dir, 'add', 'guide.md');
+      gitIn(dir, 'commit', '-q', '-m', 'guide');
+      gitIn(dir, 'push', '-q', bare, 'main');
+      gitIn(dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    }
+
+    test('AC-GIT-002.1: the header shows the current branch, 2 to push, 3 to pull after a fetch, and Fetch, Pull and Push; on a phone the counts stay visible and the buttons are in a menu', async ({ page, instance }) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      const { id, dir, bare } = pushable(instance, 'cloned');
+      gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'mine 1');
+      gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'mine 2');
+      pushFromElsewhere(bare, 'main', [ {}, {}, {} ]);
+      await openScreen(page, `/repositories/${id}`);
+
+      await gitAction(page, 'Fetch');
+
+      await expect(summary(page)).toHaveText(/main\s*·\s*2 to push, 3 to pull/);
+      for (const name of [ 'Fetch', 'Pull', 'Push' ]) {
+        await expect(bar(page).getByRole('button', { name, exact: true })).toBeVisible();
+      }
+
+      await page.setViewportSize({ width: 375, height: 700 });
+
+      await expect(summary(page)).toHaveText(/main\s*·\s*2 to push, 3 to pull/);
+      await expect(bar(page).getByRole('button', { name: 'Pull', exact: true })).toHaveCount(0);
+      await gitActions(page).click();
+      for (const name of [ 'Fetch', 'Pull', 'Push' ]) {
+        await expect(page.getByRole('menuitem', { name })).toBeVisible();
+      }
+    });
+
+    test('AC-GIT-002.9: Pull with uncommitted changes says Commit or discard your changes before pulling. With a clean working copy, it fast-forwards or makes a merge commit, and says how many commits it pulled', async ({ page, instance, monitor }) => {
+      await confirmCommitAuthor(instance.url);
+      const { id, dir, bare } = pushable(instance, 'cloned');
+      pushFromElsewhere(bare, 'main', [ { 'theirs.md': 'theirs\n' }, {}, {} ]);
+      writeFileSync(join(dir, 'mine.md'), 'mine\n');
+      await openScreen(page, `/repositories/${id}`);
+
+      await gitAction(page, 'Pull');
+
+      await expect(problem(page)).toContainText(NOT_CLEAN);
+      expect(existsSync(join(dir, 'theirs.md'))).toBe(false);
+      expect(existsSync(join(dir, 'mine.md'))).toBe(true);
+      await problem(page).getByRole('button', { name: 'Show changes' }).click();
+      await expect(changesPane(page)).toBeVisible();
+      await expect(rows(page).filter({ hasText: 'mine.md' })).toBeVisible();
+
+      // Clean: a fast-forward.
+      rmSync(join(dir, 'mine.md'));
+      await page.reload();
+      await gitAction(page, 'Pull');
+
+      await expect(toasts(page).getByText('Pulled 3 commits')).toBeVisible();
+      expect(readFileSync(join(dir, 'theirs.md'), 'utf8')).toBe('theirs\n');
+      expect(gitIn(dir, 'rev-list', '--merges', '--count', 'HEAD').toString().trim()).toBe('0');
+
+      // Commits on both sides: a merge commit.
+      gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'mine');
+      pushFromElsewhere(bare, 'main', [ {} ]);
+      await gitAction(page, 'Pull');
+
+      await expect(toasts(page).getByText('Pulled 1 commit', { exact: true })).toBeVisible();
+      expect(gitIn(dir, 'rev-list', '--merges', '--count', 'HEAD').toString().trim()).toBe('1');
+      await expect(summary(page)).toHaveText(/main\s*·\s*2 to push/);
+
+      // Nothing more.
+      await gitAction(page, 'Pull');
+      await expect(toasts(page).getByText('Already up to date')).toBeVisible();
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/pull`);
+    });
+
+    test('AC-GIT-002.11: a push rejected because the remote has new commits says The remote has new commits. Pull first. and offers Pull; no push is forced', async ({ page, instance, monitor }) => {
+      await confirmCommitAuthor(instance.url);
+      const { id, dir, bare } = pushable(instance, 'cloned');
+      gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'mine');
+      pushFromElsewhere(bare, 'main', [ {} ]);
+      const before = commitsOf(bare, 'main');
+      await openScreen(page, `/repositories/${id}`);
+
+      await push(page);
+
+      await expect(problem(page)).toContainText(PULL_FIRST);
+      await expect(problem(page).getByRole('button', { name: /force/i })).toHaveCount(0);
+      expect(commitsOf(bare, 'main')).toBe(before);
+
+      // Still leads somewhere with uncommitted changes (GA-26).
+      writeFileSync(join(dir, 'mine.md'), 'mine\n');
+      await problem(page).getByRole('button', { name: 'Pull', exact: true }).click();
+      await expect(problem(page)).toContainText(NOT_CLEAN);
+      rmSync(join(dir, 'mine.md'));
+
+      await gitAction(page, 'Pull');
+
+      await expect(toasts(page).getByText('Pulled 1 commit', { exact: true })).toBeVisible();
+      await expect(problem(page)).toHaveCount(0);
+      await push(page);
+      await expect(toasts(page).getByText('Pushed 2 commits to origin/main')).toBeVisible();
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/pull`);
+    });
+
+    test('AC-REPO-002.2: fetching and pulling a public repository work without credentials', async ({ page, instance }) => {
+      const { id, dir, bare } = pushable(instance, 'cloned');
+      pushFromElsewhere(bare, 'main', [ { 'theirs.md': 'theirs\n' } ]);
+      await openScreen(page, `/repositories/${id}`);
+
+      await gitAction(page, 'Fetch');
+      await expect(summary(page)).toHaveText(/main\s*·\s*1 to pull/);
+      await gitAction(page, 'Pull');
+
+      await expect(toasts(page).getByText('Pulled 1 commit', { exact: true })).toBeVisible();
+      await expect(summary(page)).toHaveText('main');
+      expect(existsSync(join(dir, 'theirs.md'))).toBe(true);
+    });
+
+    test('a merge commit asks for the commit author; cancelling cancels the pull, and the fetched counts show', async ({ page, instance }) => {
+      const { id, dir, bare } = pushable(instance, 'cloned');
+      gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'mine');
+      pushFromElsewhere(bare, 'main', [ {} ]);
+      await openScreen(page, `/repositories/${id}`);
+
+      await gitAction(page, 'Pull');
+
+      const question = page.getByRole('dialog', { name: 'Confirm your commit author' });
+      await question.getByRole('button', { name: 'Cancel' }).click();
+      await expect(summary(page)).toHaveText(/main\s*·\s*1 to push, 1 to pull/);
+      await expect(problem(page)).toHaveCount(0);
+      expect(gitIn(dir, 'rev-list', '--merges', '--count', 'HEAD').toString().trim()).toBe('0');
+
+      await gitAction(page, 'Pull');
+      await question.getByRole('button', { name: /^Commit as / }).click();
+
+      await expect(toasts(page).getByText('Pulled 1 commit', { exact: true })).toBeVisible();
+      expect(gitIn(dir, 'rev-list', '--merges', '--count', 'HEAD').toString().trim()).toBe('1');
+    });
+
+    test('a fast-forward does not ask for the commit author', async ({ page, instance }) => {
+      const { id, bare } = pushable(instance, 'cloned');
+      pushFromElsewhere(bare, 'main', [ {} ]);
+      await openScreen(page, `/repositories/${id}`);
+
+      await gitAction(page, 'Pull');
+
+      await expect(toasts(page).getByText('Pulled 1 commit', { exact: true })).toBeVisible();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    });
+
+    test('a pull that conflicts shows the merge bar on both tabs, and Abort merge goes back', async ({ page, context, instance, monitor }) => {
+      await confirmCommitAuthor(instance.url);
+      const { id, dir, bare } = pushable(instance, 'cloned');
+      writeFileSync(join(dir, 'guide.md'), 'mine\n');
+      gitIn(dir, 'add', 'guide.md');
+      gitIn(dir, 'commit', '-q', '-m', 'mine');
+      pushFromElsewhere(bare, 'main', [ { 'guide.md': 'theirs\n' } ]);
+      await openScreen(page, `/repositories/${id}`);
+      const other = await context.newPage();
+      await other.goto(`/repositories/${id}`);
+      await expect(summary(other)).toHaveText(/main\s*·\s*1 to push/);
+
+      await gitAction(page, 'Pull');
+
+      for (const tab of [ page, other ]) {
+        await expect(bar(tab).getByText('0 of 1 file resolved', { exact: true })).toBeVisible();
+      }
+      await expect(toasts(page).getByText(/Pulled/)).toHaveCount(0);
+      await expect(problem(page)).toHaveCount(0);
+
+      await gitAction(page, 'Abort merge');
+      await page.getByRole('dialog', { name: 'Abort the merge?' }).getByRole('button', { name: 'Abort merge' }).click();
+
+      for (const tab of [ page, other ]) {
+        await expect(summary(tab)).toHaveText(/main\s*·\s*1 to push, 1 to pull/);
+      }
+      expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toBe('mine\n');
+      await other.close();
+      // The abort's own event can read a merge that has just ended, which the store takes as its end.
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+    });
+
+    test('a branch named like a remote one pulls, then pushes', async ({ page, instance }) => {
+      await confirmCommitAuthor(instance.url);
+      const { id, dir, bare } = pushable(instance, 'cloned');
+      pushFromElsewhere(bare, 'notes', [ {} ]);
+      gitIn(dir, 'checkout', '-q', '-b', 'notes');
+      gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'mine');
+      await openScreen(page, `/repositories/${id}`);
+
+      await push(page);
+
+      await expect(problem(page)).toContainText(PULL_FIRST);
+      await problem(page).getByRole('button', { name: 'Pull', exact: true }).click();
+
+      await expect(toasts(page).getByText('Pulled 1 commit', { exact: true })).toBeVisible();
+      await expect(summary(page)).toHaveText(/notes\s*·\s*2 to push/);
+      expect(gitIn(dir, 'rev-parse', '--abbrev-ref', '@{upstream}').toString().trim()).toBe('origin/notes');
+
+      await push(page);
+
+      await expect(toasts(page).getByText('Pushed 2 commits to origin/notes')).toBeVisible();
+    });
+
+    test('Commit or discard goes away once the changes are committed', async ({ page, instance, monitor }) => {
+      await confirmCommitAuthor(instance.url);
+      const { id, dir } = pushable(instance, 'cloned');
+      writeFileSync(join(dir, 'mine.md'), 'mine\n');
+      await openScreen(page, `/repositories/${id}`);
+
+      await gitAction(page, 'Pull');
+      await expect(problem(page)).toContainText(NOT_CLEAN);
+      await problem(page).getByRole('button', { name: 'Show changes' }).click();
+      await message(page).fill('mine');
+      await commitButton(page, 'Commit 1 file').click();
+
+      await expect(problem(page)).toHaveCount(0);
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/pull`);
+    });
+
+    test('reloads the open file after a pull', async ({ page, instance }) => {
+      await confirmCommitAuthor(instance.url);
+      const { id, dir, bare } = pushable(instance, 'cloned');
+      publishGuide(dir, bare);
+      pushFromElsewhere(bare, 'main', [ { 'guide.md': 'after the pull\n' } ]);
+      await openScreen(page, `/repositories/${id}/files/guide.md`);
+      await expect(page.locator('.cm-content')).toContainText('before');
+
+      await gitAction(page, 'Pull');
+
+      await expect(toasts(page).getByText('Pulled 1 commit', { exact: true })).toBeVisible();
+      await expect(page.locator('.cm-content')).toContainText('after the pull');
+    });
+
+    test('a pull sends what was just typed first, which stops it rather than losing the edit', async ({ page, instance, monitor }) => {
+      await confirmCommitAuthor(instance.url);
+      const { id, dir, bare } = pushable(instance, 'cloned');
+      publishGuide(dir, bare);
+      pushFromElsewhere(bare, 'main', [ { 'guide.md': 'after the pull\n' } ]);
+      await openScreen(page, `/repositories/${id}/files/guide.md`);
+      await page.locator('.cm-content').click();
+      await page.keyboard.type('typed ');
+
+      await gitAction(page, 'Pull');
+
+      await expect(problem(page)).toContainText(NOT_CLEAN);
+      await expect(page.locator('.cm-content')).toContainText('typed');
+      expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toContain('typed');
+      drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/pull`);
+    });
   });
 });
 

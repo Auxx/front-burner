@@ -11,16 +11,20 @@ import {
 } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import { fetchUnavailableReason, pushUnavailableReason } from '../../utils/git-action-reasons/git-action-reasons';
+import {
+  fetchUnavailableReason,
+  pullUnavailableReason,
+  pushUnavailableReason
+} from '../../utils/git-action-reasons/git-action-reasons';
 
 /**
- * **Fetch** and **Push** in the repository bar (GA-7 to GA-9). Each is offered
- * when it can run; otherwise it is shown unavailable, with the reason on hover,
- * focus or tap, such as "Nothing to push", "Make a commit first" or "Another
+ * **Fetch**, **Pull** and **Push** in the repository bar (GA-7 to GA-9). Each is
+ * offered when it can run; otherwise it is shown unavailable, with the reason on
+ * hover, focus or tap, such as "Nothing to push", "Make a commit first" or "Another
  * git action is running". While a network job runs, here or in another tab, its
- * button shows a spinner and "Fetching…" or "Pushing…", which a status region also
- * tells screen readers, and the other one is unavailable (GA-9). On narrow
- * screens both are items of the git actions menu, with their reasons below
+ * button shows a spinner and "Fetching…", "Pulling…" or "Pushing…", which a status
+ * region also tells screen readers, and the others are unavailable (GA-9). On narrow
+ * screens they are items of the git actions menu, with their reasons below
  * them (GA-7, NV-11).
  */
 @Component({
@@ -52,12 +56,15 @@ export class GitActionsComponent {
   readonly showWarning = output<void>();
   /** **Fetch** was chosen while it was offered. */
   readonly fetch = output<void>();
+  /** **Pull** was chosen while it was offered. */
+  readonly pull = output<void>();
   /** **Push** was chosen while it was offered. */
   readonly push = output<void>();
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
 
   protected readonly fetching = computed(() => this.running() === 'fetch');
+  protected readonly pulling = computed(() => this.running() === 'pull');
   protected readonly pushing = computed(() => this.running() === 'push');
 
   /** The message key of what runs, for the status region; `null` while nothing runs. */
@@ -69,6 +76,10 @@ export class GitActionsComponent {
   /** Why **Fetch** is unavailable, as a message key, or `null`; none while it runs. */
   protected readonly fetchReason = computed(() =>
     this.fetching() ? null : (fetchUnavailableReason(this.status()) ?? this.busyReason())
+  );
+  /** Why **Pull** is unavailable, as a message key, or `null`; none while it runs. */
+  protected readonly pullReason = computed(() =>
+    this.pulling() ? null : (pullUnavailableReason(this.status()) ?? this.busyReason())
   );
   /** Why **Push** is unavailable, as a message key, or `null`; none while it runs. */
   protected readonly pushReason = computed(() =>
@@ -88,6 +99,8 @@ export class GitActionsComponent {
   protected choose(item: unknown): void {
     if (item === 'fetch') {
       this.chooseFetch();
+    } else if (item === 'pull') {
+      this.choosePull();
     } else if (item === 'push') {
       this.choosePush();
     } else if (item === 'warning') {
@@ -98,6 +111,12 @@ export class GitActionsComponent {
   protected chooseFetch(): void {
     if (this.fetchReason() === null && !this.fetching()) {
       this.fetch.emit();
+    }
+  }
+
+  protected choosePull(): void {
+    if (this.pullReason() === null && !this.pulling()) {
+      this.pull.emit();
     }
   }
 

@@ -5,7 +5,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { drainFailedRequests, expect, type Monitor, test } from './support/fixtures';
-import { logIn, seed, TEST_ADMIN } from './support/instance';
+import { logIn, seed, seededRemoteUrl, TEST_ADMIN } from './support/instance';
+import { gitIn } from './support/working-copy';
 
 test.use({ instanceOptions: { onboarded: true } });
 
@@ -640,6 +641,46 @@ test.describe('editor', () => {
         await expect.poll(() => storedDrafts(page)).toEqual({});
         await page.unroute(`**/api/v1/repositories/${id}/file`);
         expect(onDisk(dir, 'README.md')).toBe('# Handbook\nTheirs. Mine. Kept.');
+      } finally {
+        await other.close();
+      }
+      drainSaves(monitor, id);
+    });
+
+    test('a pull stopped by a change on disk says so, until the choice is made', async ({ page, browser, instance, monitor }) => {
+      const { id, dir } = seedHandbook(instance.dataDir);
+      gitIn(dir, 'remote', 'add', 'origin', seededRemoteUrl('handbook'));
+      gitIn(dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+      gitIn(dir, 'branch', '-q', '--set-upstream-to=origin/main');
+      await openScreen(page, `/repositories/${id}/files/README.md`);
+      await expect(editor(page, 'README.md')).toHaveText('# Handbook');
+      const other = await otherDevice(browser, instance.url, `/repositories/${id}/files/README.md`);
+      try {
+        await typeUnsaved(page, id, 'README.md', ' Mine.');
+        await typeAtEnd(other.page, 'README.md', ' Theirs.');
+        await expect(status(other.page)).toHaveText(SAVED);
+        await expect(main(page).getByText(CHANGED)).toBeVisible();
+
+        const bar = page.getByRole('banner');
+        const pull = bar.getByRole('button', { name: 'Pull', exact: true });
+        const gitActions = bar.getByRole('button', { name: /^Git actions/ });
+        await expect(pull.or(gitActions)).toBeVisible();
+        if (await gitActions.isVisible()) {
+          await gitActions.click();
+          await page.getByRole('menuitem', { name: 'Pull' }).click();
+        } else {
+          await pull.click();
+        }
+
+        const problem = bar.locator('rs-git-problem');
+        await expect(problem).toContainText(
+          'README.md changed on disk. Choose Reload or Keep mine in the editor, then pull.'
+        );
+
+        await main(page).getByRole('button', { name: 'Reload', exact: true }).click();
+
+        await expect(problem).toHaveCount(0);
+        await page.unroute(`**/api/v1/repositories/${id}/file`);
       } finally {
         await other.close();
       }

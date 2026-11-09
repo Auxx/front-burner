@@ -18,9 +18,11 @@ import {
 import { type Observable, of, Subject, throwError } from 'rxjs';
 
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { LockedKeyService } from '../locked-key/locked-key.service';
 import { NetworkJobService } from '../network-job/network-job.service';
+import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 import { CredentialFixesService } from './credential-fixes.service';
 
@@ -63,6 +65,7 @@ const unknownHostParams = {
 describe('CredentialFixesService', () => {
   let push: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let fetch: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
+  let pull: ReturnType<typeof vi.fn<(id: number) => Observable<GitJobStarted>>>;
   let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let open: ReturnType<typeof vi.fn>;
   let closed: Subject<boolean | undefined>;
@@ -100,6 +103,7 @@ describe('CredentialFixesService', () => {
   beforeEach(() => {
     push = vi.fn(() => of({ jobId: 7 }));
     fetch = vi.fn(() => of({ jobId: 8 }));
+    pull = vi.fn(() => of({ jobId: 9 }));
     gitJob = vi.fn(() => of(failed('remote-failed')));
     closed = new Subject();
     open = vi.fn(() => ({ closed }));
@@ -114,7 +118,12 @@ describe('CredentialFixesService', () => {
       providers: [
         CredentialFixesService,
         NetworkJobService,
-        { provide: GitApi, useValue: { push, fetch, gitJob } },
+        { provide: GitApi, useValue: { push, fetch, pull, gitJob } },
+        {
+          provide: OpenFilesService,
+          useValue: { flushAll: vi.fn(async () => undefined), unsavedPaths: () => [], notSaved: () => null }
+        },
+        { provide: CommitAuthorGate, useValue: { ready: vi.fn(async () => true), refresh: vi.fn() } },
         { provide: PushChannelService, useValue: { events: jobEvents, reconnected: new Subject() } },
         {
           provide: GitStatusStore,
@@ -217,7 +226,7 @@ describe('CredentialFixesService', () => {
   describe('a credential fix from a push banner', () => {
     it('also fetches, quietly, while the last fetch\'s problem is stored', async () => {
       await failedPush('credentials-refused');
-      gitStatus.set({ fetchProblem: { code: 'credentials-refused', params: {} } } as GitStatus);
+      gitStatus.set({ changes: [], fetchProblem: { code: 'credentials-refused', params: {} } } as unknown as GitStatus);
       gitJob.mockReturnValue(of(pushed));
 
       await fix('fix-credentials', true);
@@ -459,6 +468,42 @@ describe('CredentialFixesService', () => {
     expect(knownHosts.trust).not.toHaveBeenCalled();
     expect(push).toHaveBeenCalledOnce();
     expect(pushes.problem()?.code).toBe('host-key-unknown');
+  });
+
+  it('Pull on a push the remote refused pulls', async () => {
+    await failedPush('push-non-fast-forward');
+
+    await service.run('pull');
+
+    expect(pull).toHaveBeenCalledExactlyOnceWith(12);
+  });
+
+  it('Pull waits for a job that runs, as a background fetch must not lose the press', async () => {
+    await failedPush('push-non-fast-forward');
+    gitJob.mockReturnValue(of(RUNNING));
+    await pushes.start('fetch');
+    await settle();
+
+    await service.run('pull');
+    expect(pull).not.toHaveBeenCalled();
+
+    gitJob.mockReturnValue(of(pushed));
+    jobEvents.next({ type: 'job.finished', jobId: 8, outcome: 'done' });
+    await settle();
+    await settle();
+
+    expect(pull).toHaveBeenCalledOnce();
+  });
+
+  it('Show changes tells the page, and runs no job', async () => {
+    const shown = vi.fn();
+    service.showChanges.subscribe(shown);
+
+    await service.run('show-changes');
+
+    expect(shown).toHaveBeenCalledOnce();
+    expect(push).not.toHaveBeenCalled();
+    expect(pull).not.toHaveBeenCalled();
   });
 
   it('says why trusting an unknown host failed, and does not push', async () => {
