@@ -43,24 +43,16 @@ export class MergeStateService {
     const sideValues = side === 'ours'
       ? { oid: entry.oursOid, mode: entry.oursMode, size: entry.oursSize }
       : { oid: entry.theirsOid, mode: entry.theirsMode, size: entry.theirsSize };
-    if (sideValues.oid === null) {
+    // Check all readability conditions before reading the blob (ED-2).
+    if (
+      sideValues.oid === null
+      || !isMarkdownName(entry.path.split('/').at(-1) ?? '')
+      || !REGULAR_FILE.test(sideValues.mode ?? '')
+      || (sideValues.size !== null && sideValues.size > EDITABLE_FILE_LIMIT)
+    ) {
       throw new ApiErrorException(409, 'version-not-readable');
     }
-    if (!isMarkdownName(entry.path.split('/').at(-1) ?? '')) {
-      throw new ApiErrorException(409, 'version-not-readable');
-    }
-    if (!REGULAR_FILE.test(sideValues.mode ?? '')) {
-      throw new ApiErrorException(409, 'version-not-readable');
-    }
-    // Check size before reading the blob (plan review focus).
-    if (sideValues.size !== null && sideValues.size > EDITABLE_FILE_LIMIT) {
-      throw new ApiErrorException(409, 'version-not-readable');
-    }
-    const bytes = await this.merge.readVersion(root, sideValues.oid);
-    if (bytes === null) {
-      throw new ApiErrorException(409, 'version-not-readable');
-    }
-    const decoded = decodeMarkdown(bytes);
+    const decoded = decodeMarkdown(await this.merge.readVersion(root, sideValues.oid));
     if (decoded === 'not-utf8') {
       throw new ApiErrorException(409, 'version-not-readable');
     }

@@ -275,7 +275,7 @@ export class GitController {
    * One version of a conflicting file for the user to compare before choosing
    * (GC-17). `side` is `ours` or `theirs`. Refused with `no-merge-in-progress`,
    * `not-conflicting` (the path is not a conflicting file), and `version-not-readable`
-   * (not a regular file, over the limit, not valid UTF-8, or that side deleted it).
+   * (not Markdown, not a regular file, over the limit, not valid UTF-8, or that side deleted it).
    */
   @Get('merge/version')
   @ApiOkResponse({ type: GitMergeVersionDto })

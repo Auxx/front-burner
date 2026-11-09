@@ -705,17 +705,16 @@ export class GitMerge {
   }
 
   /**
-   * Read a blob by its object id, returning its raw bytes, or `null` when too
-   * large (A-5.11). The object id comes from the index, so any git failure
-   * (missing object, corrupt store, permissions) is abnormal and throws.
-   * The caller decodes the bytes with `decodeMarkdown` from the files library.
-   * Used outside the working-tree lock.
+   * Read a blob by its object id and return its raw bytes. The object id comes
+   * from the index, so any git failure (missing object, corrupt store, permissions)
+   * is abnormal and throws. The caller decodes the bytes with `decodeMarkdown`
+   * from the files library. Used outside the working-tree lock.
    *
    * @throws GitOperationError `timeout` when it ran out of time.
    * @throws Error when git fails for any reason (non-zero exit, spawn error, killed process,
    *          corrupt store, missing object, permissions).
    */
-  async readVersion(workingCopy: string, oid: string): Promise<Buffer | null> {
+  async readVersion(workingCopy: string, oid: string): Promise<Buffer> {
     const result = await this.local.run(
       workingCopy,
       [ 'cat-file', 'blob', oid ],
@@ -728,9 +727,6 @@ export class GitMerge {
     // logged as a server error rather than silently swallowed.
     if (result.exitCode !== 0) {
       throw new Error(`git cat-file blob ${oid} failed: ${result.stderr.trim()}`);
-    }
-    if (result.stdoutBytes > LOCAL_MAX_OUTPUT_BYTES) {
-      return null;
     }
     return result.stdoutRaw;
   }
