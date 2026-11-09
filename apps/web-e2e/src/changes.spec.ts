@@ -766,8 +766,9 @@ test.describe('pushing', () => {
     });
 
     test('on a phone it is in the git actions menu, whose item shows the text, and the save status stays in the bar', async ({ page, instance, isMobile }) => {
-      test.skip(isMobile, 'It sets a phone\'s width itself.');
-      await page.setViewportSize({ width: 375, height: 700 });
+      if (!isMobile) {
+        await page.setViewportSize({ width: 375, height: 700 });
+      }
       const { id, bare } = pushable(instance, 'cloned');
       renameSync(bare, `${bare}.away`);
       await openScreen(page, `/repositories/${id}`);
@@ -791,8 +792,9 @@ test.describe('pushing', () => {
   });
 
   test('moves Push into a menu on a phone', async ({ page, instance, isMobile }) => {
-    test.skip(isMobile, 'It sets a phone\'s width itself.');
-    await page.setViewportSize({ width: 375, height: 700 });
+    if (!isMobile) {
+      await page.setViewportSize({ width: 375, height: 700 });
+    }
     const { id, dir } = pushable(instance, 'cloned');
     gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
     await openScreen(page, `/repositories/${id}`);
@@ -1050,7 +1052,9 @@ test.describe('pushing', () => {
 
         await openScreen(page, `/repositories/${id}/files/guide.md`);
 
-        await expect(notice(page)).toContainText('1 new commit on origin/main');
+        // Longer than the scheduler's 5 seconds between looks at what is viewed, in case
+        // its fetch is the one that brings the commit.
+        await expect(notice(page)).toContainText('1 new commit on origin/main', { timeout: 15_000 });
         await expect(notice(page)).toContainText(FILE_CHANGED);
         await expect(page.locator('.cm-content')).toContainText('before');
         expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toBe('before\n');
@@ -1430,7 +1434,6 @@ test.describe('a locked key', () => {
     gitIn(elsewhere, 'commit', '-q', '--allow-empty', '-m', 'from elsewhere');
     gitIn(elsewhere, 'push', '-q', 'origin', 'main');
     await page.goto(`/repositories/${id}`);
-    const viewedAt = Date.now();
     const otherPage = await context.newPage();
     await otherPage.goto(`/repositories/${other.id}`);
 
@@ -1441,9 +1444,8 @@ test.describe('a locked key', () => {
     await expect(details).not.toContainText(FETCH_FAILED);
     await page.keyboard.press('Escape');
     await expect(summary(page)).toHaveText(/1 to push/);
-    // Longer than the scheduler's 5 seconds between looks at what is viewed, counted from
-    // when the screen started viewing the repository, so that the checks above count too.
-    await page.waitForTimeout(Math.max(0, viewedAt + 7_000 - Date.now()));
+    // Longer than the scheduler's 5 seconds between looks at what is viewed.
+    await page.waitForTimeout(7_000);
     await expect(summary(page)).not.toHaveText(/to pull/);
 
     await banner(page).getByRole('button', { name: 'Unlock' }).click();
