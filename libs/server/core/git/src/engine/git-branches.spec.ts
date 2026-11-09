@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GitRunner } from '../runner/git-runner';
@@ -192,6 +192,101 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
       { name: 'origin/remote-with%00percent', branch: 'remote-with%00percent' },
       { name: 'origin/remote-Заметки', branch: 'remote-Заметки' }
     ]);
+  });
+
+  it('leaves out a symbolic local branch, which is not a branch of its own', async () => {
+    fetched('origin/alias');
+    git(work, 'symbolic-ref', 'refs/heads/alias', 'refs/heads/main');
+
+    expect(await branches.list(work)).toEqual({
+      current: 'main',
+      local: [ { name: 'main', upstream: null } ],
+      remote: [ { name: 'origin/alias', branch: 'alias' } ]
+    });
+  });
+
+  it('marks the real branch when HEAD names a symbolic one', async () => {
+    git(work, 'symbolic-ref', 'refs/heads/alias', 'refs/heads/main');
+    git(work, 'symbolic-ref', 'HEAD', 'refs/heads/alias');
+
+    expect(await branches.list(work)).toEqual({
+      current: 'main',
+      local: [ { name: 'main', upstream: null } ],
+      remote: []
+    });
+  });
+
+  it('does not take a branch that is missing from the refs for a repository without commits', async () => {
+    // As when a switch lands between the reads: the commit decides, not the list.
+    git(work, 'branch', '-q', '-m', 'main', 'trunk');
+    const local = new LocalGit(new GitRunner());
+    vi.spyOn(local, 'checked').mockResolvedValue('');
+
+    expect(await new GitBranches(local).list(work)).toEqual({ current: 'trunk', local: [], remote: [] });
+  });
+
+  it('reads HEAD before the refs, so that the refs include what it named', async () => {
+    const local = new LocalGit(new GitRunner());
+    const run = vi.spyOn(local, 'run');
+
+    await new GitBranches(local).list(work);
+
+    expect(run.mock.calls.map(([ , args ]) => args.find(arg => !arg.startsWith('-')))).toEqual([
+      'rev-parse',
+      'symbolic-ref',
+      'for-each-ref'
+    ]);
+  });
+
+  describe('a name that is not valid UTF-8', () => {
+    const LATIN1 = Buffer.from('caf\xE9', 'latin1');
+    /** Git takes any bytes; a Node argument can't carry these, so the ref is written as a file. */
+    const writeRef = (folder: string, name: Buffer) => {
+      const commit = git(work, 'rev-parse', 'HEAD');
+      mkdirSync(join(work, '.git', folder), { recursive: true });
+      writeFileSync(Buffer.concat([ Buffer.from(join(work, '.git', folder, '/')), name ]), `${commit}\n`);
+    };
+
+    it('is left out of both lists', async () => {
+      writeRef('refs/heads', LATIN1);
+      writeRef('refs/remotes/origin', LATIN1);
+
+      expect(await branches.list(work)).toEqual({
+        current: 'main',
+        local: [ { name: 'main', upstream: null } ],
+        remote: []
+      });
+    });
+
+    it('is no current branch', async () => {
+      writeRef('refs/heads', LATIN1);
+      writeFileSync(
+        join(work, '.git', 'HEAD'),
+        Buffer.concat([ Buffer.from('ref: refs/heads/'), LATIN1, Buffer.from('\n') ])
+      );
+
+      expect(await branches.list(work)).toEqual({
+        current: null,
+        local: [ { name: 'main', upstream: null } ],
+        remote: []
+      });
+    });
+
+    it('still keeps what it tracks out of the remote list', async () => {
+      fetched('origin/published');
+      writeRef('refs/heads', LATIN1);
+      writeFileSync(
+        join(work, '.git', 'config'),
+        Buffer.concat([
+          Buffer.from('[remote "origin"]\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch "'),
+          LATIN1,
+          Buffer.from('"]\n\tremote = origin\n\tmerge = refs/heads/published\n')
+        ]),
+        { flag: 'a' }
+      );
+
+      expect((await branches.list(work)).remote).toEqual([]);
+    });
   });
 
   it('sorts by code units, whatever git\'s order is', async () => {

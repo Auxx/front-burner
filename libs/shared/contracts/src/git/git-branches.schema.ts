@@ -1,10 +1,11 @@
 import { z } from 'zod';
+import { nullableString } from '../nullable-string';
 
 export const GitLocalBranchSchema = z
   .object({
     name: z.string(),
     /** Such as `origin/main`; `null` for an unpublished branch. */
-    upstream: z.string().nullable()
+    upstream: nullableString()
   })
   .meta({ id: 'GitLocalBranch' });
 
@@ -20,8 +21,12 @@ export const GitRemoteBranchSchema = z
 /** The branches of a working copy, as of the last fetch, sorted by name, comparing code units (GA-36). */
 export const GitBranchListSchema = z
   .object({
-    /** `null` on a detached `HEAD`. Before the first commit it is `main`, which is listed in `local` (GA-42). */
-    current: z.string().nullable(),
+    /**
+     * `null` on a detached `HEAD`, and on a branch whose name is not valid UTF-8,
+     * which no list has. Before the first commit it is `main`, which is listed in
+     * `local` (GA-42).
+     */
+    current: nullableString(),
     local: z.array(GitLocalBranchSchema),
     /** The branches of `origin` that no local branch has the name of or tracks. */
     remote: z.array(GitRemoteBranchSchema),

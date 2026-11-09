@@ -1,6 +1,7 @@
 import { parseRemoteUrl } from '@front-burner/shared-util';
 import { z } from 'zod';
 import { CREDENTIALS_FIELD_CODES, NewHttpsCredentialsSchema, NewSshKeySchema } from '../credentials/credentials.schema';
+import { nullableString } from '../nullable-string';
 import { CLONE_MODES, type CloneMode, GIT_LEVELS } from './repository-summary.schema';
 
 /** A remote URL of AR-8 to AR-10; the issue's code is the parser's problem. */
@@ -77,7 +78,7 @@ export const AccessCheckRequestSchema = z
 
 /** The remote's branches, sorted by name, and its default branch (null for an empty remote, AR-37). */
 export const AccessCheckResultSchema = z
-  .object({ branches: z.array(z.string()), defaultBranch: z.string().nullable() })
+  .object({ branches: z.array(z.string()), defaultBranch: nullableString() })
   .meta({ id: 'AccessCheckResult' });
 
 /** {@link refineCredentialsProtocol}, and a branch exactly for a single-branch clone; exported for DTOs. */

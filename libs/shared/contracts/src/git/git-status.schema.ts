@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { nullableString } from '../nullable-string';
 import { GitNetworkJobSchema } from './git-push.schema';
 
 /** A problem a client shows with its fix: a code and the values its text needs. */
@@ -28,7 +29,7 @@ export const GitLastCommitSchema = z
     /** It is on the current branch, not on any remote branch, and not a merge commit. */
     amendable: z.boolean(),
     /** Without a trailing line break; `null` unless it can be amended, as nothing else needs it. */
-    message: z.string().nullable()
+    message: nullableString()
   })
   .meta({ id: 'GitLastCommit' });
 
@@ -36,11 +37,11 @@ export const GitLastCommitSchema = z
 export const GitStatusSchema = z
   .object({
     /** `null` on a detached `HEAD`. */
-    branch: z.string().nullable(),
+    branch: nullableString(),
     /** No commit yet: `branch` is `main` (GA-42). */
     noCommits: z.boolean(),
     /** For example `origin/main`; `null` for an unpublished branch. */
-    upstream: z.string().nullable(),
+    upstream: nullableString(),
     /**
      * The upstream does not exist as of the last fetch: the remote was empty
      * when cloned, or its branch was deleted. The counts are then 0, and a push

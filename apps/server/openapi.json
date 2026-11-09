@@ -2516,10 +2516,8 @@
             }
           },
           "defaultBranch": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -3045,10 +3043,8 @@
             "type": "boolean"
           },
           "message": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -3102,19 +3098,15 @@
         "type": "object",
         "properties": {
           "branch": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "type": "string",
+            "nullable": true
           },
           "noCommits": {
             "type": "boolean"
           },
           "upstream": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "type": "string",
+            "nullable": true
           },
           "upstreamGone": {
             "type": "boolean"
@@ -3188,10 +3180,8 @@
             "type": "string"
           },
           "upstream": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -3218,10 +3208,8 @@
         "type": "object",
         "properties": {
           "current": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "type": "string",
+            "nullable": true
           },
           "local": {
             "type": "array",

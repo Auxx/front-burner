@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult } from '../runner/git-runner';
 import { GitOperationError } from './git-errors';
-import { LOCAL_MAX_OUTPUT_BYTES, LocalGit, NO_LFS, nulTerminated } from './local-git';
+import { LOCAL_MAX_OUTPUT_BYTES, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
 /** Where the commit before a merge is kept, so that git's garbage collection keeps it (A-5.12). */
 export const PRE_MERGE_REF = 'refs/front-burner/pre-merge';
@@ -64,9 +64,6 @@ const PATHS_PER_COMMAND = 100;
 
 /** A regular file's mode in the index; a symbolic link (120000) or a submodule (160000) has no markers. */
 export const REGULAR_FILE = /^100(644|755)$/;
-
-/** What a byte that is not valid UTF-8 decodes as. */
-const UNDECODABLE = '�';
 
 interface Stage {
   mode: string;
@@ -555,15 +552,10 @@ export class GitMerge {
    * Reads no file of the working tree, so its size doesn't matter.
    */
   async branchAndUpstream(workingCopy: string): Promise<{ branch: string | null; upstream: string | null; }> {
-    const head = await this.local.run(workingCopy, [ 'symbolic-ref', '--quiet', 'HEAD' ]);
-    if (head.timedOut) {
-      throw new GitOperationError('timeout', head.stderr);
-    }
-    const ref = head.stdout.trim();
-    if (head.exitCode !== 0 || !ref.startsWith(BRANCH_PREFIX)) {
+    const branch = await this.local.currentBranch(workingCopy);
+    if (branch === null) {
       return { branch: null, upstream: null };
     }
-    const branch = ref.slice(BRANCH_PREFIX.length);
     const target = await this.local.upstreamOf(workingCopy, branch);
     return { branch, upstream: target === null ? null : `origin/${target.slice(BRANCH_PREFIX.length)}` };
   }
