@@ -21,6 +21,7 @@ import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
+import { MergeStore } from '../merge-store/merge-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 import { BranchActionsService } from './branch-actions.service';
@@ -58,6 +59,7 @@ describe('BranchActionsService', () => {
   let diskChanges: { notice: ReturnType<typeof vi.fn>; settled: ReturnType<typeof vi.fn>; };
   let branches: GitBranchList;
   let branchesAnswer: (() => Observable<GitBranchList>) | null;
+  let merging: ReturnType<typeof signal<boolean>>;
 
   const row = (text: string) =>
     [ ...overlay().querySelectorAll<HTMLButtonElement>('rs-branch-list li button') ].find(button =>
@@ -91,6 +93,7 @@ describe('BranchActionsService', () => {
     diskChanges = { notice: vi.fn(), settled: vi.fn(() => Promise.resolve()) };
     branches = BRANCHES;
     branchesAnswer = null;
+    merging = signal(false);
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
@@ -111,6 +114,7 @@ describe('BranchActionsService', () => {
         { provide: ToastService, useValue: toast },
         { provide: RepositorySessionService, useValue: { repository } },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
+        { provide: MergeStore, useValue: { merging } },
         {
           provide: GitStatusStore,
           useValue: {
@@ -311,6 +315,42 @@ describe('BranchActionsService', () => {
 
     expect(overlay().querySelector('rs-branch-list')).toBeNull();
     expect(requests).toEqual([]);
+  });
+
+  it('closes an open NewBranchDialog on closeList', async () => {
+    const done = service.open();
+    await settleDialog();
+
+    dialogButton('web-feature-repository-screen.BranchListDialog.newBranch')?.click();
+    await settleDialog();
+
+    expect(overlay().querySelector('rs-new-branch')).not.toBeNull();
+
+    expect(service.closeList()).toBe(true);
+    await done;
+
+    expect(overlay().querySelector('rs-new-branch')).toBeNull();
+  });
+
+  it('does not open when a merge is in progress', async () => {
+    merging.set(true);
+
+    await service.open();
+    await settleDialog();
+
+    expect(document.querySelector('rs-branch-list')).toBeNull();
+  });
+
+  it('does not open NewBranchDialog when merge starts while branch list is open', async () => {
+    const done = service.open();
+    await settleDialog();
+
+    merging.set(true);
+    dialogButton('web-feature-repository-screen.BranchListDialog.newBranch')?.click();
+    await settleDialog();
+    await done;
+
+    expect(overlay().querySelector('rs-new-branch')).toBeNull();
   });
 
   it('sends a waiting save first, and is then refused', async () => {

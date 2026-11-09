@@ -33,7 +33,7 @@ describe('BranchListDialog', () => {
   let gitBranches: ReturnType<typeof vi.fn<(id: number) => Observable<GitBranchList>>>;
 
   /** Opens the list and waits for it to render; `closed` settles when it closes. */
-  async function open(): Promise<{ closed: Promise<BranchChoice | undefined>; }> {
+  async function open(data: Partial<BranchListData> = {}): Promise<{ closed: Promise<BranchChoice | undefined>; }> {
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
@@ -44,7 +44,7 @@ describe('BranchListDialog', () => {
       providers: [ { provide: GitApi, useValue: { gitBranches } } ]
     });
     const ref = TestBed.inject(DialogService).open<BranchListDialog, BranchListData, BranchChoice>(BranchListDialog, {
-      data: { repositoryId: 12 }
+      data: { repositoryId: 12, ...data }
     });
     const closed = firstValueFrom(ref.closed, { defaultValue: undefined });
     await settleDialog();
@@ -373,8 +373,8 @@ describe('BranchListDialog', () => {
   });
 
   it('disables New branch button when repository has no commits', async () => {
-    gitBranches = vi.fn(() => of({ current: null, local: [], remote: [], singleBranch: false }));
-    await open();
+    gitBranches = vi.fn(() => of({ current: 'main', local: [], remote: [], singleBranch: false }));
+    await open({ noCommits: true });
 
     const newBtn = dialogButton(`${K}.newBranch`) as HTMLButtonElement;
     expect(newBtn.getAttribute('aria-disabled')).toBe('true');
@@ -384,5 +384,18 @@ describe('BranchListDialog', () => {
     await settleDialog();
 
     expect(overlay().querySelector('rs-branch-list')).not.toBeNull();
+  });
+
+  it('keeps New branch button available on a detached HEAD', async () => {
+    gitBranches = vi.fn(() => of({ current: null, local: [], remote: [], singleBranch: false }));
+    const { closed } = await open({ noCommits: false });
+
+    const newBtn = dialogButton(`${K}.newBranch`) as HTMLButtonElement;
+    expect(newBtn.getAttribute('aria-disabled')).toBeNull();
+
+    newBtn.click();
+    await settleDialog();
+
+    expect(await closed).toEqual({ kind: 'new' });
   });
 });

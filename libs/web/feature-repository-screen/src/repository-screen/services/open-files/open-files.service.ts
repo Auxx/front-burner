@@ -199,11 +199,6 @@ export class OpenFilesService {
     await Promise.all(this.all().map(file => file.saver.flush()));
   }
 
-  /** Alias for {@link flushAll}. */
-  saveWaiting(): Promise<void> {
-    return this.flushAll();
-  }
-
   /**
    * Writes the waiting content of every file as its browser draft, such as
    * when the page is hidden for good; the content of a save in flight was

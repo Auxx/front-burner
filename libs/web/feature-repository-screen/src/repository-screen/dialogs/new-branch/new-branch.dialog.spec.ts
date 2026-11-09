@@ -1,12 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import type { GitNewBranchRequest } from '@front-burner/shared-contracts';
+import type { ApiError, GitBranchList, GitNewBranchRequest } from '@front-burner/shared-contracts';
 import { DialogRef, DialogService } from '@front-burner/ui';
 import { GitApi } from '@front-burner/web-api-client';
 import { firstValueFrom, type Observable, of, Subject, throwError } from 'rxjs';
 
 import { apiError, dialogButton, nameInput, overlay, settleDialog, type } from '../../../testing/dialog-testing';
 import { translocoTesting } from '../../../testing/transloco-testing';
-import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { type NewBranchData, NewBranchDialog } from './new-branch.dialog';
 
 const K = 'web-feature-repository-screen.NewBranchDialog';
@@ -15,8 +14,9 @@ describe('NewBranchDialog', () => {
   let ref: DialogRef<void>;
   let created: GitNewBranchRequest[];
   let createAnswer: () => Observable<void>;
+  let currentBranch: string | null;
   let saveWaitingCalls: number;
-  let saveWaitingPromise: Promise<void>;
+  let saveWaitingPromise: Promise<ApiError | null>;
 
   const heading = () => overlay().querySelector('h2')?.textContent?.trim();
   const error = () => overlay().querySelector('ui-field .error')?.textContent?.trim();
@@ -30,6 +30,8 @@ describe('NewBranchDialog', () => {
     ref = TestBed.inject(DialogService).open<NewBranchDialog, NewBranchData, void>(NewBranchDialog, {
       data: {
         repositoryId: 12,
+        currentBranch: 'main',
+        stillOn: () => true,
         saveWaiting: () => {
           saveWaitingCalls++;
           return saveWaitingPromise;
@@ -48,13 +50,15 @@ describe('NewBranchDialog', () => {
   beforeEach(() => {
     created = [];
     createAnswer = () => of(undefined);
+    currentBranch = 'main';
     saveWaitingCalls = 0;
-    saveWaitingPromise = Promise.resolve();
+    saveWaitingPromise = Promise.resolve(null);
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
           'errors.git-busy': 'Git is busy.',
           'errors.internal': 'Something went wrong.',
+          'errors.draft-offered': 'Draft is offered.',
           [`${K}.errors.branch-name-invalid`]: 'This isn\'t a valid branch name.',
           [`${K}.errors.branch-exists`]: 'A branch with this name already exists.',
           [`${K}.errors.branch-name-conflict`]: 'This name clashes with another branch\'s name.'
@@ -67,7 +71,9 @@ describe('NewBranchDialog', () => {
             createBranch: (_id: number, request: GitNewBranchRequest) => {
               created.push(request);
               return createAnswer();
-            }
+            },
+            gitBranches: (): Observable<GitBranchList> =>
+              of({ current: currentBranch, singleBranch: false, local: [], remote: [] })
           }
         }
       ]
@@ -96,6 +102,88 @@ describe('NewBranchDialog', () => {
     expect(overlay().querySelector('rs-new-branch')).toBeNull();
   });
 
+  it('sends a waiting save first before calling createBranch', async () => {
+    let resolveSave!: (value: ApiError | null) => void;
+    saveWaitingPromise = new Promise(resolve => {
+      resolveSave = resolve;
+    });
+
+    await open();
+
+    type(nameInput(), 'feature');
+    dialogButton(`${K}.submit`)?.click();
+    await settleDialog();
+
+    expect(saveWaitingCalls).toBe(1);
+    expect(created).toHaveLength(0);
+
+    resolveSave(null);
+    await settleDialog();
+
+    expect(created).toEqual([ { name: 'feature' } ]);
+    expect(overlay().querySelector('rs-new-branch')).toBeNull();
+  });
+
+  it('shows error banner when waiting save fails and stops before createBranch', async () => {
+    saveWaitingPromise = Promise.resolve({
+      code: 'draft-offered',
+      message: 'Draft is offered.',
+      params: {},
+      requestId: ''
+    });
+
+    await open();
+
+    type(nameInput(), 'feature');
+    await submit();
+
+    expect(saveWaitingCalls).toBe(1);
+    expect(created).toHaveLength(0);
+    expect(banners()[0][0]).toBe('danger');
+    expect(banners()[0][1]).toContain('Draft is offered.');
+    expect(overlay().querySelector('rs-new-branch')).not.toBeNull();
+  });
+
+  it('does not send createBranch when stillOn becomes false during save flush', async () => {
+    let on = true;
+    await open({
+      stillOn: () => on
+    });
+
+    type(nameInput(), 'feature');
+    on = false;
+    await submit();
+
+    expect(saveWaitingCalls).toBe(1);
+    expect(created).toHaveLength(0);
+  });
+
+  it('closes dialog if createBranch failed but branch was created', async () => {
+    createAnswer = () => throwError(() => apiError(500, 'internal'));
+    currentBranch = 'feature';
+    await open();
+    const closed = firstValueFrom(ref.closed, { defaultValue: undefined });
+
+    type(nameInput(), 'feature');
+    await submit();
+
+    expect(await closed).toBeUndefined();
+    expect(overlay().querySelector('rs-new-branch')).toBeNull();
+  });
+
+  it('closes dialog if branch-exists error occurs but branch is already current', async () => {
+    createAnswer = () => throwError(() => apiError(409, 'branch-exists'));
+    currentBranch = 'feature';
+    await open();
+    const closed = firstValueFrom(ref.closed, { defaultValue: undefined });
+
+    type(nameInput(), 'feature');
+    await submit();
+
+    expect(await closed).toBeUndefined();
+    expect(overlay().querySelector('rs-new-branch')).toBeNull();
+  });
+
   it('shows field-level error for branch-name-invalid and keeps focus and text', async () => {
     createAnswer = () => throwError(() => apiError(400, 'branch-name-invalid'));
     await open();
@@ -112,14 +200,15 @@ describe('NewBranchDialog', () => {
 
   it('shows field-level error for branch-exists and keeps focus and text', async () => {
     createAnswer = () => throwError(() => apiError(409, 'branch-exists'));
+    currentBranch = 'main';
     await open();
 
-    type(nameInput(), 'main');
+    type(nameInput(), 'existing');
     await submit();
 
-    expect(created).toEqual([ { name: 'main' } ]);
+    expect(created).toEqual([ { name: 'existing' } ]);
     expect(error()).toBe('A branch with this name already exists.');
-    expect(nameInput().value).toBe('main');
+    expect(nameInput().value).toBe('existing');
     expect(document.activeElement).toBe(nameInput());
   });
 

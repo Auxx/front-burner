@@ -12,6 +12,7 @@ import { type SwitchRefusedData, SwitchRefusedDialog } from '../../dialogs/switc
 import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { FailureToastService } from '../failure-toast/failure-toast.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
+import { MergeStore } from '../merge-store/merge-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
 
@@ -57,11 +58,12 @@ export class BranchActionsService {
   private readonly session = inject(RepositorySessionService);
   private readonly failures = inject(FailureToastService);
   private readonly transloco = inject(TranslocoService);
+  private readonly merge = inject(MergeStore);
   private readonly changesAsked = new Subject<void>();
   private readonly running = signal(false);
 
-  /** The branch list while it is open. */
-  private list: DialogRef<BranchChoice> | null = null;
+  /** The branch list or new branch dialog while it is open. */
+  private list: DialogRef<BranchChoice> | DialogRef<void> | null = null;
   /** The toast of the last failure, which stays while it offers **Try again**. */
   private failure: { dismiss(): void; } | null = null;
   private destroyed = false;
@@ -86,25 +88,45 @@ export class BranchActionsService {
   /** Opens the list and acts on the choice. Settles when that has ended, whatever the outcome. */
   async open(): Promise<void> {
     const repositoryId = this.session.repository()?.id;
-    if (repositoryId === undefined || this.list !== null || this.running()) {
+    if (repositoryId === undefined || this.list !== null || this.running() || this.merge.merging()) {
       return;
     }
     this.dismissFailure();
     const ref = this.dialogs.open<BranchListDialog, BranchListData, BranchChoice>(BranchListDialog, {
-      data: { repositoryId }
+      data: {
+        repositoryId,
+        noCommits: this.status.status()?.noCommits ?? false
+      }
     });
     this.list = ref;
     const choice = await firstValueFrom(ref.closed, { defaultValue: undefined });
     this.list = null;
     if (choice && this.stillOn(repositoryId)) {
       if (choice.kind === 'new') {
+        if (this.merge.merging()) {
+          return;
+        }
         const createRef = this.dialogs.open<NewBranchDialog, NewBranchData, void>(NewBranchDialog, {
           data: {
             repositoryId,
-            saveWaiting: () => this.openFiles.saveWaiting()
+            currentBranch: this.status.status()?.branch ?? null,
+            stillOn: () => this.stillOn(repositoryId),
+            saveWaiting: async () => {
+              const notSaved = await this.openFiles.flushed(repositoryId);
+              if (notSaved !== null) {
+                return notSaved.error;
+              }
+              const offered = this.openFiles.offeredDraft(repositoryId);
+              if (offered !== null) {
+                return { code: 'draft-offered', params: { path: offered }, requestId: '', message: '' };
+              }
+              return null;
+            }
           }
         });
+        this.list = createRef;
         await firstValueFrom(createRef.closed, { defaultValue: undefined });
+        this.list = null;
       } else {
         await this.switchTo(repositoryId, choice, false);
       }

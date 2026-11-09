@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { form, FormField } from '@angular/forms/signals';
+import type { ApiError } from '@front-burner/shared-contracts';
 import {
   ButtonComponent,
   DIALOG_DATA,
@@ -17,7 +18,9 @@ import { firstValueFrom } from 'rxjs';
 
 export interface NewBranchData {
   readonly repositoryId: number;
-  readonly saveWaiting?: () => Promise<void>;
+  readonly currentBranch?: string | null;
+  readonly stillOn: () => boolean;
+  readonly saveWaiting: () => Promise<ApiError | null>;
 }
 
 const FIELD_ERRORS = [ 'branch-name-invalid', 'branch-exists', 'branch-name-conflict' ] as const;
@@ -82,15 +85,47 @@ export class NewBranchDialog {
     this.failure.set(null);
     this.refused.set(null);
     try {
-      await this.data.saveWaiting?.();
+      const saveError = await this.data.saveWaiting();
+      if (!this.data.stillOn()) {
+        return;
+      }
+      if (saveError) {
+        this.failure.set(this.errorText.describe(saveError));
+        return;
+      }
       await firstValueFrom(this.api.createBranch(this.data.repositoryId, { name }));
       this.ref.close();
     } catch (error) {
+      if (!this.data.stillOn()) {
+        return;
+      }
       const apiError = toApiError(error);
       if (FIELD_ERRORS.includes(apiError.code as (typeof FIELD_ERRORS)[number])) {
+        if (apiError.code === 'branch-exists' && this.data.currentBranch !== name) {
+          try {
+            const branches = await firstValueFrom(this.api.gitBranches(this.data.repositoryId));
+            if (branches.current === name) {
+              this.ref.close();
+              return;
+            }
+          } catch {
+            // ignore
+          }
+        }
         this.refused.set({ name: raw, code: apiError.code });
         this.input().nativeElement.focus();
       } else {
+        if (this.data.currentBranch !== name) {
+          try {
+            const branches = await firstValueFrom(this.api.gitBranches(this.data.repositoryId));
+            if (branches.current === name) {
+              this.ref.close();
+              return;
+            }
+          } catch {
+            // ignore
+          }
+        }
         this.failure.set(this.errorText.describe(apiError));
       }
     } finally {

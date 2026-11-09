@@ -6,8 +6,8 @@
     <div class="actions">
       <button uiButton
               class="new-branch"
-              [unavailable]="shown?.current === null"
-              [uiTooltip]="shown?.current === null ? t('makeCommitFirst') : ''"
+              [unavailable]="data.noCommits === true"
+              [uiTooltip]="data.noCommits === true ? t('makeCommitFirst') : ''"
               uiTooltipShowOnClick
               (click)="chooseNew()">{{ t('newBranch') }}</button>
     </div>
