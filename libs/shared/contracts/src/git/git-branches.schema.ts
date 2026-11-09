@@ -35,6 +35,23 @@ export const GitBranchListSchema = z
   })
   .meta({ id: 'GitBranchList' });
 
+/** Which branch to switch to (GA-37). */
+export const GitSwitchRequestSchema = z
+  .object({
+    /** A local branch's name, or with `remote`, a branch of `origin` without `origin/`. */
+    name: z.string(),
+    /** Makes a local branch of that name that tracks the remote one, and switches to it. */
+    remote: z.boolean()
+  })
+  .meta({ id: 'GitSwitchRequest' });
+
+/** A new branch from the current commit. Its name's rules are git's, so the backend checks them (GA-38). */
+export const GitNewBranchRequestSchema = z
+  .object({ name: z.string() })
+  .meta({ id: 'GitNewBranchRequest' });
+
+export type GitSwitchRequest = z.infer<typeof GitSwitchRequestSchema>;
+export type GitNewBranchRequest = z.infer<typeof GitNewBranchRequestSchema>;
 export type GitLocalBranch = z.infer<typeof GitLocalBranchSchema>;
 export type GitRemoteBranch = z.infer<typeof GitRemoteBranchSchema>;
 export type GitBranchList = z.infer<typeof GitBranchListSchema>;

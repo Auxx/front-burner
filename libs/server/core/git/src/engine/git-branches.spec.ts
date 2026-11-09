@@ -454,6 +454,22 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
         expect((await branches.list(work)).local).toContainEqual({ name: 'feature', upstream: 'origin/feature' });
       });
 
+      it('frees the config\'s lock when it ran out of time setting the upstream', async () => {
+        const local = new LocalGit(new GitRunner());
+        const run = local.run.bind(local);
+        vi.spyOn(local, 'run').mockImplementation(async (cwd, args, runOptions) => {
+          if (!args.includes('switch')) {
+            return run(cwd, args, runOptions);
+          }
+          write('.git/config.lock', '');
+          return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
+        });
+
+        expect(await codeOf(new GitBranches(local, options).trackRemote(work, 'feature'))).toBe('timeout');
+
+        expect(existsSync(join(work, '.git', 'config.lock'))).toBe(false);
+      });
+
       it('says when the remote branch is gone', async () => {
         expect(await codeOf(branches.trackRemote(work, 'gone'))).toBe('branch-not-found');
         expect(hasBranch('gone')).toBe(false);

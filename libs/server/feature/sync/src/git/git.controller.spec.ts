@@ -130,7 +130,7 @@ describe('GitController', () => {
         // And pulling.
         { provide: PullService, useValue: {} },
         { provide: GitMerge, useValue: gitMerge },
-        { provide: GitBranches, useValue: new GitBranches(new LocalGit(new GitRunner())) },
+        { provide: GitBranches, useValue: new GitBranches(new LocalGit(new GitRunner()), options) },
         {
           provide: MergeStateService,
           useValue: new MergeStateService(
@@ -369,6 +369,159 @@ describe('GitController', () => {
 
     it('refuses a repository that is not ready', async () => {
       expect((await branches(CLONING).expect(409)).body).toMatchObject({ code: 'repository-not-openable' });
+    });
+  });
+
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  describe.skipIf(process.platform === 'win32')('switching and creating branches', () => {
+    const switchTo = (body: object, id = READY) =>
+      request(app.getHttpServer()).post(`/repositories/${id}/git/switch`).send(body);
+    const create = (body: object, id = READY) =>
+      request(app.getHttpServer()).post(`/repositories/${id}/git/branches`).send(body);
+    const current = () => git(root, 'symbolic-ref', '--short', 'HEAD').trim();
+    const startMerge = () => {
+      git(root, 'checkout', '-q', '-b', 'theirs');
+      writeFileSync(join(root, 'notes.md'), 'theirs\n');
+      git(root, 'commit', '-q', '-am', 'theirs');
+      git(root, 'checkout', '-q', 'main');
+      writeFileSync(join(root, 'notes.md'), 'ours\n');
+      git(root, 'commit', '-q', '-am', 'ours');
+      expect(() => git(root, 'merge', '-q', 'theirs')).toThrow();
+    };
+
+    beforeEach(() => {
+      git(root, 'branch', 'other');
+    });
+
+    it('refuses a switch with uncommitted changes, and nothing changes', async () => {
+      writeFileSync(join(root, 'notes.md'), 'changed\n');
+
+      const { body } = await switchTo({ name: 'other', remote: false }).expect(409);
+
+      expect(body).toMatchObject({ code: 'switch-uncommitted-changes' });
+      expect(current()).toBe('main');
+      expect(readFileSync(join(root, 'notes.md'), 'utf8')).toBe('changed\n');
+      expect(published).toEqual([]);
+    });
+
+    it('refuses a switch to a remote branch with uncommitted changes, also a new file', async () => {
+      git(root, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*');
+      git(root, 'update-ref', 'refs/remotes/origin/feature', 'main');
+      writeFileSync(join(root, 'new.md'), 'new\n');
+
+      const { body } = await switchTo({ name: 'feature', remote: true }).expect(409);
+
+      expect(body).toMatchObject({ code: 'switch-uncommitted-changes' });
+      expect(current()).toBe('main');
+      expect(git(root, 'branch', '--list', 'feature')).toBe('');
+    });
+
+    it('switches with only ignored files around', async () => {
+      writeFileSync(join(root, '.git', 'info', 'exclude'), 'ignored.txt\n');
+      writeFileSync(join(root, 'ignored.txt'), 'mine\n');
+
+      await switchTo({ name: 'other', remote: false }).expect(204);
+
+      expect(current()).toBe('other');
+      expect(readFileSync(join(root, 'ignored.txt'), 'utf8')).toBe('mine\n');
+    });
+
+    it('tracks a remote branch', async () => {
+      git(root, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*');
+      git(root, 'update-ref', 'refs/remotes/origin/feature', 'main');
+
+      await switchTo({ name: 'feature', remote: true }).expect(204);
+
+      expect(current()).toBe('feature');
+      expect(git(root, 'rev-parse', '--abbrev-ref', '@{upstream}').trim()).toBe('origin/feature');
+    });
+
+    it('says why a switch did not happen', async () => {
+      git(root, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*');
+      git(root, 'update-ref', 'refs/remotes/origin/other', 'main');
+
+      expect((await switchTo({ name: 'gone', remote: false }).expect(409)).body.code).toBe('branch-not-found');
+      expect((await switchTo({ name: 'gone', remote: true }).expect(409)).body.code).toBe('branch-not-found');
+      expect((await switchTo({ name: 'other', remote: true }).expect(409)).body.code).toBe('branch-exists');
+      expect((await switchTo({ name: '--orphan=boom', remote: true }).expect(400)).body.code)
+        .toBe('branch-name-invalid');
+      expect((await switchTo({ name: '--orphan=boom', remote: false }).expect(409)).body.code)
+        .toBe('branch-not-found');
+      expect(existsSync(join(root, 'notes.md'))).toBe(true);
+      expect(current()).toBe('main');
+      expect(published).toEqual([]);
+    });
+
+    it('refuses both during a merge', async () => {
+      startMerge();
+
+      expect((await switchTo({ name: 'other', remote: false }).expect(409)).body.code).toBe('merge-in-progress');
+      expect((await create({ name: 'topic' }).expect(409)).body.code).toBe('merge-in-progress');
+
+      expect(current()).toBe('main');
+      expect(git(root, 'branch', '--list', 'topic')).toBe('');
+      expect(published).toEqual([]);
+    });
+
+    it('creates a branch, with uncommitted changes too', async () => {
+      writeFileSync(join(root, 'notes.md'), 'changed\n');
+
+      await create({ name: 'topic' }).expect(204);
+
+      expect(current()).toBe('topic');
+      expect(readFileSync(join(root, 'notes.md'), 'utf8')).toBe('changed\n');
+    });
+
+    it('says why a name was refused', async () => {
+      expect((await create({ name: 'bad..name' }).expect(400)).body.code).toBe('branch-name-invalid');
+      expect((await create({ name: 'other' }).expect(409)).body.code).toBe('branch-exists');
+      expect((await create({ name: 'other/topic' }).expect(409)).body.code).toBe('branch-name-conflict');
+      expect(current()).toBe('main');
+      expect(published).toEqual([]);
+    });
+
+    it('refuses a new branch without commits', async () => {
+      const empty = mkdtempSync(join(tmpdir(), 'fb-git-controller-empty-'));
+      git(empty, 'init', '-q', '-b', 'main');
+      const filled = root;
+      root = empty;
+      try {
+        expect((await create({ name: 'topic' }).expect(409)).body.code).toBe('no-commits');
+      } finally {
+        root = filled;
+        rmSync(empty, { recursive: true, force: true });
+      }
+    });
+
+    it('publishes files.changed and git.changed after a switch', async () => {
+      await switchTo({ name: 'other', remote: false }).expect(204);
+
+      expect(published).toEqual([
+        { type: 'files.changed', repositoryId: READY, folders: 'all' },
+        { type: 'git.changed', repositoryId: READY }
+      ]);
+    });
+
+    it('publishes only git.changed for a new branch', async () => {
+      await create({ name: 'topic' }).expect(204);
+
+      expect(published).toEqual([ { type: 'git.changed', repositoryId: READY } ]);
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      expect((await switchTo({ name: 'other', remote: false }, 9).expect(404)).body.code).toBe('not-found');
+      expect((await create({ name: 'topic' }, 9).expect(404)).body.code).toBe('not-found');
+    });
+
+    it('refuses a repository that is not ready', async () => {
+      expect((await switchTo({ name: 'other', remote: false }, CLONING).expect(409)).body.code)
+        .toBe('repository-not-openable');
+      expect((await create({ name: 'topic' }, CLONING).expect(409)).body.code).toBe('repository-not-openable');
+    });
+
+    it('needs the request\'s fields', async () => {
+      await switchTo({ name: 'other' }).expect(400);
+      await create({}).expect(400);
     });
   });
 

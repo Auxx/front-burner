@@ -137,7 +137,8 @@ export class GitBranches {
     );
     if (result.timedOut) {
       const gitDir = join(workingCopy, '.git');
-      for (const lock of [ 'index.lock', 'HEAD.lock', `${HEADS}${branch}.lock` ]) {
+      // `config.lock`: `--track` writes the upstream there.
+      for (const lock of [ 'index.lock', 'HEAD.lock', 'config.lock', `${HEADS}${branch}.lock` ]) {
         await rm(join(gitDir, lock), { force: true });
       }
       throw new GitOperationError('timeout', result.stderr);

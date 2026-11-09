@@ -11,8 +11,10 @@ import type {
   GitJobStarted,
   GitJobState,
   GitMergeState,
+  GitNewBranchRequest,
   GitPaths,
-  GitStatus
+  GitStatus,
+  GitSwitchRequest
 } from '@front-burner/shared-contracts';
 import type { Observable } from 'rxjs';
 
@@ -28,6 +30,18 @@ export class GitApi {
   gitBranches(id: number): Observable<GitBranchList> {
     return this.http.get<GitBranchList>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/branches`
+    );
+  }
+  createBranch(id: number, data: GitNewBranchRequest): Observable<void> {
+    return this.http.post<void>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/branches`,
+      data
+    );
+  }
+  switchBranch(id: number, data: GitSwitchRequest): Observable<void> {
+    return this.http.post<void>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/switch`,
+      data
     );
   }
   incoming(

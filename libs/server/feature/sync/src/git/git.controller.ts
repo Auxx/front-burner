@@ -42,8 +42,10 @@ import {
   GitJobStartedDto,
   GitJobStateDto,
   GitMergeStateDto,
+  GitNewBranchRequestDto,
   GitPathsDto,
-  GitStatusDto
+  GitStatusDto,
+  GitSwitchRequestDto
 } from './git.dto';
 
 /**
@@ -143,6 +145,66 @@ export class GitController {
     const { row, root } = this.repositories.open(authOf(req).userId, params.id);
     const list = await this.branches.list(root).catch(toGitApiError);
     return { ...list, singleBranch: row.cloneMode === 'single-branch' };
+  }
+
+  /**
+   * Makes a branch from the current commit and switches to it, keeping any
+   * uncommitted changes; unpublished until its first push (GA-38). Refused during
+   * a merge (GA-4), without commits, as the first commit makes `main` whatever the
+   * branch is called (GA-42), and with `branch-name-invalid`, `branch-exists` or
+   * `branch-name-conflict`.
+   */
+  @Post('branches')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  async createBranch(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Body() body: GitNewBranchRequestDto
+  ): Promise<void> {
+    const { userId } = authOf(req);
+    const root = this.repositories.root(userId, params.id);
+    await this.guard.change(params.id, root, async () => {
+      const { noCommits } = await this.engine.status(root).catch(toGitApiError);
+      if (noCommits) {
+        throw new ApiErrorException(409, 'no-commits');
+      }
+      await this.branches.create(root, body.name).catch(toGitApiError);
+    });
+    // No file changed.
+    this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
+  }
+
+  /**
+   * Switches to a local branch, or with `remote`, makes a local branch that tracks
+   * a branch of `origin` and switches to it (GA-37). Refused during a merge (GA-4),
+   * with `switch-uncommitted-changes` while anything is uncommitted, as nothing is
+   * stashed (GA-39), and with `branch-not-found`, `branch-exists` or
+   * `switch-blocked`, which leaves everything as it was (GA-43).
+   */
+  @Post('switch')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  async switchBranch(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Body() body: GitSwitchRequestDto
+  ): Promise<void> {
+    const { userId } = authOf(req);
+    const root = this.repositories.root(userId, params.id);
+    // Inside the lock: until then, a save can make a clean working copy dirty.
+    await this.guard.change(params.id, root, async () => {
+      const { changes } = await this.engine.status(root).catch(toGitApiError);
+      if (changes.length > 0) {
+        throw new ApiErrorException(409, 'switch-uncommitted-changes');
+      }
+      const switching = body.remote
+        ? this.branches.trackRemote(root, body.name)
+        : this.branches.switchTo(root, body.name);
+      await switching.catch(toGitApiError);
+    });
+    this.events.publish(userId, { type: 'files.changed', repositoryId: params.id, folders: 'all' });
+    this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
   }
 
   /**

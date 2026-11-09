@@ -10,8 +10,10 @@ import {
   GitJobStartedSchema,
   GitJobStateSchema,
   GitMergeStateSchema,
+  GitNewBranchRequestSchema,
   GitPathsSchema,
   GitStatusSchema,
+  GitSwitchRequestSchema,
   hasPathsUnlessAmending
 } from '@front-burner/shared-contracts';
 import { ApiSchema } from '@nestjs/swagger';
@@ -63,3 +65,9 @@ export class GitMergeStateDto extends createZodDto(z.object(GitMergeStateSchema.
 
 @ApiSchema({ name: 'GitBranchList' })
 export class GitBranchListDto extends createZodDto(z.object(GitBranchListSchema.shape)) {}
+
+@ApiSchema({ name: 'GitSwitchRequest' })
+export class GitSwitchRequestDto extends createZodDto(z.object(GitSwitchRequestSchema.shape)) {}
+
+@ApiSchema({ name: 'GitNewBranchRequest' })
+export class GitNewBranchRequestDto extends createZodDto(z.object(GitNewBranchRequestSchema.shape)) {}
