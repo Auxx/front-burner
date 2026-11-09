@@ -8,6 +8,9 @@ import { GitResult } from '../runner/git-runner';
 import { GitOperationError } from './git-errors';
 import { LOCAL_MAX_OUTPUT_BYTES, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
+/** Fatal decoder — throws when the input contains bytes that are not valid UTF-8. */
+const utf8Fatal = new TextDecoder('utf-8', { fatal: true });
+
 /** Where the commit before a merge is kept, so that git's garbage collection keeps it (A-5.12). */
 export const PRE_MERGE_REF = 'refs/front-burner/pre-merge';
 
@@ -473,11 +476,14 @@ export class GitMerge {
       throw new GitOperationError('timeout', result.stderr);
     }
     // Below 128 it is the number of conflicts. A file with a NUL byte exits 255 with no output.
-    const usable = result.exitCode !== null
-      && result.exitCode < 128
-      && result.stdoutBytes <= LOCAL_MAX_OUTPUT_BYTES
-      && !result.stdout.includes(UNDECODABLE);
-    return usable ? result.stdout : null;
+    if (result.exitCode === null || result.exitCode >= 128 || result.stdoutBytes > LOCAL_MAX_OUTPUT_BYTES) {
+      return null;
+    }
+    try {
+      return utf8Fatal.decode(result.stdoutRaw);
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -703,7 +709,11 @@ export class GitMerge {
 
   /**
    * Read a blob by its object id, returning its text content, or `null` when it
-   * is not valid UTF-8 (A-5.11). Used outside the working-tree lock.
+   * does not exist, is not a blob, or is not valid UTF-8 (A-5.11). Used outside
+   * the working-tree lock.
+   *
+   * @throws GitOperationError `timeout` when it ran out of time.
+   * @throws Error when git itself fails (spawn error, killed process, corrupt store).
    */
   async readVersion(workingCopy: string, oid: string): Promise<string | null> {
     const result = await this.local.run(
@@ -714,13 +724,26 @@ export class GitMerge {
     if (result.timedOut) {
       throw new GitOperationError('timeout', result.stderr);
     }
+    // Exit 128 means the object does not exist or is not a blob — the expected "not found" case.
+    if (result.exitCode === 128) {
+      return null;
+    }
     if (result.exitCode !== 0) {
+      throw new Error(`git cat-file blob ${oid} failed: ${result.stderr.trim()}`);
+    }
+    if (result.stdoutBytes > LOCAL_MAX_OUTPUT_BYTES) {
       return null;
     }
-    if (result.stdoutBytes > LOCAL_MAX_OUTPUT_BYTES || result.stdout.includes(UNDECODABLE)) {
+    try {
+      let text = utf8Fatal.decode(result.stdoutRaw);
+      // Normalise like the editor's decodeMarkdown: strip BOM and convert CRLF to LF.
+      if (text.startsWith('\uFEFF')) {
+        text = text.slice(1);
+      }
+      return text.replace(/\r\n/g, '\n');
+    } catch {
       return null;
     }
-    return result.stdout;
   }
 
   /** A merge, as opposed to `GitEngine.mergeInProgress`, which a rebase also answers yes to. */

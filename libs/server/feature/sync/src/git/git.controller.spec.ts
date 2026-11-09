@@ -748,6 +748,46 @@ describe('GitController', () => {
         expect(body).toMatchObject({ code: 'version-not-readable' });
       });
 
+      it('refuses a non-Markdown file with version-not-readable', async () => {
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'config.env'), 'BASE=3\n');
+        git(root, 'add', 'config.env');
+        git(root, 'commit', '-q', '-m', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'config.env'), 'BASE=2\n');
+        git(root, 'add', 'config.env');
+        git(root, 'commit', '-q', '-m', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        const { body } = await mergeVersion('config.env', 'ours').expect(409);
+
+        expect(body).toMatchObject({ code: 'version-not-readable' });
+      });
+
+      it('refuses a symbolic link with version-not-readable', async () => {
+        writeFileSync(join(root, 'base.txt'), 'base\n');
+        symlinkSync('base.txt', join(root, 'link.md'));
+        git(root, 'add', 'link.md');
+        git(root, 'commit', '-q', '-m', 'base');
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'theirs.txt'), 'theirs\n');
+        rmSync(join(root, 'link.md'));
+        symlinkSync('theirs.txt', join(root, 'link.md'));
+        git(root, 'add', 'link.md');
+        git(root, 'commit', '-q', '-m', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'mine.txt'), 'mine\n');
+        rmSync(join(root, 'link.md'));
+        symlinkSync('mine.txt', join(root, 'link.md'));
+        git(root, 'add', 'link.md');
+        git(root, 'commit', '-q', '-m', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        const { body } = await mergeVersion('link.md', 'ours').expect(409);
+
+        expect(body).toMatchObject({ code: 'version-not-readable' });
+      });
+
       it('refuses the side that deleted the file', async () => {
         writeFileSync(join(root, 'gone.md'), 'x\n');
         git(root, 'add', 'gone.md');
@@ -777,6 +817,12 @@ describe('GitController', () => {
 
       it('needs the side parameter', async () => {
         await mergeVersion('notes.md', '').expect(400);
+      });
+
+      it('refuses an empty path', async () => {
+        const { body } = await mergeVersion('', 'ours').expect(400);
+
+        expect(body).toMatchObject({ code: 'validation-failed' });
       });
     });
 

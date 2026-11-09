@@ -34,22 +34,29 @@ export class MergeStateService {
     const conflicts = await this.merge.conflicts(root);
     const entry = conflicts.find(c => c.path === path);
     if (entry === undefined) {
+      // If the merge was aborted between the first check and now, return the correct code.
+      if (!await this.merge.mergeInProgress(root)) {
+        throw new ApiErrorException(409, 'no-merge-in-progress');
+      }
       throw new ApiErrorException(409, 'not-conflicting');
     }
-    const oid = side === 'ours' ? entry.oursOid : entry.theirsOid;
-    if (oid === null) {
+    const sideValues = side === 'ours'
+      ? { oid: entry.oursOid, mode: entry.oursMode, size: entry.oursSize }
+      : { oid: entry.theirsOid, mode: entry.theirsMode, size: entry.theirsSize };
+    if (sideValues.oid === null) {
       throw new ApiErrorException(409, 'version-not-readable');
     }
-    const mode = side === 'ours' ? entry.oursMode : entry.theirsMode;
-    if (!REGULAR_FILE.test(mode ?? '')) {
+    if (!isMarkdownName(entry.path.split('/').at(-1) ?? '')) {
+      throw new ApiErrorException(409, 'version-not-readable');
+    }
+    if (!REGULAR_FILE.test(sideValues.mode ?? '')) {
       throw new ApiErrorException(409, 'version-not-readable');
     }
     // Check size before reading the blob (plan review focus).
-    const size = side === 'ours' ? entry.oursSize : entry.theirsSize;
-    if (size !== null && size > EDITABLE_FILE_LIMIT) {
+    if (sideValues.size !== null && sideValues.size > EDITABLE_FILE_LIMIT) {
       throw new ApiErrorException(409, 'version-not-readable');
     }
-    const content = await this.merge.readVersion(root, oid);
+    const content = await this.merge.readVersion(root, sideValues.oid);
     if (content === null) {
       throw new ApiErrorException(409, 'version-not-readable');
     }

@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -423,7 +424,7 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
           }
           write('.git/index.lock', '');
           write('.git/HEAD.lock', '');
-          return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
+          return { exitCode: null, stdout: '', stdoutRaw: Buffer.alloc(0), stdoutBytes: 0, stderr: '', timedOut: true };
         });
 
         expect(await codeOf(branchesOn(local).switchTo(work, 'other'))).toBe('timeout');
@@ -443,7 +444,7 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
           write('notes.md', 'half of the other branch\n');
           write('only-on-other.md', 'written before it was killed\n');
           write('.git/index.lock', '');
-          return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
+          return { exitCode: null, stdout: '', stdoutRaw: Buffer.alloc(0), stdoutBytes: 0, stderr: '', timedOut: true };
         });
 
         expect(await codeOf(branchesOn(local).switchTo(work, 'other'))).toBe('timeout');
@@ -461,7 +462,14 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
           if (!args.includes('switch')) {
             return run(cwd, args, runOptions);
           }
-          return { exitCode: 128, stdout: '', stdoutBytes: 0, stderr: 'fatal: something new\n', timedOut: false };
+          return {
+            exitCode: 128,
+            stdout: '',
+            stdoutRaw: Buffer.alloc(0),
+            stdoutBytes: 0,
+            stderr: 'fatal: something new\n',
+            timedOut: false
+          };
         });
 
         expect(await codeOf(branchesOn(local).switchTo(work, 'other'))).toBeInstanceOf(Error);
@@ -526,7 +534,7 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
             return run(cwd, args, runOptions);
           }
           write('.git/refs/heads/feature.lock', '');
-          return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
+          return { exitCode: null, stdout: '', stdoutRaw: Buffer.alloc(0), stdoutBytes: 0, stderr: '', timedOut: true };
         });
 
         expect(await codeOf(branchesOn(local).trackRemote(work, 'feature'))).toBe('timeout');
@@ -567,7 +575,7 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
             return run(cwd, args, runOptions);
           }
           write('notes.md', 'half of the other branch\n');
-          return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
+          return { exitCode: null, stdout: '', stdoutRaw: Buffer.alloc(0), stdoutBytes: 0, stderr: '', timedOut: true };
         });
 
         expect(await codeOf(branchesOn(local).trackRemote(work, 'feature'))).toBe('timeout');
@@ -748,7 +756,7 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
           if (!args.includes('switch')) {
             return run(cwd, args, runOptions);
           }
-          return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
+          return { exitCode: null, stdout: '', stdoutRaw: Buffer.alloc(0), stdoutBytes: 0, stderr: '', timedOut: true };
         });
 
         expect(await codeOf(branchesOn(local).create(work, 'topic'))).toBe('timeout');
@@ -791,7 +799,7 @@ describe.skipIf(process.platform === 'win32')('GitBranches', () => {
           }
           mkdirSync(join(work, '.git', 'refs', 'heads', 'dir'));
           write('.git/refs/heads/dir/topic.lock', '');
-          return { exitCode: null, stdout: '', stdoutBytes: 0, stderr: '', timedOut: true };
+          return { exitCode: null, stdout: '', stdoutRaw: Buffer.alloc(0), stdoutBytes: 0, stderr: '', timedOut: true };
         });
 
         expect(await codeOf(branchesOn(local).create(work, 'dir/topic'))).toBe('timeout');

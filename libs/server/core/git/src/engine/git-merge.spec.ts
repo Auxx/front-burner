@@ -582,8 +582,54 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
         expect(await merge.readVersion(work, oid)).toBeNull();
       });
 
+      it('returns the content of a blob that contains U+FFFD', async () => {
+        writeFileSync(join(work, 'replacement.md'), Buffer.from([ 0x61, 0xef, 0xbf, 0xbd, 0x62, 0x0a ]));
+        git(work, 'add', 'replacement.md');
+        const oid = git(work, 'rev-parse', ':replacement.md');
+
+        expect(await merge.readVersion(work, oid)).toBe('a\ufffdb\n');
+      });
+
       it('returns null for a non-existent oid', async () => {
         expect(await merge.readVersion(work, '0000000000000000000000000000000000000000')).toBeNull();
+      });
+
+      it('strips the BOM from a blob that starts with one', async () => {
+        const BOM = Buffer.from([ 0xef, 0xbb, 0xbf ]);
+        writeFileSync(join(work, 'bom.md'), Buffer.concat([ BOM, Buffer.from('hello\n', 'utf8') ]));
+        git(work, 'add', 'bom.md');
+        const oid = git(work, 'rev-parse', ':bom.md');
+
+        expect(await merge.readVersion(work, oid)).toBe('hello\n');
+      });
+
+      it('converts CRLF line endings to LF', async () => {
+        writeFileSync(join(work, 'crlf.md'), 'line1\r\nline2\r\n');
+        git(work, 'add', 'crlf.md');
+        const oid = git(work, 'rev-parse', ':crlf.md');
+
+        expect(await merge.readVersion(work, oid)).toBe('line1\nline2\n');
+      });
+
+      it('throws when git itself fails', async () => {
+        const local = new LocalGit(new GitRunner());
+        const run = local.run.bind(local);
+        const failingMerge = new GitMerge(local, { gitTimeoutMs: 60_000 } as GitOptions);
+        vi.spyOn(local, 'run').mockImplementation(async (cwd, args, options) => {
+          if (args[0] === 'cat-file') {
+            return {
+              exitCode: null,
+              stdout: '',
+              stdoutRaw: Buffer.alloc(0),
+              stdoutBytes: 0,
+              stderr: 'spawn git: No such file or directory',
+              timedOut: false
+            };
+          }
+          return run(cwd, args, options);
+        });
+
+        await expect(failingMerge.readVersion(work, 'abc123')).rejects.toThrow('git cat-file blob abc123 failed');
       });
     });
 

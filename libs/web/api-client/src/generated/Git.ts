@@ -11,6 +11,7 @@ import type {
   GitJobStarted,
   GitJobState,
   GitMergeState,
+  GitMergeVersion,
   GitNewBranchRequest,
   GitPaths,
   GitStatus,
@@ -62,6 +63,18 @@ export class GitApi {
   gitMerge(id: number): Observable<GitMergeState> {
     return this.http.get<GitMergeState>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/merge`
+    );
+  }
+  gitMergeVersion(
+    id: number,
+    query: {
+      path: string;
+      side: 'ours' | 'theirs';
+    }
+  ): Observable<GitMergeVersion> {
+    return this.http.get<GitMergeVersion>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/merge/version`,
+      { params: query }
     );
   }
   abortMerge(id: number): Observable<void> {
