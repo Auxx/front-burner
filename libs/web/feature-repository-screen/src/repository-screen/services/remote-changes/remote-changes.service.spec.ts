@@ -6,10 +6,9 @@ import { GitApi } from '@front-burner/web-api-client';
 import { type Observable, of, Subject, throwError } from 'rxjs';
 
 import { GitStatusStore, STATUS_RETRY_MS } from '../git-status-store/git-status-store.service';
-import { MergeStore } from '../merge-store/merge-store.service';
 import { NetworkJobService } from '../network-job/network-job.service';
 import { OpenFilesService } from '../open-files/open-files.service';
-import { RemoteChangesService } from './remote-changes.service';
+import { INCOMING_WAIT_MS, RemoteChangesService } from './remote-changes.service';
 
 function gitStatus(behind: number, branch = 'main'): GitStatus {
   return {
@@ -37,7 +36,7 @@ describe('RemoteChangesService', () => {
   let status: ReturnType<typeof signal<GitStatus | null>>;
   let followed: ReturnType<typeof signal<number | null>>;
   let readable: ReturnType<typeof signal<number | null>>;
-  let merging: ReturnType<typeof signal<boolean>>;
+  let pullSettling: ReturnType<typeof signal<boolean>>;
   let running: ReturnType<typeof signal<GitNetworkJobType | null>>;
   let current: ReturnType<typeof signal<{ path: () => string; } | null>>;
   let service: RemoteChangesService;
@@ -55,7 +54,7 @@ describe('RemoteChangesService', () => {
     status = signal(null);
     followed = signal(12);
     readable = signal(12);
-    merging = signal(false);
+    pullSettling = signal(false);
     running = signal(null);
     current = signal(null);
     TestBed.configureTestingModule({
@@ -63,8 +62,7 @@ describe('RemoteChangesService', () => {
         RemoteChangesService,
         { provide: GitApi, useValue: { incoming } },
         { provide: GitStatusStore, useValue: { status, followed, readable } },
-        { provide: MergeStore, useValue: { merging } },
-        { provide: NetworkJobService, useValue: { running } },
+        { provide: NetworkJobService, useValue: { running, pullSettling } },
         { provide: OpenFilesService, useValue: { current } }
       ]
     });
@@ -79,7 +77,7 @@ describe('RemoteChangesService', () => {
     status.set(gitStatus(3));
     await settle();
 
-    expect(service.notice()).toEqual({ commits: 3, upstream: 'origin/main', touchesOpenFile: false });
+    expect(service.notice()).toEqual({ commits: 3, upstream: 'origin/main', touchesOpenFile: false, announce: true });
     expect(incoming).toHaveBeenCalledExactlyOnceWith(12, undefined);
   });
 
@@ -120,7 +118,7 @@ describe('RemoteChangesService', () => {
     await settle();
 
     // Stays on screen, without saying anything of a file it has no answer for.
-    expect(service.notice()).toEqual({ commits: 1, upstream: 'origin/main', touchesOpenFile: false });
+    expect(service.notice()).toEqual({ commits: 1, upstream: 'origin/main', touchesOpenFile: false, announce: true });
 
     read.next({ incoming: { upstream: 'origin/main', commits: 1, touchesPath: true } });
 
@@ -148,7 +146,7 @@ describe('RemoteChangesService', () => {
     status.set(gitStatus(2));
     await settle();
 
-    expect(service.notice()).toEqual({ commits: 2, upstream: 'origin/main', touchesOpenFile: true });
+    expect(service.notice()).toEqual({ commits: 2, upstream: 'origin/main', touchesOpenFile: true, announce: true });
     expect(incoming).toHaveBeenCalledTimes(2);
   });
 
@@ -158,12 +156,73 @@ describe('RemoteChangesService', () => {
     status.set(gitStatus(3));
     await settle();
 
-    expect(service.notice()).toEqual({ commits: 3, upstream: 'origin/main', touchesOpenFile: false });
+    expect(service.notice()).toEqual({ commits: 3, upstream: 'origin/main', touchesOpenFile: false, announce: true });
 
     incoming.mockReturnValue(answer(true));
     await vi.advanceTimersByTimeAsync(STATUS_RETRY_MS);
 
     expect(service.notice()?.touchesOpenFile).toBe(true);
+  });
+
+  it('keeps This file changed too. when reading more commits fails, and after a refusal', async () => {
+    openFile('guide.md');
+    incoming.mockReturnValue(answer(true));
+    status.set(gitStatus(1));
+    await settle();
+
+    incoming.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+    status.set(gitStatus(2));
+    await settle();
+    expect(service.notice()).toEqual({ commits: 2, upstream: 'origin/main', touchesOpenFile: true, announce: true });
+
+    incoming.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 400 })));
+    status.set(gitStatus(3));
+    await settle();
+    expect(service.notice()?.touchesOpenFile).toBe(true);
+  });
+
+  it('says nothing of another file when reading fails', async () => {
+    openFile('guide.md');
+    incoming.mockReturnValue(answer(true));
+    status.set(gitStatus(1));
+    await settle();
+
+    incoming.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+    openFile('other.md');
+    await settle();
+
+    expect(service.notice()?.touchesOpenFile).toBe(false);
+  });
+
+  it('shows the count alone when the first read takes long, and adds what it answers quietly', async () => {
+    const read = new Subject<GitIncoming>();
+    incoming.mockReturnValue(read);
+    openFile('guide.md');
+    status.set(gitStatus(3));
+    await settle();
+
+    await vi.advanceTimersByTimeAsync(INCOMING_WAIT_MS - 1);
+    expect(service.notice()).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(service.notice()).toEqual({ commits: 3, upstream: 'origin/main', touchesOpenFile: false, announce: true });
+
+    read.next({ incoming: { upstream: 'origin/main', commits: 3, touchesPath: true } });
+    expect(service.notice()?.touchesOpenFile).toBe(true);
+  });
+
+  it('is not held back further by another file opened during the first read', async () => {
+    incoming.mockReturnValue(new Subject<GitIncoming>());
+    openFile('guide.md');
+    status.set(gitStatus(3));
+    await settle();
+
+    await vi.advanceTimersByTimeAsync(INCOMING_WAIT_MS - 1);
+    openFile('other.md');
+    await settle();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(service.notice()?.commits).toBe(3);
   });
 
   it('does not try again after a refusal', async () => {
@@ -227,7 +286,7 @@ describe('RemoteChangesService', () => {
 
     status.set(gitStatus(3, 'feature/x'));
     await settle();
-    expect(service.notice()).toEqual({ commits: 3, upstream: 'origin/feature/x', touchesOpenFile: false });
+    expect(service.notice()?.upstream).toBe('origin/feature/x');
 
     status.set(gitStatus(3));
     await settle();
@@ -248,16 +307,17 @@ describe('RemoteChangesService', () => {
     expect(incoming).toHaveBeenLastCalledWith(13, undefined);
   });
 
-  it('shows nothing during a merge', async () => {
-    merging.set(true);
-    status.set(gitStatus(3));
+  it('shows nothing during a merge, or a rebase, as the bar then offers no Pull', async () => {
+    status.set({ ...gitStatus(3), mergeInProgress: true });
     await settle();
 
     expect(service.notice()).toBeNull();
     expect(incoming).not.toHaveBeenCalled();
   });
 
-  it('shows nothing while a pull runs, and comes back if it fails', async () => {
+  it('shows nothing while a pull runs, and comes back if it fails, without a read or an announcement', async () => {
+    openFile('guide.md');
+    incoming.mockReturnValue(answer(true));
     status.set(gitStatus(3));
     await settle();
 
@@ -267,7 +327,54 @@ describe('RemoteChangesService', () => {
 
     running.set(null);
     await settle();
-    expect(service.notice()?.commits).toBe(3);
+    expect(service.notice()).toEqual({ commits: 3, upstream: 'origin/main', touchesOpenFile: true, announce: false });
+    expect(incoming).toHaveBeenCalledOnce();
+  });
+
+  it('announces again when more commits arrived since the pull started', async () => {
+    status.set(gitStatus(3));
+    await settle();
+    running.set('pull');
+    await settle();
+
+    running.set(null);
+    status.set(gitStatus(4));
+    await settle();
+
+    expect(service.notice()?.announce).toBe(true);
+  });
+
+  it('announces after a pull of another tab, when it was not shown before', async () => {
+    const read = new Subject<GitIncoming>();
+    incoming.mockReturnValue(read);
+    running.set('pull');
+    status.set(gitStatus(3));
+    await settle();
+
+    running.set(null);
+    await settle();
+    read.next({ incoming: { upstream: 'origin/main', commits: 3, touchesPath: false } });
+
+    expect(service.notice()?.announce).toBe(true);
+  });
+
+  it('does not come back between the end of a pull and the status after it', async () => {
+    status.set(gitStatus(3));
+    await settle();
+
+    running.set('pull');
+    await settle();
+    running.set(null);
+    pullSettling.set(true);
+    await settle();
+    expect(service.notice()).toBeNull();
+
+    status.set(gitStatus(0));
+    pullSettling.set(false);
+    await settle();
+
+    expect(service.notice()).toBeNull();
+    expect(incoming).toHaveBeenCalledOnce();
   });
 
   it('stays while another network job runs', async () => {

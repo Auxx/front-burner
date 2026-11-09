@@ -57,6 +57,7 @@ describe('NetworkJobService', () => {
   let followed: ReturnType<typeof signal<number | null>>;
   let gitStatus: ReturnType<typeof signal<GitStatus | null>>;
   let refresh: ReturnType<typeof vi.fn>;
+  let reading: ReturnType<typeof signal<boolean>>;
   let toast: { show: ReturnType<typeof vi.fn>; };
   let flushAll: ReturnType<typeof vi.fn>;
   let unlock: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
@@ -83,6 +84,7 @@ describe('NetworkJobService', () => {
     followed = signal(12);
     gitStatus = signal(status());
     refresh = vi.fn(async () => undefined);
+    reading = signal(false);
     toast = { show: vi.fn() };
     flushAll = vi.fn(async () => undefined);
     unlock = vi.fn(async () => true);
@@ -101,7 +103,7 @@ describe('NetworkJobService', () => {
         NetworkJobService,
         { provide: GitApi, useValue: { push, fetch, pull, gitJob } },
         { provide: PushChannelService, useValue: { events, reconnected } },
-        { provide: GitStatusStore, useValue: { followed, status: gitStatus, refresh } },
+        { provide: GitStatusStore, useValue: { followed, status: gitStatus, refresh, reading } },
         { provide: OpenFilesService, useValue: { flushAll, unsavedPaths, notSaved } },
         { provide: CommitAuthorGate, useValue: { ready, refresh: gateRefresh } },
         { provide: LockedKeyService, useValue: { unlock } },
@@ -719,6 +721,55 @@ describe('NetworkJobService', () => {
       await service.start('pull');
       await settle();
     }
+
+    it('settles once the status read after the pull has ended', async () => {
+      reading.set(true);
+
+      await pullEndsWith(pulled('fast-forward', 3));
+
+      expect(service.running()).toBeNull();
+      expect(service.pullSettling()).toBe(true);
+
+      reading.set(false);
+      await settle();
+
+      expect(service.pullSettling()).toBe(false);
+    });
+
+    it('another job leaves nothing to settle', async () => {
+      reading.set(true);
+      gitJob.mockReturnValueOnce(of<GitJobState>({
+        status: 'done',
+        outcome: { kind: 'fetched', moved: false, upstreamMoved: false }
+      }));
+
+      await service.start('fetch');
+      await settle();
+
+      expect(service.pullSettling()).toBe(false);
+    });
+
+    it('says when a press of Pull waits for the running job', async () => {
+      await service.start('fetch');
+      await settle();
+      expect(service.pullWaiting()).toBe(false);
+
+      await service.startWhenFree('pull');
+
+      expect(service.pullWaiting()).toBe(true);
+      expect(pull).not.toHaveBeenCalled();
+
+      gitJob.mockReturnValueOnce(of<GitJobState>({
+        status: 'done',
+        outcome: { kind: 'fetched', moved: true, upstreamMoved: true }
+      }));
+      finished();
+      await settle();
+      await settle();
+
+      expect(service.pullWaiting()).toBe(false);
+      expect(pull).toHaveBeenCalledOnce();
+    });
 
     it('says Already up to date', async () => {
       await pullEndsWith(pulled('up-to-date', 0));

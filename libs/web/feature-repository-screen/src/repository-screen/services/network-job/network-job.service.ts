@@ -157,6 +157,7 @@ export class NetworkJobService {
   private readonly starting = signal<Starting | null>(null);
   private readonly shownProblem = signal<GitProblem | null>(null);
   private readonly waiting = signal<readonly Waiting[]>([]);
+  private readonly pullEnded = signal(false);
   /** The jobs that have ended, so that a status read before their end does not take them up again. */
   private readonly ended = new Set<number>();
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -176,8 +177,19 @@ export class NetworkJobService {
   });
   /** Why the last network job failed, until it is cleared or another starts. */
   readonly problem = this.shownProblem.asReadonly();
+  /** A pull has ended and the status read after it has not: the status still says what it did before the pull. */
+  readonly pullSettling = this.pullEnded.asReadonly();
+  /** A press of **Pull** waits for the running network job to end (`startWhenFree`). */
+  readonly pullWaiting = computed(() =>
+    this.waiting().some(waiting => waiting.operation === 'pull' && waiting.options.background !== true)
+  );
 
   constructor() {
+    effect(() => {
+      if (this.pullEnded() && !this.store.reading()) {
+        untracked(() => this.pullEnded.set(false));
+      }
+    });
     let repositoryId = untracked(this.store.followed);
     effect(() => {
       const followed = this.store.followed();
@@ -475,6 +487,7 @@ export class NetworkJobService {
         this.fail(followed.operation, outcome.code, outcome.params, !followed.own);
       }
     }
+    this.pullEnded.set(followed.operation === 'pull');
     void this.store.refresh();
   }
 

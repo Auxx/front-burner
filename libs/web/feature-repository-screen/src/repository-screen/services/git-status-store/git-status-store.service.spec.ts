@@ -229,6 +229,22 @@ describe('GitStatusStore', () => {
     await first;
   });
 
+  it('says that it reads, also while a newer read replaces one', async () => {
+    await start();
+    expect(store.reading()).toBe(false);
+    const newer = new Subject<GitStatus>();
+    gitStatus.mockReturnValueOnce(new Subject()).mockReturnValueOnce(newer);
+
+    void store.refresh();
+    expect(store.reading()).toBe(true);
+    void store.refresh();
+    expect(store.reading()).toBe(true);
+
+    newer.next(status());
+    newer.complete();
+    expect(store.reading()).toBe(false);
+  });
+
   it('ignores an answer older than the last one asked for', async () => {
     await start();
     const older = new Subject<GitStatus>();

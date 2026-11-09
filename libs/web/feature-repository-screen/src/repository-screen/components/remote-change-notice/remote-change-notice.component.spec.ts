@@ -17,8 +17,8 @@ describe('RemoteChangeNoticeComponent', () => {
       found.textContent?.trim() === text || found.getAttribute('aria-label') === text
     );
 
-  async function show(commits: number, touchesOpenFile: boolean): Promise<void> {
-    fixture.componentRef.setInput('notice', { commits, upstream: 'origin/main', touchesOpenFile });
+  async function show(commits: number, touchesOpenFile: boolean, announced = true): Promise<void> {
+    fixture.componentRef.setInput('notice', { commits, upstream: 'origin/main', touchesOpenFile, announce: announced });
     await settle(fixture);
   }
 
@@ -58,6 +58,28 @@ describe('RemoteChangeNoticeComponent', () => {
 
     expect(element().textContent).not.toContain('This file changed too.');
     expect(announce).toHaveBeenCalledOnce();
+  });
+
+  it('announces nothing when it says nothing new', async () => {
+    await show(3, false, false);
+
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it('shows that Pull waits, and says so', async () => {
+    await show(3, false);
+    fixture.componentRef.setInput('waiting', true);
+    await settle(fixture);
+
+    const waiting = button(`${KEY}.waiting`) as HTMLButtonElement;
+    expect(waiting.getAttribute('aria-disabled')).toBe('true');
+    expect(element().querySelector('[aria-live="polite"]')?.textContent).toBe(`${KEY}.waiting`);
+    let pulls = 0;
+    fixture.componentInstance.pull.subscribe(() => pulls++);
+
+    waiting.click();
+
+    expect(pulls).toBe(0);
   });
 
   it('offers Pull', async () => {

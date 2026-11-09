@@ -50,6 +50,7 @@
       @if (remoteChanges.notice(); as notice) {
         <rs-remote-change-notice uiAppShellBanner
                                  [notice]="notice"
+                                 [waiting]="jobs.pullWaiting()"
                                  (pull)="jobs.startWhenFree('pull')"
                                  (dismissed)="remoteChanges.dismiss()" />
       }

@@ -140,7 +140,7 @@ export class RepositoryBarComponent {
   }
 
   /** Gives the focus to what offers the git actions, when what had it in the bar went away. */
-  protected focusActions(): void {
+  focusActions(): void {
     (this.mergeSummary() ?? this.gitActions())?.focus();
   }
 }

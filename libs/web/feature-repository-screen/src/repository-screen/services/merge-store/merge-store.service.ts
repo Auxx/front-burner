@@ -1,9 +1,10 @@
 import { computed, DestroyRef, effect, inject, Injectable, signal, untracked } from '@angular/core';
 import type { GitMergeState } from '@front-burner/shared-contracts';
 import { GitApi } from '@front-burner/web-api-client';
-import { isRefusal, PushChannelService, toApiError } from '@front-burner/web-core';
-import { finalize, Subscription } from 'rxjs';
+import { PushChannelService, toApiError } from '@front-burner/web-core';
+import type { Subscription } from 'rxjs';
 
+import { LatestRead } from '../../utils/latest-read/latest-read';
 import { GitStatusStore, STATUS_RETRY_MS } from '../git-status-store/git-status-store.service';
 
 /**
@@ -43,8 +44,7 @@ export class MergeStore {
   });
 
   private subscription: Subscription | undefined;
-  private request: Subscription | undefined;
-  private retryTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly reads = new LatestRead(STATUS_RETRY_MS);
 
   constructor() {
     effect(() => {
@@ -65,7 +65,7 @@ export class MergeStore {
           void this.refresh();
           return;
         }
-        this.cancel();
+        this.reads.cancel();
         if (!merging) {
           this.read.set(null);
         }
@@ -73,7 +73,7 @@ export class MergeStore {
     });
     inject(DestroyRef).onDestroy(() => {
       this.subscription?.unsubscribe();
-      this.cancel();
+      this.reads.cancel();
     });
   }
 
@@ -83,16 +83,14 @@ export class MergeStore {
    * cancelled it.
    */
   refresh(): Promise<void> {
-    this.cancel();
+    this.reads.cancel();
     const repositoryId = this.status.readable();
     if (repositoryId === null || !this.merging()) {
       return Promise.resolve();
     }
-    return new Promise(resolve => {
-      this.request = this.api.gitMerge(repositoryId).pipe(finalize(resolve)).subscribe({
-        next: state => this.read.set({ repositoryId, state }),
-        error: error => this.failed(error)
-      });
+    return this.reads.run(() => this.api.gitMerge(repositoryId), {
+      next: state => this.read.set({ repositoryId, state }),
+      error: error => this.failed(error)
     });
   }
 
@@ -100,8 +98,6 @@ export class MergeStore {
     if (toApiError(error).code === 'no-merge-in-progress') {
       this.ended.set(true);
       void this.status.refresh();
-    } else if (!isRefusal(error)) {
-      this.retryTimer = setTimeout(() => void this.refresh(), STATUS_RETRY_MS);
     }
   }
 
@@ -119,10 +115,5 @@ export class MergeStore {
   private again(): void {
     this.ended.set(false);
     void this.refresh();
-  }
-
-  private cancel(): void {
-    clearTimeout(this.retryTimer);
-    this.request?.unsubscribe();
   }
 }

@@ -20,6 +20,10 @@ Requirements files deferred until after the MVP:
 - Pull: the waiting saves it sends first include other repositories' open files
   (`OpenFilesService.flushAll`), so a slow one elsewhere keeps "Pulling…"
   showing. It needs a flush per repository; a commit waits in the same way.
+- Remote-change notice: a force-push that leaves the same number of commits to
+  pull goes unnoticed. "This file changed too." is not read again, and a notice
+  dismissed at that count stays away (GA-34). It needs the upstream's commit in
+  the git status, to tell these commits from the last ones.
 - Editor: basic code formatting from the repository's `.editorconfig` (for
   example indent style and size, line endings, final newline and trimming
   trailing spaces), applied while typing and on save. Until then the editor

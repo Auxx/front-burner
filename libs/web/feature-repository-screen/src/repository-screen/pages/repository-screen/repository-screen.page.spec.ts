@@ -22,7 +22,7 @@ import { ToastService } from '@front-burner/ui';
 import { CredentialsApi, FilesApi, GitApi, RepositoriesApi } from '@front-burner/web-api-client';
 import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
-import { BehaviorSubject, map, Observable, of, Subject, throwError } from 'rxjs';
+import { BehaviorSubject, map, Observable, of, Subject, take, throwError } from 'rxjs';
 
 import { dialogButton, settleDialog } from '../../../testing/dialog-testing';
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
@@ -1254,6 +1254,9 @@ describe('RepositoryScreenPage', () => {
         [ ...(notice()?.querySelectorAll('button') ?? []) ].find(found =>
           found.textContent?.trim() === text || found.getAttribute('aria-label') === text
         ) as HTMLButtonElement;
+      const fetchInBar = () =>
+        ([ ...page().querySelectorAll<HTMLButtonElement>('rs-git-actions button') ]
+          .find(found => found.textContent?.trim().endsWith('.fetch')) as HTMLButtonElement).click();
 
       beforeEach(() => {
         gitStatusAnswer = of({ ...baseStatus(), upstream: 'origin/main', behind: 3 });
@@ -1294,8 +1297,7 @@ describe('RepositoryScreenPage', () => {
           outcome: { kind: 'fetched', moved: true, upstreamMoved: true }
         }));
         await visit('/repositories/12');
-        ([ ...page().querySelectorAll<HTMLButtonElement>('rs-git-actions button') ]
-          .find(found => found.textContent?.trim().endsWith('.fetch')) as HTMLButtonElement).click();
+        fetchInBar();
         await settle(harness.fixture);
 
         noticeButton(`${NOTICE}.pull`).click();
@@ -1311,13 +1313,45 @@ describe('RepositoryScreenPage', () => {
         expect(pull).toHaveBeenCalledExactlyOnceWith(12);
       });
 
-      it('goes when dismissed', async () => {
+      it('goes when dismissed, and the focus goes to the git actions', async () => {
         await visit('/repositories/12');
+        const dismiss = noticeButton(`${NOTICE}.dismiss`);
+        dismiss.focus();
 
-        noticeButton(`${NOTICE}.dismiss`).click();
+        dismiss.click();
         await settle(harness.fixture);
 
         expect(notice()).toBeNull();
+        expect(document.activeElement?.closest('rs-git-actions')).toBeTruthy();
+      });
+
+      it('going away by itself does not take the focus', async () => {
+        const statuses = new BehaviorSubject<GitStatus>({ ...baseStatus(), upstream: 'origin/main', behind: 3 });
+        gitStatusAnswer = statuses.pipe(take(1));
+        await visit('/repositories/12');
+        const elsewhere = page().querySelector<HTMLButtonElement>('rs-file-tree button') as HTMLButtonElement;
+        elsewhere.focus();
+
+        statuses.next({ ...baseStatus(), upstream: 'origin/main' });
+        gitStatusAnswer = statuses.pipe(take(1));
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+
+        expect(notice()).toBeNull();
+        expect(document.activeElement).toBe(elsewhere);
+      });
+
+      it('Pull shows that it waits for the running job', async () => {
+        fetch.mockReturnValue(new Subject<GitJobStarted>());
+        await visit('/repositories/12');
+        fetchInBar();
+        await settle(harness.fixture);
+
+        noticeButton(`${NOTICE}.pull`).click();
+        await settle(harness.fixture);
+
+        expect(noticeButton(`${NOTICE}.waiting`).getAttribute('aria-disabled')).toBe('true');
+        expect(pull).not.toHaveBeenCalled();
       });
     });
 

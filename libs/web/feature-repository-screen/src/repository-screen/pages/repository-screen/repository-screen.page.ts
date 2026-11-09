@@ -1,11 +1,13 @@
 import { DOCUMENT } from '@angular/common';
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
   effect,
   inject,
+  Injector,
   signal,
   untracked,
   viewChild
@@ -108,7 +110,8 @@ const MAX_BADGE_COUNT = 99;
  * aren't working (GA-35, RC-6), which stays when the banner is dismissed. During a
  * merge, followed by `MergeStore`, the bar says what merges and offers **Abort merge**
  * through `MergeActionsService` (GC-2, GC-6, GC-23). Below the bar too, `RemoteChangesService`'s
- * notice says when a fetch found new commits, with **Pull** (GA-34).
+ * notice says when a fetch found new commits, with **Pull** (GA-34); the focus goes to the
+ * git actions when it goes away with the focus in it.
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -196,6 +199,7 @@ export class RepositoryScreenPage {
   /** The page's app shell, once there is one; it knows whether the layout is narrow. */
   private readonly shell = viewChild(AppShellComponent);
   private readonly changesPane = viewChild(ChangesPaneComponent);
+  private readonly bar = viewChild(RepositoryBarComponent);
   /** The activity bar's selected item: the tool window shown, beside the editor or as the drawer (FB-7, FB-9, GA-10). */
   protected readonly sideTool = computed(() => {
     const narrow = this.shell()?.narrow() ?? false;
@@ -309,6 +313,23 @@ export class RepositoryScreenPage {
     this.updateTitle();
     this.flushWhenLeft();
     this.viewRepository();
+    this.keepFocusWhenNoticeGoes();
+  }
+
+  /**
+   * **Pull** or dismissing removes the remote-change notice, with the button that
+   * has the focus. This runs before the page shows it, so what is focused is still there.
+   */
+  private keepFocusWhenNoticeGoes(): void {
+    const injector = inject(Injector);
+    let shown = false;
+    effect(() => {
+      const nowShown = this.remoteChanges.notice() !== null;
+      if (shown && !nowShown && this.document.activeElement?.closest('rs-remote-change-notice')) {
+        afterNextRender(() => this.bar()?.focusActions(), { injector });
+      }
+      shown = nowShown;
+    });
   }
 
   /**
