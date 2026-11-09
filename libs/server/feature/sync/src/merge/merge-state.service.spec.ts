@@ -349,4 +349,42 @@ describe('MergeStateService', () => {
       code: 'not-conflicting'
     });
   });
+
+  it('strips a BOM from the returned content', async () => {
+    const BOM = Buffer.from([ 0xef, 0xbb, 0xbf ]);
+    const withBom = Buffer.concat([ BOM, Buffer.from('mine\n') ]);
+    await merged(
+      { 'notes.md': 'base\n' },
+      { 'notes.md': withBom },
+      { 'notes.md': 'theirs\n' }
+    );
+
+    const { content } = await service.readVersion(work, 'notes.md', 'ours');
+
+    expect(content).toBe('mine\n');
+  });
+
+  it('converts CRLF to LF in the returned content', async () => {
+    await merged(
+      { 'notes.md': 'base\n' },
+      { 'notes.md': Buffer.from('line one\r\nline two\r\n') },
+      { 'notes.md': 'theirs\n' }
+    );
+
+    const { content } = await service.readVersion(work, 'notes.md', 'ours');
+
+    expect(content).toBe('line one\nline two\n');
+  });
+
+  it('accepts a file containing U+FFFD', async () => {
+    await merged(
+      { 'notes.md': 'base\n' },
+      { 'notes.md': Buffer.from('replaced \ufffd char\n') },
+      { 'notes.md': 'theirs\n' }
+    );
+
+    const { content } = await service.readVersion(work, 'notes.md', 'ours');
+
+    expect(content).toBe('replaced \ufffd char\n');
+  });
 });

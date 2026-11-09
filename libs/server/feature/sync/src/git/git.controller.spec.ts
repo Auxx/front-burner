@@ -824,6 +824,49 @@ describe('GitController', () => {
 
         expect(body).toMatchObject({ code: 'validation-failed' });
       });
+
+      it('strips a BOM from the returned content', async () => {
+        const BOM = Buffer.from([ 0xef, 0xbb, 0xbf ]);
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'notes.md'), 'theirs\n');
+        git(root, 'commit', '-q', '-am', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), Buffer.concat([ BOM, Buffer.from('mine\n') ]));
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        const { body } = await mergeVersion('notes.md', 'ours').expect(200);
+
+        expect(body).toEqual({ content: 'mine\n' });
+      });
+
+      it('converts CRLF to LF in the returned content', async () => {
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'notes.md'), 'theirs\n');
+        git(root, 'commit', '-q', '-am', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), Buffer.from('line one\r\nline two\r\n'));
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        const { body } = await mergeVersion('notes.md', 'ours').expect(200);
+
+        expect(body).toEqual({ content: 'line one\nline two\n' });
+      });
+
+      it('accepts a file containing U+FFFD', async () => {
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'notes.md'), 'theirs\n');
+        git(root, 'commit', '-q', '-am', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), Buffer.from('replaced \ufffd char\n'));
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        const { body } = await mergeVersion('notes.md', 'ours').expect(200);
+
+        expect(body).toEqual({ content: 'replaced \ufffd char\n' });
+      });
     });
 
     describe('abort', () => {
