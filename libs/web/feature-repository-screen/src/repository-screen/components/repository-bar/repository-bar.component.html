@@ -14,7 +14,8 @@
                         (abortMerge)="abortMerge.emit()"
                         (showWarning)="showFetchDetails()" />
     } @else {
-      <rs-git-status-summary [status]="gitStatus()" />
+      <rs-git-status-summary [status]="gitStatus()"
+                             (openBranches)="openBranches.emit()" />
       <rs-git-actions [status]="gitStatus()"
                       [running]="running()"
                       [narrow]="narrow()"

@@ -128,6 +128,37 @@ describe('TooltipDirective', () => {
     expect(shown()).toEqual([ 'Nothing to push' ]);
   });
 
+  describe('a click on its host', () => {
+    it('cancels a tooltip that the hover was about to show', () => {
+      pointer(button('Fetch'), 'pointerenter');
+
+      button('Fetch').click();
+      vi.advanceTimersByTime(TOOLTIP_SHOW_DELAY_MS);
+
+      expect(shown()).toEqual([]);
+      expect(fixture.componentInstance.clicks()).toBe(1);
+    });
+
+    it('hides a tooltip that the hover showed', () => {
+      pointer(button('Fetch'), 'pointerenter');
+      vi.advanceTimersByTime(TOOLTIP_SHOW_DELAY_MS);
+      expect(shown()).toEqual([ 'Fetch from the remote' ]);
+
+      button('Fetch').click();
+
+      expect(shown()).toEqual([]);
+    });
+
+    it('leaves a tooltip that the keyboard focus showed', () => {
+      keyboardFocus(button('Fetch'));
+      expect(shown()).toEqual([ 'Fetch from the remote' ]);
+
+      button('Fetch').click();
+
+      expect(shown()).toEqual([ 'Fetch from the remote' ]);
+    });
+  });
+
   it('shows at once on keyboard focus and hides on blur', () => {
     keyboardFocus(button('Push'));
     expect(shown()).toEqual([ 'Nothing to push' ]);

@@ -165,11 +165,21 @@ describe('i18n/en.json', () => {
     [ 'toPushAndPull', { ahead: 2, behind: 3 }, '2 to push, 3 to pull' ],
     [ 'notPublished', {}, 'Not published' ],
     [ 'noCommits', {}, 'no commits yet' ],
-    [ 'noBranch', {}, 'No branch' ]
+    [ 'noBranch', {}, 'No branch' ],
+    [ 'openListNoBranch', {}, 'No branch: open the branch list' ]
   ])('formats the git status text %s', (key, values, text) => {
     const message = texts[`${SCREEN}.GitStatusSummaryComponent.${key}`] as string;
 
     expect(new IntlMessageFormat(message, 'en').format(values)).toBe(text);
+  });
+
+  it.each([
+    [ 1, 'Filter to find the other one' ],
+    [ 4800, 'Filter to find the other 4,800' ]
+  ])('says to filter for the other %i branches', (hidden, text) => {
+    const message = texts[`${SCREEN}.BranchListDialog.filterMore`] as string;
+
+    expect(new IntlMessageFormat(message, 'en').format({ hidden })).toBe(text);
   });
 
   it.each([ 0, 1, 2, 3, 4 ])('has the strength text for score %i', score => {

@@ -9,6 +9,7 @@ import type {
   CurrentUser,
   FileContent,
   FolderListing,
+  GitBranchList,
   GitChange,
   GitDiff,
   GitJobStarted,
@@ -18,13 +19,13 @@ import type {
   RepositoryCredentialsInfo,
   RepositorySummary
 } from '@front-burner/shared-contracts';
-import { ToastService } from '@front-burner/ui';
+import { DialogService, ToastService } from '@front-burner/ui';
 import { CredentialsApi, FilesApi, GitApi, RepositoriesApi } from '@front-burner/web-api-client';
 import type { EditorStateChange } from '@front-burner/web-code-editor';
 import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { BehaviorSubject, map, Observable, of, Subject, take, throwError } from 'rxjs';
 
-import { dialogButton, settleDialog } from '../../../testing/dialog-testing';
+import { dialogButton, overlay, settleDialog } from '../../../testing/dialog-testing';
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { entry, folder, listing } from '../../../testing/listings';
 import { fileContent } from '../../../testing/open-files';
@@ -104,6 +105,7 @@ describe('RepositoryScreenPage', () => {
   /** In place of `changes`, such as a failure. */
   let gitStatusAnswer: Observable<GitStatus> | undefined;
   let abortMerge: ReturnType<typeof vi.fn>;
+  let gitBranches: ReturnType<typeof vi.fn<(id: number) => Observable<GitBranchList>>>;
 
   const baseStatus = (): GitStatus => ({
     branch: 'main',
@@ -149,6 +151,7 @@ describe('RepositoryScreenPage', () => {
               return discardAnswer(body.paths);
             },
             gitStatus: (): Observable<GitStatus> => gitStatusAnswer ?? of(baseStatus()),
+            gitBranches,
             gitMerge: () => of({ into: 'main', from: 'origin/main', files: [], otherFiles: [], message: 'Merge' }),
             abortMerge
           }
@@ -225,6 +228,14 @@ describe('RepositoryScreenPage', () => {
     changes = [];
     gitStatusAnswer = undefined;
     abortMerge = vi.fn(() => of(undefined));
+    gitBranches = vi.fn(() =>
+      of<GitBranchList>({
+        current: 'main',
+        local: [ { name: 'main', upstream: null } ],
+        remote: [],
+        singleBranch: false
+      })
+    );
     discards = [];
     discardAnswer = () => of(undefined);
     gitDiff = vi.fn(() => of<GitDiff>({ kind: 'text', lines: [], complete: true, lineEndingsOnly: false }));
@@ -1214,6 +1225,85 @@ describe('RepositoryScreenPage', () => {
 
         expect(summary()).toBe(before);
         expect(before).toContain('main');
+      });
+
+      const branchButton = () => page().querySelector('rs-git-status-summary button') as HTMLButtonElement;
+      const list = () => overlay().querySelector('rs-branch-list');
+
+      it('opens the list from the branch', async () => {
+        await visit('/repositories/12');
+
+        branchButton().click();
+        await settleDialog();
+
+        expect(list()).not.toBeNull();
+        expect(gitBranches).toHaveBeenCalledExactlyOnceWith(12);
+      });
+
+      it('opens the list on a phone', async () => {
+        narrow = true;
+        await visit('/repositories/12');
+
+        branchButton().click();
+        await settleDialog();
+
+        expect(list()).not.toBeNull();
+      });
+
+      it('reads the list again each time it opens', async () => {
+        await visit('/repositories/12');
+
+        branchButton().click();
+        await settleDialog();
+        TestBed.inject(DialogService).closeAll();
+        await settleDialog();
+        branchButton().click();
+        await settleDialog();
+
+        expect(gitBranches).toHaveBeenCalledTimes(2);
+      });
+
+      it('returns focus to the button', async () => {
+        await visit('/repositories/12');
+        branchButton().focus();
+
+        branchButton().click();
+        await settleDialog();
+        expect(document.activeElement).not.toBe(branchButton());
+
+        overlay().querySelector<HTMLButtonElement>('li button')?.click();
+        await settleDialog();
+
+        expect(list()).toBeNull();
+        expect(document.activeElement).toBe(branchButton());
+      });
+
+      it('closes the list when a merge starts, and gives the focus to the merge bar', async () => {
+        await visit('/repositories/12');
+        branchButton().focus();
+        branchButton().click();
+        await settleDialog();
+
+        gitStatusAnswer = of({ ...baseStatus(), mergeInProgress: true });
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+        await settleDialog();
+
+        expect(list()).toBeNull();
+        expect(document.activeElement?.closest('rs-merge-summary')).not.toBeNull();
+      });
+
+      it('leaves an open list alone when the status changes without a merge', async () => {
+        await visit('/repositories/12');
+        branchButton().click();
+        await settleDialog();
+
+        gitStatusAnswer = of({ ...baseStatus(), ahead: 1 });
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+        await settleDialog();
+
+        expect(list()).not.toBeNull();
       });
     });
 

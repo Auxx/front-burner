@@ -22,6 +22,8 @@ import {
   AppShellSideDirective,
   ButtonComponent,
   CentredIslandComponent,
+  type DialogRef,
+  DialogService,
   IconComponent,
   InlineBannerComponent,
   IslandComponent,
@@ -44,6 +46,7 @@ import { LockedKeyBannerComponent } from '../../components/locked-key-banner/loc
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
 import { RemoteChangeNoticeComponent } from '../../components/remote-change-notice/remote-change-notice.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
+import { type BranchChoice, type BranchListData, BranchListDialog } from '../../dialogs/branch-list/branch-list.dialog';
 import { CommitAuthorGate } from '../../services/commit-author-gate/commit-author-gate.service';
 import { CommitTicksService } from '../../services/commit-ticks/commit-ticks.service';
 import { CommitService } from '../../services/commit/commit.service';
@@ -111,7 +114,8 @@ const MAX_BADGE_COUNT = 99;
  * merge, followed by `MergeStore`, the bar says what merges and offers **Abort merge**
  * through `MergeActionsService` (GC-2, GC-6, GC-23). Below the bar too, `RemoteChangesService`'s
  * notice says when a fetch found new commits, with **Pull** (GA-34); the focus goes to the
- * git actions when it goes away with the focus in it.
+ * git actions when it goes away with the focus in it. The branch in the bar opens the
+ * branch list (GA-36).
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -190,6 +194,9 @@ export class RepositoryScreenPage {
   private readonly credentialFixes = inject(CredentialFixesService);
   private readonly pushChannel = inject(PushChannelService);
   private readonly git = inject(GitApi);
+  private readonly dialogs = inject(DialogService);
+  /** The branch list while it is open. */
+  private branchList: DialogRef<BranchChoice> | null = null;
 
   protected readonly user = this.currentUser.user;
   /** The side pane's size, whether it is collapsed and its tool window, as this device last left them (FB-8). */
@@ -314,6 +321,22 @@ export class RepositoryScreenPage {
     this.flushWhenLeft();
     this.viewRepository();
     this.keepFocusWhenNoticeGoes();
+    this.closeBranchListWhenMergeStarts();
+  }
+
+  /**
+   * A merge starting, also elsewhere, closes the branch list, since switching isn't
+   * offered during one (AC-GIT-002.20). It takes away the button that the focus
+   * would return to, so the focus goes to what replaces it.
+   */
+  private closeBranchListWhenMergeStarts(): void {
+    const injector = inject(Injector);
+    effect(() => {
+      if (this.merge.merging() && this.branchList) {
+        this.branchList.close();
+        afterNextRender(() => this.bar()?.focusActions(), { injector });
+      }
+    });
   }
 
   /**
@@ -437,6 +460,22 @@ export class RepositoryScreenPage {
   protected readonly lockedKeyShown = computed(() =>
     this.session.state() === 'ready' && !this.lockedKey.dismissed() ? this.lockedKey.key() : null
   );
+
+  /** The branch in the bar was chosen. What the list closes with is not used yet: plan 87 switches to it. */
+  protected openBranches(): void {
+    const repositoryId = this.session.repository()?.id;
+    if (repositoryId !== undefined) {
+      const ref = this.dialogs.open<BranchListDialog, BranchListData, BranchChoice>(BranchListDialog, {
+        data: { repositoryId }
+      });
+      this.branchList = ref;
+      ref.closed.subscribe(() => {
+        if (this.branchList === ref) {
+          this.branchList = null;
+        }
+      });
+    }
+  }
 
   /** The fix of a push or fetch problem (RC-4), through `CredentialFixesService`. */
   protected fixProblem(fix: GitProblem['fix']): void {

@@ -1551,6 +1551,12 @@ test.describe('repository screen, kept up to date', () => {
     expect(await fitsWidth(page)).toBe(true);
     const name = bar.getByText(branch, { exact: true });
     expect(await name.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+    // As short as it gets, the button is still a touch target (NF-13.5, NV-19).
+    if (isMobile) {
+      const box = await name.boundingBox();
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+    }
     // One bar: the counts do not wrap below it.
     expect(
       await counts.evaluate(element =>

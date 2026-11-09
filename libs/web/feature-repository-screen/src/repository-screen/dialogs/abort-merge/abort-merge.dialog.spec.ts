@@ -9,19 +9,19 @@ import { AbortMergeDialog } from './abort-merge.dialog';
 const K = 'web-feature-repository-screen.AbortMergeDialog';
 
 describe('AbortMergeDialog', () => {
-  async function open(): Promise<Promise<boolean | undefined>> {
+  /** Opens the dialog and waits for it to render; `closed` settles when it closes. */
+  async function open(): Promise<{ closed: Promise<boolean | undefined>; }> {
     TestBed.configureTestingModule({ imports: [ translocoTesting() ] });
     const ref = TestBed.inject(DialogService).open<AbortMergeDialog, void, boolean>(AbortMergeDialog);
     const closed = firstValueFrom(ref.closed, { defaultValue: undefined });
     await settleDialog();
-    return closed;
+    return { closed };
   }
 
   afterEach(() => TestBed.inject(DialogService).closeAll());
 
   it('asks, saying what is lost, with the focus on Cancel', async () => {
-    void open();
-    await settleDialog();
+    await open();
 
     expect(overlay().querySelector('h2')?.textContent).toContain(`${K}.heading`);
     expect(overlay().querySelector('.message')?.textContent).toContain(`${K}.message`);
@@ -29,20 +29,18 @@ describe('AbortMergeDialog', () => {
   });
 
   it('closes with true on Abort merge', async () => {
-    const closed = open();
-    await settleDialog();
+    const { closed } = await open();
 
     dialogButton(`${K}.abort`)?.click();
 
-    expect(await (await closed)).toBe(true);
+    expect(await closed).toBe(true);
   });
 
   it('closes with false on Cancel', async () => {
-    const closed = open();
-    await settleDialog();
+    const { closed } = await open();
 
     dialogButton(`${K}.cancel`)?.click();
 
-    expect(await (await closed)).toBe(false);
+    expect(await closed).toBe(false);
   });
 });

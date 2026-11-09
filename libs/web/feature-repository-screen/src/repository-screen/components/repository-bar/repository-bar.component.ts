@@ -83,6 +83,8 @@ export class RepositoryBarComponent {
   readonly aborting = input(false);
   /** **Abort merge** was chosen. */
   readonly abortMerge = output<void>();
+  /** The current branch was chosen, to open the branch list. */
+  readonly openBranches = output<void>();
   /** **Fetch** was chosen. */
   readonly fetch = output<void>();
   /** **Pull** was chosen. */
@@ -128,7 +130,9 @@ export class RepositoryBarComponent {
   }
 
   private actionsHaveFocus(): boolean {
-    return this.host.querySelector('rs-merge-summary, rs-git-actions')?.contains(this.document.activeElement) === true;
+    const active = this.document.activeElement;
+    return active?.closest('rs-merge-summary, rs-git-status-summary, rs-git-actions') != null
+      && this.host.contains(active);
   }
 
   /** The fetch status's item of the git actions menu was chosen: its panel opens next to the menu's button. */

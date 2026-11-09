@@ -184,6 +184,11 @@ export function attachTooltip(host: HTMLElement, text: Signal<string>, options: 
           show();
           shownByClick = true;
         }
+      } else if (!shownByClick && !shownByFocus && !shownByInput) {
+        // The hover's job is done: a browser that doesn't focus a clicked button
+        // (Safari) would otherwise show it over what the click opened, where it
+        // would take the first Escape.
+        hide();
       }
     } else if (shownByClick && !(target && panel?.location.nativeElement.contains(target))) {
       hide();
