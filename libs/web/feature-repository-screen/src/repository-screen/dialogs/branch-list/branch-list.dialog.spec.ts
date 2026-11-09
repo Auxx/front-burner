@@ -363,4 +363,26 @@ describe('BranchListDialog', () => {
 
     expect(await closed).toBeUndefined();
   });
+
+  it('closes with kind: new when New branch is chosen', async () => {
+    const { closed } = await open();
+
+    dialogButton(`${K}.newBranch`)?.click();
+
+    expect(await closed).toEqual({ kind: 'new' });
+  });
+
+  it('disables New branch button when repository has no commits', async () => {
+    gitBranches = vi.fn(() => of({ current: null, local: [], remote: [], singleBranch: false }));
+    await open();
+
+    const newBtn = dialogButton(`${K}.newBranch`) as HTMLButtonElement;
+    expect(newBtn.getAttribute('aria-disabled')).toBe('true');
+    expect(newBtn.getAttribute('aria-describedby')).not.toBeNull();
+
+    newBtn.click();
+    await settleDialog();
+
+    expect(overlay().querySelector('rs-branch-list')).not.toBeNull();
+  });
 });

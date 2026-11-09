@@ -128,6 +128,7 @@ describe('BranchActionsService', () => {
           provide: GitApi,
           useValue: {
             gitBranches: () => branchesAnswer?.() ?? of(branches),
+            createBranch: () => of(undefined),
             switchBranch: (_id: number, request: GitSwitchRequest) => {
               requests.push('switch');
               switches.push(request);
@@ -171,6 +172,20 @@ describe('BranchActionsService', () => {
     await (await choose('origin/feature')).done;
 
     expect(switches).toEqual([ { name: 'feature', remote: true } ]);
+  });
+
+  it('opens NewBranchDialog when New branch is chosen', async () => {
+    const done = service.open();
+    await settleDialog();
+
+    dialogButton('web-feature-repository-screen.BranchListDialog.newBranch')?.click();
+    await settleDialog();
+
+    expect(overlay().querySelector('rs-new-branch')).not.toBeNull();
+
+    dialogButton('web-feature-repository-screen.NewBranchDialog.cancel')?.click();
+    await settleDialog();
+    await done;
   });
 
   it('leaves the status to the events after a switch', async () => {

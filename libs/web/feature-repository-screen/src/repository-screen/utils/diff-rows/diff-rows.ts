@@ -158,7 +158,7 @@ function changedRows(block: DiffLine[], budget: { chars: number; }): DiffRow[] {
 function changedWords(before: string, after: string): [ DiffLinePart[], DiffLinePart[] ] {
   const changes = diffWordsWithSpace(visibleText(before), visibleText(after));
   return [
-    changes.filter(change => !change.added).map(change => ({ text: change.value, changed: change.removed })),
-    changes.filter(change => !change.removed).map(change => ({ text: change.value, changed: change.added }))
+    changes.filter(change => !change.added).map(change => ({ text: change.value, changed: change.removed ?? false })),
+    changes.filter(change => !change.removed).map(change => ({ text: change.value, changed: change.added ?? false }))
   ];
 }

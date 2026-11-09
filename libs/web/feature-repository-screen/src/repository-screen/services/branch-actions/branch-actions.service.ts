@@ -7,6 +7,7 @@ import { TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom, type Observable, Subject } from 'rxjs';
 
 import { type BranchChoice, type BranchListData, BranchListDialog } from '../../dialogs/branch-list/branch-list.dialog';
+import { type NewBranchData, NewBranchDialog } from '../../dialogs/new-branch/new-branch.dialog';
 import { type SwitchRefusedData, SwitchRefusedDialog } from '../../dialogs/switch-refused/switch-refused.dialog';
 import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { FailureToastService } from '../failure-toast/failure-toast.service';
@@ -18,6 +19,8 @@ const KEY = 'web-feature-repository-screen.BranchActionsService';
 
 /** Their usual text tells how to get a file past a commit, by unticking it, which does not help a switch. */
 const NOT_SAVED_TEXTS: ReadonlySet<string> = new Set([ 'file-gone', 'changed-on-disk' ]);
+
+type SwitchChoice = Extract<BranchChoice, { kind: 'local' | 'remote'; }>;
 
 /**
  * The branch list (GA-36) and what its choice does (GA-37). Provided by the page.
@@ -94,7 +97,17 @@ export class BranchActionsService {
     const choice = await firstValueFrom(ref.closed, { defaultValue: undefined });
     this.list = null;
     if (choice && this.stillOn(repositoryId)) {
-      await this.switchTo(repositoryId, choice, false);
+      if (choice.kind === 'new') {
+        const createRef = this.dialogs.open<NewBranchDialog, NewBranchData, void>(NewBranchDialog, {
+          data: {
+            repositoryId,
+            saveWaiting: () => this.openFiles.saveWaiting()
+          }
+        });
+        await firstValueFrom(createRef.closed, { defaultValue: undefined });
+      } else {
+        await this.switchTo(repositoryId, choice, false);
+      }
     }
   }
 
@@ -108,7 +121,7 @@ export class BranchActionsService {
     return true;
   }
 
-  private async switchTo(repositoryId: number, choice: BranchChoice, again: boolean): Promise<void> {
+  private async switchTo(repositoryId: number, choice: SwitchChoice, again: boolean): Promise<void> {
     this.dismissFailure();
     this.running.set(true);
     let refusal: SwitchRefusedData | null;
@@ -125,7 +138,7 @@ export class BranchActionsService {
   /** Tries to switch; what to say when the backend refuses because of changes, or else `null`. */
   private async attempt(
     repositoryId: number,
-    choice: BranchChoice,
+    choice: SwitchChoice,
     again: boolean
   ): Promise<SwitchRefusedData | null> {
     try {
@@ -161,7 +174,7 @@ export class BranchActionsService {
   }
 
   /** The switch that is still to do: an answer that got lost may have been a success, which a repeat would refuse. */
-  private async whatIsLeft(repositoryId: number, choice: BranchChoice): Promise<BranchChoice | null> {
+  private async whatIsLeft(repositoryId: number, choice: SwitchChoice): Promise<SwitchChoice | null> {
     const branches = await firstValueFrom(this.api.gitBranches(repositoryId));
     if (branches.current === choice.name) {
       return null;
@@ -171,7 +184,7 @@ export class BranchActionsService {
       : choice;
   }
 
-  private async send(repositoryId: number, choice: BranchChoice): Promise<void> {
+  private async send(repositoryId: number, choice: SwitchChoice): Promise<void> {
     const release = this.openFiles.hold();
     try {
       await firstValueFrom(
@@ -210,7 +223,7 @@ export class BranchActionsService {
     }
   }
 
-  private showFailure(error: ApiError, retry: boolean, repositoryId: number, choice: BranchChoice): void {
+  private showFailure(error: ApiError, retry: boolean, repositoryId: number, choice: SwitchChoice): void {
     const actions: readonly ToastAction[] = retry
       ? [ {
         label: this.transloco.translate(`${KEY}.retry`),
@@ -223,7 +236,7 @@ export class BranchActionsService {
     this.failure = this.failures.show(error, { actions, text, key: `${KEY}.failure` });
   }
 
-  private async tryAgain(repositoryId: number, choice: BranchChoice): Promise<void> {
+  private async tryAgain(repositoryId: number, choice: SwitchChoice): Promise<void> {
     if (this.stillOn(repositoryId) && !this.running()) {
       await this.switchTo(repositoryId, choice, true);
     }

@@ -21,7 +21,8 @@ import {
   IconComponent,
   InlineBannerComponent,
   InputComponent,
-  SpinnerComponent
+  SpinnerComponent,
+  TooltipDirective
 } from '@front-burner/ui';
 import { GitApi } from '@front-burner/web-api-client';
 import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
@@ -32,10 +33,10 @@ export interface BranchListData {
 }
 
 /** The branch that was chosen. A remote one's `name` has no `origin/`, as the API wants it (GA-37). */
-export interface BranchChoice {
-  readonly kind: 'local' | 'remote';
-  readonly name: string;
-}
+export type BranchChoice =
+  | { readonly kind: 'local'; readonly name: string; }
+  | { readonly kind: 'remote'; readonly name: string; }
+  | { readonly kind: 'new'; };
 
 type Read =
   | { kind: 'loading'; }
@@ -82,7 +83,8 @@ function firstWithCurrent(
     IconComponent,
     InlineBannerComponent,
     InputComponent,
-    SpinnerComponent
+    SpinnerComponent,
+    TooltipDirective
   ],
   templateUrl: './branch-list.dialog.html',
   styleUrl: './branch-list.dialog.scss',
@@ -136,6 +138,13 @@ export class BranchListDialog {
     this.load();
     // **Try again** goes away with the focus on it.
     this.filterInput().nativeElement.focus();
+  }
+
+  protected chooseNew(): void {
+    if (this.shown()?.current === null) {
+      return;
+    }
+    this.ref.close({ kind: 'new' });
   }
 
   /** The current branch as this read has it, which the status may not know yet: there is nothing to switch to. */
