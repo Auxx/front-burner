@@ -172,6 +172,15 @@ describe('i18n/en.json', () => {
     expect(new IntlMessageFormat(message, 'en').format(values)).toBe(text);
   });
 
+  it.each([
+    [ 1, 'Filter to find the other one' ],
+    [ 4800, 'Filter to find the other 4,800' ]
+  ])('says to filter for the other %i branches', (hidden, text) => {
+    const message = texts[`${SCREEN}.BranchListDialog.filterMore`] as string;
+
+    expect(new IntlMessageFormat(message, 'en').format({ hidden })).toBe(text);
+  });
+
   it.each([ 0, 1, 2, 3, 4 ])('has the strength text for score %i', score => {
     expect(texts[`${AUTH}.PasswordSetupStepComponent.strengths.${score}`]).toEqual(expect.any(String));
   });

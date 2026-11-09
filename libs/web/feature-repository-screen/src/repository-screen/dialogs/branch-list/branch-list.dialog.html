@@ -1,0 +1,84 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.BranchListDialog'">
+  <ui-dialog [heading]="t('heading')"
+             [closeLabel]="t('close')">
+    <ui-field class="filter"
+              [label]="t('filter')">
+      <input uiInput
+             #filter
+             autocomplete="off"
+             autocapitalize="off"
+             spellcheck="false"
+             [formField]="model.filter" />
+    </ui-field>
+    @let read = this.read();
+    @if (read.kind === 'loading') {
+      <ui-spinner [label]="t('loading')" />
+    } @else if (read.kind === 'failed') {
+      <ui-inline-banner status="danger"
+                        announce>
+        {{ read.text }}
+        @if (read.reference) {
+          <span class="reference">{{ t('reference') }} <code>{{ read.reference }}</code></span>
+        }
+        <div uiBannerActions>
+          <button uiButton
+                  size="small"
+                  (click)="retry()">{{ t('retry') }}</button>
+        </div>
+      </ui-inline-banner>
+    }
+    @if (shown(); as shown) {
+      @if (shown.singleBranch) {
+        <ui-inline-banner status="info">{{ t('singleBranch') }}</ui-inline-banner>
+      }
+      @if (shown.local.length) {
+        <h3 class="group"
+            id="rs-branch-list-local">{{ t('local') }}</h3>
+        <ul aria-labelledby="rs-branch-list-local">
+          @for (branch of shown.local; track branch.name) {
+            @let current = branch.name === shown.current;
+            <li>
+              <button class="branch"
+                      [attr.aria-current]="current ? 'true' : null"
+                      (click)="chooseLocal(branch.name)">
+                <span class="mark">
+                  @if (current) {
+                    <ui-icon name="check" />
+                  }
+                </span>
+                <span class="name">{{ branch.name }}</span>
+                @if (current) {
+                  <span class="current">{{ t('current') }}</span>
+                }
+              </button>
+            </li>
+          }
+        </ul>
+      }
+      @if (shown.remote.length) {
+        <h3 class="group"
+            id="rs-branch-list-remote">{{ t('remote') }}</h3>
+        <ul aria-labelledby="rs-branch-list-remote">
+          @for (branch of shown.remote; track branch.name) {
+            <li>
+              <button class="branch"
+                      (click)="chooseRemote(branch.branch)">
+                <span class="mark"></span>
+                <span class="name">{{ branch.name }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+      <!-- Always there, so that what it comes to say is announced as the user types. -->
+      <div class="status"
+           role="status">
+        @if (shown.nothing) {
+          {{ t('noMatches') }}
+        } @else if (shown.hidden) {
+          {{ t('filterMore', { hidden: shown.hidden }) }}
+        }
+      </div>
+    }
+  </ui-dialog>
+</ng-container>
