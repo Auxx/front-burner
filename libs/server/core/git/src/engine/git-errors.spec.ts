@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import type { EgressRefusal } from '../egress/egress-proxy';
 import type { GitResult } from '../runner/git-runner';
 import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
@@ -5,6 +6,7 @@ import { classifyGitFailure, classifyPushFailure, GitOperationError } from './gi
 const failed = (stderr: string, timedOut = false): GitResult => ({
   exitCode: timedOut ? null : 128,
   stdout: '',
+  stdoutRaw: Buffer.alloc(0),
   stdoutBytes: 0,
   stderr,
   timedOut
@@ -108,6 +110,7 @@ describe('classifyPushFailure', () => {
   const pushed = (stderr: string, stdout = '', timedOut = false): GitResult => ({
     exitCode: timedOut ? null : 1,
     stdout,
+    stdoutRaw: Buffer.from(stdout, 'utf8'),
     stdoutBytes: stdout.length,
     stderr,
     timedOut

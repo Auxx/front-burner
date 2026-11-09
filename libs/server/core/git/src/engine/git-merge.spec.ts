@@ -560,6 +560,81 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       });
     });
 
+    describe('readVersion', () => {
+      it('reads a blob by its oid', async () => {
+        const oid = git(work, 'rev-parse', ':first.md');
+        const bytes = await merge.readVersion(work, oid);
+
+        expect(bytes).toEqual(Buffer.from('one\n', 'utf8'));
+      });
+
+      it('throws for an oid that is not a blob', async () => {
+        const head = git(work, 'rev-parse', 'HEAD');
+
+        await expect(merge.readVersion(work, head)).rejects.toThrow('git cat-file blob');
+      });
+
+      it('returns the raw bytes of a blob that is not valid UTF-8', async () => {
+        writeFileSync(join(work, 'latin.md'), Buffer.from([ 0x63, 0xe9, 0x0a ]));
+        git(work, 'add', 'latin.md');
+        const oid = git(work, 'rev-parse', ':latin.md');
+
+        expect(await merge.readVersion(work, oid)).toEqual(Buffer.from([ 0x63, 0xe9, 0x0a ]));
+      });
+
+      it('returns the raw bytes of a blob that contains U+FFFD', async () => {
+        writeFileSync(join(work, 'replacement.md'), Buffer.from([ 0x61, 0xef, 0xbf, 0xbd, 0x62, 0x0a ]));
+        git(work, 'add', 'replacement.md');
+        const oid = git(work, 'rev-parse', ':replacement.md');
+
+        expect(await merge.readVersion(work, oid)).toEqual(Buffer.from([ 0x61, 0xef, 0xbf, 0xbd, 0x62, 0x0a ]));
+      });
+
+      it('throws for a non-existent oid', async () => {
+        await expect(merge.readVersion(work, '0000000000000000000000000000000000000000')).rejects.toThrow(
+          'git cat-file blob'
+        );
+      });
+
+      it('returns the raw bytes including BOM', async () => {
+        const BOM = Buffer.from([ 0xef, 0xbb, 0xbf ]);
+        writeFileSync(join(work, 'bom.md'), Buffer.concat([ BOM, Buffer.from('hello\n', 'utf8') ]));
+        git(work, 'add', 'bom.md');
+        const oid = git(work, 'rev-parse', ':bom.md');
+
+        expect(await merge.readVersion(work, oid)).toEqual(Buffer.concat([ BOM, Buffer.from('hello\n', 'utf8') ]));
+      });
+
+      it('returns the raw bytes with CRLF line endings', async () => {
+        writeFileSync(join(work, 'crlf.md'), 'line1\r\nline2\r\n');
+        git(work, 'add', 'crlf.md');
+        const oid = git(work, 'rev-parse', ':crlf.md');
+
+        expect(await merge.readVersion(work, oid)).toEqual(Buffer.from('line1\r\nline2\r\n', 'utf8'));
+      });
+
+      it('throws when git itself fails', async () => {
+        const local = new LocalGit(new GitRunner());
+        const run = local.run.bind(local);
+        const failingMerge = new GitMerge(local, { gitTimeoutMs: 60_000 } as GitOptions);
+        vi.spyOn(local, 'run').mockImplementation(async (cwd, args, options) => {
+          if (args[0] === 'cat-file') {
+            return {
+              exitCode: null,
+              stdout: '',
+              stdoutRaw: Buffer.alloc(0),
+              stdoutBytes: 0,
+              stderr: 'spawn git: No such file or directory',
+              timedOut: false
+            };
+          }
+          return run(cwd, args, options);
+        });
+
+        await expect(failingMerge.readVersion(work, 'abc123')).rejects.toThrow('git cat-file blob abc123 failed');
+      });
+    });
+
     it('tells a merge from a rebase', async () => {
       expect(await merge.mergeInProgress(work)).toBe(false);
       mkdirSync(join(work, '.git', 'rebase-merge'));
@@ -830,6 +905,24 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       expect(readFileSync(join(work, 'binary.md'))).toEqual(Buffer.from('mine\0\n'));
       await merge.writeMarkers(work, 'binary.md', { ours: 'main', theirs: 'origin/main' });
       expect(readFileSync(join(work, 'binary.md'))).toEqual(Buffer.from('mine\0\n'));
+    });
+
+    it('preserves the BOM on a conflicting Markdown file', async () => {
+      const BOM = Buffer.from([ 0xef, 0xbb, 0xbf ]);
+      writeFileSync(join(work, 'bom.md'), Buffer.concat([ BOM, Buffer.from('# Title\nbase\n', 'utf8') ]));
+      commitAll('base');
+      git(work, 'update-ref', UPSTREAM, 'HEAD');
+      onUpstream(() => {
+        writeFileSync(join(work, 'bom.md'), Buffer.concat([ BOM, Buffer.from('# Title\ntheirs\n', 'utf8') ]));
+      });
+      writeFileSync(join(work, 'bom.md'), Buffer.concat([ BOM, Buffer.from('# Title\nmine\n', 'utf8') ]));
+      commitAll('mine');
+
+      expect(await merge.merge(work, request)).toEqual({ kind: 'conflicted', commits: 1 });
+
+      const content = readFileSync(join(work, 'bom.md'));
+      expect(content.slice(0, 3)).toEqual(BOM);
+      expect(content.toString('utf8')).toContain('<<<<<<< main');
     });
 
     it('leaves other files as git wrote them', async () => {

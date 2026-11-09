@@ -253,4 +253,138 @@ describe('MergeStateService', () => {
       { path: 'a.md', kind: 'both-changed', resolved: true, editable: true, oursSize: 5, theirsSize: 7 }
     ]);
   });
+
+  it('refuses readVersion for symbolic links with version-not-readable', async () => {
+    await merged(
+      { 'link.md': { link: 'base.txt' } },
+      { 'link.md': { link: 'mine.txt' } },
+      { 'link.md': { link: 'theirs.txt' } }
+    );
+
+    await expect(service.readVersion(work, 'link.md', 'ours')).rejects.toMatchObject({
+      code: 'version-not-readable'
+    });
+    await expect(service.readVersion(work, 'link.md', 'theirs')).rejects.toMatchObject({
+      code: 'version-not-readable'
+    });
+  });
+
+  it('refuses readVersion for non-Markdown files with version-not-readable', async () => {
+    await merged(
+      { 'config.env': 'BASE=1\n', 'app.ts': 'console.log("base");\n' },
+      { 'config.env': 'BASE=2\n', 'app.ts': 'console.log("mine");\n' },
+      { 'config.env': 'BASE=3\n', 'app.ts': 'console.log("theirs");\n' }
+    );
+
+    await expect(service.readVersion(work, 'config.env', 'ours')).rejects.toMatchObject({
+      code: 'version-not-readable'
+    });
+    await expect(service.readVersion(work, 'config.env', 'theirs')).rejects.toMatchObject({
+      code: 'version-not-readable'
+    });
+    await expect(service.readVersion(work, 'app.ts', 'ours')).rejects.toMatchObject({ code: 'version-not-readable' });
+    await expect(service.readVersion(work, 'app.ts', 'theirs')).rejects.toMatchObject({ code: 'version-not-readable' });
+  });
+
+  it('refuses a large version without reading the blob', async () => {
+    const large = (fill: string) => `${fill.repeat(EDITABLE_FILE_LIMIT)}\n`;
+    await merged(
+      { 'large.md': 'base\n' },
+      { 'large.md': large('m') },
+      { 'large.md': 'theirs\n' }
+    );
+    const readBlob = vi.spyOn(merge, 'readVersion');
+
+    await expect(service.readVersion(work, 'large.md', 'ours')).rejects.toMatchObject({
+      code: 'version-not-readable'
+    });
+
+    expect(readBlob).not.toHaveBeenCalled();
+  });
+
+  it('allows readVersion for Markdown files in conflict', async () => {
+    await merged(
+      { 'notes.md': 'base\n' },
+      { 'notes.md': 'mine\n' },
+      { 'notes.md': 'theirs\n' }
+    );
+
+    const ours = await service.readVersion(work, 'notes.md', 'ours');
+    const theirs = await service.readVersion(work, 'notes.md', 'theirs');
+
+    expect(ours.content).toBe('mine\n');
+    expect(theirs.content).toBe('theirs\n');
+  });
+
+  it('returns no-merge-in-progress when merge is aborted between checks', async () => {
+    await merged(
+      { 'notes.md': 'base\n' },
+      { 'notes.md': 'mine\n' },
+      { 'notes.md': 'theirs\n' }
+    );
+
+    // Simulate the merge being aborted on another device between the two checks:
+    // the first mergeInProgress returns true, conflicts returns empty (merge aborted),
+    // then the second mergeInProgress returns false.
+    vi.spyOn(merge, 'conflicts').mockResolvedValue([]);
+    let callCount = 0;
+    vi.spyOn(merge, 'mergeInProgress').mockImplementation(async () => {
+      callCount++;
+      return callCount === 1;
+    });
+
+    await expect(service.readVersion(work, 'notes.md', 'ours')).rejects.toMatchObject({
+      code: 'no-merge-in-progress'
+    });
+  });
+
+  it('returns not-conflicting when the file is not in conflicts and merge is still in progress', async () => {
+    await merged(
+      { 'notes.md': 'base\n' },
+      { 'notes.md': 'mine\n' },
+      { 'notes.md': 'theirs\n' }
+    );
+
+    await expect(service.readVersion(work, 'nonexistent.md', 'ours')).rejects.toMatchObject({
+      code: 'not-conflicting'
+    });
+  });
+
+  it('strips a BOM from the returned content', async () => {
+    const BOM = Buffer.from([ 0xef, 0xbb, 0xbf ]);
+    const withBom = Buffer.concat([ BOM, Buffer.from('mine\n') ]);
+    await merged(
+      { 'notes.md': 'base\n' },
+      { 'notes.md': withBom },
+      { 'notes.md': 'theirs\n' }
+    );
+
+    const { content } = await service.readVersion(work, 'notes.md', 'ours');
+
+    expect(content).toBe('mine\n');
+  });
+
+  it('converts CRLF to LF in the returned content', async () => {
+    await merged(
+      { 'notes.md': 'base\n' },
+      { 'notes.md': Buffer.from('line one\r\nline two\r\n') },
+      { 'notes.md': 'theirs\n' }
+    );
+
+    const { content } = await service.readVersion(work, 'notes.md', 'ours');
+
+    expect(content).toBe('line one\nline two\n');
+  });
+
+  it('accepts a file containing U+FFFD', async () => {
+    await merged(
+      { 'notes.md': 'base\n' },
+      { 'notes.md': Buffer.from('replaced \ufffd char\n') },
+      { 'notes.md': 'theirs\n' }
+    );
+
+    const { content } = await service.readVersion(work, 'notes.md', 'ours');
+
+    expect(content).toBe('replaced \ufffd char\n');
+  });
 });

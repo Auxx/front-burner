@@ -10,6 +10,8 @@ import {
   GitJobStartedSchema,
   GitJobStateSchema,
   GitMergeStateSchema,
+  GitMergeVersionQuerySchema,
+  GitMergeVersionSchema,
   GitNewBranchRequestSchema,
   GitPathsSchema,
   GitStatusSchema,
@@ -71,3 +73,9 @@ export class GitSwitchRequestDto extends createZodDto(z.object(GitSwitchRequestS
 
 @ApiSchema({ name: 'GitNewBranchRequest' })
 export class GitNewBranchRequestDto extends createZodDto(z.object(GitNewBranchRequestSchema.shape)) {}
+
+@ApiSchema({ name: 'GitMergeVersionQuery' })
+export class GitMergeVersionQueryDto extends createZodDto(z.object(GitMergeVersionQuerySchema.shape)) {}
+
+@ApiSchema({ name: 'GitMergeVersion' })
+export class GitMergeVersionDto extends createZodDto(z.object(GitMergeVersionSchema.shape)) {}
