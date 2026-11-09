@@ -56,6 +56,9 @@ const BRANCH_PREFIX = 'refs/heads/';
 /** The branches whose merge message git writes without ` into <branch>`. */
 const MAIN_BRANCHES = new Set([ 'main', 'master' ]);
 
+/** Throws on bytes that are not UTF-8. `ignoreBOM` keeps a BOM, as this text replaces the file. */
+const utf8Fatal = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
 /** At most this many paths are named in `merge-blocked`. */
 const MAX_BLOCKING_PATHS = 20;
 
@@ -473,11 +476,14 @@ export class GitMerge {
       throw new GitOperationError('timeout', result.stderr);
     }
     // Below 128 it is the number of conflicts. A file with a NUL byte exits 255 with no output.
-    const usable = result.exitCode !== null
-      && result.exitCode < 128
-      && result.stdoutBytes <= LOCAL_MAX_OUTPUT_BYTES
-      && !result.stdout.includes(UNDECODABLE);
-    return usable ? result.stdout : null;
+    if (result.exitCode === null || result.exitCode >= 128 || result.stdoutBytes > LOCAL_MAX_OUTPUT_BYTES) {
+      return null;
+    }
+    try {
+      return utf8Fatal.decode(result.stdoutRaw);
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -699,6 +705,33 @@ export class GitMerge {
         paths: untracked.slice(0, MAX_BLOCKING_PATHS).join('\n')
       });
     }
+  }
+
+  /**
+   * Read a blob by its object id and return its raw bytes. The object id comes
+   * from the index, so any git failure (missing object, corrupt store, permissions)
+   * is abnormal and throws. The caller decodes the bytes with `decodeMarkdown`
+   * from the files library. Used outside the working-tree lock.
+   *
+   * @throws GitOperationError `timeout` when it ran out of time.
+   * @throws Error when git fails for any reason (non-zero exit, spawn error, killed process,
+   *          corrupt store, missing object, permissions).
+   */
+  async readVersion(workingCopy: string, oid: string): Promise<Buffer> {
+    const result = await this.local.run(
+      workingCopy,
+      [ 'cat-file', 'blob', oid ],
+      { timeoutMs: this.options.gitTimeoutMs }
+    );
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    // The oid comes from the index, so any non-zero exit is abnormal and should be
+    // logged as a server error rather than silently swallowed.
+    if (result.exitCode !== 0) {
+      throw new Error(`git cat-file blob ${oid} failed: ${result.stderr.trim()}`);
+    }
+    return result.stdoutRaw;
   }
 
   /** A merge, as opposed to `GitEngine.mergeInProgress`, which a rebase also answers yes to. */

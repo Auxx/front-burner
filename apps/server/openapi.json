@@ -1571,6 +1571,61 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/merge/version": {
+      "get": {
+        "operationId": "gitMergeVersion",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          {
+            "name": "side",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ours",
+                "theirs"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitMergeVersion"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/merge/abort": {
       "post": {
         "operationId": "abortMerge",
@@ -3444,6 +3499,17 @@
           "files",
           "otherFiles",
           "message"
+        ]
+      },
+      "GitMergeVersion": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
         ]
       },
       "DiffLine": {

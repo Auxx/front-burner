@@ -43,6 +43,8 @@ export interface GitResult {
   /** `null` when git was killed or could not be started. */
   exitCode: number | null;
   stdout: string;
+  /** The raw stdout bytes, for re-decoding with a fatal text decoder. */
+  stdoutRaw: Buffer;
   /** How many bytes git wrote to stdout, including any past `maxOutputBytes`. */
   stdoutBytes: number;
   /** With credentials removed from URLs (NF-10.5). */
@@ -52,6 +54,7 @@ export interface GitResult {
 
 interface Collected {
   text(): string;
+  raw(): Buffer;
   /** Every byte the stream gave, kept or dropped. */
   bytes(): number;
 }
@@ -61,6 +64,7 @@ function collect(stream: Readable | null, maxBytes: number): Collected {
   const chunks: Buffer[] = [];
   let size = 0;
   let total = 0;
+  let rawValue: Buffer | undefined;
   stream?.on('data', (chunk: Buffer) => {
     total += chunk.length;
     if (size < maxBytes) {
@@ -69,7 +73,11 @@ function collect(stream: Readable | null, maxBytes: number): Collected {
       size += kept.length;
     }
   });
-  return { text: () => Buffer.concat(chunks).toString('utf8'), bytes: () => total };
+  return {
+    text: () => (rawValue ??= Buffer.concat(chunks)).toString('utf8'),
+    raw: () => rawValue ??= Buffer.concat(chunks),
+    bytes: () => total
+  };
 }
 
 /** Runs `git` with a clean environment and the hardening of A-5.1. Features use `GitEngine`, never this. */
@@ -143,6 +151,7 @@ export class GitRunner {
         resolve({
           exitCode: spawnError ? null : code,
           stdout: stdout.text(),
+          stdoutRaw: stdout.raw(),
           stdoutBytes: stdout.bytes(),
           stderr: redactCredentials(spawnError ? spawnError.message : stderr.text()),
           timedOut

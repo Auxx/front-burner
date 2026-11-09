@@ -1,9 +1,18 @@
+import { Buffer } from 'node:buffer';
 import type { GitResult, GitRunner } from './git-runner';
 import { assertSupportedGit, gitVersion } from './git-version';
 
 const runnerAnswering = (result: Partial<GitResult>) =>
   ({
-    run: async () => ({ exitCode: 0, stdout: '', stdoutBytes: 0, stderr: '', timedOut: false, ...result })
+    run: async () => ({
+      exitCode: 0,
+      stdout: '',
+      stdoutRaw: Buffer.alloc(0),
+      stdoutBytes: 0,
+      stderr: '',
+      timedOut: false,
+      ...result
+    })
   }) as unknown as GitRunner;
 
 describe('gitVersion', () => {
