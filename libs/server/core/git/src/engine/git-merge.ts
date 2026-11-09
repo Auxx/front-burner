@@ -8,6 +8,9 @@ import { GitResult } from '../runner/git-runner';
 import { GitOperationError } from './git-errors';
 import { LOCAL_MAX_OUTPUT_BYTES, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
+/** UTF-8 BOM byte sequence. */
+const BOM = Buffer.from([ 0xef, 0xbb, 0xbf ]);
+
 /** Fatal decoder — throws when the input contains bytes that are not valid UTF-8, preserves BOM. */
 const utf8Fatal = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
@@ -735,11 +738,12 @@ export class GitMerge {
       return null;
     }
     try {
-      let text = utf8Fatal.decode(result.stdoutRaw);
-      // Normalise like the editor's decodeMarkdown: strip BOM and convert CRLF to LF.
-      if (text.startsWith('\uFEFF')) {
-        text = text.slice(1);
-      }
+      // Strip BOM at the byte level, like the editor's decodeMarkdown, so that a
+      // blob with two BOMs keeps the second one (which the decoder turns into
+      // U+FEFF) — matching the editor behaviour.
+      const raw = result.stdoutRaw;
+      const hasBom = raw.subarray(0, BOM.length).equals(BOM);
+      const text = utf8Fatal.decode(hasBom ? raw.subarray(BOM.length) : raw);
       return text.replace(/\r\n/g, '\n');
     } catch {
       return null;
