@@ -76,6 +76,20 @@ export const ERROR_CODES = [
   'no-upstream',
   /** 409; the working copy has uncommitted changes, so a pull does not start (GA-26). */
   'uncommitted-changes',
+  /** 409; the working copy has uncommitted changes, so a switch does not start; nothing is stashed (GA-39). */
+  'switch-uncommitted-changes',
+  /** 409; no local branch of that name, or no such remote branch as of the last fetch (GA-37). */
+  'branch-not-found',
+  /** 409; a local branch already has the name (GA-37, GA-38). */
+  'branch-exists',
+  /** 400; not a name git allows for a branch (GA-38). */
+  'branch-name-invalid',
+  /** 409; `a` when `a/b` exists, or the reverse (GA-38). */
+  'branch-name-conflict',
+  /** 409; the switch would overwrite or lose a file that git does not track; nothing changed (GA-43). */
+  'switch-blocked',
+  /** 409; another git holds a lock this needs, such as a push writing the upstream; nothing changed, so try again. */
+  'git-busy',
   // How a pull job ended, besides the codes above and `merge-in-progress` and `commit-author-not-confirmed`.
   /** The current branch is not the one the pull was asked for; params `{ branch }`, the one asked for. */
   'branch-changed',

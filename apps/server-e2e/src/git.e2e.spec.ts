@@ -1044,6 +1044,44 @@ describe('branches (REQ-GIT-002)', () => {
       singleBranch: false
     });
   });
+
+  it('switches, tracks a remote branch and creates a branch', async () => {
+    remote('actions');
+    const { id } = await client.add('actions', `${publicGit.url}/actions.git`);
+    const refusal = async (response: Response, status: number) => {
+      expect(response.status).toBe(status);
+      return (await response.json() as { code: string; }).code;
+    };
+
+    // `draft` is only on the remote.
+    expect((await client.send('POST', `/repositories/${id}/git/switch`, { name: 'draft', remote: true })).status)
+      .toBe(204);
+    expect(await branchesOf(id)).toEqual({
+      current: 'draft',
+      local: [ { name: 'draft', upstream: 'origin/draft' }, { name: 'main', upstream: 'origin/main' } ],
+      remote: [],
+      singleBranch: false
+    });
+
+    expect((await client.send('POST', `/repositories/${id}/git/switch`, { name: 'main', remote: false })).status)
+      .toBe(204);
+    expect(await branchesOf(id)).toMatchObject({ current: 'main' });
+
+    expect((await client.send('POST', `/repositories/${id}/git/branches`, { name: 'topic' })).status).toBe(204);
+    expect(await branchesOf(id)).toMatchObject({
+      current: 'topic',
+      local: expect.arrayContaining([ { name: 'topic', upstream: null } ])
+    });
+
+    expect(await refusal(await client.send('POST', `/repositories/${id}/git/branches`, { name: 'bad..name' }), 400))
+      .toBe('branch-name-invalid');
+    expect(await refusal(await client.send('POST', `/repositories/${id}/git/branches`, { name: 'topic' }), 409))
+      .toBe('branch-exists');
+    expect(
+      await refusal(await client.send('POST', `/repositories/${id}/git/switch`, { name: 'gone', remote: false }), 409)
+    )
+      .toBe('branch-not-found');
+  });
 });
 
 describe('secrets in a push (REQ-REPO-002)', () => {

@@ -1,5 +1,5 @@
 import { EventsHub } from '@front-burner/server-core-events';
-import { GitBranches, GitEngine, GitMerge } from '@front-burner/server-core-git';
+import { GitBranches, GitEngine, GitMerge, GitOperationError } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { authOf } from '@front-burner/server-core-security';
 import { inBatches, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
@@ -42,8 +42,10 @@ import {
   GitJobStartedDto,
   GitJobStateDto,
   GitMergeStateDto,
+  GitNewBranchRequestDto,
   GitPathsDto,
-  GitStatusDto
+  GitStatusDto,
+  GitSwitchRequestDto
 } from './git.dto';
 
 /**
@@ -80,6 +82,17 @@ function checkDiscardPaths(root: string, paths: string[]): Promise<void> {
   };
   return inBatches(paths, path => checkPath(root, path, hasListedFolder(path)));
 }
+
+/**
+ * Answers a failed branch action. Git refuses before it changes anything, except
+ * when it was killed at its timeout: then `onChange` runs, as it may have.
+ */
+const mayHaveChanged = (onChange: () => void) => (error: unknown): never => {
+  if (error instanceof GitOperationError && error.code === 'timeout') {
+    onChange();
+  }
+  return toGitApiError(error);
+};
 
 /** Git in the logged-in user's working copies (REQ-GIT-002). */
 @ApiTags('git')
@@ -143,6 +156,80 @@ export class GitController {
     const { row, root } = this.repositories.open(authOf(req).userId, params.id);
     const list = await this.branches.list(root).catch(toGitApiError);
     return { ...list, singleBranch: row.cloneMode === 'single-branch' };
+  }
+
+  /**
+   * Makes a branch from the current commit and switches to it, keeping any
+   * uncommitted changes; unpublished until its first push (GA-38). Refused during
+   * a merge (GA-4), without commits, as the first commit makes `main` whatever the
+   * branch is called (GA-42), and with `branch-name-invalid`, `branch-exists`,
+   * `branch-name-conflict` or `git-busy`. Clients are told also after `git-timeout`,
+   * as the branch may have been made and be current.
+   */
+  @Post('branches')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  async createBranch(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Body() body: GitNewBranchRequestDto
+  ): Promise<void> {
+    const { userId } = authOf(req);
+    const root = this.repositories.root(userId, params.id);
+    let changed = false;
+    try {
+      await this.guard.change(params.id, root, async () => {
+        await this.branches.create(root, body.name).catch(mayHaveChanged(() => (changed = true)));
+        changed = true;
+      });
+    } finally {
+      if (changed) {
+        // No file changed.
+        this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
+      }
+    }
+  }
+
+  /**
+   * Switches to a local branch, or with `remote`, makes a local branch that tracks
+   * a branch of `origin` and switches to it (GA-37). Refused during a merge (GA-4),
+   * with `switch-uncommitted-changes` while anything is uncommitted, as nothing is
+   * stashed (GA-39), and with `branch-not-found`, `switch-blocked` or `git-busy`;
+   * with `remote`, also `branch-name-invalid` (`400`), `branch-exists` or
+   * `branch-name-conflict`. A refusal leaves everything as it was (GA-43). After
+   * `git-timeout`, the files are put back and clients are told, as a killed git may
+   * have changed them.
+   */
+  @Post('switch')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  async switchBranch(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Body() body: GitSwitchRequestDto
+  ): Promise<void> {
+    const { userId } = authOf(req);
+    const root = this.repositories.root(userId, params.id);
+    let changed = false;
+    try {
+      // Inside the lock: until then, a save can make a clean working copy dirty.
+      await this.guard.change(params.id, root, async () => {
+        const { changes } = await this.engine.status(root).catch(toGitApiError);
+        if (changes.length > 0) {
+          throw new ApiErrorException(409, 'switch-uncommitted-changes');
+        }
+        const switching = body.remote
+          ? this.branches.trackRemote(root, body.name)
+          : this.branches.switchTo(root, body.name);
+        await switching.catch(mayHaveChanged(() => (changed = true)));
+        changed = true;
+      });
+    } finally {
+      if (changed) {
+        this.events.publish(userId, { type: 'files.changed', repositoryId: params.id, folders: 'all' });
+        this.events.publish(userId, { type: 'git.changed', repositoryId: params.id });
+      }
+    }
   }
 
   /**

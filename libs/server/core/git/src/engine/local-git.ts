@@ -112,6 +112,24 @@ export class LocalGit {
   }
 
   /**
+   * The locks that a git killed at its timeout can have left when it changes the
+   * files or the current branch, and those of `refs`, full names of local branches
+   * it was making. The caller holds the working-tree lock, so no other command of
+   * ours that changes these is running. A push or a fetch doesn't need that lock,
+   * so what they can hold is left: a remote branch's lock, and `config.lock`, which
+   * they write upstreams and refspecs under; removing it could lose their write.
+   */
+  async removeOwnLocks(cwd: string, refs: readonly string[] = []): Promise<void> {
+    const gitDir = join(cwd, '.git');
+    const head = await this.run(cwd, [ 'symbolic-ref', '-q', 'HEAD' ]);
+    const current = head.exitCode === 0 ? [ head.stdout.trim() ] : [];
+    const refLocks = [ ...current, ...refs ].map(ref => `${ref}.lock`);
+    for (const lock of [ 'index.lock', 'HEAD.lock', 'ORIG_HEAD.lock', ...refLocks ]) {
+      await rm(join(gitDir, lock), { force: true });
+    }
+  }
+
+  /**
    * A git killed at its timeout cannot remove its `index.lock`; the caller holds
    * the working-tree lock, so no other command of ours is using it, and it is removed.
    */

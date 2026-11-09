@@ -18,6 +18,13 @@ describe('toGitApiError', () => {
       [ 'detached-head', 409, 'detached-head' ],
       [ 'amend-not-allowed', 409, 'amend-not-allowed' ],
       [ 'discard-blocked', 409, 'discard-blocked' ],
+      [ 'branch-name-invalid', 400, 'branch-name-invalid' ],
+      [ 'branch-not-found', 409, 'branch-not-found' ],
+      [ 'branch-exists', 409, 'branch-exists' ],
+      [ 'branch-name-conflict', 409, 'branch-name-conflict' ],
+      [ 'switch-blocked', 409, 'switch-blocked' ],
+      [ 'git-busy', 409, 'git-busy' ],
+      [ 'no-commits', 409, 'no-commits' ],
       [ 'timeout', 504, 'git-timeout' ]
     ] as const
   )('answers %s with %i %s', (code, status, apiCode) => {

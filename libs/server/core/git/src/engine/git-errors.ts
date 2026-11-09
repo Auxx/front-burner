@@ -38,6 +38,18 @@ export const GIT_ERROR_CODES = [
    * refused before anything changed.
    */
   'merge-blocked',
+  /** Not a name git allows for a branch. */
+  'branch-name-invalid',
+  /** A local branch already has the name. */
+  'branch-exists',
+  /** `a` when `a/b` exists, or the reverse: git keeps refs as files, so it can't have both. */
+  'branch-name-conflict',
+  /** The switch would overwrite a file that git does not track; refused before anything changed. */
+  'switch-blocked',
+  /** A new branch needs a commit to start from. */
+  'no-commits',
+  /** Another git holds a lock that this command needs, such as a push writing the upstream; nothing changed. */
+  'git-busy',
   'failed'
 ] as const;
 
@@ -87,6 +99,30 @@ export function classifyGitFailure(result: GitResult, refusals: EgressRefusal[])
     return 'host-unreachable';
   }
   return PATTERNS.find(([ pattern ]) => pattern.test(result.stderr))?.[1] ?? 'failed';
+}
+
+// Anchored, as these lines can come with a file's or a branch's name. The first match wins.
+const BRANCH_PATTERNS: [ RegExp, GitErrorCode ][] = [
+  [ /^fatal: a branch named .* already exists/m, 'branch-exists' ],
+  // Not every "cannot lock ref": a lock another git holds says that too.
+  [ /^fatal: cannot lock ref '.*': '.*' exists; cannot create /m, 'branch-name-conflict' ],
+  [
+    /^(error: could not lock config file .*: File exists|fatal: .*Unable to create '.*\.lock': File exists)/m,
+    'git-busy'
+  ],
+  [ /^fatal: invalid reference: /m, 'branch-not-found' ],
+  [ /^fatal: the requested upstream branch .* does not exist/m, 'branch-not-found' ],
+  // What git won't switch to by this name, such as a branch called `@`.
+  [ /^fatal: a branch is expected/m, 'branch-not-found' ],
+  // A ref that the working copy's fetch refspec doesn't cover, so it isn't a branch of the remote any more.
+  [ /^fatal: cannot set up tracking information/m, 'branch-not-found' ],
+  // Git checks the whole tree first, and says this after anything it won't overwrite or lose.
+  [ /^error: .*would be overwritten|^Aborting$/m, 'switch-blocked' ]
+];
+
+/** The code of a failed `git switch` or `git branch` (RC-5), or `null` for a failure with no meaning to a user. */
+export function classifyBranchFailure(stderr: string): GitErrorCode | null {
+  return BRANCH_PATTERNS.find(([ pattern ]) => pattern.test(stderr))?.[1] ?? null;
 }
 
 /** At most this many bytes of the remote's own lines are kept. */

@@ -1,4 +1,19 @@
-import { GitBranchListSchema } from './git-branches.schema';
+import { GitBranchListSchema, GitNewBranchRequestSchema, GitSwitchRequestSchema } from './git-branches.schema';
+
+describe('GitSwitchRequestSchema', () => {
+  it('needs a name, and whether it is a remote branch', () => {
+    expect(GitSwitchRequestSchema.parse({ name: 'feature', remote: true })).toEqual({ name: 'feature', remote: true });
+    expect(GitSwitchRequestSchema.safeParse({ name: 'feature' }).success).toBe(false);
+    expect(GitSwitchRequestSchema.safeParse({ remote: false }).success).toBe(false);
+  });
+});
+
+describe('GitNewBranchRequestSchema', () => {
+  it('leaves a name\'s rules to git, as they are git\'s (GA-38)', () => {
+    expect(GitNewBranchRequestSchema.parse({ name: 'bad..name' })).toEqual({ name: 'bad..name' });
+    expect(GitNewBranchRequestSchema.safeParse({}).success).toBe(false);
+  });
+});
 
 describe('GitBranchListSchema', () => {
   const list = {

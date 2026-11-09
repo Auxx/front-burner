@@ -571,6 +571,12 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       expect(await merge.mergeInProgress(work)).toBe(true);
     });
 
+    it('does not take a branch called MERGE_HEAD for a merge', async () => {
+      git(work, 'branch', 'MERGE_HEAD');
+
+      expect(await merge.mergeInProgress(work)).toBe(false);
+    });
+
     it('names the branch and its upstream', async () => {
       expect(await merge.branchAndUpstream(work)).toEqual({ branch: 'main', upstream: null });
 

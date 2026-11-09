@@ -1,7 +1,7 @@
 import { inBatches, lstatOrMissing, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
 import { isMarkdownName } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
-import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult } from '../runner/git-runner';
@@ -156,7 +156,7 @@ export class GitMerge {
       return await command();
     } catch (error) {
       if (error instanceof GitOperationError && error.code === 'timeout') {
-        await this.removeOwnLocks(workingCopy);
+        await this.local.removeOwnLocks(workingCopy);
       }
       throw error;
     }
@@ -176,14 +176,14 @@ export class GitMerge {
   }
 
   /**
-   * Undoes a merge that git did not finish. A killed git leaves locks that make
-   * `reset` fail, and a checkout killed partway leaves untracked files that
-   * `reset` keeps. The working copy had nothing else untracked (GA-26), except
-   * what `git status` can't see: ignored files and the user's empty folders, which
-   * both stay. A merge's folder always has a file in it, so it goes.
+   * Undoes a merge or a switch that git did not finish. A killed git leaves locks
+   * that make `reset` fail, and a checkout killed partway leaves untracked files
+   * that `reset` keeps. The working copy had nothing else untracked (GA-26, GA-39),
+   * except what `git status` can't see: ignored files and the user's empty folders,
+   * which both stay. A merge's folder always has a file in it, so it goes.
    */
   async undoCutShort(workingCopy: string, oid: string): Promise<void> {
-    await this.removeOwnLocks(workingCopy);
+    await this.local.removeOwnLocks(workingCopy);
     await this.resetTo(workingCopy, oid);
     const timeoutMs = this.options.gitTimeoutMs;
     // Without `-d`, it leaves every untracked folder.
@@ -201,20 +201,6 @@ export class GitMerge {
         [ '--literal-pathspecs', 'clean', '-fdq', '--', ...folders.slice(start, start + PATHS_PER_COMMAND) ],
         { timeoutMs }
       );
-    }
-  }
-
-  /**
-   * The locks that a merge killed partway can have left, and that a reset needs.
-   * The caller holds the working-tree lock, and a fetch, which doesn't need it,
-   * touches no local branch, so these are stale; a remote branch's may not be.
-   */
-  private async removeOwnLocks(workingCopy: string): Promise<void> {
-    const gitDir = join(workingCopy, '.git');
-    const head = await this.local.run(workingCopy, [ 'symbolic-ref', '-q', 'HEAD' ]);
-    const branchLocks = head.exitCode === 0 ? [ `${head.stdout.trim()}.lock` ] : [];
-    for (const lock of [ 'index.lock', 'HEAD.lock', 'ORIG_HEAD.lock', ...branchLocks ]) {
-      await rm(join(gitDir, lock), { force: true });
     }
   }
 
@@ -717,8 +703,8 @@ export class GitMerge {
 
   /** A merge, as opposed to `GitEngine.mergeInProgress`, which a rebase also answers yes to. */
   async mergeInProgress(workingCopy: string): Promise<boolean> {
-    const result = await this.local.run(workingCopy, [ 'rev-parse', '-q', '--verify', 'MERGE_HEAD' ]);
-    return exitAsBoolean(result, 'rev-parse');
+    // The file, not `rev-parse`: that also finds a branch called `MERGE_HEAD`.
+    return access(join(workingCopy, '.git', 'MERGE_HEAD')).then(() => true, () => false);
   }
 
   private async isAncestor(workingCopy: string, ancestor: string, descendant: string): Promise<boolean> {

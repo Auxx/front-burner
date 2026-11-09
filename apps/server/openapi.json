@@ -1423,6 +1423,76 @@
         "tags": [
           "git"
         ]
+      },
+      "post": {
+        "operationId": "createBranch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitNewBranchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/v1/repositories/{id}/git/switch": {
+      "post": {
+        "operationId": "switchBranch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitSwitchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "git"
+        ]
       }
     },
     "/api/v1/repositories/{id}/git/incoming": {
@@ -3232,6 +3302,32 @@
           "local",
           "remote",
           "singleBranch"
+        ]
+      },
+      "GitNewBranchRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "GitSwitchRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "remote": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "remote"
         ]
       },
       "GitIncomingChanges": {
