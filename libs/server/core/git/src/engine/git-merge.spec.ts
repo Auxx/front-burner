@@ -568,10 +568,10 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
         expect(content).toBe('one\n');
       });
 
-      it('returns null for an oid that is not a blob', async () => {
+      it('throws for an oid that is not a blob', async () => {
         const head = git(work, 'rev-parse', 'HEAD');
 
-        expect(await merge.readVersion(work, head)).toBeNull();
+        await expect(merge.readVersion(work, head)).rejects.toThrow('git cat-file blob');
       });
 
       it('returns null for a blob that is not valid UTF-8', async () => {
@@ -590,8 +590,10 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
         expect(await merge.readVersion(work, oid)).toBe('a\ufffdb\n');
       });
 
-      it('returns null for a non-existent oid', async () => {
-        expect(await merge.readVersion(work, '0000000000000000000000000000000000000000')).toBeNull();
+      it('throws for a non-existent oid', async () => {
+        await expect(merge.readVersion(work, '0000000000000000000000000000000000000000')).rejects.toThrow(
+          'git cat-file blob'
+        );
       });
 
       it('strips the BOM from a blob that starts with one', async () => {

@@ -709,11 +709,13 @@ export class GitMerge {
 
   /**
    * Read a blob by its object id, returning its text content, or `null` when it
-   * does not exist, is not a blob, or is not valid UTF-8 (A-5.11). Used outside
-   * the working-tree lock.
+   * is not valid UTF-8 or too large (A-5.11). The object id comes from the index,
+   * so any git failure (missing object, corrupt store, permissions) is abnormal
+   * and throws. Used outside the working-tree lock.
    *
    * @throws GitOperationError `timeout` when it ran out of time.
-   * @throws Error when git itself fails (spawn error, killed process, corrupt store).
+   * @throws Error when git fails for any reason (non-zero exit, spawn error, killed process,
+   *          corrupt store, missing object, permissions).
    */
   async readVersion(workingCopy: string, oid: string): Promise<string | null> {
     const result = await this.local.run(
@@ -724,10 +726,8 @@ export class GitMerge {
     if (result.timedOut) {
       throw new GitOperationError('timeout', result.stderr);
     }
-    // Exit 128 means the object does not exist or is not a blob — the expected "not found" case.
-    if (result.exitCode === 128) {
-      return null;
-    }
+    // The oid comes from the index, so any non-zero exit is abnormal and should be
+    // logged as a server error rather than silently swallowed.
     if (result.exitCode !== 0) {
       throw new Error(`git cat-file blob ${oid} failed: ${result.stderr.trim()}`);
     }
