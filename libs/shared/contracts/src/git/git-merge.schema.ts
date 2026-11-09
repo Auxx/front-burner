@@ -41,3 +41,23 @@ export const GitMergeStateSchema = z
 export type GitConflictKind = z.infer<typeof GitConflictKindSchema>;
 export type GitConflictFile = z.infer<typeof GitConflictFileSchema>;
 export type GitMergeState = z.infer<typeof GitMergeStateSchema>;
+
+/** Which side of a merge to read (GC-17). */
+export const GitMergeSideSchema = z.enum([ 'ours', 'theirs' ]).meta({ id: 'GitMergeSide' });
+
+export const GitMergeVersionQuerySchema = z
+  .object({
+    path: z.string().min(1),
+    side: GitMergeSideSchema
+  })
+  .meta({ id: 'GitMergeVersionQuery' });
+
+export const GitMergeVersionSchema = z
+  .object({
+    content: z.string()
+  })
+  .meta({ id: 'GitMergeVersion' });
+
+export type GitMergeSide = z.infer<typeof GitMergeSideSchema>;
+export type GitMergeVersionQuery = z.infer<typeof GitMergeVersionQuerySchema>;
+export type GitMergeVersion = z.infer<typeof GitMergeVersionSchema>;

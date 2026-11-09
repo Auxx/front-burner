@@ -14,6 +14,7 @@ import type {
   GitJobStarted,
   GitJobState,
   GitMergeState,
+  GitMergeVersion,
   GitStatus
 } from '@front-burner/shared-contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
@@ -42,6 +43,8 @@ import {
   GitJobStartedDto,
   GitJobStateDto,
   GitMergeStateDto,
+  GitMergeVersionDto,
+  GitMergeVersionQueryDto,
   GitNewBranchRequestDto,
   GitPathsDto,
   GitStatusDto,
@@ -279,6 +282,21 @@ export class GitController {
   @ApiNoContentResponse()
   abortMerge(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<void> {
     return this.mergeActions.abort(authOf(req).userId, params.id);
+  }
+
+  /**
+   * One version of a conflicting file, resolved or not (GC-17).
+   */
+  @Get('merge/version')
+  @ApiOkResponse({ type: GitMergeVersionDto })
+  @ZodSerializerDto(GitMergeVersionDto)
+  gitMergeVersion(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Query() query: GitMergeVersionQueryDto
+  ): Promise<GitMergeVersion> {
+    const root = this.repositories.root(authOf(req).userId, params.id);
+    return this.mergeState.version(root, query.path, query.side).catch(toGitApiError);
   }
 
   /**

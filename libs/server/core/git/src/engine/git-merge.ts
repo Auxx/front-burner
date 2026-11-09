@@ -533,6 +533,21 @@ export class GitMerge {
   }
 
   /**
+   * Reads a version of a conflicting file by its blob id. Returns `null` when
+   * git fails, or when the blob is not valid UTF-8.
+   */
+  async readVersion(workingCopy: string, oid: string): Promise<string | null> {
+    const result = await this.local.run(workingCopy, [ '--no-optional-locks', 'cat-file', '-p', oid ]);
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    if (result.exitCode !== 0 || result.stdout.includes(UNDECODABLE)) {
+      return null;
+    }
+    return result.stdout;
+  }
+
+  /**
    * The current branch and its upstream, such as `origin/main`, which the
    * configuration keeps after a fetch pruned it; each `null` when there is none.
    * Reads no file of the working tree, so its size doesn't matter.

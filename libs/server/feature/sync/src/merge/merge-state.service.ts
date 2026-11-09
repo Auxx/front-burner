@@ -2,7 +2,13 @@ import { ConflictEntry, GitMerge, REGULAR_FILE } from '@front-burner/server-core
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { inBatches, PathRefusedError } from '@front-burner/server-core-storage';
 import { FileContents } from '@front-burner/server-feature-files';
-import type { GitConflictFile, GitMergeState } from '@front-burner/shared-contracts';
+import {
+  EDITABLE_FILE_LIMIT,
+  type GitConflictFile,
+  type GitMergeSide,
+  type GitMergeState,
+  type GitMergeVersion
+} from '@front-burner/shared-contracts';
 import { isMarkdownName } from '@front-burner/shared-util';
 import { Injectable, Logger } from '@nestjs/common';
 
@@ -47,6 +53,42 @@ export class MergeStateService {
       otherFiles: await this.merge.mergedWithoutConflicts(root, new Set(conflicts.map(({ path }) => path))),
       message
     };
+  }
+
+  /**
+   * The text of one version of a conflicting file, resolved or not (GC-17).
+   *
+   * @throws ApiErrorException `no-merge-in-progress`; `not-conflicting` when
+   *   the path is not among the merge's conflicting files;
+   *   `version-not-readable` when this version was deleted, is a symbolic
+   *   link, not a Markdown file, over the size limit or not valid UTF-8.
+   */
+  async version(root: string, path: string, side: GitMergeSide): Promise<GitMergeVersion> {
+    if (!await this.merge.mergeInProgress(root)) {
+      throw new ApiErrorException(409, 'no-merge-in-progress');
+    }
+    const entry = (await this.merge.conflicts(root)).find(candidate => candidate.path === path);
+    if (entry === undefined) {
+      throw new ApiErrorException(409, 'not-conflicting');
+    }
+    const oid = side === 'ours' ? entry.oursOid : entry.theirsOid;
+    const mode = side === 'ours' ? entry.oursMode : entry.theirsMode;
+    const size = side === 'ours' ? entry.oursSize : entry.theirsSize;
+    if (
+      oid === null
+      || mode === null
+      || !REGULAR_FILE.test(mode)
+      || !isMarkdownName(path.split('/').at(-1) ?? '')
+      || size === null
+      || size > EDITABLE_FILE_LIMIT
+    ) {
+      throw new ApiErrorException(409, 'version-not-readable');
+    }
+    const content = await this.merge.readVersion(root, oid);
+    if (content === null) {
+      throw new ApiErrorException(409, 'version-not-readable');
+    }
+    return { content };
   }
 
   private async toFile(root: string, entry: ConflictEntry): Promise<GitConflictFile> {

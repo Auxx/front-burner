@@ -79,6 +79,7 @@ describe('GitController', () => {
   let published: PushEvent[];
   let fileOpened: ReturnType<typeof vi.fn<FetchScheduler['fileOpened']>>;
   let cloneMode: 'full' | 'single-branch';
+  let gitMerge: GitMerge;
 
   const status = (id = READY) => request(app.getHttpServer()).get(`/repositories/${id}/git/status`);
   const commit = (body: object, id = READY) =>
@@ -116,7 +117,7 @@ describe('GitController', () => {
       }
     };
     const engine = new GitEngine(options, new GitRunner());
-    const gitMerge = new GitMerge(new LocalGit(new GitRunner()), options);
+    gitMerge = new GitMerge(new LocalGit(new GitRunner()), options);
     const moduleRef = await Test.createTestingModule({
       controllers: [ GitController ],
       providers: [
@@ -693,6 +694,136 @@ describe('GitController', () => {
         await abort(99).expect(404);
         await abort(CLONING).expect(409);
         expect(published).toEqual([]);
+      });
+    });
+
+    describe('version', () => {
+      const version = (query: Record<string, string>, id = READY) =>
+        request(app.getHttpServer()).get(`/repositories/${id}/git/merge/version`).query(query);
+
+      it('reads my version and their version', async () => {
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'notes.md'), 'theirs\n');
+        git(root, 'commit', '-q', '-am', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), 'mine\n');
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        const ours = await version({ path: 'notes.md', side: 'ours' }).expect(200);
+        expect(ours.body).toEqual({ content: 'mine\n' });
+
+        const theirs = await version({ path: 'notes.md', side: 'theirs' }).expect(200);
+        expect(theirs.body).toEqual({ content: 'theirs\n' });
+      });
+
+      it('reads a version of a resolved file', async () => {
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'notes.md'), 'theirs\n');
+        git(root, 'commit', '-q', '-am', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), 'mine\n');
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        writeFileSync(join(root, 'notes.md'), 'resolved\n');
+        git(root, 'add', 'notes.md');
+
+        const ours = await version({ path: 'notes.md', side: 'ours' }).expect(200);
+        expect(ours.body).toEqual({ content: 'mine\n' });
+
+        const theirs = await version({ path: 'notes.md', side: 'theirs' }).expect(200);
+        expect(theirs.body).toEqual({ content: 'theirs\n' });
+      });
+
+      it('refuses a path that is not conflicting', async () => {
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'notes.md'), 'theirs\n');
+        writeFileSync(join(root, 'clean.md'), 'clean\n');
+        git(root, 'add', 'clean.md');
+        git(root, 'commit', '-q', '-am', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), 'mine\n');
+        writeFileSync(join(root, 'clean.md'), 'clean\n');
+        git(root, 'add', 'clean.md');
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        const notConflicting = await version({ path: 'clean.md', side: 'ours' }).expect(409);
+        expect(notConflicting.body).toMatchObject({ code: 'not-conflicting' });
+
+        const notInMerge = await version({ path: '.git/config', side: 'ours' }).expect(409);
+        expect(notInMerge.body).toMatchObject({ code: 'not-conflicting' });
+
+        const missing = await version({ path: 'missing.md', side: 'ours' }).expect(409);
+        expect(missing.body).toMatchObject({ code: 'not-conflicting' });
+      });
+
+      it('refuses a large version without reading it', async () => {
+        const large = `${'x'.repeat(1_048_576 + 1)}\n`;
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'notes.md'), large);
+        git(root, 'commit', '-q', '-am', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), 'mine\n');
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        const spy = vi.spyOn(gitMerge, 'readVersion');
+        const response = await version({ path: 'notes.md', side: 'theirs' }).expect(409);
+        expect(response.body).toMatchObject({ code: 'version-not-readable' });
+        expect(spy).not.toHaveBeenCalled();
+      });
+
+      it('refuses a version that is not valid UTF-8', async () => {
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'notes.md'), Buffer.from([ 0x6d, 0xe9, 0x0a ]));
+        git(root, 'commit', '-q', '-am', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), 'mine\n');
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        const response = await version({ path: 'notes.md', side: 'theirs' }).expect(409);
+        expect(response.body).toMatchObject({ code: 'version-not-readable' });
+      });
+
+      it('refuses the side that deleted the file', async () => {
+        git(root, 'switch', '-q', '-c', 'theirs');
+        git(root, 'rm', '-q', 'notes.md');
+        git(root, 'commit', '-q', '-m', 'deleted');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), 'mine\n');
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        const response = await version({ path: 'notes.md', side: 'theirs' }).expect(409);
+        expect(response.body).toMatchObject({ code: 'version-not-readable' });
+
+        const ours = await version({ path: 'notes.md', side: 'ours' }).expect(200);
+        expect(ours.body).toEqual({ content: 'mine\n' });
+      });
+
+      it('refuses without a merge', async () => {
+        const response = await version({ path: 'notes.md', side: 'ours' }).expect(409);
+        expect(response.body).toMatchObject({ code: 'no-merge-in-progress' });
+      });
+
+      it('answers another user\'s repository like a missing one', async () => {
+        git(root, 'switch', '-q', '-c', 'theirs');
+        writeFileSync(join(root, 'notes.md'), 'theirs\n');
+        git(root, 'commit', '-q', '-am', 'theirs');
+        git(root, 'switch', '-q', 'main');
+        writeFileSync(join(root, 'notes.md'), 'mine\n');
+        git(root, 'commit', '-q', '-am', 'mine');
+        expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+        expect((await version({ path: 'notes.md', side: 'ours' }, 99).expect(404)).body).toMatchObject({
+          code: 'not-found'
+        });
+        expect((await version({ path: 'notes.md', side: 'ours' }, CLONING).expect(409)).body).toMatchObject({
+          code: 'repository-not-openable'
+        });
       });
     });
   });

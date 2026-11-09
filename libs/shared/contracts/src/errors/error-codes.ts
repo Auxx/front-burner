@@ -38,6 +38,10 @@ export const ERROR_CODES = [
   'merge-in-progress',
   /** 409; there is no merge in progress to read (GC-6). */
   'no-merge-in-progress',
+  /** 409; the path is not among the merge's conflicting files (GC-17). */
+  'not-conflicting',
+  /** 409; the version of the conflicting file is over the limit, not valid UTF-8, deleted, or a symbolic link (GC-17). */
+  'version-not-readable',
   /** 500; git could not abort the merge, which stays in progress (GC-27). */
   'merge-abort-failed',
   /** 413; a file to read or save is over the editor's limit; params `{ limit }` in bytes (ED-2, ED-19). */

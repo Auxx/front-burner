@@ -39,6 +39,10 @@ for (const r of routes) {
     }
     names.filter((n) => modelNames.has(n)).forEach((n) => used.add(n));
   }
+  if (r.request.query && r.request.query.type) {
+    const names = String(r.request.query.type).match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+    names.filter((n) => modelNames.has(n)).forEach((n) => used.add(n));
+  }
 }
 %>
 import { HttpClient } from '@angular/common/http';

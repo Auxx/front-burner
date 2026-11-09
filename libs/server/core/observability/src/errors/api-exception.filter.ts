@@ -36,6 +36,8 @@ const MESSAGES: Record<ErrorCode, string> = {
   'repository-not-openable': 'This repository can\'t be opened yet.',
   'merge-in-progress': 'A merge is in progress. Finish or abort it first.',
   'no-merge-in-progress': 'No merge is in progress any more.',
+  'not-conflicting': 'This file is not in conflict.',
+  'version-not-readable': 'This version of the file cannot be read.',
   'merge-abort-failed': 'The merge couldn\'t be aborted, so it is still in progress. Try again.',
   'file-too-large': 'This file is too large to edit (the limit is 1 MB).',
   'file-not-utf8': 'This file isn\'t UTF-8 text, so it can\'t be edited safely.',

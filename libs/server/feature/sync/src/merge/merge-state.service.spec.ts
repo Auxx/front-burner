@@ -253,4 +253,71 @@ describe('MergeStateService', () => {
       { path: 'a.md', kind: 'both-changed', resolved: true, editable: true, oursSize: 5, theirsSize: 7 }
     ]);
   });
+
+  describe('version', () => {
+    it('reads ours and theirs', async () => {
+      await merged({ 'a.md': 'base\n' }, { 'a.md': 'mine\n' }, { 'a.md': 'theirs\n' });
+
+      expect(await service.version(work, 'a.md', 'ours')).toEqual({ content: 'mine\n' });
+      expect(await service.version(work, 'a.md', 'theirs')).toEqual({ content: 'theirs\n' });
+    });
+
+    it('reads a version of a resolved file', async () => {
+      await merged({ 'a.md': 'base\n' }, { 'a.md': 'mine\n' }, { 'a.md': 'theirs\n' });
+      writeFileSync(join(work, 'a.md'), 'resolved\n');
+      git(work, 'add', 'a.md');
+
+      expect(await service.version(work, 'a.md', 'ours')).toEqual({ content: 'mine\n' });
+      expect(await service.version(work, 'a.md', 'theirs')).toEqual({ content: 'theirs\n' });
+    });
+
+    it('refuses a path that is not conflicting', async () => {
+      await merged({ 'a.md': 'base\n', 'clean.md': 'clean\n' }, { 'a.md': 'mine\n' }, { 'a.md': 'theirs\n' });
+
+      await expect(service.version(work, 'clean.md', 'ours')).rejects.toMatchObject({ code: 'not-conflicting' });
+      await expect(service.version(work, 'missing.md', 'ours')).rejects.toMatchObject({ code: 'not-conflicting' });
+      await expect(service.version(work, '.git/config', 'ours')).rejects.toMatchObject({ code: 'not-conflicting' });
+    });
+
+    it('refuses without a merge', async () => {
+      await expect(service.version(work, 'a.md', 'ours')).rejects.toMatchObject({ code: 'no-merge-in-progress' });
+    });
+
+    it('refuses a large version without reading it', async () => {
+      const large = `${'x'.repeat(EDITABLE_FILE_LIMIT + 1)}\n`;
+      await merged({ 'a.md': 'base\n' }, { 'a.md': 'mine\n' }, { 'a.md': large });
+
+      const spy = vi.spyOn(merge, 'readVersion');
+      await expect(service.version(work, 'a.md', 'theirs')).rejects.toMatchObject({ code: 'version-not-readable' });
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('refuses a version that is not valid UTF-8', async () => {
+      await merged(
+        { 'a.md': 'base\n' },
+        { 'a.md': 'mine\n' },
+        { 'a.md': Buffer.from([ 0x6d, 0xe9, 0x0a ]) }
+      );
+
+      await expect(service.version(work, 'a.md', 'theirs')).rejects.toMatchObject({ code: 'version-not-readable' });
+    });
+
+    it('refuses when that side deleted the file', async () => {
+      await merged({ 'a.md': 'base\n' }, { 'a.md': 'mine\n' }, { 'a.md': null });
+
+      await expect(service.version(work, 'a.md', 'theirs')).rejects.toMatchObject({ code: 'version-not-readable' });
+      expect(await service.version(work, 'a.md', 'ours')).toEqual({ content: 'mine\n' });
+    });
+
+    it('refuses a non-markdown file or a symbolic link', async () => {
+      await merged(
+        { 'img.png': 'base\n', 'link.md': { link: 'base.txt' } },
+        { 'img.png': 'mine\n', 'link.md': { link: 'mine.txt' } },
+        { 'img.png': 'theirs\n', 'link.md': { link: 'theirs.txt' } }
+      );
+
+      await expect(service.version(work, 'img.png', 'ours')).rejects.toMatchObject({ code: 'version-not-readable' });
+      await expect(service.version(work, 'link.md', 'ours')).rejects.toMatchObject({ code: 'version-not-readable' });
+    });
+  });
 });

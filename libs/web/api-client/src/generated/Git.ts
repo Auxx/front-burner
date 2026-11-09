@@ -10,7 +10,9 @@ import type {
   GitIncoming,
   GitJobStarted,
   GitJobState,
+  GitMergeSide,
   GitMergeState,
+  GitMergeVersion,
   GitNewBranchRequest,
   GitPaths,
   GitStatus,
@@ -68,6 +70,19 @@ export class GitApi {
     return this.http.request<void>(
       'POST',
       `/api/v1/repositories/${encodeURIComponent(id)}/git/merge/abort`
+    );
+  }
+  gitMergeVersion(
+    id: number,
+    query: {
+      /** @minLength 1 */
+      path: string;
+      side: GitMergeSide;
+    }
+  ): Observable<GitMergeVersion> {
+    return this.http.get<GitMergeVersion>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/merge/version`,
+      { params: query }
     );
   }
   diff(
