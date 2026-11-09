@@ -939,6 +939,74 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
       expect(merged.sort()).toEqual([ 'first', 'my topic', 'their topic' ]);
     }
   );
+
+  describe('branches', () => {
+    const branchesOf = async (id: number) => {
+      const response = await client.call(`/repositories/${id}/git/branches`);
+      expect(response.status).toBe(200);
+      return await response.json() as Record<string, unknown>;
+    };
+
+    it('lists a full clone\'s branches', async () => {
+      remote('branches-full');
+      const { id } = await client.add('branches-full', `${publicGit.url}/branches-full.git`);
+
+      expect(await branchesOf(id)).toEqual({
+        current: 'main',
+        local: [ { name: 'main', upstream: 'origin/main' } ],
+        remote: [ { name: 'origin/draft', branch: 'draft' } ],
+        singleBranch: false
+      });
+    });
+
+    it('lists what a single-branch clone has', async () => {
+      const name = 'branches-single';
+      remote(name);
+      const { id, workingCopy } = await client.add(name, `${publicGit.url}/${name}.git`, { mode: 'none' }, 'main');
+
+      // `draft` is on the remote, and a single-branch clone doesn't fetch it.
+      expect(await branchesOf(id)).toEqual({
+        current: 'main',
+        local: [ { name: 'main', upstream: 'origin/main' } ],
+        remote: [],
+        singleBranch: true
+      });
+
+      git(workingCopy, 'checkout', '-q', '-b', 'topic');
+      commitIn(workingCopy, 'my topic');
+      expect((await client.pushed(id)).outcome).toMatchObject({ kind: 'pushed', upstream: 'origin/topic' });
+      expect(await branchesOf(id)).toMatchObject({
+        current: 'topic',
+        local: [ { name: 'main', upstream: 'origin/main' }, { name: 'topic', upstream: 'origin/topic' } ],
+        remote: []
+      });
+
+      // Without its local branch, what was pushed is a remote branch, and stays one after a fetch.
+      git(workingCopy, 'checkout', '-q', 'main');
+      git(workingCopy, 'branch', '-q', '-D', 'topic');
+      expect(await client.fetched(id)).toMatchObject({ status: 'done' });
+      expect(await branchesOf(id)).toEqual({
+        current: 'main',
+        local: [ { name: 'main', upstream: 'origin/main' } ],
+        remote: [ { name: 'origin/topic', branch: 'topic' } ],
+        singleBranch: true
+      });
+    });
+
+    it('answers a repository of no commits with main', async () => {
+      const bare = join(root, 'branches-empty.git');
+      git(root, 'init', '-q', '--bare', '-b', 'main', bare);
+      publicOptions.repositories['branches-empty.git'] = bare;
+      const { id } = await client.add('branches-empty', `${publicGit.url}/branches-empty.git`);
+
+      expect(await branchesOf(id)).toEqual({
+        current: 'main',
+        local: [ { name: 'main', upstream: null } ],
+        remote: [],
+        singleBranch: false
+      });
+    });
+  });
 });
 
 describe('secrets in a push (REQ-REPO-002)', () => {

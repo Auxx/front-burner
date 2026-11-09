@@ -1392,6 +1392,39 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/branches": {
+      "get": {
+        "operationId": "gitBranches",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitBranchList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/incoming": {
       "get": {
         "operationId": "incoming",
@@ -3146,6 +3179,71 @@
           "lastCommit",
           "networkJob",
           "fetchProblem"
+        ]
+      },
+      "GitLocalBranch": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "upstream": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "upstream"
+        ]
+      },
+      "GitRemoteBranch": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "branch"
+        ]
+      },
+      "GitBranchList": {
+        "type": "object",
+        "properties": {
+          "current": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "local": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitLocalBranch"
+            }
+          },
+          "remote": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitRemoteBranch"
+            }
+          },
+          "singleBranch": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "current",
+          "local",
+          "remote",
+          "singleBranch"
         ]
       },
       "GitIncomingChanges": {

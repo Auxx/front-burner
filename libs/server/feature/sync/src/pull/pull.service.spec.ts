@@ -1,6 +1,6 @@
 import { jobs } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitMerge } from '@front-burner/server-core-git';
+import { GitBranches, GitEngine, GitMerge } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { ApiExceptionFilter } from '@front-burner/server-core-observability';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
@@ -56,6 +56,7 @@ describe.skipIf(process.platform === 'win32')('PullService', () => {
       providers: [
         { provide: GitEngine, useValue: harness.engine },
         { provide: GitMerge, useValue: harness.merge },
+        { provide: GitBranches, useValue: {} },
         { provide: WorkingTreeGuard, useValue: harness.guard },
         { provide: OpenableRepository, useValue: harness.openable },
         { provide: CommitAuthors, useValue: harness.commitAuthors },
