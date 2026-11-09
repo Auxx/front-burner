@@ -297,6 +297,9 @@ export class RepositoryScreenPage {
       });
     // The app header's loader is not on this screen (NV-9).
     this.currentUser.load().catch(() => undefined);
+    this.credentialFixes.showChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.selectSideTool('changes', this.shell()?.narrow() ?? false));
     this.updateTitle();
     this.flushWhenLeft();
     this.viewRepository();

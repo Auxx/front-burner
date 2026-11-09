@@ -25,6 +25,7 @@
                            [aborting]="mergeActions.aborting()"
                            (abortMerge)="mergeActions.abort()"
                            (fetch)="jobs.start('fetch')"
+                           (pull)="jobs.start('pull')"
                            (push)="jobs.start('push')"
                            (retryFetch)="jobs.start('fetch')"
                            (fixFetch)="fixFetchProblem($event)"

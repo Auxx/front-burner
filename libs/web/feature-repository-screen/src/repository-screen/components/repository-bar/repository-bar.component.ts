@@ -38,7 +38,7 @@ import { SaveStatusComponent } from '../save-status/save-status.component';
  * The repository screen's one bar, the app header and the repository's header
  * in one (NV-9, FB-10): the product's icon as a link to the dashboard, the
  * repository name, which opens the repository switcher (NV-10), the current
- * branch and its counts and **Fetch** and **Push** (GA-7), or during a merge what merges and **Abort merge**
+ * branch and its counts and **Fetch**, **Pull** and **Push** (GA-7), or during a merge what merges and **Abort merge**
  * (GC-6), why fetches aren't working, quietly (GA-35), the open file's save status (ED-18), and the user menu. The
  * **Files** toggle is in the activity bar (FB-7, FB-9).
  */
@@ -85,6 +85,8 @@ export class RepositoryBarComponent {
   readonly abortMerge = output<void>();
   /** **Fetch** was chosen. */
   readonly fetch = output<void>();
+  /** **Pull** was chosen. */
+  readonly pull = output<void>();
   /** **Push** was chosen. */
   readonly push = output<void>();
   /** **Try again** was chosen in the quiet fetch status. */

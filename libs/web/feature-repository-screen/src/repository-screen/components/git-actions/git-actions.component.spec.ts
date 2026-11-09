@@ -29,6 +29,7 @@ describe('GitActionsComponent', () => {
   let fixture: ComponentFixture<GitActionsComponent>;
   let fetched: number;
   let pushed: number;
+  let pulled: number;
 
   const element = () => fixture.nativeElement as HTMLElement;
   const buttons = () =>
@@ -52,6 +53,8 @@ describe('GitActionsComponent', () => {
     pushed = 0;
     fixture.componentInstance.fetch.subscribe(() => fetched++);
     fixture.componentInstance.push.subscribe(() => pushed++);
+    pulled = 0;
+    fixture.componentInstance.pull.subscribe(() => pulled++);
     document.body.append(element());
     await settle(fixture);
   }
@@ -97,6 +100,56 @@ describe('GitActionsComponent', () => {
 
     expect(pushed).toBe(0);
     expect(tooltips()).toContain(`${KEY}.reasons.nothingToPush`);
+  });
+
+  it('pulls when there is an upstream, also with nothing to pull', async () => {
+    await show({ status: status({ ahead: 0, behind: 0 }) });
+
+    expect(named('pull').getAttribute('aria-disabled')).toBeNull();
+    named('pull').click();
+
+    expect(pulled).toBe(1);
+    expect(fetched).toBe(0);
+    expect(pushed).toBe(0);
+  });
+
+  it('disables Pull with the reason', async () => {
+    await show({ status: status({ upstream: null }) });
+
+    expect(named('pull').getAttribute('aria-disabled')).toBe('true');
+    named('pull').click();
+    await settle(fixture);
+
+    expect(pulled).toBe(0);
+    expect(tooltips()).toContain(`${KEY}.reasons.noUpstream`);
+  });
+
+  it('offers Pull for a branch with a remote branch of its name', async () => {
+    await show({ status: status({ upstream: null, sameNameRemote: true }) });
+
+    named('pull').click();
+
+    expect(pulled).toBe(1);
+  });
+
+  it('shows a pull\'s progress, and disables the others', async () => {
+    await show({ running: 'pull' });
+
+    expect(named('pulling').querySelector('ui-spinner')).toBeTruthy();
+    expect(named('pulling').getAttribute('aria-disabled')).toBe('true');
+    expect(text(liveStatus())).toBe(`${KEY}.pulling`);
+    expect(named('fetch').getAttribute('aria-disabled')).toBe('true');
+    expect(named('push').getAttribute('aria-disabled')).toBe('true');
+
+    named('pulling').click();
+    await settle(fixture);
+    expect(pulled).toBe(0);
+  });
+
+  it('shows a pull\'s progress on the menu\'s button on a phone', async () => {
+    await show({ narrow: true, running: 'pull' });
+
+    expect(buttons()[0].querySelector('ui-spinner')).toBeTruthy();
   });
 
   it('says to make a commit first in a repository without commits', async () => {
@@ -153,7 +206,7 @@ describe('GitActionsComponent', () => {
     expect(fetched).toBe(0);
   });
 
-  it('moves Fetch and Push into a menu on a phone', async () => {
+  it('moves Fetch, Pull and Push into a menu on a phone', async () => {
     await show({ narrow: true });
 
     const trigger = buttons()[0];
@@ -163,7 +216,7 @@ describe('GitActionsComponent', () => {
     trigger.click();
     await settle(fixture);
 
-    expect(items().map(item => text(item))).toEqual([ `${KEY}.fetch`, `${KEY}.push` ]);
+    expect(items().map(item => text(item))).toEqual([ `${KEY}.fetch`, `${KEY}.pull`, `${KEY}.push` ]);
     items()[0].click();
     await settle(fixture);
     expect(fetched).toBe(1);
@@ -174,7 +227,16 @@ describe('GitActionsComponent', () => {
     await settle(fixture);
     items()[1].click();
     await settle(fixture);
+    expect(pulled).toBe(1);
+    expect(fetched).toBe(1);
+    expect(menu()).toBeNull();
+
+    trigger.click();
+    await settle(fixture);
+    items()[2].click();
+    await settle(fixture);
     expect(pushed).toBe(1);
+    expect(pulled).toBe(1);
     expect(fetched).toBe(1);
     expect(menu()).toBeNull();
   });
@@ -197,10 +259,11 @@ describe('GitActionsComponent', () => {
 
     expect(items().map(item => text(item))).toEqual([
       `${KEY}.fetch`,
+      `${KEY}.pull`,
       `${KEY}.push`,
       'Couldn\'t check for remote changes'
     ]);
-    items()[2].click();
+    items()[3].click();
     await settle(fixture);
 
     expect(shown).toBe(1);
@@ -213,7 +276,7 @@ describe('GitActionsComponent', () => {
     buttons()[0].click();
     await settle(fixture);
 
-    const [ fetch, push ] = items();
+    const [ fetch, , push ] = items();
     expect(fetch.getAttribute('aria-disabled')).not.toBe('true');
     expect(text(push.querySelector('.reason'))).toBe(`${KEY}.reasons.nothingToPush`);
     expect(push.getAttribute('aria-disabled')).toBe('true');
@@ -240,7 +303,7 @@ describe('GitActionsComponent', () => {
     trigger.click();
     await settle(fixture);
 
-    const [ fetch, push ] = items();
+    const [ fetch, , push ] = items();
     expect(text(fetch)).toBe(`${KEY}.fetching`);
     expect(fetch.getAttribute('aria-disabled')).toBe('true');
     expect(push.getAttribute('aria-disabled')).toBe('true');

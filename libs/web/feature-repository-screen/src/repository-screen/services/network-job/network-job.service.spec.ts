@@ -51,7 +51,7 @@ describe('NetworkJobService', () => {
   let gateRefresh: ReturnType<typeof vi.fn>;
   let unsavedPaths: ReturnType<typeof vi.fn<(id: number) => string[]>>;
   let notSaved: ReturnType<typeof vi.fn>;
-  let gitJob:ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
+  let gitJob: ReturnType<typeof vi.fn<(id: number, jobId: number) => Observable<GitJobState>>>;
   let events: Subject<PushEvent>;
   let reconnected: Subject<void>;
   let followed: ReturnType<typeof signal<number | null>>;
