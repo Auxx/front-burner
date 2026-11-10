@@ -910,6 +910,50 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
     expect((await client.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
   });
 
+  it('AC-GIT-003.9: during the merge, saving a non-conflicting file, switching branches, pulling and pushing are refused', async () => {
+    const bare = remote('refused-during-merge');
+    const { id, workingCopy } = await client.add('refused-during-merge', `${publicGit.url}/refused-during-merge.git`);
+    // Create a conflict on `both.md`.
+    pushFileFromElsewhere(bare, 'both.md', 'theirs\n');
+    writeFileSync(join(workingCopy, 'both.md'), 'mine\n');
+    git(workingCopy, 'add', 'both.md');
+    commitIn(workingCopy, 'mine');
+    // Also commit a non-conflicting file to save.
+    writeFileSync(join(workingCopy, 'other.md'), 'other\n');
+    git(workingCopy, 'add', 'other.md');
+    commitIn(workingCopy, 'other');
+
+    expect((await client.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
+
+    // Saving a non-conflicting file is refused.
+    const saveResponse = await client.send(
+      'PUT',
+      `/repositories/${id}/file`,
+      { path: 'other.md', content: 'changed\n', lineEnding: 'lf', bom: false }
+    );
+    expect(saveResponse.status).toBe(409);
+    expect(await saveResponse.json()).toMatchObject({ code: 'merge-in-progress' });
+
+    // Switching branches is refused.
+    const switchResponse = await client.send(
+      'POST',
+      `/repositories/${id}/git/branches/switch`,
+      { branch: 'main' }
+    );
+    expect(switchResponse.status).toBe(409);
+    expect(await switchResponse.json()).toMatchObject({ code: 'merge-in-progress' });
+
+    // Pulling is refused.
+    const pullResponse = await client.call(`/repositories/${id}/git/pull`, { method: 'POST' });
+    expect(pullResponse.status).toBe(409);
+    expect(await pullResponse.json()).toMatchObject({ code: 'merge-in-progress' });
+
+    // Pushing is refused.
+    const pushResponse = await client.call(`/repositories/${id}/git/push`, { method: 'POST' });
+    expect(pushResponse.status).toBe(409);
+    expect(await pushResponse.json()).toMatchObject({ code: 'merge-in-progress' });
+  });
+
   it.each([ [ 'a full clone', 'full' ], [ 'a single-branch clone', 'main' ] ] as const)(
     'a rejected branch can pull and push, in %s',
     async (_label, clone) => {

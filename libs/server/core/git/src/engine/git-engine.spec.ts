@@ -341,21 +341,36 @@ describe('GitEngine', () => {
     });
 
     it('checks the whole path, not just the file name', async () => {
-      conflictingMerge();
-      mkdirSync(join(work, 'docs'));
-      writeFileSync(join(work, 'docs', 'both.md'), 'unrelated\n');
+      // Put the conflict in dir/both.md so the old prefix-matching code would
+      // match `dir` against `dir/both.md` and return true.
+      work = join(root, 'whole-path');
+      mkdirSync(work);
+      git(work, 'init', '-q', '-b', 'main');
+      mkdirSync(join(work, 'dir'));
+      writeFileSync(join(work, 'dir', 'both.md'), 'base\n');
+      writeFileSync(join(work, 'first.md'), 'first\n');
+      git(work, 'add', '.');
+      git(work, 'commit', '-q', '-m', 'base');
+      git(work, 'checkout', '-q', '-b', 'other');
+      writeFileSync(join(work, 'dir', 'both.md'), 'theirs\n');
+      git(work, 'commit', '-q', '-am', 'theirs');
+      git(work, 'checkout', '-q', 'main');
+      writeFileSync(join(work, 'dir', 'both.md'), 'ours\n');
+      git(work, 'commit', '-q', '-am', 'ours');
+      expect(() => git(work, 'merge', '-q', 'other')).toThrow();
 
-      expect(await engine().isUnresolved(work, 'docs/both.md')).toBe(false);
+      // The conflict is at dir/both.md. Asking about `dir` (the directory prefix)
+      // must return false — the old code matched `dir` against `dir/both.md`.
+      expect(await engine().isUnresolved(work, 'dir')).toBe(false);
+      expect(await engine().isUnresolved(work, 'dir/both.md')).toBe(true);
     });
 
     it('reads the path literally, not as a glob', async () => {
       conflictingMerge();
-      mkdirSync(join(work, 'a'));
-      writeFileSync(join(work, 'a', 'b.md'), 'unrelated\n');
-      // A path with glob characters — `*` would match `a/b.md` without --literal-pathspecs.
-      writeFileSync(join(work, '[a-z].md'), 'glob name\n');
-
-      expect(await engine().isUnresolved(work, '[a-z].md')).toBe(false);
+      // both.md is the only unmerged file. The glob `bo*.md` matches `both.md`,
+      // so without --literal-pathspecs the query would find a record and return
+      // true. With the flag, `bo*.md` is read literally and returns false.
+      expect(await engine().isUnresolved(work, 'bo*.md')).toBe(false);
     });
   });
 
