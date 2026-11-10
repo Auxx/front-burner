@@ -765,8 +765,10 @@ test.describe('pushing', () => {
       await expect(toasts(page).getByText('No new commits')).toBeVisible();
     });
 
-    test('on a phone it is in the git actions menu, whose item shows the text, and the save status stays in the bar', async ({ page, instance }) => {
-      await page.setViewportSize({ width: 375, height: 700 });
+    test('on a phone it is in the git actions menu, whose item shows the text, and the save status stays in the bar', async ({ page, instance, isMobile }) => {
+      if (!isMobile) {
+        await page.setViewportSize({ width: 375, height: 700 });
+      }
       const { id, bare } = pushable(instance, 'cloned');
       renameSync(bare, `${bare}.away`);
       await openScreen(page, `/repositories/${id}`);
@@ -789,8 +791,10 @@ test.describe('pushing', () => {
     });
   });
 
-  test('moves Push into a menu on a phone', async ({ page, instance }) => {
-    await page.setViewportSize({ width: 375, height: 700 });
+  test('moves Push into a menu on a phone', async ({ page, instance, isMobile }) => {
+    if (!isMobile) {
+      await page.setViewportSize({ width: 375, height: 700 });
+    }
     const { id, dir } = pushable(instance, 'cloned');
     gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
     await openScreen(page, `/repositories/${id}`);
@@ -1037,24 +1041,20 @@ test.describe('pushing', () => {
       const notice = (page: Page) => page.locator('rs-remote-change-notice');
       const FILE_CHANGED = 'This file changed too.';
 
-      test('AC-GIT-002.13: while the repository is viewed, a commit pushed to the upstream from elsewhere shows 1 new commit on origin/main within about 2 minutes, with This file changed too. when it changes the open file; the user\'s files do not change until they pull', async ({ page, instance, browserName, isMobile }) => {
-        test.skip(
-          browserName !== 'chromium' || isMobile,
-          'It waits for a whole fetch interval, and what it proves does not depend on the browser.'
-        );
-        // The interval is a constant (A-6.7).
-        test.setTimeout(150_000);
+      test('AC-GIT-002.13: while the repository is viewed, a commit pushed to the upstream from elsewhere shows 1 new commit on origin/main by a background fetch, with This file changed too. when it changes the open file; the user\'s files do not change until they pull', async ({ page, instance }) => {
+        // The fetches made when the file is opened and when the screen starts viewing the
+        // repository bring the commit, without a click. That they repeat every 2 minutes, the
+        // "within about 2 minutes", is the scheduler's own test (A-6.7, fetch-scheduler.spec.ts),
+        // so that this test does not wait out the interval.
         const { id, dir, bare } = pushable(instance, 'cloned');
         publishGuide(dir, bare);
-        await openScreen(page, `/repositories/${id}/files/guide.md`);
-        await expect(page.locator('.cm-content')).toContainText('before');
-        // Past the fetches of opening the file and of starting to view it, which the scheduler
-        // queues within 5 seconds, so that only the next one, 2 minutes later, can find the commit.
-        await page.waitForTimeout(7_000);
-
         pushFromElsewhere(bare, 'main', [ { 'guide.md': 'from elsewhere\n' } ]);
 
-        await expect(notice(page)).toContainText('1 new commit on origin/main', { timeout: 130_000 });
+        await openScreen(page, `/repositories/${id}/files/guide.md`);
+
+        // Longer than the scheduler's 5 seconds between looks at what is viewed, in case
+        // its fetch is the one that brings the commit.
+        await expect(notice(page)).toContainText('1 new commit on origin/main', { timeout: 15_000 });
         await expect(notice(page)).toContainText(FILE_CHANGED);
         await expect(page.locator('.cm-content')).toContainText('before');
         expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toBe('before\n');
@@ -1411,7 +1411,11 @@ test.describe('a locked key', () => {
     }
   });
 
-  test('AC-REPO-002.8: after a restart, a locked key shows the banner and no background fetch runs; unlocking makes fetches resume and removes the banner from every repository that uses the key', async ({ page, context, instance }) => {
+  test('AC-REPO-002.8: after a restart, a locked key shows the banner and no background fetch runs; unlocking makes fetches resume and removes the banner from every repository that uses the key', async ({ page, context, instance, isMobile }) => {
+    test.skip(
+      isMobile,
+      'It waits for the scheduler, which does not depend on the layout; the banner on a phone has tests of its own.'
+    );
     // A second server start, and waiting for a fetch that must not run.
     test.slow();
     const { id, bare } = await lockedRepository(instance);
@@ -1456,7 +1460,11 @@ test.describe('a locked key', () => {
   test.describe('an unlock that ends by its idle time', () => {
     test.use({ instanceOptions: { onboarded: true, env: { FRONT_BURNER_KEY_UNLOCK_IDLE: '5s' } } });
 
-    test('says so without a reload, and asks for nothing', async ({ page, instance }) => {
+    test('says so without a reload, and asks for nothing', async ({ page, instance, isMobile }) => {
+      test.skip(
+        isMobile,
+        'It waits for the idle time, which does not depend on the layout; the status on a phone has tests of its own.'
+      );
       const { id } = await lockedRepository(instance);
       await openScreen(page, `/repositories/${id}`);
       await banner(page).getByRole('button', { name: 'Unlock' }).click();
