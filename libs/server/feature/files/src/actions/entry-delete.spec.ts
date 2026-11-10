@@ -1,5 +1,5 @@
 import type { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitOptions, GitRunner, WorkingTreeLock } from '@front-burner/server-core-git';
+import { GitEngine, GitMerge, GitOptions, GitRunner, LocalGit, WorkingTreeLock } from '@front-burner/server-core-git';
 import type { JobRunner } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { DataLayout } from '@front-burner/server-core-storage';
@@ -93,12 +93,13 @@ describe('EntryDelete', () => {
     git(root, 'add', '.');
     git(root, 'commit', '-q', '-m', 'base');
     engine = new GitEngine(options, new GitRunner());
+    const merge = new GitMerge(new LocalGit(new GitRunner()), options);
     const repositories = { root: vi.fn().mockReturnValue(root) } as unknown as OpenableRepository;
     publish = vi.fn();
     enqueue = vi.fn().mockReturnValue(1);
     entries = new EntryDelete(
       repositories,
-      new WorkingTreeGuard(new WorkingTreeLock(), engine),
+      new WorkingTreeGuard(new WorkingTreeLock(), engine, merge),
       engine,
       { enqueue } as unknown as JobRunner,
       { publish } as unknown as EventsHub,

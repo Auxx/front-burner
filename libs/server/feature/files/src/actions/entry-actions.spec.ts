@@ -1,5 +1,5 @@
 import type { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitOptions, GitRunner, WorkingTreeLock } from '@front-burner/server-core-git';
+import { GitEngine, GitMerge, GitOptions, GitRunner, LocalGit, WorkingTreeLock } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import type { CreateEntryRequest, RenameEntryRequest } from '@front-burner/shared-contracts';
 import { execFileSync } from 'node:child_process';
@@ -97,11 +97,12 @@ describe('EntryActions', () => {
     git(root, 'add', '.');
     git(root, 'commit', '-q', '-m', 'base');
     const engine = new GitEngine(options, new GitRunner());
+    const merge = new GitMerge(new LocalGit(new GitRunner()), options);
     const repositories = { root: vi.fn().mockReturnValue(root) } as unknown as OpenableRepository;
     publish = vi.fn();
     actions = new EntryActions(
       repositories,
-      new WorkingTreeGuard(new WorkingTreeLock(), engine),
+      new WorkingTreeGuard(new WorkingTreeLock(), engine, merge),
       engine,
       { publish } as unknown as EventsHub
     );

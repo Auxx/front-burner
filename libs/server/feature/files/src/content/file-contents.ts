@@ -95,12 +95,12 @@ export class FileContents {
     return { hash: hashBytes(bytes), size: bytes.length };
   }
 
-  /** Saves an existing Markdown file; never creates one (ED-12, ED-19, ED-21). */
+  /** Saves an existing Markdown file; never creates one (ED-12, ED-19, ED-21, GC-12). */
   async save(userId: number, repositoryId: number, request: SaveFileRequest): Promise<FileState> {
     const root = this.repositories.root(userId, repositoryId);
     const [ parent, name ] = markdownPath(request.path);
     const bytes = this.encode(request);
-    await this.guard.change(repositoryId, root, async () => {
+    await this.guard.changeFile(repositoryId, root, request.path, async () => {
       const folder = await openFolder(this.git, root, parent);
       try {
         // The name's own checks (a NUL, `.git`) come with resolving it inside the opened folder.
