@@ -134,19 +134,22 @@ describe('WorkingTreeGuard', () => {
     expect(task).not.toHaveBeenCalled();
   });
 
-  it('checks isUnresolved only once changeFile holds the lock', async () => {
+  it('checks for a merge inside the lock, not before', async () => {
     let release = () => undefined as void;
     const held = lock.run(7, () => new Promise<void>(resolve => (release = () => resolve())));
     const changeFile = guard.changeFile(7, '/root', 'conflict.md', async () => 'done').catch((thrown: unknown) =>
       thrown
     );
     await Promise.resolve();
-    // A merge queued ahead of the change starts.
+    // A merge starts while changeFile is waiting for the lock.
     mergingOnly = true;
     unresolved = false;
     release();
     await held;
 
+    // Because the check runs inside the lock (after release), it sees the merge
+    // and refuses the save. If it ran before the lock, mergingOnly would still be
+    // false and the save would go through.
     expect(await changeFile).toBeInstanceOf(ApiErrorException);
   });
 });

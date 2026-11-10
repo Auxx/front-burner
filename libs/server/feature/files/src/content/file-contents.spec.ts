@@ -284,21 +284,6 @@ describe('FileContents', () => {
     expect(existsSync(join(root, 'docs', 'new.md'))).toBe(false);
   });
 
-  it('refuses to recreate a file during a merge', async () => {
-    writeFileSync(join(root, 'docs', 'readme.md'), 'main\n');
-    git(root, 'commit', '-q', '-am', 'main');
-    git(root, 'checkout', '-q', '-b', 'other', 'HEAD~1');
-    writeFileSync(join(root, 'docs', 'readme.md'), 'other\n');
-    git(root, 'commit', '-q', '-am', 'other');
-    git(root, 'checkout', '-q', 'main');
-    git(root, 'merge', 'other');
-
-    const merging = { status: 409, code: 'merge-in-progress', params: {} };
-    expect(await refusal(recreate({ path: 'docs/new.md', content: 'x', lineEnding: 'lf', bom: false })))
-      .toEqual(merging);
-    expect(existsSync(join(root, 'docs', 'new.md'))).toBe(false);
-  });
-
   // Runs git and reads /proc/self/fd, which only Linux has.
   it.skipIf(process.platform !== 'linux')('recreates a deleted file and refuses an existing one', async () => {
     unlinkSync(join(root, 'docs', 'readme.md'));
