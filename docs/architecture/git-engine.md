@@ -49,7 +49,10 @@ where git may connect. Lives in `server/git` (A-2). See
     them (NF-2.3). _(Plan's call.)_
   - While a resolution lock is held (D-3.5) or a merge or rebase is in progress
     (D-4.4), the queue refuses saves and operations that the lock does not
-    allow, with an error code.
+    allow, with an error code. The only exception is a save to an unresolved
+    conflicting file during a merge (GC-12): the guard checks the path against
+    `git ls-files -u` and allows it so the user can edit out conflict markers.
+    _(Plan 90.)_
 
 ## A-5: Credentials
 
