@@ -150,7 +150,7 @@ export class PushHarness {
     this.runner = new JobRunner(this.database, { cloneConcurrency: 2 } as Config, this.events);
     this.engine = new GitEngine(gitOptions, new GitRunner());
     this.merge = new GitMerge(new LocalGit(new GitRunner()), gitOptions);
-    this.guard = new WorkingTreeGuard(new WorkingTreeLock(), this.engine);
+    this.guard = new WorkingTreeGuard(new WorkingTreeLock(), this.engine, this.merge);
     const knownHosts = new KnownHostsService(this.database, gitOptions);
     this.fetchStep = new FetchStep(
       this.engine,

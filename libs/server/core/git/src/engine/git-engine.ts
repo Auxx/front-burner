@@ -713,19 +713,29 @@ export class GitEngine implements BeforeApplicationShutdown {
 
   /**
    * Whether `path` still has unmerged stages in the index (GC-12). Uses
-   * `--literal-pathspecs` so that glob characters in the path are read literally.
+   * `--literal-pathspecs` so that glob characters in the path are read literally,
+   * and `-z` so the output is parsed for an exact path match — a directory
+   * `notes.md/` won't match a file `notes.md`. Throws on git failure so the real
+   * error is surfaced instead of being read as "resolved".
    * Returns `false` when the path is resolved, not in the merge, or when there is
    * no merge in progress.
    */
   async isUnresolved(workingCopy: string, path: string): Promise<boolean> {
-    const result = await this.local.run(workingCopy, [
+    const output = await this.local.checked(workingCopy, [
       '--literal-pathspecs',
       'ls-files',
       '-u',
+      '-z',
       '--',
       path
     ]);
-    return result.stdout.trim().length > 0;
+    for (const record of output.split('\0')) {
+      const tab = record.indexOf('\t');
+      if (tab > 0 && record.slice(tab + 1) === path) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

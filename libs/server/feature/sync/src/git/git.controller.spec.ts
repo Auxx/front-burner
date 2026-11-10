@@ -121,7 +121,7 @@ describe('GitController', () => {
       controllers: [ GitController ],
       providers: [
         { provide: GitEngine, useValue: engine },
-        { provide: WorkingTreeGuard, useValue: new WorkingTreeGuard(new WorkingTreeLock(), engine) },
+        { provide: WorkingTreeGuard, useValue: new WorkingTreeGuard(new WorkingTreeLock(), engine, gitMerge) },
         { provide: OpenableRepository, useValue: repositories },
         { provide: CommitAuthors, useValue: commitAuthors },
         // Pushing has its own spec, with a remote.

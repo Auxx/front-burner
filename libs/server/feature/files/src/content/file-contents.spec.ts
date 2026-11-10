@@ -1,5 +1,5 @@
 import type { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitOptions, GitRunner, WorkingTreeLock } from '@front-burner/server-core-git';
+import { GitEngine, GitMerge, GitOptions, GitRunner, LocalGit, WorkingTreeLock } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { DataLayout } from '@front-burner/server-core-storage';
 import { EDITABLE_FILE_LIMIT, type SaveFileRequest } from '@front-burner/shared-contracts';
@@ -106,11 +106,12 @@ describe('FileContents', () => {
     git(root, 'add', '.');
     git(root, 'commit', '-q', '-m', 'base');
     const engine = new GitEngine(options, new GitRunner());
+    const merge = new GitMerge(new LocalGit(new GitRunner()), options);
     const repositories = { root: vi.fn().mockReturnValue(root) } as unknown as OpenableRepository;
     publish = vi.fn();
     contents = new FileContents(
       repositories,
-      new WorkingTreeGuard(new WorkingTreeLock(), engine),
+      new WorkingTreeGuard(new WorkingTreeLock(), engine, merge),
       engine,
       { publish } as unknown as EventsHub,
       layout

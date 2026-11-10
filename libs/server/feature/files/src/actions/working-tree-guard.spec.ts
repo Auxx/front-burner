@@ -1,22 +1,25 @@
-import { GitEngine, WorkingTreeLock } from '@front-burner/server-core-git';
+import { GitEngine, GitMerge, WorkingTreeLock } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { WorkingTreeGuard } from './working-tree-guard';
 
 describe('WorkingTreeGuard', () => {
   let merging: boolean;
+  let mergingOnly: boolean;
   let unresolved: boolean;
   let lock: WorkingTreeLock;
   let guard: WorkingTreeGuard;
 
   beforeEach(() => {
     merging = false;
+    mergingOnly = false;
     unresolved = false;
     lock = new WorkingTreeLock();
     const git = {
       mergeInProgress: vi.fn(async () => merging),
       isUnresolved: vi.fn(async () => unresolved)
     } as unknown as GitEngine;
-    guard = new WorkingTreeGuard(lock, git);
+    const merge = { mergeInProgress: vi.fn(async () => mergingOnly) } as unknown as GitMerge;
+    guard = new WorkingTreeGuard(lock, git, merge);
   });
 
   it('runs the change inside the lock', async () => {
@@ -63,7 +66,7 @@ describe('WorkingTreeGuard', () => {
   });
 
   it('allows changeFile for an unresolved conflicting file during a merge', async () => {
-    merging = true;
+    mergingOnly = true;
     unresolved = true;
     const task = vi.fn().mockResolvedValue('saved');
 
@@ -74,7 +77,7 @@ describe('WorkingTreeGuard', () => {
   });
 
   it('refuses changeFile for a non-conflicting file during a merge', async () => {
-    merging = true;
+    mergingOnly = true;
     unresolved = false;
     const task = vi.fn();
 
@@ -86,12 +89,28 @@ describe('WorkingTreeGuard', () => {
     expect(task).not.toHaveBeenCalled();
   });
 
+  it('allows changeFile during a rebase (GitEngine says merging, GitMerge does not)', async () => {
+    // A rebase sets GitEngine.mergeInProgress (MERGE_HEAD + REBASE_HEAD),
+    // but GitMerge.mergeInProgress checks only MERGE_HEAD — it returns false
+    // when there's no actual merge. changeFile uses GitMerge, so it allows the save.
+    merging = true;
+    mergingOnly = false;
+    const task = vi.fn().mockResolvedValue('saved');
+
+    const result = await guard.changeFile(7, '/root', 'any.md', task);
+
+    expect(result).toBe('saved');
+    expect(task).toHaveBeenCalled();
+  });
+
   it('allows changeFile when there is no merge in progress', async () => {
     merging = false;
+    mergingOnly = false;
     const task = vi.fn().mockResolvedValue('saved');
     const isUnresolved = vi.fn().mockResolvedValue(false);
     const git = { mergeInProgress: vi.fn().mockResolvedValue(merging), isUnresolved } as unknown as GitEngine;
-    const guardWithMock = new WorkingTreeGuard(new WorkingTreeLock(), git);
+    const merge = { mergeInProgress: vi.fn().mockResolvedValue(mergingOnly) } as unknown as GitMerge;
+    const guardWithMock = new WorkingTreeGuard(new WorkingTreeLock(), git, merge);
 
     const result = await guardWithMock.changeFile(7, '/root', 'any.md', task);
 
@@ -102,7 +121,7 @@ describe('WorkingTreeGuard', () => {
   });
 
   it('refuses changeFile for a file resolved on another device', async () => {
-    merging = true;
+    mergingOnly = true;
     // File was unresolved when the client read it, but is now resolved.
     unresolved = false;
     const task = vi.fn();
@@ -123,7 +142,7 @@ describe('WorkingTreeGuard', () => {
     );
     await Promise.resolve();
     // A merge queued ahead of the change starts.
-    merging = true;
+    mergingOnly = true;
     unresolved = false;
     release();
     await held;

@@ -1,11 +1,15 @@
-import { GitEngine, WorkingTreeLock } from '@front-burner/server-core-git';
+import { GitEngine, GitMerge, WorkingTreeLock } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { Injectable } from '@nestjs/common';
 
 /** The only way the files feature changes a working tree (FB-26, A-5.3). */
 @Injectable()
 export class WorkingTreeGuard {
-  constructor(private readonly lock: WorkingTreeLock, private readonly git: GitEngine) {}
+  constructor(
+    private readonly lock: WorkingTreeLock,
+    private readonly git: GitEngine,
+    private readonly merge: GitMerge
+  ) {}
 
   /**
    * Runs `task` inside the repository's working-tree lock, refusing it while a
@@ -24,16 +28,16 @@ export class WorkingTreeGuard {
   }
 
   /**
-   * Like `change`, but during a merge allows the task when `path` is an unresolved
-   * conflicting file (GC-12). A resolved file is still refused: its content was
-   * added to the index, so a save would change the disk but not what **Commit
-   * merge** commits. A non-conflicting file is refused too.
+   * Like `change`, but during a merge (not a rebase) allows the task when `path`
+   * is an unresolved conflicting file (GC-12). A resolved file is still refused:
+   * its content was added to the index, so a save would change the disk but not
+   * what **Commit merge** commits. A non-conflicting file is refused too.
    *
    * @throws ApiErrorException `409 merge-in-progress`
    */
   changeFile<T>(repositoryId: number, root: string, path: string, task: () => Promise<T>): Promise<T> {
     return this.lock.run(repositoryId, async () => {
-      if (await this.git.mergeInProgress(root)) {
+      if (await this.merge.mergeInProgress(root)) {
         if (!await this.git.isUnresolved(root, path)) {
           throw new ApiErrorException(409, 'merge-in-progress');
         }
