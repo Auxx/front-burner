@@ -37,8 +37,8 @@ export class WorkingTreeGuard {
   /**
    * Shared body: acquires the lock, then refuses the operation while a git
    * operation is in progress. For `changeFile`, a save to an unresolved
-   * conflicting file during a merge is allowed (GC-12), and a rebase is not
-   * blocked because there is no rebase-resolution flow.
+   * conflicting file during a merge is allowed (GC-12). During a rebase,
+   * everything is refused because there is no rebase-resolution flow.
    */
   private async run<T>(
     repositoryId: number,
@@ -53,11 +53,11 @@ export class WorkingTreeGuard {
           if (!await this.git.isUnresolved(root, path)) {
             throw new ApiErrorException(409, 'merge-in-progress');
           }
-        } else if (path === undefined) {
+        } else {
           // change is always blocked during merge or rebase.
+          // changeFile during a rebase is blocked (no rebase-resolution flow).
           throw new ApiErrorException(409, 'merge-in-progress');
         }
-        // changeFile during a rebase: allowed (no rebase-resolution flow).
       }
       return task();
     });

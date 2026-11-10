@@ -91,18 +91,21 @@ describe('WorkingTreeGuard', () => {
     expect(task).not.toHaveBeenCalled();
   });
 
-  it('allows changeFile during a rebase (GitEngine says merging, GitMerge does not)', async () => {
+  it('refuses changeFile during a rebase (GitEngine says merging, GitMerge does not)', async () => {
     // A rebase sets GitEngine.mergeInProgress (MERGE_HEAD + REBASE_HEAD),
     // but GitMerge.mergeInProgress checks only MERGE_HEAD — it returns false
-    // when there's no actual merge. changeFile uses GitMerge, so it allows the save.
+    // when there's no actual merge. changeFile must refuse because there is
+    // no rebase-resolution flow (A-5.3).
     merging = true;
     mergingOnly = false;
-    const task = vi.fn().mockResolvedValue('saved');
+    const task = vi.fn();
 
-    const result = await guard.changeFile(7, '/root', 'any.md', task);
+    const error = await guard.changeFile(7, '/root', 'any.md', task).catch((thrown: unknown) => thrown);
 
-    expect(result).toBe('saved');
-    expect(task).toHaveBeenCalled();
+    expect(error).toBeInstanceOf(ApiErrorException);
+    expect((error as ApiErrorException).getStatus()).toBe(409);
+    expect((error as ApiErrorException).code).toBe('merge-in-progress');
+    expect(task).not.toHaveBeenCalled();
   });
 
   it('allows changeFile when there is no merge in progress', async () => {

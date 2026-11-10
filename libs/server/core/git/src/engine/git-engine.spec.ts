@@ -288,6 +288,77 @@ describe('GitEngine', () => {
     });
   });
 
+  describe('isUnresolved', () => {
+    let work: string;
+
+    /** Create a merge with conflicts in `both.md`. */
+    const conflictingMerge = () => {
+      work = join(root, 'unresolved');
+      mkdirSync(work);
+      git(work, 'init', '-q', '-b', 'main');
+      writeFileSync(join(work, 'both.md'), 'base\n');
+      writeFileSync(join(work, 'first.md'), 'first\n');
+      git(work, 'add', '.');
+      git(work, 'commit', '-q', '-m', 'base');
+      git(work, 'checkout', '-q', '-b', 'other');
+      writeFileSync(join(work, 'both.md'), 'theirs\n');
+      git(work, 'commit', '-q', '-am', 'theirs');
+      git(work, 'checkout', '-q', 'main');
+      writeFileSync(join(work, 'both.md'), 'ours\n');
+      git(work, 'commit', '-q', '-am', 'ours');
+      expect(() => git(work, 'merge', '-q', 'other')).toThrow();
+    };
+
+    it('returns true for an unresolved conflicting file', async () => {
+      conflictingMerge();
+
+      expect(await engine().isUnresolved(work, 'both.md')).toBe(true);
+    });
+
+    it('returns false for a file not in the merge', async () => {
+      conflictingMerge();
+
+      expect(await engine().isUnresolved(work, 'first.md')).toBe(false);
+    });
+
+    it('returns false when there is no merge', async () => {
+      work = join(root, 'no-merge');
+      mkdirSync(work);
+      git(work, 'init', '-q', '-b', 'main');
+      writeFileSync(join(work, 'first.md'), 'first\n');
+      git(work, 'add', '.');
+      git(work, 'commit', '-q', '-m', 'base');
+
+      expect(await engine().isUnresolved(work, 'first.md')).toBe(false);
+    });
+
+    it('keeps it unresolved after a save', async () => {
+      conflictingMerge();
+      // Writing the conflict markers away and NOT staging it leaves it unresolved.
+      writeFileSync(join(work, 'both.md'), 'resolved by hand\n');
+
+      expect(await engine().isUnresolved(work, 'both.md')).toBe(true);
+    });
+
+    it('checks the whole path, not just the file name', async () => {
+      conflictingMerge();
+      mkdirSync(join(work, 'docs'));
+      writeFileSync(join(work, 'docs', 'both.md'), 'unrelated\n');
+
+      expect(await engine().isUnresolved(work, 'docs/both.md')).toBe(false);
+    });
+
+    it('reads the path literally, not as a glob', async () => {
+      conflictingMerge();
+      mkdirSync(join(work, 'a'));
+      writeFileSync(join(work, 'a', 'b.md'), 'unrelated\n');
+      // A path with glob characters — `*` would match `a/b.md` without --literal-pathspecs.
+      writeFileSync(join(work, '[a-z].md'), 'glob name\n');
+
+      expect(await engine().isUnresolved(work, '[a-z].md')).toBe(false);
+    });
+  });
+
   // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
   describe.skipIf(process.platform === 'win32')('status', () => {
     let work: string;
