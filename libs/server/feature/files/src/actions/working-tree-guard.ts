@@ -19,12 +19,7 @@ export class WorkingTreeGuard {
    * @throws ApiErrorException `409 merge-in-progress`
    */
   change<T>(repositoryId: number, root: string, task: () => Promise<T>): Promise<T> {
-    return this.lock.run(repositoryId, async () => {
-      if (await this.git.mergeInProgress(root)) {
-        throw new ApiErrorException(409, 'merge-in-progress');
-      }
-      return task();
-    });
+    return this.run(repositoryId, root, undefined, task);
   }
 
   /**
@@ -36,11 +31,33 @@ export class WorkingTreeGuard {
    * @throws ApiErrorException `409 merge-in-progress`
    */
   changeFile<T>(repositoryId: number, root: string, path: string, task: () => Promise<T>): Promise<T> {
+    return this.run(repositoryId, root, path, task);
+  }
+
+  /**
+   * Shared body: acquires the lock, then refuses the operation while a git
+   * operation is in progress. For `changeFile`, a save to an unresolved
+   * conflicting file during a merge is allowed (GC-12), and a rebase is not
+   * blocked because there is no rebase-resolution flow.
+   */
+  private async run<T>(
+    repositoryId: number,
+    root: string,
+    path: string | undefined,
+    task: () => Promise<T>
+  ): Promise<T> {
     return this.lock.run(repositoryId, async () => {
-      if (await this.merge.mergeInProgress(root)) {
-        if (!await this.git.isUnresolved(root, path)) {
+      if (await this.git.mergeInProgress(root)) {
+        if (path !== undefined && await this.merge.mergeInProgress(root)) {
+          // During a merge, changeFile is allowed for unresolved conflicts.
+          if (!await this.git.isUnresolved(root, path)) {
+            throw new ApiErrorException(409, 'merge-in-progress');
+          }
+        } else if (path === undefined) {
+          // change is always blocked during merge or rebase.
           throw new ApiErrorException(409, 'merge-in-progress');
         }
+        // changeFile during a rebase: allowed (no rebase-resolution flow).
       }
       return task();
     });

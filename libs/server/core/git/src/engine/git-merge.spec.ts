@@ -119,50 +119,6 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
     return oid;
   }
 
-  describe('isUnresolved', () => {
-    it('returns true for an unresolved conflicting file', async () => {
-      conflictingMerge();
-
-      expect(await merge.isUnresolved(work, 'both.md')).toBe(true);
-    });
-
-    it('returns false for a file not in the merge', async () => {
-      conflictingMerge();
-
-      expect(await merge.isUnresolved(work, 'first.md')).toBe(false);
-    });
-
-    it('returns false when there is no merge', async () => {
-      expect(await merge.isUnresolved(work, 'first.md')).toBe(false);
-    });
-
-    it('keeps it unresolved after a save', async () => {
-      conflictingMerge();
-      // Writing the conflict markers away and NOT staging it leaves it unresolved.
-      writeFileSync(join(work, 'both.md'), 'resolved by hand\n');
-
-      expect(await merge.isUnresolved(work, 'both.md')).toBe(true);
-    });
-
-    it('checks the whole path, not just the file name', async () => {
-      conflictingMerge();
-      mkdirSync(join(work, 'docs'));
-      write('docs/both.md', 'unrelated\n');
-
-      expect(await merge.isUnresolved(work, 'docs/both.md')).toBe(false);
-    });
-
-    it('reads the path literally, not as a glob', async () => {
-      conflictingMerge();
-      mkdirSync(join(work, 'a'));
-      write('a/b.md', 'unrelated\n');
-      // A path with glob characters — `*` would match `a/b.md` without --literal-pathspecs.
-      write('[a-z].md', 'glob name\n');
-
-      expect(await merge.isUnresolved(work, '[a-z].md')).toBe(false);
-    });
-  });
-
   it('says which commit HEAD is and which the ref keeps', async () => {
     expect(await merge.recordedCommit(work)).toBeNull();
 

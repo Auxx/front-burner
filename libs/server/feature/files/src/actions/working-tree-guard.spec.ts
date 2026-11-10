@@ -66,6 +66,7 @@ describe('WorkingTreeGuard', () => {
   });
 
   it('allows changeFile for an unresolved conflicting file during a merge', async () => {
+    merging = true;
     mergingOnly = true;
     unresolved = true;
     const task = vi.fn().mockResolvedValue('saved');
@@ -77,6 +78,7 @@ describe('WorkingTreeGuard', () => {
   });
 
   it('refuses changeFile for a non-conflicting file during a merge', async () => {
+    merging = true;
     mergingOnly = true;
     unresolved = false;
     const task = vi.fn();
@@ -121,6 +123,7 @@ describe('WorkingTreeGuard', () => {
   });
 
   it('refuses changeFile for a file resolved on another device', async () => {
+    merging = true;
     mergingOnly = true;
     // File was unresolved when the client read it, but is now resolved.
     unresolved = false;
@@ -142,6 +145,7 @@ describe('WorkingTreeGuard', () => {
     );
     await Promise.resolve();
     // A merge starts while changeFile is waiting for the lock.
+    merging = true;
     mergingOnly = true;
     unresolved = false;
     release();
