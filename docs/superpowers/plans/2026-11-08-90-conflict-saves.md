@@ -65,21 +65,21 @@ A-5.3.
     string, task: () => Promise<T>): Promise<T>`: `change`, except that during a
     merge an unresolved path goes ahead.
 
-- [ ] **Step 1: Write the failing tests**: `saves an unresolved conflicting
+- [x] **Step 1: Write the failing tests**: `saves an unresolved conflicting
       file`; `keeps it unresolved after a save`; `refuses a save to a file not
       in the merge`; `refuses a save to a file resolved on another device`;
       `checks the whole path`; `reads the path literally`; `refuses to recreate
       a file during a merge`; end to end, `AC-GIT-003.9: during the merge,
       saving a file that is not conflicting, switching branches, pulling and
       pushing are refused by the API`.
-- [ ] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
+- [x] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
       server-core-git server-feature-files`.
-- [ ] **Step 3: Implement.** A-5.3 says what the lock allows during a merge.
-- [ ] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
+- [x] **Step 3: Implement.** A-5.3 says what the lock allows during a merge.
+- [x] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
       server-e2e`.
-- [ ] **Step 5: Update the status**: REQ-EDIT-001 adds `conflict-saves`, and
+- [x] **Step 5: Update the status**: REQ-EDIT-001 adds `conflict-saves`, and
       removes ED-19. REQ-GIT-003 adds it; GC-3 and GC-12 "(only the backend is
       built)". Run `doc-ids.mjs criteria` and copy its result.
-- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
+- [x] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(files): save conflicting files during
       a merge`.

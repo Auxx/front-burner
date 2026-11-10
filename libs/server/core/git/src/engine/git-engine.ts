@@ -712,6 +712,23 @@ export class GitEngine implements BeforeApplicationShutdown {
   }
 
   /**
+   * Whether `path` still has unmerged stages in the index (GC-12). Uses
+   * `--literal-pathspecs` so that glob characters in the path are read literally.
+   * Returns `false` when the path is resolved, not in the merge, or when there is
+   * no merge in progress.
+   */
+  async isUnresolved(workingCopy: string, path: string): Promise<boolean> {
+    const result = await this.local.run(workingCopy, [
+      '--literal-pathspecs',
+      'ls-files',
+      '-u',
+      '--',
+      path
+    ]);
+    return result.stdout.trim().length > 0;
+  }
+
+  /**
    * Pushes the current branch to its upstream on `origin`, or publishes it
    * under its own name and makes that its upstream; never forced, without tags
    * (GA-29, GA-30). In a single-branch clone, a published branch is added to

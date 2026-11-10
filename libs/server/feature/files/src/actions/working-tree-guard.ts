@@ -22,4 +22,23 @@ export class WorkingTreeGuard {
       return task();
     });
   }
+
+  /**
+   * Like `change`, but during a merge allows the task when `path` is an unresolved
+   * conflicting file (GC-12). A resolved file is still refused: its content was
+   * added to the index, so a save would change the disk but not what **Commit
+   * merge** commits. A non-conflicting file is refused too.
+   *
+   * @throws ApiErrorException `409 merge-in-progress`
+   */
+  changeFile<T>(repositoryId: number, root: string, path: string, task: () => Promise<T>): Promise<T> {
+    return this.lock.run(repositoryId, async () => {
+      if (await this.git.mergeInProgress(root)) {
+        if (!await this.git.isUnresolved(root, path)) {
+          throw new ApiErrorException(409, 'merge-in-progress');
+        }
+      }
+      return task();
+    });
+  }
 }

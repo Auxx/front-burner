@@ -259,7 +259,7 @@ describe('FileContents', () => {
     expect(statSync(join(root, 'docs', 'readme.md')).mode & 0o777).toBe(0o755);
   });
 
-  it('refuses saves during a merge', async () => {
+  it('allows saving an unresolved conflicting file during a merge and refuses the rest', async () => {
     writeFileSync(join(root, 'docs', 'readme.md'), 'main\n');
     git(root, 'commit', '-q', '-am', 'main');
     git(root, 'checkout', '-q', '-b', 'other', 'HEAD~1');
@@ -268,17 +268,33 @@ describe('FileContents', () => {
     git(root, 'checkout', '-q', 'main');
     git(root, 'merge', 'other');
     writeFileSync(join(root, 'docs', 'other.md'), 'other\n');
-    const before = bytesOf('docs/readme.md');
 
     const merging = { status: 409, code: 'merge-in-progress', params: {} };
+    // Non-conflicting file is refused.
     expect(await refusal(save({ path: 'docs/other.md', content: 'x', lineEnding: 'lf', bom: false })))
       .toEqual(merging);
-    expect(await refusal(save({ path: 'docs/readme.md', content: 'x', lineEnding: 'lf', bom: false })))
-      .toEqual(merging);
+    // Recreate is still refused.
     expect(await refusal(recreate({ path: 'docs/new.md', content: 'x', lineEnding: 'lf', bom: false })))
       .toEqual(merging);
-    expect(bytesOf('docs/readme.md')).toEqual(before);
+    // The conflicting file can be saved.
+    await save({ path: 'docs/readme.md', content: 'resolved by me\n', lineEnding: 'lf', bom: false });
+    expect(readFileSync(join(root, 'docs', 'readme.md'), 'utf8')).toBe('resolved by me\n');
     expect(bytesOf('docs/other.md').toString()).toBe('other\n');
+    expect(existsSync(join(root, 'docs', 'new.md'))).toBe(false);
+  });
+
+  it('refuses to recreate a file during a merge', async () => {
+    writeFileSync(join(root, 'docs', 'readme.md'), 'main\n');
+    git(root, 'commit', '-q', '-am', 'main');
+    git(root, 'checkout', '-q', '-b', 'other', 'HEAD~1');
+    writeFileSync(join(root, 'docs', 'readme.md'), 'other\n');
+    git(root, 'commit', '-q', '-am', 'other');
+    git(root, 'checkout', '-q', 'main');
+    git(root, 'merge', 'other');
+
+    const merging = { status: 409, code: 'merge-in-progress', params: {} };
+    expect(await refusal(recreate({ path: 'docs/new.md', content: 'x', lineEnding: 'lf', bom: false })))
+      .toEqual(merging);
     expect(existsSync(join(root, 'docs', 'new.md'))).toBe(false);
   });
 
