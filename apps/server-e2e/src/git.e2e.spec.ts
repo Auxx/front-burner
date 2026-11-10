@@ -937,8 +937,8 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
     // Switching branches is refused.
     const switchResponse = await client.send(
       'POST',
-      `/repositories/${id}/git/branches/switch`,
-      { branch: 'main' }
+      `/repositories/${id}/git/switch`,
+      { name: 'main', remote: false }
     );
     expect(switchResponse.status).toBe(409);
     expect(await switchResponse.json()).toMatchObject({ code: 'merge-in-progress' });

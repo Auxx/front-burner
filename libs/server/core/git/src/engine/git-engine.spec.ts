@@ -291,20 +291,20 @@ describe('GitEngine', () => {
   describe('isUnresolved', () => {
     let work: string;
 
-    /** Create a merge with conflicts in `both.md`. */
-    const conflictingMerge = () => {
+    /** Create a merge with a conflict in `file`. */
+    const conflictingMerge = (file = 'both.md') => {
       work = join(root, 'unresolved');
       mkdirSync(work);
       git(work, 'init', '-q', '-b', 'main');
-      writeFileSync(join(work, 'both.md'), 'base\n');
+      writeFileSync(join(work, file), 'base\n');
       writeFileSync(join(work, 'first.md'), 'first\n');
       git(work, 'add', '.');
       git(work, 'commit', '-q', '-m', 'base');
       git(work, 'checkout', '-q', '-b', 'other');
-      writeFileSync(join(work, 'both.md'), 'theirs\n');
+      writeFileSync(join(work, file), 'theirs\n');
       git(work, 'commit', '-q', '-am', 'theirs');
       git(work, 'checkout', '-q', 'main');
-      writeFileSync(join(work, 'both.md'), 'ours\n');
+      writeFileSync(join(work, file), 'ours\n');
       git(work, 'commit', '-q', '-am', 'ours');
       expect(() => git(work, 'merge', '-q', 'other')).toThrow();
     };
@@ -365,12 +365,20 @@ describe('GitEngine', () => {
       expect(await engine().isUnresolved(work, 'dir/both.md')).toBe(true);
     });
 
-    it('reads the path literally, not as a glob', async () => {
-      conflictingMerge();
-      // both.md is the only unmerged file. The glob `bo*.md` matches `both.md`,
-      // so without --literal-pathspecs the query would find a record and return
-      // true. With the flag, `bo*.md` is read literally and returns false.
+    it('reads the path literally, not as a pathspec', async () => {
+      // Without --literal-pathspecs git reads the leading `:` as pathspec magic,
+      // looks for `c.md` and finds nothing, so the file would read as resolved.
+      conflictingMerge(':c.md');
+
+      expect(await engine().isUnresolved(work, ':c.md')).toBe(true);
       expect(await engine().isUnresolved(work, 'bo*.md')).toBe(false);
+    });
+
+    it('throws when git fails, instead of reading the file as resolved', async () => {
+      work = join(root, 'not-a-repository');
+      mkdirSync(work);
+
+      await expect(engine().isUnresolved(work, 'both.md')).rejects.toThrow();
     });
   });
 
