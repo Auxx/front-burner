@@ -38,6 +38,7 @@ function conflicting(...paths: string[]): GitMergeState {
       path,
       kind: 'both-changed' as const,
       resolved: false,
+      edited: false,
       editable: true,
       oursSize: 1,
       theirsSize: 1

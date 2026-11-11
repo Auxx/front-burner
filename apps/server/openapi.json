@@ -1688,6 +1688,42 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/merge/start-over": {
+      "post": {
+        "operationId": "startConflictOver",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitConflictPath"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/diff": {
       "get": {
         "operationId": "diff",
@@ -3473,6 +3509,9 @@
           "editable": {
             "type": "boolean"
           },
+          "edited": {
+            "type": "boolean"
+          },
           "oursSize": {
             "type": "integer",
             "minimum": 0,
@@ -3491,6 +3530,7 @@
           "kind",
           "resolved",
           "editable",
+          "edited",
           "oursSize",
           "theirsSize"
         ]
@@ -3576,6 +3616,19 @@
         "required": [
           "path",
           "resolution"
+        ]
+      },
+      "GitConflictPath": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "path"
         ]
       },
       "DiffLine": {

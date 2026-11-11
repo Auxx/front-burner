@@ -36,6 +36,7 @@ function merge(...resolved: boolean[]): GitMergeState {
       path: `${index}.md`,
       kind: 'both-changed' as const,
       resolved: isResolved,
+      edited: false,
       editable: true,
       oursSize: 1,
       theirsSize: 1

@@ -53,6 +53,12 @@ export interface ConflictEntry {
   /** In bytes; also `null` for a submodule, whose commit has no size in this repository. */
   oursSize: number | null;
   theirsSize: number | null;
+  /**
+   * Resolved with a file that is neither version, as one the user edited (GC-18).
+   * A file resolved as `delete`, or not resolved, is not; one that line-ending
+   * normalisation changed when it was added is, which only asks one more question.
+   */
+  edited: boolean;
 }
 
 const BRANCH_PREFIX = 'refs/heads/';
@@ -518,7 +524,10 @@ export class GitMerge {
     ]);
     // A path in both is unresolved: starting a file over makes it so.
     const byPath = new Map([ ...resolved, ...unresolved ]);
-    const sizes = await this.blobSizes(workingCopy, [ ...byPath.values() ].flatMap(stages => [ ...stages.values() ]));
+    const [ sizes, resolutions ] = await Promise.all([
+      this.blobSizes(workingCopy, [ ...byPath.values() ].flatMap(stages => [ ...stages.values() ])),
+      this.mergedEntries(workingCopy, [ ...resolved.keys() ].filter(path => !unresolved.has(path)))
+    ]);
     const sizeOf = (stage: Stage | undefined) => stage === undefined ? null : sizes.get(stage.oid) ?? null;
     return [ ...byPath ].sort(([ a ], [ b ]) => a < b ? -1 : 1).flatMap(([ path, stages ]) => {
       const kind = kindOf(stages);
@@ -527,6 +536,7 @@ export class GitMerge {
       }
       const ours = stages.get(2);
       const theirs = stages.get(3);
+      const resolution = resolutions.get(path)?.oid;
       return [ {
         path,
         kind,
@@ -537,7 +547,8 @@ export class GitMerge {
         oursMode: ours?.mode ?? null,
         theirsMode: theirs?.mode ?? null,
         oursSize: sizeOf(ours),
-        theirsSize: sizeOf(theirs)
+        theirsSize: sizeOf(theirs),
+        edited: resolution !== undefined && resolution !== ours?.oid && resolution !== theirs?.oid
       } ];
     });
   }
@@ -616,6 +627,31 @@ export class GitMerge {
       }
     }
     return sizes;
+  }
+
+  /** The stage-0 entry of each of `paths` that has one, by path: what a resolution put in the index. */
+  private async mergedEntries(workingCopy: string, paths: string[]): Promise<Map<string, Stage>> {
+    const byPath = new Map<string, Stage>();
+    const wanted = new Set(paths);
+    for (let start = 0; start < paths.length; start += PATHS_PER_COMMAND) {
+      const output = await this.local.checked(workingCopy, [
+        '--no-optional-locks',
+        '--literal-pathspecs',
+        'ls-files',
+        '-z',
+        '--stage',
+        '--',
+        ...paths.slice(start, start + PATHS_PER_COMMAND)
+      ]);
+      for (const record of output.split('\0')) {
+        const match = /^(\d+) ([0-9a-f]+) 0\t(.*)$/s.exec(record);
+        // A pathspec also matches what is inside a folder of that name.
+        if (match !== null && wanted.has(match[3] ?? '')) {
+          byPath.set(match[3] ?? '', { mode: match[1] ?? '', oid: match[2] ?? '' });
+        }
+      }
+    }
+    return byPath;
   }
 
   /** The unmerged entries under `pathspec`, by path. */
@@ -823,6 +859,108 @@ export class GitMerge {
     if (!(await this.unmerged(workingCopy, [ '--', `:(literal)${path}` ])).has(path)) {
       // Takes paths only as arguments, which are names and never pathspecs.
       await this.local.checked(workingCopy, [ 'update-index', '--unresolve', '--', path ]);
+    }
+    await rm(absolute, { force: true });
+    if (backup !== null) {
+      await rename(backup, absolute);
+    }
+  }
+
+  /**
+   * Puts a resolved file back as the merge left it (GC-18): its stages come back
+   * from what git keeps to undo the resolution (`git update-index --unresolve`),
+   * and the file on disk is my version, or theirs when I deleted it, byte for byte
+   * and with its mode. A Markdown file whose versions git can merge as text gets
+   * the markers that `writeMarkers` writes, labelled `labels`; one that does not
+   * decode keeps my version. Not `git checkout -m`, which labels the markers
+   * `ours` and `theirs` (GC-5). Nothing else is touched (GC-19). The caller holds
+   * the working-tree lock and has checked that the file is resolved.
+   *
+   * All or nothing (GC-27), as `resolve` is: the file waits in `.git` until git
+   * has its stages back, and if git fails, the file and its resolution are put back.
+   *
+   * @throws PathRefusedError when the path is reached through a symbolic link (A-7.6).
+   * @throws GitOperationError `timeout`
+   */
+  async startOver(workingCopy: string, entry: ConflictEntry, labels: MarkerLabels): Promise<void> {
+    const { path } = entry;
+    const { absolute, type } = await resolveInWorkingCopy(workingCopy, path, { symlinkLeaf: true, mayBeMissing: true });
+    if (type === 'folder' || type === 'other') {
+      throw new Error(`Not a file: ${path}`);
+    }
+    // Worked out before anything changes, so that nothing is left half done.
+    const markers = await this.markersOf(workingCopy, entry, labels);
+    const resolution = (await this.mergedEntries(workingCopy, [ path ])).get(path) ?? null;
+    const timeoutMs = this.options.gitTimeoutMs;
+    const backup = join(workingCopy, '.git', RESOLVE_BACKUP);
+    await rm(backup, { force: true, recursive: true });
+    const saved = type !== 'missing';
+    if (saved) {
+      await rename(absolute, backup);
+    }
+    try {
+      await this.freeingLocksAtTimeout(workingCopy, async () => {
+        // Takes paths only as arguments, which are names and never pathspecs.
+        await this.local.checked(workingCopy, [ 'update-index', '--unresolve', '--', path ], { timeoutMs });
+        const side = entry.oursOid === null ? 'theirs' : 'ours';
+        await this.local.checked(
+          workingCopy,
+          [
+            ...NO_LFS,
+            '--literal-pathspecs',
+            'checkout',
+            `--${side}`,
+            '--pathspec-from-file=-',
+            '--pathspec-file-nul'
+          ],
+          { stdin: nulTerminated([ path ]), timeoutMs }
+        );
+      });
+      if (markers !== null) {
+        // git has just written a regular file there, which this replaces.
+        await writeFile(absolute, markers);
+      }
+    } catch (error) {
+      await this.undoStartOver(workingCopy, path, absolute, saved ? backup : null, resolution);
+      throw error;
+    }
+    if (saved) {
+      await rm(backup, { force: true });
+    }
+  }
+
+  /** The markers of a Markdown file whose versions are both regular files that git can merge as text; else `null`. */
+  private async markersOf(workingCopy: string, entry: ConflictEntry, labels: MarkerLabels): Promise<string | null> {
+    const { path, baseOid, oursOid, theirsOid, oursMode, theirsMode } = entry;
+    if (
+      oursOid === null || theirsOid === null || !REGULAR_FILE.test(oursMode ?? '')
+      || !REGULAR_FILE.test(theirsMode ?? '') || !isMarkdownName(path.split('/').at(-1) ?? '')
+    ) {
+      return null;
+    }
+    return this.textWithMarkers(workingCopy, baseOid, oursOid, theirsOid, labels);
+  }
+
+  /**
+   * Puts a file and its resolution back after `startOver` failed partway: the
+   * entry `resolution` names, or none for a file resolved as deleted, which also
+   * records the stages to undo it again, and the file from `backup`.
+   */
+  private async undoStartOver(
+    workingCopy: string,
+    path: string,
+    absolute: string,
+    backup: string | null,
+    resolution: Stage | null
+  ): Promise<void> {
+    if ((await this.unmerged(workingCopy, [ '--', `:(literal)${path}` ])).has(path)) {
+      await (resolution === null
+        ? this.local.checked(workingCopy, [ 'update-index', '--force-remove', '-z', '--stdin' ], {
+          stdin: nulTerminated([ path ])
+        })
+        : this.local.checked(workingCopy, [ 'update-index', '-z', '--index-info' ], {
+          stdin: nulTerminated([ `${resolution.mode} ${resolution.oid} 0\t${path}` ])
+        }));
     }
     await rm(absolute, { force: true });
     if (backup !== null) {

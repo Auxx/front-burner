@@ -73,7 +73,7 @@ GC-19, GC-27); `docs/architecture/git-engine.md` A-5.10.
     `204`, `GitConflictPath`: `{ path: string }`).
   - Error code `not-resolved`.
 
-- [ ] **Step 1: Write the failing tests**: `brings back the markers and marks
+- [x] **Step 1: Write the failing tests**: `brings back the markers and marks
       the file unresolved`; `writes the same markers as the merge`; `brings back
       a file that was deleted`; `brings back my version of a binary file`;
       `gives my version of a file that does not decode`; `brings back their
@@ -81,14 +81,14 @@ GC-19, GC-27); `docs/architecture/git-engine.md` A-5.10.
       nothing for a whole version`; `asks when in doubt`; `refuses a file that
       is not resolved`; `leaves the other files alone`; `publishes files.changed
       and git.changed`.
-- [ ] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
+- [x] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
       server-core-git server-feature-sync`.
-- [ ] **Step 3: Implement**; `npx nx run web-api-client:generate`. In A-5.10,
+- [x] **Step 3: Implement**; `npx nx run web-api-client:generate`. In A-5.10,
       "`git checkout -m`" becomes "`git update-index --unresolve`, then the
       markers".
-- [ ] **Step 4: Run them and see them pass** — same command.
-- [ ] **Step 5: Update the status**: REQ-GIT-003 adds `start-over-api`; GC-18
+- [x] **Step 4: Run them and see them pass** — same command.
+- [x] **Step 5: Update the status**: REQ-GIT-003 adds `start-over-api`; GC-18
       "(only the backend is built)". Run `doc-ids.mjs criteria` and copy its
       result.
-- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
+- [x] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(sync): start a file over`.

@@ -92,8 +92,8 @@ export class MergeStateService {
   }
 
   private async toFile(root: string, entry: ConflictEntry): Promise<GitConflictFile> {
-    const { path, kind, resolved, oursSize, theirsSize } = entry;
-    return { path, kind, resolved, oursSize, theirsSize, editable: await this.isEditable(root, entry) };
+    const { path, kind, resolved, edited, oursSize, theirsSize } = entry;
+    return { path, kind, resolved, edited, oursSize, theirsSize, editable: await this.isEditable(root, entry) };
   }
 
   /**

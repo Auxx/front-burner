@@ -42,6 +42,8 @@ export const ERROR_CODES = [
   'not-conflicting',
   /** 409; the file's kind does not offer this resolution, or it is not editable to mark as resolved (GC-14 to GC-16). */
   'resolution-not-allowed',
+  /** 409; the conflicting file is not resolved, so there is nothing to start over (GC-18). */
+  'not-resolved',
   /** 409; the file still has lines that look like conflict markers; send `force` to mark it as resolved anyway (GC-14). */
   'conflict-markers-left',
   /** 409; the version cannot be read: not Markdown, a symbolic link, over the limit, not valid UTF-8, or that side deleted it (GC-17). */

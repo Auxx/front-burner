@@ -2,6 +2,7 @@ import {
   CommitRequestSchema,
   CommitResultSchema,
   GitBranchListSchema,
+  GitConflictPathSchema,
   GitDiffQuerySchema,
   GitDiffSchema,
   GitIncomingQuerySchema,
@@ -83,3 +84,6 @@ export class GitMergeVersionDto extends createZodDto(z.object(GitMergeVersionSch
 
 @ApiSchema({ name: 'GitResolveRequest' })
 export class GitResolveRequestDto extends createZodDto(z.object(GitResolveRequestSchema.shape)) {}
+
+@ApiSchema({ name: 'GitConflictPath' })
+export class GitConflictPathDto extends createZodDto(z.object(GitConflictPathSchema.shape)) {}

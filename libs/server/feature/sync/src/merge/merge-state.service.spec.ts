@@ -148,7 +148,15 @@ describe('MergeStateService', () => {
       into: 'main',
       from: 'origin/main',
       files: [
-        { path: 'a.md', kind: 'both-changed', resolved: false, editable: true, oursSize: 5, theirsSize: 11 }
+        {
+          path: 'a.md',
+          kind: 'both-changed',
+          resolved: false,
+          edited: false,
+          editable: true,
+          oursSize: 5,
+          theirsSize: 11
+        }
       ],
       otherFiles: [ 'clean.md', 'new.md' ],
       message: 'Merge remote-tracking branch \'origin/main\''
@@ -239,8 +247,24 @@ describe('MergeStateService', () => {
     const { files } = await service.read(work);
 
     expect(files).toEqual([
-      { path: 'by-me.md', kind: 'deleted-by-us', resolved: false, editable: false, oursSize: null, theirsSize: 7 },
-      { path: 'by-them.md', kind: 'deleted-by-them', resolved: false, editable: false, oursSize: 5, theirsSize: null }
+      {
+        path: 'by-me.md',
+        kind: 'deleted-by-us',
+        resolved: false,
+        edited: false,
+        editable: false,
+        oursSize: null,
+        theirsSize: 7
+      },
+      {
+        path: 'by-them.md',
+        kind: 'deleted-by-them',
+        resolved: false,
+        edited: false,
+        editable: false,
+        oursSize: 5,
+        theirsSize: null
+      }
     ]);
   });
 
@@ -250,7 +274,7 @@ describe('MergeStateService', () => {
     git(work, 'add', 'a.md');
 
     expect((await service.read(work)).files).toEqual([
-      { path: 'a.md', kind: 'both-changed', resolved: true, editable: true, oursSize: 5, theirsSize: 7 }
+      { path: 'a.md', kind: 'both-changed', resolved: true, edited: true, editable: true, oursSize: 5, theirsSize: 7 }
     ]);
   });
 

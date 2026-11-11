@@ -664,5 +664,127 @@ describe.skipIf(process.platform === 'win32')('MergeActions', () => {
       expect(await merges.mergeInProgress(work)).toBe(true);
       expect(published.map(({ type }) => type)).toEqual([ 'files.changed', 'git.changed' ]);
     });
+
+    describe('startOver', () => {
+      const entry = async (path: string) => (await merges.conflicts(work)).find(conflict => conflict.path === path);
+
+      it('brings back the markers with the branch names and marks the file unresolved', async () => {
+        conflicting();
+        await pullThatConflicts();
+        const asMerged = onDisk('edited.md');
+        writeFileSync(join(work, 'edited.md'), 'mine and theirs\n');
+        await actions.resolve(userId, repositoryId, { path: 'edited.md', resolution: 'mark-resolved' });
+        expect(await entry('edited.md')).toMatchObject({ resolved: true, edited: true });
+
+        await actions.startOver(userId, repositoryId, 'edited.md');
+
+        expect(onDisk('edited.md')).toBe(asMerged);
+        expect(asMerged).toBe('<<<<<<< main\nmine\n=======\ntheirs\n>>>>>>> origin/main\n');
+        expect(await entry('edited.md')).toMatchObject({ resolved: false, edited: false });
+      });
+
+      it('brings back a file that was deleted', async () => {
+        conflicting();
+        await pullThatConflicts();
+        await actions.resolve(userId, repositoryId, { path: 'gone.md', resolution: 'delete' });
+
+        await actions.startOver(userId, repositoryId, 'gone.md');
+
+        expect(onDisk('gone.md')).toBe('mine\n');
+        expect(await resolved('gone.md')).toBe(false);
+      });
+
+      it('refuses a file that is not resolved', async () => {
+        conflicting();
+        await pullThatConflicts();
+        writeFileSync(join(work, 'edited.md'), 'saved\n');
+        const before = snapshot();
+
+        await expect(actions.startOver(userId, repositoryId, 'edited.md'))
+          .rejects.toMatchObject({ status: 409, code: 'not-resolved' });
+
+        expect(snapshot()).toEqual(before);
+        expect(published).toEqual([]);
+      });
+
+      it('refuses a file not in the merge, and when there is no merge', async () => {
+        await expect(actions.startOver(userId, repositoryId, 'edited.md'))
+          .rejects.toMatchObject({ status: 409, code: 'no-merge-in-progress' });
+        conflicting();
+        await pullThatConflicts();
+
+        for (const path of [ 'missing.md', 'docs' ]) {
+          await expect(actions.startOver(userId, repositoryId, path))
+            .rejects.toMatchObject({ status: 409, code: 'not-conflicting' });
+        }
+        expect(published).toEqual([]);
+      });
+
+      it('refuses a path through a symbolic link', async () => {
+        conflicting();
+        await pullThatConflicts();
+        await actions.resolve(userId, repositoryId, { path: 'docs/inner.md', resolution: 'ours' });
+        const outside = join(root, 'outside');
+        mkdirSync(outside);
+        writeFileSync(join(outside, 'inner.md'), 'not in the working copy\n');
+        rmSync(join(work, 'docs'), { recursive: true });
+        symlinkSync(outside, join(work, 'docs'));
+        published = [];
+
+        await expect(actions.startOver(userId, repositoryId, 'docs/inner.md'))
+          .rejects.toMatchObject({ status: 400, code: 'path-refused', params: { reason: 'symlink' } });
+
+        expect(readFileSync(join(outside, 'inner.md'), 'utf8')).toBe('not in the working copy\n');
+        expect(await resolved('docs/inner.md')).toBe(true);
+      });
+
+      it('leaves the other files alone', async () => {
+        conflicting();
+        await pullThatConflicts();
+        await actions.resolve(userId, repositoryId, { path: 'edited.md', resolution: 'theirs' });
+        await actions.resolve(userId, repositoryId, { path: 'data.txt', resolution: 'ours' });
+        writeFileSync(join(work, 'other.md'), 'saved\n');
+        const others = () => ({
+          index: git(work, 'ls-files', '--stage', '--', 'data.txt', 'other.md', 'docs', 'gone.md'),
+          data: onDisk('data.txt'),
+          other: onDisk('other.md'),
+          inner: onDisk('docs/inner.md')
+        });
+        const before = others();
+
+        await actions.startOver(userId, repositoryId, 'edited.md');
+
+        expect(others()).toEqual(before);
+        expect(await resolved('data.txt')).toBe(true);
+      });
+
+      it('publishes files.changed and git.changed', async () => {
+        conflicting();
+        await pullThatConflicts();
+        await actions.resolve(userId, repositoryId, { path: 'docs/inner.md', resolution: 'theirs' });
+        published = [];
+
+        await actions.startOver(userId, repositoryId, 'docs/inner.md');
+
+        expect(published).toEqual([
+          { type: 'files.changed', repositoryId, folders: [ 'docs' ] },
+          { type: 'git.changed', repositoryId }
+        ]);
+      });
+
+      it('says with a code that git failed, and clients are told', async () => {
+        conflicting();
+        await pullThatConflicts();
+        await actions.resolve(userId, repositoryId, { path: 'edited.md', resolution: 'ours' });
+        published = [];
+        vi.spyOn(merges, 'startOver').mockRejectedValueOnce(new GitOperationError('timeout', 'too slow'));
+
+        await expect(actions.startOver(userId, repositoryId, 'edited.md'))
+          .rejects.toMatchObject({ status: 504, code: 'git-timeout' });
+
+        expect(await resolved('edited.md')).toBe(true);
+        expect(published.map(({ type }) => type)).toEqual([ 'files.changed', 'git.changed' ]);
+      });
+    });
   });
 });

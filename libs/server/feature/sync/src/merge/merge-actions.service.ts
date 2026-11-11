@@ -71,20 +71,60 @@ export class MergeActions {
    *   `entry-not-found`, `file-too-large`, `file-not-utf8`, `git-timeout`
    */
   async resolve(userId: number, repositoryId: number, request: GitResolveRequest): Promise<void> {
+    await this.changeOneFile(userId, repositoryId, request.path, async root => {
+      const entry = await this.resolvable(root, request);
+      return () => this.merges.resolve(root, entry, request.resolution);
+    });
+  }
+
+  /**
+   * Puts a resolved file back as it was when the merge stopped, with its markers
+   * labelled with the branch names, and marks it unresolved (GC-18), as
+   * `resolve` changes a file: in the lock, all or nothing, and nothing else.
+   *
+   * @throws ApiErrorException `no-merge-in-progress`, `not-conflicting`,
+   *   `not-resolved`, `path-refused`, `git-timeout`
+   */
+  async startOver(userId: number, repositoryId: number, path: string): Promise<void> {
+    await this.changeOneFile(userId, repositoryId, path, async root => {
+      const entry = await this.merges.conflict(root, path);
+      if (entry === null) {
+        throw new ApiErrorException(409, 'not-conflicting');
+      }
+      if (!entry.resolved) {
+        throw new ApiErrorException(409, 'not-resolved');
+      }
+      // The names `GET …/git/merge` gives, as the merge labelled its markers (GC-5).
+      const { branch, upstream } = await this.merges.branchAndUpstream(root);
+      const labels = { ours: branch ?? 'HEAD', theirs: upstream ?? 'MERGE_HEAD' };
+      return () => this.merges.startOver(root, entry, labels);
+    });
+  }
+
+  /**
+   * Runs `check` in the lock during a merge, then the change it gives back, and
+   * tells clients once the change was tried, also after a failure: git puts the
+   * file back, but clients may have seen it change meanwhile.
+   */
+  private async changeOneFile(
+    userId: number,
+    repositoryId: number,
+    path: string,
+    check: (root: string) => Promise<() => Promise<void>>
+  ): Promise<void> {
     const root = this.repositories.root(userId, repositoryId);
     let tried = false;
     try {
       await this.guard.change(repositoryId, root, async () => {
-        const entry = await this.resolvable(root, request);
+        const change = await check(root);
         tried = true;
-        await this.merges.resolve(root, entry, request.resolution).catch((failure: unknown) =>
+        await change().catch((failure: unknown) =>
           failure instanceof PathRefusedError ? toFilesError(failure) : toGitApiError(failure)
         );
       });
     } finally {
-      // Also after a failure: git puts the file back, but clients may have seen it change meanwhile.
       if (tried) {
-        const [ folder ] = splitPath(request.path);
+        const [ folder ] = splitPath(path);
         this.events.publish(userId, { type: 'files.changed', repositoryId, folders: [ folder ] });
         this.events.publish(userId, { type: 'git.changed', repositoryId });
       }
