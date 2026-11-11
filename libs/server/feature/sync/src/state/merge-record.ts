@@ -25,6 +25,18 @@ export class MergeRecord {
     this.syncState.forgetRecord(repositoryId);
   }
 
+  /**
+   * Drops the record once its merge commit is on a remote branch: pushed, so
+   * it can no longer be undone (A-4.5a, GC-25). A record still being applied
+   * belongs to a merge under way, and stays.
+   */
+  async forgetIfPushed(repositoryId: number, root: string): Promise<void> {
+    const { mergeCommit, applying } = this.syncState.record(repositoryId);
+    if (mergeCommit !== null && !applying && await this.merges.isOnRemoteBranch(root, mergeCommit)) {
+      await this.forget(repositoryId, root);
+    }
+  }
+
   /** Makes the ref say what the database says. */
   async matchRef(repositoryId: number, root: string): Promise<void> {
     await this.pointRefAt(root, this.syncState.record(repositoryId).recordedCommit);

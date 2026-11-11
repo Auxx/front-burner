@@ -21,6 +21,7 @@ const published: GitStatus = {
   changes: [],
   mergeInProgress: false,
   networkJob: null,
+  undoableMerge: false,
   fetchProblem: null
 };
 

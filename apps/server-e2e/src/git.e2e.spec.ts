@@ -101,6 +101,7 @@ describe('git status (REQ-GIT-002)', () => {
       changes: [ { path: 'README.md', state: 'added' } ],
       lastCommit: null,
       networkJob: null,
+      undoableMerge: false,
       fetchProblem: null
     });
   });
@@ -955,6 +956,43 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
     expect(second.status).toBe(409);
     expect(await second.json()).toMatchObject({ code: 'no-merge-in-progress' });
     expect((await client.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
+  });
+
+  it('undoes a committed merge over the API', async () => {
+    const bare = remote('undone');
+    const { id, workingCopy } = await client.add('undone', `${publicGit.url}/undone.git`);
+    pushFileFromElsewhere(bare, 'both.md', 'theirs\n');
+    writeFileSync(join(workingCopy, 'both.md'), 'mine\n');
+    git(workingCopy, 'add', 'both.md');
+    commitIn(workingCopy, 'mine');
+    const head = gitOutput(workingCopy, 'rev-parse', 'HEAD');
+    const undo = () => client.call(`/repositories/${id}/git/merge/undo`, { method: 'POST' });
+    const status = async () => await (await client.call(`/repositories/${id}/git/status`)).json() as object;
+    expect(await status()).toMatchObject({ undoableMerge: false });
+    const refused = await undo();
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ code: 'undo-not-allowed' });
+
+    expect((await client.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
+    expect(await status()).toMatchObject({ undoableMerge: false });
+    const duringMerge = await undo();
+    expect(duringMerge.status).toBe(409);
+    expect(await duringMerge.json()).toMatchObject({ code: 'merge-in-progress' });
+    const resolved = await client.send('POST', `/repositories/${id}/git/merge/resolve`, {
+      path: 'both.md',
+      resolution: 'theirs'
+    });
+    expect(resolved.status).toBe(204);
+    const committed = await client.send('POST', `/repositories/${id}/git/merge/commit`, { message: 'Merge' });
+    expect(committed.status).toBe(201);
+    expect(await status()).toMatchObject({ undoableMerge: true, ahead: 2, behind: 0 });
+
+    expect((await undo()).status).toBe(204);
+
+    expect(gitOutput(workingCopy, 'rev-parse', 'HEAD')).toBe(head);
+    expect(readFileSync(join(workingCopy, 'both.md'), 'utf8')).toBe('mine\n');
+    expect(await status()).toMatchObject({ undoableMerge: false, ahead: 1, behind: 1, changes: [] });
+    expect((await undo()).status).toBe(409);
   });
 
   it('AC-GIT-001.9: a merge commit made by a pull and the commit that finishes a conflict resolution use the same commit author as other commits in that repository', async () => {

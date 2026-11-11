@@ -23,6 +23,7 @@ function gitStatus(behind: number, branch = 'main'): GitStatus {
     changes: [],
     mergeInProgress: false,
     networkJob: null,
+    undoableMerge: false,
     fetchProblem: null
   };
 }

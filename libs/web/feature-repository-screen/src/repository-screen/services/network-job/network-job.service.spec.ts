@@ -35,6 +35,7 @@ function status(networkJob: GitStatus['networkJob'] = null): GitStatus {
     changes: [],
     mergeInProgress: false,
     networkJob,
+    undoableMerge: false,
     fetchProblem: null
   };
 }

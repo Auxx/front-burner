@@ -24,6 +24,7 @@ function status(mergeInProgress: boolean): GitStatus {
     changes: [],
     mergeInProgress,
     networkJob: null,
+    undoableMerge: false,
     fetchProblem: null
   };
 }

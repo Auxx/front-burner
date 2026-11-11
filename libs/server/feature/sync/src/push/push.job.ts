@@ -1,6 +1,6 @@
 import type { Job } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitOperationError, NetworkLock } from '@front-burner/server-core-git';
+import { GitEngine, GitOperationError, NetworkLock, WorkingTreeLock } from '@front-burner/server-core-git';
 import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
 import { JobKeys, KnownHostsService } from '@front-burner/server-feature-credentials';
 import { OpenableRepository } from '@front-burner/server-feature-files';
@@ -9,6 +9,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { FetchStep, FetchStepJob } from '../fetch/fetch-step';
 import { JobCredentials } from '../jobs/job-credentials.service';
 import { networkFailure } from '../jobs/network-failure';
+import { MergeRecord } from '../state/merge-record';
 
 export const PUSH_JOB_TYPE = 'sync.push';
 
@@ -31,7 +32,9 @@ export const pushDedupeKey = (repositoryId: number, branch: string) => `push:${r
  * runner _(plan 57's call)_. The job reads its credentials when it runs; a
  * protected key only from the copy held since it was queued (RC-19). It does
  * not run during a merge that started after it was queued (GC-3), and a push
- * rejected as non-fast-forward fetches afterwards (GA-30).
+ * rejected as non-fast-forward fetches afterwards (GA-30). A push that
+ * published the last merge's commit forgets that merge's record, as it can no
+ * longer be undone (A-4.5a).
  */
 @Injectable()
 export class PushJob implements OnModuleInit {
@@ -46,7 +49,9 @@ export class PushJob implements OnModuleInit {
     private readonly knownHosts: KnownHostsService,
     private readonly fetchStep: FetchStep,
     private readonly jobKeys: JobKeys,
-    private readonly events: EventsHub
+    private readonly events: EventsHub,
+    private readonly workingTreeLock: WorkingTreeLock,
+    private readonly mergeRecord: MergeRecord
   ) {}
 
   onModuleInit(): void {
@@ -97,10 +102,31 @@ export class PushJob implements OnModuleInit {
         return networkFailure(error, row.credentialId !== null, { branch });
       }
     });
+    if (outcome.kind === 'pushed') {
+      await this.forgetPushedMerge(userId, repositoryId);
+    }
     if (outcome.kind === 'failed' && outcome.code === 'push-non-fast-forward') {
       await this.fetchAfterRejection({ id, userId, repositoryId });
     }
     return outcome;
+  }
+
+  /**
+   * Forgets the record of a merge whose commit is now on a remote branch
+   * (A-4.5a). In the working-tree lock, after the network lock is let go, so
+   * that no pull starts a new merge, and with it a new record, meanwhile. The
+   * push itself succeeded, so a failure here is only logged: the next push
+   * tries again, and **Undo merge** is not offered for a pushed merge anyway.
+   */
+  private async forgetPushedMerge(userId: number, repositoryId: number): Promise<void> {
+    try {
+      await this.workingTreeLock.run(
+        repositoryId,
+        () => this.mergeRecord.forgetIfPushed(repositoryId, this.repositories.root(userId, repositoryId))
+      );
+    } catch (error) {
+      this.logger.warn(`Could not forget the pushed merge of repository ${repositoryId}: ${String(error)}`);
+    }
   }
 
   /**

@@ -1192,6 +1192,35 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       expect(await local.upstreamOf(work, 'release.1')).toBe('refs/heads/release.1');
       expect(git(work, 'config', '--get', 'branch.release.1.remote')).toBe('origin');
     });
+
+    it('knows whether a commit is on a remote branch', async () => {
+      write('mine.md', 'mine\n');
+      commitAll('mine');
+      const mine = head();
+      expect(await merge.isOnRemoteBranch(work, mine)).toBe(false);
+
+      // On any remote branch, not only the upstream.
+      git(work, 'update-ref', 'refs/remotes/origin/other', mine);
+      expect(await merge.isOnRemoteBranch(work, mine)).toBe(true);
+      // An older commit of a remote branch is on it too.
+      write('more.md', 'more\n');
+      commitAll('more');
+      git(work, 'update-ref', 'refs/remotes/origin/other', head());
+      expect(await merge.isOnRemoteBranch(work, mine)).toBe(true);
+    });
+
+    it('says that a commit not in the repository is on no remote branch, and refuses what is not an ID', async () => {
+      expect(await merge.isOnRemoteBranch(work, '0'.repeat(40))).toBe(false);
+      await expect(merge.isOnRemoteBranch(work, '--all')).rejects.toThrow('Not an object ID');
+    });
+
+    it('throws, rather than say "not published", when git fails for an existing commit', async () => {
+      const mine = head();
+      // A remote branch that names a missing object makes `rev-list --remotes` fail.
+      writeFileSync(join(work, '.git', 'refs', 'remotes', 'origin', 'broken'), `${'1'.repeat(40)}\n`);
+
+      await expect(merge.isOnRemoteBranch(work, mine)).rejects.toThrow('git rev-list failed');
+    });
   });
 
   describe('resolve', () => {

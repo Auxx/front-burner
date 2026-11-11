@@ -6,11 +6,12 @@ import {
   GitOperationError,
   GitRunner,
   LocalGit,
+  NetworkLock,
   WorkingTreeLock
 } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import type { DataLayout } from '@front-burner/server-core-storage';
-import { FileContents, type OpenableRepository, type WorkingTreeGuard } from '@front-burner/server-feature-files';
+import { FileContents, type OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import type { CommitAuthors } from '@front-burner/server-feature-preferences';
 import { EDITABLE_FILE_LIMIT, type PushEvent } from '@front-burner/shared-contracts';
 import {
@@ -158,7 +159,10 @@ describe.skipIf(process.platform === 'win32')('MergeActions', () => {
       contents,
       {
         forRepository: () => ({ author: AUTHOR, source: 'default', confirmed: authorConfirmed })
-      } as unknown as CommitAuthors
+      } as unknown as CommitAuthors,
+      engine,
+      new WorkingTreeGuard(lock, engine, merges),
+      new NetworkLock()
     );
   });
 

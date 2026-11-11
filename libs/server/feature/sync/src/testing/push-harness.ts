@@ -91,6 +91,9 @@ export class PushHarness {
   engine!: GitEngine;
   merge!: GitMerge;
   guard!: WorkingTreeGuard;
+  /** The lock that `guard` and the jobs take. */
+  workingTreeLock!: WorkingTreeLock;
+  mergeRecord!: MergeRecord;
   service!: PushService;
   pullService!: PullService;
   fetchStep!: FetchStep;
@@ -150,7 +153,9 @@ export class PushHarness {
     this.runner = new JobRunner(this.database, { cloneConcurrency: 2 } as Config, this.events);
     this.engine = new GitEngine(gitOptions, new GitRunner());
     this.merge = new GitMerge(new LocalGit(new GitRunner()), gitOptions);
-    this.guard = new WorkingTreeGuard(new WorkingTreeLock(), this.engine, this.merge);
+    this.workingTreeLock = new WorkingTreeLock();
+    this.mergeRecord = new MergeRecord(this.syncState, this.merge);
+    this.guard = new WorkingTreeGuard(this.workingTreeLock, this.engine, this.merge);
     const knownHosts = new KnownHostsService(this.database, gitOptions);
     this.fetchStep = new FetchStep(
       this.engine,
@@ -170,7 +175,9 @@ export class PushHarness {
       knownHosts,
       this.fetchStep,
       this.jobKeys,
-      this.events
+      this.events,
+      this.workingTreeLock,
+      this.mergeRecord
     ).onModuleInit();
     new FetchJob(this.runner, this.fetchStep, this.jobKeys).onModuleInit();
     new PullJob(
@@ -182,7 +189,7 @@ export class PushHarness {
       this.guard,
       this.commitAuthors,
       this.syncState,
-      new MergeRecord(this.syncState, this.merge),
+      this.mergeRecord,
       new InstanceRepositories(this.database),
       this.jobKeys,
       this.events

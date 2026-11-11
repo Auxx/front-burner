@@ -42,6 +42,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'conflict-markers-left': 'This file still has conflict markers.',
   'not-resolved': 'This file isn\'t resolved, so there is nothing to start over.',
   'merge-unresolved': 'Resolve every conflicting file before committing the merge.',
+  'undo-not-allowed': 'This merge can\'t be undone any more.',
   'merge-abort-failed': 'The merge couldn\'t be aborted, so it is still in progress. Try again.',
   'file-too-large': 'This file is too large to edit (the limit is 1 MB).',
   'file-not-utf8': 'This file isn\'t UTF-8 text, so it can\'t be edited safely.',
