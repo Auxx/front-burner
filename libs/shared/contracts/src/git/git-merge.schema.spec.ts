@@ -1,4 +1,9 @@
-import { GitConflictFileSchema, GitMergeStateSchema, GitMergeVersionQuerySchema } from './git-merge.schema';
+import {
+  GitConflictFileSchema,
+  GitMergeStateSchema,
+  GitMergeVersionQuerySchema,
+  GitResolveRequestSchema
+} from './git-merge.schema';
 
 describe('GitMergeStateSchema', () => {
   const file = {
@@ -40,5 +45,22 @@ describe('GitMergeVersionQuerySchema', () => {
 
   it('refuses an unknown side', () => {
     expect(GitMergeVersionQuerySchema.safeParse({ path: 'notes.md', side: 'base' }).success).toBe(false);
+  });
+});
+
+describe('GitResolveRequestSchema', () => {
+  it('parses each resolution, with and without force', () => {
+    for (const resolution of [ 'mark-resolved', 'ours', 'theirs', 'keep', 'delete' ]) {
+      const request = { path: 'notes.md', resolution };
+      expect(GitResolveRequestSchema.parse(request)).toEqual(request);
+    }
+    const forced = { path: 'notes.md', resolution: 'mark-resolved', force: true };
+    expect(GitResolveRequestSchema.parse(forced)).toEqual(forced);
+  });
+
+  it('refuses an unknown resolution, an empty path or a path that is too long', () => {
+    expect(GitResolveRequestSchema.safeParse({ path: 'notes.md', resolution: 'both' }).success).toBe(false);
+    expect(GitResolveRequestSchema.safeParse({ path: '', resolution: 'ours' }).success).toBe(false);
+    expect(GitResolveRequestSchema.safeParse({ path: 'a'.repeat(4097), resolution: 'ours' }).success).toBe(false);
   });
 });

@@ -14,6 +14,7 @@ import {
   GitMergeVersionSchema,
   GitNewBranchRequestSchema,
   GitPathsSchema,
+  GitResolveRequestSchema,
   GitStatusSchema,
   GitSwitchRequestSchema,
   hasPathsUnlessAmending
@@ -79,3 +80,6 @@ export class GitMergeVersionQueryDto extends createZodDto(z.object(GitMergeVersi
 
 @ApiSchema({ name: 'GitMergeVersion' })
 export class GitMergeVersionDto extends createZodDto(z.object(GitMergeVersionSchema.shape)) {}
+
+@ApiSchema({ name: 'GitResolveRequest' })
+export class GitResolveRequestDto extends createZodDto(z.object(GitResolveRequestSchema.shape)) {}

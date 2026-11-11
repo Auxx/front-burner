@@ -38,8 +38,12 @@ export const ERROR_CODES = [
   'merge-in-progress',
   /** 409; there is no merge in progress to read (GC-6). */
   'no-merge-in-progress',
-  /** 409; the path is not one of the merge's conflicting files (GC-17). */
+  /** 409; the path is not one of the merge's conflicting files, or is already resolved (GC-14 to GC-17). */
   'not-conflicting',
+  /** 409; the file's kind does not offer this resolution, or it is not editable to mark as resolved (GC-14 to GC-16). */
+  'resolution-not-allowed',
+  /** 409; the file still has lines that look like conflict markers; send `force` to mark it as resolved anyway (GC-14). */
+  'conflict-markers-left',
   /** 409; the version cannot be read: not Markdown, a symbolic link, over the limit, not valid UTF-8, or that side deleted it (GC-17). */
   'version-not-readable',
   /** 500; git could not abort the merge, which stays in progress (GC-27). */

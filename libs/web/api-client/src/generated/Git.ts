@@ -14,6 +14,7 @@ import type {
   GitMergeVersion,
   GitNewBranchRequest,
   GitPaths,
+  GitResolveRequest,
   GitStatus,
   GitSwitchRequest
 } from '@front-burner/shared-contracts';
@@ -85,6 +86,12 @@ export class GitApi {
     return this.http.request<void>(
       'POST',
       `/api/v1/repositories/${encodeURIComponent(id)}/git/merge/abort`
+    );
+  }
+  resolveConflict(id: number, data: GitResolveRequest): Observable<void> {
+    return this.http.post<void>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/merge/resolve`,
+      data
     );
   }
   diff(

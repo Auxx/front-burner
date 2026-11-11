@@ -97,7 +97,7 @@ export class MergeStateService {
    * can't be checked must not keep the user from the merge. It is simply not
    * offered for editing, and whole versions still resolve it (GC-15).
    */
-  private async isEditable(root: string, entry: ConflictEntry): Promise<boolean> {
+  async isEditable(root: string, entry: ConflictEntry): Promise<boolean> {
     const { path, oursMode, theirsMode } = entry;
     const regular = REGULAR_FILE.test(oursMode ?? '') && REGULAR_FILE.test(theirsMode ?? '');
     if (!regular || !isMarkdownName(path.split('/').at(-1) ?? '')) {

@@ -36,6 +36,9 @@ export interface MarkerLabels {
 
 export type ConflictKind = 'both-changed' | 'both-added' | 'deleted-by-us' | 'deleted-by-them';
 
+/** How a conflicting file is resolved; `GitResolution` in the API (GC-14 to GC-16). */
+export type GitResolution = 'mark-resolved' | 'ours' | 'theirs' | 'keep' | 'delete';
+
 /** One file a merge could not combine; `null` for a version that does not exist. */
 export interface ConflictEntry {
   path: string;
@@ -732,6 +735,50 @@ export class GitMerge {
       throw new Error(`git cat-file blob ${oid} failed: ${result.stderr.trim()}`);
     }
     return result.stdoutRaw;
+  }
+
+  /**
+   * Resolves one conflicting file, which the caller has checked that the
+   * resolution suits (GC-14 to GC-16): `mark-resolved` adds it as it is on disk,
+   * `ours` and `theirs` put that whole version there first, byte for byte and
+   * with its mode, `keep` puts the version that exists there, and `delete`
+   * removes the file and its entries. Each records the file as resolved, so that
+   * the merge still lists it (A-4.5). Nothing else is touched (GC-19). The caller
+   * holds the working-tree lock.
+   *
+   * @throws PathRefusedError when the file to delete is reached through a symbolic link (A-7.6).
+   * @throws GitOperationError `timeout`
+   */
+  async resolve(workingCopy: string, entry: ConflictEntry, resolution: GitResolution): Promise<void> {
+    const { path } = entry;
+    const onStdin = { stdin: nulTerminated([ path ]), timeoutMs: this.options.gitTimeoutMs };
+    // Each path read literally: `:(top)x.md` is a file's name, not a pathspec.
+    const literal = [ '--literal-pathspecs' ];
+    const fromStdin = [ '--pathspec-from-file=-', '--pathspec-file-nul' ];
+    await this.freeingLocksAtTimeout(workingCopy, async () => {
+      if (resolution === 'delete') {
+        await this.deleteFromWorkingCopy(workingCopy, path);
+        await this.local.checked(workingCopy, [ 'update-index', '--force-remove', '-z', '--stdin' ], onStdin);
+        return;
+      }
+      const side = resolution === 'keep' ? (entry.oursOid === null ? 'theirs' : 'ours') : resolution;
+      if (side !== 'mark-resolved') {
+        await this.local.checked(
+          workingCopy,
+          [ ...NO_LFS, ...literal, 'checkout', `--${side}`, ...fromStdin ],
+          onStdin
+        );
+      }
+      await this.local.checked(workingCopy, [ ...literal, 'add', '-A', ...fromStdin ], onStdin);
+    });
+  }
+
+  /** Deletes a conflicting file, as the entry it is; one that is already gone, or a folder, stays as it is. */
+  private async deleteFromWorkingCopy(workingCopy: string, path: string): Promise<void> {
+    const { absolute, type } = await resolveInWorkingCopy(workingCopy, path, { symlinkLeaf: true, mayBeMissing: true });
+    if (type !== 'folder' && type !== 'missing') {
+      await rm(absolute, { force: true });
+    }
   }
 
   /** A merge, as opposed to `GitEngine.mergeInProgress`, which a rebase also answers yes to. */
