@@ -51,6 +51,8 @@ export const ERROR_CODES = [
   'conflict-markers-left',
   /** 409; the version cannot be read: not Markdown, a symbolic link, over the limit, not valid UTF-8, or that side deleted it (GC-17). */
   'version-not-readable',
+  /** 409; a conflicting file is not resolved yet, so the merge cannot be committed (GC-20). */
+  'merge-unresolved',
   /** 500; git could not abort the merge, which stays in progress (GC-27). */
   'merge-abort-failed',
   /** 413; a file to read or save is over the editor's limit; params `{ limit }` in bytes (ED-2, ED-19). */

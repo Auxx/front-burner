@@ -1,6 +1,7 @@
 import {
   GitConflictFileSchema,
   GitConflictPathSchema,
+  GitMergeCommitRequestSchema,
   GitMergeStateSchema,
   GitMergeVersionQuerySchema,
   GitResolveRequestSchema
@@ -78,5 +79,18 @@ describe('GitResolveRequestSchema', () => {
     expect(GitResolveRequestSchema.safeParse({ path: 'notes.md', resolution: 'both' }).success).toBe(false);
     expect(GitResolveRequestSchema.safeParse({ path: '', resolution: 'ours' }).success).toBe(false);
     expect(GitResolveRequestSchema.safeParse({ path: 'a'.repeat(4097), resolution: 'ours' }).success).toBe(false);
+  });
+});
+
+describe('GitMergeCommitRequestSchema', () => {
+  it('keeps the message as written, lines starting with # included', () => {
+    const request = { message: 'Merge origin/main\n\n# kept\n' };
+    expect(GitMergeCommitRequestSchema.parse(request)).toEqual(request);
+  });
+
+  it('refuses a message that is empty, only spaces or too long', () => {
+    expect(GitMergeCommitRequestSchema.safeParse({ message: '' }).success).toBe(false);
+    expect(GitMergeCommitRequestSchema.safeParse({ message: ' \n\t' }).success).toBe(false);
+    expect(GitMergeCommitRequestSchema.safeParse({ message: 'a'.repeat(65_537) }).success).toBe(false);
   });
 });

@@ -957,6 +957,48 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
     expect((await client.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
   });
 
+  it('AC-GIT-001.9: a merge commit made by a pull and the commit that finishes a conflict resolution use the same commit author as other commits in that repository', async () => {
+    const bare = remote('merge-author');
+    const { id, workingCopy } = await client.add('merge-author', `${publicGit.url}/merge-author.git`);
+    // The working copy's own configuration is never used (CA-2).
+    git(workingCopy, 'config', 'user.name', 'Configured');
+    git(workingCopy, 'config', 'user.email', 'configured@example.com');
+    const commitFile = async (path: string, content: string) => {
+      writeFileSync(join(workingCopy, path), content);
+      const response = await client.send('POST', `/repositories/${id}/git/commits`, { message: path, paths: [ path ] });
+      expect(response.status).toBe(201);
+    };
+
+    await commitFile('mine.md', 'mine\n');
+    pushFileFromElsewhere(bare, 'theirs.md', 'theirs\n');
+    expect((await client.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'merged' });
+
+    await commitFile('both.md', 'mine\n');
+    pushFileFromElsewhere(bare, 'both.md', 'theirs\n');
+    expect((await client.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
+    const commitMerge = () => client.send('POST', `/repositories/${id}/git/merge/commit`, { message: 'Merge' });
+    const unresolved = await commitMerge();
+    expect(unresolved.status).toBe(409);
+    expect(await unresolved.json()).toMatchObject({ code: 'merge-unresolved' });
+    const resolved = await client.send('POST', `/repositories/${id}/git/merge/resolve`, {
+      path: 'both.md',
+      resolution: 'ours'
+    });
+    expect(resolved.status).toBe(204);
+
+    const committed = await commitMerge();
+
+    expect(committed.status).toBe(201);
+    expect(await committed.json()).toEqual({ oid: gitOutput(workingCopy, 'rev-parse', 'HEAD') });
+    const expected = `${AUTHOR.name} <${AUTHOR.email}>`;
+    // The finishing commit, both.md, the pull's merge commit and mine.md.
+    expect(gitOutput(workingCopy, 'log', '--first-parent', '-4', '--format=%s|%an <%ae>|%cn <%ce>').split('\n'))
+      .toEqual([ 'Merge', 'both.md', 'Merge remote-tracking branch \'origin/main\'', 'mine.md' ]
+        .map(subject => `${subject}|${expected}|${expected}`));
+    expect(gitOutput(workingCopy, 'rev-list', '--parents', '-n', '1', 'HEAD').split(' ')).toHaveLength(3);
+    expect(await statusOf(id)).toMatchObject({ mergeInProgress: false, changes: [], ahead: 4 });
+  });
+
   it('AC-GIT-003.9: during the merge, saving a non-conflicting file, switching branches, pulling and pushing are refused', async () => {
     const bare = remote('refused-during-merge');
     const { id, workingCopy } = await client.add('refused-during-merge', `${publicGit.url}/refused-during-merge.git`);

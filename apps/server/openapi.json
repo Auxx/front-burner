@@ -1724,6 +1724,49 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/merge/commit": {
+      "post": {
+        "operationId": "commitMerge",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitMergeCommitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitResult"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/diff": {
       "get": {
         "operationId": "diff",
@@ -3631,6 +3674,29 @@
           "path"
         ]
       },
+      "GitMergeCommitRequest": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 65536
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "CommitResult": {
+        "type": "object",
+        "properties": {
+          "oid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "oid"
+        ]
+      },
       "DiffLine": {
         "type": "object",
         "properties": {
@@ -3779,17 +3845,6 @@
         "required": [
           "message",
           "paths"
-        ]
-      },
-      "CommitResult": {
-        "type": "object",
-        "properties": {
-          "oid": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "oid"
         ]
       },
       "GitJobStarted": {

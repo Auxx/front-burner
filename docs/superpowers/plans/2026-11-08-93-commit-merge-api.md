@@ -73,7 +73,7 @@ AC-GIT-001.9).
     `GitMergeCommitRequest`: `{ message: string }`, `CommitResult`).
   - Error code `merge-unresolved`.
 
-- [ ] **Step 1: Write the failing tests**: `commits with the resolved files and
+- [x] **Step 1: Write the failing tests**: `commits with the resolved files and
       what merged by itself`; `has both parents`; `refuses an unconfirmed
       author`; `refuses while a file is unresolved`; `refuses without a merge`;
       `keeps a line starting with #`; `commits the index as it stands`; `commits
@@ -82,14 +82,14 @@ AC-GIT-001.9).
       end, `AC-GIT-001.9: a merge commit made by a pull and the commit that
       finishes a conflict resolution use the same commit author as other commits
       in that repository`.
-- [ ] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
+- [x] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
       server-core-git server-feature-sync`.
-- [ ] **Step 3: Implement**; `npx nx run web-api-client:generate`.
-- [ ] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
+- [x] **Step 3: Implement**; `npx nx run web-api-client:generate`.
+- [x] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
       server-e2e`.
-- [ ] **Step 5: Update the status**: REQ-GIT-003 adds `commit-merge-api`; GC-20
+- [x] **Step 5: Update the status**: REQ-GIT-003 adds `commit-merge-api`; GC-20
       and GC-21 "(only the backend is built)". REQ-GIT-001 adds it, and CA-14
       "(the question on the commit that finishes a merge, plan 101)". Run
       `doc-ids.mjs criteria` and copy its result.
-- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
+- [x] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(sync): commit a merge`.

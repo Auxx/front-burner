@@ -151,7 +151,8 @@ describe('GitController', () => {
               new MergeRecord(syncState, gitMerge),
               events,
               state,
-              contents
+              contents,
+              commitAuthors as unknown as CommitAuthors
             ),
           inject: [ MergeGuard, SyncStateStore, EventsHub, MergeStateService ]
         },
@@ -1012,6 +1013,52 @@ describe('GitController', () => {
           code: 'no-merge-in-progress'
         });
         await startOver({ path: 'notes.md' }, 99).expect(404);
+      });
+    });
+
+    describe('commit', () => {
+      const commitMerge = (body: object, id = READY) =>
+        request(app.getHttpServer()).post(`/repositories/${id}/git/merge/commit`).send(body);
+
+      it('commits the merge as the commit author, ends it and tells clients', async () => {
+        await resolveConflict({ path: 'notes.md', resolution: 'theirs' }).expect(204);
+        published.length = 0;
+
+        const { body } = await commitMerge({ message: 'Merge branch \'theirs\'\n\n# kept\n' }).expect(201);
+
+        expect(body).toEqual({ oid: git(root, 'rev-parse', 'HEAD').trim() });
+        expect(git(root, 'log', '-1', '--format=%P|%an <%ae>|%B').trim().split('|')).toEqual([
+          `${git(root, 'rev-parse', 'HEAD~1').trim()} ${git(root, 'rev-parse', 'theirs').trim()}`,
+          `${ADA.name} <${ADA.email}>`,
+          'Merge branch \'theirs\'\n\n# kept'
+        ]);
+        expect((await mergeState().expect(409)).body).toMatchObject({ code: 'no-merge-in-progress' });
+        expect(published).toEqual([ { type: 'git.changed', repositoryId: READY } ]);
+      });
+
+      it('refuses, in order, an unconfirmed author, no merge and an unresolved file', async () => {
+        commitAuthor = { ...commitAuthor, confirmed: false };
+        expect((await commitMerge({ message: 'Merge' }).expect(409)).body)
+          .toMatchObject({ code: 'commit-author-not-confirmed' });
+        commitAuthor = { ...commitAuthor, confirmed: true };
+
+        expect((await commitMerge({ message: 'Merge' }).expect(409)).body)
+          .toMatchObject({ code: 'merge-unresolved' });
+
+        git(root, 'merge', '--abort');
+        expect((await commitMerge({ message: 'Merge' }).expect(409)).body)
+          .toMatchObject({ code: 'no-merge-in-progress' });
+        expect(published).toEqual([]);
+      });
+
+      it('validates the request', async () => {
+        for (const body of [ { message: '' }, { message: '  \n' }, {} ]) {
+          expect((await commitMerge(body).expect(400)).body).toMatchObject({ code: 'validation-failed' });
+        }
+      });
+
+      it('answers another user\'s repository like a missing one', async () => {
+        await commitMerge({ message: 'Merge' }, 99).expect(404);
       });
     });
   });

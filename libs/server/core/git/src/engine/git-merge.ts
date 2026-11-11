@@ -988,6 +988,45 @@ export class GitMerge {
       }));
   }
 
+  /**
+   * Commits the merge in progress with the index as it stands, which is the
+   * merge's result: the resolved files and what merged by itself (GC-20). Unlike
+   * `GitEngine.commit`, it neither empties the index nor adds files, so a change
+   * on disk that is not in the index stays out. `MERGE_HEAD` gives the second
+   * parent, also when the result is the same as `HEAD`. The message is kept as
+   * written, lines starting with `#` included (GA-21), and the author beats the
+   * working copy's configuration (CA-2). The caller holds the working-tree lock
+   * and knows that no file is unresolved.
+   *
+   * A failure leaves the merge as it was (GC-27), without the locks of a git
+   * killed at its timeout.
+   *
+   * @throws GitOperationError `timeout`
+   */
+  async commit(
+    workingCopy: string,
+    request: { message: string; author: { name: string; email: string; }; }
+  ): Promise<{ oid: string; }> {
+    const { name, email } = request.author;
+    await this.freeingLocksAtTimeout(workingCopy, () =>
+      this.local.checked(
+        workingCopy,
+        [ '-c', 'commit.gpgsign=false', 'commit', '--cleanup=whitespace', '--no-edit', '-F', '-' ],
+        {
+          stdin: request.message,
+          timeoutMs: this.options.gitTimeoutMs,
+          // These beat every git configuration, including the working copy's (CA-2).
+          env: {
+            GIT_AUTHOR_NAME: name,
+            GIT_AUTHOR_EMAIL: email,
+            GIT_COMMITTER_NAME: name,
+            GIT_COMMITTER_EMAIL: email
+          }
+        }
+      ));
+    return { oid: await this.head(workingCopy) };
+  }
+
   /** A merge, as opposed to `GitEngine.mergeInProgress`, which a rebase also answers yes to. */
   async mergeInProgress(workingCopy: string): Promise<boolean> {
     // The file, not `rev-parse`: that also finds a branch called `MERGE_HEAD`.

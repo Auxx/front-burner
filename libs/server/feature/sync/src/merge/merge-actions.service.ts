@@ -3,7 +3,8 @@ import { ConflictEntry, ConflictKind, GitMerge, GitOperationError } from '@front
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
 import { FileContents, OpenableRepository, splitPath, toFilesError } from '@front-burner/server-feature-files';
-import type { GitResolution, GitResolveRequest } from '@front-burner/shared-contracts';
+import { CommitAuthors } from '@front-burner/server-feature-preferences';
+import type { CommitResult, GitResolution, GitResolveRequest } from '@front-burner/shared-contracts';
 import { hasConflictMarkers } from '@front-burner/shared-util';
 import { Injectable, Logger } from '@nestjs/common';
 import { toGitApiError } from '../git/git-api-errors';
@@ -34,7 +35,8 @@ export class MergeActions {
     private readonly mergeRecord: MergeRecord,
     private readonly events: EventsHub,
     private readonly mergeState: MergeStateService,
-    private readonly contents: FileContents
+    private readonly contents: FileContents,
+    private readonly commitAuthors: CommitAuthors
   ) {}
 
   /**
@@ -105,6 +107,48 @@ export class MergeActions {
       const labels = { ours: branch ?? 'HEAD', theirs: upstream ?? 'MERGE_HEAD' };
       return () => this.merges.startOver(root, entry, labels);
     });
+  }
+
+  /**
+   * Commits the merge as the repository's commit author, with the files as the
+   * merge has them: the resolved ones and what merged by itself (GC-20, CA-1,
+   * CA-2). The merge then ends (GC-21). The record stays, with the merge commit
+   * beside it, for **Undo merge** (A-4.5a), when it is this merge's: one that a
+   * pull started, and that has no merge commit yet. A failure leaves the merge
+   * as it was (GC-27). Clients are told once git ran, also after a timeout, as
+   * a killed git may have committed.
+   *
+   * @throws ApiErrorException `commit-author-not-confirmed`, `no-merge-in-progress`,
+   *   `merge-unresolved`, `git-timeout`
+   */
+  async commit(userId: number, repositoryId: number, message: string): Promise<CommitResult> {
+    const { author, confirmed } = this.commitAuthors.forRepository(userId, repositoryId);
+    if (!confirmed) {
+      throw new ApiErrorException(409, 'commit-author-not-confirmed');
+    }
+    const root = this.repositories.root(userId, repositoryId);
+    let tried = false;
+    try {
+      return await this.guard.change(repositoryId, root, async () => {
+        const conflicts = await this.merges.conflicts(root).catch(toGitApiError);
+        if (conflicts.some(conflict => !conflict.resolved)) {
+          throw new ApiErrorException(409, 'merge-unresolved');
+        }
+        const before = await this.merges.head(root).catch(toGitApiError);
+        tried = true;
+        const result = await this.merges.commit(root, { message, author }).catch(toGitApiError);
+        const { recordedCommit, mergeCommit } = this.syncState.record(repositoryId);
+        if (recordedCommit === before && mergeCommit === null) {
+          this.syncState.mergeCommitted(repositoryId, result.oid);
+        }
+        return result;
+      });
+    } finally {
+      if (tried) {
+        // No file changes: the files on disk are already the merge's.
+        this.events.publish(userId, { type: 'git.changed', repositoryId });
+      }
+    }
   }
 
   /**
