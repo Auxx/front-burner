@@ -1,5 +1,6 @@
 import {
   GitConflictFileSchema,
+  GitConflictPathSchema,
   GitMergeStateSchema,
   GitMergeVersionQuerySchema,
   GitResolveRequestSchema
@@ -11,6 +12,7 @@ describe('GitMergeStateSchema', () => {
     kind: 'deleted-by-us',
     resolved: false,
     editable: false,
+    edited: false,
     oursSize: null,
     theirsSize: 12
   };
@@ -29,6 +31,20 @@ describe('GitMergeStateSchema', () => {
   it('needs a known kind and a size that can be one', () => {
     expect(GitConflictFileSchema.safeParse({ ...file, kind: 'renamed' }).success).toBe(false);
     expect(GitConflictFileSchema.safeParse({ ...file, theirsSize: -1 }).success).toBe(false);
+  });
+
+  it('says whether the file was edited', () => {
+    const { edited: _edited, ...withoutEdited } = file;
+    expect(GitConflictFileSchema.safeParse(withoutEdited).success).toBe(false);
+    expect(GitConflictFileSchema.parse({ ...file, edited: true }).edited).toBe(true);
+  });
+});
+
+describe('GitConflictPathSchema', () => {
+  it('parses a path, and refuses an empty one or one that is too long', () => {
+    expect(GitConflictPathSchema.parse({ path: 'docs/a.md' })).toEqual({ path: 'docs/a.md' });
+    expect(GitConflictPathSchema.safeParse({ path: '' }).success).toBe(false);
+    expect(GitConflictPathSchema.safeParse({ path: 'a'.repeat(4097) }).success).toBe(false);
   });
 });
 

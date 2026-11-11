@@ -644,7 +644,15 @@ describe('GitController', () => {
         into: 'main',
         from: 'MERGE_HEAD',
         files: [
-          { path: 'notes.md', kind: 'both-changed', resolved: false, editable: true, oursSize: 5, theirsSize: 7 }
+          {
+            path: 'notes.md',
+            kind: 'both-changed',
+            resolved: false,
+            edited: false,
+            editable: true,
+            oursSize: 5,
+            theirsSize: 7
+          }
         ],
         otherFiles: [],
         message: 'Merge branch \'theirs\''
@@ -955,6 +963,56 @@ describe('GitController', () => {
       const none = await resolveConflict({ path: 'notes.md', resolution: 'ours' }).expect(409);
       expect(none.body).toMatchObject({ code: 'no-merge-in-progress' });
       await resolveConflict({ path: 'notes.md', resolution: 'ours' }, 99).expect(404);
+    });
+
+    describe('start over', () => {
+      const startOver = (body: object, id = READY) =>
+        request(app.getHttpServer()).post(`/repositories/${id}/git/merge/start-over`).send(body);
+
+      it('brings back the markers, says the file was edited before, and tells clients', async () => {
+        writeFileSync(join(root, 'notes.md'), 'both\n');
+        await resolveConflict({ path: 'notes.md', resolution: 'mark-resolved' }).expect(204);
+        expect((await mergeState().expect(200)).body.files).toMatchObject([
+          { path: 'notes.md', resolved: true, edited: true }
+        ]);
+        published.length = 0;
+
+        await startOver({ path: 'notes.md' }).expect(204);
+
+        expect(readFileSync(join(root, 'notes.md'), 'utf8')).toBe(
+          '<<<<<<< main\nmine\n=======\ntheirs\n>>>>>>> MERGE_HEAD\n'
+        );
+        expect((await mergeState().expect(200)).body.files).toMatchObject([
+          { path: 'notes.md', resolved: false, edited: false }
+        ]);
+        expect(published).toEqual([
+          { type: 'files.changed', repositoryId: READY, folders: [ '' ] },
+          { type: 'git.changed', repositoryId: READY }
+        ]);
+      });
+
+      it('refuses a file that is not resolved, or not in the merge', async () => {
+        const unresolved = await startOver({ path: 'notes.md' }).expect(409);
+        expect(unresolved.body).toMatchObject({ code: 'not-resolved' });
+        const other = await startOver({ path: 'other.md' }).expect(409);
+        expect(other.body).toMatchObject({ code: 'not-conflicting' });
+        expect(published).toEqual([]);
+      });
+
+      it('validates the request', async () => {
+        for (const body of [ { path: '' }, {} ]) {
+          expect((await startOver(body).expect(400)).body).toMatchObject({ code: 'validation-failed' });
+        }
+      });
+
+      it('answers no merge, and another user\'s repository like a missing one', async () => {
+        git(root, 'merge', '--abort');
+
+        expect((await startOver({ path: 'notes.md' }).expect(409)).body).toMatchObject({
+          code: 'no-merge-in-progress'
+        });
+        await startOver({ path: 'notes.md' }, 99).expect(404);
+      });
     });
   });
 

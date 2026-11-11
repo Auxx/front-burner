@@ -16,6 +16,12 @@ export const GitConflictFileSchema = z
      * regular file that git can merge as text, and ED-2 holds (GC-9).
      */
     editable: z.boolean(),
+    /**
+     * Resolved with content that is neither version, so **Start over** asks first
+     * (GC-18). When in doubt, it is: a whole version that line-ending
+     * normalisation changed counts. Never for a file resolved as deleted.
+     */
+    edited: z.boolean(),
     /** In bytes; `null` when this version does not exist or is a submodule. */
     oursSize: z.number().int().min(0).nullable(),
     theirsSize: z.number().int().min(0).nullable()
@@ -71,7 +77,15 @@ export const GitResolveRequestSchema = z
   })
   .meta({ id: 'GitResolveRequest' });
 
+/** One conflicting file, such as a resolved one to start over (GC-18). */
+export const GitConflictPathSchema = z
+  .object({
+    path: z.string().min(1).max(4096)
+  })
+  .meta({ id: 'GitConflictPath' });
+
 export type GitConflictKind = z.infer<typeof GitConflictKindSchema>;
+export type GitConflictPath = z.infer<typeof GitConflictPathSchema>;
 export type GitResolution = z.infer<typeof GitResolutionSchema>;
 export type GitResolveRequest = z.infer<typeof GitResolveRequestSchema>;
 export type GitConflictFile = z.infer<typeof GitConflictFileSchema>;

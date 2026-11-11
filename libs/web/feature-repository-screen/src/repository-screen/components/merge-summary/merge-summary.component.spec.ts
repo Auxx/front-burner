@@ -16,6 +16,7 @@ const merge: GitMergeState = {
     path: `${index}.md`,
     kind: 'both-changed' as const,
     resolved,
+    edited: false,
     editable: true,
     oursSize: 1,
     theirsSize: 1

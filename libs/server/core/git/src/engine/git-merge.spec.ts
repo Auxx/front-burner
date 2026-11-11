@@ -346,7 +346,9 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
           oursMode: '100644',
           theirsMode: '100644',
           oursSize: sizeOf('mine\n'),
-          theirsSize: sizeOf('theirs!\n')
+          theirsSize: sizeOf('theirs!\n'),
+          resolution: null,
+          edited: false
         }
       ]);
     });
@@ -1390,19 +1392,20 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       expect(await entryOf('b.md')).toMatchObject({ resolved: false });
     });
 
-    describe('when git fails partway', () => {
-      const failing = (step: string) => {
-        const local = new LocalGit(new GitRunner());
-        const checked = local.checked.bind(local);
-        vi.spyOn(local, 'checked').mockImplementation((cwd: string, args: string[], options?: LocalRunOptions) =>
-          args.includes(step)
-            ? Promise.reject(new GitOperationError('timeout', 'too slow'))
-            : checked(cwd, args, options)
-        );
-        return new GitMerge(local, { gitTimeoutMs: 60_000 } as GitOptions);
-      };
-      const backup = () => join(work, '.git', 'front-burner-resolving');
+    /** A `GitMerge` whose git fails at the command that has `step` among its arguments. */
+    const failing = (step: string) => {
+      const local = new LocalGit(new GitRunner());
+      const checked = local.checked.bind(local);
+      vi.spyOn(local, 'checked').mockImplementation((cwd: string, args: string[], options?: LocalRunOptions) =>
+        args.includes(step)
+          ? Promise.reject(new GitOperationError('timeout', 'too slow'))
+          : checked(cwd, args, options)
+      );
+      return new GitMerge(local, { gitTimeoutMs: 60_000 } as GitOptions);
+    };
+    const backup = () => join(work, '.git', 'front-burner-resolving');
 
+    describe('when git fails partway', () => {
       it.each(
         [
           [ 'theirs', 'add' ],
@@ -1512,6 +1515,210 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
 
       expect(readFileSync(join(outside, 'gone.md'), 'utf8')).toBe('not ours\n');
       expect(await entryOf('docs/gone.md')).toMatchObject({ resolved: false });
+    });
+
+    describe('startOver', () => {
+      const labels = { ours: 'main', theirs: 'theirs' };
+      const startOver = async (path: string, merging = merge) => merging.startOver(work, await entryOf(path), labels);
+      const unmergedStages = (path: string) =>
+        git(work, 'ls-files', '-u', '--', path).split('\n').map(line => line.split('\t')[0]?.at(-1));
+
+      it('brings back the markers and marks the file unresolved', async () => {
+        bothChanged();
+        await resolve('edited.md', 'ours');
+
+        await startOver('edited.md');
+
+        expect(onDisk('edited.md')).toBe('<<<<<<< main\nmine\n=======\ntheirs\n>>>>>>> theirs\n');
+        expect(unmergedStages('edited.md')).toEqual([ '1', '2', '3' ]);
+        expect(await entryOf('edited.md')).toMatchObject({ kind: 'both-changed', resolved: false, edited: false });
+      });
+
+      it('writes the same markers as the merge', async () => {
+        git(work, 'config', 'merge.conflictStyle', 'zdiff3');
+        diverged(
+          { 'edited.md': 'one\ntwo\nthree\n' },
+          { 'edited.md': 'one\nmine\nthree\n' },
+          { 'edited.md': 'one\ntheirs\nthree\n' }
+        );
+        await merge.writeMarkers(work, 'edited.md', labels);
+        const asMerged = onDisk('edited.md');
+        writeFileSync(join(work, 'edited.md'), 'one\nboth\nthree\n');
+        await resolve('edited.md', 'mark-resolved');
+
+        await startOver('edited.md');
+
+        expect(onDisk('edited.md')).toBe(asMerged);
+        expect(asMerged).toBe('one\n<<<<<<< main\nmine\n=======\ntheirs\n>>>>>>> theirs\nthree\n');
+      });
+
+      it('brings back a file that was deleted', async () => {
+        diverged({ 'gone.md': 'base\n' }, { 'gone.md': 'mine\n' }, { 'gone.md': null });
+        await resolve('gone.md', 'delete');
+
+        await startOver('gone.md');
+
+        expect(onDisk('gone.md')).toBe('mine\n');
+        expect(unmergedStages('gone.md')).toEqual([ '1', '2' ]);
+        expect(await entryOf('gone.md')).toMatchObject({ kind: 'deleted-by-them', resolved: false });
+      });
+
+      it('brings back my version of a binary file', async () => {
+        const mine = Buffer.from([ 0, 1, 2, 0xff ]);
+        diverged({ 'image.png': Buffer.from([ 0, 0 ]) }, { 'image.png': mine }, { 'image.png': Buffer.from([ 0, 9 ]) });
+        await resolve('image.png', 'theirs');
+
+        await startOver('image.png');
+
+        expect(readFileSync(join(work, 'image.png')).equals(mine)).toBe(true);
+        expect(await entryOf('image.png')).toMatchObject({ resolved: false });
+      });
+
+      it('gives my version of a file that does not decode', async () => {
+        const mine = Buffer.from([ 0x61, 0xff, 0x0a ]);
+        diverged(
+          { 'edited.md': 'base\n' },
+          { 'edited.md': mine },
+          { 'edited.md': Buffer.from([ 0x62, 0xfe, 0x0a ]) }
+        );
+        await resolve('edited.md', 'theirs');
+
+        await startOver('edited.md');
+
+        expect(readFileSync(join(work, 'edited.md')).equals(mine)).toBe(true);
+        expect(await entryOf('edited.md')).toMatchObject({ resolved: false });
+      });
+
+      it('brings back their version of a file I deleted', async () => {
+        diverged({ 'gone.md': 'base\n' }, { 'gone.md': null }, { 'gone.md': 'theirs\n' });
+        await resolve('gone.md', 'delete');
+
+        await startOver('gone.md');
+
+        expect(onDisk('gone.md')).toBe('theirs\n');
+        expect(await entryOf('gone.md')).toMatchObject({ kind: 'deleted-by-us', resolved: false });
+      });
+
+      it('says when the user edited it', async () => {
+        bothChanged();
+        writeFileSync(join(work, 'edited.md'), 'both, by hand\n');
+
+        await resolve('edited.md', 'mark-resolved');
+
+        expect(await entryOf('edited.md')).toMatchObject({
+          resolved: true,
+          edited: true,
+          resolution: { mode: '100644', oid: git(work, 'rev-parse', ':0:edited.md') }
+        });
+      });
+
+      it('says nothing for a whole version', async () => {
+        diverged(
+          { 'a.md': 'base\n', 'b.md': 'base\n', 'c.md': 'base\n', 'gone.md': 'base\n' },
+          { 'a.md': 'mine\n', 'b.md': 'mine\n', 'c.md': 'mine\n', 'gone.md': 'mine\n' },
+          { 'a.md': 'theirs\n', 'b.md': 'theirs\n', 'c.md': 'theirs\n', 'gone.md': null }
+        );
+
+        await resolve('a.md', 'ours');
+        await resolve('b.md', 'theirs');
+        await resolve('gone.md', 'delete');
+
+        expect((await merge.conflicts(work)).map(({ path, edited }) => [ path, edited ])).toEqual([
+          [ 'a.md', false ],
+          [ 'b.md', false ],
+          [ 'c.md', false ],
+          [ 'gone.md', false ]
+        ]);
+      });
+
+      it('asks when in doubt', async () => {
+        diverged({ 'edited.md': 'base\r\n' }, { 'edited.md': 'mine\r\n' }, { 'edited.md': 'theirs\r\n' });
+        // Line endings are normalised when the version is added, so the blob is not mine any more.
+        writeFileSync(join(work, '.gitattributes'), '*.md text\n');
+
+        await resolve('edited.md', 'ours');
+
+        expect(await entryOf('edited.md')).toMatchObject({ resolved: true, edited: true });
+      });
+
+      it('leaves the other files alone', async () => {
+        diverged(
+          { 'a.md': 'base\n', 'b.md': 'base\n', 'c.md': 'base\n' },
+          { 'a.md': 'mine\n', 'b.md': 'mine\n', 'c.md': 'mine\n' },
+          { 'a.md': 'theirs\n', 'b.md': 'theirs\n', 'c.md': 'theirs\n' }
+        );
+        await resolve('a.md', 'theirs');
+        writeFileSync(join(work, 'b.md'), 'by hand\n');
+        await resolve('b.md', 'mark-resolved');
+        writeFileSync(join(work, 'c.md'), 'saved\n');
+        const before = { b: staged('b.md'), c: staged('c.md') };
+
+        await startOver('a.md');
+
+        expect(onDisk('b.md')).toBe('by hand\n');
+        expect(onDisk('c.md')).toBe('saved\n');
+        expect({ b: staged('b.md'), c: staged('c.md') }).toEqual(before);
+        expect(await merge.conflicts(work)).toMatchObject([
+          { path: 'a.md', resolved: false },
+          { path: 'b.md', resolved: true, edited: true },
+          { path: 'c.md', resolved: false }
+        ]);
+      });
+
+      it('starts over a file with a name like a pathspec, and nothing it would match', async () => {
+        const files = (content: string) => ({ ':(top)x.md': content, 'x.md': content });
+        diverged(files('base\n'), files('mine\n'), files('theirs\n'));
+        await resolve(':(top)x.md', 'theirs');
+        await resolve('x.md', 'ours');
+
+        await startOver(':(top)x.md');
+
+        expect(onDisk(':(top)x.md')).toContain('<<<<<<< main');
+        expect(onDisk('x.md')).toBe('mine\n');
+        expect(await entryOf('x.md')).toMatchObject({ resolved: true });
+      });
+
+      it.each([ 'checkout', '--unresolve' ])(
+        'puts the file and its resolution back when git fails at %s',
+        async step => {
+          bothChanged();
+          writeFileSync(join(work, 'edited.md'), 'by hand\n');
+          await resolve('edited.md', 'mark-resolved');
+          const before = { index: staged('edited.md'), undo: git(work, 'ls-files', '--resolve-undo') };
+
+          await expect(startOver('edited.md', failing(step))).rejects.toMatchObject({ code: 'timeout' });
+
+          expect(onDisk('edited.md')).toBe('by hand\n');
+          expect({ index: staged('edited.md'), undo: git(work, 'ls-files', '--resolve-undo') }).toEqual(before);
+          expect(existsSync(backup())).toBe(false);
+        }
+      );
+
+      it('puts a deletion back when git fails', async () => {
+        diverged({ 'gone.md': 'base\n' }, { 'gone.md': 'mine\n' }, { 'gone.md': null });
+        await resolve('gone.md', 'delete');
+
+        await expect(startOver('gone.md', failing('checkout'))).rejects.toMatchObject({ code: 'timeout' });
+
+        expect(existsSync(join(work, 'gone.md'))).toBe(false);
+        expect(staged('gone.md')).toBe('');
+        expect(await entryOf('gone.md')).toMatchObject({ resolved: true });
+      });
+
+      it('refuses a file through a symbolic link, and changes nothing', async () => {
+        diverged({ 'docs/a.md': 'base\n' }, { 'docs/a.md': 'mine\n' }, { 'docs/a.md': 'theirs\n' });
+        await resolve('docs/a.md', 'ours');
+        const outside = join(root, 'outside');
+        mkdirSync(outside);
+        writeFileSync(join(outside, 'a.md'), 'not ours\n');
+        rmSync(join(work, 'docs'), { recursive: true });
+        symlinkSync(outside, join(work, 'docs'));
+
+        await expect(startOver('docs/a.md')).rejects.toBeInstanceOf(PathRefusedError);
+
+        expect(readFileSync(join(outside, 'a.md'), 'utf8')).toBe('not ours\n');
+        expect(await entryOf('docs/a.md')).toMatchObject({ resolved: true });
+      });
     });
   });
 });
