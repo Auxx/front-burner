@@ -6,5 +6,6 @@ export * from './content/markdown-codec';
 export * from './files.module';
 export * from './files/files-errors';
 export * from './listing/folder-lister';
+export { splitPath } from './paths/entry-paths';
 export * from './repository/openable-repository';
 export * from './summary/entry-summaries';

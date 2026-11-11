@@ -851,6 +851,45 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
     });
   });
 
+  it('AC-GIT-003.14: restarting the backend during a merge keeps the merge in progress and every resolution made so far', async () => {
+    const { first, firstClient, restart } = await restartableServer('front-burner-e2e-merge-resolve-');
+    const bare = remote('resolving');
+    const { id, workingCopy } = await firstClient.add('resolving', `${publicGit.url}/resolving.git`);
+    pushFileFromElsewhere(bare, 'both.md', 'theirs\n');
+    pushFileFromElsewhere(bare, 'edited.md', 'theirs too\n');
+    pushFileFromElsewhere(bare, 'left.md', 'theirs as well\n');
+    for (const name of [ 'both.md', 'edited.md', 'left.md' ]) {
+      writeFileSync(join(workingCopy, name), `mine in ${name}\n`);
+    }
+    git(workingCopy, 'add', '-A');
+    commitIn(workingCopy, 'mine');
+    expect((await firstClient.pulled(id)).outcome).toMatchObject({ kind: 'pulled', result: 'conflicted' });
+    const resolve = (client: GitApi, body: object) =>
+      client.send('POST', `/repositories/${id}/git/merge/resolve`, body);
+
+    expect((await resolve(firstClient, { path: 'both.md', resolution: 'theirs' })).status).toBe(204);
+    writeFileSync(join(workingCopy, 'edited.md'), 'mine and theirs\n');
+    const marked = await resolve(firstClient, { path: 'edited.md', resolution: 'mark-resolved' });
+    expect(marked.status).toBe(204);
+    const left = readFileSync(join(workingCopy, 'left.md'), 'utf8');
+    await first.kill();
+
+    const secondClient = await restart();
+
+    const state = await (await secondClient.call(`/repositories/${id}/git/merge`)).json() as Record<string, unknown>;
+    expect(state['files']).toMatchObject([
+      { path: 'both.md', resolved: true },
+      { path: 'edited.md', resolved: true },
+      { path: 'left.md', resolved: false }
+    ]);
+    expect(readFileSync(join(workingCopy, 'both.md'), 'utf8')).toBe('theirs\n');
+    expect(readFileSync(join(workingCopy, 'edited.md'), 'utf8')).toBe('mine and theirs\n');
+    expect(readFileSync(join(workingCopy, 'left.md'), 'utf8')).toBe(left);
+    // And the rest can be resolved after it.
+    expect((await resolve(secondClient, { path: 'left.md', resolution: 'ours' })).status).toBe(204);
+    expect(readFileSync(join(workingCopy, 'left.md'), 'utf8')).toBe('mine in left.md\n');
+  });
+
   it('a pull that conflicts is readable from another session', async () => {
     const bare = remote('readable');
     const { id, workingCopy } = await client.add('readable', `${publicGit.url}/readable.git`);

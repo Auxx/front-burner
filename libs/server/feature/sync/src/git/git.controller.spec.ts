@@ -117,6 +117,13 @@ describe('GitController', () => {
     };
     const engine = new GitEngine(options, new GitRunner());
     const gitMerge = new GitMerge(new LocalGit(new GitRunner()), options);
+    const contents = new FileContents(
+      {} as OpenableRepository,
+      {} as WorkingTreeGuard,
+      engine,
+      {} as EventsHub,
+      {} as DataLayout
+    );
     const moduleRef = await Test.createTestingModule({
       controllers: [ GitController ],
       providers: [
@@ -132,31 +139,21 @@ describe('GitController', () => {
         { provide: PullService, useValue: {} },
         { provide: GitMerge, useValue: gitMerge },
         { provide: GitBranches, useValue: new GitBranches(new LocalGit(new GitRunner()), gitMerge, options) },
-        {
-          provide: MergeStateService,
-          useValue: new MergeStateService(
-            gitMerge,
-            new FileContents(
-              {} as OpenableRepository,
-              {} as WorkingTreeGuard,
-              engine,
-              {} as EventsHub,
-              {} as DataLayout
-            )
-          )
-        },
+        { provide: MergeStateService, useValue: new MergeStateService(gitMerge, contents) },
         {
           provide: MergeActions,
-          useFactory: (guard: MergeGuard, syncState: SyncStateStore, events: EventsHub) =>
+          useFactory: (guard: MergeGuard, syncState: SyncStateStore, events: EventsHub, state: MergeStateService) =>
             new MergeActions(
               repositories as unknown as OpenableRepository,
               guard,
               gitMerge,
               syncState,
               new MergeRecord(syncState, gitMerge),
-              events
+              events,
+              state,
+              contents
             ),
-          inject: [ MergeGuard, SyncStateStore, EventsHub ]
+          inject: [ MergeGuard, SyncStateStore, EventsHub, MergeStateService ]
         },
         { provide: MergeGuard, useValue: new MergeGuard(new WorkingTreeLock(), gitMerge) },
         { provide: FetchScheduler, useValue: { fileOpened } },
@@ -898,6 +895,66 @@ describe('GitController', () => {
         await abort(CLONING).expect(409);
         expect(published).toEqual([]);
       });
+    });
+  });
+
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  describe.skipIf(process.platform === 'win32')('resolve', () => {
+    const resolveConflict = (body: object, id = READY) =>
+      request(app.getHttpServer()).post(`/repositories/${id}/git/merge/resolve`).send(body);
+    const mergeState = () => request(app.getHttpServer()).get(`/repositories/${READY}/git/merge`);
+
+    beforeEach(() => {
+      git(root, 'switch', '-q', '-c', 'theirs');
+      writeFileSync(join(root, 'notes.md'), 'theirs\n');
+      git(root, 'commit', '-q', '-am', 'theirs');
+      git(root, 'switch', '-q', 'main');
+      writeFileSync(join(root, 'notes.md'), 'mine\n');
+      git(root, 'commit', '-q', '-am', 'mine');
+      expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+    });
+
+    it('resolves a file with a whole version and tells clients', async () => {
+      await resolveConflict({ path: 'notes.md', resolution: 'theirs' }).expect(204);
+
+      expect(readFileSync(join(root, 'notes.md'), 'utf8')).toBe('theirs\n');
+      const { body } = await mergeState().expect(200);
+      expect(body.files).toMatchObject([ { path: 'notes.md', resolved: true } ]);
+      expect(published).toEqual([
+        { type: 'files.changed', repositoryId: READY, folders: [ '' ] },
+        { type: 'git.changed', repositoryId: READY }
+      ]);
+    });
+
+    it('refuses leftover markers without force, and goes ahead with it', async () => {
+      const left = await resolveConflict({ path: 'notes.md', resolution: 'mark-resolved' }).expect(409);
+      expect(left.body).toMatchObject({ code: 'conflict-markers-left' });
+
+      await resolveConflict({ path: 'notes.md', resolution: 'mark-resolved', force: true }).expect(204);
+    });
+
+    it('refuses what the merge does not allow', async () => {
+      const kind = await resolveConflict({ path: 'notes.md', resolution: 'keep' }).expect(409);
+      expect(kind.body).toMatchObject({ code: 'resolution-not-allowed' });
+      const other = await resolveConflict({ path: 'other.md', resolution: 'ours' }).expect(409);
+      expect(other.body).toMatchObject({ code: 'not-conflicting' });
+      const inside = await resolveConflict({ path: '.git/config', resolution: 'ours' }).expect(409);
+      expect(inside.body).toMatchObject({ code: 'not-conflicting' });
+      expect(published).toEqual([]);
+    });
+
+    it('validates the request', async () => {
+      for (const body of [ { path: 'notes.md', resolution: 'both' }, { path: '', resolution: 'ours' }, {} ]) {
+        expect((await resolveConflict(body).expect(400)).body).toMatchObject({ code: 'validation-failed' });
+      }
+    });
+
+    it('answers no merge, and another user\'s repository like a missing one', async () => {
+      git(root, 'merge', '--abort');
+
+      const none = await resolveConflict({ path: 'notes.md', resolution: 'ours' }).expect(409);
+      expect(none.body).toMatchObject({ code: 'no-merge-in-progress' });
+      await resolveConflict({ path: 'notes.md', resolution: 'ours' }, 99).expect(404);
     });
   });
 

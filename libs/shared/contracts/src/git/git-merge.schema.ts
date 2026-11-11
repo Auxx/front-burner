@@ -53,7 +53,27 @@ export const GitMergeVersionQuerySchema = z
   })
   .meta({ id: 'GitMergeVersionQuery' });
 
+/**
+ * How a conflicting file is resolved (GC-14 to GC-16): `mark-resolved` as saved,
+ * for an editable file; `ours` or `theirs`, the whole version, for a file both
+ * changed or added; `keep` or `delete`, for a file one side deleted.
+ */
+export const GitResolutionSchema = z
+  .enum([ 'mark-resolved', 'ours', 'theirs', 'keep', 'delete' ])
+  .meta({ id: 'GitResolution' });
+
+/** Resolves one conflicting file; `force` marks it as resolved with markers left (GC-14). */
+export const GitResolveRequestSchema = z
+  .object({
+    path: z.string().min(1).max(4096),
+    resolution: GitResolutionSchema,
+    force: z.boolean().optional()
+  })
+  .meta({ id: 'GitResolveRequest' });
+
 export type GitConflictKind = z.infer<typeof GitConflictKindSchema>;
+export type GitResolution = z.infer<typeof GitResolutionSchema>;
+export type GitResolveRequest = z.infer<typeof GitResolveRequestSchema>;
 export type GitConflictFile = z.infer<typeof GitConflictFileSchema>;
 export type GitMergeState = z.infer<typeof GitMergeStateSchema>;
 export type GitMergeVersion = z.infer<typeof GitMergeVersionSchema>;

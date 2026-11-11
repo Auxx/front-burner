@@ -1652,6 +1652,42 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/merge/resolve": {
+      "post": {
+        "operationId": "resolveConflict",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/diff": {
       "get": {
         "operationId": "diff",
@@ -3510,6 +3546,36 @@
         },
         "required": [
           "content"
+        ]
+      },
+      "GitResolution": {
+        "type": "string",
+        "enum": [
+          "mark-resolved",
+          "ours",
+          "theirs",
+          "keep",
+          "delete"
+        ]
+      },
+      "GitResolveRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/GitResolution"
+          },
+          "force": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "resolution"
         ]
       },
       "DiffLine": {
