@@ -2,7 +2,7 @@ import { EventsHub } from '@front-burner/server-core-events';
 import { ConflictEntry, ConflictKind, GitMerge, GitOperationError } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
-import { FileContents, OpenableRepository, toFilesError } from '@front-burner/server-feature-files';
+import { FileContents, OpenableRepository, splitPath, toFilesError } from '@front-burner/server-feature-files';
 import type { GitResolution, GitResolveRequest } from '@front-burner/shared-contracts';
 import { hasConflictMarkers } from '@front-burner/shared-util';
 import { Injectable, Logger } from '@nestjs/common';
@@ -10,7 +10,7 @@ import { toGitApiError } from '../git/git-api-errors';
 import { MergeRecord } from '../state/merge-record';
 import { SyncStateStore } from '../state/sync-state.store';
 import { MergeGuard } from './merge-guard';
-import { MergeStateService } from './merge-state.service';
+import { mayBeEditable, MergeStateService } from './merge-state.service';
 
 /** The kinds of file each resolution is for (GC-14 to GC-16); `mark-resolved` also needs an editable file. */
 const ALLOWED: Record<GitResolution, readonly ConflictKind[]> = {
@@ -64,10 +64,11 @@ export class MergeActions {
    * Resolves one conflicting file (GC-14 to GC-16), at once on disk and in the
    * index, so that it survives a restart and any device sees it (GC-4). Waits for
    * a save in progress, through the working-tree lock. Nothing changes when it
-   * is refused (GC-27), and no other file is touched (GC-19).
+   * is refused or git fails (GC-27), and no other file is touched (GC-19).
    *
    * @throws ApiErrorException `no-merge-in-progress`, `not-conflicting`,
-   *   `resolution-not-allowed`, `conflict-markers-left`, `path-refused`, `git-timeout`
+   *   `resolution-not-allowed`, `conflict-markers-left`, `path-refused`,
+   *   `entry-not-found`, `file-too-large`, `file-not-utf8`, `git-timeout`
    */
   async resolve(userId: number, repositoryId: number, request: GitResolveRequest): Promise<void> {
     const root = this.repositories.root(userId, repositoryId);
@@ -76,16 +77,14 @@ export class MergeActions {
       await this.guard.change(repositoryId, root, async () => {
         const entry = await this.resolvable(root, request);
         tried = true;
-        await this.merges.resolve(root, entry, request.resolution).catch((failure: unknown) => {
-          if (failure instanceof PathRefusedError) {
-            toFilesError(failure);
-          }
-          return toGitApiError(failure);
-        });
+        await this.merges.resolve(root, entry, request.resolution).catch((failure: unknown) =>
+          failure instanceof PathRefusedError ? toFilesError(failure) : toGitApiError(failure)
+        );
       });
     } finally {
+      // Also after a failure: git puts the file back, but clients may have seen it change meanwhile.
       if (tried) {
-        const folder = request.path.includes('/') ? request.path.slice(0, request.path.lastIndexOf('/')) : '';
+        const [ folder ] = splitPath(request.path);
         this.events.publish(userId, { type: 'files.changed', repositoryId, folders: [ folder ] });
         this.events.publish(userId, { type: 'git.changed', repositoryId });
       }
@@ -94,20 +93,27 @@ export class MergeActions {
 
   /** The entry of an unresolved file that the resolution suits, or why not. */
   private async resolvable(root: string, { path, resolution, force }: GitResolveRequest): Promise<ConflictEntry> {
-    const entry = (await this.merges.conflicts(root)).find(conflict => conflict.path === path);
-    if (entry === undefined || entry.resolved) {
+    const entry = await this.merges.conflict(root, path);
+    if (entry === null || entry.resolved) {
       throw new ApiErrorException(409, 'not-conflicting');
     }
     // Also though git named the path: a folder on the way can be a symbolic link (A-7.6).
-    await resolveInWorkingCopy(root, path, { symlinkLeaf: true, mayBeMissing: true }).catch(toFilesError);
-    if (!ALLOWED[resolution].includes(entry.kind)) {
+    const { type } = await resolveInWorkingCopy(root, path, { symlinkLeaf: true, mayBeMissing: true })
+      .catch(toFilesError);
+    // A folder where the file was: no resolution of a file can say what becomes of it.
+    if (!ALLOWED[resolution].includes(entry.kind) || type === 'folder' || type === 'other') {
       throw new ApiErrorException(409, 'resolution-not-allowed');
     }
     if (resolution === 'mark-resolved') {
-      if (!await this.mergeState.isEditable(root, entry)) {
+      if (!mayBeEditable(entry)) {
         throw new ApiErrorException(409, 'resolution-not-allowed');
       }
-      if (!force && hasConflictMarkers(await this.contents.readTracked(root, path).catch(toFilesError))) {
+      // Read once; what keeps the editor from it, such as its size, says so with its own code (ED-2).
+      const text = await this.contents.readTracked(root, path).catch(toFilesError);
+      if (!await this.mergeState.isEditableText(root, entry, text)) {
+        throw new ApiErrorException(409, 'resolution-not-allowed');
+      }
+      if (!force && hasConflictMarkers(text)) {
         throw new ApiErrorException(409, 'conflict-markers-left');
       }
     }

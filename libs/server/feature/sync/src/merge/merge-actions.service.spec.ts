@@ -11,7 +11,7 @@ import {
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import type { DataLayout } from '@front-burner/server-core-storage';
 import { FileContents, type OpenableRepository, type WorkingTreeGuard } from '@front-burner/server-feature-files';
-import type { PushEvent } from '@front-burner/shared-contracts';
+import { EDITABLE_FILE_LIMIT, type PushEvent } from '@front-burner/shared-contracts';
 import {
   existsSync,
   mkdirSync,
@@ -556,6 +556,42 @@ describe.skipIf(process.platform === 'win32')('MergeActions', () => {
       ).rejects.toMatchObject({ status: 409, code: 'resolution-not-allowed' });
 
       expect(await resolved('data.txt')).toBe(false);
+    });
+
+    it('says why a file that the editor can\'t open now can\'t be marked as resolved', async () => {
+      conflicting();
+      await pullThatConflicts();
+      const mark = { path: 'edited.md', resolution: 'mark-resolved', force: true } as const;
+
+      writeFileSync(join(work, 'edited.md'), 'x'.repeat(EDITABLE_FILE_LIMIT + 1));
+      await expect(actions.resolve(userId, repositoryId, mark))
+        .rejects.toMatchObject({ status: 413, code: 'file-too-large' });
+      writeFileSync(join(work, 'edited.md'), Buffer.from([ 0x61, 0xff, 0x0a ]));
+      await expect(actions.resolve(userId, repositoryId, mark))
+        .rejects.toMatchObject({ status: 422, code: 'file-not-utf8' });
+      rmSync(join(work, 'edited.md'));
+      await expect(actions.resolve(userId, repositoryId, mark))
+        .rejects.toMatchObject({ status: 404, code: 'entry-not-found' });
+
+      expect(await resolved('edited.md')).toBe(false);
+      expect(published).toEqual([]);
+    });
+
+    it('refuses a file that is a folder on disk now, and changes nothing', async () => {
+      conflicting();
+      await pullThatConflicts();
+      rmSync(join(work, 'gone.md'));
+      mkdirSync(join(work, 'gone.md'));
+      writeFileSync(join(work, 'gone.md', 'inside.md'), 'kept\n');
+
+      for (const resolution of [ 'delete', 'keep' ] as const) {
+        await expect(actions.resolve(userId, repositoryId, { path: 'gone.md', resolution }))
+          .rejects.toMatchObject({ status: 409, code: 'resolution-not-allowed' });
+      }
+
+      expect(onDisk('gone.md/inside.md')).toBe('kept\n');
+      expect(await resolved('gone.md')).toBe(false);
+      expect(published).toEqual([]);
     });
 
     it('refuses a file already resolved, or not in the merge', async () => {

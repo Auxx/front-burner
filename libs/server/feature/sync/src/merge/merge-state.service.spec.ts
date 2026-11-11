@@ -324,9 +324,9 @@ describe('MergeStateService', () => {
     );
 
     // Simulate the merge being aborted on another device between the two checks:
-    // the first mergeInProgress returns true, conflicts returns empty (merge aborted),
+    // the first mergeInProgress returns true, conflict finds nothing (merge aborted),
     // then the second mergeInProgress returns false.
-    vi.spyOn(merge, 'conflicts').mockResolvedValue([]);
+    vi.spyOn(merge, 'conflict').mockResolvedValue(null);
     let callCount = 0;
     vi.spyOn(merge, 'mergeInProgress').mockImplementation(async () => {
       callCount++;

@@ -1,7 +1,8 @@
 import { inBatches, lstatOrMissing, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
+import type { GitResolution } from '@front-burner/shared-contracts';
 import { isMarkdownName } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
-import { access, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult } from '../runner/git-runner';
@@ -36,8 +37,8 @@ export interface MarkerLabels {
 
 export type ConflictKind = 'both-changed' | 'both-added' | 'deleted-by-us' | 'deleted-by-them';
 
-/** How a conflicting file is resolved; `GitResolution` in the API (GC-14 to GC-16). */
-export type GitResolution = 'mark-resolved' | 'ours' | 'theirs' | 'keep' | 'delete';
+/** Where `resolve` keeps a file in `.git` until git has recorded the resolution. */
+const RESOLVE_BACKUP = 'front-burner-resolving';
 
 /** One file a merge could not combine; `null` for a version that does not exist. */
 export interface ConflictEntry {
@@ -496,10 +497,24 @@ export class GitMerge {
    * base is left out, as a file both sides deleted (`prepareConflicts`). Takes
    * no lock (A-5.3).
    */
-  async conflicts(workingCopy: string): Promise<ConflictEntry[]> {
+  conflicts(workingCopy: string): Promise<ConflictEntry[]> {
+    return this.conflictsUnder(workingCopy, []);
+  }
+
+  /**
+   * One file of `conflicts`, or `null` when the path is not one, read without
+   * listing the others. Takes no lock (A-5.3).
+   */
+  async conflict(workingCopy: string, path: string): Promise<ConflictEntry | null> {
+    // A pathspec also matches what is inside a folder of that name.
+    const entries = await this.conflictsUnder(workingCopy, [ '--', `:(literal)${path}` ]);
+    return entries.find(entry => entry.path === path) ?? null;
+  }
+
+  private async conflictsUnder(workingCopy: string, pathspec: string[]): Promise<ConflictEntry[]> {
     const [ unresolved, resolved ] = await Promise.all([
-      this.unmerged(workingCopy, []),
-      this.stagesFrom(workingCopy, [ '--resolve-undo' ])
+      this.unmerged(workingCopy, pathspec),
+      this.stagesFrom(workingCopy, [ '--resolve-undo', ...pathspec ])
     ]);
     // A path in both is unresolved: starting a file over makes it so.
     const byPath = new Map([ ...resolved, ...unresolved ]);
@@ -744,9 +759,13 @@ export class GitMerge {
    * with its mode, `keep` puts the version that exists there, and `delete`
    * removes the file and its entries. Each records the file as resolved, so that
    * the merge still lists it (A-4.5). Nothing else is touched (GC-19). The caller
-   * holds the working-tree lock.
+   * holds the working-tree lock, and has checked that the path is not a folder.
    *
-   * @throws PathRefusedError when the file to delete is reached through a symbolic link (A-7.6).
+   * All or nothing (GC-27): until git has recorded the resolution, the file
+   * waits in `.git`, not deleted; if git fails, the file and its conflict are
+   * put back as they were. Renamed, not copied, so a large file costs nothing.
+   *
+   * @throws PathRefusedError when the path is reached through a symbolic link (A-7.6).
    * @throws GitOperationError `timeout`
    */
   async resolve(workingCopy: string, entry: ConflictEntry, resolution: GitResolution): Promise<void> {
@@ -755,29 +774,59 @@ export class GitMerge {
     // Each path read literally: `:(top)x.md` is a file's name, not a pathspec.
     const literal = [ '--literal-pathspecs' ];
     const fromStdin = [ '--pathspec-from-file=-', '--pathspec-file-nul' ];
-    await this.freeingLocksAtTimeout(workingCopy, async () => {
-      if (resolution === 'delete') {
-        await this.deleteFromWorkingCopy(workingCopy, path);
-        await this.local.checked(workingCopy, [ 'update-index', '--force-remove', '-z', '--stdin' ], onStdin);
-        return;
-      }
-      const side = resolution === 'keep' ? (entry.oursOid === null ? 'theirs' : 'ours') : resolution;
-      if (side !== 'mark-resolved') {
+    const add = () => this.local.checked(workingCopy, [ ...literal, 'add', '-A', ...fromStdin ], onStdin);
+    if (resolution === 'mark-resolved') {
+      // One write of the index, under its lock: there is nothing to put back.
+      await this.freeingLocksAtTimeout(workingCopy, add);
+      return;
+    }
+    const { absolute, type } = await resolveInWorkingCopy(workingCopy, path, { symlinkLeaf: true, mayBeMissing: true });
+    if (type === 'folder' || type === 'other') {
+      throw new Error(`Not a file: ${path}`);
+    }
+    const backup = join(workingCopy, '.git', RESOLVE_BACKUP);
+    // What a backend stopped mid-way left; the merge's own file was put back or resolved.
+    await rm(backup, { force: true, recursive: true });
+    const saved = type !== 'missing';
+    if (saved) {
+      await rename(absolute, backup);
+    }
+    try {
+      await this.freeingLocksAtTimeout(workingCopy, async () => {
+        if (resolution === 'delete') {
+          await this.local.checked(workingCopy, [ 'update-index', '--force-remove', '-z', '--stdin' ], onStdin);
+          return;
+        }
+        const side = resolution === 'keep' ? (entry.oursOid === null ? 'theirs' : 'ours') : resolution;
         await this.local.checked(
           workingCopy,
           [ ...NO_LFS, ...literal, 'checkout', `--${side}`, ...fromStdin ],
           onStdin
         );
-      }
-      await this.local.checked(workingCopy, [ ...literal, 'add', '-A', ...fromStdin ], onStdin);
-    });
+        await add();
+      });
+    } catch (error) {
+      await this.undoResolve(workingCopy, path, absolute, saved ? backup : null);
+      throw error;
+    }
+    if (saved) {
+      await rm(backup, { force: true });
+    }
   }
 
-  /** Deletes a conflicting file, as the entry it is; one that is already gone, or a folder, stays as it is. */
-  private async deleteFromWorkingCopy(workingCopy: string, path: string): Promise<void> {
-    const { absolute, type } = await resolveInWorkingCopy(workingCopy, path, { symlinkLeaf: true, mayBeMissing: true });
-    if (type !== 'folder' && type !== 'missing') {
-      await rm(absolute, { force: true });
+  /**
+   * Puts a file and its conflict back after `resolve` failed partway: its
+   * stages from what git keeps to undo a resolution, if git recorded it, and the
+   * file from `backup`, or no file when there was none.
+   */
+  private async undoResolve(workingCopy: string, path: string, absolute: string, backup: string | null): Promise<void> {
+    if (!(await this.unmerged(workingCopy, [ '--', `:(literal)${path}` ])).has(path)) {
+      // Takes paths only as arguments, which are names and never pathspecs.
+      await this.local.checked(workingCopy, [ 'update-index', '--unresolve', '--', path ]);
+    }
+    await rm(absolute, { force: true });
+    if (backup !== null) {
+      await rename(backup, absolute);
     }
   }
 

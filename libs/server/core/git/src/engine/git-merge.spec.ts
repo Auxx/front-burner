@@ -1,4 +1,5 @@
 import { PathRefusedError } from '@front-burner/server-core-storage';
+import type { GitResolution } from '@front-burner/shared-contracts';
 import { execFileSync } from 'node:child_process';
 import {
   existsSync,
@@ -18,7 +19,7 @@ import { pathToFileURL } from 'node:url';
 import type { GitOptions } from '../git.options';
 import { GitRunner } from '../runner/git-runner';
 import { GitOperationError } from './git-errors';
-import { GitMerge, GitResolution } from './git-merge';
+import { GitMerge } from './git-merge';
 import { LocalGit, LocalRunOptions } from './local-git';
 
 const REF = 'refs/front-burner/pre-merge';
@@ -1387,6 +1388,116 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
       expect(onDisk('b.md')).toBe('edited\n');
       expect(git(work, 'ls-files', '--stage', '--', 'b.md')).toBe(before);
       expect(await entryOf('b.md')).toMatchObject({ resolved: false });
+    });
+
+    describe('when git fails partway', () => {
+      const failing = (step: string) => {
+        const local = new LocalGit(new GitRunner());
+        const checked = local.checked.bind(local);
+        vi.spyOn(local, 'checked').mockImplementation((cwd: string, args: string[], options?: LocalRunOptions) =>
+          args.includes(step)
+            ? Promise.reject(new GitOperationError('timeout', 'too slow'))
+            : checked(cwd, args, options)
+        );
+        return new GitMerge(local, { gitTimeoutMs: 60_000 } as GitOptions);
+      };
+      const backup = () => join(work, '.git', 'front-burner-resolving');
+
+      it.each(
+        [
+          [ 'theirs', 'add' ],
+          [ 'ours', 'checkout' ]
+        ] as const
+      )('puts the file and its conflict back after %s fails at %s', async (resolution, step) => {
+        bothChanged();
+        writeFileSync(join(work, 'edited.md'), 'saved edits\n');
+        const stages = staged('edited.md');
+
+        await expect(failing(step).resolve(work, await entryOf('edited.md'), resolution))
+          .rejects.toMatchObject({ code: 'timeout' });
+
+        expect(onDisk('edited.md')).toBe('saved edits\n');
+        expect(staged('edited.md')).toBe(stages);
+        expect(git(work, 'ls-files', '--resolve-undo')).toBe('');
+        expect(await entryOf('edited.md')).toMatchObject({ resolved: false });
+        expect(existsSync(backup())).toBe(false);
+      });
+
+      it('puts back a file it was deleting', async () => {
+        diverged({ 'gone.md': 'base\n' }, { 'gone.md': 'mine\n' }, { 'gone.md': null });
+        const stages = staged('gone.md');
+
+        await expect(failing('--force-remove').resolve(work, await entryOf('gone.md'), 'delete'))
+          .rejects.toMatchObject({ code: 'timeout' });
+
+        expect(onDisk('gone.md')).toBe('mine\n');
+        expect(staged('gone.md')).toBe(stages);
+        expect(existsSync(backup())).toBe(false);
+      });
+
+      it('puts back the conflict that git recorded as resolved, and no file where there was none', async () => {
+        diverged({ 'gone.md': 'base\n' }, { 'gone.md': null }, { 'gone.md': 'theirs\n' });
+        rmSync(join(work, 'gone.md'));
+        const stages = staged('gone.md');
+        const local = new LocalGit(new GitRunner());
+        const checked = local.checked.bind(local);
+        // git records the resolution, then the command is reported as failed.
+        vi.spyOn(local, 'checked').mockImplementation(
+          async (cwd: string, args: string[], options?: LocalRunOptions) => {
+            const output = await checked(cwd, args, options);
+            if (args.includes('add')) {
+              throw new GitOperationError('timeout', 'too slow');
+            }
+            return output;
+          }
+        );
+        const merging = new GitMerge(local, { gitTimeoutMs: 60_000 } as GitOptions);
+
+        await expect(merging.resolve(work, await entryOf('gone.md'), 'keep')).rejects.toMatchObject({
+          code: 'timeout'
+        });
+
+        expect(existsSync(join(work, 'gone.md'))).toBe(false);
+        expect(staged('gone.md')).toBe(stages);
+        expect(await entryOf('gone.md')).toMatchObject({ resolved: false });
+      });
+
+      it('clears what a stopped backend left before it starts', async () => {
+        bothChanged();
+        writeFileSync(backup(), 'left over\n');
+
+        await resolve('edited.md', 'theirs');
+
+        expect(existsSync(backup())).toBe(false);
+        expect(onDisk('edited.md')).toBe('theirs\n');
+      });
+    });
+
+    it('refuses a path that is a folder on disk, and changes nothing', async () => {
+      diverged({ 'gone.md': 'base\n' }, { 'gone.md': 'mine\n' }, { 'gone.md': null });
+      rmSync(join(work, 'gone.md'));
+      mkdirSync(join(work, 'gone.md'));
+      writeFileSync(join(work, 'gone.md', 'inside.md'), 'kept\n');
+
+      await expect(resolve('gone.md', 'delete')).rejects.toThrow('Not a file');
+
+      expect(onDisk('gone.md/inside.md')).toBe('kept\n');
+      expect(await entryOf('gone.md')).toMatchObject({ resolved: false });
+    });
+
+    it('reads one conflict without the others, and not what is inside a folder of its name', async () => {
+      diverged(
+        { 'docs/a.md': 'base\n', 'b.md': 'base\n' },
+        { 'docs/a.md': 'mine\n', 'b.md': 'mine\n' },
+        { 'docs/a.md': 'theirs\n', 'b.md': 'theirs\n' }
+      );
+      await resolve('docs/a.md', 'ours');
+
+      expect(await merge.conflict(work, 'docs/a.md')).toEqual(await entryOf('docs/a.md'));
+      expect(await merge.conflict(work, 'b.md')).toEqual(await entryOf('b.md'));
+      expect(await merge.conflict(work, 'docs')).toBeNull();
+      expect(await merge.conflict(work, 'first.md')).toBeNull();
+      expect(await merge.conflict(work, '*.md')).toBeNull();
     });
 
     it('refuses to delete a file through a symbolic link', async () => {

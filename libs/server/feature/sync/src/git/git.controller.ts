@@ -310,9 +310,11 @@ export class GitController {
    * `delete`, for a file one side deleted (GC-16). Waits for a save in progress.
    * Refused with `no-merge-in-progress`; `not-conflicting` for a file already
    * resolved or not in the merge; `resolution-not-allowed` when the file's kind
-   * does not offer it; `conflict-markers-left` when the file still has lines that
-   * look like markers and `force` is not set; and `path-refused` for a path
-   * through a symbolic link. Nothing changes when it is refused (GC-27).
+   * does not offer it, or the path is a folder on disk; `conflict-markers-left`
+   * when the file still has lines that look like markers and `force` is not set;
+   * `path-refused` for a path through a symbolic link; and, for `mark-resolved`,
+   * what keeps the editor from the file (`file-too-large`, `file-not-utf8`,
+   * `entry-not-found`). Nothing changes when it is refused or git fails (GC-27).
    */
   @Post('merge/resolve')
   @HttpCode(204)
