@@ -6,6 +6,7 @@ import type {
   CommitRequest,
   CommitResult,
   GitBranchList,
+  GitConflictPath,
   GitDiff,
   GitIncoming,
   GitJobStarted,
@@ -91,6 +92,12 @@ export class GitApi {
   resolveConflict(id: number, data: GitResolveRequest): Observable<void> {
     return this.http.post<void>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/merge/resolve`,
+      data
+    );
+  }
+  startConflictOver(id: number, data: GitConflictPath): Observable<void> {
+    return this.http.post<void>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/merge/start-over`,
       data
     );
   }

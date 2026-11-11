@@ -40,7 +40,10 @@ export const ERROR_CODES = [
   'no-merge-in-progress',
   /** 409; the path is not one of the merge's conflicting files, or is already resolved (GC-14 to GC-17). */
   'not-conflicting',
-  /** 409; the file's kind does not offer this resolution, or it is not editable to mark as resolved (GC-14 to GC-16). */
+  /**
+   * 409; the file's kind does not offer this resolution, it is not editable to mark as resolved, or a folder is
+   * at its path, which no resolution or start over can say what becomes of (GC-14 to GC-16, GC-18).
+   */
   'resolution-not-allowed',
   /** 409; the conflicting file is not resolved, so there is nothing to start over (GC-18). */
   'not-resolved',

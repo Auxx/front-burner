@@ -333,7 +333,8 @@ export class GitController {
    * markers, and marks it unresolved (GC-18); `edited` in `GET …/git/merge` says
    * whether to ask first. Waits for a save in progress, and touches no other file
    * (GC-19). Refused with `no-merge-in-progress`; `not-conflicting` for a file not
-   * in the merge; `not-resolved` for one that is not resolved; and `path-refused`
+   * in the merge; `not-resolved` for one that is not resolved;
+   * `resolution-not-allowed` when the path is a folder on disk; and `path-refused`
    * for a path through a symbolic link. Nothing changes when it is refused or git
    * fails (GC-27).
    */

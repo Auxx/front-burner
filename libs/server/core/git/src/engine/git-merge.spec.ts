@@ -347,6 +347,7 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
           theirsMode: '100644',
           oursSize: sizeOf('mine\n'),
           theirsSize: sizeOf('theirs!\n'),
+          resolution: null,
           edited: false
         }
       ]);
@@ -1604,7 +1605,11 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
 
         await resolve('edited.md', 'mark-resolved');
 
-        expect(await entryOf('edited.md')).toMatchObject({ resolved: true, edited: true });
+        expect(await entryOf('edited.md')).toMatchObject({
+          resolved: true,
+          edited: true,
+          resolution: { mode: '100644', oid: git(work, 'rev-parse', ':0:edited.md') }
+        });
       });
 
       it('says nothing for a whole version', async () => {

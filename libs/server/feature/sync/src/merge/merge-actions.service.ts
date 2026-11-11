@@ -83,28 +83,49 @@ export class MergeActions {
    * `resolve` changes a file: in the lock, all or nothing, and nothing else.
    *
    * @throws ApiErrorException `no-merge-in-progress`, `not-conflicting`,
-   *   `not-resolved`, `path-refused`, `git-timeout`
+   *   `not-resolved`, `resolution-not-allowed` (a folder at the path),
+   *   `path-refused`, `git-timeout`
    */
   async startOver(userId: number, repositoryId: number, path: string): Promise<void> {
     await this.changeOneFile(userId, repositoryId, path, async root => {
-      const entry = await this.merges.conflict(root, path);
+      const [ entry, { branch, upstream } ] = await Promise.all([
+        this.merges.conflict(root, path),
+        this.merges.branchAndUpstream(root)
+      ]);
       if (entry === null) {
         throw new ApiErrorException(409, 'not-conflicting');
       }
       if (!entry.resolved) {
         throw new ApiErrorException(409, 'not-resolved');
       }
+      if (!await this.isFileOrMissing(root, path)) {
+        throw new ApiErrorException(409, 'resolution-not-allowed');
+      }
       // The names `GET …/git/merge` gives, as the merge labelled its markers (GC-5).
-      const { branch, upstream } = await this.merges.branchAndUpstream(root);
       const labels = { ours: branch ?? 'HEAD', theirs: upstream ?? 'MERGE_HEAD' };
       return () => this.merges.startOver(root, entry, labels);
     });
   }
 
   /**
+   * Whether a file, or nothing, is at a conflicting file's path: with a folder
+   * there, no change to the file can say what becomes of the folder. Also though
+   * git named the path, a folder on the way can be a symbolic link (A-7.6).
+   *
+   * @throws ApiErrorException `path-refused`
+   */
+  private async isFileOrMissing(root: string, path: string): Promise<boolean> {
+    const { type } = await resolveInWorkingCopy(root, path, { symlinkLeaf: true, mayBeMissing: true })
+      .catch(toFilesError);
+    return type !== 'folder' && type !== 'other';
+  }
+
+  /**
    * Runs `check` in the lock during a merge, then the change it gives back, and
    * tells clients once the change was tried, also after a failure: git puts the
-   * file back, but clients may have seen it change meanwhile.
+   * file back, but clients may have seen it change meanwhile. Only the file's own
+   * folder changes: `check` refuses a path whose folder is missing (`entry-not-found`),
+   * so no folder comes back.
    */
   private async changeOneFile(
     userId: number,
@@ -137,11 +158,7 @@ export class MergeActions {
     if (entry === null || entry.resolved) {
       throw new ApiErrorException(409, 'not-conflicting');
     }
-    // Also though git named the path: a folder on the way can be a symbolic link (A-7.6).
-    const { type } = await resolveInWorkingCopy(root, path, { symlinkLeaf: true, mayBeMissing: true })
-      .catch(toFilesError);
-    // A folder where the file was: no resolution of a file can say what becomes of it.
-    if (!ALLOWED[resolution].includes(entry.kind) || type === 'folder' || type === 'other') {
+    if (!ALLOWED[resolution].includes(entry.kind) || !await this.isFileOrMissing(root, path)) {
       throw new ApiErrorException(409, 'resolution-not-allowed');
     }
     if (resolution === 'mark-resolved') {

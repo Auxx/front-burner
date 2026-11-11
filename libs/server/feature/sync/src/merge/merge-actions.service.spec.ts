@@ -772,6 +772,39 @@ describe.skipIf(process.platform === 'win32')('MergeActions', () => {
         ]);
       });
 
+      it('refuses a file that is a folder on disk now, and changes nothing', async () => {
+        conflicting();
+        await pullThatConflicts();
+        await actions.resolve(userId, repositoryId, { path: 'gone.md', resolution: 'delete' });
+        mkdirSync(join(work, 'gone.md'));
+        writeFileSync(join(work, 'gone.md', 'inside.md'), 'kept\n');
+        published = [];
+
+        await expect(actions.startOver(userId, repositoryId, 'gone.md'))
+          .rejects.toMatchObject({ status: 409, code: 'resolution-not-allowed' });
+
+        expect(onDisk('gone.md/inside.md')).toBe('kept\n');
+        expect(await resolved('gone.md')).toBe(true);
+        expect(published).toEqual([]);
+      });
+
+      it('refuses a file whose folder is gone, so no folder comes back unannounced', async () => {
+        diverged({ 'notes/deep/gone.md': 'base\n' }, { 'notes/deep/gone.md': 'mine\n' }, {
+          'notes/deep/gone.md': null
+        });
+        await pullThatConflicts();
+        await actions.resolve(userId, repositoryId, { path: 'notes/deep/gone.md', resolution: 'delete' });
+        rmSync(join(work, 'notes'), { recursive: true });
+        published = [];
+
+        await expect(actions.startOver(userId, repositoryId, 'notes/deep/gone.md'))
+          .rejects.toMatchObject({ status: 404, code: 'entry-not-found' });
+
+        expect(existsSync(join(work, 'notes'))).toBe(false);
+        expect(await resolved('notes/deep/gone.md')).toBe(true);
+        expect(published).toEqual([]);
+      });
+
       it('says with a code that git failed, and clients are told', async () => {
         conflicting();
         await pullThatConflicts();
