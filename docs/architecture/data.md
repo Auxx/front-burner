@@ -47,13 +47,17 @@ numbering conventions.
   is pushed or undone (GC-24 to GC-26). Only then are both removed. _(My call.)_
   Aborting puts back the record of the merge before it, if it has one, so that
   **Undo merge** of that merge comes back, and leaves alone a record that is not
-  the aborted merge's (A-5.12). _(Plan 80's call.)_ The record is five columns
-  of `sync_state`: `recorded_commit` and `merge_commit` (null until the merge is
-  committed), `earlier_recorded_commit` and `earlier_merge_commit`, which hold
-  the record of the previous merge while a new merge is applied so that a merge
-  that fails can put it back, and `merge_applying` (boolean, false by default),
-  true while a merge is being applied. Committing the merge clears the
-  `earlier_` columns.
+  the aborted merge's (A-5.12). _(Plan 80's call.)_ A successful push forgets
+  the record when the merge commit is then on a remote branch. A merge pushed
+  from another device, or found on a remote branch by a fetch, is not offered
+  for **Undo merge**, as its commit is on a remote branch, and its record is
+  forgotten at the next push from here. _(Plan 94's call.)_ The record is five
+  columns of `sync_state`: `recorded_commit` and `merge_commit` (null until the
+  merge is committed), `earlier_recorded_commit` and `earlier_merge_commit`,
+  which hold the record of the previous merge while a new merge is applied so
+  that a merge that fails can put it back, and `merge_applying` (boolean, false
+  by default), true while a merge is being applied. Committing the merge clears
+  the `earlier_` columns.
 - **A-4.5b** Every row that belongs to one repository references it with `ON
   DELETE CASCADE`, so that removing a repository (RM-19) deletes its
   `sync_state`, warnings and jobs in the same transaction. Saved credentials and

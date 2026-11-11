@@ -24,6 +24,7 @@ const STATUS: GitStatus = {
   changes: [ 'README.md', 'a.md', 'b.md', 'logo.png' ].map(path => ({ path, state: 'modified' as const })),
   mergeInProgress: false,
   networkJob: null,
+  undoableMerge: false,
   fetchProblem: null
 };
 

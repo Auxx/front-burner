@@ -1767,6 +1767,32 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/git/merge/undo": {
+      "post": {
+        "operationId": "undoMerge",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/git/diff": {
       "get": {
         "operationId": "diff",
@@ -3381,6 +3407,9 @@
             ],
             "nullable": true
           },
+          "undoableMerge": {
+            "type": "boolean"
+          },
           "networkJob": {
             "allOf": [
               {
@@ -3409,6 +3438,7 @@
           "changes",
           "mergeInProgress",
           "lastCommit",
+          "undoableMerge",
           "networkJob",
           "fetchProblem"
         ]

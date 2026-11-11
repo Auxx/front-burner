@@ -53,6 +53,8 @@ export const ERROR_CODES = [
   'version-not-readable',
   /** 409; a conflicting file is not resolved yet, so the merge cannot be committed (GC-20). */
   'merge-unresolved',
+  /** 409; the last commit is not a merge that can be undone: not Front Burner's last merge, pushed, or with uncommitted changes (GC-25). */
+  'undo-not-allowed',
   /** 500; git could not abort the merge, which stays in progress (GC-27). */
   'merge-abort-failed',
   /** 413; a file to read or save is over the editor's limit; params `{ limit }` in bytes (ED-2, ED-19). */

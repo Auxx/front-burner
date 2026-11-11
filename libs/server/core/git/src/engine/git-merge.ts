@@ -77,6 +77,9 @@ const MAX_BLOCKING_PATHS = 20;
 /** Paths on one command line: 100 of the longest (4,096 bytes) stay well within Linux's 2 MiB. */
 const PATHS_PER_COMMAND = 100;
 
+/** A full SHA-1 or SHA-256 object ID, as `rev-parse` gives it. */
+const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
 /** A regular file's mode in the index; a symbolic link (120000) or a submodule (160000) has no markers. */
 export const REGULAR_FILE = /^100(644|755)$/;
 
@@ -356,6 +359,33 @@ export class GitMerge {
       `refs/remotes/origin/${branch}`
     ]);
     return exitAsBoolean(result, 'show-ref');
+  }
+
+  /**
+   * Whether a commit is on a remote branch as of the last fetch or push, so has
+   * been published (GC-25). A commit that is not in the repository is on none.
+   * Any other failure throws: it must never pass for "not published", as an
+   * undo would then reset a merge that others already have.
+   */
+  async isOnRemoteBranch(workingCopy: string, oid: string): Promise<boolean> {
+    if (!OBJECT_ID.test(oid)) {
+      throw new Error(`Not an object ID: ${oid}`);
+    }
+    const result = await this.local.run(workingCopy, [ 'rev-list', '-1', oid, '--not', '--remotes' ], {
+      timeoutMs: this.options.gitTimeoutMs
+    });
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    if (result.exitCode === 0) {
+      return result.stdout.trim() === '';
+    }
+    // A commit that garbage collection removed, or never was: nothing to undo.
+    const exists = await this.local.run(workingCopy, [ 'cat-file', '-e', `${oid}^{commit}` ]);
+    if (exists.exitCode !== 0 && !exists.timedOut) {
+      return false;
+    }
+    throw new Error(`git rev-list failed: ${result.stderr.trim()}`);
   }
 
   /** Makes the branch of the same name on `origin` the branch's upstream. */

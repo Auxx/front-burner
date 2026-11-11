@@ -81,7 +81,7 @@ half, GC-27); `docs/architecture/data.md` A-4.5a; D-4.6.
   - `POST /api/v1/repositories/:id/git/merge/undo` (`undoMerge`, `204`).
   - Error code `undo-not-allowed`.
 
-- [ ] **Step 1: Write the failing tests**: `offers undo after a merge commit`;
+- [x] **Step 1: Write the failing tests**: `offers undo after a merge commit`;
       `is not offered after a pull that made no merge commit`; `is not offered
       after a fast-forward`; `stays offered after a pull that left the merge as
       it was`; `undoes the merge and shows the upstream's commits again`;
@@ -90,13 +90,13 @@ half, GC-27); `docs/architecture/data.md` A-4.5a; D-4.6.
       push`; `forgets the record after a successful push`; `keeps the record
       after a failed push`; `publishes files.changed and git.changed`; end to
       end, `undoes a committed merge over the API`.
-- [ ] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
+- [x] **Step 2: Run them and see them fail** — `npx nx run-many -t test -p
       server-core-git server-feature-sync`.
-- [ ] **Step 3: Implement**; `npx nx run web-api-client:generate`.
-- [ ] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
+- [x] **Step 3: Implement**; `npx nx run web-api-client:generate`.
+- [x] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
       server-e2e`.
-- [ ] **Step 5: Update the status**: REQ-GIT-003 adds `undo-merge-api`; GC-25
+- [x] **Step 5: Update the status**: REQ-GIT-003 adds `undo-merge-api`; GC-25
       and GC-26 "(only the backend is built)". Run `doc-ids.mjs criteria` and
       copy its result.
-- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
+- [x] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(sync): undo a committed merge`.

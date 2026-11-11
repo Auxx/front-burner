@@ -63,6 +63,12 @@ export const GitStatusSchema = z
     mergeInProgress: z.boolean(),
     /** `null` without commits. */
     lastCommit: GitLastCommitSchema.nullable(),
+    /**
+     * **Undo merge** is offered: the last commit is the merge commit of
+     * Front Burner's last merge, on no remote branch, and nothing is
+     * uncommitted (GC-25).
+     */
+    undoableMerge: z.boolean(),
     /** The unfinished push, fetch or pull, or `null` (GA-9). */
     networkJob: GitNetworkJobSchema.nullable(),
     /**

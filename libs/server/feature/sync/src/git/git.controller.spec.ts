@@ -7,6 +7,7 @@ import {
   GitOptions,
   GitRunner,
   LocalGit,
+  NetworkLock,
   WorkingTreeLock
 } from '@front-burner/server-core-git';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
@@ -79,6 +80,8 @@ describe('GitController', () => {
   let published: PushEvent[];
   let fileOpened: ReturnType<typeof vi.fn<FetchScheduler['fileOpened']>>;
   let cloneMode: 'full' | 'single-branch';
+  let record: { recordedCommit: string | null; mergeCommit: string | null; applying: boolean; };
+  let forgotten: number;
 
   const status = (id = READY) => request(app.getHttpServer()).get(`/repositories/${id}/git/status`);
   const commit = (body: object, id = READY) =>
@@ -97,6 +100,8 @@ describe('GitController', () => {
     published = [];
     fileOpened = vi.fn();
     cloneMode = 'full';
+    record = { recordedCommit: null, mergeCommit: null, applying: false };
+    forgotten = 0;
     const repositories = {
       root: (userId: number, id: number) => {
         if (userId !== USER || (id !== READY && id !== CLONING)) {
@@ -124,11 +129,12 @@ describe('GitController', () => {
       {} as EventsHub,
       {} as DataLayout
     );
+    const workingTreeGuard = new WorkingTreeGuard(new WorkingTreeLock(), engine, gitMerge);
     const moduleRef = await Test.createTestingModule({
       controllers: [ GitController ],
       providers: [
         { provide: GitEngine, useValue: engine },
-        { provide: WorkingTreeGuard, useValue: new WorkingTreeGuard(new WorkingTreeLock(), engine, gitMerge) },
+        { provide: WorkingTreeGuard, useValue: workingTreeGuard },
         { provide: OpenableRepository, useValue: repositories },
         { provide: CommitAuthors, useValue: commitAuthors },
         // Pushing has its own spec, with a remote.
@@ -152,7 +158,10 @@ describe('GitController', () => {
               events,
               state,
               contents,
-              commitAuthors as unknown as CommitAuthors
+              commitAuthors as unknown as CommitAuthors,
+              engine,
+              workingTreeGuard,
+              new NetworkLock()
             ),
           inject: [ MergeGuard, SyncStateStore, EventsHub, MergeStateService ]
         },
@@ -162,7 +171,11 @@ describe('GitController', () => {
           provide: SyncStateStore,
           useValue: {
             fetchProblem: () => null,
-            record: () => ({ recordedCommit: null, mergeCommit: null, applying: false })
+            record: () => record,
+            forgetRecord: () => {
+              forgotten++;
+              record = { recordedCommit: null, mergeCommit: null, applying: false };
+            }
           }
         },
         { provide: GitJobs, useValue: { networkJob: () => null } },
@@ -203,6 +216,7 @@ describe('GitController', () => {
       changes: [ { path: 'notes.md', state: 'modified' } ],
       lastCommit: { oid: git(root, 'rev-parse', 'HEAD').trim(), amendable: true, message: 'base' },
       networkJob: null,
+      undoableMerge: false,
       fetchProblem: null
     });
 
@@ -1060,6 +1074,79 @@ describe('GitController', () => {
       it('answers another user\'s repository like a missing one', async () => {
         await commitMerge({ message: 'Merge' }, 99).expect(404);
       });
+    });
+  });
+
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  describe.skipIf(process.platform === 'win32')('undo merge', () => {
+    const undoMerge = (id = READY) => request(app.getHttpServer()).post(`/repositories/${id}/git/merge/undo`);
+    const head = () => git(root, 'rev-parse', 'HEAD').trim();
+    let before: string;
+
+    beforeEach(() => {
+      git(root, 'switch', '-q', '-c', 'theirs');
+      writeFileSync(join(root, 'theirs.md'), 'theirs\n');
+      git(root, 'add', 'theirs.md');
+      git(root, 'commit', '-q', '-m', 'theirs');
+      git(root, 'switch', '-q', 'main');
+      writeFileSync(join(root, 'mine.md'), 'mine\n');
+      git(root, 'add', 'mine.md');
+      git(root, 'commit', '-q', '-m', 'mine');
+      before = head();
+      git(root, 'merge', '-q', '--no-edit', 'theirs');
+      record = { recordedCommit: before, mergeCommit: head(), applying: false };
+    });
+
+    it('says in the status that the merge can be undone, undoes it and tells clients', async () => {
+      expect((await status().expect(200)).body).toMatchObject({ undoableMerge: true });
+
+      await undoMerge().expect(204);
+
+      expect(head()).toBe(before);
+      expect(existsSync(join(root, 'theirs.md'))).toBe(false);
+      expect(forgotten).toBe(1);
+      expect((await status().expect(200)).body).toMatchObject({ undoableMerge: false });
+      expect(published).toEqual([
+        { type: 'files.changed', repositoryId: READY, folders: 'all' },
+        { type: 'git.changed', repositoryId: READY }
+      ]);
+    });
+
+    it('refuses with undo-not-allowed, and changes nothing', async () => {
+      const merged = head();
+      writeFileSync(join(root, 'mine.md'), 'changed\n');
+
+      expect((await status().expect(200)).body).toMatchObject({ undoableMerge: false });
+      expect((await undoMerge().expect(409)).body).toMatchObject({ code: 'undo-not-allowed' });
+
+      expect(head()).toBe(merged);
+      expect(readFileSync(join(root, 'mine.md'), 'utf8')).toBe('changed\n');
+      expect(forgotten).toBe(0);
+      expect(published).toEqual([]);
+    });
+
+    it('agrees with the status on a detached HEAD at the merge commit', async () => {
+      git(root, 'switch', '-q', '--detach', 'HEAD');
+
+      expect((await status().expect(200)).body).toMatchObject({ undoableMerge: false });
+      expect((await undoMerge().expect(409)).body).toMatchObject({ code: 'undo-not-allowed' });
+    });
+
+    it('refuses during a merge', async () => {
+      git(root, 'switch', '-q', 'theirs');
+      writeFileSync(join(root, 'notes.md'), 'theirs\n');
+      git(root, 'commit', '-q', '-am', 'theirs again');
+      git(root, 'switch', '-q', 'main');
+      writeFileSync(join(root, 'notes.md'), 'mine\n');
+      git(root, 'commit', '-q', '-am', 'mine again');
+      expect(() => git(root, 'merge', '--no-edit', 'theirs')).toThrow();
+
+      expect((await undoMerge().expect(409)).body).toMatchObject({ code: 'merge-in-progress' });
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      await undoMerge(99).expect(404);
+      await undoMerge(CLONING).expect(409);
     });
   });
 

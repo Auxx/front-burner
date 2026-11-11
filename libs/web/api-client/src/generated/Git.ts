@@ -111,6 +111,12 @@ export class GitApi {
       data
     );
   }
+  undoMerge(id: number): Observable<void> {
+    return this.http.request<void>(
+      'POST',
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/merge/undo`
+    );
+  }
   diff(
     id: number,
     query: {

@@ -62,7 +62,7 @@ describe.skipIf(process.platform === 'win32')('FetchService', () => {
         { provide: GitJobs, useValue: harness.gitJobs },
         { provide: SyncStateStore, useValue: harness.syncState },
         { provide: MergeStateService, useValue: {} },
-        { provide: MergeActions, useValue: {} },
+        { provide: MergeActions, useValue: { isUndoable: async () => false } },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
         { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor }

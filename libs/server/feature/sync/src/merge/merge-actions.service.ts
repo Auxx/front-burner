@@ -1,8 +1,21 @@
 import { EventsHub } from '@front-burner/server-core-events';
-import { ConflictEntry, ConflictKind, GitMerge, GitOperationError } from '@front-burner/server-core-git';
+import {
+  ConflictEntry,
+  ConflictKind,
+  GitEngine,
+  GitMerge,
+  GitOperationError,
+  NetworkLock
+} from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
-import { FileContents, OpenableRepository, splitPath, toFilesError } from '@front-burner/server-feature-files';
+import {
+  FileContents,
+  OpenableRepository,
+  splitPath,
+  toFilesError,
+  WorkingTreeGuard
+} from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
 import type { CommitResult, GitResolution, GitResolveRequest } from '@front-burner/shared-contracts';
 import { hasConflictMarkers } from '@front-burner/shared-util';
@@ -22,6 +35,17 @@ const ALLOWED: Record<GitResolution, readonly ConflictKind[]> = {
   delete: [ 'deleted-by-us', 'deleted-by-them' ]
 };
 
+/** What GC-25 needs to know about the working copy, beyond the record. */
+export interface UndoState {
+  /** `null` on a detached `HEAD`. */
+  branch: string | null;
+  /** `null` without commits. */
+  head: string | null;
+  /** Nothing is uncommitted. */
+  clean: boolean;
+  mergeInProgress: boolean;
+}
+
 /** What a user does to the merge in progress (REQ-GIT-003). */
 @Injectable()
 export class MergeActions {
@@ -36,8 +60,60 @@ export class MergeActions {
     private readonly events: EventsHub,
     private readonly mergeState: MergeStateService,
     private readonly contents: FileContents,
-    private readonly commitAuthors: CommitAuthors
+    private readonly commitAuthors: CommitAuthors,
+    private readonly engine: GitEngine,
+    private readonly workingTree: WorkingTreeGuard,
+    private readonly networkLock: NetworkLock
   ) {}
+
+  /**
+   * Whether **Undo merge** is offered (GC-25): the current branch's last commit
+   * is the merge commit of the record, which is on no remote branch, and nothing
+   * is uncommitted or being merged. A merge pushed from another device, or that
+   * a fetch found on a remote branch, fails it without any bookkeeping.
+   */
+  async isUndoable(repositoryId: number, root: string, state: UndoState): Promise<boolean> {
+    return (await this.undoTarget(repositoryId, root, state)) !== null;
+  }
+
+  /**
+   * Undoes the last merge, which was committed (GC-26): the branch and the files
+   * go back to the commit recorded before it, so the upstream's commits show as
+   * to pull again, and the record is forgotten (A-4.5a). GC-25 is checked again
+   * in both locks: the network lock first, so that a push of the merge commit
+   * under way finishes and counts, then the working-tree lock, as a save or a
+   * commit can come between the status and this request, and a hard reset would
+   * destroy uncommitted changes. Nothing takes the working-tree lock inside the
+   * network lock, so the two can't wait on each other, and saves never wait
+   * behind the remote. Clients are told whenever the reset was tried, as a reset
+   * that fails partway may have changed files.
+   *
+   * @throws ApiErrorException `merge-in-progress`, `undo-not-allowed`, `git-timeout`
+   */
+  async undo(userId: number, repositoryId: number): Promise<void> {
+    const root = this.repositories.root(userId, repositoryId);
+    let tried = false;
+    try {
+      await this.networkLock.run(repositoryId, () =>
+        this.workingTree.change(repositoryId, root, async () => {
+          const status = await this.engine.status(root).catch(toGitApiError);
+          const head = status.noCommits ? null : await this.merges.head(root).catch(toGitApiError);
+          const state = { branch: status.branch, head, clean: status.changes.length === 0, mergeInProgress: false };
+          const recordedCommit = await this.undoTarget(repositoryId, root, state).catch(toGitApiError);
+          if (recordedCommit === null) {
+            throw new ApiErrorException(409, 'undo-not-allowed');
+          }
+          tried = true;
+          await this.merges.resetTo(root, recordedCommit).catch(toGitApiError);
+          await this.mergeRecord.forget(repositoryId, root);
+        }));
+    } finally {
+      if (tried) {
+        this.events.publish(userId, { type: 'files.changed', repositoryId, folders: 'all' });
+        this.events.publish(userId, { type: 'git.changed', repositoryId });
+      }
+    }
+  }
 
   /**
    * Puts the branch, the files and the index back as they were before the pull
@@ -250,6 +326,22 @@ export class MergeActions {
     }
     const recorded = recordedCommit ?? await this.merges.recordedCommit(root);
     return recorded !== null && recorded === await this.merges.head(root) ? recorded : null;
+  }
+
+  /**
+   * The commit that **Undo merge** goes back to, or `null` when GC-25 does not
+   * hold. On a detached `HEAD`, a reset would leave the merge on its branch, so
+   * it is never offered there.
+   */
+  private async undoTarget(repositoryId: number, root: string, state: UndoState): Promise<string | null> {
+    const { recordedCommit, mergeCommit, applying } = this.syncState.record(repositoryId);
+    if (recordedCommit === null || mergeCommit === null || applying) {
+      return null;
+    }
+    if (state.branch === null || state.head !== mergeCommit || !state.clean || state.mergeInProgress) {
+      return null;
+    }
+    return await this.merges.isOnRemoteBranch(root, mergeCommit) ? null : recordedCommit;
   }
 
   /** GC-27: a failure says so with its own code. The merge is still there, so the user can try again. */

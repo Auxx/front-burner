@@ -120,6 +120,7 @@ describe('RepositoryScreenPage', () => {
     changes,
     mergeInProgress: false,
     networkJob: null,
+    undoableMerge: false,
     fetchProblem: null
   });
   const page = () => harness.fixture.nativeElement as HTMLElement;

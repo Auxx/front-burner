@@ -22,6 +22,7 @@ function status(...paths: string[]): GitStatus {
     changes: paths.map(path => ({ path, state: 'modified' as const })),
     mergeInProgress: false,
     networkJob: null,
+    undoableMerge: false,
     fetchProblem: null
   };
 }

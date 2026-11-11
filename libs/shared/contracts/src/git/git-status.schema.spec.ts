@@ -16,8 +16,15 @@ describe('GitStatusSchema', () => {
     } ],
     lastCommit: { oid: '0123456789abcdef0123456789abcdef01234567', amendable: true, message: 'Subject\n\nBody' },
     networkJob: null,
+    undoableMerge: false,
     fetchProblem: null
   };
+
+  it('parses whether the last merge can be undone, and needs it', () => {
+    expect(GitStatusSchema.parse({ ...status, undoableMerge: true }).undoableMerge).toBe(true);
+    const { undoableMerge: _undoableMerge, ...without } = status;
+    expect(GitStatusSchema.safeParse(without).success).toBe(false);
+  });
 
   it('parses a status', () => {
     expect(GitStatusSchema.parse(status)).toEqual(status);

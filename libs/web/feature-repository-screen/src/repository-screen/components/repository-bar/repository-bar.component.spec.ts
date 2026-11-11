@@ -156,6 +156,7 @@ describe('RepositoryBarComponent', () => {
       changes: [],
       mergeInProgress: false,
       networkJob: null,
+      undoableMerge: false,
       fetchProblem: null
     });
     await settle(fixture);

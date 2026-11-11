@@ -125,8 +125,9 @@ export class GitController {
   /**
    * The branch, its counts against the upstream, whether an unpublished branch
    * has a remote branch of its name to pull, every changed file, whether the
-   * last commit can be amended, the push, fetch or pull under way, and why the
-   * last fetch failed (GA-7 to GA-9, GA-11, GA-22, GA-35, GA-42).
+   * last commit can be amended, whether the last merge can be undone, the push,
+   * fetch or pull under way, and why the last fetch failed (GA-7 to GA-9, GA-11,
+   * GA-22, GA-35, GA-42, GC-25).
    */
   @Get('status')
   @ApiOkResponse({ type: GitStatusDto })
@@ -139,11 +140,21 @@ export class GitController {
       this.engine.mergeInProgress(root),
       this.engine.lastCommit(root)
     ]);
+    const [ sameName, undoableMerge ] = await Promise.all([
+      sameNameRemote(this.merge, root, status),
+      this.mergeActions.isUndoable(params.id, root, {
+        branch: status.branch,
+        head: lastCommit?.oid ?? null,
+        clean: status.changes.length === 0,
+        mergeInProgress
+      })
+    ]);
     return {
       ...status,
-      sameNameRemote: await sameNameRemote(this.merge, root, status),
+      sameNameRemote: sameName,
       mergeInProgress,
       lastCommit,
+      undoableMerge,
       networkJob: this.gitJobs.networkJob(userId, params.id),
       fetchProblem: this.syncState.fetchProblem(params.id)
     };
@@ -369,6 +380,23 @@ export class GitController {
     @Body() body: GitMergeCommitRequestDto
   ): Promise<CommitResult> {
     return this.mergeActions.commit(authOf(req).userId, params.id, body.message);
+  }
+
+  /**
+   * Undoes the last merge, once committed: the branch and the files go back to
+   * the commit recorded before it, and the upstream's commits show as to pull
+   * again (GC-26). Waits for a push, fetch or pull under way, so that a push of
+   * the merge commit counts, and for a save in progress. Refused with
+   * `merge-in-progress`, and with `undo-not-allowed` unless `undoableMerge` in
+   * the status holds, checked again here: the last commit must be that merge
+   * commit, on no remote branch, with nothing uncommitted (GC-25). A failure
+   * leaves the branch as it was (GC-27).
+   */
+  @Post('merge/undo')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  undoMerge(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<void> {
+    return this.mergeActions.undo(authOf(req).userId, params.id);
   }
 
   /**
