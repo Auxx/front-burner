@@ -113,13 +113,12 @@ export class MergeActions {
    * Commits the merge as the repository's commit author, with the files as the
    * merge has them: the resolved ones and what merged by itself (GC-20, CA-1,
    * CA-2). The merge then ends (GC-21). The record stays, with the merge commit
-   * beside it, for **Undo merge** (A-4.5a), when it is this merge's: one that a
-   * pull started, and that has no merge commit yet. A failure leaves the merge
-   * as it was (GC-27). Clients are told once git ran, also after a timeout, as
-   * a killed git may have committed.
+   * beside it, for **Undo merge** (A-4.5a), when it is this merge's, as abort
+   * decides (`recordOfThisMerge`). A failure leaves the merge as it was (GC-27).
+   * Clients are told after a commit, and after a timeout, which may have committed.
    *
    * @throws ApiErrorException `commit-author-not-confirmed`, `no-merge-in-progress`,
-   *   `merge-unresolved`, `git-timeout`
+   *   `merge-unresolved`, `detached-head`, `git-busy`, `git-timeout`
    */
   async commit(userId: number, repositoryId: number, message: string): Promise<CommitResult> {
     const { author, confirmed } = this.commitAuthors.forRepository(userId, repositoryId);
@@ -130,18 +129,21 @@ export class MergeActions {
     let tried = false;
     try {
       return await this.guard.change(repositoryId, root, async () => {
-        const conflicts = await this.merges.conflicts(root).catch(toGitApiError);
-        if (conflicts.some(conflict => !conflict.resolved)) {
+        // From the index, as git's commit checks, not from the conflict list.
+        if (await this.merges.hasUnmerged(root).catch(toGitApiError)) {
           throw new ApiErrorException(409, 'merge-unresolved');
         }
-        const before = await this.merges.head(root).catch(toGitApiError);
+        const recorded = await this.recordOfThisMerge(repositoryId, root).catch(toGitApiError);
+        const { oid, parent } = await this.merges.commit(root, { message, author }).catch((failure: unknown) => {
+          // Only a git killed at its timeout may have changed something; any other failure refused first.
+          tried = failure instanceof GitOperationError && failure.code === 'timeout';
+          return toGitApiError(failure);
+        });
         tried = true;
-        const result = await this.merges.commit(root, { message, author }).catch(toGitApiError);
-        const { recordedCommit, mergeCommit } = this.syncState.record(repositoryId);
-        if (recordedCommit === before && mergeCommit === null) {
-          this.syncState.mergeCommitted(repositoryId, result.oid);
+        if (recorded !== null && recorded === parent) {
+          this.syncState.mergeCommitted(repositoryId, oid, recorded);
         }
-        return result;
+        return { oid };
       });
     } finally {
       if (tried) {

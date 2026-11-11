@@ -101,15 +101,19 @@ export function classifyGitFailure(result: GitResult, refusals: EgressRefusal[])
   return PATTERNS.find(([ pattern ]) => pattern.test(result.stderr))?.[1] ?? 'failed';
 }
 
+/** What git says when another git holds a lock that it needs; nothing changed. */
+const LOCK_HELD =
+  /^(error: could not lock config file .*: File exists|fatal: .*Unable to create '.*\.lock': File exists)/m;
+
+/** Whether a local git command failed only because another git holds a lock (`git-busy`). */
+export const isLockHeld = (stderr: string): boolean => LOCK_HELD.test(stderr);
+
 // Anchored, as these lines can come with a file's or a branch's name. The first match wins.
 const BRANCH_PATTERNS: [ RegExp, GitErrorCode ][] = [
   [ /^fatal: a branch named .* already exists/m, 'branch-exists' ],
   // Not every "cannot lock ref": a lock another git holds says that too.
   [ /^fatal: cannot lock ref '.*': '.*' exists; cannot create /m, 'branch-name-conflict' ],
-  [
-    /^(error: could not lock config file .*: File exists|fatal: .*Unable to create '.*\.lock': File exists)/m,
-    'git-busy'
-  ],
+  [ LOCK_HELD, 'git-busy' ],
   [ /^fatal: invalid reference: /m, 'branch-not-found' ],
   [ /^fatal: the requested upstream branch .* does not exist/m, 'branch-not-found' ],
   // What git won't switch to by this name, such as a branch called `@`.

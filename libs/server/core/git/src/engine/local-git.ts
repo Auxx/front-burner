@@ -21,6 +21,17 @@ export const LOCAL_TIMEOUT_MS = 10_000;
 /** Enough for the names of a folder of a few hundred thousand entries; output past it would be lost. */
 export const LOCAL_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 
+/**
+ * The environment that makes `author` git's author and committer of a commit.
+ * It beats every git configuration, including the working copy's (CA-2).
+ */
+export const authorEnv = ({ name, email }: { name: string; email: string; }): Record<string, string> => ({
+  GIT_AUTHOR_NAME: name,
+  GIT_AUTHOR_EMAIL: email,
+  GIT_COMMITTER_NAME: name,
+  GIT_COMMITTER_EMAIL: email
+});
+
 export interface LocalRunOptions {
   stdin?: string;
   env?: Record<string, string>;

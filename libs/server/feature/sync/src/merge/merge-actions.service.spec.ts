@@ -891,6 +891,57 @@ describe.skipIf(process.platform === 'win32')('MergeActions', () => {
       expect(syncState.record(repositoryId)).toMatchObject({ recordedCommit: older, mergeCommit: 'the-merge-commit' });
     });
 
+    it('keeps the record that only the ref still has, as abort finds it', async () => {
+      conflicting();
+      const recorded = await pullThatConflicts();
+      await resolveAll();
+      syncState.forgetRecord(repositoryId);
+
+      const { oid } = await actions.commit(userId, repositoryId, 'Merge origin/main');
+
+      expect(syncState.record(repositoryId)).toEqual({ recordedCommit: recorded, mergeCommit: oid, applying: false });
+    });
+
+    it('refuses a path git still has unmerged, also when the conflict list leaves it out', async () => {
+      // Both sides renamed it, each to its own name, in a merge that git started by itself.
+      diverged(
+        { 'orig.md': 'a\nb\nc\n' },
+        { 'orig.md': null, 'mine.md': 'a\nb\nc\n' },
+        { 'orig.md': null, 'theirs.md': 'a\nb\nc\n' }
+      );
+      expect(() => git(work, 'merge', '--no-edit', 'origin/main')).toThrow();
+      for (const path of [ 'mine.md', 'theirs.md' ]) {
+        await actions.resolve(userId, repositoryId, { path, resolution: 'keep' });
+      }
+      published = [];
+
+      await expect(actions.commit(userId, repositoryId, 'Merge')).rejects.toMatchObject({
+        status: 409,
+        code: 'merge-unresolved'
+      });
+      expect(await merges.mergeInProgress(work)).toBe(true);
+      expect(published).toEqual([]);
+    });
+
+    it('says why git refused before it changed anything, and tells nobody', async () => {
+      conflicting();
+      await pullThatConflicts();
+      await resolveAll();
+      vi.spyOn(merges, 'commit')
+        .mockRejectedValueOnce(new GitOperationError('detached-head', 'no branch'))
+        .mockRejectedValueOnce(new GitOperationError('git-busy', 'index.lock'));
+
+      await expect(actions.commit(userId, repositoryId, 'Merge')).rejects.toMatchObject({
+        status: 409,
+        code: 'detached-head'
+      });
+      await expect(actions.commit(userId, repositoryId, 'Merge')).rejects.toMatchObject({
+        status: 409,
+        code: 'git-busy'
+      });
+      expect(published).toEqual([]);
+    });
+
     it('refuses an unconfirmed author, before anything else', async () => {
       authorConfirmed = false;
 

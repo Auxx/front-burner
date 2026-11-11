@@ -6,8 +6,8 @@ import { access, readdir, readFile, rename, rm, writeFile } from 'node:fs/promis
 import { join } from 'node:path';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult } from '../runner/git-runner';
-import { GitOperationError } from './git-errors';
-import { LOCAL_MAX_OUTPUT_BYTES, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
+import { GitOperationError, isLockHeld } from './git-errors';
+import { authorEnv, LOCAL_MAX_OUTPUT_BYTES, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
 /** Where the commit before a merge is kept, so that git's garbage collection keeps it (A-5.12). */
 export const PRE_MERGE_REF = 'refs/front-burner/pre-merge';
@@ -290,7 +290,6 @@ export class GitMerge {
     );
     const fastForward = await this.isAncestor(workingCopy, 'HEAD', oid);
     await this.assertNothingInTheWay(workingCopy, oid);
-    const { name, email } = request.author;
     const result = await this.local.run(
       workingCopy,
       [
@@ -318,16 +317,7 @@ export class GitMerge {
         // The commit the checks saw, not the ref, which a fetch may have moved since.
         oid
       ],
-      {
-        timeoutMs,
-        // These beat every git configuration, including the working copy's (CA-2).
-        env: {
-          GIT_AUTHOR_NAME: name,
-          GIT_AUTHOR_EMAIL: email,
-          GIT_COMMITTER_NAME: name,
-          GIT_COMMITTER_EMAIL: email
-        }
-      }
+      { timeoutMs, env: authorEnv(request.author) }
     );
     if (result.timedOut) {
       throw new GitOperationError('timeout', result.stderr);
@@ -999,32 +989,84 @@ export class GitMerge {
    * and knows that no file is unresolved.
    *
    * A failure leaves the merge as it was (GC-27), without the locks of a git
-   * killed at its timeout.
+   * killed at its timeout. A git killed after it made the commit has committed,
+   * though: that commit is the answer, and what is left of the merge goes.
    *
-   * @throws GitOperationError `timeout`
+   * @returns the merge commit, and the commit it was made on.
+   * @throws GitOperationError `detached-head`, before anything changed, as a
+   *   commit on no branch is lost at the next switch; `git-busy`; `timeout`
    */
   async commit(
     workingCopy: string,
     request: { message: string; author: { name: string; email: string; }; }
-  ): Promise<{ oid: string; }> {
-    const { name, email } = request.author;
-    await this.freeingLocksAtTimeout(workingCopy, () =>
-      this.local.checked(
-        workingCopy,
-        [ '-c', 'commit.gpgsign=false', 'commit', '--cleanup=whitespace', '--no-edit', '-F', '-' ],
-        {
-          stdin: request.message,
-          timeoutMs: this.options.gitTimeoutMs,
-          // These beat every git configuration, including the working copy's (CA-2).
-          env: {
-            GIT_AUTHOR_NAME: name,
-            GIT_AUTHOR_EMAIL: email,
-            GIT_COMMITTER_NAME: name,
-            GIT_COMMITTER_EMAIL: email
-          }
+  ): Promise<{ oid: string; parent: string; }> {
+    const onBranch = await this.local.run(workingCopy, [ 'symbolic-ref', '-q', 'HEAD' ]);
+    if (!exitAsBoolean(onBranch, 'symbolic-ref')) {
+      throw new GitOperationError('detached-head', 'HEAD is not on a branch.');
+    }
+    const [ parent, theirs ] = await Promise.all([ this.head(workingCopy), this.mergeHead(workingCopy) ]);
+    try {
+      const result = await this.freeingLocksAtTimeout(workingCopy, async () => {
+        const run = await this.local.run(
+          workingCopy,
+          [ '-c', 'commit.gpgsign=false', 'commit', '--cleanup=whitespace', '--no-edit', '-F', '-' ],
+          { stdin: request.message, timeoutMs: this.options.gitTimeoutMs, env: authorEnv(request.author) }
+        );
+        if (run.timedOut) {
+          throw new GitOperationError('timeout', run.stderr);
         }
-      ));
-    return { oid: await this.head(workingCopy) };
+        return run;
+      });
+      if (result.exitCode !== 0) {
+        if (isLockHeld(result.stderr)) {
+          throw new GitOperationError('git-busy', result.stderr);
+        }
+        throw new Error(`git commit failed: ${result.stderr.trim()}`);
+      }
+    } catch (error) {
+      const oid = error instanceof GitOperationError && error.code === 'timeout'
+        ? await this.committedAnyway(workingCopy, parent, theirs)
+        : null;
+      if (oid === null) {
+        throw error;
+      }
+      return { oid, parent };
+    }
+    return { oid: await this.head(workingCopy), parent };
+  }
+
+  /**
+   * The merge commit that a git killed at its timeout made all the same: `HEAD`
+   * with the two parents of this merge. git moves the branch before it removes
+   * `MERGE_HEAD`, so that is removed when it is still there, leaving the files
+   * and the index as they are. `null` when there is no such commit.
+   */
+  private async committedAnyway(workingCopy: string, parent: string, theirs: string): Promise<string | null> {
+    const [ head, ...parents ] = (
+      await this.local.checked(workingCopy, [ 'rev-list', '--parents', '-n', '1', 'HEAD', '--' ])
+    ).trim().split(' ');
+    if (parents.length !== 2 || parents[0] !== parent || parents[1] !== theirs) {
+      return null;
+    }
+    if (await this.mergeInProgress(workingCopy)) {
+      await this.local.checked(workingCopy, [ 'merge', '--quit' ]);
+    }
+    return head ?? null;
+  }
+
+  /** The commit being merged; the first line of `MERGE_HEAD`, as the product merges one commit. */
+  private async mergeHead(workingCopy: string): Promise<string> {
+    const content = await readFile(join(workingCopy, '.git', 'MERGE_HEAD'), 'utf8');
+    return content.split('\n')[0]?.trim() ?? '';
+  }
+
+  /**
+   * Whether git still has a path that is not resolved. Read from the index, as
+   * git's commit checks, so also a path that `conflicts` leaves out, such as one
+   * both sides deleted in a merge that the product did not start.
+   */
+  async hasUnmerged(workingCopy: string): Promise<boolean> {
+    return (await this.unmerged(workingCopy, [])).size > 0;
   }
 
   /** A merge, as opposed to `GitEngine.mergeInProgress`, which a rebase also answers yes to. */

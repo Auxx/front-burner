@@ -44,6 +44,15 @@ describe('SyncStateStore', () => {
     expect(store.record(repositoryId)).toEqual({ recordedCommit: 'aaa', mergeCommit: 'mmm', applying: false });
   });
 
+  it('writes the whole record with its recorded commit, also without a row', () => {
+    store.mergeCommitted(repositoryId, 'mmm', 'aaa');
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: 'aaa', mergeCommit: 'mmm', applying: false });
+    store.startMerge(repositoryId, 'bbb');
+    store.mergeCommitted(repositoryId, 'nnn', 'bbb');
+    expect(store.record(repositoryId)).toEqual({ recordedCommit: 'bbb', mergeCommit: 'nnn', applying: false });
+    expect(store.earlierRecordedCommit(repositoryId)).toBeNull();
+  });
+
   it('forgets it', () => {
     store.startMerge(repositoryId, 'aaa');
     store.mergeCommitted(repositoryId, 'mmm');
