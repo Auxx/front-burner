@@ -43,6 +43,7 @@ import {
   GitJobParamsDto,
   GitJobStartedDto,
   GitJobStateDto,
+  GitMergeCommitRequestDto,
   GitMergeStateDto,
   GitMergeVersionDto,
   GitMergeVersionQueryDto,
@@ -347,6 +348,27 @@ export class GitController {
     @Body() body: GitConflictPathDto
   ): Promise<void> {
     return this.mergeActions.startOver(authOf(req).userId, params.id, body.path);
+  }
+
+  /**
+   * Commits the merge with the message, as the repository's commit author, with
+   * the resolved files and what merged by itself (GC-20, CA-1, CA-2), and the
+   * merge ends (GC-21). Waits for a save in progress. Refused, in this order,
+   * with `commit-author-not-confirmed` (CA-13), `no-merge-in-progress`, and
+   * `merge-unresolved` while git has any path unresolved; then with
+   * `detached-head`, as a commit on no branch is lost at the next switch, and
+   * `git-busy`. A failure leaves the merge as it was (GC-27); a git killed at its
+   * timeout that committed all the same answers with that commit.
+   */
+  @Post('merge/commit')
+  @ApiCreatedResponse({ type: CommitResultDto })
+  @ZodSerializerDto(CommitResultDto)
+  commitMerge(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Body() body: GitMergeCommitRequestDto
+  ): Promise<CommitResult> {
+    return this.mergeActions.commit(authOf(req).userId, params.id, body.message);
   }
 
   /**

@@ -10,6 +10,7 @@ import {
   GitJobParamsSchema,
   GitJobStartedSchema,
   GitJobStateSchema,
+  GitMergeCommitRequestSchema,
   GitMergeStateSchema,
   GitMergeVersionQuerySchema,
   GitMergeVersionSchema,
@@ -84,6 +85,9 @@ export class GitMergeVersionDto extends createZodDto(z.object(GitMergeVersionSch
 
 @ApiSchema({ name: 'GitResolveRequest' })
 export class GitResolveRequestDto extends createZodDto(z.object(GitResolveRequestSchema.shape)) {}
+
+@ApiSchema({ name: 'GitMergeCommitRequest' })
+export class GitMergeCommitRequestDto extends createZodDto(z.object(GitMergeCommitRequestSchema.shape)) {}
 
 @ApiSchema({ name: 'GitConflictPath' })
 export class GitConflictPathDto extends createZodDto(z.object(GitConflictPathSchema.shape)) {}

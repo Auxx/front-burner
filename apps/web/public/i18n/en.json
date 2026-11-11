@@ -32,6 +32,7 @@
   "errors.resolution-not-allowed": "This file can't be resolved that way.",
   "errors.conflict-markers-left": "This file still has conflict markers.",
   "errors.not-resolved": "This file isn't resolved, so there is nothing to start over.",
+  "errors.merge-unresolved": "Resolve every conflicting file before committing the merge.",
   "errors.merge-abort-failed": "The merge couldn't be aborted, so it is still in progress. Try again.",
   "errors.entry-not-deletable": "This can't be deleted.",
   "errors.file-too-large": "This file is too large to edit (the limit is 1 MB).",

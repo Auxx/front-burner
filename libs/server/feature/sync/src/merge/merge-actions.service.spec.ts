@@ -11,6 +11,7 @@ import {
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import type { DataLayout } from '@front-burner/server-core-storage';
 import { FileContents, type OpenableRepository, type WorkingTreeGuard } from '@front-burner/server-feature-files';
+import type { CommitAuthors } from '@front-burner/server-feature-preferences';
 import { EDITABLE_FILE_LIMIT, type PushEvent } from '@front-burner/shared-contracts';
 import {
   existsSync,
@@ -61,6 +62,7 @@ describe.skipIf(process.platform === 'win32')('MergeActions', () => {
   let root: string;
   let work: string;
   let elsewhere: string;
+  let authorConfirmed: boolean;
 
   function put(folder: string, files: Files): void {
     for (const [ path, content ] of Object.entries(files)) {
@@ -136,6 +138,7 @@ describe.skipIf(process.platform === 'win32')('MergeActions', () => {
     userId = insertUser(database, 'a@example.com');
     repositoryId = insertRepository(database, userId, { name: 'notes' });
     published = [];
+    authorConfirmed = true;
     lock = new WorkingTreeLock();
     actions = new MergeActions(
       {
@@ -152,7 +155,10 @@ describe.skipIf(process.platform === 'win32')('MergeActions', () => {
       new MergeRecord(syncState, merges),
       { publish: (_user: number, event: PushEvent) => published.push(event) } as unknown as EventsHub,
       new MergeStateService(merges, contents),
-      contents
+      contents,
+      {
+        forRepository: () => ({ author: AUTHOR, source: 'default', confirmed: authorConfirmed })
+      } as unknown as CommitAuthors
     );
   });
 
@@ -818,6 +824,198 @@ describe.skipIf(process.platform === 'win32')('MergeActions', () => {
         expect(await resolved('edited.md')).toBe(true);
         expect(published.map(({ type }) => type)).toEqual([ 'files.changed', 'git.changed' ]);
       });
+    });
+  });
+
+  describe('commit', () => {
+    const conflicting = () =>
+      diverged(
+        { 'edited.md': 'base\n', 'other.md': 'base\n', 'clean.md': 'one\ntwo\nthree\n' },
+        { 'edited.md': 'mine\n', 'other.md': 'mine\n', 'clean.md': 'ONE\ntwo\nthree\n' },
+        { 'edited.md': 'theirs\n', 'other.md': 'theirs\n', 'clean.md': 'one\ntwo\nTHREE\n' }
+      );
+    const resolveAll = async () => {
+      await actions.resolve(userId, repositoryId, { path: 'edited.md', resolution: 'ours' });
+      await actions.resolve(userId, repositoryId, { path: 'other.md', resolution: 'theirs' });
+      published = [];
+    };
+    const out = (...args: string[]) => git(work, ...args).trim();
+    const committed = (path: string) => out('show', `HEAD:${path}`);
+
+    it('commits with the resolved files and what merged by itself, and the merge ends', async () => {
+      conflicting();
+      await pullThatConflicts();
+      await resolveAll();
+
+      const { oid } = await actions.commit(userId, repositoryId, 'Merge origin/main');
+
+      expect(oid).toBe(out('rev-parse', 'HEAD'));
+      expect([ committed('edited.md'), committed('other.md'), committed('clean.md') ])
+        .toEqual([ 'mine', 'theirs', 'ONE\ntwo\nTHREE' ]);
+      expect(out('log', '-1', '--format=%an <%ae>|%B')).toBe('Ada Lovelace <ada@example.com>|Merge origin/main');
+      expect(mergeFiles()).toEqual([]);
+    });
+
+    it('has both parents', async () => {
+      conflicting();
+      const recorded = await pullThatConflicts();
+      await resolveAll();
+
+      await actions.commit(userId, repositoryId, 'Merge origin/main');
+
+      expect(out('rev-list', '--parents', '-n', '1', 'HEAD').split(' ').slice(1))
+        .toEqual([ recorded, out('rev-parse', 'origin/main') ]);
+    });
+
+    it('keeps the record, with the merge commit', async () => {
+      conflicting();
+      const recorded = await pullThatConflicts();
+      await resolveAll();
+
+      const { oid } = await actions.commit(userId, repositoryId, 'Merge origin/main');
+
+      expect(syncState.record(repositoryId)).toEqual({ recordedCommit: recorded, mergeCommit: oid, applying: false });
+      expect(refAt()).toBe(recorded);
+    });
+
+    it('leaves alone a record that is not this merge\'s', async () => {
+      conflicting();
+      const older = await merges.record(work);
+      syncState.startMerge(repositoryId, older);
+      syncState.mergeCommitted(repositoryId, 'the-merge-commit');
+      await mergeThatConflicts();
+      await resolveAll();
+
+      await actions.commit(userId, repositoryId, 'Merge origin/main');
+
+      expect(syncState.record(repositoryId)).toMatchObject({ recordedCommit: older, mergeCommit: 'the-merge-commit' });
+    });
+
+    it('keeps the record that only the ref still has, as abort finds it', async () => {
+      conflicting();
+      const recorded = await pullThatConflicts();
+      await resolveAll();
+      syncState.forgetRecord(repositoryId);
+
+      const { oid } = await actions.commit(userId, repositoryId, 'Merge origin/main');
+
+      expect(syncState.record(repositoryId)).toEqual({ recordedCommit: recorded, mergeCommit: oid, applying: false });
+    });
+
+    it('refuses a path git still has unmerged, also when the conflict list leaves it out', async () => {
+      // Both sides renamed it, each to its own name, in a merge that git started by itself.
+      diverged(
+        { 'orig.md': 'a\nb\nc\n' },
+        { 'orig.md': null, 'mine.md': 'a\nb\nc\n' },
+        { 'orig.md': null, 'theirs.md': 'a\nb\nc\n' }
+      );
+      expect(() => git(work, 'merge', '--no-edit', 'origin/main')).toThrow();
+      for (const path of [ 'mine.md', 'theirs.md' ]) {
+        await actions.resolve(userId, repositoryId, { path, resolution: 'keep' });
+      }
+      published = [];
+
+      await expect(actions.commit(userId, repositoryId, 'Merge')).rejects.toMatchObject({
+        status: 409,
+        code: 'merge-unresolved'
+      });
+      expect(await merges.mergeInProgress(work)).toBe(true);
+      expect(published).toEqual([]);
+    });
+
+    it('says why git refused before it changed anything, and tells nobody', async () => {
+      conflicting();
+      await pullThatConflicts();
+      await resolveAll();
+      vi.spyOn(merges, 'commit')
+        .mockRejectedValueOnce(new GitOperationError('detached-head', 'no branch'))
+        .mockRejectedValueOnce(new GitOperationError('git-busy', 'index.lock'));
+
+      await expect(actions.commit(userId, repositoryId, 'Merge')).rejects.toMatchObject({
+        status: 409,
+        code: 'detached-head'
+      });
+      await expect(actions.commit(userId, repositoryId, 'Merge')).rejects.toMatchObject({
+        status: 409,
+        code: 'git-busy'
+      });
+      expect(published).toEqual([]);
+    });
+
+    it('refuses an unconfirmed author, before anything else', async () => {
+      authorConfirmed = false;
+
+      await expect(actions.commit(userId, repositoryId, 'Merge')).rejects.toMatchObject({
+        status: 409,
+        code: 'commit-author-not-confirmed'
+      });
+      expect(published).toEqual([]);
+    });
+
+    it('refuses while a file is unresolved, and changes nothing', async () => {
+      conflicting();
+      await pullThatConflicts();
+      await actions.resolve(userId, repositoryId, { path: 'edited.md', resolution: 'ours' });
+      published = [];
+      const before = snapshot();
+
+      await expect(actions.commit(userId, repositoryId, 'Merge')).rejects.toMatchObject({
+        status: 409,
+        code: 'merge-unresolved'
+      });
+
+      expect(snapshot()).toEqual(before);
+      expect(await merges.mergeInProgress(work)).toBe(true);
+      expect(published).toEqual([]);
+    });
+
+    it('refuses without a merge', async () => {
+      await expect(actions.commit(userId, repositoryId, 'Merge')).rejects.toMatchObject({
+        status: 409,
+        code: 'no-merge-in-progress'
+      });
+    });
+
+    it('waits for a save in progress', async () => {
+      conflicting();
+      await pullThatConflicts();
+      await resolveAll();
+      const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+      const held = lock.run(repositoryId, () => gate);
+
+      const committing = actions.commit(userId, repositoryId, 'Merge');
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(await merges.mergeInProgress(work)).toBe(true);
+
+      release();
+      await Promise.all([ held, committing ]);
+      expect(await merges.mergeInProgress(work)).toBe(false);
+    });
+
+    it('publishes git.changed', async () => {
+      conflicting();
+      await pullThatConflicts();
+      await resolveAll();
+
+      await actions.commit(userId, repositoryId, 'Merge');
+
+      expect(published).toEqual([ { type: 'git.changed', repositoryId } ]);
+    });
+
+    it('leaves the merge and its record after a failed commit, and clients are told', async () => {
+      conflicting();
+      const recorded = await pullThatConflicts();
+      await resolveAll();
+      vi.spyOn(merges, 'commit').mockRejectedValueOnce(new GitOperationError('timeout', 'too slow'));
+
+      await expect(actions.commit(userId, repositoryId, 'Merge')).rejects.toMatchObject({
+        status: 504,
+        code: 'git-timeout'
+      });
+
+      expect(await merges.mergeInProgress(work)).toBe(true);
+      expect(syncState.record(repositoryId)).toMatchObject({ recordedCommit: recorded, mergeCommit: null });
+      expect(published).toEqual([ { type: 'git.changed', repositoryId } ]);
     });
   });
 });

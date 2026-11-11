@@ -11,6 +11,7 @@ import type {
   GitIncoming,
   GitJobStarted,
   GitJobState,
+  GitMergeCommitRequest,
   GitMergeState,
   GitMergeVersion,
   GitNewBranchRequest,
@@ -98,6 +99,15 @@ export class GitApi {
   startConflictOver(id: number, data: GitConflictPath): Observable<void> {
     return this.http.post<void>(
       `/api/v1/repositories/${encodeURIComponent(id)}/git/merge/start-over`,
+      data
+    );
+  }
+  commitMerge(
+    id: number,
+    data: GitMergeCommitRequest
+  ): Observable<CommitResult> {
+    return this.http.post<CommitResult>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/git/merge/commit`,
       data
     );
   }

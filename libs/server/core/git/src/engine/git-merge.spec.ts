@@ -1720,5 +1720,199 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
         expect(await entryOf('docs/a.md')).toMatchObject({ resolved: true });
       });
     });
+
+    describe('commit', () => {
+      const author = { name: 'Ada Lovelace', email: 'ada@example.com' };
+      const commitMerge = (message: string, merging = merge) => merging.commit(work, { message, author });
+      const parents = () => git(work, 'rev-list', '--parents', '-n', '1', 'HEAD').split(' ').slice(1);
+
+      /** `edited.md` conflicts; `clean.md` merges by itself. */
+      function withCleanFile(): { mine: string; theirs: string; } {
+        diverged(
+          { 'edited.md': 'base\n', 'clean.md': 'a\nb\nc\n' },
+          { 'edited.md': 'mine\n', 'clean.md': 'A\nb\nc\n' },
+          { 'edited.md': 'theirs\n', 'clean.md': 'a\nb\nC\n' }
+        );
+        return { mine: git(work, 'rev-parse', 'HEAD'), theirs: git(work, 'rev-parse', 'theirs') };
+      }
+
+      it('commits with the resolved files and what merged by itself', async () => {
+        withCleanFile();
+        writeFileSync(join(work, 'edited.md'), 'both\n');
+        await resolve('edited.md', 'mark-resolved');
+
+        const { oid } = await commitMerge('Merge theirs');
+
+        expect(oid).toBe(git(work, 'rev-parse', 'HEAD'));
+        expect(git(work, 'show', 'HEAD:edited.md')).toBe('both');
+        expect(git(work, 'show', 'HEAD:clean.md')).toBe('A\nb\nC');
+        expect(await merge.mergeInProgress(work)).toBe(false);
+        expect(git(work, 'status', '--porcelain')).toBe('');
+      });
+
+      it('has both parents', async () => {
+        const { mine, theirs } = withCleanFile();
+        await resolve('edited.md', 'theirs');
+
+        await commitMerge('Merge theirs');
+
+        expect(parents()).toEqual([ mine, theirs ]);
+      });
+
+      it('keeps a line starting with #', async () => {
+        withCleanFile();
+        await resolve('edited.md', 'ours');
+
+        await commitMerge('Merge theirs\n\n# Not a comment\n');
+
+        expect(git(work, 'log', '-1', '--format=%B')).toBe('Merge theirs\n\n# Not a comment');
+      });
+
+      it('commits the index as it stands', async () => {
+        withCleanFile();
+        await resolve('edited.md', 'ours');
+        writeFileSync(join(work, 'edited.md'), 'changed after resolving\n');
+        writeFileSync(join(work, 'new.md'), 'untracked\n');
+
+        await commitMerge('Merge theirs');
+
+        expect(git(work, 'show', 'HEAD:edited.md')).toBe('mine');
+        expect(() => git(work, 'cat-file', '-e', 'HEAD:new.md')).toThrow();
+        expect(readFileSync(join(work, 'edited.md'), 'utf8')).toBe('changed after resolving\n');
+      });
+
+      it('commits a merge that changes nothing', async () => {
+        diverged({ 'edited.md': 'base\n' }, { 'edited.md': 'mine\n' }, { 'edited.md': 'theirs\n' });
+        const mine = git(work, 'rev-parse', 'HEAD');
+        await resolve('edited.md', 'ours');
+
+        await commitMerge('Merge theirs');
+
+        expect(parents()).toEqual([ mine, git(work, 'rev-parse', 'theirs') ]);
+        expect(git(work, 'rev-parse', 'HEAD^{tree}')).toBe(git(work, 'rev-parse', `${mine}^{tree}`));
+      });
+
+      it('commits as the author, whatever the working copy\'s configuration says', async () => {
+        withCleanFile();
+        await resolve('edited.md', 'ours');
+        git(work, 'config', 'user.name', 'Configured');
+        git(work, 'config', 'user.email', 'configured@example.com');
+
+        await commitMerge('Merge theirs');
+
+        expect(git(work, 'log', '-1', '--format=%an <%ae> %cn <%ce>'))
+          .toBe('Ada Lovelace <ada@example.com> Ada Lovelace <ada@example.com>');
+      });
+
+      /** A GitMerge whose `git commit` runs `before`, then is reported as killed at its timeout. */
+      const timingOut = (before: () => Promise<void>) => {
+        const local = new LocalGit(new GitRunner());
+        const run = local.run.bind(local);
+        vi.spyOn(local, 'run').mockImplementation(async (cwd: string, args: string[], options?: LocalRunOptions) => {
+          if (!args.includes('commit')) {
+            return run(cwd, args, options);
+          }
+          await before();
+          return {
+            exitCode: null,
+            stdout: '',
+            stdoutRaw: Buffer.alloc(0),
+            stdoutBytes: 0,
+            stderr: 'killed',
+            timedOut: true
+          };
+        });
+        return new GitMerge(local, { gitTimeoutMs: 60_000 } as GitOptions);
+      };
+
+      it('leaves the merge after a failed commit', async () => {
+        const { mine } = withCleanFile();
+        await resolve('edited.md', 'ours');
+        const stages = git(work, 'ls-files', '--stage');
+        // A git killed at its timeout leaves its lock behind.
+        const merging = timingOut(async () => writeFileSync(join(work, '.git', 'index.lock'), ''));
+
+        await expect(commitMerge('Merge theirs', merging)).rejects.toMatchObject({ code: 'timeout' });
+
+        expect(existsSync(join(work, '.git', 'index.lock'))).toBe(false);
+        expect(git(work, 'rev-parse', 'HEAD')).toBe(mine);
+        expect(await merge.mergeInProgress(work)).toBe(true);
+        expect(git(work, 'ls-files', '--stage')).toBe(stages);
+      });
+
+      it.each([ [ 'ended', false ], [ 'not ended yet', true ] ] as const)(
+        'gives the commit that a git killed at its timeout made, with the merge %s',
+        async (_label, mergeLeft) => {
+          const { mine, theirs } = withCleanFile();
+          await resolve('edited.md', 'ours');
+          const merging = timingOut(async () => {
+            git(work, 'commit', '-q', '--no-edit');
+            if (mergeLeft) {
+              // Killed after it moved the branch, before it removed MERGE_HEAD.
+              writeFileSync(join(work, '.git', 'MERGE_HEAD'), `${theirs}\n`);
+            }
+          });
+
+          const result = await commitMerge('Merge theirs', merging);
+
+          expect(result).toEqual({ oid: git(work, 'rev-parse', 'HEAD'), parent: mine });
+          expect(parents()).toEqual([ mine, theirs ]);
+          expect(await merge.mergeInProgress(work)).toBe(false);
+          expect(git(work, 'status', '--porcelain')).toBe('');
+        }
+      );
+
+      it('refuses a detached HEAD, and leaves the merge', async () => {
+        withCleanFile();
+        git(work, 'merge', '--abort');
+        git(work, 'switch', '-q', '--detach', 'main');
+        expect(() => git(work, 'merge', '--no-edit', 'theirs')).toThrow();
+        await resolve('edited.md', 'ours');
+        const head = git(work, 'rev-parse', 'HEAD');
+
+        await expect(commitMerge('Merge theirs')).rejects.toMatchObject({ code: 'detached-head' });
+
+        expect(git(work, 'rev-parse', 'HEAD')).toBe(head);
+        expect(await merge.mergeInProgress(work)).toBe(true);
+      });
+
+      it('says git is busy when another git holds the index, and leaves its lock', async () => {
+        const { mine } = withCleanFile();
+        await resolve('edited.md', 'ours');
+        writeFileSync(join(work, '.git', 'index.lock'), '');
+
+        await expect(commitMerge('Merge theirs')).rejects.toMatchObject({ code: 'git-busy' });
+
+        expect(existsSync(join(work, '.git', 'index.lock'))).toBe(true);
+        expect(git(work, 'rev-parse', 'HEAD')).toBe(mine);
+        expect(await merge.mergeInProgress(work)).toBe(true);
+      });
+    });
+
+    describe('hasUnmerged', () => {
+      it('is false once every file is resolved', async () => {
+        bothChanged();
+        expect(await merge.hasUnmerged(work)).toBe(true);
+
+        await resolve('edited.md', 'ours');
+
+        expect(await merge.hasUnmerged(work)).toBe(false);
+      });
+
+      it('sees a path that only has a base, which the conflict list leaves out', async () => {
+        // Both sides renamed it, each to its own name, in a merge that git started by itself.
+        diverged(
+          { 'orig.md': 'a\nb\nc\n' },
+          { 'orig.md': null, 'mine.md': 'a\nb\nc\n' },
+          { 'orig.md': null, 'theirs.md': 'a\nb\nc\n' }
+        );
+        for (const conflict of await merge.conflicts(work)) {
+          await merge.resolve(work, conflict, 'keep');
+        }
+
+        expect((await merge.conflicts(work)).map(({ path }) => path)).not.toContain('orig.md');
+        expect(await merge.hasUnmerged(work)).toBe(true);
+      });
+    });
   });
 });

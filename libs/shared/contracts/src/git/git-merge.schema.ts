@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CommitRequestSchema } from './git-commit.schema';
 
 /** Which sides have the file: both changed or added it, or one side deleted it (GC-15, GC-16). */
 export const GitConflictKindSchema = z
@@ -84,6 +85,16 @@ export const GitConflictPathSchema = z
   })
   .meta({ id: 'GitConflictPath' });
 
+/**
+ * Commits the merge in progress with the message, which is kept as written and
+ * checked as a commit's is (GA-21); the files are what the merge has (GC-20).
+ */
+export const GitMergeCommitRequestSchema = z
+  .object({
+    message: CommitRequestSchema.shape.message
+  })
+  .meta({ id: 'GitMergeCommitRequest' });
+
 export type GitConflictKind = z.infer<typeof GitConflictKindSchema>;
 export type GitConflictPath = z.infer<typeof GitConflictPathSchema>;
 export type GitResolution = z.infer<typeof GitResolutionSchema>;
@@ -92,3 +103,4 @@ export type GitConflictFile = z.infer<typeof GitConflictFileSchema>;
 export type GitMergeState = z.infer<typeof GitMergeStateSchema>;
 export type GitMergeVersion = z.infer<typeof GitMergeVersionSchema>;
 export type GitMergeVersionQuery = z.infer<typeof GitMergeVersionQuerySchema>;
+export type GitMergeCommitRequest = z.infer<typeof GitMergeCommitRequestSchema>;

@@ -45,14 +45,24 @@ export class SyncStateStore {
     this.change(repositoryId, { mergeApplying: false });
   }
 
-  /** The merge was committed: its commit joins the record, and the earlier record is dropped. */
-  mergeCommitted(repositoryId: number, mergeCommit: string): void {
-    this.change(repositoryId, {
+  /**
+   * The merge was committed: its commit joins the record, and the earlier record
+   * is dropped. With `recordedCommit`, the record is written whole, also for a
+   * repository with no row: for a record that only `PRE_MERGE_REF` still had.
+   */
+  mergeCommitted(repositoryId: number, mergeCommit: string, recordedCommit?: string): void {
+    const set = {
       mergeCommit,
       mergeApplying: false,
       earlierRecordedCommit: null,
       earlierMergeCommit: null
-    });
+    };
+    if (recordedCommit === undefined) {
+      this.change(repositoryId, set);
+      return;
+    }
+    this.database.db.insert(syncState).values({ repositoryId, recordedCommit, ...set })
+      .onConflictDoUpdate({ target: syncState.repositoryId, set: { recordedCommit, ...set } }).run();
   }
 
   /** Puts the earlier record back; returns the recorded commit now in place, or `null` when there is none. */

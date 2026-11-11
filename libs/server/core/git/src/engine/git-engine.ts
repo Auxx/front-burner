@@ -14,7 +14,7 @@ import { hasHostEntry, HostKey, trustedKeysFor } from '../ssh/known-hosts';
 import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
 import { FIRST_BRANCH, parseStatus, WorkingCopyStatus } from './git-status';
-import { LOCAL_TIMEOUT_MS, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
+import { authorEnv, LOCAL_TIMEOUT_MS, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
 /** AR-42. */
 const ACCESS_CHECK_TIMEOUT_MS = 30_000;
@@ -498,7 +498,6 @@ export class GitEngine implements BeforeApplicationShutdown {
           { stdin: nulTerminated(paths), timeoutMs: this.options.gitTimeoutMs }
         );
       }
-      const { name, email } = request.author;
       await this.local.checked(
         workingCopy,
         [
@@ -515,13 +514,7 @@ export class GitEngine implements BeforeApplicationShutdown {
         {
           stdin: request.message,
           timeoutMs: this.options.gitTimeoutMs,
-          // These beat every git configuration, including the working copy's (CA-2).
-          env: {
-            GIT_AUTHOR_NAME: name,
-            GIT_AUTHOR_EMAIL: email,
-            GIT_COMMITTER_NAME: name,
-            GIT_COMMITTER_EMAIL: email
-          }
+          env: authorEnv(request.author)
         }
       );
     } catch (error) {
