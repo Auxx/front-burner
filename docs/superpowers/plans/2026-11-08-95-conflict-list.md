@@ -17,6 +17,12 @@ Which file is selected is `MergeStore.selected`, not in the URL, as for a diff,
 since a reload must work out the merge again anyway _(plan's call)_. Until plan
 96 the editor area shows only the file's name and kind.
 
+_(Changed while implementing.)_ The activity bar does not go: its **Files** and
+**Changes** items do, and one **Conflicting files** item takes their place.
+Without it, nothing would open the drawer on a phone (FB-9) or bring back a
+collapsed pane. It does not change the tool window remembered for after the
+merge.
+
 **Tech Stack:** as before. No new packages.
 
 **Spec:** `docs/requirements/git-conflicts.md` (GC-2, GC-7, GC-8's selection,
@@ -81,7 +87,7 @@ AC-FILE-001.20); `docs/requirements/editor.md` (ED-25).
   - `ConflictFileComponent` (`rs-conflict-file`): input `file: GitConflictFile`,
     shown in the editor area. Plans 96, 97, 99 and 100 fill it.
 
-- [ ] **Step 1: Write the failing tests**: `AC-GIT-003.1: a pull that conflicts
+- [x] **Step 1: Write the failing tests**: `AC-GIT-003.1: a pull that conflicts
       on guide.md switches the repository screen to conflict resolution, with
       Merging origin/main into main and 0 of 1 file resolved; another device
       that opens the repository sees the same screen` (end to end, two
@@ -98,15 +104,15 @@ AC-FILE-001.20); `docs/requirements/editor.md` (ED-25).
       drawer on a phone, and selecting closes it`; `keeps focus in the side pane
       when the bar goes`; `goes back to the tree and Changes when the merge
       ends`.
-- [ ] **Step 2: Run them and see them fail** — `npx nx test
+- [x] **Step 2: Run them and see them fail** — `npx nx test
       web-feature-repository-screen`.
-- [ ] **Step 3: Implement.** Follow the `angular-templates` skill.
-- [ ] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
+- [x] **Step 3: Implement.** Follow the `angular-templates` skill.
+- [x] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
       web-e2e`.
-- [ ] **Step 5: Update the status**: REQ-GIT-003 adds `conflict-list`, and
+- [x] **Step 5: Update the status**: REQ-GIT-003 adds `conflict-list`, and
       removes GC-2 and GC-7. REQ-GIT-002 adds it, and removes GA-4 and the rest
       of GA-28. REQ-FILE-001 adds it, and removes FB-26. Run `doc-ids.mjs
       criteria` and copy its result.
-- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
+- [x] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(repository-screen): the conflict
       list`.

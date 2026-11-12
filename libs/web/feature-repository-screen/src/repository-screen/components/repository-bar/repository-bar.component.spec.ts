@@ -162,6 +162,17 @@ describe('RepositoryBarComponent', () => {
     await settle(fixture);
   };
 
+  it('shows no branch button during a merge', async () => {
+    await withBranch();
+    expect(bar().querySelector('rs-git-status-summary button.branch')).not.toBeNull();
+
+    fixture.componentRef.setInput('merging', true);
+    await settle(fixture);
+
+    // Switching isn't offered during a merge (GA-4, AC-GIT-002.20).
+    expect(bar().querySelector('button.branch')).toBeNull();
+  });
+
   it('passes on that the branch was chosen', async () => {
     await withBranch();
     const opened = vi.fn();

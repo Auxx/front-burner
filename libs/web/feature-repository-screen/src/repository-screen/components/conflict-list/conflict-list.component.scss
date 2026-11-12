@@ -1,0 +1,138 @@
+// The side pane does not scroll itself: the list does.
+:host {
+  display: block;
+  block-size: 100%;
+  overflow: auto;
+  outline: none;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// As an entry of **Changes**: the whole row can be tapped, and a long path is shortened.
+.entry {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  inline-size: 100%;
+  min-block-size: 3rem;
+  padding: var(--ui-space-1) var(--ui-space-2);
+  background: none;
+  color: var(--ui-text-default);
+  font: inherit;
+  font-size: var(--ui-font-size-ui-small);
+  text-align: start;
+  border: 0;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--ui-surface-hover);
+  }
+
+  &:focus-visible {
+    outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
+    outline-offset: calc(-1 * var(--ui-focus-ring-width));
+  }
+
+  // An accent bar as well, not only another colour.
+  &[aria-current='true'] {
+    background: var(--ui-selected-active);
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset-block: var(--ui-space-1);
+      inset-inline-start: 0;
+      inline-size: var(--ui-focus-ring-width);
+      background: var(--ui-accent-indicator);
+      forced-color-adjust: none;
+    }
+  }
+}
+
+.path {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.name,
+.folder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder {
+  color: var(--ui-text-muted);
+}
+
+.about {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  color: var(--ui-text-muted);
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+
+  // The colour only repeats the word and the icon (NF-13.7).
+  ui-icon {
+    color: var(--ui-warning-icon);
+  }
+
+  &.resolved ui-icon {
+    color: var(--ui-success-icon);
+  }
+}
+
+.other {
+  padding-block: var(--ui-space-2);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-ui-small);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  inline-size: 100%;
+  min-block-size: var(--ui-row-height);
+  padding-inline: var(--ui-space-2);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  border: 0;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--ui-surface-hover);
+  }
+
+  &:focus-visible {
+    outline: var(--ui-focus-ring-width) solid var(--ui-border-focus);
+    outline-offset: calc(-1 * var(--ui-focus-ring-width));
+  }
+}
+
+.other-files li,
+.more {
+  padding-block: var(--ui-space-1);
+  padding-inline: calc(var(--ui-space-2) + var(--ui-icon-size) + var(--ui-space-1)) var(--ui-space-2);
+  overflow-wrap: anywhere;
+}
+
+.more {
+  margin: 0;
+}

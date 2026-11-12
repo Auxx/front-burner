@@ -85,52 +85,87 @@
           </ui-centred-island>
         }
       }
+      @let merging = merge.merging();
       @if (state === 'ready') {
         <ui-activity-bar [label]="t('toolWindows')"
                          [orientation]="shell.narrow() ? 'horizontal' : 'vertical'"
                          [selected]="sideTool()"
                          (selectedChange)="selectSideTool($event, shell.narrow())">
-          <button uiActivityBarItem="files"
-                  [label]="t('files')">
-            <ui-icon name="folder" />
-          </button>
-          <button uiActivityBarItem="changes"
-                  [label]="gitStatus.failed() ? t('changesFailed') : gitStatus.changeCount() > 0 ? t('changesCount', { count: gitStatus.changeCount() }) : t('changes')">
-            <ui-icon name="source-control" />
-            @if (changesBadge(); as badge) {
-              <span class="change-count"
-                    [attr.data-count]="badge"></span>
-            }
-          </button>
+          @if (merging) {
+            <button uiActivityBarItem="conflicts"
+                    [label]="t('conflicts')">
+              <ui-icon name="warning" />
+            </button>
+          } @else {
+            <button uiActivityBarItem="files"
+                    [label]="t('files')">
+              <ui-icon name="folder" />
+            </button>
+            <button uiActivityBarItem="changes"
+                    [label]="gitStatus.failed() ? t('changesFailed') : gitStatus.changeCount() > 0 ? t('changesCount', { count: gitStatus.changeCount() }) : t('changes')">
+              <ui-icon name="source-control" />
+              @if (changesBadge(); as badge) {
+                <span class="change-count"
+                      [attr.data-count]="badge"></span>
+              }
+            </button>
+          }
         </ui-activity-bar>
       }
       @if (state === 'ready') {
         @let changesShown = panes.sideTool() === 'changes';
         <ui-island uiAppShellSide
-                   [label]="changesShown ? t('changes') : t('files')"
-                   [resizeLabel]="changesShown ? t('resizeChanges') : t('resizeFiles')"
+                   [label]="merging ? t('conflicts') : changesShown ? t('changes') : t('files')"
+                   [resizeLabel]="merging ? t('resizeConflicts') : changesShown ? t('resizeChanges') : t('resizeFiles')"
                    [scrollable]="false">
-          <rs-file-tree [hidden]="changesShown"
+          <!-- The tree and Changes stay in place during a merge, hidden, and keep their state for after it (GC-7). -->
+          <rs-file-tree [hidden]="merging || changesShown"
                         [selected]="selectedPath()"
                         (selectPath)="openEntryAt($event)"
                         (retry)="retry($event)"
                         (action)="runAction($event.action, $event.path)" />
-          <rs-changes-pane [hidden]="!changesShown"
+          <rs-changes-pane [hidden]="merging || !changesShown"
                            [selected]="selectedChangePath()"
                            (selectPath)="openDiff($event)"
                            (discard)="discardChanges($event)" />
+          @if (merging) {
+            @if (merge.state(); as mergeState) {
+              <rs-conflict-list [state]="mergeState"
+                                [selected]="merge.selected()"
+                                (selectPath)="selectConflict($event)" />
+            } @else if (merge.failed()) {
+              <ui-inline-banner class="merge-failed"
+                                status="warning"
+                                announce>
+                {{ t('mergeFailed') }}
+                <div uiBannerActions>
+                  <button uiButton
+                          size="small"
+                          (click)="merge.refresh()">{{ t('retry') }}</button>
+                </div>
+              </ui-inline-banner>
+            } @else {
+              <ui-spinner class="reading-merge"
+                          [label]="t('readingMerge')" />
+            }
+          }
         </ui-island>
       }
       @if (state === 'ready') {
         <ui-island [scrollable]="false">
-          @if (diffChange(); as change) {
+          @if (merging) {
+            @if (merge.selectedFile(); as conflict) {
+              <rs-conflict-file [file]="conflict" />
+            }
+          } @else if (diffChange(); as change) {
             <rs-diff-view [repositoryId]="session.repository()!.id"
                           [path]="change.path"
                           [state]="change.state"
                           [waiting]="diffWaiting()"
                           (openInEditor)="openEntryAt($event)" />
           }
-          <rs-editor-area [hidden]="diffChange() !== null"
+          <!-- Hidden during a merge, so that it keeps its unsaved edits and its undo (ED-25). -->
+          <rs-editor-area [hidden]="merging || diffChange() !== null"
                           [path]="openPath()"
                           [entry]="openEntry()"
                           [file]="openFiles.current()"

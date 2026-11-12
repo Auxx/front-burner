@@ -11,9 +11,11 @@ import type {
   FolderListing,
   GitBranchList,
   GitChange,
+  GitConflictFile,
   GitDiff,
   GitJobStarted,
   GitJobState,
+  GitMergeState,
   GitStatus,
   PushEvent,
   RepositoryCredentialsInfo,
@@ -105,6 +107,8 @@ describe('RepositoryScreenPage', () => {
   /** In place of `changes`, such as a failure. */
   let gitStatusAnswer: Observable<GitStatus> | undefined;
   let abortMerge: ReturnType<typeof vi.fn>;
+  /** What `GitApi.gitMerge` answers. */
+  let mergeAnswer: GitMergeState;
   let gitBranches: ReturnType<typeof vi.fn<(id: number) => Observable<GitBranchList>>>;
   let switchBranch: ReturnType<typeof vi.fn<() => Observable<void>>>;
 
@@ -155,7 +159,7 @@ describe('RepositoryScreenPage', () => {
             gitStatus: (): Observable<GitStatus> => gitStatusAnswer ?? of(baseStatus()),
             gitBranches,
             switchBranch,
-            gitMerge: () => of({ into: 'main', from: 'origin/main', files: [], otherFiles: [], message: 'Merge' }),
+            gitMerge: () => of(mergeAnswer),
             abortMerge
           }
         },
@@ -231,6 +235,7 @@ describe('RepositoryScreenPage', () => {
     changes = [];
     gitStatusAnswer = undefined;
     abortMerge = vi.fn(() => of(undefined));
+    mergeAnswer = { into: 'main', from: 'origin/main', files: [], otherFiles: [], message: 'Merge' };
     switchBranch = vi.fn(() => of(undefined));
     gitBranches = vi.fn(() =>
       of<GitBranchList>({
@@ -1379,6 +1384,196 @@ describe('RepositoryScreenPage', () => {
         expect(merging()).toBeNull();
         expect(page().querySelector('rs-git-actions')).not.toBeNull();
       });
+
+      describe('the conflict list', () => {
+        const conflict = (path: string, resolved = false): GitConflictFile => ({
+          path,
+          kind: 'both-changed',
+          resolved,
+          editable: true,
+          edited: false,
+          oursSize: 1,
+          theirsSize: 1
+        });
+        const conflictList = () => page().querySelector('rs-conflict-list') as HTMLElement | null;
+        const conflictFile = () => page().querySelector('rs-conflict-file h2')?.textContent?.trim();
+        const editorArea = () => page().querySelector('rs-editor-area') as HTMLElement;
+        const fileTree = () => page().querySelector('rs-file-tree') as HTMLElement;
+        const changesPane = () => page().querySelector('rs-changes-pane') as HTMLElement;
+        const item = (name: string) =>
+          page().querySelector(`ui-activity-bar button[uiActivityBarItem="${name}"]`) as HTMLButtonElement | null;
+        const entryButton = (name: string) =>
+          [ ...page().querySelectorAll<HTMLButtonElement>('rs-conflict-list .entry') ].find(entry =>
+            entry.querySelector('.name')?.textContent?.trim() === name
+          ) as HTMLButtonElement;
+
+        async function startMerge(): Promise<void> {
+          gitStatusAnswer = of({ ...baseStatus(), mergeInProgress: true });
+          events.next({ type: 'git.changed', repositoryId: 12 });
+          await settle(harness.fixture);
+          await settle(harness.fixture);
+        }
+
+        async function endMerge(): Promise<void> {
+          gitStatusAnswer = of(baseStatus());
+          events.next({ type: 'git.changed', repositoryId: 12 });
+          await settle(harness.fixture);
+          await settle(harness.fixture);
+        }
+
+        beforeEach(() => {
+          mergeAnswer = {
+            ...mergeAnswer,
+            files: [ conflict('README.md', true), conflict('docs/guide.md') ],
+            otherFiles: [ 'logo.png' ]
+          };
+        });
+
+        it('replaces the tree and Changes, keeping them in place, and goes back when the merge ends', async () => {
+          await visit('/repositories/12/files/README.md');
+
+          await startMerge();
+
+          expect(conflictList()).not.toBeNull();
+          expect(fileTree().hidden).toBe(true);
+          expect(changesPane().hidden).toBe(true);
+          expect(page().querySelector('ui-island[uiAppShellSide]')?.getAttribute('aria-label')).toBe(
+            `${KEY}.conflicts`
+          );
+          expect(item('files')).toBeNull();
+          expect(item('changes')).toBeNull();
+          expect(item('conflicts')?.getAttribute('aria-pressed')).toBe('true');
+          expect(editorArea().hidden).toBe(true);
+
+          await endMerge();
+
+          expect(conflictList()).toBeNull();
+          expect(fileTree().hidden).toBe(false);
+          expect(item('files')?.getAttribute('aria-pressed')).toBe('true');
+          expect(item('conflicts')).toBeNull();
+          expect(editorArea().hidden).toBe(false);
+          expect(page().querySelector('rs-conflict-file')).toBeNull();
+        });
+
+        it('keeps the remembered tool window for after the merge', async () => {
+          localStorage.setItem('fb.4.sideTool', 'changes');
+          await visit('/repositories/12');
+          await startMerge();
+
+          // Collapsed and opened again, as the other items do.
+          item('conflicts')?.click();
+          await settle(harness.fixture);
+          expect(conflictList()?.closest('[hidden]')).not.toBeNull();
+          expect(item('conflicts')?.getAttribute('aria-pressed')).toBe('false');
+          item('conflicts')?.click();
+          await settle(harness.fixture);
+          await endMerge();
+
+          expect(changesPane().hidden).toBe(false);
+          expect(localStorage.getItem('fb.4.sideTool')).toBe('changes');
+        });
+
+        it('selects the first unresolved file, and shows the one selected', async () => {
+          await visit('/repositories/12');
+          await startMerge();
+
+          expect(conflictFile()).toBe('guide.md');
+          expect(entryButton('guide.md').getAttribute('aria-current')).toBe('true');
+
+          entryButton('README.md').click();
+          await settle(harness.fixture);
+
+          expect(conflictFile()).toBe('README.md');
+          expect(entryButton('README.md').getAttribute('aria-current')).toBe('true');
+        });
+
+        it('names the conflicting file shown in the title, and the route\'s file again after the merge', async () => {
+          await visit('/repositories/12/files/README.md');
+          expect(document.title).toBe('README.md · handbook · Front Burner');
+
+          await startMerge();
+          expect(document.title).toBe('guide.md · handbook · Front Burner');
+
+          entryButton('README.md').click();
+          await settle(harness.fixture);
+          expect(document.title).toBe('README.md · handbook · Front Burner');
+
+          await endMerge();
+          expect(document.title).toBe('README.md · handbook · Front Burner');
+        });
+
+        it('moves the selection when the file leaves the list', async () => {
+          mergeAnswer = { ...mergeAnswer, files: [ conflict('a.md'), conflict('b.md'), conflict('c.md') ] };
+          await visit('/repositories/12');
+          await startMerge();
+          entryButton('b.md').click();
+          await settle(harness.fixture);
+
+          mergeAnswer = { ...mergeAnswer, files: [ conflict('a.md'), conflict('c.md') ] };
+          events.next({ type: 'git.changed', repositoryId: 12 });
+          await settle(harness.fixture);
+
+          expect(conflictFile()).toBe('c.md');
+        });
+
+        it('hides the diff during a merge', async () => {
+          changes = [ { path: 'docs/guide.md', state: 'modified' } ];
+          localStorage.setItem('fb.4.sideTool', 'changes');
+          await visit('/repositories/12/files/README.md');
+          (page().querySelector('rs-change-entry .entry') as HTMLButtonElement).click();
+          await settle(harness.fixture);
+          expect(page().querySelector('rs-diff-view')).not.toBeNull();
+
+          await startMerge();
+          expect(page().querySelector('rs-diff-view')).toBeNull();
+
+          await endMerge();
+          expect(page().querySelector('rs-diff-view')).toBeNull();
+          expect(editorArea().hidden).toBe(false);
+          expect(TestBed.inject(Router).url).toBe('/repositories/12/files/README.md');
+        });
+
+        it('is in the drawer on a phone, and selecting closes it', async () => {
+          narrow = true;
+          await visit('/repositories/12');
+          await startMerge();
+          expect(conflictList()?.closest('[hidden]')).not.toBeNull();
+
+          item('conflicts')?.click();
+          await settle(harness.fixture);
+          expect(conflictList()?.closest('[hidden]')).toBeNull();
+
+          entryButton('README.md').click();
+          await settle(harness.fixture);
+
+          expect(item('conflicts')?.getAttribute('aria-pressed')).toBe('false');
+          expect(conflictFile()).toBe('README.md');
+        });
+
+        it('keeps focus in the side pane when the bar goes', async () => {
+          await visit('/repositories/12');
+          item('changes')?.focus();
+          expect(document.activeElement).toBe(item('changes'));
+
+          await startMerge();
+
+          expect(document.activeElement).toBe(entryButton('guide.md'));
+
+          await endMerge();
+
+          expect(document.activeElement).toBe(item('files'));
+        });
+
+        it('leaves the focus alone when it is elsewhere', async () => {
+          await visit('/repositories/12');
+          const bar = page().querySelector('rs-repository-bar button') as HTMLButtonElement;
+          bar.focus();
+
+          await startMerge();
+
+          expect(document.activeElement).toBe(bar);
+        });
+      });
     });
 
     describe('the remote-change notice', () => {
@@ -2043,6 +2238,32 @@ describe('RepositoryScreenPage', () => {
       await settle(harness.fixture);
 
       expect(status()).toBe(`${STATUS}.saving`);
+    });
+
+    it('holds a waiting save during a merge, as a browser draft, and sends it once the merge ends', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      gitStatusAnswer = of({ ...baseStatus(), mergeInProgress: true });
+      events.next({ type: 'git.changed', repositoryId: 12 });
+      await settle(harness.fixture);
+      expect(drafts.at('README.md')?.content).toBe('# README.md\nMore.\n');
+
+      // Hiding the tab sends the waiting saves at once (ED-17), but not during a merge.
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+      try {
+        document.dispatchEvent(new Event('visibilitychange'));
+        await settle(harness.fixture);
+      } finally {
+        Reflect.deleteProperty(document, 'visibilityState');
+      }
+      expect(saveFile).not.toHaveBeenCalled();
+
+      gitStatusAnswer = of(baseStatus());
+      events.next({ type: 'git.changed', repositoryId: 12 });
+      await settle(harness.fixture);
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
     });
 
     it('AC-EDIT-001.4: saves the first file when another is opened', async () => {

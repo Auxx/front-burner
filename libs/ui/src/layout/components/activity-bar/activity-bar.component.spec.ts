@@ -23,8 +23,10 @@ class ActivityBarItemHarness extends ToolbarWidgetHarness {
     <ui-activity-bar label="Side panel"
                      [orientation]="orientation()"
                      [(selected)]="selected">
-      <button uiActivityBarItem="files"
-              label="Files">F</button>
+      @if (withFiles()) {
+        <button uiActivityBarItem="files"
+                label="Files">F</button>
+      }
       <button uiActivityBarItem="changes"
               label="Changes">C</button>
       <button uiActivityBarItem="search"
@@ -33,6 +35,7 @@ class ActivityBarItemHarness extends ToolbarWidgetHarness {
   `
 })
 class HostComponent {
+  readonly withFiles = signal(true);
   readonly orientation = signal<'horizontal' | 'vertical'>('vertical');
   readonly selected = signal<string | null>(null);
 }
@@ -112,5 +115,19 @@ describe('ActivityBarComponent', () => {
     const tabStops = [ 'files', 'changes', 'search' ].filter(value => button(value).tabIndex === 0);
 
     expect(tabStops.length).toBe(1);
+  });
+
+  it('stays one tab stop when the active item goes, also after it was used', async () => {
+    // Used: the toolbar no longer picks its own first item.
+    button('files').focus();
+    button('files').click();
+    await fixture.whenStable();
+    expect(button('files').tabIndex).toBe(0);
+
+    host.withFiles.set(false);
+    await fixture.whenStable();
+
+    const tabStops = [ 'changes', 'search' ].filter(value => button(value).tabIndex === 0);
+    expect(tabStops).toEqual([ 'changes' ]);
   });
 });

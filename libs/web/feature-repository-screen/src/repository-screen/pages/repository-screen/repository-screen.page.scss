@@ -36,6 +36,16 @@ rs-changes-pane[hidden] {
   display: none;
 }
 
+.merge-failed {
+  margin: var(--ui-space-2);
+}
+
+.reading-merge {
+  display: grid;
+  place-items: center;
+  block-size: 100%;
+}
+
 .reference {
   display: block;
 }

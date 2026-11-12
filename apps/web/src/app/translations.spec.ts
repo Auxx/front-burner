@@ -191,6 +191,21 @@ describe('i18n/en.json', () => {
     expect(new IntlMessageFormat(message, 'en').format({ hidden })).toBe(text);
   });
 
+  it.each([
+    [ 1, '1 other file merged without conflicts' ],
+    [ 5000, '5,000 other files merged without conflicts' ]
+  ])('says %i other files merged without conflicts (GC-7)', (count, text) => {
+    const message = texts[`${SCREEN}.ConflictListComponent.otherFiles`] as string;
+
+    expect(new IntlMessageFormat(message, 'en').format({ count })).toBe(text);
+  });
+
+  it('says how many other files the conflict list leaves out', () => {
+    const message = texts[`${SCREEN}.ConflictListComponent.more`] as string;
+
+    expect(new IntlMessageFormat(message, 'en').format({ count: 4800 })).toBe('and 4,800 more');
+  });
+
   it.each([ 0, 1, 2, 3, 4 ])('has the strength text for score %i', score => {
     expect(texts[`${AUTH}.PasswordSetupStepComponent.strengths.${score}`]).toEqual(expect.any(String));
   });

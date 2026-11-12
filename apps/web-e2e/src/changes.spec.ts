@@ -999,6 +999,220 @@ test.describe('pushing', () => {
       drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
     });
 
+    test.describe('the conflict list', () => {
+      const conflictsItem = (page: Page) =>
+        page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Conflicting files' });
+      const conflictList = (page: Page) => page.getByRole('list', { name: 'Conflicting files' });
+      const mergeSummary = (page: Page) => bar(page).locator('rs-merge-summary');
+
+      /**
+       * A repository whose pull conflicts on `guide.md`, which both sides changed;
+       * the remote also adds `notes.md`, merged without conflicts. `draft.md` is
+       * committed here only.
+       */
+      async function conflicting(instance: { url: string; dataDir: string; }): Promise<{ id: number; dir: string; }> {
+        await confirmCommitAuthor(instance.url);
+        const { id, dir, bare } = pushable(instance, 'cloned');
+        publishGuide(dir, bare);
+        writeFileSync(join(dir, 'guide.md'), 'mine\n');
+        writeFileSync(join(dir, 'draft.md'), '# Draft\n');
+        gitIn(dir, 'add', 'guide.md', 'draft.md');
+        gitIn(dir, 'commit', '-q', '-m', 'mine');
+        pushFromElsewhere(bare, 'main', [ { 'guide.md': 'theirs\n', 'notes.md': 'notes\n' } ]);
+        return { id, dir };
+      }
+
+      /** Shows the conflicting files: beside the editor on wide screens, and a drawer on phones (GC-7, FB-9). */
+      async function showConflicts(page: Page): Promise<void> {
+        if (await conflictsItem(page).getAttribute('aria-pressed') === 'false') {
+          await conflictsItem(page).click();
+        }
+        await expect(conflictList(page)).toBeVisible();
+      }
+
+      /** Calls the API as the admin; returns the status and the error code, if any. */
+      async function api(
+        instance: { url: string; },
+        method: string,
+        path: string,
+        body?: unknown
+      ): Promise<{ status: number; code?: string; }> {
+        const answer = await fetch(`${instance.url}/api/v1${path}`, {
+          method,
+          headers: {
+            authorization: `Bearer ${await adminAuthToken(instance.url)}`,
+            'content-type': 'application/json'
+          },
+          body: body === undefined ? undefined : JSON.stringify(body)
+        });
+        const text = await answer.text();
+        return { status: answer.status, code: text ? (JSON.parse(text) as { code?: string; }).code : undefined };
+      }
+
+      test('AC-GIT-003.1: a pull that conflicts on guide.md switches the repository screen to conflict resolution, with Merging origin/main into main and 0 of 1 file resolved; another device that opens the repository sees the same screen', async ({ page, browser, instance }) => {
+        const { id } = await conflicting(instance);
+        await openScreen(page, `/repositories/${id}/files/draft.md`);
+
+        await gitAction(page, 'Pull');
+
+        await expect(mergeSummary(page)).toContainText(/Merging\s*origin\/main\s*into\s*main/);
+        await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+        await showConflicts(page);
+        await expect(conflictList(page).getByRole('listitem')).toHaveCount(1);
+        await expect(conflictList(page)).toContainText(/guide\.md\s*Both changed\s*Unresolved/);
+        // Selecting a file shows it, and closes the drawer on a phone (FB-9).
+        await conflictList(page).getByRole('button', { name: /guide\.md/ }).click();
+        await expect(page.getByRole('main').getByRole('heading', { name: 'guide.md' })).toBeVisible();
+        if (await conflictsItem(page).getAttribute('aria-pressed') === 'false') {
+          await expect(conflictList(page)).toBeHidden();
+        }
+
+        const context = await browser.newContext({ baseURL: instance.url, viewport: { width: 375, height: 700 } });
+        const phone = await context.newPage();
+        try {
+          await openScreen(phone, `/repositories/${id}`);
+          await expect(mergeSummary(phone)).toContainText('0 of 1 file resolved');
+          await showConflicts(phone);
+          await expect(conflictList(phone)).toContainText(/guide\.md\s*Both changed\s*Unresolved/);
+        } finally {
+          await context.close();
+        }
+      });
+
+      test('AC-FILE-001.20: while a merge with conflicts is in progress, the file tree is replaced by the list of conflicting files, and the API refuses create, rename and delete', async ({ page, instance }) => {
+        const { id } = await conflicting(instance);
+        await openScreen(page, `/repositories/${id}`);
+        await gitAction(page, 'Pull');
+        await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+
+        await showConflicts(page);
+        await expect(page.getByRole('tree')).toBeHidden();
+        await expect(
+          page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files', exact: true })
+        ).toHaveCount(0);
+
+        const base = `/repositories/${id}`;
+        for (
+          const refused of [
+            await api(instance, 'POST', `${base}/entries`, { folder: '', name: 'new.md', kind: 'file' }),
+            await api(instance, 'POST', `${base}/entries/rename`, { path: 'draft.md', name: 'renamed.md' }),
+            await api(instance, 'DELETE', `${base}/entries?path=draft.md`)
+          ]
+        ) {
+          expect(refused).toEqual({ status: 409, code: 'merge-in-progress' });
+        }
+      });
+
+      test('AC-GIT-002.20: while a merge is in progress, commit, discard, pull, push and branch switching are not offered, and the API refuses them', async ({ page, instance }) => {
+        const { id, dir } = await conflicting(instance);
+        await openScreen(page, `/repositories/${id}`);
+        await gitAction(page, 'Pull');
+        await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+
+        const tools = page.getByRole('toolbar', { name: 'Tool windows' });
+        await expect(tools.getByRole('button', { name: /^Changes/ })).toHaveCount(0);
+        await expect(changesPane(page)).toBeHidden();
+        for (const name of [ 'Fetch', 'Pull', 'Push' ]) {
+          await expect(bar(page).getByRole('button', { name, exact: true })).toHaveCount(0);
+        }
+        await expect(bar(page).getByRole('button', { name: /open the branch list/i })).toHaveCount(0);
+        await expect(summary(page)).toHaveCount(0);
+        if (await gitActions(page).isVisible()) {
+          await gitActions(page).click();
+          await expect(page.getByRole('menuitem')).toHaveText([ 'Abort merge' ]);
+          await page.keyboard.press('Escape');
+        }
+
+        const base = `/repositories/${id}/git`;
+        writeFileSync(join(dir, 'draft.md'), '# Changed\n');
+        for (
+          const refused of [
+            await api(instance, 'POST', `${base}/commits`, { message: 'Refused', paths: [ 'draft.md' ] }),
+            await api(instance, 'POST', `${base}/discard`, { paths: [ 'draft.md' ] }),
+            await api(instance, 'POST', `${base}/pull`),
+            await api(instance, 'POST', `${base}/push`),
+            await api(instance, 'POST', `${base}/switch`, { name: 'main', remote: false })
+          ]
+        ) {
+          expect(refused).toEqual({ status: 409, code: 'merge-in-progress' });
+        }
+      });
+
+      test('keeps focus in the side pane when the bar goes', async ({ page, context, instance, isMobile, monitor }) => {
+        const { id } = await conflicting(instance);
+        await openScreen(page, `/repositories/${id}/files/draft.md`);
+        const tools = page.getByRole('toolbar', { name: 'Tool windows' });
+        const changesItem = tools.getByRole('button', { name: /^Changes/ });
+        if (!isMobile) {
+          await changesItem.focus();
+        }
+
+        const other = await context.newPage();
+        await other.goto(`/repositories/${id}`);
+        await gitAction(other, 'Pull');
+        await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+
+        if (!isMobile) {
+          await expect(conflictList(page).getByRole('button', { name: /guide\.md/ })).toBeFocused();
+        }
+        await showConflicts(page);
+        // As the repository screen's own checks: on a phone the open drawer is shown instead of `main` (FB-9).
+        const axe = new AxeBuilder({ page }).exclude('ui-split-pane > .divider');
+        expect((await (isMobile ? axe.disableRules('landmark-one-main') : axe).analyze()).violations).toEqual([]);
+
+        // The skip link still leads to the editor area, which shows the selected file.
+        await page.reload();
+        await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+        await page.keyboard.press('Tab');
+        await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('main')).toBeFocused();
+        await expect(page.getByRole('main').getByRole('heading', { name: 'guide.md' })).toBeVisible();
+
+        await gitAction(other, 'Abort merge');
+        await other.getByRole('dialog', { name: 'Abort the merge?' }).getByRole('button', { name: 'Abort merge' })
+          .click();
+        await other.close();
+        await expect(changesItem).toBeVisible();
+        drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+      });
+
+      test('keeps unsaved edits through a merge', async ({ page, context, instance, monitor }) => {
+        const { id, dir } = await conflicting(instance);
+        await openScreen(page, `/repositories/${id}/files/draft.md`);
+        const editor = page.getByRole('main').getByRole('textbox', { name: 'draft.md', exact: true });
+        await expect(editor).toBeVisible();
+        // The save does not get through, so the edit stays unsaved.
+        await page.route(
+          `**/api/v1/repositories/${id}/file`,
+          route => route.request().method() === 'PUT' ? route.abort('internetdisconnected') : route.fallback()
+        );
+        await editor.click();
+        await page.keyboard.press('ControlOrMeta+End');
+        await page.keyboard.type('Kept through the merge.');
+
+        const other = await context.newPage();
+        await other.goto(`/repositories/${id}`);
+        await gitAction(other, 'Pull');
+        await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+        await expect(editor).toBeHidden();
+
+        await gitAction(other, 'Abort merge');
+        await other.getByRole('dialog', { name: 'Abort the merge?' }).getByRole('button', { name: 'Abort merge' })
+          .click();
+        await other.close();
+        await page.unroute(`**/api/v1/repositories/${id}/file`);
+
+        await expect(editor).toBeVisible();
+        await expect(editor).toContainText('Kept through the merge.');
+        // And the next save sends them.
+        await expect.poll(() => readFileSync(join(dir, 'draft.md'), 'utf8'), { timeout: 40_000 })
+          .toContain('Kept through the merge.');
+        drainFailedRequests(monitor, `/api/v1/repositories/${id}/file`);
+        drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+      });
+    });
+
     test('a branch named like a remote one pulls, then pushes', async ({ page, instance }) => {
       await confirmCommitAuthor(instance.url);
       const { id, dir, bare } = pushable(instance, 'cloned');

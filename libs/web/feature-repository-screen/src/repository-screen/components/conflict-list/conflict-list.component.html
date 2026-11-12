@@ -1,0 +1,53 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ConflictListComponent'">
+  <ul class="files"
+      [attr.aria-label]="t('label')">
+    @for (row of rows(); track row.path) {
+      <li>
+        <button type="button"
+                class="entry"
+                uiTooltipLongPress
+                [uiTooltip]="row.path"
+                [attr.aria-current]="row.path === selected() ? 'true' : null"
+                (click)="selectPath.emit(row.path)">
+          <span class="path">
+            <span class="name">{{ row.name }}</span>
+            @if (row.folder) {
+              <span class="folder">{{ row.folder }}</span>
+            }
+          </span>
+          <span class="about">
+            <span class="kind">{{ t(row.kind) }}</span>
+            <span class="state"
+                  [class.resolved]="row.resolved">
+              <ui-icon [name]="row.resolved ? 'pass' : 'warning'" />
+              {{ row.resolved ? t('resolved') : t('unresolved') }}
+            </span>
+          </span>
+        </button>
+      </li>
+    }
+  </ul>
+  @if (otherCount() > 0) {
+    <div class="other">
+      <button type="button"
+              class="toggle"
+              [attr.aria-controls]="expanded() ? 'rs-conflict-list-other' : null"
+              [attr.aria-expanded]="expanded()"
+              (click)="toggleOther()">
+        <ui-icon [name]="expanded() ? 'chevron-down' : 'chevron-right'" />
+        {{ t('otherFiles', { count: otherCount() }) }}
+      </button>
+      @if (expanded()) {
+        <ul id="rs-conflict-list-other"
+            class="other-files">
+          @for (path of otherShown(); track path) {
+            <li>{{ path }}</li>
+          }
+        </ul>
+        @if (otherMore() > 0) {
+          <p class="more">{{ t('more', { count: otherMore() }) }}</p>
+        }
+      }
+    </div>
+  }
+</ng-container>

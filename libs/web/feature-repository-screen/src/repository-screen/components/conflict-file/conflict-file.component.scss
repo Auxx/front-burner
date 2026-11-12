@@ -1,0 +1,43 @@
+:host {
+  display: block;
+  block-size: 100%;
+  overflow: auto;
+  padding: var(--ui-space-4);
+  box-sizing: border-box;
+}
+
+.name {
+  margin: 0;
+  font-size: var(--ui-font-size-lg);
+  overflow-wrap: anywhere;
+}
+
+.folder,
+.about {
+  margin: var(--ui-space-1) 0 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-ui-small);
+  overflow-wrap: anywhere;
+}
+
+.about {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1);
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+
+  // The colour only repeats the word and the icon (NF-13.7).
+  ui-icon {
+    color: var(--ui-warning-icon);
+  }
+
+  &.resolved ui-icon {
+    color: var(--ui-success-icon);
+  }
+}

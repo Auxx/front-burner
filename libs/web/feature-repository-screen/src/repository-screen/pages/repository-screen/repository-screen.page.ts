@@ -6,6 +6,7 @@ import {
   computed,
   DestroyRef,
   effect,
+  ElementRef,
   inject,
   Injector,
   signal,
@@ -36,6 +37,8 @@ import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { map, merge, take } from 'rxjs';
 
 import { ChangesPaneComponent } from '../../components/changes-pane/changes-pane.component';
+import { ConflictFileComponent } from '../../components/conflict-file/conflict-file.component';
+import { ConflictListComponent } from '../../components/conflict-list/conflict-list.component';
 import { DiffViewComponent } from '../../components/diff-view/diff-view.component';
 import { EditorAreaComponent } from '../../components/editor-area/editor-area.component';
 import { FileTreeComponent } from '../../components/file-tree/file-tree.component';
@@ -116,6 +119,10 @@ const MAX_BADGE_COUNT = 99;
  * branch list, and `BranchActionsService` switches to the branch chosen there, or says
  * why not, with **Show changes** (GA-36, GA-37, GA-39). What follows a switch needs
  * nothing of its own: to `TreeSyncService` it is a change made elsewhere (GA-40).
+ * During a merge, the side pane lists the conflicting files instead of the tree and
+ * **Changes**, and the editor area shows the one selected in `MergeStore` (GC-7, GC-8,
+ * FB-26). The tree, **Changes** and the editor stay in place, hidden, so that they keep
+ * their state, unsaved edits included, for when the merge ends (ED-25).
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -135,6 +142,8 @@ const MAX_BADGE_COUNT = 99;
     PageNotFoundPage,
     RouteAnnouncerComponent,
     ChangesPaneComponent,
+    ConflictFileComponent,
+    ConflictListComponent,
     DiffViewComponent,
     EditorAreaComponent,
     FileTreeComponent,
@@ -179,6 +188,7 @@ export class RepositoryScreenPage {
   private readonly currentUser = inject(CurrentUserService);
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly firstFile = inject(FirstFileService);
   protected readonly tree = inject(FileTreeStoreService);
   private readonly commands = inject(EntryCommandsService);
@@ -206,10 +216,17 @@ export class RepositoryScreenPage {
   private readonly shell = viewChild(AppShellComponent);
   private readonly changesPane = viewChild(ChangesPaneComponent);
   private readonly bar = viewChild(RepositoryBarComponent);
-  /** The activity bar's selected item: the tool window shown, beside the editor or as the drawer (FB-7, FB-9, GA-10). */
+  private readonly conflictList = viewChild(ConflictListComponent);
+  /**
+   * The activity bar's selected item: the tool window shown, beside the editor or as the drawer (FB-7, FB-9, GA-10).
+   * During a merge, the conflicting files are the only one (GC-7); the tool remembered stays for after it.
+   */
   protected readonly sideTool = computed(() => {
     const narrow = this.shell()?.narrow() ?? false;
-    return (narrow ? this.drawerOpen() : this.panes.sideOpen()) ? this.panes.sideTool() : null;
+    if (!(narrow ? this.drawerOpen() : this.panes.sideOpen())) {
+      return null;
+    }
+    return this.merge.merging() ? 'conflicts' : this.panes.sideTool();
   });
   /**
    * The route's repository and path, whether the navigation to it closed the
@@ -321,6 +338,92 @@ export class RepositoryScreenPage {
     this.viewRepository();
     this.keepFocusWhenNoticeGoes();
     this.closeBranchListWhenMergeStarts();
+    this.followMergeInSidePane();
+    this.holdSavesDuringMerge();
+  }
+
+  /**
+   * During a merge, the files open before it are hidden, and a save of one of them
+   * would be refused, or for a conflicting file would write over its conflict
+   * markers. Their savers are held, and what waits is kept as browser drafts
+   * (ED-25); the waiting saves are sent once the merge ends. Leaving the screen
+   * meanwhile sends nothing: the drafts keep the edits.
+   */
+  private holdSavesDuringMerge(): void {
+    let release: (() => void) | null = null;
+    effect(() => {
+      const merging = this.merge.merging();
+      untracked(() => {
+        if (merging && release === null) {
+          release = this.openFiles.hold();
+          this.openFiles.writeDrafts();
+        } else if (!merging && release !== null) {
+          release();
+          release = null;
+        }
+      });
+    });
+  }
+
+  /**
+   * A merge starting, also elsewhere, ends the diff, so that the screen shows the
+   * file again once it ends (GA-14, GC-7). It replaces the tree and **Changes** with
+   * the conflicting files, and their activity bar items with one of its own: the
+   * focus in any of them goes to the conflicting files once they are listed, or to
+   * the item while the pane is collapsed. When the merge ends, the focus in the
+   * list goes to the activity bar's selected item, as the list goes too.
+   */
+  private followMergeInSidePane(): void {
+    const injector = inject(Injector);
+    let wasMerging = false;
+    /** Whether the focus waits for the conflict list, which shows once the merge has been read. */
+    const listWaits = signal(false);
+    effect(() => {
+      const merging = this.merge.merging();
+      if (merging === wasMerging) {
+        return;
+      }
+      wasMerging = merging;
+      untracked(() => {
+        if (merging) {
+          this.selectedChange.set(null);
+        }
+        listWaits.set(false);
+        if (!this.focusInSide()) {
+          return;
+        }
+        if (merging && this.sideTool() !== null) {
+          listWaits.set(true);
+        } else {
+          afterNextRender(() => this.focusActivityItem(), { injector });
+        }
+      });
+    });
+    effect(() => {
+      const list = this.conflictList();
+      if (list && listWaits()) {
+        untracked(() => listWaits.set(false));
+        afterNextRender(() => {
+          // Unless the user has put the focus somewhere else meanwhile.
+          if (this.focusInSide() || this.document.activeElement === this.document.body) {
+            list.focus();
+          }
+        }, { injector });
+      }
+    });
+  }
+
+  /** Whether the focus is in the activity bar or the side pane. */
+  private focusInSide(): boolean {
+    const focused = this.document.activeElement;
+    return (focused?.closest('ui-activity-bar, rs-file-tree, rs-changes-pane, rs-conflict-list') ?? null) !== null;
+  }
+
+  /** Focuses the activity bar's selected item, or its first one. */
+  private focusActivityItem(): void {
+    const bar = this.host.querySelector('ui-activity-bar');
+    const item = bar?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? bar?.querySelector<HTMLElement>('button');
+    item?.focus();
   }
 
   /**
@@ -368,8 +471,8 @@ export class RepositoryScreenPage {
    * screens and closes the drawer on narrow ones.
    */
   protected selectSideTool(tool: string | null, narrow: boolean): void {
-    if (tool !== null) {
-      this.panes.sideTool.set(tool as SideTool);
+    if (tool === 'files' || tool === 'changes') {
+      this.panes.sideTool.set(tool satisfies SideTool);
     }
     if (narrow) {
       this.drawerOpen.set(tool !== null);
@@ -394,6 +497,12 @@ export class RepositoryScreenPage {
     void this.router.navigate([ '/repositories', repository.id, 'files', ...path.split('/') ], {
       fragment: fragment ?? undefined
     });
+  }
+
+  /** Shows a conflicting file in the editor area (GC-8) and closes the drawer of narrow screens (FB-9). */
+  protected selectConflict(path: string): void {
+    this.drawerOpen.set(false);
+    this.merge.select(path);
   }
 
   /**
@@ -650,7 +759,8 @@ export class RepositoryScreenPage {
    * `<file name> · <repository name> · Front Burner`, or without a file
    * `<repository name> · Front Burner` (NV-13), published again for each file
    * so that it is announced (NV-18), with `• ` in front while the open file
-   * has unsaved edits. Until the repository has opened, the
+   * has unsaved edits. During a merge, the file is the conflicting file
+   * shown (GC-8), without the mark. Until the repository has opened, the
    * product name alone, so that no other page's title stays.
    */
   private updateTitle(): void {
@@ -661,9 +771,11 @@ export class RepositoryScreenPage {
     effect(onCleanup => {
       const state = this.session.state();
       const repository = this.session.repository();
-      const path = this.path();
+      // During a merge, the conflicting file shown, not the hidden one of the route.
+      const merging = this.merge.merging();
+      const path = merging ? (this.merge.selected() ?? '') : this.path();
       const file = fileName(path);
-      const unsaved = this.unsaved();
+      const unsaved = !merging && this.unsaved();
       untracked(() => {
         if (state === 'loading') {
           pageTitle.setPending();
