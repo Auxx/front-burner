@@ -368,4 +368,94 @@ describe('MergeStore', () => {
     expect(store.merging()).toBe(true);
     expect(store.state()).toBeNull();
   });
+
+  describe('the selected file', () => {
+    /** A merge whose files have these paths, all unresolved unless named in `resolved`. */
+    function mergeOf(paths: string[], resolvedPaths: string[] = []): GitMergeState {
+      const state = merge(...paths.map(path => resolvedPaths.includes(path)));
+      return { ...state, files: state.files.map((file, index) => ({ ...file, path: paths[index] })) };
+    }
+
+    async function readAgain(state: GitMergeState): Promise<void> {
+      gitMerge.mockReturnValue(of(state));
+      gitChanged();
+      await settle();
+    }
+
+    it('selects the first unresolved file', async () => {
+      await start(true);
+
+      expect(store.selected()).toBe('1.md');
+      expect(store.selectedFile()?.path).toBe('1.md');
+    });
+
+    it('selects the first file when all are resolved', async () => {
+      gitMerge.mockReturnValue(of(merge(true, true)));
+      await start(true);
+
+      expect(store.selected()).toBe('0.md');
+    });
+
+    it('selects nothing before the merge is read, nor without one', async () => {
+      gitMerge.mockReturnValue(new Subject<GitMergeState>());
+      await start(true);
+      expect(store.selected()).toBeNull();
+      expect(store.selectedFile()).toBeNull();
+
+      gitStatus.mockReturnValue(of(status(false)));
+      await statusStore.refresh();
+      await settle();
+      expect(store.selected()).toBeNull();
+    });
+
+    it('selects a listed file, and ignores a path that is not one', async () => {
+      await start(true);
+
+      store.select('2.md');
+      expect(store.selected()).toBe('2.md');
+      store.select('other.md');
+      expect(store.selected()).toBe('2.md');
+    });
+
+    it('keeps the selection when the merge is read again, also once the file is resolved', async () => {
+      await start(true);
+      store.select('2.md');
+
+      await readAgain(merge(true, true, true));
+
+      expect(store.selected()).toBe('2.md');
+      expect(store.selectedFile()?.resolved).toBe(true);
+    });
+
+    it('moves the selection when the file leaves the list', async () => {
+      gitMerge.mockReturnValue(of(mergeOf([ 'a.md', 'b.md', 'c.md', 'd.md' ], [ 'c.md' ])));
+      await start(true);
+      store.select('b.md');
+
+      await readAgain(mergeOf([ 'a.md', 'c.md', 'd.md' ], [ 'c.md' ]));
+      expect(store.selected()).toBe('d.md');
+
+      // Nothing unresolved after it: the first unresolved file, then the first file.
+      await readAgain(mergeOf([ 'a.md', 'c.md' ], [ 'c.md' ]));
+      expect(store.selected()).toBe('a.md');
+      await readAgain(mergeOf([ 'c.md' ], [ 'c.md' ]));
+      expect(store.selected()).toBe('c.md');
+      await readAgain(mergeOf([]));
+      expect(store.selected()).toBeNull();
+    });
+
+    it('starts again with the first unresolved file in the next merge', async () => {
+      await start(true);
+      store.select('2.md');
+
+      gitStatus.mockReturnValue(of(status(false)));
+      await statusStore.refresh();
+      await settle();
+      gitStatus.mockReturnValue(of(status(true)));
+      await statusStore.refresh();
+      await settle();
+
+      expect(store.selected()).toBe('1.md');
+    });
+  });
 });

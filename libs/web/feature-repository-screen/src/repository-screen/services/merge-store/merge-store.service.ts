@@ -1,11 +1,40 @@
-import { computed, DestroyRef, effect, inject, Injectable, signal, untracked } from '@angular/core';
-import type { GitMergeState } from '@front-burner/shared-contracts';
+import {
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  Injectable,
+  linkedSignal,
+  type Signal,
+  signal,
+  untracked
+} from '@angular/core';
+import type { GitConflictFile, GitMergeState } from '@front-burner/shared-contracts';
 import { GitApi } from '@front-burner/web-api-client';
 import { PushChannelService, toApiError } from '@front-burner/web-core';
 import type { Subscription } from 'rxjs';
 
 import { LatestRead } from '../../utils/latest-read/latest-read';
 import { GitStatusStore, STATUS_RETRY_MS } from '../git-status-store/git-status-store.service';
+
+/**
+ * The file to select in a newly read merge, given the one selected before: it
+ * stays while it is listed. Otherwise the first unresolved file after it, by the
+ * list's order, or else the first unresolved file, or else the first file, so that
+ * the selection never points at nothing (GC-8).
+ */
+function nextSelection(state: GitMergeState | null, previous: string | null): string | null {
+  if (state === null || state.files.length === 0) {
+    return null;
+  }
+  const { files } = state;
+  if (previous !== null && files.some(file => file.path === previous)) {
+    return previous;
+  }
+  // Sorted by code units (GitMergeStateSchema), as `<` compares strings.
+  const after = previous === null ? undefined : files.find(file => !file.resolved && file.path > previous);
+  return (after ?? files.find(file => !file.resolved) ?? files[0]).path;
+}
 
 /**
  * The open repository's merge in progress (GC-2, A-4.5). Provided by the page.
@@ -43,6 +72,22 @@ export class MergeStore {
     return this.merging() && read?.repositoryId === this.status.followed() ? read.state : null;
   });
 
+  /**
+   * The conflicting file shown in the editor area (GC-8), by path; `null` without
+   * a merge read. The first unresolved file when the merge is first read; one that
+   * leaves the list hands over to the next unresolved file after it.
+   */
+  private readonly selection = linkedSignal<GitMergeState | null, string | null>({
+    source: this.state,
+    computation: (state, previous) => nextSelection(state, previous?.value ?? null)
+  });
+  readonly selected: Signal<string | null> = this.selection.asReadonly();
+  /** The file at `selected`. */
+  readonly selectedFile = computed<GitConflictFile | null>(() => {
+    const selected = this.selected();
+    return this.state()?.files.find(file => file.path === selected) ?? null;
+  });
+
   private subscription: Subscription | undefined;
   private readonly reads = new LatestRead(STATUS_RETRY_MS);
 
@@ -68,6 +113,8 @@ export class MergeStore {
         this.reads.cancel();
         if (!merging) {
           this.read.set(null);
+          // The next merge starts afresh, whether or not anything read the selection meanwhile.
+          this.selection.set(null);
         }
       });
     });
@@ -75,6 +122,13 @@ export class MergeStore {
       this.subscription?.unsubscribe();
       this.reads.cancel();
     });
+  }
+
+  /** Shows a conflicting file in the editor area (GC-8); a path that isn't one is ignored. */
+  select(path: string): void {
+    if (this.state()?.files.some(file => file.path === path)) {
+      this.selection.set(path);
+    }
   }
 
   /**

@@ -1,0 +1,18 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ConflictFileComponent'">
+  @let conflict = file();
+  <header class="header">
+    <h2 class="name">{{ name() }}</h2>
+    @if (folder(); as folder) {
+      <p class="folder">{{ folder }}</p>
+    }
+    <p class="about">
+      <span class="kind">{{ t(conflict.kind) }}</span>
+      <span aria-hidden="true">·</span>
+      <span class="state"
+            [class.resolved]="conflict.resolved">
+        <ui-icon [name]="conflict.resolved ? 'pass' : 'warning'" />
+        {{ conflict.resolved ? t('resolved') : t('unresolved') }}
+      </span>
+    </p>
+  </header>
+</ng-container>
