@@ -339,6 +339,30 @@ export class RepositoryScreenPage {
     this.keepFocusWhenNoticeGoes();
     this.closeBranchListWhenMergeStarts();
     this.followMergeInSidePane();
+    this.holdSavesDuringMerge();
+  }
+
+  /**
+   * During a merge, the files open before it are hidden, and a save of one of them
+   * would be refused, or for a conflicting file would write over its conflict
+   * markers. Their savers are held, and what waits is kept as browser drafts
+   * (ED-25); the waiting saves are sent once the merge ends. Leaving the screen
+   * meanwhile sends nothing: the drafts keep the edits.
+   */
+  private holdSavesDuringMerge(): void {
+    let release: (() => void) | null = null;
+    effect(() => {
+      const merging = this.merge.merging();
+      untracked(() => {
+        if (merging && release === null) {
+          release = this.openFiles.hold();
+          this.openFiles.writeDrafts();
+        } else if (!merging && release !== null) {
+          release();
+          release = null;
+        }
+      });
+    });
   }
 
   /**
@@ -735,7 +759,8 @@ export class RepositoryScreenPage {
    * `<file name> · <repository name> · Front Burner`, or without a file
    * `<repository name> · Front Burner` (NV-13), published again for each file
    * so that it is announced (NV-18), with `• ` in front while the open file
-   * has unsaved edits. Until the repository has opened, the
+   * has unsaved edits. During a merge, the file is the conflicting file
+   * shown (GC-8), without the mark. Until the repository has opened, the
    * product name alone, so that no other page's title stays.
    */
   private updateTitle(): void {
@@ -746,9 +771,11 @@ export class RepositoryScreenPage {
     effect(onCleanup => {
       const state = this.session.state();
       const repository = this.session.repository();
-      const path = this.path();
+      // During a merge, the conflicting file shown, not the hidden one of the route.
+      const merging = this.merge.merging();
+      const path = merging ? (this.merge.selected() ?? '') : this.path();
       const file = fileName(path);
-      const unsaved = this.unsaved();
+      const unsaved = !merging && this.unsaved();
       untracked(() => {
         if (state === 'loading') {
           pageTitle.setPending();

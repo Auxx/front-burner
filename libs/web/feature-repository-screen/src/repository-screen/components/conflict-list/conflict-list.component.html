@@ -31,7 +31,7 @@
     <div class="other">
       <button type="button"
               class="toggle"
-              aria-controls="rs-conflict-list-other"
+              [attr.aria-controls]="expanded() ? 'rs-conflict-list-other' : null"
               [attr.aria-expanded]="expanded()"
               (click)="toggleOther()">
         <ui-icon [name]="expanded() ? 'chevron-down' : 'chevron-right'" />

@@ -1487,6 +1487,21 @@ describe('RepositoryScreenPage', () => {
           expect(entryButton('README.md').getAttribute('aria-current')).toBe('true');
         });
 
+        it('names the conflicting file shown in the title, and the route\'s file again after the merge', async () => {
+          await visit('/repositories/12/files/README.md');
+          expect(document.title).toBe('README.md · handbook · Front Burner');
+
+          await startMerge();
+          expect(document.title).toBe('guide.md · handbook · Front Burner');
+
+          entryButton('README.md').click();
+          await settle(harness.fixture);
+          expect(document.title).toBe('README.md · handbook · Front Burner');
+
+          await endMerge();
+          expect(document.title).toBe('README.md · handbook · Front Burner');
+        });
+
         it('moves the selection when the file leaves the list', async () => {
           mergeAnswer = { ...mergeAnswer, files: [ conflict('a.md'), conflict('b.md'), conflict('c.md') ] };
           await visit('/repositories/12');
@@ -2223,6 +2238,32 @@ describe('RepositoryScreenPage', () => {
       await settle(harness.fixture);
 
       expect(status()).toBe(`${STATUS}.saving`);
+    });
+
+    it('holds a waiting save during a merge, as a browser draft, and sends it once the merge ends', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+
+      gitStatusAnswer = of({ ...baseStatus(), mergeInProgress: true });
+      events.next({ type: 'git.changed', repositoryId: 12 });
+      await settle(harness.fixture);
+      expect(drafts.at('README.md')?.content).toBe('# README.md\nMore.\n');
+
+      // Hiding the tab sends the waiting saves at once (ED-17), but not during a merge.
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+      try {
+        document.dispatchEvent(new Event('visibilitychange'));
+        await settle(harness.fixture);
+      } finally {
+        Reflect.deleteProperty(document, 'visibilityState');
+      }
+      expect(saveFile).not.toHaveBeenCalled();
+
+      gitStatusAnswer = of(baseStatus());
+      events.next({ type: 'git.changed', repositoryId: 12 });
+      await settle(harness.fixture);
+
+      expect(savedPaths()).toEqual([ 'README.md' ]);
     });
 
     it('AC-EDIT-001.4: saves the first file when another is opened', async () => {

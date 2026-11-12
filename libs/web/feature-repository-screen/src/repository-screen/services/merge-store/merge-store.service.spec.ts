@@ -417,14 +417,41 @@ describe('MergeStore', () => {
       expect(store.selected()).toBe('2.md');
     });
 
-    it('keeps the selection when the merge is read again, also once the file is resolved', async () => {
+    it('keeps the selection when the merge is read again', async () => {
       await start(true);
       store.select('2.md');
 
-      await readAgain(merge(true, true, true));
+      await readAgain(merge(true, false, true));
 
       expect(store.selected()).toBe('2.md');
-      expect(store.selectedFile()?.resolved).toBe(true);
+    });
+
+    it('moves on when a read finds the file resolved, here or on another device', async () => {
+      gitMerge.mockReturnValue(of(mergeOf([ 'a.md', 'b.md', 'c.md', 'd.md' ], [ 'c.md' ])));
+      await start(true);
+      expect(store.selected()).toBe('a.md');
+
+      await readAgain(mergeOf([ 'a.md', 'b.md', 'c.md', 'd.md' ], [ 'a.md', 'c.md' ]));
+      expect(store.selected()).toBe('b.md');
+
+      // Past the end: the first unresolved file.
+      store.select('d.md');
+      await readAgain(mergeOf([ 'a.md', 'b.md', 'c.md', 'd.md' ], [ 'a.md', 'c.md', 'd.md' ]));
+      expect(store.selected()).toBe('b.md');
+
+      // None left: the file stays.
+      await readAgain(mergeOf([ 'a.md', 'b.md', 'c.md', 'd.md' ], [ 'a.md', 'b.md', 'c.md', 'd.md' ]));
+      expect(store.selected()).toBe('b.md');
+    });
+
+    it('keeps a resolved file that the user selected', async () => {
+      gitMerge.mockReturnValue(of(mergeOf([ 'a.md', 'b.md' ], [ 'a.md' ])));
+      await start(true);
+
+      store.select('a.md');
+      await readAgain(mergeOf([ 'a.md', 'b.md' ], [ 'a.md' ]));
+
+      expect(store.selected()).toBe('a.md');
     });
 
     it('moves the selection when the file leaves the list', async () => {
@@ -442,6 +469,36 @@ describe('MergeStore', () => {
       expect(store.selected()).toBe('c.md');
       await readAgain(mergeOf([]));
       expect(store.selected()).toBeNull();
+    });
+
+    it('says that a merge could not be read, until a read succeeds', async () => {
+      gitMerge.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await start(true);
+
+      expect(store.state()).toBeNull();
+      expect(store.failed()).toBe(true);
+
+      gitMerge.mockReturnValue(of(merge(false)));
+      await store.refresh();
+      expect(store.failed()).toBe(false);
+      expect(store.state()).not.toBeNull();
+
+      // A merge known already stays shown when a later read fails.
+      gitMerge.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await store.refresh();
+      expect(store.failed()).toBe(false);
+      expect(store.state()).not.toBeNull();
+    });
+
+    it('does not say a merge that ended could not be read', async () => {
+      gitMerge.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await start(true);
+
+      gitStatus.mockReturnValue(of(status(false)));
+      await statusStore.refresh();
+      await settle();
+
+      expect(store.failed()).toBe(false);
     });
 
     it('starts again with the first unresolved file in the next merge', async () => {

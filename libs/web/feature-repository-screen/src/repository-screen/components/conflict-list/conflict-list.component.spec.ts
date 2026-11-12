@@ -94,11 +94,14 @@ describe('ConflictListComponent', () => {
     expect(toggle()?.textContent?.trim()).toBe('3 other files merged without conflicts');
     expect(toggle()?.getAttribute('aria-expanded')).toBe('false');
     expect(host().querySelector('.other-files')).toBeNull();
+    // It names the list only while there is one.
+    expect(toggle()?.hasAttribute('aria-controls')).toBe(false);
 
     toggle()?.click();
     await fixture.whenStable();
 
     expect(toggle()?.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle()?.getAttribute('aria-controls')).toBe(host().querySelector('.other-files')?.id);
     expect(texts('.other-files li')).toEqual([ 'b.md', 'docs/c.md', 'e.md' ]);
     expect(host().querySelector('.more')).toBeNull();
 

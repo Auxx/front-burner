@@ -133,6 +133,17 @@
               <rs-conflict-list [state]="mergeState"
                                 [selected]="merge.selected()"
                                 (selectPath)="selectConflict($event)" />
+            } @else if (merge.failed()) {
+              <ui-inline-banner class="merge-failed"
+                                status="warning"
+                                announce>
+                {{ t('mergeFailed') }}
+                <div uiBannerActions>
+                  <button uiButton
+                          size="small"
+                          (click)="merge.refresh()">{{ t('retry') }}</button>
+                </div>
+              </ui-inline-banner>
             } @else {
               <ui-spinner class="reading-merge"
                           [label]="t('readingMerge')" />

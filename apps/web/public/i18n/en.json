@@ -489,6 +489,7 @@
   "web-feature-repository-screen.RepositoryScreenPage.conflicts": "Conflicting files",
   "web-feature-repository-screen.RepositoryScreenPage.resizeConflicts": "Resize conflicting files",
   "web-feature-repository-screen.RepositoryScreenPage.readingMerge": "Reading the merge",
+  "web-feature-repository-screen.RepositoryScreenPage.mergeFailed": "The conflicting files could not be read.",
   "web-feature-repository-screen.RepositoryScreenPage.editor": "Editor",
   "web-feature-repository-screen.RepositorySwitcherComponent.loading": "Loading your repositories",
   "web-feature-repository-screen.RepositorySwitcherComponent.loadFailed": "Your repositories could not be loaded.",
