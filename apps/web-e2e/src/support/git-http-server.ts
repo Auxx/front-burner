@@ -43,12 +43,13 @@ export function createHandbookRemote(root: string): string {
 
 /**
  * Someone else pushes to `branch` of the bare repository `bare`: one commit per
- * entry of `commits`, each writing its files (path → content), or empty without any.
+ * entry of `commits`, each writing its files (path → content, or `null` to delete
+ * the file), or empty without any.
  */
 export function pushFromElsewhere(
   bare: string,
   branch: string,
-  commits: readonly Readonly<Record<string, string>>[]
+  commits: readonly Readonly<Record<string, string | null>>[]
 ): void {
   const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, env: gitEnv });
   const elsewhere = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-elsewhere-'));
@@ -58,6 +59,10 @@ export function pushFromElsewhere(
     git(elsewhere, 'checkout', '-q', '-B', branch, ...hasBranch(elsewhere, branch) ? [ `origin/${branch}` ] : []);
     commits.forEach((files, index) => {
       for (const [ path, content ] of Object.entries(files)) {
+        if (content === null) {
+          rmSync(join(elsewhere, path));
+          continue;
+        }
         mkdirSync(dirname(join(elsewhere, path)), { recursive: true });
         writeFileSync(join(elsewhere, path), content);
       }

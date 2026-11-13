@@ -121,7 +121,7 @@ const MAX_BADGE_COUNT = 99;
  * nothing of its own: to `TreeSyncService` it is a change made elsewhere (GA-40).
  * During a merge, the side pane lists the conflicting files instead of the tree and
  * **Changes**, and the editor area shows the one selected in `MergeStore` (GC-7, GC-8,
- * FB-26). The tree, **Changes** and the editor stay in place, hidden, so that they keep
+ * FB-26), whose whole versions `MergeActionsService` resolves it with (GC-15, GC-16). The tree, **Changes** and the editor stay in place, hidden, so that they keep
  * their state, unsaved edits included, for when the merge ends (ED-25).
  */
 @Component({
@@ -228,6 +228,15 @@ export class RepositoryScreenPage {
     }
     return this.merge.merging() ? 'conflicts' : this.panes.sideTool();
   });
+  /** The resolution running for the conflicting file shown, if any (GC-15, GC-16). */
+  protected readonly conflictResolving = computed(() => {
+    const running = this.mergeActions.resolving();
+    return running !== null && running.path === this.merge.selected() ? running.resolution : null;
+  });
+  /** Whether no conflicting file can be resolved now: one is being resolved, or the merge aborted. */
+  protected readonly conflictsLocked = computed(() =>
+    this.mergeActions.resolving() !== null || this.mergeActions.aborting()
+  );
   /**
    * The route's repository and path, whether the navigation to it closed the
    * open file (FB-39), and whether it replaced the URL, read while it runs.

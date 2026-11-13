@@ -819,9 +819,16 @@ test.describe('pushing', () => {
      * blocking git call here would wait for the server that this process runs.
      */
     function publishGuide(dir: string, bare: string): void {
-      writeFileSync(join(dir, 'guide.md'), 'before\n');
-      gitIn(dir, 'add', 'guide.md');
-      gitIn(dir, 'commit', '-q', '-m', 'guide');
+      publish(dir, bare, { 'guide.md': 'before\n' });
+    }
+
+    /** Commits `files` (path → content) and pushes them, as `publishGuide` does. */
+    function publish(dir: string, bare: string, files: Readonly<Record<string, string>>, message = 'guide'): void {
+      for (const [ path, content ] of Object.entries(files)) {
+        writeFileSync(join(dir, path), content);
+      }
+      gitIn(dir, 'add', ...Object.keys(files));
+      gitIn(dir, 'commit', '-q', '-m', message);
       gitIn(dir, 'push', '-q', bare, 'main');
       gitIn(dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
     }
@@ -1059,7 +1066,9 @@ test.describe('pushing', () => {
         await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
         await showConflicts(page);
         await expect(conflictList(page).getByRole('listitem')).toHaveCount(1);
-        await expect(conflictList(page)).toContainText(/guide\.md\s*Both changed\s*Unresolved/);
+        await expect(conflictList(page)).toContainText(
+          /guide\.md\s*Mine\s+5 B\s+·\s+Theirs\s+7 B\s*Both changed\s*Unresolved/
+        );
         // Selecting a file shows it, and closes the drawer on a phone (FB-9).
         await conflictList(page).getByRole('button', { name: /guide\.md/ }).click();
         await expect(page.getByRole('main').getByRole('heading', { name: 'guide.md' })).toBeVisible();
@@ -1073,7 +1082,9 @@ test.describe('pushing', () => {
           await openScreen(phone, `/repositories/${id}`);
           await expect(mergeSummary(phone)).toContainText('0 of 1 file resolved');
           await showConflicts(phone);
-          await expect(conflictList(phone)).toContainText(/guide\.md\s*Both changed\s*Unresolved/);
+          await expect(conflictList(phone)).toContainText(
+            /guide\.md\s*Mine\s+5 B\s+·\s+Theirs\s+7 B\s*Both changed\s*Unresolved/
+          );
         } finally {
           await context.close();
         }
@@ -1210,6 +1221,137 @@ test.describe('pushing', () => {
           .toContain('Kept through the merge.');
         drainFailedRequests(monitor, `/api/v1/repositories/${id}/file`);
         drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+      });
+
+      test.describe('whole versions', () => {
+        const offers = (page: Page) =>
+          page.getByRole('main').getByRole('group', { name: 'Resolve this file' }).getByRole('button');
+        const shownFile = (page: Page, name: string) => page.getByRole('main').getByRole('heading', { name });
+
+        /** Selects a conflicting file, from the drawer on a phone. */
+        async function select(page: Page, name: string): Promise<void> {
+          await showConflicts(page);
+          // An entry's name starts with the file's name, followed by its folder, sizes, kind and state.
+          const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          await conflictList(page).getByRole('button', { name: new RegExp(`^${escaped}\\s`) }).click();
+          await expect(shownFile(page, name)).toBeVisible();
+        }
+
+        /** Chooses a whole version of the file shown. */
+        async function choose(page: Page, name: string): Promise<void> {
+          await page.getByRole('main').getByRole('button', { name, exact: true }).click();
+        }
+
+        test('AC-GIT-003.7: a conflicting PNG offers only Use my version and Use their version; a file deleted on the remote and changed locally offers Keep the file and Delete the file, saying which side deleted it', async ({ page, instance, monitor }) => {
+          await confirmCommitAuthor(instance.url);
+          const { id, dir, bare } = pushable(instance, 'cloned');
+          publish(dir, bare, { 'logo.png': '\u0089PNG\0before', 'notes.md': 'notes\n' });
+          writeFileSync(join(dir, 'logo.png'), '\u0089PNG\0mine, longer');
+          writeFileSync(join(dir, 'notes.md'), 'my notes\n');
+          gitIn(dir, 'commit', '-q', '-a', '-m', 'mine');
+          pushFromElsewhere(bare, 'main', [ { 'logo.png': '\u0089PNG\0theirs', 'notes.md': null } ]);
+          await openScreen(page, `/repositories/${id}`);
+          await gitAction(page, 'Pull');
+          await expect(mergeSummary(page)).toContainText('0 of 2 files resolved');
+          await showConflicts(page);
+          await expect(conflictList(page)).toContainText(
+            /notes\.md\s*Mine\s+9 B\s+·\s+Theirs\s+deleted\s*Deleted by them/
+          );
+
+          await select(page, 'logo.png');
+          await expect(offers(page)).toHaveText([ 'Use my version', 'Use their version' ]);
+          await expect(page.getByRole('main')).toContainText(/Mine \(main\)\s*\d+ B\s*Theirs \(origin\/main\)\s*\d+ B/);
+
+          await select(page, 'notes.md');
+          await expect(offers(page)).toHaveText([ 'Keep the file', 'Delete the file' ]);
+          await expect(page.getByRole('main')).toContainText('origin/main deleted this file; you changed it.');
+          await expect(page.getByRole('main')).toContainText(/Theirs \(origin\/main\)\s*Deleted/);
+
+          // Each resolves at once, and the screen moves on to the next unresolved file, wrapping round (GC-8).
+          await choose(page, 'Delete the file');
+          await expect(mergeSummary(page)).toContainText('1 of 2 files resolved');
+          await expect(shownFile(page, 'logo.png')).toBeVisible();
+          await choose(page, 'Use their version');
+          await expect(mergeSummary(page)).toContainText('2 of 2 files resolved');
+          // With none left, it stays, resolved, and offers nothing more.
+          await expect(shownFile(page, 'logo.png')).toBeVisible();
+          await expect(page.getByRole('main')).toContainText(/Both changed\s*·\s*Resolved/);
+          await expect(offers(page)).toHaveCount(0);
+          expect(existsSync(join(dir, 'notes.md'))).toBe(false);
+          expect(readFileSync(join(dir, 'logo.png'), 'utf8')).toBe('\u0089PNG\0theirs');
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
+        test('AC-GIT-003.12: Abort merge after resolving some files puts the branch and every file back exactly as before the pull; git status shows no merge in progress', async ({ page, instance, monitor }) => {
+          await confirmCommitAuthor(instance.url);
+          const { id, dir, bare } = pushable(instance, 'cloned');
+          publish(dir, bare, { 'guide.md': 'before\n', 'intro.md': 'before\n' });
+          writeFileSync(join(dir, 'guide.md'), 'my guide\n');
+          writeFileSync(join(dir, 'intro.md'), 'my intro\n');
+          gitIn(dir, 'commit', '-q', '-a', '-m', 'mine');
+          const before = gitIn(dir, 'rev-parse', 'HEAD').toString().trim();
+          pushFromElsewhere(bare, 'main', [ { 'guide.md': 'their guide\n', 'intro.md': 'their intro\n' } ]);
+          await openScreen(page, `/repositories/${id}`);
+          await gitAction(page, 'Pull');
+          await expect(mergeSummary(page)).toContainText('0 of 2 files resolved');
+
+          await expect(shownFile(page, 'guide.md')).toBeVisible();
+          await choose(page, 'Use their version');
+          await expect(mergeSummary(page)).toContainText('1 of 2 files resolved');
+          await expect(shownFile(page, 'intro.md')).toBeVisible();
+          expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toBe('their guide\n');
+
+          await gitAction(page, 'Abort merge');
+          await page.getByRole('dialog', { name: 'Abort the merge?' }).getByRole('button', { name: 'Abort merge' })
+            .click();
+
+          await expect(summary(page)).toHaveText(/main\s*·\s*1 to push, 1 to pull/);
+          expect(gitIn(dir, 'rev-parse', 'HEAD').toString().trim()).toBe(before);
+          expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toBe('my guide\n');
+          expect(readFileSync(join(dir, 'intro.md'), 'utf8')).toBe('my intro\n');
+          expect(gitIn(dir, 'status', '--porcelain').toString()).toBe('');
+          expect(existsSync(join(dir, '.git', 'MERGE_HEAD'))).toBe(false);
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
+        test('shows the chosen version after the merge', async ({ page, context, instance, monitor }) => {
+          const { id, dir } = await conflicting(instance);
+          await openScreen(page, `/repositories/${id}/files/guide.md`);
+          const editor = page.getByRole('main').getByRole('textbox', { name: 'guide.md', exact: true });
+          await expect(editor).toContainText('mine');
+          // An edit whose save does not get through, so that it waits through the merge.
+          await page.route(
+            `**/api/v1/repositories/${id}/file`,
+            route => route.request().method() === 'PUT' ? route.abort('internetdisconnected') : route.fallback()
+          );
+          await editor.click();
+          await page.keyboard.press('ControlOrMeta+End');
+          await page.keyboard.type('Not saved.');
+
+          const other = await context.newPage();
+          await other.goto(`/repositories/${id}`);
+          await gitAction(other, 'Pull');
+          await other.close();
+          await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+          await expect(editor).toBeHidden();
+          await page.unroute(`**/api/v1/repositories/${id}/file`);
+          await choose(page, 'Use their version');
+          await expect(mergeSummary(page)).toContainText('1 of 1 file resolved');
+
+          const committed = await api(instance, 'POST', `/repositories/${id}/git/merge/commit`, { message: 'Merge' });
+          expect(committed.code).toBeUndefined();
+
+          await expect(editor).toBeVisible();
+          await expect(editor).toHaveText('theirs');
+          // The waiting save is gone: the next edit saves on top of their version, without the old one.
+          await editor.click();
+          await page.keyboard.press('ControlOrMeta+End');
+          await page.keyboard.type('Then edited.');
+          await expect.poll(() => readFileSync(join(dir, 'guide.md'), 'utf8'), { timeout: 40_000 })
+            .toBe('theirs\nThen edited.');
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/file`);
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
       });
     });
 

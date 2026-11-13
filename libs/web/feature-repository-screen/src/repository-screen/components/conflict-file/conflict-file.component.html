@@ -15,4 +15,39 @@
       </span>
     </p>
   </header>
+  @if (deletedNote(); as deletedNote) {
+    <p class="deleted-by">{{ t(deletedNote, { from: from() }) }}</p>
+  }
+  <dl class="versions">
+    @for (version of versions(); track version.side) {
+      <div class="version">
+        <dt>{{ t(version.side, { into: into(), from: from() }) }}</dt>
+        <dd>
+          @switch (version.size) {
+            @case ('deleted') {
+              {{ t('deleted') }}
+            }
+            @case ('none') {
+              {{ t('noSize') }}
+            }
+            @default {
+              {{ version.size }}
+            }
+          }
+        </dd>
+      </div>
+    }
+  </dl>
+  @if (offers().length > 0) {
+    <div class="offers"
+         role="group"
+         [attr.aria-label]="t('offers')">
+      @for (offer of offers(); track offer) {
+        <button uiButton
+                [busy]="resolving() === offer"
+                [unavailable]="locked()"
+                (click)="resolve.emit(offer)">{{ t('offer.' + offer) }}</button>
+      }
+    </div>
+  }
 </ng-container>

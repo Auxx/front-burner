@@ -154,8 +154,14 @@
       @if (state === 'ready') {
         <ui-island [scrollable]="false">
           @if (merging) {
+            @let mergeState = merge.state();
             @if (merge.selectedFile(); as conflict) {
-              <rs-conflict-file [file]="conflict" />
+              <rs-conflict-file [file]="conflict"
+                                [into]="mergeState?.into ?? ''"
+                                [from]="mergeState?.from ?? ''"
+                                [resolving]="conflictResolving()"
+                                [locked]="conflictsLocked()"
+                                (resolve)="mergeActions.resolve(conflict.path, $event)" />
             }
           } @else if (diffChange(); as change) {
             <rs-diff-view [repositoryId]="session.repository()!.id"
