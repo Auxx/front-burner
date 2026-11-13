@@ -1,9 +1,10 @@
 import { inject, Injectable, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import type { GitResolution } from '@front-burner/shared-contracts';
 import { DialogService } from '@front-burner/ui';
 import { GitApi } from '@front-burner/web-api-client';
 import { toApiError } from '@front-burner/web-core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, type Observable } from 'rxjs';
 
 import { AbortMergeDialog } from '../../dialogs/abort-merge/abort-merge.dialog';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
@@ -48,10 +49,13 @@ export class MergeActionsService {
   private readonly failures = inject(FailureToastService);
 
   private readonly abortRunning = signal(false);
+  private readonly resolveRunning = signal<{ path: string; resolution: GitResolution; } | null>(null);
   private asking = false;
 
   /** Whether an abort the user confirmed is running. */
   readonly aborting = this.abortRunning.asReadonly();
+  /** The resolve running, if any. */
+  readonly resolving = this.resolveRunning.asReadonly();
 
   /** Asks, then aborts the merge. Settles when it has ended, whatever the outcome. */
   async abort(): Promise<void> {
@@ -78,6 +82,37 @@ export class MergeActionsService {
     }
   }
 
+  /**
+   * Resolves the conflicting file at `path` with a whole version, or keeps or
+   * deletes it, at once (GC-15, GC-16), as **Abort merge** does to every
+   * conflicting file from step 3 on, so that no waiting save of the file lands
+   * after it. Then the merge is read again, which moves the selection on (GC-8).
+   * `not-conflicting` is no failure: the file was resolved meanwhile, by a second
+   * press or on another device, and neither is `no-merge-in-progress`. Ignored
+   * while an abort or another resolve runs. Settles when it has ended, whatever
+   * the outcome.
+   */
+  async resolve(path: string, resolution: GitResolution): Promise<void> {
+    const repositoryId = this.session.repository()?.id;
+    if (repositoryId === undefined || this.asking || this.abortRunning() || this.resolveRunning() !== null) {
+      return;
+    }
+    this.resolveRunning.set({ path, resolution });
+    try {
+      const changed = await this.change(
+        repositoryId,
+        [ path ],
+        () => this.api.resolveConflict(repositoryId, { path, resolution }),
+        [ 'not-conflicting', 'no-merge-in-progress' ]
+      );
+      if (changed) {
+        await Promise.all([ this.status.refresh(), this.store.refresh() ]);
+      }
+    } finally {
+      this.resolveRunning.set(null);
+    }
+  }
+
   private async send(repositoryId: number): Promise<void> {
     let paths: string[];
     try {
@@ -89,6 +124,29 @@ export class MergeActionsService {
     if (!this.stillOn(repositoryId)) {
       return;
     }
+    const changed = await this.change(
+      repositoryId,
+      paths,
+      () => this.api.abortMerge(repositoryId),
+      [ 'no-merge-in-progress' ]
+    );
+    if (changed) {
+      await this.status.refresh();
+    }
+  }
+
+  /**
+   * Steps 3 to 5 of the abort, for `paths`, around `request`. An answer with one
+   * of the `done` codes counts as success. Any other failure says why, gives the
+   * saves back and reads what is true now. Resolves whether the request went
+   * through and the repository is still the one open.
+   */
+  private async change(
+    repositoryId: number,
+    paths: readonly string[],
+    request: () => Observable<void>,
+    done: readonly string[]
+  ): Promise<boolean> {
     const route = this.routePath();
     // Only these can be followed as a change on disk, which this one is not (ED-24, FB-42).
     const shown = paths.filter(path => this.openFiles.get(path) !== undefined || path === route);
@@ -97,13 +155,13 @@ export class MergeActionsService {
     const notOpen = paths.filter(path => this.openFiles.get(path) === undefined);
     const dropped = await Promise.all(shown.map(path => this.openFiles.dropForDiscard(path)));
     try {
-      await firstValueFrom(this.api.abortMerge(repositoryId), { defaultValue: undefined });
+      await firstValueFrom(request(), { defaultValue: undefined });
     } catch (error) {
-      if (!this.mergeEnded(error)) {
+      if (!done.includes(toApiError(error).code)) {
         dropped.forEach(file => file?.restore());
         own.forEach(release => release());
         await this.failed(error);
-        return;
+        return false;
       }
     }
     void this.openFiles.deleteDrafts(repositoryId, notOpen);
@@ -111,7 +169,7 @@ export class MergeActionsService {
       // Navigated meanwhile: the entries at these paths are now another repository's.
       dropped.forEach(file => file?.release());
       own.forEach(release => release());
-      return;
+      return false;
     }
     await Promise.all(shown.map(async (path, index) => {
       const release = own.get(path) as () => void;
@@ -124,7 +182,7 @@ export class MergeActionsService {
         release();
       }
     }));
-    await this.status.refresh();
+    return true;
   }
 
   /** The conflicting files, read here if the store has not got them. Rejects with what the read answered. */

@@ -41,3 +41,35 @@
     color: var(--ui-success-icon);
   }
 }
+
+.deleted-by {
+  margin: var(--ui-space-4) 0 0;
+}
+
+.versions {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--ui-space-1) var(--ui-space-3);
+  margin: var(--ui-space-4) 0 0;
+  font-size: var(--ui-font-size-ui-small);
+}
+
+.version {
+  display: contents;
+
+  dt {
+    color: var(--ui-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+.offers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+  margin-block-start: var(--ui-space-4);
+}

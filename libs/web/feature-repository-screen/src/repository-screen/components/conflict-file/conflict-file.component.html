@@ -1,5 +1,6 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ConflictFileComponent'">
   @let conflict = file();
+  @let running = resolving();
   <header class="header">
     <h2 class="name">{{ name() }}</h2>
     @if (folder(); as folder) {
@@ -15,4 +16,35 @@
       </span>
     </p>
   </header>
+  @if (deletedBy(); as deletedBy) {
+    <p class="deleted-by">{{ t(deletedBy, { from: from() }) }}</p>
+  }
+  <dl class="versions">
+    @for (version of versions(); track version.side) {
+      <div class="version">
+        <dt>{{ t(version.side, { into: into(), from: from() }) }}</dt>
+        <dd>
+          @if (version.size; as size) {
+            {{ size }}
+          } @else if (version.deleted) {
+            {{ t('deleted') }}
+          } @else {
+            {{ t('noSize') }}
+          }
+        </dd>
+      </div>
+    }
+  </dl>
+  @if (offers().length > 0) {
+    <div class="offers"
+         role="group"
+         [attr.aria-label]="t('offers')">
+      @for (offer of offers(); track offer) {
+        <button uiButton
+                [busy]="running === offer"
+                [unavailable]="running !== null"
+                (click)="choose(offer)">{{ t('offer.' + offer) }}</button>
+      }
+    </div>
+  }
 </ng-container>

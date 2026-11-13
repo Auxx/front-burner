@@ -444,6 +444,29 @@ describe('MergeStore', () => {
       expect(store.selected()).toBe('b.md');
     });
 
+    it('moves on to the next unresolved file, and wraps round', async () => {
+      gitMerge.mockReturnValue(of(mergeOf([ 'a.md', 'b.md', 'c.md' ], [])));
+      await start(true);
+      store.select('b.md');
+
+      await readAgain(mergeOf([ 'a.md', 'b.md', 'c.md' ], [ 'b.md' ]));
+      expect(store.selected()).toBe('c.md');
+
+      await readAgain(mergeOf([ 'a.md', 'b.md', 'c.md' ], [ 'b.md', 'c.md' ]));
+      expect(store.selected()).toBe('a.md');
+    });
+
+    it('stays on the last file', async () => {
+      gitMerge.mockReturnValue(of(mergeOf([ 'a.md', 'b.md' ], [ 'a.md' ])));
+      await start(true);
+      expect(store.selected()).toBe('b.md');
+
+      await readAgain(mergeOf([ 'a.md', 'b.md' ], [ 'a.md', 'b.md' ]));
+
+      expect(store.selected()).toBe('b.md');
+      expect(store.selectedFile()?.resolved).toBe(true);
+    });
+
     it('keeps a resolved file that the user selected', async () => {
       gitMerge.mockReturnValue(of(mergeOf([ 'a.md', 'b.md' ], [ 'a.md' ])));
       await start(true);

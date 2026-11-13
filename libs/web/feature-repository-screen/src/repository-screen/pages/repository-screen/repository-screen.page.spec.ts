@@ -107,6 +107,7 @@ describe('RepositoryScreenPage', () => {
   /** In place of `changes`, such as a failure. */
   let gitStatusAnswer: Observable<GitStatus> | undefined;
   let abortMerge: ReturnType<typeof vi.fn>;
+  let resolveConflict: ReturnType<typeof vi.fn>;
   /** What `GitApi.gitMerge` answers. */
   let mergeAnswer: GitMergeState;
   let gitBranches: ReturnType<typeof vi.fn<(id: number) => Observable<GitBranchList>>>;
@@ -160,7 +161,8 @@ describe('RepositoryScreenPage', () => {
             gitBranches,
             switchBranch,
             gitMerge: () => of(mergeAnswer),
-            abortMerge
+            abortMerge,
+            resolveConflict
           }
         },
         {
@@ -235,6 +237,7 @@ describe('RepositoryScreenPage', () => {
     changes = [];
     gitStatusAnswer = undefined;
     abortMerge = vi.fn(() => of(undefined));
+    resolveConflict = vi.fn(() => of(undefined));
     mergeAnswer = { into: 'main', from: 'origin/main', files: [], otherFiles: [], message: 'Merge' };
     switchBranch = vi.fn(() => of(undefined));
     gitBranches = vi.fn(() =>
@@ -1514,6 +1517,25 @@ describe('RepositoryScreenPage', () => {
           await settle(harness.fixture);
 
           expect(conflictFile()).toBe('c.md');
+        });
+
+        it('resolves the file shown with the version chosen, and moves on to the next unresolved file', async () => {
+          mergeAnswer = { ...mergeAnswer, files: [ conflict('a.md'), conflict('b.md') ] };
+          await visit('/repositories/12');
+          await startMerge();
+          expect(conflictFile()).toBe('a.md');
+          resolveConflict.mockImplementation(() => {
+            mergeAnswer = { ...mergeAnswer, files: [ conflict('a.md', true), conflict('b.md') ] };
+            return of(undefined);
+          });
+
+          const offers = [ ...page().querySelectorAll<HTMLButtonElement>('rs-conflict-file .offers button') ];
+          offers[1].click();
+          await settle(harness.fixture);
+          await settle(harness.fixture);
+
+          expect(resolveConflict).toHaveBeenCalledExactlyOnceWith(12, { path: 'a.md', resolution: 'theirs' });
+          expect(conflictFile()).toBe('b.md');
         });
 
         it('hides the diff during a merge', async () => {
