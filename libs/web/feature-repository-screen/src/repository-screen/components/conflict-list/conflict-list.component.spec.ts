@@ -71,6 +71,20 @@ describe('ConflictListComponent', () => {
     expect(host().querySelector('ul')?.getAttribute('aria-label')).toBe(`${KEY}.label`);
   });
 
+  it('shows the size of each version', async () => {
+    await show(merge([
+      { ...conflict('a.png'), oursSize: 1536, theirsSize: 20 },
+      { ...conflict('b.md', 'deleted-by-them'), theirsSize: null },
+      { ...conflict('c', 'both-changed'), oursSize: null }
+    ]));
+
+    expect(texts('.sizes').map(text => text?.replace(/\s+/g, ' '))).toEqual([
+      `${KEY}.mine 1.5 KB · ${KEY}.theirs 20 B`,
+      `${KEY}.mine 1 B · ${KEY}.theirs ${KEY}.deleted`,
+      `${KEY}.mine ${KEY}.noSize · ${KEY}.theirs 1 B`
+    ]);
+  });
+
   it('marks the selected file and asks for the one selected', async () => {
     await show(merge([ conflict('a.md'), conflict('b.md') ]), 'b.md');
     const selected: string[] = [];

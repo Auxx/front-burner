@@ -233,6 +233,10 @@ export class RepositoryScreenPage {
     const running = this.mergeActions.resolving();
     return running !== null && running.path === this.merge.selected() ? running.resolution : null;
   });
+  /** Whether no conflicting file can be resolved now: one is being resolved, or the merge aborted. */
+  protected readonly conflictsLocked = computed(() =>
+    this.mergeActions.resolving() !== null || this.mergeActions.aborting()
+  );
   /**
    * The route's repository and path, whether the navigation to it closed the
    * open file (FB-39), and whether it replaced the URL, read while it runs.

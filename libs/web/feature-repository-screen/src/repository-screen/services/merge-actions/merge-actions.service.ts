@@ -51,6 +51,8 @@ export class MergeActionsService {
   private readonly abortRunning = signal(false);
   private readonly resolveRunning = signal<{ path: string; resolution: GitResolution; } | null>(null);
   private asking = false;
+  /** Settles when the last resolve has ended; it never rejects. */
+  private resolveSettled: Promise<void> = Promise.resolve();
 
   /** Whether an abort the user confirmed is running. */
   readonly aborting = this.abortRunning.asReadonly();
@@ -76,6 +78,11 @@ export class MergeActionsService {
     }
     this.abortRunning.set(true);
     try {
+      // A resolve that fails gives its file's saves back, which must happen before the abort drops them.
+      await this.resolveSettled;
+      if (!this.stillOn(repositoryId)) {
+        return;
+      }
       await this.send(repositoryId);
     } finally {
       this.abortRunning.set(false);
@@ -89,8 +96,9 @@ export class MergeActionsService {
    * after it. Then the merge is read again, which moves the selection on (GC-8).
    * `not-conflicting` is no failure: the file was resolved meanwhile, by a second
    * press or on another device, and neither is `no-merge-in-progress`. Ignored
-   * while an abort or another resolve runs. Settles when it has ended, whatever
-   * the outcome.
+   * while an abort or another resolve runs; an abort confirmed meanwhile waits
+   * for it, so that the saves a failed resolve gives back are dropped too.
+   * Settles when it has ended, whatever the outcome.
    */
   async resolve(path: string, resolution: GitResolution): Promise<void> {
     const repositoryId = this.session.repository()?.id;
@@ -98,6 +106,12 @@ export class MergeActionsService {
       return;
     }
     this.resolveRunning.set({ path, resolution });
+    const running = this.sendResolve(repositoryId, path, resolution);
+    this.resolveSettled = running;
+    await running;
+  }
+
+  private async sendResolve(repositoryId: number, path: string, resolution: GitResolution): Promise<void> {
     try {
       const changed = await this.change(
         repositoryId,
@@ -106,6 +120,7 @@ export class MergeActionsService {
         [ 'not-conflicting', 'no-merge-in-progress' ]
       );
       if (changed) {
+        // Its own `git.changed` reads the merge too, but the push channel may be down.
         await Promise.all([ this.status.refresh(), this.store.refresh() ]);
       }
     } finally {

@@ -1066,7 +1066,9 @@ test.describe('pushing', () => {
         await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
         await showConflicts(page);
         await expect(conflictList(page).getByRole('listitem')).toHaveCount(1);
-        await expect(conflictList(page)).toContainText(/guide\.md\s*Both changed\s*Unresolved/);
+        await expect(conflictList(page)).toContainText(
+          /guide\.md\s*Mine\s+5 B\s+·\s+Theirs\s+7 B\s*Both changed\s*Unresolved/
+        );
         // Selecting a file shows it, and closes the drawer on a phone (FB-9).
         await conflictList(page).getByRole('button', { name: /guide\.md/ }).click();
         await expect(page.getByRole('main').getByRole('heading', { name: 'guide.md' })).toBeVisible();
@@ -1080,7 +1082,9 @@ test.describe('pushing', () => {
           await openScreen(phone, `/repositories/${id}`);
           await expect(mergeSummary(phone)).toContainText('0 of 1 file resolved');
           await showConflicts(phone);
-          await expect(conflictList(phone)).toContainText(/guide\.md\s*Both changed\s*Unresolved/);
+          await expect(conflictList(phone)).toContainText(
+            /guide\.md\s*Mine\s+5 B\s+·\s+Theirs\s+7 B\s*Both changed\s*Unresolved/
+          );
         } finally {
           await context.close();
         }
@@ -1227,7 +1231,9 @@ test.describe('pushing', () => {
         /** Selects a conflicting file, from the drawer on a phone. */
         async function select(page: Page, name: string): Promise<void> {
           await showConflicts(page);
-          await conflictList(page).getByRole('button', { name: new RegExp(name.replace('.', '\\.')) }).click();
+          // An entry's name starts with the file's name, followed by its folder, sizes, kind and state.
+          const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          await conflictList(page).getByRole('button', { name: new RegExp(`^${escaped}\\s`) }).click();
           await expect(shownFile(page, name)).toBeVisible();
         }
 
@@ -1247,6 +1253,10 @@ test.describe('pushing', () => {
           await openScreen(page, `/repositories/${id}`);
           await gitAction(page, 'Pull');
           await expect(mergeSummary(page)).toContainText('0 of 2 files resolved');
+          await showConflicts(page);
+          await expect(conflictList(page)).toContainText(
+            /notes\.md\s*Mine\s+9 B\s+·\s+Theirs\s+deleted\s*Deleted by them/
+          );
 
           await select(page, 'logo.png');
           await expect(offers(page)).toHaveText([ 'Use my version', 'Use their version' ]);
@@ -1333,10 +1343,12 @@ test.describe('pushing', () => {
 
           await expect(editor).toBeVisible();
           await expect(editor).toHaveText('theirs');
-          // The waiting save is gone: nothing writes the edit over the chosen version later.
-          await page.waitForTimeout(5_000);
-          expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toBe('theirs\n');
-          await expect(editor).toHaveText('theirs');
+          // The waiting save is gone: the next edit saves on top of their version, without the old one.
+          await editor.click();
+          await page.keyboard.press('ControlOrMeta+End');
+          await page.keyboard.type('Then edited.');
+          await expect.poll(() => readFileSync(join(dir, 'guide.md'), 'utf8'), { timeout: 40_000 })
+            .toBe('theirs\nThen edited.');
           drainFailedRequests(monitor, `/api/v1/repositories/${id}/file`);
           drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
         });

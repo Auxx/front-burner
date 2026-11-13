@@ -4,6 +4,7 @@ import { IconComponent, TooltipDirective } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import { fileName, parentPath } from '../../utils/file-name/file-name';
+import { type VersionSize, versionSizes } from '../../utils/version-sizes/version-sizes';
 
 /** How many of the files merged without conflicts the expanded list shows; the rest are counted. */
 export const OTHER_FILES_SHOWN = 200;
@@ -15,13 +16,15 @@ interface ConflictRow {
   folder: string;
   kind: GitConflictKind;
   resolved: boolean;
+  sizes: VersionSize[];
 }
 
 /**
  * The conflicting files of the merge in progress, in the side pane in place of
  * the file tree and **Changes** (GC-7, FB-26): sorted by path, as the API sends
- * them, each with its name, its folder in a quieter style, its kind in words and
- * whether it is resolved, in words and with an icon (NF-13.7). Below them, the
+ * them, each with its name, its folder in a quieter style, the size of each
+ * version (GC-17), its kind in words and whether it is resolved, in words and
+ * with an icon (NF-13.7). Below them, the
  * files merged without conflicts, collapsed; expanded, the first
  * `OTHER_FILES_SHOWN` of them and how many more, so that thousands don't slow
  * the screen. Selecting a file asks the page to show it (GC-8).
@@ -52,7 +55,8 @@ export class ConflictListComponent {
       name: fileName(file.path),
       folder: parentPath(file.path),
       kind: file.kind,
-      resolved: file.resolved
+      resolved: file.resolved,
+      sizes: versionSizes(file)
     }))
   );
   protected readonly otherCount = computed(() => this.state().otherFiles.length);

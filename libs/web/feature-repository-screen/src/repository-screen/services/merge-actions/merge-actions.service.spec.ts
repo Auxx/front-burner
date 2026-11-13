@@ -623,6 +623,38 @@ describe('MergeActionsService', () => {
       expect(service.resolving()).toBeNull();
     });
 
+    it('lets an abort start only once a resolve of the same file has failed and given its save back', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const file = await opened('guide.md');
+        // As the page does during a merge.
+        const releaseSaves = openFiles.hold();
+        file.saver.edit(() => '<<<<<<< main');
+        file.preview.read = () => '<<<<<<< main';
+        const answer = new Subject<void>();
+        resolveAnswer = () => answer;
+
+        const resolved = service.resolve('guide.md', 'theirs');
+        await Promise.resolve();
+        const { done } = await confirm();
+
+        expect(requests).toEqual([ 'resolve guide.md theirs' ]);
+        expect(service.aborting()).toBe(true);
+
+        answer.error(apiError(500, 'internal'));
+        await resolved;
+        await done;
+        releaseSaves();
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        expect(requests).toEqual([ 'resolve guide.md theirs', 'abort', 'read guide.md' ]);
+        expect(file.saver.unsaved()).toBe(false);
+        expect(file.file.content).toBe('restored');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('says nothing when the merge ended meanwhile', async () => {
       resolveAnswer = () => throwError(() => apiError(409, 'no-merge-in-progress'));
 

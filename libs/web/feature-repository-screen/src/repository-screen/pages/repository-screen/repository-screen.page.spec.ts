@@ -1538,6 +1538,29 @@ describe('RepositoryScreenPage', () => {
           expect(conflictFile()).toBe('b.md');
         });
 
+        it('shows every file\'s choices as unavailable while a resolve runs', async () => {
+          mergeAnswer = { ...mergeAnswer, files: [ conflict('a.md'), conflict('b.md') ] };
+          await visit('/repositories/12');
+          await startMerge();
+          const answer = new Subject<void>();
+          resolveConflict.mockReturnValue(answer);
+          const offers = () => [ ...page().querySelectorAll<HTMLButtonElement>('rs-conflict-file .offers button') ];
+
+          offers()[1].click();
+          await settle(harness.fixture);
+          entryButton('b.md').click();
+          await settle(harness.fixture);
+
+          expect(conflictFile()).toBe('b.md');
+          expect(offers().map(button => button.getAttribute('aria-disabled'))).toEqual([ 'true', 'true' ]);
+
+          answer.complete();
+          await settle(harness.fixture);
+          await settle(harness.fixture);
+
+          expect(offers().map(button => button.getAttribute('aria-disabled'))).toEqual([ null, null ]);
+        });
+
         it('hides the diff during a merge', async () => {
           changes = [ { path: 'docs/guide.md', state: 'modified' } ];
           localStorage.setItem('fb.4.sideTool', 'changes');

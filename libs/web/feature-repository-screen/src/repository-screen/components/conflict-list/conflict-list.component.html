@@ -14,6 +14,25 @@
             @if (row.folder) {
               <span class="folder">{{ row.folder }}</span>
             }
+            <span class="sizes">
+              @for (version of row.sizes; track version.side) {
+                @if (!$first) {
+                  ·
+                }
+                {{ t(version.side) }}
+                @switch (version.size) {
+                  @case ('deleted') {
+                    {{ t('deleted') }}
+                  }
+                  @case ('none') {
+                    {{ t('noSize') }}
+                  }
+                  @default {
+                    {{ version.size }}
+                  }
+                }
+              }
+            </span>
           </span>
           <span class="about">
             <span class="kind">{{ t(row.kind) }}</span>

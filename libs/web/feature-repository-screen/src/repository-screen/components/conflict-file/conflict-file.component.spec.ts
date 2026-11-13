@@ -36,8 +36,8 @@ describe('ConflictFileComponent', () => {
       imports: [
         ConflictFileComponent,
         translocoTesting({
-          [`${KEY}.deletedByUs`]: 'You deleted this file; {{ from }} changed it.',
-          [`${KEY}.deletedByThem`]: '{{ from }} deleted this file; you changed it.',
+          [`${KEY}.deletedByUsNote`]: 'You deleted this file; {{ from }} changed it.',
+          [`${KEY}.deletedByThemNote`]: '{{ from }} deleted this file; you changed it.',
           [`${KEY}.mine`]: 'Mine ({{ into }})',
           [`${KEY}.theirs`]: 'Theirs ({{ from }})'
         })
@@ -120,7 +120,8 @@ describe('ConflictFileComponent', () => {
     expect(chosen).toEqual([ 'delete' ]);
   });
 
-  it('shows the choice running as busy, and the others as unavailable, without emitting', async () => {
+  it('shows the choice running as busy, and every choice as unavailable while locked, without emitting', async () => {
+    fixture.componentRef.setInput('locked', true);
     await show({}, 'theirs');
     const chosen: GitResolution[] = [];
     fixture.componentInstance.resolve.subscribe(resolution => chosen.push(resolution));

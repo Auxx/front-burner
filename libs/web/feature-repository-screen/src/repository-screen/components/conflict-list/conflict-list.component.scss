@@ -63,13 +63,15 @@ ul {
 }
 
 .name,
-.folder {
+.folder,
+.sizes {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.folder {
+.folder,
+.sizes {
   color: var(--ui-text-muted);
 }
 

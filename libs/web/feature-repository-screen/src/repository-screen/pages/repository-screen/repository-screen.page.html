@@ -160,6 +160,7 @@
                                 [into]="mergeState?.into ?? ''"
                                 [from]="mergeState?.from ?? ''"
                                 [resolving]="conflictResolving()"
+                                [locked]="conflictsLocked()"
                                 (resolve)="mergeActions.resolve(conflict.path, $event)" />
             }
           } @else if (diffChange(); as change) {
