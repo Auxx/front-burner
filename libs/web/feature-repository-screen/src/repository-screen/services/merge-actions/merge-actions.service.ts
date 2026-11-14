@@ -1,4 +1,4 @@
-import { computed, inject, Injectable, signal, type Type } from '@angular/core';
+import { computed, inject, Injectable, Injector, signal, type Type } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import type { ApiError, GitResolution } from '@front-burner/shared-contracts';
 import { DialogService, ToastService } from '@front-burner/ui';
@@ -17,6 +17,7 @@ import { MarkersLeftDialog } from '../../dialogs/markers-left/markers-left.dialo
 import { StartOverDialog } from '../../dialogs/start-over/start-over.dialog';
 import { UndoMergeDialog } from '../../dialogs/undo-merge/undo-merge.dialog';
 import type { ConflictAction } from '../../models/conflict-action.model';
+import { BranchActionsService } from '../branch-actions/branch-actions.service';
 import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
 import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
@@ -78,6 +79,7 @@ export class MergeActionsService {
   private readonly diskChanges = inject(DiskChangesService);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
+  private readonly injector = inject(Injector);
 
   private readonly abortRunning = signal(false);
   private readonly undoRunning = signal(false);
@@ -219,7 +221,8 @@ export class MergeActionsService {
    *
    * 1. the waiting saves are sent, as the backend refuses with uncommitted
    *    changes, and a save that lands after the reset would bring the merge's
-   *    content back. One that did not reach the disk stops it and says why;
+   *    content back. One that did not reach the disk stops it and says why, and
+   *    so does a browser draft on offer, which was written against the merge;
    * 2. every saver is held, so that an edit typed meanwhile waits;
    * 3. the backend decides whether the merge can still be undone, and undoes it;
    * 4. the open file is compared with the disk, which reloads it or asks (ED-24),
@@ -228,11 +231,12 @@ export class MergeActionsService {
    * A toast says "Merge undone.", or why it failed (GC-27), such as when the merge
    * commit was pushed meanwhile (`undo-not-allowed`). Either way the status is read
    * again, which brings the **to pull** count back, or takes the stale button away.
-   * Ignored while anything else is asked or running. Settles when it has ended.
+   * Ignored while anything else is asked or running, a branch switch included.
+   * Settles when it has ended.
    */
   async undo(): Promise<void> {
-    const repositoryId = this.idleOn();
-    if (repositoryId === null || !(await this.ask(UndoMergeDialog)) || this.idleOn() !== repositoryId) {
+    const repositoryId = this.undoableOn();
+    if (repositoryId === null || !(await this.ask(UndoMergeDialog)) || this.undoableOn() !== repositoryId) {
       return;
     }
     this.undoRunning.set(true);
@@ -243,13 +247,31 @@ export class MergeActionsService {
     }
   }
 
+  /** The open repository, when nothing is asked or running that an undo must wait for, a branch switch included. */
+  private undoableOn(): number | null {
+    // Looked up when needed: `BranchActionsService` injects this service, so injecting it here would be a cycle.
+    return this.injector.get(BranchActionsService).switching() ? null : this.idleOn();
+  }
+
   private async sendUndo(repositoryId: number): Promise<void> {
     const notSaved = await this.openFiles.flushed(repositoryId);
     if (!this.stillOn(repositoryId)) {
       return;
     }
-    if (notSaved !== null) {
-      this.failures.show(notSaved.error);
+    const offered = this.openFiles.offeredDraft(repositoryId);
+    if (notSaved !== null || offered !== null) {
+      if (notSaved !== null) {
+        this.failures.show(notSaved.error);
+      } else {
+        // Written against the merge: restored after the undo, it would bring the merge back.
+        const params = { path: offered };
+        this.failures.show(
+          { code: 'draft-offered', params, requestId: '', message: '' },
+          { text: this.transloco.translate(`${KEY}.draft-offered`, params) }
+        );
+      }
+      // What can be undone may have changed meanwhile.
+      await this.status.refresh();
       return;
     }
     const release = this.openFiles.hold();

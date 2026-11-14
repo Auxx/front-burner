@@ -62,6 +62,7 @@ describe('BranchActionsService', () => {
   let branchesAnswer: (() => Observable<GitBranchList>) | null;
   let merging: ReturnType<typeof signal<boolean>>;
   let undo: ReturnType<typeof vi.fn>;
+  let undoing: ReturnType<typeof signal<boolean>>;
 
   const row = (text: string) =>
     [ ...overlay().querySelectorAll<HTMLButtonElement>('rs-branch-list li button') ].find(button =>
@@ -97,6 +98,7 @@ describe('BranchActionsService', () => {
     branchesAnswer = null;
     merging = signal(false);
     undo = vi.fn(() => Promise.resolve());
+    undoing = signal(false);
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
@@ -118,7 +120,7 @@ describe('BranchActionsService', () => {
         { provide: RepositorySessionService, useValue: { repository } },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         { provide: MergeStore, useValue: { merging } },
-        { provide: MergeActionsService, useValue: { undo } },
+        { provide: MergeActionsService, useValue: { undo, undoing } },
         {
           provide: GitStatusStore,
           useValue: {
@@ -360,6 +362,40 @@ describe('BranchActionsService', () => {
 
       expect(overlay().querySelector('rs-branch-list')).not.toBeNull();
       expect(undoButton()).toBeUndefined();
+    });
+
+    it('does nothing when the merge can no longer be undone by the time it is chosen', async () => {
+      status.set({ ...changed(), undoableMerge: true });
+      const done = service.open();
+      await settleDialog();
+
+      // Pushed elsewhere while the list was open.
+      status.set({ ...changed(), undoableMerge: false });
+      undoButton()?.click();
+      await done;
+
+      expect(undo).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when a merge started by the time it is chosen', async () => {
+      status.set({ ...changed(), undoableMerge: true });
+      const done = service.open();
+      await settleDialog();
+
+      merging.set(true);
+      undoButton()?.click();
+      await done;
+
+      expect(undo).not.toHaveBeenCalled();
+    });
+
+    it('does not open the list while an undo runs', async () => {
+      undoing.set(true);
+
+      await service.open();
+      await settleDialog();
+
+      expect(overlay()?.querySelector('rs-branch-list') ?? null).toBeNull();
     });
   });
 

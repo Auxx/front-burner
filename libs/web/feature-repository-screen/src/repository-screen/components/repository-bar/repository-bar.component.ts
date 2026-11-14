@@ -83,6 +83,11 @@ export class RepositoryBarComponent {
   readonly mergeState = input<GitMergeState | null>(null);
   /** Whether an abort of the merge is running. */
   readonly aborting = input(false);
+  /** Whether an undo of the last merge is running (GC-26). */
+  readonly undoing = input(false);
+
+  /** A switch or an undo makes **Fetch**, **Pull** and **Push** wait: each would race it. */
+  protected readonly actionsWait = computed(() => this.switching() || this.undoing());
   /** **Abort merge** was chosen. */
   readonly abortMerge = output<void>();
   /** **Commit merge** was chosen. */

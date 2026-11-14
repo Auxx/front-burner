@@ -740,6 +740,13 @@ export class RepositoryScreenPage {
       && status.lastCommit?.oid !== this.dismissedMerge();
   });
 
+  /**
+   * Whether **Undo merge** must wait: a switch or a network job, here or in another
+   * tab, would race it. The backend would order them, but the undo would then fail
+   * or undo what the user did not expect.
+   */
+  protected readonly undoBlocked = computed(() => this.branchActions.switching() || this.jobs.running() !== null);
+
   /** The locked key, while the banner for it is shown (RC-15). */
   protected readonly lockedKeyShown = computed(() =>
     this.session.state() === 'ready' && !this.lockedKey.dismissed() ? this.lockedKey.key() : null

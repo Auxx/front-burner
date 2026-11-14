@@ -91,7 +91,8 @@ export class BranchActionsService {
   /** Opens the list and acts on the choice. Settles when that has ended, whatever the outcome. */
   async open(): Promise<void> {
     const repositoryId = this.session.repository()?.id;
-    if (repositoryId === undefined || this.list !== null || this.running() || this.merge.merging()) {
+    const busy = this.running() || this.mergeActions.undoing() || this.merge.merging();
+    if (repositoryId === undefined || this.list !== null || busy) {
       return;
     }
     this.dismissFailure();
@@ -107,7 +108,10 @@ export class BranchActionsService {
     this.list = null;
     if (choice && this.stillOn(repositoryId)) {
       if (choice.kind === 'undo-merge') {
-        await this.mergeActions.undo();
+        // The list showed what was true when it opened; a push or a pull since then may have changed it.
+        if (this.status.status()?.undoableMerge === true && !this.merge.merging()) {
+          await this.mergeActions.undo();
+        }
       } else if (choice.kind === 'new') {
         if (this.merge.merging()) {
           return;

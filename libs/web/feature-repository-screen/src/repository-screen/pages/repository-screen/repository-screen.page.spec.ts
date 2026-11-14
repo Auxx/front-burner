@@ -2101,6 +2101,29 @@ describe('RepositoryScreenPage', () => {
         expect(document.activeElement?.closest('rs-git-actions')).toBeTruthy();
       });
 
+      it('does not offer Undo merge while a fetch runs, and does once it has ended', async () => {
+        const started = new Subject<GitJobStarted>();
+        fetch.mockReturnValue(started);
+        gitJob.mockReturnValue(of<GitJobState>({
+          status: 'done',
+          outcome: { kind: 'fetched', moved: false, upstreamMoved: false }
+        }));
+        gitStatusAnswer = of(committed());
+        await visit('/repositories/12');
+        ([ ...page().querySelectorAll<HTMLButtonElement>('rs-git-actions button') ]
+          .find(found => found.textContent?.trim().endsWith('.fetch')) as HTMLButtonElement).click();
+        await settle(harness.fixture);
+
+        expect(noticeButton(`${NOTICE}.undo`).getAttribute('aria-disabled')).toBe('true');
+
+        started.next({ jobId: 9 });
+        started.complete();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(noticeButton(`${NOTICE}.undo`).getAttribute('aria-disabled')).toBeNull();
+      });
+
       it('offers Undo merge in the branch list after the notice is dismissed', async () => {
         gitStatusAnswer = of(committed());
         await visit('/repositories/12');

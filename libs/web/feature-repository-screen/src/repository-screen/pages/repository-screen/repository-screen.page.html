@@ -24,6 +24,7 @@
                            [merging]="merge.merging()"
                            [mergeState]="merge.state()"
                            [aborting]="mergeActions.aborting()"
+                           [undoing]="mergeActions.undoing()"
                            (abortMerge)="mergeActions.abort()"
                            (commitMerge)="commitMerge()"
                            (openBranches)="branchActions.open()"
@@ -59,6 +60,8 @@
       }
       @if (mergeCommitted()) {
         <rs-merge-committed uiAppShellBanner
+                            [undoing]="mergeActions.undoing()"
+                            [undoBlocked]="undoBlocked()"
                             (push)="pushMerge()"
                             (undo)="mergeActions.undo()"
                             (dismissed)="dismissMergeCommitted()" />

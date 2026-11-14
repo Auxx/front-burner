@@ -58,6 +58,34 @@ describe('MergeCommittedComponent', () => {
     expect(undone).toBe(1);
   });
 
+  it('shows an undo running, and offers neither Push nor Undo merge meanwhile', async () => {
+    let chosen = 0;
+    fixture.componentInstance.push.subscribe(() => chosen++);
+    fixture.componentInstance.undo.subscribe(() => chosen++);
+    fixture.componentRef.setInput('undoing', true);
+    await settle(fixture);
+
+    expect(button('Undo merge')?.getAttribute('data-busy')).toBe('true');
+    expect(button('Push')?.getAttribute('aria-disabled')).toBe('true');
+    button('Undo merge')?.click();
+    button('Push')?.click();
+
+    expect(chosen).toBe(0);
+  });
+
+  it('does not offer Undo merge while another git action runs, and still offers Push', async () => {
+    let undone = 0;
+    fixture.componentInstance.undo.subscribe(() => undone++);
+    fixture.componentRef.setInput('undoBlocked', true);
+    await settle(fixture);
+
+    expect(button('Undo merge')?.getAttribute('aria-disabled')).toBe('true');
+    expect(button('Push')?.getAttribute('aria-disabled')).toBeNull();
+    button('Undo merge')?.click();
+
+    expect(undone).toBe(0);
+  });
+
   it('can be dismissed', () => {
     let dismissed = 0;
     fixture.componentInstance.dismissed.subscribe(() => dismissed++);
