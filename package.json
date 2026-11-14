@@ -41,7 +41,7 @@
     "@nestjs/platform-express": "11.2.8",
     "@nestjs/swagger": "11.4.8",
     "@nestjs/throttler": "6.7.1",
-    "@shikijs/rehype": "4.5.0",
+    "@shikijs/rehype": "4.6.0",
     "@vscode/codicons": "0.0.46-24",
     "@zxcvbn-ts/core": "4.2.0",
     "@zxcvbn-ts/language-common": "4.1.3",
