@@ -1,0 +1,37 @@
+# Runs Front Burner from tools/docker/Dockerfile for local testing. Not a
+# production setup: the secrets below are public, development-only values.
+#
+#   docker compose -f tools/docker/compose.yaml up --build
+#
+# Then open http://localhost:8080 and complete administrator onboarding with
+# the setup token below.
+
+name: front-burner-test
+
+services:
+  front-burner:
+    image: front-burner:test
+    build:
+      context: ../..
+      dockerfile: tools/docker/Dockerfile
+    ports:
+      - '${FRONT_BURNER_HOST_PORT:-8080}:8080'
+    environment:
+      FRONT_BURNER_LOG_FORMAT: pretty
+      FRONT_BURNER_LOG_LEVEL: info
+      FRONT_BURNER_SETUP_TOKEN: test-setup-token
+      FRONT_BURNER_JWT_SECRET: test-only-jwt-secret-do-not-use-0123456789abcdef
+      FRONT_BURNER_ENCRYPTION_KEY: test-only-encryption-key-do-not-use-0123456789
+    volumes:
+      - data:/data
+    # The hardening that NF-11.13 asks Front Burner to work under.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  data:
