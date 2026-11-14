@@ -1,0 +1,28 @@
+:host {
+  display: block;
+}
+
+// One row that wraps on a narrow screen, in the pane's flow above the editor, so that it
+// stays where the toolbar is while the on-screen keyboard is open (NF-12.5).
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1) var(--ui-space-2);
+  padding: var(--ui-space-1) var(--ui-space-2);
+  border-block-end: calc(var(--ui-border-width) * 2) solid var(--ui-surface-canvas);
+}
+
+.position {
+  margin: 0;
+  margin-inline-end: auto;
+  font-size: var(--ui-font-size-ui-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.moves,
+.accepts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-1);
+}

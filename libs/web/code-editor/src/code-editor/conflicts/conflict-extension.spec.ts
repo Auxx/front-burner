@@ -1,7 +1,13 @@
 import { redo, undo } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createEditorState, type EditorStateOptions, setConflicts, setReadOnly } from '../state/editor-state';
+import {
+  createEditorState,
+  type EditorStateOptions,
+  isShowingConflicts,
+  setConflicts,
+  setReadOnly
+} from '../state/editor-state';
 import {
   acceptConflict,
   conflictAtCursor,
@@ -253,14 +259,17 @@ describe('conflictExtension', () => {
     const view = open(FILE, { conflicts: undefined });
     view.dispatch({ changes: { from: 0, insert: 'x' }, selection: { anchor: 5 }, userEvent: 'input.type' });
 
+    expect(isShowingConflicts(view.state)).toBe(false);
     view.dispatch(setConflicts(TEXTS));
 
+    expect(isShowingConflicts(view.state)).toBe(true);
     expect(conflictsIn(view.state)).toHaveLength(2);
     expect(textsOf(view, '.cm-conflict-label')).toHaveLength(4);
     expect(view.state.selection.main.head).toBe(5);
 
     view.dispatch(setConflicts(null));
 
+    expect(isShowingConflicts(view.state)).toBe(false);
     expect(conflictsIn(view.state)).toEqual([]);
     expect(view.dom.querySelector('.cm-conflict-label, .cm-conflict-actions')).toBeNull();
     expect(view.state.selection.main.head).toBe(5);

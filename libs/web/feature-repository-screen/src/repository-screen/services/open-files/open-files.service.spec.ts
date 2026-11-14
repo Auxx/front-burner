@@ -308,6 +308,23 @@ describe('OpenFilesService', () => {
     expect(service.get('README.md')).toBeUndefined();
   });
 
+  it('holds each file\'s saver apart, until its own release', async () => {
+    const guide = await service.open('docs/guide.md');
+    const notes = await service.open('notes.md');
+    const holds = service.holdEach();
+    guide.saver.edit(() => 'guide, typed');
+    notes.saver.edit(() => 'notes, typed');
+    void guide.saver.flush();
+    void notes.saver.flush();
+    expect(saves).toEqual([]);
+
+    holds.get(guide)?.();
+
+    expect(saves.map(save => save.request.content)).toEqual([ 'guide, typed' ]);
+    holds.get(notes)?.();
+    expect(saves.map(save => save.request.content)).toEqual([ 'guide, typed', 'notes, typed' ]);
+  });
+
   it('tells whether any file has unsaved edits', async () => {
     const file = await service.open('README.md');
     expect(service.anyUnsaved()).toBe(false);

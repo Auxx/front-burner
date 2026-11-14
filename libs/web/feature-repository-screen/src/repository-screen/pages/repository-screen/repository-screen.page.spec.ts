@@ -1576,11 +1576,12 @@ describe('RepositoryScreenPage', () => {
             await settle(harness.fixture);
           }
 
-          it('keeps the file\'s editor as it was', async () => {
-            await visit('/repositories/12/files/docs/guide.md');
+          it('keeps the route\'s file\'s editor as it was', async () => {
+            // README.md is resolved, so it is not edited with its conflicts as guide.md is.
+            await visit('/repositories/12/files/README.md');
             const openFiles = harness.fixture.debugElement.query(By.directive(RepositoryScreenPage)).injector
               .get(OpenFilesService);
-            const before = openFiles.current()?.editorState;
+            const before = openFiles.current()?.editorState as EditorStateChange['state'];
             expect(before).toBeTruthy();
 
             await startMerge();
@@ -1591,8 +1592,11 @@ describe('RepositoryScreenPage', () => {
             await settle(harness.fixture);
             await endMerge();
 
-            expect(openFiles.current()?.editorState).toBe(before);
-            expect(page().querySelector('rs-editor-pane .cm-content')?.textContent).toContain('# docs/guide.md');
+            // The route's file is opened again after the conflicting one: its state carries on from the
+            // one it had, with the same document, not one loaded afresh.
+            const after = openFiles.current()?.editorState as EditorStateChange['state'];
+            expect(after.doc).toBe(before.doc);
+            expect(page().querySelector('rs-editor-pane .cm-content')?.textContent).toContain('# README.md');
           });
 
           it('goes when another file is selected or the merge ends', async () => {
@@ -1614,6 +1618,142 @@ describe('RepositoryScreenPage', () => {
 
             expect(version()).toBeNull();
             expect(page().querySelector('rs-conflict-file')).toBeNull();
+          });
+        });
+
+        describe('editing a conflicting file (GC-9, GC-12)', () => {
+          const MARKED = '<<<<<<< main\nmine\n=======\ntheirs\n>>>>>>> origin/main\n';
+          const conflictEditor = () => page().querySelector('rs-conflict-file rs-editor-pane');
+          const conflictText = () => conflictEditor()?.querySelector('.cm-content')?.textContent ?? '';
+          const services = () => harness.fixture.debugElement.query(By.directive(RepositoryScreenPage)).injector;
+
+          /** Types at the end of the file in the editor inside `host`, as a keystroke would. */
+          function typeIn(host: 'rs-conflict-file' | 'rs-editor-area', text: string): void {
+            const editor = harness.fixture.debugElement.query(element =>
+              element.name === 'ce-code-editor' && element.nativeElement.closest(host) !== null
+            );
+            const code = editor.componentInstance as {
+              state(): EditorStateChange['state'];
+              stateChange: { emit(change: EditorStateChange): void; };
+            };
+            const state = code.state();
+            code.stateChange.emit({
+              state: state.update({ changes: { from: state.doc.length, insert: text } }).state,
+              docChanged: true
+            });
+            harness.fixture.detectChanges();
+          }
+
+          beforeEach(() => {
+            readFile.mockImplementation(path =>
+              of(fileContent(path, path === 'docs/guide.md' ? { content: MARKED, hash: 'c'.repeat(64) } : {}))
+            );
+          });
+
+          it('opens the selected file in the editor with its conflicts, keeping the route and the last file', async () => {
+            await visit('/repositories/12/files/README.md');
+            await startMerge();
+
+            expect(conflictText()).toContain('<<<<<<< main');
+            expect(conflictEditor()?.querySelector('rs-conflict-bar')).not.toBeNull();
+            expect(TestBed.inject(Router).url).toBe('/repositories/12/files/README.md');
+            expect(localStorage.getItem('fb.4.repo.12.lastFile')).toBe('README.md');
+          });
+
+          it('saves an edit, which a reload shows', async () => {
+            await visit('/repositories/12/files/README.md');
+            await startMerge();
+
+            typeIn('rs-conflict-file', 'More.\n');
+            await services().get(OpenFilesService).flushAll();
+
+            expect(saveFile).toHaveBeenCalledTimes(1);
+            expect(saveFile.mock.calls[0][1]).toMatchObject({ path: 'docs/guide.md', content: `${MARKED}More.\n` });
+            expect(page().querySelector('rs-repository-bar rs-save-status')).not.toBeNull();
+          });
+
+          it('shows conflicts in a file that was already open, and saves it again only after the disk check', async () => {
+            readFile.mockImplementation(path => of(fileContent(path)));
+            await visit('/repositories/12/files/docs/guide.md');
+            typeIn('rs-editor-area', 'Before the merge.\n');
+            // The merge writes the markers into the file.
+            readFile.mockImplementation(path =>
+              of(fileContent(path, path === 'docs/guide.md' ? { content: MARKED, hash: 'c'.repeat(64) } : {}))
+            );
+
+            await startMerge();
+            await settle(harness.fixture);
+
+            // The unsaved edits from before the merge are not sent over the markers: the editor asks.
+            expect(saveFile).not.toHaveBeenCalled();
+            expect(conflictEditor()?.querySelector('rs-changed-on-disk')).not.toBeNull();
+            // Only one editor shows the file.
+            expect(page().querySelectorAll('rs-editor-pane')).toHaveLength(1);
+          });
+
+          it('opens the route\'s file when the merge ends', async () => {
+            await visit('/repositories/12/files/README.md');
+            await startMerge();
+            expect(conflictText()).toContain('<<<<<<< main');
+
+            await endMerge();
+
+            const current = services().get(OpenFilesService).current();
+            expect(current?.path()).toBe('README.md');
+            expect(page().querySelector('rs-editor-area rs-editor-pane .cm-content')?.textContent).toContain(
+              '# README.md'
+            );
+          });
+
+          it('goes to the empty state when the merge ends without a route\'s file', async () => {
+            // No Markdown file in the root folder: the screen opens with none.
+            folders[''] = listing('', [ folder('docs') ]);
+            await visit('/repositories/12');
+            expect(services().get(OpenFilesService).current()).toBeNull();
+            await startMerge();
+            expect(conflictText()).toContain('<<<<<<< main');
+
+            await endMerge();
+
+            expect(services().get(OpenFilesService).current()).toBeNull();
+            expect(page().querySelector('rs-editor-area rs-editor-pane')).toBeNull();
+          });
+
+          it('is a normal file after the merge', async () => {
+            await visit('/repositories/12/files/README.md');
+            await startMerge();
+            await endMerge();
+
+            await go('/repositories/12/files/docs/guide.md');
+
+            expect(page().querySelector('rs-editor-area .cm-content')?.textContent).toContain('<<<<<<< main');
+            expect(page().querySelector('rs-editor-area rs-conflict-bar, rs-editor-area .cm-conflict-label'))
+              .toBeNull();
+            expect(page().querySelector('rs-editor-area .cm-content')?.getAttribute('contenteditable')).toBe('true');
+          });
+
+          it('follows an edit made on another device', async () => {
+            await visit('/repositories/12/files/README.md');
+            await startMerge();
+
+            readFile.mockImplementation(path =>
+              of(fileContent(path, path === 'docs/guide.md' ? { content: 'theirs\n', hash: 'e'.repeat(64) } : {}))
+            );
+            events.next({ type: 'files.changed', repositoryId: 12, folders: [ 'docs' ] });
+            await settle(harness.fixture);
+            await settle(harness.fixture);
+
+            expect(conflictText()).toBe('theirs');
+          });
+
+          it('does not offer it for a file that cannot be edited', async () => {
+            mergeAnswer = { ...mergeAnswer, files: [ { ...conflict('docs/guide.md'), editable: false } ] };
+            await visit('/repositories/12/files/README.md');
+            await startMerge();
+
+            expect(conflictFile()).toBe('guide.md');
+            expect(conflictEditor()).toBeNull();
+            expect(readFile).not.toHaveBeenCalledWith('docs/guide.md');
           });
         });
 

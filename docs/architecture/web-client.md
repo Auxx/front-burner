@@ -220,7 +220,12 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   load or save — in a per-file store keyed by repository and path, not in the
   screen, so that tabs can be added later (ED-3). Changes to the open file on
   disk are found by comparing `files.changed` events with that hash (A-3.11,
-  ED-24).
+  ED-24). During a merge, the conflicting file edited with its conflicts (GC-9)
+  is the open file without being the route's, which keeps naming the file open
+  before the merge and opens it again after it. The savers of the files open
+  before the merge are held each on its own, and a conflicting one among them
+  saves again only once it has been checked for the merge's change on disk, so
+  that edits from before the merge never land over its markers (GC-12, ED-25).
 - **A-8.16** **Image loader** (REQ-EDIT-003), in `web/markdown`: DOMPurify's
   step moves every image address into a pipeline attribute (`data-md-src` on
   `img`, `data-md-srcset` on `source`), which the browser does not read, so no

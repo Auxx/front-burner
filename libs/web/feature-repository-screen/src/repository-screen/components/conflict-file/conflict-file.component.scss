@@ -10,6 +10,59 @@
     overflow: hidden;
     padding: 0;
   }
+
+  // A file edited with its conflicts: its name and choices above, the editor in the rest (GC-9).
+  &.editing {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+
+    .header {
+      padding: var(--ui-space-2) var(--ui-space-4) 0;
+    }
+
+    .shows,
+    .offers {
+      margin-block-start: var(--ui-space-2);
+      padding-inline: var(--ui-space-4);
+    }
+
+    // The two rows of choices are one row when there is room.
+    .shows + .offers {
+      margin-block-start: var(--ui-space-1);
+    }
+
+    .editor {
+      flex: 1;
+      min-block-size: 0;
+      margin-block-start: var(--ui-space-2);
+      border-block-start: calc(var(--ui-border-width) * 2) solid var(--ui-surface-canvas);
+    }
+
+    .open-failed {
+      margin: var(--ui-space-4);
+    }
+  }
+
+  // On a phone while typing: the editor keeps its usual height (NF-12.5).
+  &.typing {
+    .header,
+    .shows,
+    .offers {
+      display: none;
+    }
+
+    .editor {
+      margin-block-start: 0;
+      border-block-start: none;
+    }
+  }
+}
+
+.reference {
+  display: block;
+  margin-block-start: var(--ui-space-1);
 }
 
 .opening {

@@ -9,6 +9,7 @@ import {
   cursorOf,
   type EditorStateChange,
   isHighlighting,
+  isShowingConflicts,
   isSoftWrapping
 } from '@front-burner/web-code-editor';
 import { CurrentUserService } from '@front-burner/web-core';
@@ -40,6 +41,7 @@ class FakeWorker extends EventTarget {
 }
 
 const K = 'web-feature-repository-screen.EditorPaneComponent';
+const BAR = 'web-feature-repository-screen.ConflictBarComponent';
 
 type EditorState = EditorStateChange['state'];
 
@@ -106,7 +108,20 @@ describe('EditorPaneComponent', () => {
       allowedGitLevels: [ 'advanced' ]
     });
     TestBed.configureTestingModule({
-      imports: [ EditorPaneComponent, translocoTesting() ],
+      imports: [
+        EditorPaneComponent,
+        // The conflict bar's words, so that its position reads as it does on screen; the pane's own show as keys.
+        translocoTesting({
+          [`${BAR}.at`]: 'Conflict {{ index }} of {{ total }}',
+          [`${BAR}.count`]: '{{ count }} conflicts',
+          [`${BAR}.none`]: 'No conflict markers left.',
+          [`${BAR}.next`]: 'Next',
+          [`${BAR}.previous`]: 'Previous',
+          [`${BAR}.acceptOurs`]: 'Accept mine',
+          [`${BAR}.acceptTheirs`]: 'Accept theirs',
+          [`${BAR}.acceptBoth`]: 'Accept both'
+        })
+      ],
       providers: [
         {
           provide: BreakpointObserver,
@@ -894,6 +909,112 @@ describe('EditorPaneComponent', () => {
       await settle(fixture);
 
       expect(notice).toHaveBeenCalledWith('README.md');
+    });
+  });
+
+  describe('a conflicting file (GC-9 to GC-13)', () => {
+    const conflict = (n: number) => `<<<<<<< main\nmine ${n}\n=======\ntheirs ${n}\n>>>>>>> origin/main`;
+    const THREE = `${conflict(1)}\nbetween\n${conflict(2)}\nmore\n${conflict(3)}\nend\n`;
+
+    const position = () => pane().querySelector('rs-conflict-bar .position')?.textContent?.trim();
+    const note = () => pane().querySelector('.preview-note');
+    const preview = () => pane().querySelector('md-preview');
+
+    async function showConflicting(file: OpenFile, conflicts = true): Promise<void> {
+      fixture.componentRef.setInput('conflicts', conflicts);
+      await show(file);
+    }
+
+    it('AC-GIT-003.3: Conflict 1 of 3 with Next moves to the second conflict', async () => {
+      const file = openFile('guide.md', { content: THREE });
+      await showConflicting(file);
+
+      expect(position()).toBe('Conflict 1 of 3');
+      button('Next')?.click();
+      await settle(fixture);
+
+      expect(cursorOf(stateOf(file))).toEqual({ line: 7, column: 1 });
+      expect(position()).toBe('Conflict 2 of 3');
+    });
+
+    it('labels mine and theirs in the editor, with the words of the screen\'s language', async () => {
+      await showConflicting(openFile('guide.md', { content: THREE }));
+
+      expect([ ...pane().querySelectorAll('.cm-conflict-label') ].map(label => label.textContent).slice(0, 2)).toEqual([
+        `${K}.mine`,
+        `${K}.theirs`
+      ]);
+    });
+
+    it('accepts with the keyboard, saves like typing, and gives focus back to the editor', async () => {
+      const file = openFile('guide.md', { content: THREE });
+      await showConflicting(file);
+
+      button('Accept theirs')?.focus();
+      button('Accept theirs')?.click();
+      await settle(fixture);
+
+      expect(contentOf(stateOf(file))).toBe(`theirs 1\nbetween\n${conflict(2)}\nmore\n${conflict(3)}\nend\n`);
+      expect(file.saver.unsaved()).toBe(true);
+      expect(document.activeElement?.closest('.cm-editor')).not.toBeNull();
+      expect(position()).toBe('2 conflicts');
+    });
+
+    it('offers no Accept while the editor is read-only', async () => {
+      const file = openFile('guide.md', { content: THREE });
+      file.draft.set({ content: 'draft', savedAt: '2026-11-14T10:00:00Z' });
+      await showConflicting(file);
+
+      expect(button('Accept mine')?.getAttribute('aria-disabled')).toBe('true');
+    });
+
+    it('shows the note instead of the preview while markers remain, and the preview once none are left', async () => {
+      const file = openFile('guide.md', { content: `${conflict(1)}\nafter\n` });
+      await showConflicting(file);
+
+      expect(note()?.textContent).toContain(`${K}.markersLeft`);
+      expect(preview()).toBeNull();
+
+      button('Accept both')?.click();
+      await settle(fixture);
+
+      expect(note()).toBeNull();
+      expect(preview()).not.toBeNull();
+    });
+
+    it('shows the note for a lone =======', async () => {
+      await showConflicting(openFile('guide.md', { content: 'Title\n=======\n\nText.\n' }));
+
+      expect(position()).toBe('No conflict markers left.');
+      expect(note()).not.toBeNull();
+    });
+
+    it('shows conflicts in a file that was already open, keeping its undo history', async () => {
+      const file = openFile('guide.md', { content: THREE });
+      await showConflicting(file, false);
+      typeAtEnd('x');
+      await settle(fixture);
+      expect(isShowingConflicts(stateOf(file))).toBe(false);
+
+      fixture.componentRef.setInput('conflicts', true);
+      await settle(fixture);
+
+      expect(isShowingConflicts(stateOf(file))).toBe(true);
+      expect(position()).toBe('Conflict 1 of 3');
+      expect(undoDepth(stateOf(file))).toBe(1);
+    });
+
+    it('is a normal file after the merge', async () => {
+      const file = openFile('guide.md', { content: THREE });
+      await showConflicting(file);
+
+      fixture.componentRef.setInput('conflicts', false);
+      await settle(fixture);
+
+      expect(isShowingConflicts(stateOf(file))).toBe(false);
+      expect(stateOf(file).readOnly).toBe(false);
+      expect(pane().querySelector('rs-conflict-bar, .cm-conflict-label')).toBeNull();
+      expect(preview()).not.toBeNull();
     });
   });
 });

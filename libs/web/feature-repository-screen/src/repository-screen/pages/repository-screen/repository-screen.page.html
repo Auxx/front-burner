@@ -156,13 +156,18 @@
           @if (merging) {
             @let mergeState = merge.state();
             @if (merge.selectedFile(); as conflict) {
+              @let editing = conflictEditing();
+              @let edited = editing?.path === conflict.path ? editing : null;
               <rs-conflict-file [repositoryId]="session.repository()!.id"
                                 [file]="conflict"
                                 [into]="mergeState?.into ?? ''"
                                 [from]="mergeState?.from ?? ''"
                                 [resolving]="conflictResolving()"
                                 [locked]="conflictsLocked()"
-                                (resolve)="mergeActions.resolve(conflict.path, $event)" />
+                                [openFile]="edited?.file ?? null"
+                                [openError]="edited?.error ?? null"
+                                (resolve)="mergeActions.resolve(conflict.path, $event)"
+                                (retryOpen)="retryConflict()" />
             }
           } @else if (diffChange(); as change) {
             <rs-diff-view [repositoryId]="session.repository()!.id"
@@ -175,7 +180,7 @@
           <rs-editor-area [hidden]="merging || diffChange() !== null"
                           [path]="openPath()"
                           [entry]="openEntry()"
-                          [file]="openFiles.current()"
+                          [file]="areaFile()"
                           [openError]="openError()"
                           [goneElsewhere]="goneElsewhere()"
                           [fragment]="fragment()"

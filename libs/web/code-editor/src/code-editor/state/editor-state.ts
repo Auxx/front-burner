@@ -72,6 +72,8 @@ const readOnly = new Compartment();
 const label = new Compartment();
 const softWrap = new Compartment();
 const conflicts = new Compartment();
+// The conflict compartment's content while it is off: `isShowingConflicts` compares by identity.
+const noConflicts: Extension = [];
 
 // Built once: `isSoftWrapping` compares the compartment's content with it by identity.
 const softWrapExtension: Extension = [ EditorView.lineWrapping, wrapMarker() ];
@@ -143,7 +145,7 @@ export function createEditorState(options: EditorStateOptions): EditorState {
       }),
       label.of(labelExtension(options.label)),
       readOnly.of(options.readOnly ? readOnlyExtension : []),
-      conflicts.of(options.conflicts ? conflictExtension(options.conflicts) : []),
+      conflicts.of(options.conflicts ? conflictExtension(options.conflicts) : noConflicts),
       editorTheme
     ]
   });
@@ -173,7 +175,12 @@ export function isSoftWrapping(state: EditorState): boolean {
  * is open.
  */
 export function setConflicts(texts: ConflictTexts | null): TransactionSpec {
-  return { effects: conflicts.reconfigure(texts ? conflictExtension(texts) : []) };
+  return { effects: conflicts.reconfigure(texts ? conflictExtension(texts) : noConflicts) };
+}
+
+/** Whether the conflict view is on, whether or not the text has conflicts. */
+export function isShowingConflicts(state: EditorState): boolean {
+  return conflicts.get(state) !== noConflicts;
 }
 
 export function setReadOnly(on: boolean): TransactionSpec {

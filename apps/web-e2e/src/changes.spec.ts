@@ -1183,6 +1183,8 @@ test.describe('pushing', () => {
         await gitAction(other, 'Abort merge');
         await other.getByRole('dialog', { name: 'Abort the merge?' }).getByRole('button', { name: 'Abort merge' })
           .click();
+        // The abort first drops the waiting save of the conflicting file open there, so it is sent a moment later.
+        await expect(mergeSummary(other)).toHaveCount(0);
         await other.close();
         await expect(changesItem).toBeVisible();
         drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
@@ -1211,6 +1213,8 @@ test.describe('pushing', () => {
         await gitAction(other, 'Abort merge');
         await other.getByRole('dialog', { name: 'Abort the merge?' }).getByRole('button', { name: 'Abort merge' })
           .click();
+        // The abort first drops the waiting save of the conflicting file open there, so it is sent a moment later.
+        await expect(mergeSummary(other)).toHaveCount(0);
         await other.close();
         await page.unroute(`**/api/v1/repositories/${id}/file`);
 
@@ -1333,7 +1337,11 @@ test.describe('pushing', () => {
           await gitAction(other, 'Pull');
           await other.close();
           await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
-          await expect(editor).toBeHidden();
+          // The file opens with its conflicts, and asks first about the merge's change, as its edit was not
+          // saved: read-only meanwhile, so the edit is not sent over the markers (ED-24, ED-25).
+          await expect(page.getByRole('main').getByText('This file changed while you were editing.')).toBeVisible();
+          await expect(editor).toHaveAttribute('contenteditable', 'false');
+          expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toContain('<<<<<<<');
           await page.unroute(`**/api/v1/repositories/${id}/file`);
           await choose(page, 'Use their version');
           await expect(mergeSummary(page)).toContainText('1 of 1 file resolved');
@@ -1389,6 +1397,160 @@ test.describe('pushing', () => {
           await main.getByRole('button', { name: 'Back', exact: true }).click();
           await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
           expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toContain('<<<<<<<');
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+      });
+
+      test.describe('editing a conflicting file', () => {
+        const MARKED = [ '<<<<<<< main', 'mine', '=======', 'theirs', '>>>>>>> origin/main', '' ];
+        const main = (page: Page) => page.getByRole('main');
+        const editor = (page: Page) => main(page).getByRole('textbox', { name: 'guide.md', exact: true });
+        const conflictBar = (page: Page) => main(page).getByRole('group', { name: 'Conflicts' });
+        /** An **Accept** button inside the editor, for pointer and touch; hidden from assistive technology. */
+        const widget = (page: Page, name: string) =>
+          editor(page).locator('.cm-conflict-action').filter({ hasText: name }).first();
+        const tab = (page: Page, name: string) => main(page).getByRole('tab', { name, exact: true });
+
+        /** The editor's lines, without the labels that the conflict view adds to the marker lines. */
+        function lines(page: Page): Promise<string[]> {
+          return editor(page).evaluate(content =>
+            [ ...content.querySelectorAll('.cm-line') ].map(line => {
+              const copy = line.cloneNode(true) as HTMLElement;
+              copy.querySelectorAll('.cm-conflict-label').forEach(label => label.remove());
+              return copy.textContent ?? '';
+            })
+          );
+        }
+
+        /** Pulls into `draft.md`'s screen, which conflicts on `guide.md`, and waits for its editor. */
+        async function pulled(
+          page: Page,
+          instance: { url: string; dataDir: string; },
+          conflictStyle?: string
+        ): Promise<{ id: number; dir: string; }> {
+          const { id, dir } = await conflicting(instance);
+          if (conflictStyle) {
+            gitIn(dir, 'config', 'merge.conflictStyle', conflictStyle);
+          }
+          await openScreen(page, `/repositories/${id}/files/draft.md`);
+          await gitAction(page, 'Pull');
+          await expect(editor(page)).toBeVisible();
+          return { id, dir };
+        }
+
+        test('AC-GIT-003.2: guide.md opens in the editor with plain markers labelled <<<<<<< main and >>>>>>> origin/main, even if the working copy\'s configuration sets merge.conflictStyle=zdiff3', async ({ page, instance, monitor }) => {
+          const { id } = await pulled(page, instance, 'zdiff3');
+
+          await expect.poll(() => lines(page)).toEqual(MARKED);
+          await expect(editor(page).locator('.cm-conflict-label')).toHaveText([
+            'Mine (main)',
+            'Theirs (origin/main)'
+          ]);
+          await expect(conflictBar(page)).toContainText('Conflict 1 of 1');
+          // The route still names the file that was open, and the screen opens it again after the merge.
+          expect(page.url()).toMatch(/\/files\/draft\.md$/);
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
+        test('AC-GIT-003.4: Accept mine, Accept theirs and Accept both each replace the conflict as described; the editor\'s undo brings the conflict back', async ({ page, instance, monitor }) => {
+          const { id } = await pulled(page, instance);
+          const undo = async () => {
+            await editor(page).click();
+            await page.keyboard.press('ControlOrMeta+z');
+            await expect.poll(() => lines(page)).toEqual(MARKED);
+          };
+
+          await widget(page, 'Accept mine').click();
+          await expect.poll(() => lines(page)).toEqual([ 'mine', '' ]);
+          await undo();
+
+          await widget(page, 'Accept theirs').click();
+          await expect.poll(() => lines(page)).toEqual([ 'theirs', '' ]);
+          await undo();
+
+          // The bar's buttons, with the keyboard, for the conflict at the cursor.
+          await editor(page).click();
+          await page.keyboard.press('ControlOrMeta+Home');
+          await expect(conflictBar(page)).toContainText('Conflict 1 of 1');
+          await conflictBar(page).getByRole('button', { name: 'Accept both' }).focus();
+          await page.keyboard.press('Enter');
+          await expect.poll(() => lines(page)).toEqual([ 'mine', 'theirs', '' ]);
+          await expect(editor(page)).toBeFocused();
+          await expect(conflictBar(page)).toContainText('No conflict markers left.');
+          await page.keyboard.press('ControlOrMeta+z');
+          await expect.poll(() => lines(page)).toEqual(MARKED);
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
+        test('AC-GIT-003.5: while markers remain, the preview says it will come back when no conflict markers are left; after the last one is removed, the preview renders again', async ({ page, instance, isMobile, monitor }) => {
+          const { id } = await pulled(page, instance);
+          const preview = main(page).getByRole('region', { name: 'Preview of guide.md' });
+          const note = main(page).getByText('The preview is shown again when no conflict markers are left.');
+
+          if (isMobile) {
+            await tab(page, 'Preview').click();
+          }
+          await expect(note).toBeVisible();
+          await expect(preview).toHaveCount(0);
+
+          if (isMobile) {
+            await tab(page, 'Edit').click();
+          }
+          await widget(page, 'Accept theirs').click();
+          if (isMobile) {
+            await tab(page, 'Preview').click();
+          }
+          await expect(preview.getByText('theirs', { exact: true })).toBeVisible();
+          await expect(note).toHaveCount(0);
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
+        test('saves an edit, which a reload shows', async ({ page, instance, monitor }) => {
+          const { id, dir } = await pulled(page, instance);
+
+          await widget(page, 'Accept theirs').click();
+          await expect.poll(() => readFileSync(join(dir, 'guide.md'), 'utf8')).toBe('theirs\n');
+          await page.reload();
+
+          await expect(editor(page)).toBeVisible();
+          await expect.poll(() => lines(page)).toEqual([ 'theirs', '' ]);
+          await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
+        test('follows an edit made on another device', async ({ page, browser, instance, monitor }) => {
+          const { id } = await pulled(page, instance);
+
+          const context = await browser.newContext({ baseURL: instance.url });
+          const other = await context.newPage();
+          try {
+            await openScreen(other, `/repositories/${id}`);
+            await expect(editor(other)).toBeVisible();
+            await widget(other, 'Accept mine').click();
+            await expect.poll(() => lines(other)).toEqual([ 'mine', '' ]);
+
+            await expect.poll(() => lines(page)).toEqual([ 'mine', '' ]);
+            await expect(page.getByText('This file was updated.')).toBeVisible();
+          } finally {
+            await context.close();
+          }
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
+        test('stays visible with the on-screen keyboard open', async ({ page, instance, isMobile, browserName, monitor }) => {
+          test.skip(!isMobile, 'The on-screen keyboard is a phone\'s.');
+          test.skip(browserName !== 'chromium', 'Shrinking the visual viewport as the keyboard does needs Chromium.');
+          const { id } = await pulled(page, instance);
+          await editor(page).locator('.cm-line').filter({ hasText: /^theirs$/ }).click();
+          const size = page.viewportSize() ?? { width: 412, height: 839 };
+
+          await page.setViewportSize({ width: size.width, height: Math.round(size.height / 2) });
+
+          await expect(conflictBar(page)).toBeInViewport();
+          await expect(main(page).locator('.cm-cursor-primary')).toBeInViewport();
+          // At least three lines of text are left to edit in.
+          const box = await main(page).locator('rs-conflict-file .cm-scroller').boundingBox();
+          expect(box?.height ?? 0).toBeGreaterThan(3 * 20);
           drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
         });
       });

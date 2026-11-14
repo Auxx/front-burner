@@ -14,6 +14,7 @@ import {
 import { openSearchPanel } from '@codemirror/search';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { acceptConflict, type ConflictChoice, goToConflict } from '../../conflicts/conflict-extension';
 import { setFindPanelInjector, SWAPPING_ATTRIBUTE } from '../../search/find-panel';
 
 export interface EditorStateChange {
@@ -74,6 +75,20 @@ export class CodeEditorComponent {
 
   focus(): void {
     this.view?.focus();
+  }
+
+  /** Moves the cursor to the start of a conflict and scrolls to it (GC-10); the focus stays where it is. */
+  goToConflict(index: number): void {
+    if (this.view) {
+      goToConflict(this.view, index);
+    }
+  }
+
+  /** Replaces a conflict with mine, theirs or both, as one undoable edit (GC-11). */
+  acceptConflict(index: number, choice: ConflictChoice): void {
+    if (this.view) {
+      acceptConflict(this.view, index, choice);
+    }
   }
 
   /**
