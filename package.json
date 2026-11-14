@@ -114,7 +114,7 @@
     "@storybook/addon-vitest": "10.6.6",
     "@storybook/angular-vite": "10.6.6",
     "@swc/core": "1.16.20",
-    "@swc/helpers": "0.5.23",
+    "@swc/helpers": "0.5.24",
     "@types/better-sqlite3": "9.6.0",
     "@types/cookie-parser": "1.4.10",
     "@types/express": "5.0.6",
