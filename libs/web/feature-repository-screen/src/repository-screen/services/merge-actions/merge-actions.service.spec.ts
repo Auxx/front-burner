@@ -235,7 +235,16 @@ describe('MergeActionsService', () => {
     openFiles = TestBed.inject(OpenFilesService);
   });
 
-  afterEach(() => TestBed.inject(DialogService).closeAll());
+  afterEach(() => {
+    // A waiting save outlives its test otherwise: its timer would send it into the next test's `requests`.
+    for (const id of [ 12, 13 ]) {
+      repository.set({ id });
+      for (const path of [ 'guide.md', 'notes.md', 'other.md' ]) {
+        openFiles.close(path, { dropPending: true, keepDraft: true });
+      }
+    }
+    TestBed.inject(DialogService).closeAll();
+  });
 
   it('asks before aborting, and cancelling changes nothing', async () => {
     const file = await opened('guide.md');
