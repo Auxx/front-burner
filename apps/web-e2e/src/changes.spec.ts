@@ -1387,7 +1387,7 @@ test.describe('pushing', () => {
 
           await main.getByRole('button', { name: 'Back', exact: true }).click();
           await expect(showMine).toBeFocused();
-          await expect(offers(page)).toHaveText([ 'Use my version', 'Use their version' ]);
+          await expect(offers(page)).toHaveText([ 'Mark as resolved', 'Use my version', 'Use their version' ]);
 
           await main.getByRole('button', { name: 'Show theirs', exact: true }).click();
           await expect(main).toContainText('This is their version (origin/main), read-only.');
@@ -1503,6 +1503,33 @@ test.describe('pushing', () => {
           await expect(preview.getByText('theirs', { exact: true })).toBeVisible();
           await expect(note).toHaveCount(0);
           drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
+        test('AC-GIT-003.6: Mark as resolved with a marker left asks to confirm; without markers it marks the file resolved at once', async ({ page, instance, monitor }) => {
+          const { id, dir } = await pulled(page, instance);
+          const markResolved = main(page).getByRole('button', { name: 'Mark as resolved', exact: true });
+          const question = page.getByRole('dialog', { name: 'Mark as resolved?' });
+
+          await markResolved.click();
+          await expect(question).toContainText('This file still has conflict markers. Mark it as resolved anyway?');
+          await question.getByRole('button', { name: 'Cancel', exact: true }).click();
+          await expect(question).toHaveCount(0);
+          await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+
+          await widget(page, 'Accept theirs').click();
+          // On a phone, the file's choices make way while the focus is in the editor (NF-12.5).
+          await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+          // At once: the edit's waiting save is sent first, and the file is marked as it was saved (GC-14).
+          await markResolved.click();
+          await expect(mergeSummary(page)).toContainText('1 of 1 file resolved');
+          await expect(question).toHaveCount(0);
+          await expect(main(page)).toContainText(/Both changed\s*·\s*Resolved/);
+          await expect(editor(page)).toHaveCount(0);
+          expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toBe('theirs\n');
+          expect(gitIn(dir, 'ls-files', '-u').toString()).toBe('');
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+          // The backend's answer that markers are left, which asked the question.
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge/resolve`);
         });
 
         test('saves an edit, which a reload shows', async ({ page, instance, monitor }) => {

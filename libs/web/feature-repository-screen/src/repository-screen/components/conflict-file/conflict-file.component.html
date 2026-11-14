@@ -69,10 +69,17 @@
         }
       </div>
     }
-    @if (offers().length > 0) {
+    @if (edited || offers().length > 0) {
       <div class="offers"
            role="group"
            [attr.aria-label]="t('offers')">
+        @if (edited) {
+          <button uiButton
+                  variant="primary"
+                  [busy]="resolving() === 'mark-resolved'"
+                  [unavailable]="locked()"
+                  (click)="markResolved.emit()">{{ t('markResolved') }}</button>
+        }
         @for (offer of offers(); track offer) {
           <button uiButton
                   [busy]="resolving() === offer"

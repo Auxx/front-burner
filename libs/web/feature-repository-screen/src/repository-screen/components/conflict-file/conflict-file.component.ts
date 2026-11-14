@@ -97,6 +97,8 @@ export class ConflictFileComponent {
 
   /** A whole version chosen (GC-15, GC-16). */
   readonly resolve = output<GitResolution>();
+  /** **Mark as resolved**, for a file edited with its conflicts (GC-14). */
+  readonly markResolved = output<void>();
   /** **Try again** after the file could not be opened for editing. */
   readonly retryOpen = output<void>();
 

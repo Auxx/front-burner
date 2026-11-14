@@ -94,8 +94,39 @@ describe('ConflictFileComponent', () => {
       expect(editorPane()?.querySelector('.cm-content')?.textContent).toContain('<<<<<<< main');
       expect(editorPane()?.querySelector('rs-conflict-bar')).not.toBeNull();
       expect(host().classList).toContain('editing');
-      expect(labels()).toEqual([ `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
+      expect(labels()).toEqual([ `${KEY}.markResolved`, `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
       expect(host().querySelector('.versions')).toBeNull();
+    });
+
+    it('emits Mark as resolved (GC-14)', async () => {
+      let marked = 0;
+      fixture.componentInstance.markResolved.subscribe(() => marked++);
+      await show({ editable: true });
+
+      buttons()[0].click();
+
+      expect(marked).toBe(1);
+    });
+
+    it('shows Mark as resolved as busy while it runs, and unavailable while locked', async () => {
+      let marked = 0;
+      fixture.componentInstance.markResolved.subscribe(() => marked++);
+      fixture.componentRef.setInput('locked', true);
+      await show({ editable: true }, 'mark-resolved');
+
+      const [ mark, ours ] = buttons();
+      expect(mark.getAttribute('aria-disabled')).toBe('true');
+      expect(mark.querySelector('ui-spinner')).not.toBeNull();
+      expect(ours.querySelector('ui-spinner')).toBeNull();
+
+      mark.click();
+      expect(marked).toBe(0);
+    });
+
+    it('does not offer Mark as resolved for a file that cannot be edited', async () => {
+      await show({ editable: false });
+
+      expect(labels()).toEqual([ `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
     });
 
     it('shows a spinner while the file opens, and why it could not, with Try again', async () => {

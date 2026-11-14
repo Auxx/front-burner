@@ -1534,8 +1534,9 @@ describe('RepositoryScreenPage', () => {
             return of(undefined);
           });
 
+          // After Mark as resolved and Use my version.
           const offers = [ ...page().querySelectorAll<HTMLButtonElement>('rs-conflict-file .offers button') ];
-          offers[1].click();
+          offers[2].click();
           await settle(harness.fixture);
           await settle(harness.fixture);
 
@@ -1551,19 +1552,19 @@ describe('RepositoryScreenPage', () => {
           resolveConflict.mockReturnValue(answer);
           const offers = () => [ ...page().querySelectorAll<HTMLButtonElement>('rs-conflict-file .offers button') ];
 
-          offers()[1].click();
+          offers()[2].click();
           await settle(harness.fixture);
           entryButton('b.md').click();
           await settle(harness.fixture);
 
           expect(conflictFile()).toBe('b.md');
-          expect(offers().map(button => button.getAttribute('aria-disabled'))).toEqual([ 'true', 'true' ]);
+          expect(offers().map(button => button.getAttribute('aria-disabled'))).toEqual([ 'true', 'true', 'true' ]);
 
           answer.complete();
           await settle(harness.fixture);
           await settle(harness.fixture);
 
-          expect(offers().map(button => button.getAttribute('aria-disabled'))).toEqual([ null, null ]);
+          expect(offers().map(button => button.getAttribute('aria-disabled'))).toEqual([ null, null, null ]);
         });
 
         describe('a version shown', () => {
@@ -1754,6 +1755,28 @@ describe('RepositoryScreenPage', () => {
             expect(conflictFile()).toBe('guide.md');
             expect(conflictEditor()).toBeNull();
             expect(readFile).not.toHaveBeenCalledWith('docs/guide.md');
+          });
+
+          it('marks it as resolved, with what was typed saved first, and shows it as resolved (GC-14)', async () => {
+            await visit('/repositories/12/files/README.md');
+            await startMerge();
+            typeIn('rs-conflict-file', 'More.\n');
+            resolveConflict.mockImplementation(() => {
+              mergeAnswer = { ...mergeAnswer, files: [ conflict('README.md', true), conflict('docs/guide.md', true) ] };
+              return of(undefined);
+            });
+
+            page().querySelector<HTMLButtonElement>('rs-conflict-file .offers button')?.click();
+            await settle(harness.fixture);
+            await settle(harness.fixture);
+
+            expect(saveFile.mock.calls[0][1]).toMatchObject({ path: 'docs/guide.md', content: `${MARKED}More.\n` });
+            expect(resolveConflict).toHaveBeenCalledExactlyOnceWith(12, {
+              path: 'docs/guide.md',
+              resolution: 'mark-resolved'
+            });
+            expect(conflictEditor()).toBeNull();
+            expect(page().querySelector('rs-conflict-file .state.resolved')).not.toBeNull();
           });
         });
 
