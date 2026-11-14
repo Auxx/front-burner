@@ -5,9 +5,16 @@
                     (dismissed)="dismissed.emit()">
     {{ t('message') }}
     <div uiBannerActions>
+      @let undoRuns = undoing();
       <button uiButton
               size="small"
+              [unavailable]="undoRuns"
               (click)="push.emit()">{{ t('push') }}</button>
+      <button uiButton
+              size="small"
+              [busy]="undoRuns"
+              [unavailable]="undoBlocked()"
+              (click)="undo.emit()">{{ t('undo') }}</button>
     </div>
   </ui-inline-banner>
 </ng-container>

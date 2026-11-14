@@ -31,13 +31,19 @@ import { TranslocoDirective } from '@jsverse/transloco';
 export interface BranchListData {
   readonly repositoryId: number;
   readonly noCommits?: boolean;
+  /** Whether the backend says that the last merge can still be undone (GC-25): **Undo merge** is offered. */
+  readonly undoableMerge?: boolean;
 }
 
-/** The branch that was chosen. A remote one's `name` has no `origin/`, as the API wants it (GA-37). */
+/**
+ * The branch that was chosen. A remote one's `name` has no `origin/`, as the API
+ * wants it (GA-37). `undo-merge` is **Undo merge** (GC-25).
+ */
 export type BranchChoice =
   | { readonly kind: 'local'; readonly name: string; }
   | { readonly kind: 'remote'; readonly name: string; }
-  | { readonly kind: 'new'; };
+  | { readonly kind: 'new'; }
+  | { readonly kind: 'undo-merge'; };
 
 type Read =
   | { kind: 'loading'; }
@@ -62,7 +68,8 @@ function firstWithCurrent(
 /**
  * The branch list (GA-36): the local branches with the current one marked, then
  * the remote branches that have no local branch, and in a single-branch clone a
- * note about what is missing (GA-41). A dialog rather than a menu, since a filter
+ * note about what is missing (GA-41). Above them, **New branch**, and **Undo
+ * merge** while the last merge can be undone (GC-25). A dialog rather than a menu, since a filter
  * field in a menu breaks the ARIA menu pattern (NV-19), and it works the same way
  * on a phone. It reads the branches each time it opens, so it can't be out of
  * date, and closes with the branch that was chosen, if any and if it is not the
@@ -146,6 +153,10 @@ export class BranchListDialog {
       return;
     }
     this.ref.close({ kind: 'new' });
+  }
+
+  protected chooseUndoMerge(): void {
+    this.ref.close({ kind: 'undo-merge' });
   }
 
   /** The current branch as this read has it, which the status may not know yet: there is nothing to switch to. */

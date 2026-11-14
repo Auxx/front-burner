@@ -1,8 +1,12 @@
 .actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
   margin-block-end: var(--ui-space-2);
 }
 
-.new-branch {
+.new-branch,
+.undo-merge {
   inline-size: 100%;
 }
 

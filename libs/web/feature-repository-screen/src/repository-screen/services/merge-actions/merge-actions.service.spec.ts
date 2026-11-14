@@ -21,7 +21,9 @@ import { apiError, dialogButton, overlay, settleDialog } from '../../../testing/
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { BranchActionsService } from '../branch-actions/branch-actions.service';
 import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
+import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { MergeStore } from '../merge-store/merge-store.service';
@@ -63,6 +65,7 @@ describe('MergeActionsService', () => {
   let abortAnswer: () => Observable<void>;
   let resolveAnswer: () => Observable<void>;
   let startOverAnswer: () => Observable<void>;
+  let undoAnswer: () => Observable<void>;
   let mergeAnswer: () => Observable<GitMergeState>;
   let readAnswer: (path: string) => Observable<FileContent>;
   let saves: { request: SaveFileRequest; answer: Subject<FileState>; }[];
@@ -75,6 +78,7 @@ describe('MergeActionsService', () => {
   let own: string[];
   let released: string[];
   let merging: ReturnType<typeof signal<boolean>>;
+  let switching: ReturnType<typeof signal<boolean>>;
   let commitAnswer: () => Observable<CommitResult>;
   let gateReady: () => Promise<boolean>;
   let gateRefresh: ReturnType<typeof vi.fn>;
@@ -103,6 +107,7 @@ describe('MergeActionsService', () => {
     abortAnswer = () => of(undefined);
     resolveAnswer = () => of(undefined);
     startOverAnswer = () => of(undefined);
+    undoAnswer = () => of(undefined);
     mergeAnswer = () => of(conflicting('guide.md'));
     readAnswer = path => of(fileContent(path));
     saves = [];
@@ -114,6 +119,7 @@ describe('MergeActionsService', () => {
     own = [];
     released = [];
     merging = signal(true);
+    switching = signal(false);
     commitAnswer = () => of({ oid: 'c'.repeat(40) } as CommitResult);
     gateReady = async () => true;
     gateRefresh = vi.fn();
@@ -124,6 +130,10 @@ describe('MergeActionsService', () => {
           'errors.merge-unresolved': 'Resolve every conflicting file before committing the merge.',
           'errors.internal': 'Something went wrong.',
           'errors.resolution-not-allowed': 'This file can\'t be resolved that way.',
+          'errors.undo-not-allowed': 'This merge can\'t be undone any more.',
+          'web-feature-repository-screen.MergeActionsService.undone': 'Merge undone.',
+          'web-feature-repository-screen.MergeActionsService.draft-offered':
+            '{{ path }} has unsaved changes from earlier. Restore or discard them before undoing the merge.',
           'web-feature-repository-screen.FailureToastService.reference': 'Reference: {{ reference }}'
         })
       ],
@@ -145,6 +155,14 @@ describe('MergeActionsService', () => {
           }
         },
         { provide: RepositorySessionService, useValue: { repository } },
+        { provide: BranchActionsService, useValue: { switching } },
+        {
+          provide: DiskChangesService,
+          useValue: {
+            notice: (path: string) => requests.push(`notice ${path}`),
+            settled: () => Promise.resolve()
+          }
+        },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         {
           provide: EntryCommandsService,
@@ -177,6 +195,10 @@ describe('MergeActionsService', () => {
             startConflictOver: (_id: number, request: { path: string; }) => {
               requests.push(`start over ${request.path}`);
               return startOverAnswer();
+            },
+            undoMerge: () => {
+              requests.push('undo');
+              return undoAnswer();
             },
             commitMerge: (_id: number, request: { message: string; }) => {
               requests.push(`commit ${request.message}`);
@@ -213,7 +235,16 @@ describe('MergeActionsService', () => {
     openFiles = TestBed.inject(OpenFilesService);
   });
 
-  afterEach(() => TestBed.inject(DialogService).closeAll());
+  afterEach(() => {
+    // A waiting save outlives its test otherwise: its timer would send it into the next test's `requests`.
+    for (const id of [ 12, 13 ]) {
+      repository.set({ id });
+      for (const path of [ 'guide.md', 'notes.md', 'other.md' ]) {
+        openFiles.close(path, { dropPending: true, keepDraft: true });
+      }
+    }
+    TestBed.inject(DialogService).closeAll();
+  });
 
   it('asks before aborting, and cancelling changes nothing', async () => {
     const file = await opened('guide.md');
@@ -1150,6 +1181,180 @@ describe('MergeActionsService', () => {
       await service.commit();
 
       expect(overlay().querySelector('rs-commit-merge')).toBeNull();
+    });
+  });
+
+  describe('undoing the merge', () => {
+    const U = 'web-feature-repository-screen.UndoMergeDialog';
+
+    beforeEach(() => {
+      merging.set(false);
+      state.set(null);
+    });
+
+    /** Asks to undo, and presses **Undo merge**. */
+    async function confirmUndo(): Promise<{ done: Promise<void>; }> {
+      const done = service.undo();
+      await settleDialog();
+      dialogButton(`${U}.undo`)?.click();
+      await settleDialog();
+      return { done };
+    }
+
+    it('asks first, and cancelling changes nothing', async () => {
+      const file = await opened('guide.md');
+      file.saver.edit(() => 'mine');
+      const done = service.undo();
+      await settleDialog();
+
+      expect(overlay().querySelector('rs-undo-merge')).not.toBeNull();
+
+      dialogButton(`${U}.cancel`)?.click();
+      await done;
+
+      expect(requests).toEqual([]);
+      expect(file.saver.waiting()).toBe('mine');
+      expect(statusRefresh).not.toHaveBeenCalled();
+    });
+
+    it('undoes, says so, and shows the upstream\'s commits to pull again', async () => {
+      await (await confirmUndo()).done;
+
+      expect(requests).toEqual([ 'undo' ]);
+      expect(statusRefresh).toHaveBeenCalled();
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ message: 'Merge undone.', status: 'success' })
+      );
+      expect(service.undoing()).toBe(false);
+    });
+
+    it('sends a waiting save first', async () => {
+      const file = await opened('guide.md');
+      file.saver.edit(() => 'mine');
+
+      const { done } = await confirmUndo();
+
+      expect(requests).toEqual([ 'save mine' ]);
+      expect(service.undoing()).toBe(true);
+
+      saves[0].answer.next({ hash: 'c'.repeat(64), size: 4 });
+      saves[0].answer.complete();
+      await done;
+
+      expect(requests).toEqual([ 'save mine', 'undo', 'notice guide.md' ]);
+    });
+
+    it('does not undo when a waiting save did not get there, and says why', async () => {
+      const file = await opened('guide.md');
+      file.saver.edit(() => 'mine');
+
+      const { done } = await confirmUndo();
+      saves[0].answer.error(apiError(409, 'merge-in-progress'));
+      await done;
+
+      expect(requests).toEqual([ 'save mine' ]);
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 'danger' }));
+      expect(file.saver.unsaved()).toBe(true);
+      // What can be undone may have changed meanwhile.
+      expect(statusRefresh).toHaveBeenCalled();
+    });
+
+    it('does not undo while a browser draft is on offer, and says what to do', async () => {
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'guide.md' }, {
+        content: 'from before',
+        savedAt: '2026-10-29T10:05:00.000Z'
+      });
+      await openFiles.open('guide.md');
+      requests = [];
+
+      await (await confirmUndo()).done;
+
+      expect(requests).toEqual([]);
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        message: 'guide.md has unsaved changes from earlier. Restore or discard them before undoing the merge.',
+        status: 'danger'
+      }));
+      expect(statusRefresh).toHaveBeenCalled();
+    });
+
+    it('is not asked while a branch switch runs', async () => {
+      switching.set(true);
+
+      await service.undo();
+      await settleDialog();
+
+      expect(overlay()?.querySelector('rs-undo-merge') ?? null).toBeNull();
+    });
+
+    it('waits for no switch that starts while it asks: it does not undo then', async () => {
+      const done = service.undo();
+      await settleDialog();
+      switching.set(true);
+      dialogButton(`${U}.undo`)?.click();
+      await done;
+
+      expect(requests).toEqual([]);
+    });
+
+    it('holds the saves while it undoes, and checks the open file against the disk before they go on', async () => {
+      const file = await opened('guide.md');
+      const answer = new Subject<void>();
+      undoAnswer = () => answer;
+
+      const { done } = await confirmUndo();
+      file.saver.edit(() => 'typed');
+      await Promise.resolve();
+
+      expect(file.saver.held()).toBe(true);
+
+      answer.complete();
+      await done;
+
+      expect(requests).toEqual([ 'undo', 'notice guide.md' ]);
+      expect(file.saver.held()).toBe(false);
+    });
+
+    it('says when the merge can no longer be undone, and reads the status', async () => {
+      undoAnswer = () => throwError(() => apiError(409, 'undo-not-allowed'));
+
+      await (await confirmUndo()).done;
+
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          message: expect.stringContaining('This merge can\'t be undone any more.'),
+          status: 'danger'
+        })
+      );
+      expect(statusRefresh).toHaveBeenCalled();
+    });
+
+    it('says why it failed, with its reference', async () => {
+      undoAnswer = () => throwError(() => apiError(500, 'internal'));
+
+      await (await confirmUndo()).done;
+
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        message: expect.stringMatching(/^Something went wrong\. Reference: \S+$/),
+        status: 'danger'
+      }));
+    });
+
+    it('asks once, however often it is chosen', async () => {
+      void service.undo();
+      void service.undo();
+      await settleDialog();
+
+      expect(overlay().querySelectorAll('rs-undo-merge')).toHaveLength(1);
+    });
+
+    it('undoes nothing after a switch to another repository while it asks', async () => {
+      const done = service.undo();
+      await settleDialog();
+      repository.set({ id: 13 });
+      dialogButton(`${U}.undo`)?.click();
+      await done;
+
+      expect(requests).toEqual([]);
     });
   });
 });

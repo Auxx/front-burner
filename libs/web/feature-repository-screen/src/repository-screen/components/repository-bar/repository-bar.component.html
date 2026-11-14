@@ -20,7 +20,7 @@
                              (openBranches)="openBranches.emit()" />
       <rs-git-actions [status]="gitStatus()"
                       [running]="running()"
-                      [switching]="switching()"
+                      [switching]="actionsWait()"
                       [narrow]="narrow()"
                       [warning]="warning"
                       (fetch)="fetch.emit()"

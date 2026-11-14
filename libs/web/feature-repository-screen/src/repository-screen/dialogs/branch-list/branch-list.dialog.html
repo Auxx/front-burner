@@ -10,6 +10,11 @@
               [uiTooltip]="data.noCommits === true ? t('makeCommitFirst') : ''"
               uiTooltipShowOnClick
               (click)="chooseNew()">{{ t('newBranch') }}</button>
+      @if (data.undoableMerge) {
+        <button uiButton
+                class="undo-merge"
+                (click)="chooseUndoMerge()">{{ t('undoMerge') }}</button>
+      }
     </div>
     <ui-field class="filter"
               [label]="t('filter')">

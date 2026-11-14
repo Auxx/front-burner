@@ -100,6 +100,23 @@ describe('RepositoryBarComponent', () => {
     expect(pulled).toBe(1);
   });
 
+  it('makes the git actions wait while a switch or an undo of a merge runs', async () => {
+    await show();
+    const actions = () =>
+      fixture.debugElement.query(By.directive(GitActionsComponent)).componentInstance as GitActionsComponent;
+
+    expect(actions().switching()).toBe(false);
+
+    fixture.componentRef.setInput('undoing', true);
+    await settle(fixture);
+    expect(actions().switching()).toBe(true);
+
+    fixture.componentRef.setInput('undoing', false);
+    fixture.componentRef.setInput('switching', true);
+    await settle(fixture);
+    expect(actions().switching()).toBe(true);
+  });
+
   it('replaces the status and the actions during a merge', async () => {
     await show();
     fixture.componentRef.setInput('merging', true);

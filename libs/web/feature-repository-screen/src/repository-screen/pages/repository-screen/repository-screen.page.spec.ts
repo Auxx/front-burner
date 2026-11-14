@@ -108,6 +108,7 @@ describe('RepositoryScreenPage', () => {
   /** In place of `changes`, such as a failure. */
   let gitStatusAnswer: Observable<GitStatus> | undefined;
   let abortMerge: ReturnType<typeof vi.fn>;
+  let undoMerge: ReturnType<typeof vi.fn>;
   let resolveConflict: ReturnType<typeof vi.fn>;
   let startConflictOver: ReturnType<typeof vi.fn>;
   /** What `GitApi.gitMerge` answers. */
@@ -166,6 +167,7 @@ describe('RepositoryScreenPage', () => {
             gitMergeVersion: (_id: number, query: { path: string; side: string; }) =>
               of({ content: `${query.side} of ${query.path}\n` }),
             abortMerge,
+            undoMerge,
             resolveConflict,
             startConflictOver
           }
@@ -242,6 +244,7 @@ describe('RepositoryScreenPage', () => {
     changes = [];
     gitStatusAnswer = undefined;
     abortMerge = vi.fn(() => of(undefined));
+    undoMerge = vi.fn(() => of(undefined));
     resolveConflict = vi.fn(() => of(undefined));
     startConflictOver = vi.fn(() => of(undefined));
     mergeAnswer = { into: 'main', from: 'origin/main', files: [], otherFiles: [], message: 'Merge' };
@@ -2076,6 +2079,65 @@ describe('RepositoryScreenPage', () => {
         await settle(harness.fixture);
 
         expect(notice()).toBeNull();
+      });
+
+      it('undoes the merge after asking, and the notice goes', async () => {
+        gitStatusAnswer = of(committed());
+        await visit('/repositories/12');
+        const undoButton = noticeButton(`${NOTICE}.undo`);
+        undoButton.focus();
+
+        undoButton.click();
+        await settleDialog();
+        expect(undoMerge).not.toHaveBeenCalled();
+
+        gitStatusAnswer = of({ ...baseStatus(), upstream: 'origin/main', behind: 3 });
+        dialogButton('web-feature-repository-screen.UndoMergeDialog.undo')?.click();
+        await settleDialog();
+        await settle(harness.fixture);
+
+        expect(undoMerge).toHaveBeenCalledExactlyOnceWith(12);
+        expect(notice()).toBeNull();
+        expect(document.activeElement?.closest('rs-git-actions')).toBeTruthy();
+      });
+
+      it('does not offer Undo merge while a fetch runs, and does once it has ended', async () => {
+        const started = new Subject<GitJobStarted>();
+        fetch.mockReturnValue(started);
+        gitJob.mockReturnValue(of<GitJobState>({
+          status: 'done',
+          outcome: { kind: 'fetched', moved: false, upstreamMoved: false }
+        }));
+        gitStatusAnswer = of(committed());
+        await visit('/repositories/12');
+        ([ ...page().querySelectorAll<HTMLButtonElement>('rs-git-actions button') ]
+          .find(found => found.textContent?.trim().endsWith('.fetch')) as HTMLButtonElement).click();
+        await settle(harness.fixture);
+
+        expect(noticeButton(`${NOTICE}.undo`).getAttribute('aria-disabled')).toBe('true');
+
+        started.next({ jobId: 9 });
+        started.complete();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(noticeButton(`${NOTICE}.undo`).getAttribute('aria-disabled')).toBeNull();
+      });
+
+      it('offers Undo merge in the branch list after the notice is dismissed', async () => {
+        gitStatusAnswer = of(committed());
+        await visit('/repositories/12');
+        noticeButton(`${NOTICE}.dismiss`).click();
+        await settle(harness.fixture);
+
+        (page().querySelector('rs-git-status-summary button') as HTMLButtonElement).click();
+        await settleDialog();
+        dialogButton('web-feature-repository-screen.BranchListDialog.undoMerge')?.click();
+        await settleDialog();
+        dialogButton('web-feature-repository-screen.UndoMergeDialog.undo')?.click();
+        await settleDialog();
+
+        expect(undoMerge).toHaveBeenCalledExactlyOnceWith(12);
       });
 
       it('goes when the merge is pushed elsewhere', async () => {
