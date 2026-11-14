@@ -106,6 +106,54 @@ describe('RepositoryQueries', () => {
     expect(queries.find(bob, id)?.lastAccessedAt).toEqual(new Date(0));
   });
 
+  describe('all', () => {
+    it('sorts by name ignoring case', () => {
+      for (const name of [ 'gamma', 'Beta', 'alpha' ]) {
+        insertRepository(database, alice, { name });
+      }
+
+      expect(queries.all(alice).map(row => row.name)).toEqual([ 'alpha', 'Beta', 'gamma' ]);
+    });
+
+    it('ties by ID', () => {
+      // The uniqueness of AR-15 forbids a tie; dropped here so that the order is shown stable anyway.
+      database.sqlite.exec('DROP INDEX repositories_user_name_unique');
+      const first = insertRepository(database, alice, { name: 'Notes' });
+      const second = insertRepository(database, alice, { name: 'notes' });
+
+      expect(queries.all(alice).map(row => row.id)).toEqual([ first, second ]);
+    });
+
+    it('lists every status', () => {
+      // The database has no `needs-confirmation`: the MVP never produces it (DS-21).
+      insertRepository(database, alice, { name: 'a', status: 'cloning' });
+      insertRepository(database, alice, { name: 'b', status: 'ready' });
+      insertRepository(database, alice, { name: 'c', status: 'error', errorCode: 'clone-failed' });
+
+      expect(queries.all(alice).map(row => row.status)).toEqual([ 'cloning', 'ready', 'error' ]);
+    });
+
+    it('lists only the user\'s own', () => {
+      const bob = insertUser(database, 'bob@example.com');
+      insertRepository(database, alice, { name: 'handbook' });
+      insertRepository(database, bob, { name: 'secret' });
+
+      expect(queries.all(alice).map(row => [ row.userId, row.name ])).toEqual([ [ alice, 'handbook' ] ]);
+    });
+
+    it('does not change the last access time', () => {
+      const at = new Date(Date.UTC(2026, 9, 26, 10));
+      const id = insertRepository(database, alice, { name: 'handbook', lastAccessedAt: at });
+
+      expect(queries.all(alice)[0]?.lastAccessedAt).toEqual(at);
+      expect(queries.find(alice, id)?.lastAccessedAt).toEqual(at);
+    });
+
+    it('answers an empty list for a user without repositories', () => {
+      expect(queries.all(alice)).toEqual([]);
+    });
+  });
+
   it('honours a smaller limit', () => {
     insertRepository(database, alice, { name: 'a' });
     insertRepository(database, alice, { name: 'b' });

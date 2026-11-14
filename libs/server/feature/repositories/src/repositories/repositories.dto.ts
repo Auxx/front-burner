@@ -9,6 +9,7 @@ import {
   RepositoryCredentialsInfoSchema,
   RepositoryCredentialsSchema,
   RepositoryIndexSchema,
+  RepositoryListSchema,
   RepositoryParamsSchema,
   RepositorySummarySchema,
   UpdateTokenRequestSchema
@@ -28,6 +29,9 @@ export class RecentQueryDto extends createZodDto(z.object(RecentQuerySchema.shap
 
 @ApiSchema({ name: 'RepositorySummary' })
 export class RepositorySummaryDto extends createZodDto(z.object(RepositorySummarySchema.shape)) {}
+
+@ApiSchema({ name: 'RepositoryList' })
+export class RepositoryListDto extends createZodDto(z.object(RepositoryListSchema.shape)) {}
 
 @ApiSchema({ name: 'RepositoryIndex' })
 export class RepositoryIndexDto extends createZodDto(z.object(RepositoryIndexSchema.shape)) {}

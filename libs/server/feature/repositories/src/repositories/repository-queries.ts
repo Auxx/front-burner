@@ -20,6 +20,18 @@ export class RepositoryQueries {
     return { repositories: rows.map(row => ({ name: row.name, remoteKey: remoteDisplay(row.remoteUrl) })) };
   }
 
+  /**
+   * Every repository of the user, in any status, by name ignoring case, then
+   * by ID (RM-5). SQLite's `lower` folds ASCII only, as the uniqueness of AR-15
+   * does. Reading changes nothing, not even the last access time (DS-9).
+   */
+  all(userId: number): Repository[] {
+    return this.database.db.select().from(repositories)
+      .where(eq(repositories.userId, userId))
+      .orderBy(asc(sql`lower(${repositories.name})`), asc(repositories.id))
+      .all();
+  }
+
   /** One of the user's repositories; another user's is not found, like a missing one (FB-2). */
   find(userId: number, id: number): Repository | undefined {
     return this.database.db.select().from(repositories)

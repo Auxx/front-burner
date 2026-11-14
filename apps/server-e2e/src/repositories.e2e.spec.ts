@@ -141,3 +141,69 @@ describe('recent repositories (REQ-DASH-001)', () => {
     expect(((await response.json()) as { code: string; }).code).toBe('unauthenticated');
   });
 });
+
+describe('all repositories (REQ-REPO-003)', () => {
+  let server: ServerProcess;
+  let users = 0;
+
+  beforeAll(async () => {
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
+    await onboard(server);
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+  });
+
+  /** A new user of its own for each test, so that tests do not see each other's repositories. */
+  function newUser(): { userId: number; email: string; } {
+    users++;
+    const email = `list${users}@example.com`;
+    return { userId: seed(server.dataDir, { users: [ { email } ] }).userIds[0] as number, email };
+  }
+
+  async function list(email: string): Promise<Summary[]> {
+    const { authToken } = await login(server, 'body', { email, password: E2E_ADMIN.password });
+    const response = await fetch(`${server.url}/api/v1/repositories`, {
+      headers: { authorization: `Bearer ${authToken}` }
+    });
+    expect(response.status).toBe(200);
+    return ((await response.json()) as { repositories: Summary[]; }).repositories;
+  }
+
+  it('lists all 12 of 12 repositories in every status, by name ignoring case', async () => {
+    const { userId, email } = newUser();
+    const names = Array.from({ length: 12 }, (_, i) => (i % 2 === 0 ? `Repo-${i + 10}` : `repo-${i + 10}`));
+    seed(server.dataDir, {
+      repositories: [
+        ...names.map((name, i) => ({ userId, name, lastAccessedAt: at(i) })),
+        { userId, name: 'zeta', status: 'error', errorCode: 'clone-failed', lastAccessedAt: at(30) },
+        { userId, name: 'Alpha', status: 'cloning', lastAccessedAt: at(0) },
+        { userId: 1, name: 'admin-notes', lastAccessedAt: at(0) }
+      ]
+    });
+
+    const repositories = await list(email);
+
+    expect(repositories.map(repository => repository.name)).toEqual([ 'Alpha', ...names, 'zeta' ]);
+    expect(repositories.map(repository => repository.status)).toEqual([
+      'cloning',
+      ...names.map(() => 'ready'),
+      'error'
+    ]);
+  });
+
+  it('does not change the last access time', async () => {
+    const { userId, email } = newUser();
+    seed(server.dataDir, { repositories: [ { userId, name: 'handbook', lastAccessedAt: at(5) } ] });
+
+    await list(email);
+
+    expect((await list(email))[0]?.lastAccessedAt).toBe(at(5).toISOString());
+  });
+
+  it('requires a login', async () => {
+    const response = await fetch(`${server.url}/api/v1/repositories`);
+    expect(response.status).toBe(401);
+  });
+});

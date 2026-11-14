@@ -10,6 +10,7 @@ import type {
   RepositoryCredentials,
   RepositoryCredentialsInfo,
   RepositoryIndex,
+  RepositoryList,
   RepositorySummary,
   UpdateTokenRequest
 } from '@front-burner/shared-contracts';
@@ -34,14 +35,17 @@ export class RepositoriesApi {
   index(): Observable<RepositoryIndex> {
     return this.http.get<RepositoryIndex>(`/api/v1/repositories/index`);
   }
+  list(): Observable<RepositoryList> {
+    return this.http.get<RepositoryList>(`/api/v1/repositories`);
+  }
+  add(data: AddRepositoryRequest): Observable<RepositorySummary> {
+    return this.http.post<RepositorySummary>(`/api/v1/repositories`, data);
+  }
   accessCheck(data: AccessCheckRequest): Observable<AccessCheckResult> {
     return this.http.post<AccessCheckResult>(
       `/api/v1/repositories/access-check`,
       data
     );
-  }
-  add(data: AddRepositoryRequest): Observable<RepositorySummary> {
-    return this.http.post<RepositorySummary>(`/api/v1/repositories`, data);
   }
   get(id: number): Observable<RepositorySummary> {
     return this.http.get<RepositorySummary>(

@@ -22,6 +22,13 @@ numbering conventions.
   restart interrupted, reports its error code without params. Another user's
   job, or a job of another repository, is answered like a missing one. _(Plan
   57's call.)_
+- **A-3.2a** `GET /repositories` answers all of the user's repositories, in any
+  status, as the `RepositorySummary` of the dashboard, sorted by name ignoring
+  case and then by ID (RM-5). SQLite's `lower` folds ASCII only, as the
+  uniqueness of AR-15 does, so the order and the uniqueness agree. The list is
+  not paged and its schema has no maximum: adding keeps a user to at most 50
+  repositories (NF-1.3). Listing changes nothing, not even the last access time
+  (DS-9). _(Plan 104's call.)_
 
 ## A-3: Contracts
 

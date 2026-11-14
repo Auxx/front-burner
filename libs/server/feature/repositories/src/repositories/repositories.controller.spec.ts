@@ -181,9 +181,69 @@ describe('RepositoriesController', () => {
     await http().get('/api/v1/repositories/recent?exclude=abc').set('x-test-user', String(alice)).expect(400);
   });
 
+  describe('list', () => {
+    it('sorts by name ignoring case', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      for (const name of [ 'gamma', 'Beta', 'alpha' ]) {
+        insertRepository(database, alice, { name });
+      }
+
+      const response = await http().get('/api/v1/repositories').set('x-test-user', String(alice)).expect(200);
+
+      expect(response.body.repositories.map((r: { name: string; }) => r.name)).toEqual([ 'alpha', 'Beta', 'gamma' ]);
+    });
+
+    it('lists every status, as summaries without credentials', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      insertRepository(database, alice, { name: 'a', status: 'cloning' });
+      const failed = insertRepository(database, alice, {
+        name: 'b',
+        status: 'error',
+        errorCode: 'clone-failed',
+        remoteUrl: 'https://u:t@github.com/acme/handbook.git',
+        lastAccessedAt: new Date(Date.UTC(2026, 9, 26, 10))
+      });
+
+      const response = await http().get('/api/v1/repositories').set('x-test-user', String(alice)).expect(200);
+
+      expect(response.body.repositories.map((r: { status: string; }) => r.status)).toEqual([ 'cloning', 'error' ]);
+      expect(response.body.repositories[1]).toEqual({
+        id: failed,
+        name: 'b',
+        remote: 'github.com/acme/handbook',
+        status: 'error',
+        error: 'clone-failed',
+        warnings: [],
+        lastAccessedAt: '2026-10-26T10:00:00.000Z'
+      });
+      expect(JSON.stringify(response.body)).not.toContain('u:t');
+    });
+
+    it('lists only the user\'s own', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const bob = insertUser(database, 'bob@example.com');
+      insertRepository(database, bob, { name: 'secret' });
+
+      const response = await http().get('/api/v1/repositories').set('x-test-user', String(alice)).expect(200);
+
+      expect(response.body).toEqual({ repositories: [] });
+    });
+
+    it('does not change the last access time', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      insertRepository(database, alice, { name: 'handbook', lastAccessedAt: new Date(1000) });
+
+      await http().get('/api/v1/repositories').set('x-test-user', String(alice)).expect(200);
+      const response = await http().get('/api/v1/repositories').set('x-test-user', String(alice)).expect(200);
+
+      expect(response.body.repositories[0].lastAccessedAt).toBe(new Date(1000).toISOString());
+    });
+  });
+
   it('requires a login', async () => {
     const response = await http().get('/api/v1/repositories/recent').expect(401);
     expect(response.body.code).toBe('unauthenticated');
+    await http().get('/api/v1/repositories').expect(401);
     await http().get('/api/v1/repositories/index').expect(401);
     await http().post('/api/v1/repositories/access-check').send({}).expect(401);
     await http().post('/api/v1/repositories').send({}).expect(401);
