@@ -148,6 +148,12 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
 
   // Diffs and conflicts
   ...diffBackgrounds.map(bg => text('text-default', bg)),
+  // The editor's conflict labels on their marker lines, and its Accept buttons, also when
+  // hovered or pressed (GC-10, GC-11)
+  text('text-muted', 'conflict-marker'),
+  ...[ [], [ 'surface-hover' ], [ 'surface-pressed' ] ].map(overlay =>
+    text('text-link', 'editor-background', ...overlay)
+  ),
 
   // Editor
   text('editor-line-number', 'editor-background'),

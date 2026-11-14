@@ -74,6 +74,22 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     in 50 reached 74 ms; to be repeated on a phone (spike 3, note of
     2026-10-31). The phone check of this list is to be repeated
     (`docs/wiki/typing-test.md`).
+  - The conflict view (GC-10, GC-11), in its own `Compartment` like soft wrap
+    and read-only, so that it can be switched on and off without losing the undo
+    history: empty for every file except one with unresolved conflicts, whose
+    typing it alone can change. A `StateField` keeps the conflict regions,
+    parsed again in one pass over the lines only when the document changed, and
+    decorations computed from it give mine and theirs their backgrounds, the
+    labels "Mine (main)" and "Theirs (origin/main)" on the marker lines, and the
+    **Accept** buttons above each conflict, left out in a read-only editor. Each
+    **Accept** is one transaction, its own undo step. The buttons can't be
+    reached with `Tab`, which the editor keeps, so they are hidden from
+    assistive technology and the conflict bar outside the editor offers the same
+    to the keyboard and screen readers. With a conflict every 40 lines of the 1
+    MB test file (about 380), typing at a 4× CPU slowdown in desktop emulation
+    took a median of 19 ms and at most 47 ms by the browser's timing, against 16
+    ms and 39 ms without the view (`typing-test.mjs`, `?conflicts=on`,
+    2026-11-14); the phone check waits for step 6.
   - Typing stays within NF-2.4 on its own: at a 4× CPU slowdown, keystrokes in a
     200 KB file took at most 32–40 ms, and in a 1 MB file 40–56 ms, right at the
     limit (spike 3).

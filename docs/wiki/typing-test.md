@@ -79,6 +79,7 @@ Make each run with the on-screen keyboard, at your normal typing speed:
 | 4   | `1mb.md`   | **Middle**                                                                 | 50 letters                      |
 | 5   | `1mb.md`   | **End**                                                                    | 50 letters, then Enter 10 times |
 | 6   | `1mb.md`   | Scroll quickly to about the middle, tap inside a paragraph, then **Reset** | 50 letters                      |
+| 7   | `1mb.md`   | Tick **Conflicts** (the editor's conflict view), then **Middle**           | 50 letters                      |
 
 For each run:
 
@@ -117,6 +118,7 @@ Run 3 (1 MB, start):
 Run 4 (1 MB, middle):
 Run 5 (1 MB, end + Enter):
 Run 6 (1 MB, after scroll):
+Run 7 (1 MB, conflicts, middle):
 
 How it felt:
 Anything odd (cursor hidden, autocorrect, scrolling jumps):

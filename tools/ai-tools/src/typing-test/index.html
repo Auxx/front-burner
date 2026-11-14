@@ -21,6 +21,13 @@
       #editor { flex: 1; min-height: 0; }
       #editor .cm-editor { height: 100%; }
       #editor .cm-scroller { font: 14px/1.5 ui-monospace, monospace; }
+      /* The conflict view's classes, roughly as the editor's theme draws them. */
+      #editor .cm-conflict-ours { background: #16a34a22; }
+      #editor .cm-conflict-theirs { background: #2563eb22; }
+      #editor .cm-conflict-marker { background: #8883; }
+      #editor .cm-conflict-label { margin-inline-start: 12px; opacity: 0.7; font: 12px system-ui, sans-serif; }
+      #editor .cm-conflict-actions { display: flex; gap: 4px; padding: 2px 16px; font: 12px system-ui, sans-serif; }
+      #editor .cm-conflict-action { min-width: 24px; min-height: 24px; padding: 0 8px; }
     </style>
     <script type="module" src="./app.js"></script>
   </head>
@@ -28,6 +35,7 @@
     <header>
       <select id="file" aria-label="Test file"></select>
       <select id="setup" aria-label="Editor setup"></select>
+      <label><input id="conflicts" type="checkbox"> Conflicts</label>
       <span id="status" role="status">Loading…</span>
       <button id="start" type="button">Start</button>
       <button id="middle" type="button">Middle</button>

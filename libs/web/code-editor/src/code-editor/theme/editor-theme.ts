@@ -142,8 +142,46 @@ export const editorTheme = EditorView.theme({
     outlineOffset: 'calc(-1 * var(--ui-focus-ring-width))'
   },
   '.fb-find-button:focus-visible': { outlineOffset: 'calc(-1 * var(--ui-focus-ring-width))' },
-  // Shadows are removed in forced colours, so the panel gets a border (A-10.22).
+  // Conflicts (GC-10): mine and theirs on the Conflict tokens' backgrounds, and told apart by
+  // the labels on their marker lines too, never by colour alone (NF-13.7).
+  '.cm-conflict-ours': { backgroundColor: 'var(--ui-conflict-mine)' },
+  '.cm-conflict-theirs': { backgroundColor: 'var(--ui-conflict-theirs)' },
+  '.cm-conflict-marker': { backgroundColor: 'var(--ui-conflict-marker)' },
+  '.cm-conflict-label': {
+    marginInlineStart: 'var(--ui-space-3)',
+    color: 'var(--ui-text-muted)',
+    fontFamily: 'var(--ui-font-family-sans)',
+    fontSize: 'var(--ui-font-size-ui-small)'
+  },
+  // The Accept buttons above a conflict (GC-11), at least 24 by 24 CSS pixels (NF-13.5).
+  '.cm-conflict-actions': {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 'var(--ui-space-1)',
+    padding: 'var(--ui-space-1) var(--ui-space-4)',
+    fontFamily: 'var(--ui-font-family-sans)',
+    fontSize: 'var(--ui-font-size-ui-small)'
+  },
+  '.cm-conflict-action': {
+    minInlineSize: '24px',
+    minBlockSize: '24px',
+    boxSizing: 'border-box',
+    margin: '0',
+    padding: '0 var(--ui-space-2)',
+    color: 'var(--ui-text-link)',
+    backgroundColor: 'transparent',
+    border: 'var(--ui-border-width) solid transparent',
+    borderRadius: 'var(--ui-radius-control)',
+    font: 'inherit',
+    cursor: 'pointer'
+  },
+  '.cm-conflict-action:hover': { backgroundColor: 'var(--ui-surface-hover)' },
+  '.cm-conflict-action:active': { backgroundColor: 'var(--ui-surface-pressed)' },
+  // Shadows are removed in forced colours, so the panel gets a border (A-10.22). The conflict
+  // backgrounds are gone too, so the labels tell mine and theirs apart, and the buttons get
+  // the system's button colours.
   '@media (forced-colors: active)': {
-    '.cm-panels.cm-panels-top': { border: 'var(--ui-border-width) solid var(--ui-border-default)' }
+    '.cm-panels.cm-panels-top': { border: 'var(--ui-border-width) solid var(--ui-border-default)' },
+    '.cm-conflict-action': { color: 'ButtonText', borderColor: 'ButtonBorder' }
   }
 });

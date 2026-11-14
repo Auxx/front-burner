@@ -7,18 +7,13 @@ import { markdown } from '@codemirror/lang-markdown';
 import { yamlFrontmatter } from '@codemirror/lang-yaml';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { search, searchKeymap } from '@codemirror/search';
-import { EditorSelection, EditorState, RangeSetBuilder } from '@codemirror/state';
-import {
-  Decoration,
-  drawSelection,
-  EditorView,
-  gutter,
-  GutterMarker,
-  highlightActiveLineGutter,
-  keymap,
-  lineNumbers,
-  ViewPlugin
-} from '@codemirror/view';
+import { EditorSelection, EditorState } from '@codemirror/state';
+import { drawSelection, EditorView, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
+// The editor's own extensions, not copies: the build maps these names to their sources in
+// libs/web/code-editor (`EDITOR_SOURCES` in typing-test-site.mjs).
+import { conflictExtension } from 'typing-test:conflict-extension';
+import { lineDirection } from 'typing-test:line-direction';
+import { wrapMarker } from 'typing-test:wrap-marker';
 import {
   formatResults,
   isOn,
@@ -27,7 +22,8 @@ import {
   SETUPS,
   summarise,
   SWITCHES,
-  TYPING_TEST_FILES
+  TYPING_TEST_FILES,
+  withConflicts
 } from '../lib/typing-test.mjs';
 
 /** A keystroke not followed by a change of the text within this long is dropped (a key that edits nothing). */
@@ -112,58 +108,6 @@ const view = new EditorView({
   state: EditorState.create({ doc: 'Loading…' })
 });
 
-const autoDirection = Decoration.line({ attributes: { dir: 'auto' } });
-
-/** A copy of the editor's `lineDirection` (libs/web/code-editor): `dir="auto"` on every visible line. */
-const lineDirection = ViewPlugin.fromClass(
-  class {
-    constructor(view) {
-      this.decorations = decorateLines(view);
-    }
-
-    update(update) {
-      if (update.docChanged || update.viewportChanged) {
-        this.decorations = decorateLines(update.view);
-      }
-    }
-  },
-  { decorations: plugin => plugin.decorations }
-);
-
-function decorateLines(view) {
-  const builder = new RangeSetBuilder();
-  for (const { from, to } of view.visibleRanges) {
-    for (let position = from; position <= to;) {
-      const line = view.state.doc.lineAt(position);
-      builder.add(line.from, line.from, autoDirection);
-      position = line.to + 1;
-    }
-  }
-  return builder.finish();
-}
-
-/**
- * A mirror of `wrapMarker()` in libs/web/code-editor/src/code-editor/state/wrap-marker.ts (a
- * library cannot be imported from here), so that the test measures the same gutter.
- */
-class WrapMarker extends GutterMarker {
-  toDOM() {
-    const element = document.createElement('span');
-    element.className = 'cm-wrap-marker';
-    element.textContent = '↪';
-    element.setAttribute('aria-hidden', 'true');
-    return element;
-  }
-}
-const marker = new WrapMarker();
-const wrapMarker = () =>
-  gutter({
-    class: 'cm-wrapMarkers',
-    initialSpacer: () => marker,
-    lineMarker: (view, line) => view.lineBlockAt(line.from).height > view.defaultLineHeight * 1.5 ? marker : null,
-    lineMarkerChange: update => update.geometryChanged || update.docChanged
-  });
-
 /** The editor's setup as A-8.11 plans it, without the parts the address switches off. */
 function extensions() {
   const on = name => isOn(setup.off, name);
@@ -184,10 +128,20 @@ function extensions() {
         ? { spellcheck: 'true', autocorrect: 'on', autocapitalize: 'sentences' }
         : { spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }
     ),
+    setup.conflicts ? conflictExtension(CONFLICT_TEXTS) : [],
     measure,
     listen
   ];
 }
+
+/** The conflict view's words, in English as the product's own. */
+const CONFLICT_TEXTS = {
+  ours: branch => `Mine (${branch})`,
+  theirs: branch => `Theirs (${branch})`,
+  acceptOurs: 'Accept mine',
+  acceptTheirs: 'Accept theirs',
+  acceptBoth: 'Accept both'
+};
 
 if (eventTiming !== null) {
   new PerformanceObserver(list => {
@@ -221,7 +175,8 @@ async function load(name) {
   status.textContent = 'Loading…';
   status.className = 'loading';
   const response = await fetch(`./${name}`, { cache: 'no-store' });
-  const text = await response.text();
+  const fetched = await response.text();
+  const text = setup.conflicts ? withConflicts(fetched) : fetched;
   file = name;
   bytes = new TextEncoder().encode(text).length;
   view.setState(EditorState.create({ doc: text, extensions: extensions() }));
@@ -229,7 +184,9 @@ async function load(name) {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       setTimeout(() => {
-        status.textContent = `Ready: ${name}${setup.off.length ? ` · off: ${setup.off.join(', ')}` : ''}`;
+        status.textContent = `Ready: ${name}${setup.off.length ? ` · off: ${setup.off.join(', ')}` : ''}${
+          setup.conflicts ? ' · conflicts' : ''
+        }`;
         status.className = 'ready';
       }, SETTLE_MS);
     })
@@ -261,6 +218,7 @@ async function copy() {
     starts,
     eventTiming,
     off: setup.off,
+    conflicts: setup.conflicts,
     userAgent: navigator.userAgent,
     screen: `${window.innerWidth}×${window.innerHeight} @${window.devicePixelRatio}x`
   });
@@ -284,11 +242,15 @@ for (const off of SETUPS) {
   const label = off.length ? `Without ${off.map(name => SWITCHES[name]).join(', ')}` : 'Everything on';
   $('setup').append(new Option(label, value, false, value === setup.off.join(',')));
 }
+$('conflicts').checked = setup.conflicts;
 $('file').addEventListener('change', event => {
-  location.search = setupQuery({ file: event.target.value, off: setup.off });
+  location.search = setupQuery({ ...setup, file: event.target.value });
 });
 $('setup').addEventListener('change', event => {
-  location.search = setupQuery({ file: setup.file, off: event.target.value ? event.target.value.split(',') : [] });
+  location.search = setupQuery({ ...setup, off: event.target.value ? event.target.value.split(',') : [] });
+});
+$('conflicts').addEventListener('change', event => {
+  location.search = setupQuery({ ...setup, conflicts: event.target.checked });
 });
 $('start').addEventListener('click', () => placeCursor(0.02));
 $('middle').addEventListener('click', () => placeCursor(0.5));

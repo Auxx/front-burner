@@ -14,6 +14,7 @@ import {
 } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { classHighlighter, tagHighlighter, tags } from '@lezer/highlight';
+import { conflictExtension, type ConflictTexts } from '../conflicts/conflict-extension';
 import { findIconSprite, findLabels, type FindPanelLabels } from '../search/find-labels';
 import { createFindPanel, openReplacePanel } from '../search/find-panel';
 import { editorTheme } from '../theme/editor-theme';
@@ -39,6 +40,11 @@ export interface EditorStateOptions {
   findLabels?: FindPanelLabels;
   /** The URL of the icon sprite that the find panel draws from (A-10.35). */
   findIconSprite?: string;
+  /**
+   * The conflict view's texts, which turn it on (GC-10, GC-11); only a conflicting file has
+   * it, so no other file's typing changes.
+   */
+  conflicts?: ConflictTexts;
 }
 
 /** A position in the text by line and column, both 1-based. */
@@ -65,6 +71,7 @@ const highlighting = new Compartment();
 const readOnly = new Compartment();
 const label = new Compartment();
 const softWrap = new Compartment();
+const conflicts = new Compartment();
 
 // Built once: `isSoftWrapping` compares the compartment's content with it by identity.
 const softWrapExtension: Extension = [ EditorView.lineWrapping, wrapMarker() ];
@@ -104,7 +111,7 @@ function labelExtension(text: string): Extension {
 }
 
 /**
- * A file's editor state with exactly the extensions of A-8.11 (including line numbers and the soft-wrap compartment), the setup that spike 3
+ * A file's editor state with exactly the extensions of A-8.11 (including line numbers, the soft-wrap compartment and the conflict compartment), the setup that spike 3
  * measured on a real phone. Nothing in it changes the text on its own (ED-9): adding an
  * extension means measuring again with the `typing-test` tool.
  */
@@ -136,6 +143,7 @@ export function createEditorState(options: EditorStateOptions): EditorState {
       }),
       label.of(labelExtension(options.label)),
       readOnly.of(options.readOnly ? readOnlyExtension : []),
+      conflicts.of(options.conflicts ? conflictExtension(options.conflicts) : []),
       editorTheme
     ]
   });
@@ -157,6 +165,15 @@ export function setSoftWrap(on: boolean): TransactionSpec {
 
 export function isSoftWrapping(state: EditorState): boolean {
   return softWrap.get(state) === softWrapExtension;
+}
+
+/**
+ * Turns the conflict view on with its texts, or off with `null`, without recreating the state,
+ * so the undo history and the cursor stay, such as when a merge starts or ends while the file
+ * is open.
+ */
+export function setConflicts(texts: ConflictTexts | null): TransactionSpec {
+  return { effects: conflicts.reconfigure(texts ? conflictExtension(texts) : []) };
 }
 
 export function setReadOnly(on: boolean): TransactionSpec {

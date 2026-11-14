@@ -14,7 +14,8 @@ import {
   summarise,
   SWITCHES,
   TYPING_TEST_FILES,
-  typingSpeed
+  typingSpeed,
+  withConflicts
 } from './typing-test.mjs';
 import { OutsideWorkspaceError, WORKSPACE_ROOT, workspacePath } from './workspace.mjs';
 
@@ -120,16 +121,22 @@ describe('switches', () => {
 });
 
 describe('parseSetup', () => {
-  it('defaults to the first file with everything on', () => {
-    expect(parseSetup('')).toEqual({ file: '2kb.md', off: [], unknown: [] });
+  it('defaults to the first file with everything on and no conflicts', () => {
+    expect(parseSetup('')).toEqual({ file: '2kb.md', off: [], conflicts: false, unknown: [] });
   });
 
   it('reads the file and the switches, in the order of SWITCHES', () => {
     expect(parseSetup('?file=1mb.md&off=spellcheck, wrap')).toEqual({
       file: '1mb.md',
       off: [ 'wrap', 'spellcheck' ],
+      conflicts: false,
       unknown: []
     });
+  });
+
+  it('turns the conflict view on, and refuses another value', () => {
+    expect(parseSetup('?file=1mb.md&conflicts=on').conflicts).toBe(true);
+    expect(parseSetup('?conflicts=yes')).toMatchObject({ conflicts: false, unknown: [ 'conflicts=yes' ] });
   });
 
   it('falls back to the first file for an unknown one', () => {
@@ -140,11 +147,49 @@ describe('parseSetup', () => {
     expect(parseSetup('?off=wrap,highlight').unknown).toEqual([ 'highlight' ]);
   });
 
-  it('round-trips every setup of the menu through the address', () => {
+  it('round-trips every setup of the menu through the address, with and without conflicts', () => {
     for (const off of SETUPS) {
       expect(off.every(name => name in SWITCHES)).toBe(true);
-      expect(parseSetup(setupQuery({ file: '1mb.md', off }))).toEqual({ file: '1mb.md', off, unknown: [] });
+      for (const conflicts of [ false, true ]) {
+        expect(parseSetup(setupQuery({ file: '1mb.md', off, conflicts }))).toEqual({
+          file: '1mb.md',
+          off,
+          conflicts,
+          unknown: []
+        });
+      }
     }
+  });
+});
+
+describe('withConflicts', () => {
+  it('puts every nth non-empty line in a conflict with git plain markers', () => {
+    const lines = Array.from({ length: 7 }, (_, index) => (index === 4 ? '' : `line ${index}`));
+
+    expect(withConflicts(lines.join('\n'), 2).split('\n')).toEqual([
+      'line 0',
+      'line 1',
+      '<<<<<<< main',
+      'line 2',
+      '=======',
+      'line 2 again',
+      '>>>>>>> origin/main',
+      'line 3',
+      '',
+      'line 5',
+      '<<<<<<< main',
+      'line 6',
+      '=======',
+      'line 6 again',
+      '>>>>>>> origin/main'
+    ]);
+  });
+
+  it('gives the 1 MB file hundreds of conflicts', () => {
+    const text = withConflicts(generateMarkdown(TYPING_TEST_FILES['1mb.md']));
+
+    expect(text.match(/^<<<<<<< main$/gm)?.length).toBeGreaterThan(100);
+    expect(text.match(/^<<<<<<< main$/gm)?.length).toBe(text.match(/^>>>>>>> origin\/main$/gm)?.length);
   });
 });
 
@@ -169,6 +214,7 @@ describe('formatResults', () => {
     expect(formatResults(run)).toBe([
       'file: 1mb.md (1,048,000 bytes)',
       'switched off: wrap, spellcheck',
+      'conflict view: off',
       'typed at: 50 % of the file',
       'keystrokes: 3',
       'typing speed: 4 keys/s',
@@ -187,6 +233,10 @@ describe('formatResults', () => {
     expect(text).toContain('typed at: n/a');
     expect(text).toContain('no keystrokes measured');
     expect(text).toContain('browser timing: not supported by this browser');
+  });
+
+  it('says when the conflict view was on', () => {
+    expect(formatResults({ ...run, conflicts: true })).toContain('conflict view: on, a conflict every 40 lines');
   });
 });
 
