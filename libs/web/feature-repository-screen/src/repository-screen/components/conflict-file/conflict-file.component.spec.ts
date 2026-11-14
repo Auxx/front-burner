@@ -9,6 +9,7 @@ import { BehaviorSubject, map, of } from 'rxjs';
 import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import type { ConflictAction } from '../../models/conflict-action.model';
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
@@ -27,7 +28,7 @@ describe('ConflictFileComponent', () => {
   const buttons = () => [ ...host().querySelectorAll<HTMLButtonElement>('.offers button') ];
   const labels = () => buttons().map(button => button.textContent?.trim());
 
-  async function show(file: Partial<GitConflictFile>, resolving: GitResolution | null = null): Promise<void> {
+  async function show(file: Partial<GitConflictFile>, resolving: ConflictAction | null = null): Promise<void> {
     fixture.componentRef.setInput('repositoryId', 12);
     fixture.componentRef.setInput('file', {
       path: 'docs/guide.md',
@@ -94,8 +95,64 @@ describe('ConflictFileComponent', () => {
       expect(editorPane()?.querySelector('.cm-content')?.textContent).toContain('<<<<<<< main');
       expect(editorPane()?.querySelector('rs-conflict-bar')).not.toBeNull();
       expect(host().classList).toContain('editing');
-      expect(labels()).toEqual([ `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
+      expect(labels()).toEqual([ `${KEY}.markResolved`, `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
       expect(host().querySelector('.versions')).toBeNull();
+    });
+
+    it('emits Mark as resolved (GC-14)', async () => {
+      let marked = 0;
+      fixture.componentInstance.markResolved.subscribe(() => marked++);
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md'));
+      await show({ editable: true });
+
+      buttons()[0].click();
+
+      expect(marked).toBe(1);
+    });
+
+    it('offers Mark as resolved only once the file has opened, as what is marked must be what the user sees', async () => {
+      await show({ editable: true });
+      expect(labels()).toEqual([ `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
+
+      fixture.componentRef.setInput('openError', { code: 'file-not-utf8', params: {}, requestId: 'r', message: 'x' });
+      await settle(fixture);
+      expect(labels()).toEqual([ `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
+    });
+
+    it('keeps the editor read-only while locked, so that nothing is typed that the change would drop', async () => {
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md', { content: '<<<<<<< main\na\n' }));
+      fixture.componentRef.setInput('locked', true);
+      await show({ editable: true }, 'mark-resolved');
+      await settle(fixture);
+
+      expect(editorPane()?.querySelector('.cm-content')?.getAttribute('contenteditable')).toBe('false');
+
+      fixture.componentRef.setInput('locked', false);
+      await settle(fixture);
+
+      expect(editorPane()?.querySelector('.cm-content')?.getAttribute('contenteditable')).toBe('true');
+    });
+
+    it('shows Mark as resolved as busy while it runs, and unavailable while locked', async () => {
+      let marked = 0;
+      fixture.componentInstance.markResolved.subscribe(() => marked++);
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md'));
+      fixture.componentRef.setInput('locked', true);
+      await show({ editable: true }, 'mark-resolved');
+
+      const [ mark, ours ] = buttons();
+      expect(mark.getAttribute('aria-disabled')).toBe('true');
+      expect(mark.querySelector('ui-spinner')).not.toBeNull();
+      expect(ours.querySelector('ui-spinner')).toBeNull();
+
+      mark.click();
+      expect(marked).toBe(0);
+    });
+
+    it('does not offer Mark as resolved for a file that cannot be edited', async () => {
+      await show({ editable: false });
+
+      expect(labels()).toEqual([ `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
     });
 
     it('shows a spinner while the file opens, and why it could not, with Try again', async () => {
@@ -189,10 +246,10 @@ describe('ConflictFileComponent', () => {
     expect(labels()).toEqual([ `${KEY}.offer.keep`, `${KEY}.offer.delete` ]);
   });
 
-  it('offers nothing for a resolved file', async () => {
+  it('offers no whole version for a resolved file, only Start over', async () => {
     await show({ resolved: true });
 
-    expect(buttons()).toEqual([]);
+    expect(labels()).toEqual([ `${KEY}.startOver` ]);
   });
 
   it('says which side deleted the file', async () => {
@@ -245,6 +302,51 @@ describe('ConflictFileComponent', () => {
 
     ours.click();
     expect(chosen).toEqual([]);
+  });
+
+  describe('Start over (GC-18)', () => {
+    it('shows Resolved instead of the editor, with Start over', async () => {
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md', { content: 'fixed\n' }));
+      await show({ editable: true, resolved: true });
+      await settle(fixture);
+
+      expect(host().querySelector('rs-editor-pane')).toBeNull();
+      expect(host().classList).not.toContain('editing');
+      expect(text('.state')).toBe(`${KEY}.resolved`);
+      expect(labels()).toEqual([ `${KEY}.startOver` ]);
+    });
+
+    it('offers it for any resolved file, and not for an unresolved one', async () => {
+      await show({ kind: 'deleted-by-us', resolved: true });
+      expect(labels()).toEqual([ `${KEY}.startOver` ]);
+
+      await show({ resolved: false });
+      expect(labels()).not.toContain(`${KEY}.startOver`);
+    });
+
+    it('emits Start over', async () => {
+      let started = 0;
+      fixture.componentInstance.startOver.subscribe(() => started++);
+      await show({ resolved: true });
+
+      buttons()[0].click();
+
+      expect(started).toBe(1);
+    });
+
+    it('shows it as busy while it runs, and unavailable while locked', async () => {
+      let started = 0;
+      fixture.componentInstance.startOver.subscribe(() => started++);
+      fixture.componentRef.setInput('locked', true);
+      await show({ resolved: true }, 'start-over');
+
+      const [ startOver ] = buttons();
+      expect(startOver.getAttribute('aria-disabled')).toBe('true');
+      expect(startOver.querySelector('ui-spinner')).not.toBeNull();
+
+      startOver.click();
+      expect(started).toBe(0);
+    });
   });
 
   describe('Show mine and Show theirs', () => {

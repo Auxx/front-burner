@@ -715,6 +715,22 @@ describe('EditorPaneComponent', () => {
       return file;
     }
 
+    it('keeps the editor read-only while locked, and editable again after', async () => {
+      const file = openFile('README.md');
+      fixture.componentRef.setInput('locked', true);
+
+      await show(file);
+
+      expect(stateOf(file).readOnly).toBe(true);
+      expect(content().getAttribute('contenteditable')).toBe('false');
+
+      fixture.componentRef.setInput('locked', false);
+      await settle(fixture);
+
+      expect(stateOf(file).readOnly).toBe(false);
+      expect(contentOf(stateOf(file))).toBe(DISK);
+    });
+
     it('offers a draft and keeps the editor read-only', async () => {
       const file = withDraft();
 

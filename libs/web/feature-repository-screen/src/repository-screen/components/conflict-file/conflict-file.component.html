@@ -69,10 +69,26 @@
         }
       </div>
     }
-    @if (offers().length > 0) {
+    @if (conflict.resolved) {
+      <div class="offers"
+           role="group"
+           [attr.aria-label]="t('resolvedOffers')">
+        <button uiButton
+                [busy]="resolving() === 'start-over'"
+                [unavailable]="locked()"
+                (click)="startOver.emit()">{{ t('startOver') }}</button>
+      </div>
+    } @else if (offers().length > 0) {
       <div class="offers"
            role="group"
            [attr.aria-label]="t('offers')">
+        @if (markable()) {
+          <button uiButton
+                  variant="primary"
+                  [busy]="resolving() === 'mark-resolved'"
+                  [unavailable]="locked()"
+                  (click)="markResolved.emit()">{{ t('markResolved') }}</button>
+        }
         @for (offer of offers(); track offer) {
           <button uiButton
                   [busy]="resolving() === offer"
@@ -86,7 +102,8 @@
         @defer {
           <rs-editor-pane class="editor"
                           conflicts
-                          [file]="opened" />
+                          [file]="opened"
+                          [locked]="locked()" />
         } @loading (minimum 0ms) {
           <ui-spinner class="opening"
                       [label]="t('openingFile')" />

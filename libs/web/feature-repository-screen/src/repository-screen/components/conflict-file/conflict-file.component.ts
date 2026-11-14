@@ -25,6 +25,7 @@ import {
 import { ApiErrorTextService } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 
+import type { ConflictAction } from '../../models/conflict-action.model';
 import type { OpenFile } from '../../services/open-files/open-files.service';
 import { conflictOffers, shownVersions, type VersionSide } from '../../utils/conflict-offers/conflict-offers';
 import { fileName, parentPath } from '../../utils/file-name/file-name';
@@ -51,7 +52,10 @@ import { EditorPaneComponent } from '../editor-pane/editor-pane.component';
  * it saves as any file does (GC-12). Until then a spinner shows, or why it could
  * not be opened, with **Try again** (`retryOpen`). The editor is deferred, as the
  * editor area's is, so that CodeMirror stays out of the screen's first chunk.
- * Plan 100 adds **Mark as resolved** and **Start over**.
+ * **Mark as resolved** comes first among its choices (GC-14), and is emitted.
+ *
+ * A resolved file shows **Resolved** and **Start over** (GC-18), which is emitted,
+ * in place of the editor, as saves to it are refused.
  */
 @Component({
   selector: 'rs-conflict-file',
@@ -85,8 +89,8 @@ export class ConflictFileComponent {
   readonly into = input.required<string>();
   /** The branch merged into it, such as `origin/main`. */
   readonly from = input.required<string>();
-  /** The resolution of this file that is running, if any. */
-  readonly resolving = input<GitResolution | null>(null);
+  /** The resolution of this file, or its **Start over**, that is running, if any. */
+  readonly resolving = input<ConflictAction | null>(null);
   /** Whether no choice can be made now. */
   readonly locked = input(false, { transform: booleanAttribute });
 
@@ -97,6 +101,10 @@ export class ConflictFileComponent {
 
   /** A whole version chosen (GC-15, GC-16). */
   readonly resolve = output<GitResolution>();
+  /** **Mark as resolved**, for a file edited with its conflicts (GC-14). */
+  readonly markResolved = output<void>();
+  /** **Start over**, for a resolved file (GC-18). */
+  readonly startOver = output<void>();
   /** **Try again** after the file could not be opened for editing. */
   readonly retryOpen = output<void>();
 
@@ -128,6 +136,12 @@ export class ConflictFileComponent {
   protected readonly versions = computed(() => versionSizes(this.file()));
   /** Whether the file is edited with its conflict markers (GC-9): unresolved, and editable. */
   readonly editing = computed(() => this.file().editable && !this.file().resolved);
+  /**
+   * Whether **Mark as resolved** is offered (GC-14): only once the file has opened
+   * in the editor, as what is marked must be what the user sees; a file that could
+   * not be opened may have a browser draft that marking it would drop unseen.
+   */
+  protected readonly markable = computed(() => this.editing() && this.openFile() !== null);
   protected readonly openFailure = computed(() => {
     const error = this.openError();
     return error ? this.errorText.describe(error) : null;

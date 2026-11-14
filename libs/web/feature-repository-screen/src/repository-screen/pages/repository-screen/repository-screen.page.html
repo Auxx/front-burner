@@ -167,6 +167,8 @@
                                 [openFile]="edited?.file ?? null"
                                 [openError]="edited?.error ?? null"
                                 (resolve)="mergeActions.resolve(conflict.path, $event)"
+                                (markResolved)="mergeActions.markResolved(conflict.path)"
+                                (startOver)="mergeActions.startOver(conflict.path)"
                                 (retryOpen)="retryConflict()" />
             }
           } @else if (diffChange(); as change) {

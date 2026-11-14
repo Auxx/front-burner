@@ -1,4 +1,4 @@
-import { inject, Injectable, signal } from '@angular/core';
+import { inject, Injectable, signal, type Type } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import type { GitResolution } from '@front-burner/shared-contracts';
 import { DialogService } from '@front-burner/ui';
@@ -7,12 +7,28 @@ import { toApiError } from '@front-burner/web-core';
 import { firstValueFrom, type Observable } from 'rxjs';
 
 import { AbortMergeDialog } from '../../dialogs/abort-merge/abort-merge.dialog';
+import { MarkersLeftDialog } from '../../dialogs/markers-left/markers-left.dialog';
+import { StartOverDialog } from '../../dialogs/start-over/start-over.dialog';
+import type { ConflictAction } from '../../models/conflict-action.model';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
 import { FailureToastService } from '../failure-toast/failure-toast.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { MergeStore } from '../merge-store/merge-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
+
+/**
+ * How a change to the merge ended: it went through, it stopped (failed, said why,
+ * or the repository changed meanwhile), or it was refused with a code the caller
+ * deals with.
+ */
+type ChangeOutcome = 'changed' | 'stopped' | 'quiet';
+
+/**
+ * Answers to a resolve that count as done: the file was resolved meanwhile, by a
+ * second press or on another device, or the merge ended.
+ */
+const RESOLVED = [ 'not-conflicting', 'no-merge-in-progress' ];
 
 /**
  * What the user does to the merge in progress. Provided by the page.
@@ -49,7 +65,7 @@ export class MergeActionsService {
   private readonly failures = inject(FailureToastService);
 
   private readonly abortRunning = signal(false);
-  private readonly resolveRunning = signal<{ path: string; resolution: GitResolution; } | null>(null);
+  private readonly resolveRunning = signal<{ path: string; resolution: ConflictAction; } | null>(null);
   private asking = false;
   /** Settles when the last resolve has ended; it never rejects. */
   private resolveSettled: Promise<void> = Promise.resolve();
@@ -65,14 +81,7 @@ export class MergeActionsService {
     if (repositoryId === undefined || this.asking || this.abortRunning()) {
       return;
     }
-    this.asking = true;
-    let confirmed: boolean;
-    try {
-      const ref = this.dialogs.open<AbortMergeDialog, void, boolean>(AbortMergeDialog);
-      confirmed = await firstValueFrom(ref.closed, { defaultValue: undefined }) === true;
-    } finally {
-      this.asking = false;
-    }
+    const confirmed = await this.ask(AbortMergeDialog);
     if (!confirmed || !this.stillOn(repositoryId)) {
       return;
     }
@@ -101,30 +110,141 @@ export class MergeActionsService {
    * Settles when it has ended, whatever the outcome.
    */
   async resolve(path: string, resolution: GitResolution): Promise<void> {
-    const repositoryId = this.session.repository()?.id;
-    if (repositoryId === undefined || this.asking || this.abortRunning() || this.resolveRunning() !== null) {
+    const repositoryId = this.idleOn();
+    if (repositoryId !== null) {
+      await this.run(path, resolution, () => this.sendResolve(repositoryId, path, resolution));
+    }
+  }
+
+  /**
+   * **Mark as resolved** (GC-14): the file's waiting save is sent first, so that
+   * what is marked is what the user sees, and a save that fails stops it with the
+   * reason. The backend decides whether markers are left: on
+   * `conflict-markers-left` the file's saves are given back, and the user is asked
+   * whether to mark it as resolved anyway; once confirmed, it is sent again with
+   * `force`. Otherwise as `resolve`, whose rules it shares.
+   */
+  async markResolved(path: string): Promise<void> {
+    const repositoryId = this.idleOn();
+    if (repositoryId !== null) {
+      await this.run(path, 'mark-resolved', () => this.sendMarkResolved(repositoryId, path));
+    }
+  }
+
+  /**
+   * **Start over** (GC-18): puts the resolved file at `path` back as it was when
+   * the merge stopped, with its conflict markers. It asks first when the user
+   * edited it, or when the merge has not been read; a whole version is started
+   * over at once. Its waiting save and browser draft are dropped, as the user
+   * asked for it, and an open file is loaded again, as `resolve` does (GA-24).
+   * `not-resolved` is no failure: it was started over meanwhile. Otherwise as
+   * `resolve`, whose rules it shares.
+   */
+  async startOver(path: string): Promise<void> {
+    const repositoryId = this.idleOn();
+    if (repositoryId === null) {
       return;
     }
+    const edited = this.store.state()?.files.find(file => file.path === path)?.edited ?? true;
+    // The question takes time: what was free before it, or the repository, may have changed after it.
+    if (edited && (!(await this.ask(StartOverDialog)) || this.idleOn() !== repositoryId)) {
+      return;
+    }
+    await this.run(path, 'start-over', async () => {
+      await this.changeOne(
+        repositoryId,
+        path,
+        () => this.api.startConflictOver(repositoryId, { path }),
+        [ 'not-resolved', 'no-merge-in-progress' ]
+      );
+    });
+  }
+
+  /** The open repository, when nothing is asked or running that a resolve must wait for; otherwise `null`. */
+  private idleOn(): number | null {
+    const repositoryId = this.session.repository()?.id;
+    const busy = this.asking || this.abortRunning() || this.resolveRunning() !== null;
+    return repositoryId === undefined || busy ? null : repositoryId;
+  }
+
+  /** Runs `work` as the one change of a conflicting file, shown by `resolving`, for an abort to wait for. */
+  private async run(path: string, resolution: ConflictAction, work: () => Promise<void>): Promise<void> {
     this.resolveRunning.set({ path, resolution });
-    const running = this.sendResolve(repositoryId, path, resolution);
+    const running = work().finally(() => this.resolveRunning.set(null));
     this.resolveSettled = running;
     await running;
   }
 
   private async sendResolve(repositoryId: number, path: string, resolution: GitResolution): Promise<void> {
-    try {
-      const changed = await this.change(
-        repositoryId,
-        [ path ],
-        () => this.api.resolveConflict(repositoryId, { path, resolution }),
-        [ 'not-conflicting', 'no-merge-in-progress' ]
-      );
-      if (changed) {
-        // Its own `git.changed` reads the merge too, but the push channel may be down.
-        await Promise.all([ this.status.refresh(), this.store.refresh() ]);
+    await this.changeOne(
+      repositoryId,
+      path,
+      () => this.api.resolveConflict(repositoryId, { path, resolution }),
+      RESOLVED
+    );
+  }
+
+  private async sendMarkResolved(repositoryId: number, path: string): Promise<void> {
+    for (const force of [ false, true ]) {
+      if (!(await this.savedFirst(repositoryId, path))) {
+        return;
       }
+      const outcome = await this.changeOne(
+        repositoryId,
+        path,
+        () =>
+          this.api.resolveConflict(repositoryId, { path, resolution: 'mark-resolved', ...(force ? { force } : {}) }),
+        RESOLVED,
+        force ? [] : [ 'conflict-markers-left' ]
+      );
+      // Never over another question, nor once an abort is confirmed or the user has left the repository.
+      const mayAsk = outcome === 'quiet' && !this.asking && !this.abortRunning() && this.stillOn(repositoryId);
+      if (!mayAsk || !(await this.ask(MarkersLeftDialog)) || !this.stillOn(repositoryId)) {
+        return;
+      }
+    }
+  }
+
+  /** Sends the waiting saves first; says why and resolves `false` when the file's edits did not get there. */
+  private async savedFirst(repositoryId: number, path: string): Promise<boolean> {
+    const unsaved = await this.openFiles.flushed(repositoryId, [ path ]);
+    if (unsaved !== null) {
+      this.failures.show(unsaved.error);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * `change` for the one file at `path`; when it went through, the merge and the
+   * status are read again: its own `git.changed` reads them too, but the push
+   * channel may be down.
+   */
+  private async changeOne(
+    repositoryId: number,
+    path: string,
+    request: () => Observable<void>,
+    done: readonly string[],
+    quiet: readonly string[] = []
+  ): Promise<ChangeOutcome> {
+    const outcome = await this.change(repositoryId, [ path ], request, done, quiet);
+    if (outcome === 'changed') {
+      await Promise.all([ this.status.refresh(), this.store.refresh() ]);
+    }
+    return outcome;
+  }
+
+  /**
+   * Opens `dialog` and resolves whether the user confirmed; while it is open, an
+   * abort is not asked. Callers check `asking` first, so that questions never overlap.
+   */
+  private async ask(dialog: Type<unknown>): Promise<boolean> {
+    this.asking = true;
+    try {
+      const ref = this.dialogs.open<unknown, void, boolean>(dialog);
+      return await firstValueFrom(ref.closed, { defaultValue: undefined }) === true;
     } finally {
-      this.resolveRunning.set(null);
+      this.asking = false;
     }
   }
 
@@ -139,29 +259,32 @@ export class MergeActionsService {
     if (!this.stillOn(repositoryId)) {
       return;
     }
-    const changed = await this.change(
+    const outcome = await this.change(
       repositoryId,
       paths,
       () => this.api.abortMerge(repositoryId),
       [ 'no-merge-in-progress' ]
     );
-    if (changed) {
+    if (outcome === 'changed') {
       await this.status.refresh();
     }
   }
 
   /**
    * Steps 3 to 5 of the abort, for `paths`, around `request`. An answer with one
-   * of the `done` codes counts as success. Any other failure says why, gives the
-   * saves back and reads what is true now. Resolves whether the request went
-   * through and the repository is still the one open.
+   * of the `done` codes counts as success. One of the `quiet` codes gives the
+   * saves back and resolves `quiet`, for the caller to deal with. Any other
+   * failure says why, gives the saves back and reads what is true now. Resolves
+   * `changed` when the request went through and the repository is still the one
+   * open.
    */
   private async change(
     repositoryId: number,
     paths: readonly string[],
     request: () => Observable<void>,
-    done: readonly string[]
-  ): Promise<boolean> {
+    done: readonly string[],
+    quiet: readonly string[] = []
+  ): Promise<ChangeOutcome> {
     const route = this.routePath();
     // Only these can be followed as a change on disk, which this one is not (ED-24, FB-42).
     const shown = paths.filter(path => this.openFiles.get(path) !== undefined || path === route);
@@ -172,11 +295,15 @@ export class MergeActionsService {
     try {
       await firstValueFrom(request(), { defaultValue: undefined });
     } catch (error) {
-      if (!done.includes(toApiError(error).code)) {
+      const code = toApiError(error).code;
+      if (!done.includes(code)) {
         dropped.forEach(file => file?.restore());
         own.forEach(release => release());
+        if (quiet.includes(code)) {
+          return 'quiet';
+        }
         await this.failed(error);
-        return false;
+        return 'stopped';
       }
     }
     void this.openFiles.deleteDrafts(repositoryId, notOpen);
@@ -184,7 +311,7 @@ export class MergeActionsService {
       // Navigated meanwhile: the entries at these paths are now another repository's.
       dropped.forEach(file => file?.release());
       own.forEach(release => release());
-      return false;
+      return 'stopped';
     }
     await Promise.all(shown.map(async (path, index) => {
       const release = own.get(path) as () => void;
@@ -197,7 +324,7 @@ export class MergeActionsService {
         release();
       }
     }));
-    return true;
+    return 'changed';
   }
 
   /** The conflicting files, read here if the store has not got them. Rejects with what the read answered. */

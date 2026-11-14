@@ -60,6 +60,7 @@ describe('MergeActionsService', () => {
   let requests: string[];
   let abortAnswer: () => Observable<void>;
   let resolveAnswer: () => Observable<void>;
+  let startOverAnswer: () => Observable<void>;
   let mergeAnswer: () => Observable<GitMergeState>;
   let readAnswer: (path: string) => Observable<FileContent>;
   let saves: { request: SaveFileRequest; answer: Subject<FileState>; }[];
@@ -95,6 +96,7 @@ describe('MergeActionsService', () => {
     requests = [];
     abortAnswer = () => of(undefined);
     resolveAnswer = () => of(undefined);
+    startOverAnswer = () => of(undefined);
     mergeAnswer = () => of(conflicting('guide.md'));
     readAnswer = path => of(fileContent(path));
     saves = [];
@@ -150,8 +152,12 @@ describe('MergeActionsService', () => {
               requests.push('abort');
               return abortAnswer();
             },
+            startConflictOver: (_id: number, request: { path: string; }) => {
+              requests.push(`start over ${request.path}`);
+              return startOverAnswer();
+            },
             resolveConflict: (_id: number, request: GitResolveRequest) => {
-              requests.push(`resolve ${request.path} ${request.resolution}`);
+              requests.push(`resolve ${request.path} ${request.resolution}${request.force ? ' force' : ''}`);
               return resolveAnswer();
             }
           }
@@ -679,6 +685,307 @@ describe('MergeActionsService', () => {
 
       expect(requests).toEqual([ 'resolve guide.md theirs' ]);
       expect(released).toEqual([ 'guide.md' ]);
+    });
+  });
+
+  describe('marking as resolved', () => {
+    const M = 'web-feature-repository-screen.MarkersLeftDialog';
+
+    /** The first resolve answers that markers are left; any later one goes through. */
+    function markersLeft(): void {
+      let answered = false;
+      resolveAnswer = () => {
+        if (answered) {
+          return of(undefined);
+        }
+        answered = true;
+        return throwError(() => apiError(409, 'conflict-markers-left'));
+      };
+    }
+
+    it('marks a file without markers as resolved at once, and reads the merge and the status', async () => {
+      await service.markResolved('notes.md');
+
+      expect(overlay()?.querySelector('rs-markers-left') ?? null).toBeNull();
+      expect(requests).toEqual([ 'resolve notes.md mark-resolved' ]);
+      expect(mergeRefresh).toHaveBeenCalled();
+      expect(statusRefresh).toHaveBeenCalled();
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(service.resolving()).toBeNull();
+    });
+
+    it('sends a waiting save first', async () => {
+      const file = await opened('guide.md');
+      file.saver.edit(() => 'fixed');
+
+      const done = service.markResolved('guide.md');
+      await Promise.resolve();
+
+      expect(requests).toEqual([ 'save fixed' ]);
+      expect(service.resolving()).toEqual({ path: 'guide.md', resolution: 'mark-resolved' });
+
+      saves[0].answer.next({ hash: 'c'.repeat(64), size: 5 });
+      saves[0].answer.complete();
+      await done;
+
+      expect(requests).toEqual([ 'save fixed', 'resolve guide.md mark-resolved', 'read guide.md' ]);
+      expect(file.saver.unsaved()).toBe(false);
+    });
+
+    it('does not resolve when the save failed', async () => {
+      const file = await opened('guide.md');
+      file.saver.edit(() => 'fixed');
+
+      const done = service.markResolved('guide.md');
+      await Promise.resolve();
+      saves[0].answer.error(apiError(409, 'merge-in-progress'));
+      await done;
+
+      expect(requests).toEqual([ 'save fixed' ]);
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 'danger' }));
+      expect(file.saver.unsaved()).toBe(true);
+      expect(service.resolving()).toBeNull();
+    });
+
+    it('asks when markers are left, and marks it resolved anyway once confirmed', async () => {
+      markersLeft();
+
+      const done = service.markResolved('guide.md');
+      await settleDialog();
+
+      expect(overlay().querySelector('rs-markers-left')).not.toBeNull();
+      expect(requests).toEqual([ 'resolve guide.md mark-resolved' ]);
+
+      dialogButton(`${M}.markResolved`)?.click();
+      await done;
+
+      expect(requests).toEqual([ 'resolve guide.md mark-resolved', 'resolve guide.md mark-resolved force' ]);
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(mergeRefresh).toHaveBeenCalled();
+    });
+
+    it('cancelling the question changes nothing', async () => {
+      const file = await opened('guide.md');
+      markersLeft();
+
+      const done = service.markResolved('guide.md');
+      await settleDialog();
+      dialogButton(`${M}.cancel`)?.click();
+      await done;
+
+      expect(requests).toEqual([ 'resolve guide.md mark-resolved' ]);
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(file.saver.held()).toBe(false);
+      expect(released).toEqual([ 'guide.md' ]);
+      expect(service.resolving()).toBeNull();
+    });
+
+    it('does not ask while the abort question is open, and leaves the merge to the abort', async () => {
+      const answer = new Subject<void>();
+      resolveAnswer = () => answer;
+
+      const done = service.markResolved('guide.md');
+      await Promise.resolve();
+      const aborted = service.abort();
+      await settleDialog();
+      answer.error(apiError(409, 'conflict-markers-left'));
+      await done;
+      await settleDialog();
+
+      expect(overlay().querySelector('rs-markers-left')).toBeNull();
+      expect(overlay().querySelector('rs-abort-merge')).not.toBeNull();
+
+      dialogButton(`${K}.abort`)?.click();
+      await aborted;
+
+      expect(requests).toEqual([ 'resolve guide.md mark-resolved', 'abort' ]);
+    });
+
+    it('does not ask once an abort is confirmed', async () => {
+      const answer = new Subject<void>();
+      resolveAnswer = () => answer;
+
+      const done = service.markResolved('guide.md');
+      await Promise.resolve();
+      const { done: aborted } = await confirm();
+      answer.error(apiError(409, 'conflict-markers-left'));
+      await done;
+      await aborted;
+
+      expect(overlay()?.querySelector('rs-markers-left') ?? null).toBeNull();
+      expect(requests).toEqual([ 'resolve guide.md mark-resolved', 'abort' ]);
+    });
+
+    it('does not ask once the user went to another repository', async () => {
+      const answer = new Subject<void>();
+      resolveAnswer = () => answer;
+
+      const done = service.markResolved('guide.md');
+      await Promise.resolve();
+      repository.set({ id: 13 });
+      answer.error(apiError(409, 'conflict-markers-left'));
+      await done;
+      await settleDialog();
+
+      expect(overlay()?.querySelector('rs-markers-left') ?? null).toBeNull();
+      expect(requests).toEqual([ 'resolve guide.md mark-resolved' ]);
+    });
+
+    it('leaves no draft behind', async () => {
+      drafts.drafts.set('4/12/notes.md', { content: '<<<<<<< main', savedAt: '2026-11-08T10:00:00.000Z' });
+      const file = await opened('guide.md');
+      file.saver.edit(() => 'fixed');
+
+      const done = service.markResolved('guide.md');
+      await Promise.resolve();
+      expect(drafts.at('guide.md')).toBeDefined();
+      saves[0].answer.next({ hash: 'c'.repeat(64), size: 5 });
+      saves[0].answer.complete();
+      await done;
+      await service.markResolved('notes.md');
+
+      expect(drafts.at('guide.md')).toBeUndefined();
+      expect(drafts.at('notes.md')).toBeUndefined();
+    });
+
+    it('moves on to the next file, by reading the merge again', async () => {
+      await service.markResolved('guide.md');
+
+      expect(mergeRefresh).toHaveBeenCalledOnce();
+    });
+
+    it('says why it failed, and the file stays unresolved', async () => {
+      resolveAnswer = () => throwError(() => apiError(409, 'resolution-not-allowed'));
+
+      await service.markResolved('guide.md');
+
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        message: expect.stringContaining('This file can\'t be resolved that way.'),
+        status: 'danger'
+      }));
+      expect(overlay()?.querySelector('rs-markers-left') ?? null).toBeNull();
+    });
+  });
+
+  describe('starting over', () => {
+    const S = 'web-feature-repository-screen.StartOverDialog';
+
+    /** The merge with `guide.md` resolved, edited by the user or with a whole version. */
+    function resolved(edited: boolean): void {
+      const merge = conflicting('guide.md', 'notes.md');
+      merge.files[0] = { ...merge.files[0], resolved: true, edited };
+      state.set(merge);
+    }
+
+    it('asks when the user edited it, and starts it over once confirmed', async () => {
+      resolved(true);
+
+      const done = service.startOver('guide.md');
+      await settleDialog();
+
+      expect(overlay().querySelector('rs-start-over')).not.toBeNull();
+      expect(requests).toEqual([]);
+
+      dialogButton(`${S}.startOver`)?.click();
+      await done;
+
+      expect(requests).toEqual([ 'start over guide.md' ]);
+      expect(mergeRefresh).toHaveBeenCalled();
+      expect(statusRefresh).toHaveBeenCalled();
+      expect(service.resolving()).toBeNull();
+    });
+
+    it('cancelling the question changes nothing', async () => {
+      resolved(true);
+
+      const done = service.startOver('guide.md');
+      await settleDialog();
+      dialogButton(`${S}.cancel`)?.click();
+      await done;
+
+      expect(requests).toEqual([]);
+      expect(mergeRefresh).not.toHaveBeenCalled();
+    });
+
+    it('does not ask for a whole version', async () => {
+      resolved(false);
+
+      await service.startOver('guide.md');
+
+      expect(overlay()?.querySelector('rs-start-over') ?? null).toBeNull();
+      expect(requests).toEqual([ 'start over guide.md' ]);
+    });
+
+    it('shows the start over running, and ignores a choice meanwhile', async () => {
+      resolved(false);
+      const answer = new Subject<void>();
+      startOverAnswer = () => answer;
+
+      const done = service.startOver('guide.md');
+      await Promise.resolve();
+      expect(service.resolving()).toEqual({ path: 'guide.md', resolution: 'start-over' });
+      await service.resolve('notes.md', 'ours');
+      answer.complete();
+      await done;
+
+      expect(requests).toEqual([ 'start over guide.md' ]);
+    });
+
+    it('reloads the open file, dropping its draft, as its own change', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        resolved(false);
+        const file = await opened('guide.md');
+        drafts.drafts.set('4/12/guide.md', { content: 'typed', savedAt: '2026-11-08T10:00:00.000Z' });
+        const revision = file.revision();
+
+        await service.startOver('guide.md');
+
+        expect(requests).toEqual([ 'start over guide.md', 'read guide.md' ]);
+        expect(file.file.content).toBe('restored');
+        expect(file.revision()).toBe(revision + 1);
+        expect(drafts.at('guide.md')).toBeUndefined();
+        expect(own).toEqual([ 'guide.md' ]);
+        await vi.advanceTimersByTimeAsync(OWN_CHANGE_MS);
+        expect(released).toEqual([ 'guide.md' ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('starts over a file that is not open, and deletes its draft', async () => {
+      resolved(false);
+      drafts.drafts.set('4/12/guide.md', { content: 'typed', savedAt: '2026-11-08T10:00:00.000Z' });
+
+      await service.startOver('guide.md');
+
+      expect(requests).toEqual([ 'start over guide.md' ]);
+      expect(openFiles.get('guide.md')).toBeUndefined();
+      expect(drafts.at('guide.md')).toBeUndefined();
+    });
+
+    it('treats a file that is no longer resolved as started over', async () => {
+      resolved(false);
+      startOverAnswer = () => throwError(() => apiError(409, 'not-resolved'));
+
+      await service.startOver('guide.md');
+
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(mergeRefresh).toHaveBeenCalled();
+    });
+
+    it('says why it failed, and the file stays resolved', async () => {
+      resolved(false);
+      const file = await opened('guide.md');
+      startOverAnswer = () => throwError(() => apiError(500, 'internal'));
+
+      await service.startOver('guide.md');
+
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 'danger' }));
+      expect(requests).toEqual([ 'start over guide.md' ]);
+      expect(file.saver.held()).toBe(false);
+      expect(mergeRefresh).toHaveBeenCalled();
+      expect(service.resolving()).toBeNull();
     });
   });
 });
