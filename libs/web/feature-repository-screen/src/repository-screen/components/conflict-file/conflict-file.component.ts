@@ -25,7 +25,7 @@ import {
 import { ApiErrorTextService } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import type { ConflictAction } from '../../services/merge-actions/merge-actions.service';
+import type { ConflictAction } from '../../models/conflict-action.model';
 import type { OpenFile } from '../../services/open-files/open-files.service';
 import { conflictOffers, shownVersions, type VersionSide } from '../../utils/conflict-offers/conflict-offers';
 import { fileName, parentPath } from '../../utils/file-name/file-name';
@@ -136,6 +136,12 @@ export class ConflictFileComponent {
   protected readonly versions = computed(() => versionSizes(this.file()));
   /** Whether the file is edited with its conflict markers (GC-9): unresolved, and editable. */
   readonly editing = computed(() => this.file().editable && !this.file().resolved);
+  /**
+   * Whether **Mark as resolved** is offered (GC-14): only once the file has opened
+   * in the editor, as what is marked must be what the user sees; a file that could
+   * not be opened may have a browser draft that marking it would drop unseen.
+   */
+  protected readonly markable = computed(() => this.editing() && this.openFile() !== null);
   protected readonly openFailure = computed(() => {
     const error = this.openError();
     return error ? this.errorText.describe(error) : null;

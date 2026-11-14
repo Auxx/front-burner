@@ -780,6 +780,57 @@ describe('MergeActionsService', () => {
       expect(service.resolving()).toBeNull();
     });
 
+    it('does not ask while the abort question is open, and leaves the merge to the abort', async () => {
+      const answer = new Subject<void>();
+      resolveAnswer = () => answer;
+
+      const done = service.markResolved('guide.md');
+      await Promise.resolve();
+      const aborted = service.abort();
+      await settleDialog();
+      answer.error(apiError(409, 'conflict-markers-left'));
+      await done;
+      await settleDialog();
+
+      expect(overlay().querySelector('rs-markers-left')).toBeNull();
+      expect(overlay().querySelector('rs-abort-merge')).not.toBeNull();
+
+      dialogButton(`${K}.abort`)?.click();
+      await aborted;
+
+      expect(requests).toEqual([ 'resolve guide.md mark-resolved', 'abort' ]);
+    });
+
+    it('does not ask once an abort is confirmed', async () => {
+      const answer = new Subject<void>();
+      resolveAnswer = () => answer;
+
+      const done = service.markResolved('guide.md');
+      await Promise.resolve();
+      const { done: aborted } = await confirm();
+      answer.error(apiError(409, 'conflict-markers-left'));
+      await done;
+      await aborted;
+
+      expect(overlay()?.querySelector('rs-markers-left') ?? null).toBeNull();
+      expect(requests).toEqual([ 'resolve guide.md mark-resolved', 'abort' ]);
+    });
+
+    it('does not ask once the user went to another repository', async () => {
+      const answer = new Subject<void>();
+      resolveAnswer = () => answer;
+
+      const done = service.markResolved('guide.md');
+      await Promise.resolve();
+      repository.set({ id: 13 });
+      answer.error(apiError(409, 'conflict-markers-left'));
+      await done;
+      await settleDialog();
+
+      expect(overlay()?.querySelector('rs-markers-left') ?? null).toBeNull();
+      expect(requests).toEqual([ 'resolve guide.md mark-resolved' ]);
+    });
+
     it('leaves no draft behind', async () => {
       drafts.drafts.set('4/12/notes.md', { content: '<<<<<<< main', savedAt: '2026-11-08T10:00:00.000Z' });
       const file = await opened('guide.md');

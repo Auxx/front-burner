@@ -9,8 +9,8 @@ import { BehaviorSubject, map, of } from 'rxjs';
 import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import type { ConflictAction } from '../../models/conflict-action.model';
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
-import type { ConflictAction } from '../../services/merge-actions/merge-actions.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
@@ -102,6 +102,7 @@ describe('ConflictFileComponent', () => {
     it('emits Mark as resolved (GC-14)', async () => {
       let marked = 0;
       fixture.componentInstance.markResolved.subscribe(() => marked++);
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md'));
       await show({ editable: true });
 
       buttons()[0].click();
@@ -109,9 +110,33 @@ describe('ConflictFileComponent', () => {
       expect(marked).toBe(1);
     });
 
+    it('offers Mark as resolved only once the file has opened, as what is marked must be what the user sees', async () => {
+      await show({ editable: true });
+      expect(labels()).toEqual([ `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
+
+      fixture.componentRef.setInput('openError', { code: 'file-not-utf8', params: {}, requestId: 'r', message: 'x' });
+      await settle(fixture);
+      expect(labels()).toEqual([ `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
+    });
+
+    it('keeps the editor read-only while locked, so that nothing is typed that the change would drop', async () => {
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md', { content: '<<<<<<< main\na\n' }));
+      fixture.componentRef.setInput('locked', true);
+      await show({ editable: true }, 'mark-resolved');
+      await settle(fixture);
+
+      expect(editorPane()?.querySelector('.cm-content')?.getAttribute('contenteditable')).toBe('false');
+
+      fixture.componentRef.setInput('locked', false);
+      await settle(fixture);
+
+      expect(editorPane()?.querySelector('.cm-content')?.getAttribute('contenteditable')).toBe('true');
+    });
+
     it('shows Mark as resolved as busy while it runs, and unavailable while locked', async () => {
       let marked = 0;
       fixture.componentInstance.markResolved.subscribe(() => marked++);
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md'));
       fixture.componentRef.setInput('locked', true);
       await show({ editable: true }, 'mark-resolved');
 

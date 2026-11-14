@@ -148,6 +148,8 @@ export class EditorPaneComponent {
   readonly fragment = input<string | null>(null);
   /** Whether the file is a conflicting file of the merge in progress, edited with its conflicts (GC-9). */
   readonly conflicts = input(false, { transform: booleanAttribute });
+  /** Whether the file can't be edited now, such as while a change to it runs whose reload would drop what is typed. */
+  readonly locked = input(false, { transform: booleanAttribute });
   /** A link in the preview to another entry of the repository (ED-31). */
   readonly openPath = output<PreviewPathLink>();
 
@@ -201,7 +203,7 @@ export class EditorPaneComponent {
       file.highlight(),
       this.settings.softWrap(),
       fileName(file.path()),
-      file.draft() !== null || file.gone() || file.changed() !== null,
+      file.draft() !== null || file.gone() || file.changed() !== null || this.locked(),
       file.revision(),
       this.conflicts()
     );

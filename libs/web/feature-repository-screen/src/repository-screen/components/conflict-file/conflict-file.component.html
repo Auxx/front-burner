@@ -78,11 +78,11 @@
                 [unavailable]="locked()"
                 (click)="startOver.emit()">{{ t('startOver') }}</button>
       </div>
-    } @else if (edited || offers().length > 0) {
+    } @else if (offers().length > 0) {
       <div class="offers"
            role="group"
            [attr.aria-label]="t('offers')">
-        @if (edited) {
+        @if (markable()) {
           <button uiButton
                   variant="primary"
                   [busy]="resolving() === 'mark-resolved'"
@@ -102,7 +102,8 @@
         @defer {
           <rs-editor-pane class="editor"
                           conflicts
-                          [file]="opened" />
+                          [file]="opened"
+                          [locked]="locked()" />
         } @loading (minimum 0ms) {
           <ui-spinner class="opening"
                       [label]="t('openingFile')" />

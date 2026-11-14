@@ -9,6 +9,7 @@ import { firstValueFrom, type Observable } from 'rxjs';
 import { AbortMergeDialog } from '../../dialogs/abort-merge/abort-merge.dialog';
 import { MarkersLeftDialog } from '../../dialogs/markers-left/markers-left.dialog';
 import { StartOverDialog } from '../../dialogs/start-over/start-over.dialog';
+import type { ConflictAction } from '../../models/conflict-action.model';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
 import { FailureToastService } from '../failure-toast/failure-toast.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
@@ -22,9 +23,6 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
  * deals with.
  */
 type ChangeOutcome = 'changed' | 'stopped' | 'quiet';
-
-/** What is done to one conflicting file: a resolution, or **Start over** (GC-14 to GC-18). */
-export type ConflictAction = GitResolution | 'start-over';
 
 /**
  * Answers to a resolve that count as done: the file was resolved meanwhile, by a
@@ -153,13 +151,12 @@ export class MergeActionsService {
       return;
     }
     await this.run(path, 'start-over', async () => {
-      const outcome = await this.change(
+      await this.changeOne(
         repositoryId,
-        [ path ],
+        path,
         () => this.api.startConflictOver(repositoryId, { path }),
         [ 'not-resolved', 'no-merge-in-progress' ]
       );
-      await this.resolved(outcome);
     });
   }
 
@@ -179,13 +176,12 @@ export class MergeActionsService {
   }
 
   private async sendResolve(repositoryId: number, path: string, resolution: GitResolution): Promise<void> {
-    const outcome = await this.change(
+    await this.changeOne(
       repositoryId,
-      [ path ],
+      path,
       () => this.api.resolveConflict(repositoryId, { path, resolution }),
       RESOLVED
     );
-    await this.resolved(outcome);
   }
 
   private async sendMarkResolved(repositoryId: number, path: string): Promise<void> {
@@ -193,28 +189,25 @@ export class MergeActionsService {
       if (!(await this.savedFirst(repositoryId, path))) {
         return;
       }
-      const outcome = await this.change(
+      const outcome = await this.changeOne(
         repositoryId,
-        [ path ],
+        path,
         () =>
           this.api.resolveConflict(repositoryId, { path, resolution: 'mark-resolved', ...(force ? { force } : {}) }),
         RESOLVED,
         force ? [] : [ 'conflict-markers-left' ]
       );
-      if (outcome !== 'quiet') {
-        await this.resolved(outcome);
-        return;
-      }
-      if (!(await this.ask(MarkersLeftDialog)) || !this.stillOn(repositoryId)) {
+      // Never over another question, nor once an abort is confirmed or the user has left the repository.
+      const mayAsk = outcome === 'quiet' && !this.asking && !this.abortRunning() && this.stillOn(repositoryId);
+      if (!mayAsk || !(await this.ask(MarkersLeftDialog)) || !this.stillOn(repositoryId)) {
         return;
       }
     }
   }
 
-  /** Sends the waiting save of the file at `path`, if open; says why and resolves `false` when it did not get there. */
+  /** Sends the waiting saves first; says why and resolves `false` when the file's edits did not get there. */
   private async savedFirst(repositoryId: number, path: string): Promise<boolean> {
-    await this.openFiles.get(path)?.saver.flush();
-    const unsaved = this.openFiles.notSaved(repositoryId, [ path ]);
+    const unsaved = await this.openFiles.flushed(repositoryId, [ path ]);
     if (unsaved !== null) {
       this.failures.show(unsaved.error);
       return false;
@@ -222,14 +215,29 @@ export class MergeActionsService {
     return true;
   }
 
-  /** After a resolve: its own `git.changed` reads the merge too, but the push channel may be down. */
-  private async resolved(outcome: ChangeOutcome): Promise<void> {
+  /**
+   * `change` for the one file at `path`; when it went through, the merge and the
+   * status are read again: its own `git.changed` reads them too, but the push
+   * channel may be down.
+   */
+  private async changeOne(
+    repositoryId: number,
+    path: string,
+    request: () => Observable<void>,
+    done: readonly string[],
+    quiet: readonly string[] = []
+  ): Promise<ChangeOutcome> {
+    const outcome = await this.change(repositoryId, [ path ], request, done, quiet);
     if (outcome === 'changed') {
       await Promise.all([ this.status.refresh(), this.store.refresh() ]);
     }
+    return outcome;
   }
 
-  /** Opens `dialog` and resolves whether the user confirmed; while it is open, an abort is not asked. */
+  /**
+   * Opens `dialog` and resolves whether the user confirmed; while it is open, an
+   * abort is not asked. Callers check `asking` first, so that questions never overlap.
+   */
   private async ask(dialog: Type<unknown>): Promise<boolean> {
     this.asking = true;
     try {
