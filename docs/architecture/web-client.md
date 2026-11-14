@@ -28,7 +28,15 @@ libraries and [overview.md](overview.md) for the numbering conventions.
 - **A-8.5** **Push channel client:** opens `GET /api/v1/events` with `fetch`
   streaming and the auth token (A-3.10); reconnects with backoff, after a token
   refresh, and when the page becomes visible again; after every reconnect it
-  asks the affected services to fetch current state (A-3.11).
+  asks the affected services to fetch current state (A-3.11). Shortly before the
+  auth token expires (30 seconds, or half the time left for a shorter-lived
+  token), it renews the token and opens a second stream with it, closing the
+  first only once the second is open: no event falls between them, so this is
+  not a reconnect, and the screen does not reload its state at every token
+  expiry. A renewal that cannot reach the backend leaves the session alone; the
+  first stream then ends at the expiry and reconnects. _(My call: the stream
+  handover, after reloads at every expiry were seen to blink the screen and lose
+  the editor's focus.)_
 - **A-8.6** **Errors:** maps error codes to text with Transloco (A-3.8) and
   shows the request ID reference (NF-10.6).
 - **A-8.7** **Version check:** when a response's version header differs from the

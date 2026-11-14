@@ -74,7 +74,8 @@ numbering conventions.
     token in the `Authorization` header like any other request;
   - one stream per client tab, carrying events for the logged-in user only;
   - the backend closes the stream when the auth token expires or the session is
-    revoked; the client reconnects with a fresh token;
+    revoked; the client reconnects with a fresh token, or the web client hands
+    the stream over to a new one before the token expires (A-8.5);
   - the response sets `X-Accel-Buffering: no` and `Cache-Control: no-cache`, and
     the backend sends a comment line every 30 seconds to keep proxies from
     closing an idle stream. _(My call: 30 seconds.)_ It also sends one as soon

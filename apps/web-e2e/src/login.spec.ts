@@ -1,7 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { BrowserContext, Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { drainFailedRequests, expect, test } from './support/fixtures';
-import { logIn, TEST_ADMIN } from './support/instance';
+import { logIn, seed, TEST_ADMIN } from './support/instance';
+import { ADMIN_ID, workingCopyOf } from './support/repositories';
 
 // The login page is reachable once onboarding is completed (AO-3).
 test.use({ instanceOptions: { onboarded: true } });
@@ -171,7 +175,51 @@ test.describe('expiring auth tokens', () => {
     drainFailedRequests(monitor, '/api/v1/events');
   });
 
+  test('keeps the repository screen as it is while its tokens expire: no reload, and the editor keeps the focus', async ({ page, instance }) => {
+    // Waiting for the background fetches, then for several tokens to expire.
+    test.slow();
+    const [ id ] = seed(instance.dataDir, {
+      repositories: [ { userId: ADMIN_ID, name: 'handbook', workingCopy: 'handbook' } ]
+    }).repositoryIds;
+    const dir = workingCopyOf(instance.dataDir, id);
+    await page.goto(`/repositories/${id}/files/README.md`);
+    await logIn(page);
+    const editor = page.getByRole('main', { name: 'Editor' }).getByRole('textbox', { name: 'README.md', exact: true });
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.type('Typed.');
+    await expect.poll(() => readFileSync(join(dir, 'README.md'), 'utf8'), { timeout: 40_000 }).toContain('Typed.');
+    // The background fetches of a screen that opens, of a remote that never answers, read the status again when
+    // they fail (GA-33, GA-35): the one of opening the file, shown in the bar or the git actions menu's button on a
+    // phone, then the scheduler's, which looks at what is viewed every 5 seconds. The next comes 2 minutes later.
+    const fetchFailed = 'Couldn\'t check for remote changes';
+    await expect(
+      page.locator('rs-fetch-status').getByText(fetchFailed)
+        .or(page.getByRole('button', { name: `Git actions. ${fetchFailed}` }))
+    ).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(6_000);
+
+    // What the screen reads again after its push channel reconnects (A-3.11).
+    const reloads: string[] = [];
+    page.on('request', request => {
+      const path = new URL(request.url()).pathname;
+      if (/\/(git\/status|git\/merge|folder|file)$/.test(path) && request.method() === 'GET') {
+        reloads.push(path);
+      }
+    });
+    // Several 2-second tokens.
+    await page.waitForTimeout(7_000);
+
+    expect(reloads).toEqual([]);
+    await expect(editor).toBeFocused();
+    await page.keyboard.type(' Still here.');
+    await expect.poll(() => readFileSync(join(dir, 'README.md'), 'utf8'), { timeout: 40_000 })
+      .toContain('Typed. Still here.');
+  });
+
   test('AC-AUTH-003.11: two tabs share one refresh', async ({ page, context, monitor }) => {
+    // Without a push channel, whose streams renew their tokens before they expire (A-8.5), the tokens expire.
+    await context.route('**/api/v1/events*', route => route.abort());
     await page.goto('/login');
     await logIn(page);
     const other = await context.newPage();

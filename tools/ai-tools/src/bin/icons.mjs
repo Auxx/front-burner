@@ -54,7 +54,7 @@ main({
     },
     show: {
       usage: '<name...> [--json]',
-      summary: 'Prints the SVG of each icon (16×16, fill="currentColor").',
+      summary: 'Prints the SVG of each icon (16×16, or 24×24 for a few; fill="currentColor").',
       options: { json: { type: 'boolean' } },
       run(options, names) {
         if (!names.length) {

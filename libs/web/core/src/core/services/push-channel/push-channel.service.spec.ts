@@ -4,7 +4,7 @@ import type { PushEvent } from '@front-burner/shared-contracts';
 import type { Subscription } from 'rxjs';
 
 import { AuthSessionService } from '../auth-session/auth-session.service';
-import { PushChannelService } from './push-channel.service';
+import { PushChannelService, RENEW_BEFORE_EXPIRY_MS } from './push-channel.service';
 
 /** One request of the fake `fetch`: the test writes to its stream or ends it. */
 interface FakeStream {
@@ -20,6 +20,9 @@ function fakeResponse(status: number, body: ReadableStream<Uint8Array> | null, j
   return { status, ok: status >= 200 && status < 300, body, json: () => Promise.resolve(json) } as Response;
 }
 
+/** The life of the tokens of the handover tests: 15 minutes, as the backend's default. */
+const TOKEN_LIFE_MS = 15 * 60_000;
+
 const sse = (event: PushEvent) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 
 describe('PushChannelService', () => {
@@ -27,6 +30,9 @@ describe('PushChannelService', () => {
   let token: string;
   let refresh: ReturnType<typeof vi.fn<(failed: string) => Promise<string>>>;
   let expire: ReturnType<typeof vi.fn<(returnUrl?: string) => Promise<void>>>;
+  /** When `token` expires; unknown unless a test sets it. */
+  let expiresAt: number | undefined;
+  let renew: ReturnType<typeof vi.fn<(token: string) => Promise<string>>>;
   let fetch: ReturnType<typeof vi.fn<(url: string, init: RequestInit) => Promise<Response>>>;
   /** What the next requests answer; a stream when empty. */
   let answers: (() => Response)[];
@@ -92,12 +98,23 @@ describe('PushChannelService', () => {
       return Promise.resolve(token);
     });
     expire = vi.fn(() => Promise.resolve());
+    expiresAt = undefined;
+    renew = vi.fn(() => {
+      token = `${token}-renewed`;
+      expiresAt = Date.now() + TOKEN_LIFE_MS;
+      return Promise.resolve(token);
+    });
     answers = [];
     streams = [];
     fetch = vi.fn((_url: string, init: RequestInit) => Promise.resolve(answers.shift()?.() ?? streamResponse(init)));
     vi.stubGlobal('fetch', fetch);
     TestBed.configureTestingModule({
-      providers: [ { provide: AuthSessionService, useValue: { loggedIn, authToken: () => token, refresh, expire } } ]
+      providers: [
+        {
+          provide: AuthSessionService,
+          useValue: { loggedIn, authToken: () => token, authTokenExpiresAt: () => expiresAt, refresh, renew, expire }
+        }
+      ]
     });
     service = TestBed.inject(PushChannelService);
   });
@@ -238,6 +255,118 @@ describe('PushChannelService', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(streams).toHaveLength(1);
+  });
+
+  describe('handing the stream over before its token expires (A-3.10)', () => {
+    const renewalAt = TOKEN_LIFE_MS - RENEW_BEFORE_EXPIRY_MS;
+    const authorization = (stream: FakeStream | undefined) =>
+      (stream?.init.headers as Record<string, string> | undefined)?.['Authorization'];
+
+    beforeEach(() => {
+      expiresAt = Date.now() + TOKEN_LIFE_MS;
+    });
+
+    it('opens a stream with a renewed token before closing the first, without a reconnect', async () => {
+      const reconnects = vi.fn();
+      service.reconnected.subscribe(reconnects);
+      const received = subscribe();
+      await settle();
+
+      await vi.advanceTimersByTimeAsync(renewalAt - 1);
+      expect(renew).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(renew).toHaveBeenCalledWith('token-1');
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(authorization(streams[1])).toBe('Bearer token-1-renewed');
+      expect(streams[0]?.init.signal?.aborted).toBe(true);
+      expect(streams[1]?.init.signal?.aborted).toBe(false);
+      expect(reconnects).toHaveBeenCalledOnce();
+
+      streams[1]?.write(sse(finished));
+      await settle();
+      expect(received).toEqual([ finished ]);
+      // The first stream, closed, does not reconnect.
+      await vi.advanceTimersByTimeAsync(RENEW_BEFORE_EXPIRY_MS);
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('hands each new stream over in turn', async () => {
+      subscribe();
+      await settle();
+
+      await vi.advanceTimersByTimeAsync(renewalAt);
+      await vi.advanceTimersByTimeAsync(TOKEN_LIFE_MS - RENEW_BEFORE_EXPIRY_MS);
+
+      expect(renew).toHaveBeenCalledTimes(2);
+      expect(authorization(streams[2])).toBe('Bearer token-1-renewed-renewed');
+      expect(streams.filter(stream => !stream.init.signal?.aborted)).toHaveLength(1);
+    });
+
+    it('renews a token that lives less than a minute at half its life', async () => {
+      expiresAt = Date.now() + 2000;
+      subscribe();
+      await settle();
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(renew).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(renew).toHaveBeenCalledOnce();
+    });
+
+    it('uses a token renewed elsewhere meanwhile as it is', async () => {
+      subscribe();
+      await settle();
+      token = 'token-from-another-tab';
+      expiresAt = Date.now() + TOKEN_LIFE_MS;
+
+      await vi.advanceTimersByTimeAsync(renewalAt);
+
+      expect(renew).not.toHaveBeenCalled();
+      expect(authorization(streams[1])).toBe('Bearer token-from-another-tab');
+      expect(streams[0]?.init.signal?.aborted).toBe(true);
+    });
+
+    it('keeps the first stream when the renewal fails, and reconnects when it ends', async () => {
+      renew.mockRejectedValue(new Error('unreachable'));
+      const reconnects = vi.fn();
+      service.reconnected.subscribe(reconnects);
+      subscribe();
+      await settle();
+
+      await vi.advanceTimersByTimeAsync(renewalAt);
+      expect(renew).toHaveBeenCalledOnce();
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(streams[0]?.init.signal?.aborted).toBe(false);
+
+      streams[0]?.end();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(reconnects).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the first stream when the second does not open', async () => {
+      subscribe();
+      await settle();
+      answers = [ () => fakeResponse(503, null) ];
+
+      await vi.advanceTimersByTimeAsync(renewalAt);
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(streams).toHaveLength(1);
+      expect(streams[0]?.init.signal?.aborted).toBe(false);
+    });
+
+    it('renews nothing once closed', async () => {
+      subscribe();
+      await settle();
+      subscription?.unsubscribe();
+
+      await vi.advanceTimersByTimeAsync(TOKEN_LIFE_MS);
+
+      expect(renew).not.toHaveBeenCalled();
+      expect(fetch).toHaveBeenCalledOnce();
+    });
   });
 
   it('ends the session and stops on unauthenticated', async () => {

@@ -64,7 +64,15 @@
     }
   }
 
+  // The icon and the first line of the message are centred on the dismiss button, which is taller than a
+  // line of text (more so on touch screens); a longer message goes on below it.
+  .icon,
+  .content {
+    padding-block-start: max(0px, calc((var(--ui-control-height-small) - 1em * var(--ui-line-height-ui)) / 2));
+  }
+
   .icon {
+    box-sizing: content-box;
     min-block-size: calc(1em * var(--ui-line-height-ui));
     align-items: center;
   }
