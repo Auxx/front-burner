@@ -10,6 +10,7 @@ import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
+import type { ConflictAction } from '../../services/merge-actions/merge-actions.service';
 import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { ViewModeService } from '../../services/view-mode/view-mode.service';
@@ -27,7 +28,7 @@ describe('ConflictFileComponent', () => {
   const buttons = () => [ ...host().querySelectorAll<HTMLButtonElement>('.offers button') ];
   const labels = () => buttons().map(button => button.textContent?.trim());
 
-  async function show(file: Partial<GitConflictFile>, resolving: GitResolution | null = null): Promise<void> {
+  async function show(file: Partial<GitConflictFile>, resolving: ConflictAction | null = null): Promise<void> {
     fixture.componentRef.setInput('repositoryId', 12);
     fixture.componentRef.setInput('file', {
       path: 'docs/guide.md',
@@ -220,10 +221,10 @@ describe('ConflictFileComponent', () => {
     expect(labels()).toEqual([ `${KEY}.offer.keep`, `${KEY}.offer.delete` ]);
   });
 
-  it('offers nothing for a resolved file', async () => {
+  it('offers no whole version for a resolved file, only Start over', async () => {
     await show({ resolved: true });
 
-    expect(buttons()).toEqual([]);
+    expect(labels()).toEqual([ `${KEY}.startOver` ]);
   });
 
   it('says which side deleted the file', async () => {
@@ -276,6 +277,51 @@ describe('ConflictFileComponent', () => {
 
     ours.click();
     expect(chosen).toEqual([]);
+  });
+
+  describe('Start over (GC-18)', () => {
+    it('shows Resolved instead of the editor, with Start over', async () => {
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md', { content: 'fixed\n' }));
+      await show({ editable: true, resolved: true });
+      await settle(fixture);
+
+      expect(host().querySelector('rs-editor-pane')).toBeNull();
+      expect(host().classList).not.toContain('editing');
+      expect(text('.state')).toBe(`${KEY}.resolved`);
+      expect(labels()).toEqual([ `${KEY}.startOver` ]);
+    });
+
+    it('offers it for any resolved file, and not for an unresolved one', async () => {
+      await show({ kind: 'deleted-by-us', resolved: true });
+      expect(labels()).toEqual([ `${KEY}.startOver` ]);
+
+      await show({ resolved: false });
+      expect(labels()).not.toContain(`${KEY}.startOver`);
+    });
+
+    it('emits Start over', async () => {
+      let started = 0;
+      fixture.componentInstance.startOver.subscribe(() => started++);
+      await show({ resolved: true });
+
+      buttons()[0].click();
+
+      expect(started).toBe(1);
+    });
+
+    it('shows it as busy while it runs, and unavailable while locked', async () => {
+      let started = 0;
+      fixture.componentInstance.startOver.subscribe(() => started++);
+      fixture.componentRef.setInput('locked', true);
+      await show({ resolved: true }, 'start-over');
+
+      const [ startOver ] = buttons();
+      expect(startOver.getAttribute('aria-disabled')).toBe('true');
+      expect(startOver.querySelector('ui-spinner')).not.toBeNull();
+
+      startOver.click();
+      expect(started).toBe(0);
+    });
   });
 
   describe('Show mine and Show theirs', () => {

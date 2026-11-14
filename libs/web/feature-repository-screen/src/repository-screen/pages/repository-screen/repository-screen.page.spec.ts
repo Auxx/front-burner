@@ -109,6 +109,7 @@ describe('RepositoryScreenPage', () => {
   let gitStatusAnswer: Observable<GitStatus> | undefined;
   let abortMerge: ReturnType<typeof vi.fn>;
   let resolveConflict: ReturnType<typeof vi.fn>;
+  let startConflictOver: ReturnType<typeof vi.fn>;
   /** What `GitApi.gitMerge` answers. */
   let mergeAnswer: GitMergeState;
   let gitBranches: ReturnType<typeof vi.fn<(id: number) => Observable<GitBranchList>>>;
@@ -165,7 +166,8 @@ describe('RepositoryScreenPage', () => {
             gitMergeVersion: (_id: number, query: { path: string; side: string; }) =>
               of({ content: `${query.side} of ${query.path}\n` }),
             abortMerge,
-            resolveConflict
+            resolveConflict,
+            startConflictOver
           }
         },
         {
@@ -241,6 +243,7 @@ describe('RepositoryScreenPage', () => {
     gitStatusAnswer = undefined;
     abortMerge = vi.fn(() => of(undefined));
     resolveConflict = vi.fn(() => of(undefined));
+    startConflictOver = vi.fn(() => of(undefined));
     mergeAnswer = { into: 'main', from: 'origin/main', files: [], otherFiles: [], message: 'Merge' };
     switchBranch = vi.fn(() => of(undefined));
     gitBranches = vi.fn(() =>
@@ -1777,6 +1780,47 @@ describe('RepositoryScreenPage', () => {
             });
             expect(conflictEditor()).toBeNull();
             expect(page().querySelector('rs-conflict-file .state.resolved')).not.toBeNull();
+          });
+
+          it('keeps what was typed when another device resolved the file', async () => {
+            await visit('/repositories/12/files/README.md');
+            await startMerge();
+            saveFile.mockReturnValue(failure(409, 'merge-in-progress'));
+            // Resolved on another device; its event has not arrived yet.
+            mergeAnswer = { ...mergeAnswer, files: [ conflict('README.md', true), conflict('docs/guide.md', true) ] };
+
+            typeIn('rs-conflict-file', 'More.\n');
+            await services().get(OpenFilesService).flushAll();
+            events.next({ type: 'git.changed', repositoryId: 12 });
+            await settle(harness.fixture);
+            await settle(harness.fixture);
+
+            expect(saveFile).toHaveBeenCalledTimes(1);
+            expect(conflictEditor()).toBeNull();
+            expect(page().querySelector('rs-conflict-file .state.resolved')).not.toBeNull();
+            expect(drafts.at('docs/guide.md')?.content).toBe(`${MARKED}More.\n`);
+          });
+
+          it('starts a resolved file over, which opens it again with its conflicts (GC-18)', async () => {
+            mergeAnswer = { ...mergeAnswer, files: [ conflict('README.md', true), conflict('docs/guide.md', true) ] };
+            startConflictOver.mockImplementation(() => {
+              mergeAnswer = { ...mergeAnswer, files: [ conflict('README.md', true), conflict('docs/guide.md') ] };
+              return of(undefined);
+            });
+            await visit('/repositories/12/files/README.md');
+            await startMerge();
+            entryButton('guide.md').click();
+            await settle(harness.fixture);
+            expect(conflictEditor()).toBeNull();
+
+            page().querySelector<HTMLButtonElement>('rs-conflict-file .offers button')?.click();
+            await settle(harness.fixture);
+            await settle(harness.fixture);
+            await settle(harness.fixture);
+
+            expect(startConflictOver).toHaveBeenCalledExactlyOnceWith(12, { path: 'docs/guide.md' });
+            expect(page().querySelector('rs-conflict-file .state.resolved')).toBeNull();
+            expect(conflictText()).toContain('<<<<<<< main');
           });
         });
 

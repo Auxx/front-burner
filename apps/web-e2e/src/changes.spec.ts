@@ -1532,6 +1532,44 @@ test.describe('pushing', () => {
           drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge/resolve`);
         });
 
+        test('AC-GIT-003.8: Start over on a resolved file brings back its conflict markers and marks it unresolved', async ({ page, instance, monitor }) => {
+          const { id, dir } = await pulled(page, instance);
+          const startOver = main(page).getByRole('button', { name: 'Start over', exact: true });
+          const question = page.getByRole('dialog', { name: 'Start over?' });
+
+          // Edited to neither version, so Start over asks first.
+          await widget(page, 'Accept both').click();
+          await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+          await main(page).getByRole('button', { name: 'Mark as resolved', exact: true }).click();
+          await expect(mergeSummary(page)).toContainText('1 of 1 file resolved');
+          await expect(editor(page)).toHaveCount(0);
+
+          await startOver.click();
+          await expect(question).toContainText('Start this file over? Your edits to it are lost.');
+          await question.getByRole('button', { name: 'Start over', exact: true }).click();
+
+          await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+          await expect(main(page)).toContainText(/Both changed\s*·\s*Unresolved/);
+          await expect.poll(() => lines(page)).toEqual(MARKED);
+          expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toBe(MARKED.join('\n'));
+          expect(gitIn(dir, 'ls-files', '-u').toString()).not.toBe('');
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
+        test('Start over on a whole version does not ask', async ({ page, instance, monitor }) => {
+          const { id } = await pulled(page, instance);
+          await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+          await main(page).getByRole('button', { name: 'Use their version', exact: true }).click();
+          await expect(mergeSummary(page)).toContainText('1 of 1 file resolved');
+
+          await main(page).getByRole('button', { name: 'Start over', exact: true }).click();
+
+          await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+          await expect(page.getByRole('dialog')).toHaveCount(0);
+          await expect.poll(() => lines(page)).toEqual(MARKED);
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
         test('saves an edit, which a reload shows', async ({ page, instance, monitor }) => {
           const { id, dir } = await pulled(page, instance);
 

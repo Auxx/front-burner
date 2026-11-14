@@ -69,7 +69,16 @@
         }
       </div>
     }
-    @if (edited || offers().length > 0) {
+    @if (conflict.resolved) {
+      <div class="offers"
+           role="group"
+           [attr.aria-label]="t('resolvedOffers')">
+        <button uiButton
+                [busy]="resolving() === 'start-over'"
+                [unavailable]="locked()"
+                (click)="startOver.emit()">{{ t('startOver') }}</button>
+      </div>
+    } @else if (edited || offers().length > 0) {
       <div class="offers"
            role="group"
            [attr.aria-label]="t('offers')">

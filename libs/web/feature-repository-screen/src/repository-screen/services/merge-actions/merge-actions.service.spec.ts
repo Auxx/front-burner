@@ -60,6 +60,7 @@ describe('MergeActionsService', () => {
   let requests: string[];
   let abortAnswer: () => Observable<void>;
   let resolveAnswer: () => Observable<void>;
+  let startOverAnswer: () => Observable<void>;
   let mergeAnswer: () => Observable<GitMergeState>;
   let readAnswer: (path: string) => Observable<FileContent>;
   let saves: { request: SaveFileRequest; answer: Subject<FileState>; }[];
@@ -95,6 +96,7 @@ describe('MergeActionsService', () => {
     requests = [];
     abortAnswer = () => of(undefined);
     resolveAnswer = () => of(undefined);
+    startOverAnswer = () => of(undefined);
     mergeAnswer = () => of(conflicting('guide.md'));
     readAnswer = path => of(fileContent(path));
     saves = [];
@@ -149,6 +151,10 @@ describe('MergeActionsService', () => {
             abortMerge: () => {
               requests.push('abort');
               return abortAnswer();
+            },
+            startConflictOver: (_id: number, request: { path: string; }) => {
+              requests.push(`start over ${request.path}`);
+              return startOverAnswer();
             },
             resolveConflict: (_id: number, request: GitResolveRequest) => {
               requests.push(`resolve ${request.path} ${request.resolution}${request.force ? ' force' : ''}`);
@@ -807,6 +813,128 @@ describe('MergeActionsService', () => {
         status: 'danger'
       }));
       expect(overlay()?.querySelector('rs-markers-left') ?? null).toBeNull();
+    });
+  });
+
+  describe('starting over', () => {
+    const S = 'web-feature-repository-screen.StartOverDialog';
+
+    /** The merge with `guide.md` resolved, edited by the user or with a whole version. */
+    function resolved(edited: boolean): void {
+      const merge = conflicting('guide.md', 'notes.md');
+      merge.files[0] = { ...merge.files[0], resolved: true, edited };
+      state.set(merge);
+    }
+
+    it('asks when the user edited it, and starts it over once confirmed', async () => {
+      resolved(true);
+
+      const done = service.startOver('guide.md');
+      await settleDialog();
+
+      expect(overlay().querySelector('rs-start-over')).not.toBeNull();
+      expect(requests).toEqual([]);
+
+      dialogButton(`${S}.startOver`)?.click();
+      await done;
+
+      expect(requests).toEqual([ 'start over guide.md' ]);
+      expect(mergeRefresh).toHaveBeenCalled();
+      expect(statusRefresh).toHaveBeenCalled();
+      expect(service.resolving()).toBeNull();
+    });
+
+    it('cancelling the question changes nothing', async () => {
+      resolved(true);
+
+      const done = service.startOver('guide.md');
+      await settleDialog();
+      dialogButton(`${S}.cancel`)?.click();
+      await done;
+
+      expect(requests).toEqual([]);
+      expect(mergeRefresh).not.toHaveBeenCalled();
+    });
+
+    it('does not ask for a whole version', async () => {
+      resolved(false);
+
+      await service.startOver('guide.md');
+
+      expect(overlay()?.querySelector('rs-start-over') ?? null).toBeNull();
+      expect(requests).toEqual([ 'start over guide.md' ]);
+    });
+
+    it('shows the start over running, and ignores a choice meanwhile', async () => {
+      resolved(false);
+      const answer = new Subject<void>();
+      startOverAnswer = () => answer;
+
+      const done = service.startOver('guide.md');
+      await Promise.resolve();
+      expect(service.resolving()).toEqual({ path: 'guide.md', resolution: 'start-over' });
+      await service.resolve('notes.md', 'ours');
+      answer.complete();
+      await done;
+
+      expect(requests).toEqual([ 'start over guide.md' ]);
+    });
+
+    it('reloads the open file, dropping its draft, as its own change', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        resolved(false);
+        const file = await opened('guide.md');
+        drafts.drafts.set('4/12/guide.md', { content: 'typed', savedAt: '2026-11-08T10:00:00.000Z' });
+        const revision = file.revision();
+
+        await service.startOver('guide.md');
+
+        expect(requests).toEqual([ 'start over guide.md', 'read guide.md' ]);
+        expect(file.file.content).toBe('restored');
+        expect(file.revision()).toBe(revision + 1);
+        expect(drafts.at('guide.md')).toBeUndefined();
+        expect(own).toEqual([ 'guide.md' ]);
+        await vi.advanceTimersByTimeAsync(OWN_CHANGE_MS);
+        expect(released).toEqual([ 'guide.md' ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('starts over a file that is not open, and deletes its draft', async () => {
+      resolved(false);
+      drafts.drafts.set('4/12/guide.md', { content: 'typed', savedAt: '2026-11-08T10:00:00.000Z' });
+
+      await service.startOver('guide.md');
+
+      expect(requests).toEqual([ 'start over guide.md' ]);
+      expect(openFiles.get('guide.md')).toBeUndefined();
+      expect(drafts.at('guide.md')).toBeUndefined();
+    });
+
+    it('treats a file that is no longer resolved as started over', async () => {
+      resolved(false);
+      startOverAnswer = () => throwError(() => apiError(409, 'not-resolved'));
+
+      await service.startOver('guide.md');
+
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(mergeRefresh).toHaveBeenCalled();
+    });
+
+    it('says why it failed, and the file stays resolved', async () => {
+      resolved(false);
+      const file = await opened('guide.md');
+      startOverAnswer = () => throwError(() => apiError(500, 'internal'));
+
+      await service.startOver('guide.md');
+
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 'danger' }));
+      expect(requests).toEqual([ 'start over guide.md' ]);
+      expect(file.saver.held()).toBe(false);
+      expect(mergeRefresh).toHaveBeenCalled();
+      expect(service.resolving()).toBeNull();
     });
   });
 });

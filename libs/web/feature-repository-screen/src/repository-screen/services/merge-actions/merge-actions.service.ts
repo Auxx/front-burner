@@ -8,6 +8,7 @@ import { firstValueFrom, type Observable } from 'rxjs';
 
 import { AbortMergeDialog } from '../../dialogs/abort-merge/abort-merge.dialog';
 import { MarkersLeftDialog } from '../../dialogs/markers-left/markers-left.dialog';
+import { StartOverDialog } from '../../dialogs/start-over/start-over.dialog';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
 import { FailureToastService } from '../failure-toast/failure-toast.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
@@ -21,6 +22,9 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
  * deals with.
  */
 type ChangeOutcome = 'changed' | 'stopped' | 'quiet';
+
+/** What is done to one conflicting file: a resolution, or **Start over** (GC-14 to GC-18). */
+export type ConflictAction = GitResolution | 'start-over';
 
 /**
  * Answers to a resolve that count as done: the file was resolved meanwhile, by a
@@ -63,7 +67,7 @@ export class MergeActionsService {
   private readonly failures = inject(FailureToastService);
 
   private readonly abortRunning = signal(false);
-  private readonly resolveRunning = signal<{ path: string; resolution: GitResolution; } | null>(null);
+  private readonly resolveRunning = signal<{ path: string; resolution: ConflictAction; } | null>(null);
   private asking = false;
   /** Settles when the last resolve has ended; it never rejects. */
   private resolveSettled: Promise<void> = Promise.resolve();
@@ -108,14 +112,10 @@ export class MergeActionsService {
    * Settles when it has ended, whatever the outcome.
    */
   async resolve(path: string, resolution: GitResolution): Promise<void> {
-    const repositoryId = this.session.repository()?.id;
-    if (repositoryId === undefined || this.asking || this.abortRunning() || this.resolveRunning() !== null) {
-      return;
+    const repositoryId = this.idleOn();
+    if (repositoryId !== null) {
+      await this.run(path, resolution, () => this.sendResolve(repositoryId, path, resolution));
     }
-    this.resolveRunning.set({ path, resolution });
-    const running = this.sendResolve(repositoryId, path, resolution);
-    this.resolveSettled = running;
-    await running;
   }
 
   /**
@@ -127,54 +127,87 @@ export class MergeActionsService {
    * `force`. Otherwise as `resolve`, whose rules it shares.
    */
   async markResolved(path: string): Promise<void> {
-    const repositoryId = this.session.repository()?.id;
-    if (repositoryId === undefined || this.asking || this.abortRunning() || this.resolveRunning() !== null) {
+    const repositoryId = this.idleOn();
+    if (repositoryId !== null) {
+      await this.run(path, 'mark-resolved', () => this.sendMarkResolved(repositoryId, path));
+    }
+  }
+
+  /**
+   * **Start over** (GC-18): puts the resolved file at `path` back as it was when
+   * the merge stopped, with its conflict markers. It asks first when the user
+   * edited it, or when the merge has not been read; a whole version is started
+   * over at once. Its waiting save and browser draft are dropped, as the user
+   * asked for it, and an open file is loaded again, as `resolve` does (GA-24).
+   * `not-resolved` is no failure: it was started over meanwhile. Otherwise as
+   * `resolve`, whose rules it shares.
+   */
+  async startOver(path: string): Promise<void> {
+    const repositoryId = this.idleOn();
+    if (repositoryId === null) {
       return;
     }
-    this.resolveRunning.set({ path, resolution: 'mark-resolved' });
-    const running = this.sendMarkResolved(repositoryId, path);
+    const edited = this.store.state()?.files.find(file => file.path === path)?.edited ?? true;
+    // The question takes time: what was free before it, or the repository, may have changed after it.
+    if (edited && (!(await this.ask(StartOverDialog)) || this.idleOn() !== repositoryId)) {
+      return;
+    }
+    await this.run(path, 'start-over', async () => {
+      const outcome = await this.change(
+        repositoryId,
+        [ path ],
+        () => this.api.startConflictOver(repositoryId, { path }),
+        [ 'not-resolved', 'no-merge-in-progress' ]
+      );
+      await this.resolved(outcome);
+    });
+  }
+
+  /** The open repository, when nothing is asked or running that a resolve must wait for; otherwise `null`. */
+  private idleOn(): number | null {
+    const repositoryId = this.session.repository()?.id;
+    const busy = this.asking || this.abortRunning() || this.resolveRunning() !== null;
+    return repositoryId === undefined || busy ? null : repositoryId;
+  }
+
+  /** Runs `work` as the one change of a conflicting file, shown by `resolving`, for an abort to wait for. */
+  private async run(path: string, resolution: ConflictAction, work: () => Promise<void>): Promise<void> {
+    this.resolveRunning.set({ path, resolution });
+    const running = work().finally(() => this.resolveRunning.set(null));
     this.resolveSettled = running;
     await running;
   }
 
   private async sendResolve(repositoryId: number, path: string, resolution: GitResolution): Promise<void> {
-    try {
-      const outcome = await this.change(
-        repositoryId,
-        [ path ],
-        () => this.api.resolveConflict(repositoryId, { path, resolution }),
-        RESOLVED
-      );
-      await this.resolved(outcome);
-    } finally {
-      this.resolveRunning.set(null);
-    }
+    const outcome = await this.change(
+      repositoryId,
+      [ path ],
+      () => this.api.resolveConflict(repositoryId, { path, resolution }),
+      RESOLVED
+    );
+    await this.resolved(outcome);
   }
 
   private async sendMarkResolved(repositoryId: number, path: string): Promise<void> {
-    try {
-      for (const force of [ false, true ]) {
-        if (!(await this.savedFirst(repositoryId, path))) {
-          return;
-        }
-        const outcome = await this.change(
-          repositoryId,
-          [ path ],
-          () =>
-            this.api.resolveConflict(repositoryId, { path, resolution: 'mark-resolved', ...(force ? { force } : {}) }),
-          RESOLVED,
-          force ? [] : [ 'conflict-markers-left' ]
-        );
-        if (outcome !== 'quiet') {
-          await this.resolved(outcome);
-          return;
-        }
-        if (!(await this.ask(MarkersLeftDialog)) || !this.stillOn(repositoryId)) {
-          return;
-        }
+    for (const force of [ false, true ]) {
+      if (!(await this.savedFirst(repositoryId, path))) {
+        return;
       }
-    } finally {
-      this.resolveRunning.set(null);
+      const outcome = await this.change(
+        repositoryId,
+        [ path ],
+        () =>
+          this.api.resolveConflict(repositoryId, { path, resolution: 'mark-resolved', ...(force ? { force } : {}) }),
+        RESOLVED,
+        force ? [] : [ 'conflict-markers-left' ]
+      );
+      if (outcome !== 'quiet') {
+        await this.resolved(outcome);
+        return;
+      }
+      if (!(await this.ask(MarkersLeftDialog)) || !this.stillOn(repositoryId)) {
+        return;
+      }
     }
   }
 
