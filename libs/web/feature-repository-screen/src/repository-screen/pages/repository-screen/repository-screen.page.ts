@@ -601,10 +601,14 @@ export class RepositoryScreenPage {
     }, { injector: this.injector });
   }
 
-  /** **Push** in the merge-committed notice runs as in the bar, and the notice goes. */
+  /**
+   * **Push** in the merge-committed notice runs as in the bar, and the notice
+   * goes. A network job running meanwhile, such as a background fetch, is waited
+   * for, as the notice is gone and the push must not be lost to it.
+   */
   protected pushMerge(): void {
     this.dismissMergeCommitted();
-    this.jobs.start('push');
+    void this.jobs.startWhenFree('push');
   }
 
   /** The merge-committed notice is dismissed for the visit, for this merge commit. */
@@ -719,7 +723,6 @@ export class RepositoryScreenPage {
     return this.session.state() === 'ready' && problem !== null ? [ problem ] : [];
   });
 
-  /** The locked key, while the banner for it is shown (RC-15). */
   /** The merge commit whose notice the user dismissed or pushed from, during this visit. */
   private readonly dismissedMerge = signal<string | null>(null);
 
@@ -737,6 +740,7 @@ export class RepositoryScreenPage {
       && status.lastCommit?.oid !== this.dismissedMerge();
   });
 
+  /** The locked key, while the banner for it is shown (RC-15). */
   protected readonly lockedKeyShown = computed(() =>
     this.session.state() === 'ready' && !this.lockedKey.dismissed() ? this.lockedKey.key() : null
   );

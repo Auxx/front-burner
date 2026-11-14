@@ -202,14 +202,18 @@ export class MergeActionsService {
     }
   }
 
+  /**
+   * One press of the dialog's **Commit merge**. An author that can't be read
+   * fails like the commit itself, as the commit form does.
+   */
   private async sendCommit(repositoryId: number, message: string): Promise<CommitMergeOutcome> {
-    if (!(await this.gate.ready())) {
-      return 'cancelled';
-    }
-    if (!this.stillOn(repositoryId)) {
-      return 'ended';
-    }
     try {
+      if (!(await this.gate.ready())) {
+        return 'cancelled';
+      }
+      if (!this.stillOn(repositoryId)) {
+        return 'ended';
+      }
       await firstValueFrom(this.api.commitMerge(repositoryId, { message }));
     } catch (error) {
       const apiError = toApiError(error);
@@ -219,11 +223,21 @@ export class MergeActionsService {
       if (apiError.code === 'commit-author-not-confirmed') {
         this.gate.refresh();
       }
-      await Promise.all([ this.status.refresh(), this.store.refresh() ]);
+      await this.readAfterCommit();
       return this.mergeEnded(error) ? 'ended' : { error: apiError };
     }
-    await Promise.all([ this.status.refresh(), this.store.refresh() ]);
+    await this.readAfterCommit();
     return 'committed';
+  }
+
+  /**
+   * The status first: once it says that the merge ended, the merge is not read,
+   * which would only be refused. Otherwise it is read too, such as for a file
+   * reopened elsewhere (`merge-unresolved`).
+   */
+  private async readAfterCommit(): Promise<void> {
+    await this.status.refresh();
+    await this.store.refresh();
   }
 
   /** The open repository, when nothing is asked or running that a resolve must wait for; otherwise `null`. */

@@ -17,8 +17,8 @@ import { TranslocoDirective } from '@jsverse/transloco';
  * actions (GC-6, GA-4): "Merging origin/main into main", "2 of 3 files resolved"
  * with **Commit merge** (GC-20) and **Abort merge** (GC-23). **Commit merge** is
  * unavailable until every file is resolved, with "Resolve every file first" on
- * hover, focus or tap (GA-8); a merge with no conflicting file left is ready at
- * once. On narrow screens the count stays, the names give up their room first,
+ * hover, focus or tap (GA-8), and while an abort runs; a merge with no
+ * conflicting file left is ready at once. On narrow screens the count stays, the names give up their room first,
  * with each full name on hover, focus, tap or long press, and both actions are in
  * a git actions menu (GA-7, NV-11). Until the merge has been read, it says only
  * that one is in progress, and can still be aborted.

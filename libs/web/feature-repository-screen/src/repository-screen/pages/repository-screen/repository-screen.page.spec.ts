@@ -2036,6 +2036,33 @@ describe('RepositoryScreenPage', () => {
         expect(document.activeElement?.closest('rs-git-actions')).toBeTruthy();
       });
 
+      it('Push waits for a fetch that runs, rather than being lost to it', async () => {
+        const started = new Subject<GitJobStarted>();
+        fetch.mockReturnValue(started);
+        gitJob.mockReturnValue(of<GitJobState>({
+          status: 'done',
+          outcome: { kind: 'fetched', moved: false, upstreamMoved: false }
+        }));
+        gitStatusAnswer = of(committed());
+        await visit('/repositories/12');
+        ([ ...page().querySelectorAll<HTMLButtonElement>('rs-git-actions button') ]
+          .find(found => found.textContent?.trim().endsWith('.fetch')) as HTMLButtonElement).click();
+        await settle(harness.fixture);
+
+        noticeButton(`${NOTICE}.push`).click();
+        await settle(harness.fixture);
+        expect(notice()).toBeNull();
+        expect(push).not.toHaveBeenCalled();
+
+        started.next({ jobId: 9 });
+        started.complete();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(push).toHaveBeenCalledExactlyOnceWith(12);
+      });
+
       it('stays dismissed for the visit', async () => {
         const statuses = new BehaviorSubject<GitStatus>(committed());
         gitStatusAnswer = statuses.pipe(take(1));

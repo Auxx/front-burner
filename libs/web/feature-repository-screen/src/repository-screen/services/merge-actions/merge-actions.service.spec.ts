@@ -122,6 +122,7 @@ describe('MergeActionsService', () => {
         translocoTesting({
           'errors.merge-abort-failed': 'The merge could not be aborted.',
           'errors.merge-unresolved': 'Resolve every conflicting file before committing the merge.',
+          'errors.internal': 'Something went wrong.',
           'errors.resolution-not-allowed': 'This file can\'t be resolved that way.',
           'web-feature-repository-screen.FailureToastService.reference': 'Reference: {{ reference }}'
         })
@@ -1072,6 +1073,37 @@ describe('MergeActionsService', () => {
       expect(overlay().querySelector('rs-commit-merge')).not.toBeNull();
       expect(mergeRefresh).toHaveBeenCalled();
       expect(toast.show).not.toHaveBeenCalled();
+    });
+
+    it('says why when the author can\'t be read, and commits nothing', async () => {
+      allResolved();
+      gateReady = () => Promise.reject(apiError(500, 'internal'));
+      void service.commit();
+      await settleDialog();
+
+      await pressCommit();
+
+      expect(requests).toEqual([]);
+      expect(overlay().textContent).toContain('Something went wrong.');
+      expect(overlay().querySelector('rs-commit-merge')).not.toBeNull();
+    });
+
+    it('reads the status before the merge after committing, so that an ended merge is not read', async () => {
+      allResolved();
+      const reads: string[] = [];
+      statusRefresh.mockImplementation(async () => {
+        reads.push('status');
+      });
+      mergeRefresh.mockImplementation(async () => {
+        reads.push('merge');
+      });
+      const done = service.commit();
+      await settleDialog();
+
+      await pressCommit();
+      await done;
+
+      expect(reads).toEqual([ 'status', 'merge' ]);
     });
 
     it('reads the author again when the backend says it is not confirmed', async () => {

@@ -78,13 +78,51 @@ describe('MergeSummaryComponent', () => {
     expect(text()).toContain('2 of 3 files resolved');
   });
 
-  it('says a merge is in progress until it has been read, with Abort merge', async () => {
+  it('says only that a merge is in progress until it has been read, with Abort merge', async () => {
     await show({ state: null });
 
     expect(text()).toContain('Merge in progress');
-    expect(commitButton().getAttribute('aria-disabled')).toBe('true');
+    expect(commitButton()).toBeNull();
+    expect(text()).not.toContain('Resolve every file first');
     abortButton().click();
     expect(aborted).toBe(1);
+  });
+
+  it('offers nothing but Abort merge in the menu on a phone until the merge has been read', async () => {
+    await show({ state: null, narrow: true });
+    barButton().click();
+    await settle(fixture);
+
+    expect(menuItems().map(item => item.textContent?.trim())).toEqual([ 'Abort merge' ]);
+  });
+
+  it('keeps the focus on Commit merge when the last file is resolved, also elsewhere', async () => {
+    await show();
+    document.body.append(host());
+    const button = commitButton();
+    button.focus();
+
+    await show({ state: { ...merge, files: merge.files.map(file => ({ ...file, resolved: true })) } });
+
+    expect(commitButton()).toBe(button);
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute('aria-disabled')).toBeNull();
+    host().remove();
+  });
+
+  it('is unavailable while an abort runs', async () => {
+    const ready = { ...merge, files: merge.files.map(file => ({ ...file, resolved: true })) };
+    await show({ state: ready, busy: true });
+
+    expect(commitButton().getAttribute('aria-disabled')).toBe('true');
+    commitButton().click();
+    expect(committed).toBe(0);
+
+    await show({ state: ready, busy: true, narrow: true });
+    barButton().click();
+    await settle(fixture);
+    expect(menuItems()[0].textContent).toContain('Commit merge');
+    expect(menuItems()[0].getAttribute('aria-disabled') ?? menuItems()[0].disabled.toString()).toMatch(/true/);
   });
 
   it('offers Abort merge in the bar on a wide screen', async () => {
