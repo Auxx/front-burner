@@ -1,53 +1,78 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ConflictFileComponent'">
   @let conflict = file();
-  <header class="header">
-    <h2 class="name">{{ name() }}</h2>
-    @if (folder(); as folder) {
-      <p class="folder">{{ folder }}</p>
+  @let side = shown();
+  @if (side) {
+    @defer {
+      <rs-conflict-version [repositoryId]="repositoryId()"
+                           [path]="conflict.path"
+                           [side]="side"
+                           [from]="from()"
+                           (back)="back()" />
+    } @loading (minimum 0ms) {
+      <ui-spinner class="opening"
+                  [label]="t('opening')" />
     }
-    <p class="about">
-      <span class="kind">{{ t(conflict.kind) }}</span>
-      <span aria-hidden="true">·</span>
-      <span class="state"
-            [class.resolved]="conflict.resolved">
-        <ui-icon [name]="conflict.resolved ? 'pass' : 'warning'" />
-        {{ conflict.resolved ? t('resolved') : t('unresolved') }}
-      </span>
-    </p>
-  </header>
-  @if (deletedNote(); as deletedNote) {
-    <p class="deleted-by">{{ t(deletedNote, { from: from() }) }}</p>
-  }
-  <dl class="versions">
-    @for (version of versions(); track version.side) {
-      <div class="version">
-        <dt>{{ t(version.side, { into: into(), from: from() }) }}</dt>
-        <dd>
-          @switch (version.size) {
-            @case ('deleted') {
-              {{ t('deleted') }}
+  } @else {
+    <header class="header">
+      <h2 class="name">{{ name() }}</h2>
+      @if (folder(); as folder) {
+        <p class="folder">{{ folder }}</p>
+      }
+      <p class="about">
+        <span class="kind">{{ t(conflict.kind) }}</span>
+        <span aria-hidden="true">·</span>
+        <span class="state"
+              [class.resolved]="conflict.resolved">
+          <ui-icon [name]="conflict.resolved ? 'pass' : 'warning'" />
+          {{ conflict.resolved ? t('resolved') : t('unresolved') }}
+        </span>
+      </p>
+    </header>
+    @if (deletedNote(); as deletedNote) {
+      <p class="deleted-by">{{ t(deletedNote, { from: from() }) }}</p>
+    }
+    <dl class="versions">
+      @for (version of versions(); track version.side) {
+        <div class="version">
+          <dt>{{ t(version.side, { into: into(), from: from() }) }}</dt>
+          <dd>
+            @switch (version.size) {
+              @case ('deleted') {
+                {{ t('deleted') }}
+              }
+              @case ('none') {
+                {{ t('noSize') }}
+              }
+              @default {
+                {{ version.size }}
+              }
             }
-            @case ('none') {
-              {{ t('noSize') }}
-            }
-            @default {
-              {{ version.size }}
-            }
-          }
-        </dd>
+          </dd>
+        </div>
+      }
+    </dl>
+    @if (shows().length > 0) {
+      <div class="shows"
+           role="group"
+           [attr.aria-label]="t('shows')">
+        @for (versionSide of shows(); track versionSide) {
+          <button #showButton
+                  uiButton
+                  (click)="show(versionSide)">{{ t('show.' + versionSide) }}</button>
+        }
       </div>
     }
-  </dl>
-  @if (offers().length > 0) {
-    <div class="offers"
-         role="group"
-         [attr.aria-label]="t('offers')">
-      @for (offer of offers(); track offer) {
-        <button uiButton
-                [busy]="resolving() === offer"
-                [unavailable]="locked()"
-                (click)="resolve.emit(offer)">{{ t('offer.' + offer) }}</button>
-      }
-    </div>
+    @if (offers().length > 0) {
+      <div class="offers"
+           role="group"
+           [attr.aria-label]="t('offers')">
+        @for (offer of offers(); track offer) {
+          <button uiButton
+                  [busy]="resolving() === offer"
+                  [unavailable]="locked()"
+                  (click)="resolve.emit(offer)">{{ t('offer.' + offer) }}</button>
+        }
+      </div>
+    }
   }
 </ng-container>

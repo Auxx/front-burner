@@ -1352,6 +1352,43 @@ test.describe('pushing', () => {
           drainFailedRequests(monitor, `/api/v1/repositories/${id}/file`);
           drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
         });
+
+        test('AC-GIT-003.16: Show mine and Show theirs on a conflicting Markdown file open that version read-only, and the list shows the size of each version', async ({ page, instance, monitor }) => {
+          const { id, dir } = await conflicting(instance);
+          await openScreen(page, `/repositories/${id}`);
+          await gitAction(page, 'Pull');
+          await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+          await showConflicts(page);
+          await expect(conflictList(page)).toContainText(/guide\.md\s*Mine\s+5 B\s+·\s+Theirs\s+7 B/);
+          await select(page, 'guide.md');
+          const main = page.getByRole('main');
+          const showMine = main.getByRole('button', { name: 'Show mine', exact: true });
+
+          await showMine.click();
+          await expect(main).toContainText('This is your version, read-only.');
+          const mine = main.getByRole('textbox', { name: 'guide.md, my version' });
+          await expect(mine).toHaveText('mine');
+          await expect(mine).toHaveAttribute('contenteditable', 'false');
+          // Typing in it changes nothing.
+          await mine.click();
+          await page.keyboard.type('Typed.');
+          await expect(mine).toHaveText('mine');
+          await expect(offers(page)).toHaveCount(0);
+
+          await main.getByRole('button', { name: 'Back', exact: true }).click();
+          await expect(showMine).toBeFocused();
+          await expect(offers(page)).toHaveText([ 'Use my version', 'Use their version' ]);
+
+          await main.getByRole('button', { name: 'Show theirs', exact: true }).click();
+          await expect(main).toContainText('This is their version (origin/main), read-only.');
+          await expect(main.getByRole('textbox', { name: 'guide.md, their version' })).toHaveText('theirs');
+
+          // Nothing was saved or resolved: the file still has the markers, and the merge is as it was.
+          await main.getByRole('button', { name: 'Back', exact: true }).click();
+          await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+          expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toContain('<<<<<<<');
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
       });
     });
 
