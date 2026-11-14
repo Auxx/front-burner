@@ -1,0 +1,13 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.MergeCommittedComponent'">
+  <ui-inline-banner status="success"
+                    announce
+                    [dismissLabel]="t('dismiss')"
+                    (dismissed)="dismissed.emit()">
+    {{ t('message') }}
+    <div uiBannerActions>
+      <button uiButton
+              size="small"
+              (click)="push.emit()">{{ t('push') }}</button>
+    </div>
+  </ui-inline-banner>
+</ng-container>

@@ -48,8 +48,8 @@ function unconfirmedHandbook(instance: { dataDir: string; }, name = 'handbook'):
   return { id, dir: join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)) };
 }
 
-/** **Fetch**, **Pull**, **Push** or **Abort merge**: in the bar, or in the git actions menu on a phone (GA-7, GC-6). */
-async function gitAction(page: Page, name: 'Fetch' | 'Pull' | 'Push' | 'Abort merge'): Promise<void> {
+/** **Fetch**, **Pull**, **Push**, **Commit merge** or **Abort merge**: in the bar, or in the git actions menu on a phone (GA-7, GC-6). */
+async function gitAction(page: Page, name: 'Fetch' | 'Pull' | 'Push' | 'Commit merge' | 'Abort merge'): Promise<void> {
   // Not the banner landmark: the notices below the bar have a Pull of their own.
   const bar = page.locator('rs-repository-bar');
   const button = bar.getByRole('button', { name, exact: true });
@@ -1130,7 +1130,7 @@ test.describe('pushing', () => {
         await expect(summary(page)).toHaveCount(0);
         if (await gitActions(page).isVisible()) {
           await gitActions(page).click();
-          await expect(page.getByRole('menuitem')).toHaveText([ 'Abort merge' ]);
+          await expect(page.getByRole('menuitem')).toHaveText([ /^\s*Commit merge/, 'Abort merge' ]);
           await page.keyboard.press('Escape');
         }
 
@@ -1147,6 +1147,79 @@ test.describe('pushing', () => {
         ) {
           expect(refused).toEqual({ status: 409, code: 'merge-in-progress' });
         }
+      });
+
+      test('commits with git\'s message, as edited, and the screen returns to normal on every device, with the notice', async ({ page, context, instance, isMobile, monitor }) => {
+        await confirmCommitAuthor(instance.url);
+        const { id, dir, bare } = pushable(instance, 'cloned');
+        publishGuide(dir, bare);
+        writeFileSync(join(dir, 'guide.md'), 'mine\n');
+        gitIn(dir, 'commit', '-q', '-am', 'mine');
+        pushFromElsewhere(bare, 'main', [ { 'guide.md': 'theirs\n', 'notes.md': 'notes\n' } ]);
+        await openScreen(page, `/repositories/${id}`);
+        const other = await context.newPage();
+        await other.goto(`/repositories/${id}`);
+        const notice = (tab: Page) => tab.locator('rs-merge-committed');
+        const NOTICE = 'Merge committed. Push to publish it.';
+
+        await gitAction(page, 'Pull');
+        await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+        await expect(mergeSummary(other)).toContainText('0 of 1 file resolved');
+
+        // Unavailable until every file is resolved, with the reason (GA-8).
+        if (isMobile) {
+          await gitActions(page).click();
+          const item = page.getByRole('menuitem', { name: /^Commit merge/ });
+          await expect(item).toContainText('Resolve every file first');
+          await expect(item).toBeDisabled();
+          await page.keyboard.press('Escape');
+        } else {
+          const button = bar(page).getByRole('button', { name: 'Commit merge', exact: true });
+          await expect(button).toHaveAttribute('aria-disabled', 'true');
+          // Pressing it says why, and opens nothing.
+          await button.focus();
+          await page.keyboard.press('Enter');
+          await expect(page.locator('ui-tooltip')).toHaveText('Resolve every file first');
+          await expect(page.getByRole('dialog')).toHaveCount(0);
+          await page.keyboard.press('Escape');
+        }
+
+        await showConflicts(page);
+        await conflictList(page).getByRole('button', { name: /^guide\.md\s/ }).click();
+        await page.getByRole('main').getByRole('button', { name: 'Use my version', exact: true }).click();
+        await expect(mergeSummary(page)).toContainText('1 of 1 file resolved');
+
+        await gitAction(page, 'Commit merge');
+        const dialog = page.getByRole('dialog', { name: 'Commit merge' });
+        const field = dialog.getByRole('textbox', { name: 'Commit message' });
+        await expect(field).toBeFocused();
+        await expect(field).toHaveValue(/^Merge .*origin\/main/);
+        await expect(dialog).toContainText('Committing as');
+        await field.fill('Merge origin/main, edited');
+        await dialog.getByRole('button', { name: 'Commit merge', exact: true }).click();
+
+        await expect(dialog).toHaveCount(0);
+        for (const tab of [ page, other ]) {
+          await expect(mergeSummary(tab)).toHaveCount(0);
+          await expect(summary(tab)).toHaveText(/main\s*·\s*2 to push/);
+          await expect(notice(tab)).toContainText(NOTICE);
+        }
+        expect(gitIn(dir, 'log', '-1', '--format=%s%n%P').toString().trim().split('\n')).toEqual([
+          'Merge origin/main, edited',
+          expect.stringMatching(/^[0-9a-f]+ [0-9a-f]+$/)
+        ]);
+        expect(readFileSync(join(dir, 'guide.md'), 'utf8')).toBe('mine\n');
+        expect(readFileSync(join(dir, 'notes.md'), 'utf8')).toBe('notes\n');
+
+        // Push in the notice runs as in the bar, and the notice goes everywhere once the merge is pushed.
+        await notice(page).getByRole('button', { name: 'Push', exact: true }).click();
+        await expect(notice(page)).toHaveCount(0);
+        await expect.poll(() => gitIn(bare, 'rev-parse', 'main').toString())
+          .toBe(gitIn(dir, 'rev-parse', 'HEAD').toString());
+        await expect(notice(other)).toHaveCount(0);
+        await other.close();
+        // A merge read while it ended.
+        drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
       });
 
       test('keeps focus in the side pane when the bar goes', async ({ page, context, instance, isMobile, monitor }) => {

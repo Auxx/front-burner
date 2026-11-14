@@ -4,6 +4,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import type {
+  CommitResult,
   CurrentUser,
   FileContent,
   FileState,
@@ -20,6 +21,7 @@ import { apiError, dialogButton, overlay, settleDialog } from '../../../testing/
 import { MemoryDraftStore, provideMemoryDrafts } from '../../../testing/drafts';
 import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { MergeStore } from '../merge-store/merge-store.service';
@@ -72,6 +74,10 @@ describe('MergeActionsService', () => {
   /** The paths marked as this tab's own change, in order, and those released. */
   let own: string[];
   let released: string[];
+  let merging: ReturnType<typeof signal<boolean>>;
+  let commitAnswer: () => Observable<CommitResult>;
+  let gateReady: () => Promise<boolean>;
+  let gateRefresh: ReturnType<typeof vi.fn>;
 
   /** Asks to abort, and presses **Abort merge**. */
   async function confirm(): Promise<{ done: Promise<void>; }> {
@@ -107,10 +113,16 @@ describe('MergeActionsService', () => {
     routePath = '';
     own = [];
     released = [];
+    merging = signal(true);
+    commitAnswer = () => of({ oid: 'c'.repeat(40) } as CommitResult);
+    gateReady = async () => true;
+    gateRefresh = vi.fn();
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
           'errors.merge-abort-failed': 'The merge could not be aborted.',
+          'errors.merge-unresolved': 'Resolve every conflicting file before committing the merge.',
+          'errors.internal': 'Something went wrong.',
           'errors.resolution-not-allowed': 'This file can\'t be resolved that way.',
           'web-feature-repository-screen.FailureToastService.reference': 'Reference: {{ reference }}'
         })
@@ -121,7 +133,17 @@ describe('MergeActionsService', () => {
         provideMemoryDrafts(drafts),
         { provide: ToastService, useValue: toast },
         { provide: GitStatusStore, useValue: { refresh: statusRefresh } },
-        { provide: MergeStore, useValue: { state, refresh: mergeRefresh } },
+        { provide: MergeStore, useValue: { state, merging, refresh: mergeRefresh } },
+        {
+          provide: CommitAuthorGate,
+          useValue: {
+            author: signal(null),
+            readFailed: signal(false),
+            ready: () => gateReady(),
+            change: vi.fn(async () => undefined),
+            refresh: gateRefresh
+          }
+        },
         { provide: RepositorySessionService, useValue: { repository } },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         {
@@ -155,6 +177,10 @@ describe('MergeActionsService', () => {
             startConflictOver: (_id: number, request: { path: string; }) => {
               requests.push(`start over ${request.path}`);
               return startOverAnswer();
+            },
+            commitMerge: (_id: number, request: { message: string; }) => {
+              requests.push(`commit ${request.message}`);
+              return commitAnswer();
             },
             resolveConflict: (_id: number, request: GitResolveRequest) => {
               requests.push(`resolve ${request.path} ${request.resolution}${request.force ? ' force' : ''}`);
@@ -986,6 +1012,144 @@ describe('MergeActionsService', () => {
       expect(file.saver.held()).toBe(false);
       expect(mergeRefresh).toHaveBeenCalled();
       expect(service.resolving()).toBeNull();
+    });
+  });
+
+  describe('committing the merge', () => {
+    const C = 'web-feature-repository-screen.CommitMergeDialog';
+
+    function allResolved(): void {
+      const merge = conflicting('guide.md', 'notes.md');
+      state.set({ ...merge, files: merge.files.map(file => ({ ...file, resolved: true })) });
+    }
+
+    async function pressCommit(): Promise<void> {
+      dialogButton(`${C}.commit`)?.click();
+      await settleDialog();
+    }
+
+    it('does nothing until every file is resolved', async () => {
+      await service.commit();
+
+      expect(overlay()?.querySelector('rs-commit-merge') ?? null).toBeNull();
+    });
+
+    it('commits with git\'s message, reads the merge again, and closes', async () => {
+      allResolved();
+      const done = service.commit();
+      await settleDialog();
+
+      expect((overlay().querySelector('textarea') as HTMLTextAreaElement).value).toBe('Merge');
+      await pressCommit();
+      await done;
+
+      expect(requests).toEqual([ 'commit Merge' ]);
+      expect(statusRefresh).toHaveBeenCalled();
+      expect(mergeRefresh).toHaveBeenCalled();
+      expect(overlay().querySelector('rs-commit-merge')).toBeNull();
+    });
+
+    it('asks for the author first, and cancelling leaves the merge', async () => {
+      allResolved();
+      gateReady = async () => false;
+      void service.commit();
+      await settleDialog();
+
+      await pressCommit();
+
+      expect(requests).toEqual([]);
+      expect(overlay().querySelector('rs-commit-merge')).not.toBeNull();
+    });
+
+    it('says when a file became unresolved, and reads the merge again', async () => {
+      allResolved();
+      commitAnswer = () => throwError(() => apiError(409, 'merge-unresolved'));
+      void service.commit();
+      await settleDialog();
+
+      await pressCommit();
+
+      expect(overlay().textContent).toContain('Resolve every conflicting file before committing the merge.');
+      expect(overlay().querySelector('rs-commit-merge')).not.toBeNull();
+      expect(mergeRefresh).toHaveBeenCalled();
+      expect(toast.show).not.toHaveBeenCalled();
+    });
+
+    it('says why when the author can\'t be read, and commits nothing', async () => {
+      allResolved();
+      gateReady = () => Promise.reject(apiError(500, 'internal'));
+      void service.commit();
+      await settleDialog();
+
+      await pressCommit();
+
+      expect(requests).toEqual([]);
+      expect(overlay().textContent).toContain('Something went wrong.');
+      expect(overlay().querySelector('rs-commit-merge')).not.toBeNull();
+    });
+
+    it('reads the status before the merge after committing, so that an ended merge is not read', async () => {
+      allResolved();
+      const reads: string[] = [];
+      statusRefresh.mockImplementation(async () => {
+        reads.push('status');
+      });
+      mergeRefresh.mockImplementation(async () => {
+        reads.push('merge');
+      });
+      const done = service.commit();
+      await settleDialog();
+
+      await pressCommit();
+      await done;
+
+      expect(reads).toEqual([ 'status', 'merge' ]);
+    });
+
+    it('reads the author again when the backend says it is not confirmed', async () => {
+      allResolved();
+      commitAnswer = () => throwError(() => apiError(409, 'commit-author-not-confirmed'));
+      void service.commit();
+      await settleDialog();
+
+      await pressCommit();
+
+      expect(gateRefresh).toHaveBeenCalledOnce();
+    });
+
+    it('closes, saying nothing, when the merge ended elsewhere', async () => {
+      allResolved();
+      commitAnswer = () => throwError(() => apiError(409, 'no-merge-in-progress'));
+      const done = service.commit();
+      await settleDialog();
+
+      await pressCommit();
+      await done;
+
+      expect(overlay().querySelector('rs-commit-merge')).toBeNull();
+      expect(overlay().textContent).not.toContain('errors.no-merge-in-progress');
+    });
+
+    it('closes when the merge ends while it is open', async () => {
+      allResolved();
+      const done = service.commit();
+      await settleDialog();
+
+      merging.set(false);
+      await settleDialog();
+      await done;
+
+      expect(overlay().querySelector('rs-commit-merge')).toBeNull();
+    });
+
+    it('is not asked over another question', async () => {
+      allResolved();
+      void service.abort();
+      await settleDialog();
+
+      await service.commit();
+
+      expect(overlay().querySelector('rs-commit-merge')).toBeNull();
     });
   });
 });

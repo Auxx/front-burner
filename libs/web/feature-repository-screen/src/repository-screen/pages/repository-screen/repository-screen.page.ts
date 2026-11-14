@@ -44,6 +44,7 @@ import { EditorAreaComponent } from '../../components/editor-area/editor-area.co
 import { FileTreeComponent } from '../../components/file-tree/file-tree.component';
 import { GitProblemComponent } from '../../components/git-problem/git-problem.component';
 import { LockedKeyBannerComponent } from '../../components/locked-key-banner/locked-key-banner.component';
+import { MergeCommittedComponent } from '../../components/merge-committed/merge-committed.component';
 import { NotOpenableComponent } from '../../components/not-openable/not-openable.component';
 import { RemoteChangeNoticeComponent } from '../../components/remote-change-notice/remote-change-notice.component';
 import { RepositoryBarComponent } from '../../components/repository-bar/repository-bar.component';
@@ -152,6 +153,7 @@ const MAX_BADGE_COUNT = 99;
     NotOpenableComponent,
     GitProblemComponent,
     RemoteChangeNoticeComponent,
+    MergeCommittedComponent,
     RepositoryBarComponent
   ],
   providers: [
@@ -190,6 +192,7 @@ export class RepositoryScreenPage {
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly injector = inject(Injector);
   private readonly firstFile = inject(FirstFileService);
   protected readonly tree = inject(FileTreeStoreService);
   private readonly commands = inject(EntryCommandsService);
@@ -564,19 +567,53 @@ export class RepositoryScreenPage {
   }
 
   /**
-   * **Pull** or dismissing removes the remote-change notice, with the button that
-   * has the focus. This runs before the page shows it, so what is focused is still there.
+   * **Pull**, **Push** or dismissing removes a notice, with the button that has
+   * the focus. This runs before the page shows it, so what is focused is still there.
    */
   private keepFocusWhenNoticeGoes(): void {
+    this.keepFocusWhenGone(() => this.remoteChanges.notice() !== null, 'rs-remote-change-notice');
+    this.keepFocusWhenGone(this.mergeCommitted, 'rs-merge-committed');
+  }
+
+  private keepFocusWhenGone(shownNow: () => boolean, selector: string): void {
     const injector = inject(Injector);
     let shown = false;
     effect(() => {
-      const nowShown = this.remoteChanges.notice() !== null;
-      if (shown && !nowShown && this.document.activeElement?.closest('rs-remote-change-notice')) {
+      const nowShown = shownNow();
+      if (shown && !nowShown && this.document.activeElement?.closest(selector)) {
         afterNextRender(() => this.bar()?.focusActions(), { injector });
       }
       shown = nowShown;
     });
+  }
+
+  /**
+   * **Commit merge**. The dialog gives the focus back to the button that opened
+   * it, which goes when the merge ends: the bar's actions then take it.
+   */
+  protected async commitMerge(): Promise<void> {
+    await this.mergeActions.commit();
+    afterNextRender(() => {
+      const active = this.document.activeElement;
+      if (active === null || active === this.document.body || !active.isConnected) {
+        this.bar()?.focusActions();
+      }
+    }, { injector: this.injector });
+  }
+
+  /**
+   * **Push** in the merge-committed notice runs as in the bar, and the notice
+   * goes. A network job running meanwhile, such as a background fetch, is waited
+   * for, as the notice is gone and the push must not be lost to it.
+   */
+  protected pushMerge(): void {
+    this.dismissMergeCommitted();
+    void this.jobs.startWhenFree('push');
+  }
+
+  /** The merge-committed notice is dismissed for the visit, for this merge commit. */
+  protected dismissMergeCommitted(): void {
+    this.dismissedMerge.set(this.gitStatus.status()?.lastCommit?.oid ?? null);
   }
 
   /**
@@ -684,6 +721,23 @@ export class RepositoryScreenPage {
   protected readonly gitProblems = computed(() => {
     const problem = this.jobs.problem();
     return this.session.state() === 'ready' && problem !== null ? [ problem ] : [];
+  });
+
+  /** The merge commit whose notice the user dismissed or pushed from, during this visit. */
+  private readonly dismissedMerge = signal<string | null>(null);
+
+  /**
+   * Whether "Merge committed. Push to publish it." shows (GC-22). It follows the
+   * status, not the commit's answer, so that it also shows after a reload and on
+   * another device (AC-GIT-003.11), and goes once the merge commit is pushed, also
+   * elsewhere, or is undone. Dismissing it, or **Push**, hides it for the visit.
+   */
+  protected readonly mergeCommitted = computed(() => {
+    const status = this.gitStatus.status();
+    return this.session.state() === 'ready'
+      && status?.undoableMerge === true
+      && !this.merge.merging()
+      && status.lastCommit?.oid !== this.dismissedMerge();
   });
 
   /** The locked key, while the banner for it is shown (RC-15). */

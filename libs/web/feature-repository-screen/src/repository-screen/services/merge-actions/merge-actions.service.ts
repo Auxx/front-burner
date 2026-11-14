@@ -1,4 +1,4 @@
-import { inject, Injectable, signal, type Type } from '@angular/core';
+import { computed, inject, Injectable, signal, type Type } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import type { GitResolution } from '@front-burner/shared-contracts';
 import { DialogService } from '@front-burner/ui';
@@ -7,9 +7,15 @@ import { toApiError } from '@front-burner/web-core';
 import { firstValueFrom, type Observable } from 'rxjs';
 
 import { AbortMergeDialog } from '../../dialogs/abort-merge/abort-merge.dialog';
+import {
+  type CommitMergeData,
+  CommitMergeDialog,
+  type CommitMergeOutcome
+} from '../../dialogs/commit-merge/commit-merge.dialog';
 import { MarkersLeftDialog } from '../../dialogs/markers-left/markers-left.dialog';
 import { StartOverDialog } from '../../dialogs/start-over/start-over.dialog';
 import type { ConflictAction } from '../../models/conflict-action.model';
+import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
 import { FailureToastService } from '../failure-toast/failure-toast.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
@@ -63,6 +69,7 @@ export class MergeActionsService {
   private readonly session = inject(RepositorySessionService);
   private readonly route = inject(ActivatedRoute);
   private readonly failures = inject(FailureToastService);
+  private readonly gate = inject(CommitAuthorGate);
 
   private readonly abortRunning = signal(false);
   private readonly resolveRunning = signal<{ path: string; resolution: ConflictAction; } | null>(null);
@@ -158,6 +165,79 @@ export class MergeActionsService {
         [ 'not-resolved', 'no-merge-in-progress' ]
       );
     });
+  }
+
+  /**
+   * **Commit merge** (GC-20, GC-21): opens the dialog with git's message, once
+   * every file is resolved. Each press asks `CommitAuthorGate` first (CA-12):
+   * cancelling there leaves the merge, and the dialog, as they were. The backend
+   * commits; then the status and the merge are read again, and the screen returns
+   * to normal. `no-merge-in-progress` is no failure: the merge ended elsewhere, and
+   * the dialog closes, as it does when that is seen any other way. Any other
+   * failure is the dialog's to show (GC-27), and `merge-unresolved` also reads the
+   * merge again, so that the file reopened elsewhere shows. Ignored while anything
+   * else is asked or running. Settles when the dialog has closed.
+   */
+  async commit(): Promise<void> {
+    const repositoryId = this.idleOn();
+    const state = this.store.state();
+    if (repositoryId === null || state === null || state.files.some(file => !file.resolved)) {
+      return;
+    }
+    this.asking = true;
+    try {
+      const ref = this.dialogs.open<CommitMergeDialog, CommitMergeData, void>(CommitMergeDialog, {
+        data: {
+          message: state.message,
+          author: this.gate.author,
+          authorFailed: this.gate.readFailed,
+          ended: computed(() => !this.store.merging() || !this.stillOn(repositoryId)),
+          changeAuthor: () => this.gate.change(),
+          commit: message => this.sendCommit(repositoryId, message)
+        }
+      });
+      await firstValueFrom(ref.closed, { defaultValue: undefined });
+    } finally {
+      this.asking = false;
+    }
+  }
+
+  /**
+   * One press of the dialog's **Commit merge**. An author that can't be read
+   * fails like the commit itself, as the commit form does.
+   */
+  private async sendCommit(repositoryId: number, message: string): Promise<CommitMergeOutcome> {
+    try {
+      if (!(await this.gate.ready())) {
+        return 'cancelled';
+      }
+      if (!this.stillOn(repositoryId)) {
+        return 'ended';
+      }
+      await firstValueFrom(this.api.commitMerge(repositoryId, { message }));
+    } catch (error) {
+      const apiError = toApiError(error);
+      if (!this.stillOn(repositoryId)) {
+        return 'ended';
+      }
+      if (apiError.code === 'commit-author-not-confirmed') {
+        this.gate.refresh();
+      }
+      await this.readAfterCommit();
+      return this.mergeEnded(error) ? 'ended' : { error: apiError };
+    }
+    await this.readAfterCommit();
+    return 'committed';
+  }
+
+  /**
+   * The status first: once it says that the merge ended, the merge is not read,
+   * which would only be refused. Otherwise it is read too, such as for a file
+   * reopened elsewhere (`merge-unresolved`).
+   */
+  private async readAfterCommit(): Promise<void> {
+    await this.status.refresh();
+    await this.store.refresh();
   }
 
   /** The open repository, when nothing is asked or running that a resolve must wait for; otherwise `null`. */

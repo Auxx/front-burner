@@ -25,6 +25,7 @@
                            [mergeState]="merge.state()"
                            [aborting]="mergeActions.aborting()"
                            (abortMerge)="mergeActions.abort()"
+                           (commitMerge)="commitMerge()"
                            (openBranches)="branchActions.open()"
                            (fetch)="jobs.start('fetch')"
                            (pull)="jobs.start('pull')"
@@ -55,6 +56,11 @@
                                  [waiting]="jobs.pullWaiting()"
                                  (pull)="jobs.startWhenFree('pull')"
                                  (dismissed)="remoteChanges.dismiss()" />
+      }
+      @if (mergeCommitted()) {
+        <rs-merge-committed uiAppShellBanner
+                            (push)="pushMerge()"
+                            (dismissed)="dismissMergeCommitted()" />
       }
       @switch (state) {
         @case ('missing') {

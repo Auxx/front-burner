@@ -30,11 +30,15 @@ const merge: GitMergeState = {
 describe('MergeSummaryComponent', () => {
   let fixture: ComponentFixture<MergeSummaryComponent>;
   let aborted: number;
+  let committed: number;
 
   const host = () => fixture.nativeElement as HTMLElement;
   const text = () => host().textContent?.replace(/\s+/g, ' ').trim();
   const menu = () => document.querySelector('.cdk-overlay-container ui-menu') as HTMLElement | null;
   const barButton = () => host().querySelector('button') as HTMLButtonElement;
+  const abortButton = () => host().querySelector('button.abort') as HTMLButtonElement;
+  const commitButton = () => host().querySelector('button.commit') as HTMLButtonElement;
+  const menuItems = () => [ ...(menu()?.querySelectorAll('button') ?? []) ] as HTMLButtonElement[];
 
   async function show(inputs: { state?: GitMergeState | null; narrow?: boolean; busy?: boolean; } = {}) {
     fixture.componentRef.setInput('state', inputs.state === undefined ? merge : inputs.state);
@@ -54,6 +58,8 @@ describe('MergeSummaryComponent', () => {
           [`${K}.resolved`]: '{{ resolved }} of {{ total }} files resolved',
           [`${K}.inProgress`]: 'Merge in progress',
           [`${K}.abort`]: 'Abort merge',
+          [`${K}.commit`]: 'Commit merge',
+          [`${K}.resolveFirst`]: 'Resolve every file first',
           [`${K}.gitActions`]: 'Git actions',
           [`${K}.gitActionsWarning`]: 'Git actions. {{ warning }}'
         })
@@ -61,6 +67,8 @@ describe('MergeSummaryComponent', () => {
     });
     fixture = TestBed.createComponent(MergeSummaryComponent);
     fixture.componentInstance.abortMerge.subscribe(() => aborted++);
+    committed = 0;
+    fixture.componentInstance.commit.subscribe(() => committed++);
   });
 
   it('shows what merges into what, and the count', async () => {
@@ -70,21 +78,60 @@ describe('MergeSummaryComponent', () => {
     expect(text()).toContain('2 of 3 files resolved');
   });
 
-  it('says a merge is in progress until it has been read, with Abort merge', async () => {
+  it('says only that a merge is in progress until it has been read, with Abort merge', async () => {
     await show({ state: null });
 
     expect(text()).toContain('Merge in progress');
-    barButton().click();
+    expect(commitButton()).toBeNull();
+    expect(text()).not.toContain('Resolve every file first');
+    abortButton().click();
     expect(aborted).toBe(1);
+  });
+
+  it('offers nothing but Abort merge in the menu on a phone until the merge has been read', async () => {
+    await show({ state: null, narrow: true });
+    barButton().click();
+    await settle(fixture);
+
+    expect(menuItems().map(item => item.textContent?.trim())).toEqual([ 'Abort merge' ]);
+  });
+
+  it('keeps the focus on Commit merge when the last file is resolved, also elsewhere', async () => {
+    await show();
+    document.body.append(host());
+    const button = commitButton();
+    button.focus();
+
+    await show({ state: { ...merge, files: merge.files.map(file => ({ ...file, resolved: true })) } });
+
+    expect(commitButton()).toBe(button);
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute('aria-disabled')).toBeNull();
+    host().remove();
+  });
+
+  it('is unavailable while an abort runs', async () => {
+    const ready = { ...merge, files: merge.files.map(file => ({ ...file, resolved: true })) };
+    await show({ state: ready, busy: true });
+
+    expect(commitButton().getAttribute('aria-disabled')).toBe('true');
+    commitButton().click();
+    expect(committed).toBe(0);
+
+    await show({ state: ready, busy: true, narrow: true });
+    barButton().click();
+    await settle(fixture);
+    expect(menuItems()[0].textContent).toContain('Commit merge');
+    expect(menuItems()[0].getAttribute('aria-disabled') ?? menuItems()[0].disabled.toString()).toMatch(/true/);
   });
 
   it('offers Abort merge in the bar on a wide screen', async () => {
     await show();
 
-    expect(barButton().textContent?.trim()).toBe('Abort merge');
-    expect(barButton().getAttribute('aria-haspopup')).toBeNull();
+    expect(abortButton().textContent?.trim()).toBe('Abort merge');
+    expect(abortButton().getAttribute('aria-haspopup')).toBeNull();
 
-    barButton().click();
+    abortButton().click();
 
     expect(aborted).toBe(1);
   });
@@ -92,7 +139,44 @@ describe('MergeSummaryComponent', () => {
   it('shows that an abort is running', async () => {
     await show({ busy: true });
 
-    expect(barButton().getAttribute('data-busy')).toBe('true');
+    expect(abortButton().getAttribute('data-busy')).toBe('true');
+  });
+
+  it('is unavailable until every file is resolved, with the reason', async () => {
+    await show();
+
+    expect(commitButton().textContent?.trim()).toBe('Commit merge');
+    expect(commitButton().getAttribute('aria-disabled')).toBe('true');
+    expect(commitButton().getAttribute('aria-description') ?? commitButton().getAttribute('aria-describedby'))
+      .not.toBeNull();
+    commitButton().click();
+    await settle(fixture);
+    expect(committed).toBe(0);
+    expect(document.body.textContent).toContain('Resolve every file first');
+
+    await show({ state: { ...merge, files: merge.files.map(file => ({ ...file, resolved: true })) } });
+    expect(commitButton().getAttribute('aria-disabled')).toBeNull();
+    commitButton().click();
+
+    expect(committed).toBe(1);
+  });
+
+  it('is ready at once with no conflicting file left', async () => {
+    await show({ state: { ...merge, files: [] } });
+
+    commitButton().click();
+
+    expect(committed).toBe(1);
+  });
+
+  it('offers Commit merge in the menu on a phone, with its reason until it is ready', async () => {
+    await show({ narrow: true });
+    barButton().click();
+    await settle(fixture);
+
+    expect(menuItems()[0].textContent).toContain('Commit merge');
+    expect(menuItems()[0].textContent).toContain('Resolve every file first');
+    expect(menuItems()[0].getAttribute('aria-disabled') ?? menuItems()[0].disabled.toString()).toMatch(/true/);
   });
 
   it('shortens long names on a phone', async () => {
@@ -118,7 +202,7 @@ describe('MergeSummaryComponent', () => {
 
     barButton().click();
     await settle(fixture);
-    const item = menu()?.querySelector('button') as HTMLButtonElement;
+    const item = menuItems()[1];
     expect(item.textContent?.trim()).toBe('Abort merge');
 
     item.click();
@@ -138,10 +222,10 @@ describe('MergeSummaryComponent', () => {
     expect(barButton().getAttribute('aria-label')).toBe('Git actions. Couldn\'t check');
     barButton().click();
     await settle(fixture);
-    const items = [ ...(menu()?.querySelectorAll('button') ?? []) ] as HTMLButtonElement[];
-    expect(items.map(item => item.textContent?.trim())).toEqual([ 'Abort merge', 'Couldn\'t check' ]);
+    const items = menuItems();
+    expect(items.slice(1).map(item => item.textContent?.trim())).toEqual([ 'Abort merge', 'Couldn\'t check' ]);
 
-    items[1].click();
+    items[2].click();
     await settle(fixture);
 
     expect(shown).toBe(1);

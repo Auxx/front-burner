@@ -85,6 +85,8 @@ export class RepositoryBarComponent {
   readonly aborting = input(false);
   /** **Abort merge** was chosen. */
   readonly abortMerge = output<void>();
+  /** **Commit merge** was chosen. */
+  readonly commitMerge = output<void>();
   /** The current branch was chosen, to open the branch list. */
   readonly openBranches = output<void>();
   /** **Fetch** was chosen. */
