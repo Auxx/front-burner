@@ -10,17 +10,27 @@ import {
   input,
   linkedSignal,
   output,
+  signal,
   viewChild,
   viewChildren
 } from '@angular/core';
-import type { GitConflictFile, GitResolution } from '@front-burner/shared-contracts';
-import { ButtonComponent, IconComponent, SpinnerComponent } from '@front-burner/ui';
+import type { ApiError, GitConflictFile, GitResolution } from '@front-burner/shared-contracts';
+import {
+  ButtonComponent,
+  IconComponent,
+  injectNarrowViewport,
+  InlineBannerComponent,
+  SpinnerComponent
+} from '@front-burner/ui';
+import { ApiErrorTextService } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 
+import type { OpenFile } from '../../services/open-files/open-files.service';
 import { conflictOffers, shownVersions, type VersionSide } from '../../utils/conflict-offers/conflict-offers';
 import { fileName, parentPath } from '../../utils/file-name/file-name';
 import { versionSizes } from '../../utils/version-sizes/version-sizes';
 import { ConflictVersionComponent } from '../conflict-version/conflict-version.component';
+import { EditorPaneComponent } from '../editor-pane/editor-pane.component';
 
 /**
  * The selected conflicting file in the editor area, in place of the editor
@@ -33,20 +43,41 @@ import { ConflictVersionComponent } from '../conflict-version/conflict-version.c
  *
  * **Show mine** and **Show theirs** open that version read-only in its place
  * (GC-17), until **Back**, which gives the focus back to the button, or until
- * another file is selected. Plans 99 and 100 add the other ways to resolve it.
+ * another file is selected.
+ *
+ * An unresolved file that can be edited with its conflict markers (GC-9) opens in
+ * the editor below its name and the other choices, as the first way offered: the
+ * page opens it through `OpenFilesService` and passes it in as `openFile`, so that
+ * it saves as any file does (GC-12). Until then a spinner shows, or why it could
+ * not be opened, with **Try again** (`retryOpen`). The editor is deferred, as the
+ * editor area's is, so that CodeMirror stays out of the screen's first chunk.
+ * Plan 100 adds **Mark as resolved** and **Start over**.
  */
 @Component({
   selector: 'rs-conflict-file',
-  imports: [ TranslocoDirective, ButtonComponent, IconComponent, SpinnerComponent, ConflictVersionComponent ],
+  imports: [
+    TranslocoDirective,
+    ButtonComponent,
+    IconComponent,
+    InlineBannerComponent,
+    SpinnerComponent,
+    ConflictVersionComponent,
+    EditorPaneComponent
+  ],
   templateUrl: './conflict-file.component.html',
   styleUrl: './conflict-file.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    '[class.showing]': 'shown() !== null'
+    '[class.showing]': 'shown() !== null',
+    '[class.editing]': 'shown() === null && editing()',
+    '[class.typing]': 'typing()',
+    '(focusin)': 'focusMoved($event)',
+    '(focusout)': 'focusMoved($event)'
   }
 })
 export class ConflictFileComponent {
   private readonly injector = inject(Injector);
+  private readonly errorText = inject(ApiErrorTextService);
 
   readonly repositoryId = input.required<number>();
   readonly file = input.required<GitConflictFile>();
@@ -59,8 +90,15 @@ export class ConflictFileComponent {
   /** Whether no choice can be made now. */
   readonly locked = input(false, { transform: booleanAttribute });
 
+  /** The file opened for editing with its conflicts, once it has opened (GC-9). */
+  readonly openFile = input<OpenFile | null>(null);
+  /** Why the file could not be opened for editing. */
+  readonly openError = input<ApiError | null>(null);
+
   /** A whole version chosen (GC-15, GC-16). */
   readonly resolve = output<GitResolution>();
+  /** **Try again** after the file could not be opened for editing. */
+  readonly retryOpen = output<void>();
 
   private readonly showButtons = viewChildren('showButton', { read: ElementRef<HTMLButtonElement> });
   private readonly heading = viewChild('heading', { read: ElementRef<HTMLElement> });
@@ -88,6 +126,26 @@ export class ConflictFileComponent {
     }
   });
   protected readonly versions = computed(() => versionSizes(this.file()));
+  /** Whether the file is edited with its conflict markers (GC-9): unresolved, and editable. */
+  readonly editing = computed(() => this.file().editable && !this.file().resolved);
+  protected readonly openFailure = computed(() => {
+    const error = this.openError();
+    return error ? this.errorText.describe(error) : null;
+  });
+  private readonly narrow = injectNarrowViewport();
+  /** Whether the focus is in the editor pane: its editor, its toolbar or its conflict bar. */
+  private readonly inEditor = signal(false);
+  /**
+   * On a phone, while the focus is in the editor and with it the on-screen keyboard,
+   * the file's name and choices make way, so that the editor keeps the height it
+   * has for any file (NF-12.5); they come back when the focus leaves it.
+   */
+  protected readonly typing = computed(() => this.narrow() && this.inEditor() && this.editing() && !this.shown());
+
+  protected focusMoved(event: FocusEvent): void {
+    const target = event.type === 'focusin' ? event.target : event.relatedTarget;
+    this.inEditor.set(target instanceof Element && target.closest('rs-editor-pane') !== null);
+  }
 
   protected show(side: VersionSide): void {
     this.shown.set(side);

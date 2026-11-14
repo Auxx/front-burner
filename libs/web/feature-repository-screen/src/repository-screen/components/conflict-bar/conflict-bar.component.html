@@ -1,6 +1,6 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ConflictBarComponent'">
   @let shown = position();
-  @let atCursor = at();
+  @let canAccept = acceptable();
   <div class="bar"
        role="group"
        [attr.aria-label]="t('label')">
@@ -18,15 +18,15 @@
     <div class="accepts">
       <button uiButton
               size="small"
-              [unavailable]="atCursor === null"
+              [unavailable]="!canAccept"
               (click)="acceptAt('ours')">{{ t('acceptOurs') }}</button>
       <button uiButton
               size="small"
-              [unavailable]="atCursor === null"
+              [unavailable]="!canAccept"
               (click)="acceptAt('theirs')">{{ t('acceptTheirs') }}</button>
       <button uiButton
               size="small"
-              [unavailable]="atCursor === null"
+              [unavailable]="!canAccept"
               (click)="acceptAt('both')">{{ t('acceptBoth') }}</button>
     </div>
   </div>

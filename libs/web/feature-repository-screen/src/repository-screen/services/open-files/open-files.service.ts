@@ -528,6 +528,15 @@ export class OpenFilesService {
     return () => releases.forEach(release => release());
   }
 
+  /**
+   * Keeps each file's saver from sending until its own function in the map is
+   * called, such as during a merge, which lets a conflicting file save again
+   * while the others wait (GC-12, ED-25).
+   */
+  holdEach(): Map<OpenFile, () => void> {
+    return new Map(this.all().map(file => [ file, file.saver.hold() ]));
+  }
+
   /** Makes the file shown in the editor none, such as when the route names another kind of entry. */
   clearCurrent(): void {
     this.opening++;

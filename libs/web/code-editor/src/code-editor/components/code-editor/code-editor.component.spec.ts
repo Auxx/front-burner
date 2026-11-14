@@ -138,6 +138,35 @@ describe('CodeEditorComponent', () => {
     expect(view().state).toBe(changes[0].state);
   });
 
+  it('moves to a conflict and accepts one, as one undoable edit', async () => {
+    await setUp();
+    const conflict = '<<<<<<< main\nmine\n=======\ntheirs\n>>>>>>> origin/main';
+    const content = `intro\n${conflict}\nend\n`;
+    await show(
+      createEditorState({
+        content,
+        highlight: false,
+        label: 'guide.md',
+        conflicts: {
+          ours: branch => `Mine (${branch})`,
+          theirs: branch => `Theirs (${branch})`,
+          acceptOurs: 'Accept mine',
+          acceptTheirs: 'Accept theirs',
+          acceptBoth: 'Accept both'
+        }
+      })
+    );
+
+    fixture.componentInstance.goToConflict(0);
+    expect(view().state.selection.main.head).toBe('intro\n'.length);
+
+    fixture.componentInstance.acceptConflict(0, 'theirs');
+    expect(view().state.doc.toString()).toBe('intro\ntheirs\nend\n');
+    expect(changes.at(-1)?.docChanged).toBe(true);
+    undo(view());
+    expect(view().state.doc.toString()).toBe(content);
+  });
+
   it('opens the search panel', async () => {
     await setUp();
 

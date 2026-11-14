@@ -49,6 +49,11 @@
           <rs-view-mode-switch />
         </div>
       </div>
+      @if (barShown()) {
+        <rs-conflict-bar [state]="state()"
+                         (move)="moveToConflict($event)"
+                         (accept)="acceptConflict($event)" />
+      }
       <div class="panel"
            uiTabPanel="edit">
         <ng-template uiTabContent>
@@ -61,14 +66,19 @@
       <div class="panel"
            uiTabPanel="preview">
         <ng-template uiTabContent>
-          <md-preview [source]="openFile.preview"
-                      [path]="openFile.path()"
-                      [label]="name()"
-                      [fragment]="fragment()"
-                      [active]="viewMode.previewShown()"
-                      [repositoryId]="repositoryId()"
-                      (openPath)="openPath.emit($event)"
-                      (scrolled)="previewScrolled($event)" />
+          @if (markersLeft()) {
+            <ui-empty-state class="preview-note"
+                            icon="info">{{ t('markersLeft') }}</ui-empty-state>
+          } @else {
+            <md-preview [source]="openFile.preview"
+                        [path]="openFile.path()"
+                        [label]="name()"
+                        [fragment]="fragment()"
+                        [active]="viewMode.previewShown()"
+                        [repositoryId]="repositoryId()"
+                        (openPath)="openPath.emit($event)"
+                        (scrolled)="previewScrolled($event)" />
+          }
         </ng-template>
       </div>
     </div>
@@ -97,6 +107,11 @@
         <rs-view-mode-switch />
       </div>
     </div>
+    @if (barShown()) {
+      <rs-conflict-bar [state]="state()"
+                       (move)="moveToConflict($event)"
+                       (accept)="acceptConflict($event)" />
+    }
     <ui-split-pane class="panes"
                    [show]="show()"
                    [(size)]="editorSize"
@@ -106,15 +121,21 @@
                       [state]="state()"
                       (stateChange)="changed($event)"
                       (scrolled)="editorScrolled($event)" />
-      <md-preview uiSplitPaneEnd
-                  [source]="openFile.preview"
-                  [path]="openFile.path()"
-                  [label]="name()"
-                  [fragment]="fragment()"
-                  [active]="viewMode.previewShown()"
-                  [repositoryId]="repositoryId()"
-                  (openPath)="openPath.emit($event)"
-                  (scrolled)="previewScrolled($event)" />
+      @if (markersLeft()) {
+        <ui-empty-state uiSplitPaneEnd
+                        class="preview-note"
+                        icon="info">{{ t('markersLeft') }}</ui-empty-state>
+      } @else {
+        <md-preview uiSplitPaneEnd
+                    [source]="openFile.preview"
+                    [path]="openFile.path()"
+                    [label]="name()"
+                    [fragment]="fragment()"
+                    [active]="viewMode.previewShown()"
+                    [repositoryId]="repositoryId()"
+                    (openPath)="openPath.emit($event)"
+                    (scrolled)="previewScrolled($event)" />
+      }
     </ui-split-pane>
   }
 </ng-container>

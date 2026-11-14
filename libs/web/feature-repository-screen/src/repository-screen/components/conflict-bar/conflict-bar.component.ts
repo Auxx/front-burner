@@ -25,7 +25,8 @@ const KEY = 'web-feature-repository-screen.ConflictBarComponent';
  * conflicts", or "No conflict markers left."; **Previous** and **Next**, which go
  * to the conflict before and after the one at the cursor, or the nearest ones
  * when the cursor is in none; and **Accept mine**, **Accept theirs** and
- * **Accept both** for the conflict at the cursor.
+ * **Accept both** for the conflict at the cursor, unavailable while the editor
+ * is read-only, as the buttons inside it are.
  *
  * It gives the keyboard and screen readers what the buttons inside the editor
  * give to pointer and touch, since those can't be reached with `Tab`. It reads
@@ -55,6 +56,8 @@ export class ConflictBarComponent {
   /** The index of the conflict at the cursor, or `null`. */
   protected readonly at = computed(() => conflictAtCursor(this.state()));
   protected readonly total = computed(() => this.regions().length);
+  /** Whether **Accept** can act: on a conflict at the cursor, in an editor that can be edited. */
+  protected readonly acceptable = computed(() => this.at() !== null && !this.state().readOnly);
   /** The conflict that **Previous** goes to: the one before the cursor's, or the nearest before the cursor. */
   protected readonly previous = computed(() => {
     const at = this.at();
@@ -109,7 +112,7 @@ export class ConflictBarComponent {
 
   protected acceptAt(choice: ConflictChoice): void {
     const index = this.at();
-    if (index !== null) {
+    if (index !== null && this.acceptable()) {
       this.accept.emit({ index, choice });
     }
   }

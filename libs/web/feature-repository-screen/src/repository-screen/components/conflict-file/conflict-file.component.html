@@ -34,26 +34,30 @@
     @if (deletedNote(); as deletedNote) {
       <p class="deleted-by">{{ t(deletedNote, { from: from() }) }}</p>
     }
-    <dl class="versions">
-      @for (version of versions(); track version.side) {
-        <div class="version">
-          <dt>{{ t(version.side, { into: into(), from: from() }) }}</dt>
-          <dd>
-            @switch (version.size) {
-              @case ('deleted') {
-                {{ t('deleted') }}
+    @let edited = editing();
+    <!-- The sizes say what a file that can't be edited holds; an edited file shows its text instead. -->
+    @if (!edited) {
+      <dl class="versions">
+        @for (version of versions(); track version.side) {
+          <div class="version">
+            <dt>{{ t(version.side, { into: into(), from: from() }) }}</dt>
+            <dd>
+              @switch (version.size) {
+                @case ('deleted') {
+                  {{ t('deleted') }}
+                }
+                @case ('none') {
+                  {{ t('noSize') }}
+                }
+                @default {
+                  {{ version.size }}
+                }
               }
-              @case ('none') {
-                {{ t('noSize') }}
-              }
-              @default {
-                {{ version.size }}
-              }
-            }
-          </dd>
-        </div>
-      }
-    </dl>
+            </dd>
+          </div>
+        }
+      </dl>
+    }
     @if (shows().length > 0) {
       <div class="shows"
            role="group"
@@ -76,6 +80,35 @@
                   (click)="resolve.emit(offer)">{{ t('offer.' + offer) }}</button>
         }
       </div>
+    }
+    @if (edited) {
+      @if (openFile(); as opened) {
+        @defer {
+          <rs-editor-pane class="editor"
+                          conflicts
+                          [file]="opened" />
+        } @loading (minimum 0ms) {
+          <ui-spinner class="opening"
+                      [label]="t('openingFile')" />
+        }
+      } @else if (openFailure(); as failure) {
+        <ui-inline-banner class="open-failed"
+                          status="danger"
+                          announce>
+          {{ t('openFailed') }} {{ failure.text }}
+          @if (failure.reference) {
+            <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+          }
+          <div uiBannerActions>
+            <button uiButton
+                    size="small"
+                    (click)="retryOpen.emit()">{{ t('retry') }}</button>
+          </div>
+        </ui-inline-banner>
+      } @else {
+        <ui-spinner class="opening"
+                    [label]="t('openingFile')" />
+      }
     }
   }
 </ng-container>

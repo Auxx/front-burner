@@ -1,5 +1,6 @@
 import {
   afterNextRender,
+  booleanAttribute,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -14,8 +15,10 @@ import {
   untracked,
   viewChild
 } from '@angular/core';
+import { hasConflictMarkers } from '@front-burner/shared-util';
 import {
   ButtonComponent,
+  EmptyStateComponent,
   ICON_SPRITE_URL,
   IconComponent,
   SplitPaneComponent,
@@ -26,13 +29,17 @@ import {
 } from '@front-burner/ui';
 import {
   CodeEditorComponent,
+  conflictsIn,
+  type ConflictTexts,
   contentOf,
   createEditorState,
   cursorOf,
   type EditorStateChange,
   isHighlighting,
+  isShowingConflicts,
   isSoftWrapping,
   replaceContent,
+  setConflicts,
   setHighlighting,
   setLabel,
   setReadOnly,
@@ -50,6 +57,7 @@ import { fileName } from '../../utils/file-name/file-name';
 import { findPanelLabels } from '../../utils/find-panel-labels/find-panel-labels';
 import { type ScrollPane, ScrollSync } from '../../utils/scroll-sync/scroll-sync';
 import { ChangedOnDiskComponent } from '../changed-on-disk/changed-on-disk.component';
+import { type ConflictAccept, ConflictBarComponent } from '../conflict-bar/conflict-bar.component';
 import { DraftOfferComponent } from '../draft-offer/draft-offer.component';
 import { GoneElsewhereComponent } from '../gone-elsewhere/gone-elsewhere.component';
 import { LargeFileNoteComponent } from '../large-file-note/large-file-note.component';
@@ -65,6 +73,10 @@ interface Layout {
 
 /** The `revision` of the content each file's editor state was built from (ED-24). */
 const built = new WeakMap<OpenFile, number>();
+
+const KEY = 'web-feature-repository-screen.EditorPaneComponent';
+/** The **Accept** buttons inside the editor say what the conflict bar's say. */
+const BAR_KEY = 'web-feature-repository-screen.ConflictBarComponent';
 
 /**
  * The editor of the open file: CodeMirror with the file's own state (A-8.15),
@@ -96,6 +108,15 @@ const built = new WeakMap<OpenFile, number>();
  * no work (A-8.12). In **Split** mode the two scroll together (ED-35); when
  * the mode or the screen size changes, the panes now shown open at the place
  * of the file that was at the top before (ED-36).
+ *
+ * With `conflicts`, for a conflicting file during a merge, the editor shows its
+ * conflicts with plan 98's conflict view, also in a state kept from before the
+ * merge, and `rs-conflict-bar` above it moves between them and accepts them
+ * (GC-10, GC-11); an **Accept** gives the focus back to the editor. Edits are
+ * saved as any file's (GC-12). While the text has lines that look like conflict
+ * markers, by the rule that **Mark as resolved** uses (GC-14), the preview says
+ * it comes back when none are left, since marker lines would render as headings
+ * and rules (GC-13). Without `conflicts` the view is off again.
  */
 @Component({
   selector: 'rs-editor-pane',
@@ -104,7 +125,9 @@ const built = new WeakMap<OpenFile, number>();
     ButtonComponent,
     CodeEditorComponent,
     ChangedOnDiskComponent,
+    ConflictBarComponent,
     DraftOfferComponent,
+    EmptyStateComponent,
     GoneElsewhereComponent,
     IconComponent,
     LargeFileNoteComponent,
@@ -123,6 +146,8 @@ export class EditorPaneComponent {
   readonly file = input.required<OpenFile>();
   /** The heading of the file to show in the preview, such as from a link in another file. */
   readonly fragment = input<string | null>(null);
+  /** Whether the file is a conflicting file of the merge in progress, edited with its conflicts (GC-9). */
+  readonly conflicts = input(false, { transform: booleanAttribute });
   /** A link in the preview to another entry of the repository (ED-31). */
   readonly openPath = output<PreviewPathLink>();
 
@@ -177,9 +202,29 @@ export class EditorPaneComponent {
       this.settings.softWrap(),
       fileName(file.path()),
       file.draft() !== null || file.gone() || file.changed() !== null,
-      file.revision()
+      file.revision(),
+      this.conflicts()
     );
   });
+  /**
+   * Whether the preview waits for the conflict markers to go (GC-13). The text is
+   * read only once the conflict view finds no conflict left, so that typing in a
+   * file with conflicts reads nothing more.
+   */
+  protected readonly markersLeft = computed(() => {
+    const state = this.state();
+    return this.conflicts() && (conflictsIn(state).length > 0 || hasConflictMarkers(contentOf(state)));
+  });
+  /** The conflict bar shows with the editor of a conflicting file. */
+  protected readonly barShown = computed(() => this.conflicts() && this.viewMode.editorShown());
+  /** The words of the conflict view, translated when it draws them, as the find panel's are. */
+  private readonly conflictTexts: ConflictTexts = {
+    ours: branch => this.transloco.translate(`${KEY}.mine`, { branch }),
+    theirs: branch => this.transloco.translate(`${KEY}.theirs`, { branch }),
+    acceptOurs: this.transloco.translate(`${BAR_KEY}.acceptOurs`),
+    acceptTheirs: this.transloco.translate(`${BAR_KEY}.acceptTheirs`),
+    acceptBoth: this.transloco.translate(`${BAR_KEY}.acceptBoth`)
+  };
   protected readonly noteShown = computed(() => {
     const file = this.file();
     return file.largeOnNarrow && !file.highlight() && this.viewMode.editorShown();
@@ -314,6 +359,18 @@ export class EditorPaneComponent {
     }
   }
 
+  /** **Previous** or **Next** of the conflict bar: the cursor goes to the conflict; the focus stays on the bar. */
+  protected moveToConflict(index: number): void {
+    this.editor()?.goToConflict(index);
+  }
+
+  /** An **Accept** of the conflict bar, as one undoable edit; the focus goes back to the editor (GC-11). */
+  protected acceptConflict(accept: ConflictAccept): void {
+    const editor = this.editor();
+    editor?.acceptConflict(accept.index, accept.choice);
+    editor?.focus();
+  }
+
   /**
    * ED-36: when the layout changes, the panes shown next open at the place
    * that was at the top of the panes shown before.
@@ -362,7 +419,7 @@ export class EditorPaneComponent {
 
   /**
    * The file's state, created on its first showing and again for each
-   * reload, with its highlighting, soft wrap, name and read-only mode brought up to date.
+   * reload, with its highlighting, soft wrap, name, read-only mode and conflict view brought up to date.
    */
   private stateFor(
     file: OpenFile,
@@ -370,7 +427,8 @@ export class EditorPaneComponent {
     softWrap: boolean,
     label: string,
     readOnly: boolean,
-    revision: number
+    revision: number,
+    conflicts: boolean
   ): EditorState {
     const existing = file.editorState as EditorState | null;
     const reloaded = existing !== null && (built.get(file) ?? 0) !== revision;
@@ -393,13 +451,15 @@ export class EditorPaneComponent {
         readOnly,
         cursor: reloaded ? cursorOf(existing) : undefined,
         findLabels: findPanelLabels(this.transloco),
-        findIconSprite: this.iconSprite
+        findIconSprite: this.iconSprite,
+        conflicts: conflicts ? this.conflictTexts : undefined
       })
       : existing.update(
         setLabel(label),
         ...(isHighlighting(existing) === highlight ? [] : [ setHighlighting(highlight) ]),
         ...(isSoftWrapping(existing) === softWrap ? [] : [ setSoftWrap(softWrap) ]),
-        ...(existing.readOnly === readOnly ? [] : [ setReadOnly(readOnly) ])
+        ...(existing.readOnly === readOnly ? [] : [ setReadOnly(readOnly) ]),
+        ...(isShowingConflicts(existing) === conflicts ? [] : [ setConflicts(conflicts ? this.conflictTexts : null) ])
       ).state;
     file.editorState = state;
     if (existing === null) {

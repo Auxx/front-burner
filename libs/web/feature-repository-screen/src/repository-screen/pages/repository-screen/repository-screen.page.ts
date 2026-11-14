@@ -62,7 +62,7 @@ import { LockedKeyService } from '../../services/locked-key/locked-key.service';
 import { MergeActionsService } from '../../services/merge-actions/merge-actions.service';
 import { MergeStore } from '../../services/merge-store/merge-store.service';
 import { type GitProblem, NetworkJobService } from '../../services/network-job/network-job.service';
-import { OpenFilesService } from '../../services/open-files/open-files.service';
+import { type OpenFile, OpenFilesService } from '../../services/open-files/open-files.service';
 import { PaneMemoryService, type SideTool } from '../../services/pane-memory/pane-memory.service';
 import { RemoteChangesService } from '../../services/remote-changes/remote-changes.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
@@ -122,7 +122,8 @@ const MAX_BADGE_COUNT = 99;
  * During a merge, the side pane lists the conflicting files instead of the tree and
  * **Changes**, and the editor area shows the one selected in `MergeStore` (GC-7, GC-8,
  * FB-26), whose whole versions `MergeActionsService` resolves it with (GC-15, GC-16). The tree, **Changes** and the editor stay in place, hidden, so that they keep
- * their state, unsaved edits included, for when the merge ends (ED-25).
+ * their state, unsaved edits included, for when the merge ends (ED-25). A conflicting file that can be edited
+ * opens there in the editor, with its conflicts, as the open file but not the route's (GC-9, GC-12).
  */
 @Component({
   selector: 'rs-repository-screen',
@@ -306,6 +307,36 @@ export class RepositoryScreenPage {
   /** Whether the open file has unsaved edits (NV-13). */
   private readonly unsaved = computed(() => this.openFiles.current()?.saver.unsaved() ?? false);
 
+  /**
+   * The conflicting file edited with its conflicts (GC-9): its path, and the file
+   * once it has opened, or why it could not; `null` while the file shown can't be
+   * edited, and without a merge.
+   */
+  protected readonly conflictEditing = signal<{ path: string; file: OpenFile | null; error: ApiError | null; } | null>(
+    null
+  );
+  /**
+   * The file the editor area shows: the open file, but during a merge the route's,
+   * hidden, while the conflicting file edited is the open one; none when they are
+   * the same file, which only one editor may show.
+   */
+  protected readonly areaFile = computed(() => {
+    const current = this.openFiles.current();
+    const editing = this.conflictEditing()?.file ?? null;
+    if (current === null || current !== editing) {
+      return current;
+    }
+    const path = this.openPath();
+    const routeFile = path ? (this.openFiles.get(path) ?? null) : null;
+    return routeFile === editing ? null : routeFile;
+  });
+  /** The savers held during a merge, each released on its own (ED-25, GC-12). */
+  private mergeHolds: Map<OpenFile, () => void> | null = null;
+  /** Counts the conflicting files opened, so that only the latest one counts. */
+  private conflictOpening = 0;
+  /** Whether a conflicting file was opened during this merge, so that the route's file is opened again after it. */
+  private conflictOpened = false;
+
   /** Counts the diffs selected, so that only the latest one's wait for a save counts. */
   private diffsSelected = 0;
   /** Counts the paths shown, so that only the latest one's answer counts. */
@@ -349,6 +380,7 @@ export class RepositoryScreenPage {
     this.closeBranchListWhenMergeStarts();
     this.followMergeInSidePane();
     this.holdSavesDuringMerge();
+    this.editConflictingFiles();
   }
 
   /**
@@ -356,22 +388,104 @@ export class RepositoryScreenPage {
    * would be refused, or for a conflicting file would write over its conflict
    * markers. Their savers are held, and what waits is kept as browser drafts
    * (ED-25); the waiting saves are sent once the merge ends. Leaving the screen
-   * meanwhile sends nothing: the drafts keep the edits.
+   * meanwhile sends nothing: the drafts keep the edits. A conflicting file edited
+   * during the merge saves again once it is open (`openConflict`).
    */
   private holdSavesDuringMerge(): void {
-    let release: (() => void) | null = null;
     effect(() => {
       const merging = this.merge.merging();
       untracked(() => {
-        if (merging && release === null) {
-          release = this.openFiles.hold();
+        if (merging && this.mergeHolds === null) {
+          this.mergeHolds = this.openFiles.holdEach();
           this.openFiles.writeDrafts();
-        } else if (!merging && release !== null) {
-          release();
-          release = null;
+        } else if (!merging && this.mergeHolds !== null) {
+          this.mergeHolds.forEach(release => release());
+          this.mergeHolds = null;
         }
       });
     });
+  }
+
+  /**
+   * The conflicting file selected during a merge, when it is unresolved and can be
+   * edited, opens in the editor with its conflicts (GC-9). It is opened through
+   * `OpenFilesService` without going through the route, which keeps naming the
+   * file that was open, so it saves, keeps browser drafts and follows changes made
+   * elsewhere as any open file (GC-12, ED-24), and is never remembered as this
+   * device's last file (FB-12). When the merge ends, the route's file is opened
+   * again, or the empty state shown without one.
+   */
+  private editConflictingFiles(): void {
+    effect(() => {
+      const file = this.merge.selectedFile();
+      const path = file?.editable && !file.resolved ? file.path : null;
+      untracked(() => {
+        if (path !== (this.conflictEditing()?.path ?? null)) {
+          void this.openConflict(path);
+        }
+      });
+    });
+    effect(() => {
+      const merging = this.merge.merging();
+      const repository = this.session.repository();
+      untracked(() => {
+        if (merging || !this.conflictOpened) {
+          return;
+        }
+        this.conflictOpened = false;
+        if (repository) {
+          const path = this.path();
+          void this.show(repository.id, path, path === '');
+        }
+      });
+    });
+  }
+
+  /**
+   * Opens the conflicting file at `path` for editing, or none. One already open, as
+   * the route's file before the merge, is checked for the merge's change on disk
+   * first, which loads the markers or asks **Reload** or **Keep mine** (ED-24), and
+   * only then may save again: a save waiting from before the merge would otherwise
+   * write over its markers.
+   */
+  private async openConflict(path: string | null): Promise<void> {
+    const opening = ++this.conflictOpening;
+    if (path === null) {
+      this.conflictEditing.set(null);
+      return;
+    }
+    this.conflictEditing.set({ path, file: null, error: null });
+    // Before the file has opened: a merge that ends meanwhile opens the route's file again, which makes this
+    // opening too late to become the open file.
+    this.conflictOpened = true;
+    const kept = this.openFiles.get(path) !== undefined;
+    try {
+      const file = await this.openFiles.open(path);
+      if (kept) {
+        this.diskChanges.notice(path);
+        await this.diskChanges.settled();
+      }
+      const release = this.mergeHolds?.get(file);
+      if (release) {
+        this.mergeHolds?.delete(file);
+        release();
+      }
+      if (opening === this.conflictOpening) {
+        this.conflictEditing.set({ path, file, error: null });
+      }
+    } catch (error) {
+      if (opening === this.conflictOpening) {
+        this.conflictEditing.set({ path, file: null, error: error as ApiError });
+      }
+    }
+  }
+
+  /** **Try again** after the conflicting file could not be opened for editing. */
+  protected retryConflict(): void {
+    const path = this.conflictEditing()?.path;
+    if (path) {
+      void this.openConflict(path);
+    }
   }
 
   /**

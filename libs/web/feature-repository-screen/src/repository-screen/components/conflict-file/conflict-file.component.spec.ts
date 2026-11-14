@@ -1,10 +1,18 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import type { GitConflictFile, GitResolution } from '@front-burner/shared-contracts';
+import type { CurrentUser, GitConflictFile, GitResolution } from '@front-burner/shared-contracts';
 import { GitApi } from '@front-burner/web-api-client';
-import { of } from 'rxjs';
+import { CurrentUserService } from '@front-burner/web-core';
+import { BehaviorSubject, map, of } from 'rxjs';
 
+import { openFile } from '../../../testing/open-files';
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { DiskChangesService } from '../../services/disk-changes/disk-changes.service';
+import { OpenFilesService } from '../../services/open-files/open-files.service';
+import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
+import { ViewModeService } from '../../services/view-mode/view-mode.service';
 import { ConflictFileComponent } from './conflict-file.component';
 
 const KEY = 'web-feature-repository-screen.ConflictFileComponent';
@@ -12,6 +20,7 @@ const KEY = 'web-feature-repository-screen.ConflictFileComponent';
 describe('ConflictFileComponent', () => {
   let fixture: ComponentFixture<ConflictFileComponent>;
   let gitMergeVersion: ReturnType<typeof vi.fn>;
+  let narrow: BehaviorSubject<boolean>;
 
   const host = () => fixture.nativeElement as HTMLElement;
   const text = (selector: string) => host().querySelector(selector)?.textContent?.trim();
@@ -24,7 +33,8 @@ describe('ConflictFileComponent', () => {
       path: 'docs/guide.md',
       kind: 'both-changed',
       resolved: false,
-      editable: true,
+      // The file's choices alone; the editor has tests of its own below.
+      editable: false,
       edited: false,
       oursSize: 1,
       theirsSize: 1,
@@ -39,6 +49,7 @@ describe('ConflictFileComponent', () => {
   }
 
   beforeEach(() => {
+    narrow = new BehaviorSubject(false);
     gitMergeVersion = vi.fn((_id: number, query: { path: string; side: string; }) =>
       of({ content: `${query.side} of ${query.path}` })
     );
@@ -52,9 +63,99 @@ describe('ConflictFileComponent', () => {
           [`${KEY}.theirs`]: 'Theirs ({{ from }})'
         })
       ],
-      providers: [ { provide: GitApi, useValue: { gitMergeVersion } } ]
+      providers: [
+        { provide: GitApi, useValue: { gitMergeVersion } },
+        {
+          provide: BreakpointObserver,
+          useValue: {
+            isMatched: () => narrow.value,
+            observe: () => narrow.pipe(map(matches => ({ matches, breakpoints: {} })))
+          }
+        },
+        // What the deferred editor pane needs.
+        { provide: OpenFilesService, useValue: {} },
+        { provide: DiskChangesService, useValue: {} },
+        { provide: RepositorySessionService, useValue: { repository: signal({ id: 12 }) } },
+        ViewModeService,
+        { provide: CurrentUserService, useValue: { user: signal<CurrentUser | undefined>(undefined) } }
+      ]
     });
     fixture = TestBed.createComponent(ConflictFileComponent);
+  });
+
+  describe('editing the file with its conflicts (GC-9)', () => {
+    const editorPane = () => host().querySelector('rs-editor-pane');
+
+    it('offers the editor for an editable file, first, with the other choices still there', async () => {
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md', { content: '<<<<<<< main\na\n' }));
+      await show({ editable: true });
+      await settle(fixture);
+
+      expect(editorPane()?.querySelector('.cm-content')?.textContent).toContain('<<<<<<< main');
+      expect(editorPane()?.querySelector('rs-conflict-bar')).not.toBeNull();
+      expect(host().classList).toContain('editing');
+      expect(labels()).toEqual([ `${KEY}.offer.ours`, `${KEY}.offer.theirs` ]);
+      expect(host().querySelector('.versions')).toBeNull();
+    });
+
+    it('shows a spinner while the file opens, and why it could not, with Try again', async () => {
+      let retries = 0;
+      fixture.componentInstance.retryOpen.subscribe(() => retries++);
+      await show({ editable: true });
+
+      expect(host().querySelector('ui-spinner')?.getAttribute('aria-label')).toBe(`${KEY}.openingFile`);
+
+      fixture.componentRef.setInput('openError', {
+        code: 'file-not-utf8',
+        params: {},
+        requestId: 'req-123456789',
+        message: 'Not UTF-8'
+      });
+      await settle(fixture);
+      (host().querySelector('.open-failed [uiBannerActions] button') as HTMLButtonElement).click();
+
+      expect(text('.open-failed')).toContain(`${KEY}.openFailed`);
+      expect(retries).toBe(1);
+    });
+
+    it('makes way for the editor on a phone while the focus is in it, and comes back when it leaves', async () => {
+      narrow.next(true);
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md', { content: '<<<<<<< main\na\n' }));
+      await show({ editable: true });
+      await settle(fixture);
+      const content = host().querySelector<HTMLElement>('.cm-content');
+
+      content?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      await settle(fixture);
+      expect(host().classList).toContain('typing');
+
+      // A button of the editor pane, such as the conflict bar's, keeps it so.
+      content?.dispatchEvent(
+        new FocusEvent('focusout', { bubbles: true, relatedTarget: host().querySelector('rs-conflict-bar button') })
+      );
+      await settle(fixture);
+      expect(host().classList).toContain('typing');
+
+      content?.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: buttons()[0] }));
+      await settle(fixture);
+      expect(host().classList).not.toContain('typing');
+
+      narrow.next(false);
+      content?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      await settle(fixture);
+      expect(host().classList).not.toContain('typing');
+    });
+
+    it('does not offer it for a PNG or a large file, nor for a resolved one', async () => {
+      fixture.componentRef.setInput('openFile', openFile('docs/guide.md'));
+      await show({ editable: false });
+      expect(editorPane()).toBeNull();
+      expect(host().querySelector('.versions')).not.toBeNull();
+
+      await show({ editable: true, resolved: true });
+      expect(editorPane()).toBeNull();
+      expect(host().classList).not.toContain('editing');
+    });
   });
 
   it('shows the file\'s name, folder, kind and state', async () => {
