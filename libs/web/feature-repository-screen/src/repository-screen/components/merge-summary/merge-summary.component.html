@@ -39,6 +39,14 @@
     </button>
     <ui-menu #actions="uiMenu"
              (itemSelected)="choose($event)">
+      <button uiMenuItem="commit"
+              [disabled]="!ready()">
+        <ui-icon name="check" />
+        {{ t('commit') }}
+        @if (!ready()) {
+          <span class="reason">{{ t('resolveFirst') }}</span>
+        }
+      </button>
       <button uiMenuItem="abort">
         <ui-icon name="close" />
         {{ t('abort') }}
@@ -51,9 +59,32 @@
       }
     </ui-menu>
   } @else {
+    @if (ready()) {
+      <button uiButton
+              variant="ghost"
+              size="small"
+              class="commit"
+              [unavailable]="busy()"
+              (click)="commit.emit()">
+        <ui-icon name="check" />
+        {{ t('commit') }}
+      </button>
+    } @else {
+      <button uiButton
+              variant="ghost"
+              size="small"
+              class="commit"
+              unavailable
+              uiTooltipShowOnClick
+              [uiTooltip]="t('resolveFirst')">
+        <ui-icon name="check" />
+        {{ t('commit') }}
+      </button>
+    }
     <button uiButton
             variant="ghost"
             size="small"
+            class="abort"
             [busy]="busy()"
             (click)="abortMerge.emit()">
       <ui-icon name="close" />

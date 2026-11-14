@@ -48,3 +48,11 @@
 button {
   flex-shrink: 0;
 }
+
+// The reason of an item that is not offered, below its label (GA-8).
+.reason {
+  display: block;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-ui-small);
+  white-space: normal;
+}

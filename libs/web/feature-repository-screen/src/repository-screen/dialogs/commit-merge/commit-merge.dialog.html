@@ -1,0 +1,58 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.CommitMergeDialog'">
+  <ui-dialog [heading]="t('heading')">
+    <form novalidate
+          [id]="formId"
+          (submit)="confirm($event)">
+      @if (failure(); as failure) {
+        <ui-inline-banner status="danger"
+                          announce>
+          {{ failure.text }}
+          @if (failure.reference) {
+            <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+          }
+        </ui-inline-banner>
+      }
+      @let refusedKey = refused();
+      <ui-field [label]="t('message')"
+                [error]="refusedKey ? t(refusedKey, { length: maxLength }) : undefined">
+        <textarea uiTextarea
+                  #messageField
+                  rows="4"
+                  [readOnly]="busy()"
+                  [value]="message()"
+                  (input)="typed($event)"></textarea>
+      </ui-field>
+      @if (data.author(); as current) {
+        <div class="author">
+          <span class="author-text">{{ t('committingAs', current.author) }}</span>
+          <button uiButton
+                  type="button"
+                  size="small"
+                  class="change"
+                  [attr.aria-label]="t('changeLabel')"
+                  [unavailable]="busy()"
+                  (click)="changeAuthor()">
+            {{ t('change') }}
+          </button>
+        </div>
+      } @else if (data.authorFailed()) {
+        <ui-inline-banner status="warning"
+                          announce>
+          {{ t('authorFailed') }}
+        </ui-inline-banner>
+      }
+    </form>
+    <div uiDialogFooter>
+      <button uiButton
+              [unavailable]="busy()"
+              (click)="ref.close()">{{ t('cancel') }}</button>
+      <button uiButton
+              variant="primary"
+              type="submit"
+              [attr.form]="formId"
+              [busy]="busy()">
+        {{ t('commit') }}
+      </button>
+    </div>
+  </ui-dialog>
+</ng-container>

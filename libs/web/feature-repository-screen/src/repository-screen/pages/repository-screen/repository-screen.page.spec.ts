@@ -1380,7 +1380,7 @@ describe('RepositoryScreenPage', () => {
         expect(merging()?.textContent).toContain('origin/main');
         expect(page().querySelector('rs-git-actions')).toBeNull();
 
-        (merging()?.querySelector('button') as HTMLButtonElement).click();
+        (merging()?.querySelector('button.abort') as HTMLButtonElement).click();
         await settleDialog();
         expect(abortMerge).not.toHaveBeenCalled();
 
@@ -1989,6 +1989,80 @@ describe('RepositoryScreenPage', () => {
 
         expect(noticeButton(`${NOTICE}.waiting`).getAttribute('aria-disabled')).toBe('true');
         expect(pull).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('the merge-committed notice (GC-22)', () => {
+      const notice = () => page().querySelector('rs-merge-committed');
+      const NOTICE = 'web-feature-repository-screen.MergeCommittedComponent';
+      const noticeButton = (text: string) =>
+        [ ...(notice()?.querySelectorAll('button') ?? []) ].find(found =>
+          found.textContent?.trim() === text || found.getAttribute('aria-label') === text
+        ) as HTMLButtonElement;
+      const committed = (): GitStatus => ({
+        ...baseStatus(),
+        upstream: 'origin/main',
+        ahead: 2,
+        undoableMerge: true,
+        lastCommit: { oid: 'm'.repeat(40), message: 'Merge', amendable: false } as GitStatus['lastCommit']
+      });
+
+      it('shows after a reload, while the merge commit can be undone', async () => {
+        gitStatusAnswer = of(committed());
+
+        await visit('/repositories/12');
+
+        expect(notice()?.textContent).toContain(`${NOTICE}.message`);
+      });
+
+      it('shows nothing otherwise', async () => {
+        await visit('/repositories/12');
+
+        expect(notice()).toBeNull();
+      });
+
+      it('pushes, and the notice goes', async () => {
+        gitStatusAnswer = of(committed());
+        await visit('/repositories/12');
+        const pushButton = noticeButton(`${NOTICE}.push`);
+        pushButton.focus();
+
+        pushButton.click();
+        await settle(harness.fixture);
+        await settle(harness.fixture);
+
+        expect(push).toHaveBeenCalledExactlyOnceWith(12);
+        expect(notice()).toBeNull();
+        expect(document.activeElement?.closest('rs-git-actions')).toBeTruthy();
+      });
+
+      it('stays dismissed for the visit', async () => {
+        const statuses = new BehaviorSubject<GitStatus>(committed());
+        gitStatusAnswer = statuses.pipe(take(1));
+        await visit('/repositories/12');
+
+        noticeButton(`${NOTICE}.dismiss`).click();
+        await settle(harness.fixture);
+        expect(notice()).toBeNull();
+
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+
+        expect(notice()).toBeNull();
+      });
+
+      it('goes when the merge is pushed elsewhere', async () => {
+        const statuses = new BehaviorSubject<GitStatus>(committed());
+        gitStatusAnswer = statuses.pipe(take(1));
+        await visit('/repositories/12');
+        expect(notice()).not.toBeNull();
+
+        statuses.next({ ...committed(), ahead: 0, undoableMerge: false });
+        gitStatusAnswer = statuses.pipe(take(1));
+        events.next({ type: 'git.changed', repositoryId: 12 });
+        await settle(harness.fixture);
+
+        expect(notice()).toBeNull();
       });
     });
 

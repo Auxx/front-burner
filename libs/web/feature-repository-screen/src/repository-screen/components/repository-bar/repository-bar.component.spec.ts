@@ -111,15 +111,19 @@ describe('RepositoryBarComponent', () => {
       message: 'Merge'
     });
     let aborted = 0;
+    let committed = 0;
     fixture.componentInstance.abortMerge.subscribe(() => aborted++);
+    fixture.componentInstance.commitMerge.subscribe(() => committed++);
     await settle(fixture);
 
     expect(bar().querySelector('rs-git-status-summary')).toBeNull();
     expect(bar().querySelector('rs-git-actions')).toBeNull();
     expect(bar().querySelector('rs-merge-summary')).not.toBeNull();
 
-    (bar().querySelector('rs-merge-summary button') as HTMLButtonElement).click();
+    (bar().querySelector('rs-merge-summary button.abort') as HTMLButtonElement).click();
     expect(aborted).toBe(1);
+    (bar().querySelector('rs-merge-summary button.commit') as HTMLButtonElement).click();
+    expect(committed).toBe(1);
 
     fixture.componentRef.setInput('merging', false);
     await settle(fixture);

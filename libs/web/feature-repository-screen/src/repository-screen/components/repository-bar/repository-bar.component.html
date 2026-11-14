@@ -12,6 +12,7 @@
                         [busy]="aborting()"
                         [warning]="warning"
                         (abortMerge)="abortMerge.emit()"
+                        (commit)="commitMerge.emit()"
                         (showWarning)="showFetchDetails()" />
     } @else {
       <rs-git-status-summary [status]="gitStatus()"
