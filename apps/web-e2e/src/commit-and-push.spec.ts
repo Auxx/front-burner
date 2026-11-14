@@ -1,4 +1,3 @@
-import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,6 +11,15 @@ import {
   PROTECTED_KEY_PUBLIC,
   startGitSshServer
 } from './support/git-ssh-server';
+import {
+  arrowTo,
+  axe,
+  type Hands,
+  keyboard as keyboardHands,
+  recordAnnouncements,
+  tabTo,
+  touch as touchHands
+} from './support/hands';
 import { confirmCommitAuthor, logIn, seed, seededRemoteUrl, TEST_ADMIN } from './support/instance';
 import { addOverApi, ADMIN_ID, escapeRegExp, sshRepository, workingCopyOf } from './support/repositories';
 import { createWorkingCopy, gitIn } from './support/working-copy';
@@ -51,41 +59,8 @@ const dialog = (page: Page, name?: string) => page.getByRole('dialog', name === 
 const credentialsDialog = (page: Page) => dialog(page, 'Repository credentials');
 const tooltip = (page: Page) => page.locator('ui-tooltip');
 
-/** Waits for every animation, so that axe measures the colours a dialog ends with. */
-async function settled(page: Page): Promise<void> {
-  await page.evaluate(() =>
-    Promise.all(
-      document.getAnimations()
-        .filter(animation => animation.effect?.getTiming().iterations !== Infinity)
-        .map(animation => animation.finished)
-    )
-  );
-}
-
-async function axe(page: Page, ...selectors: string[]): Promise<void> {
-  await settled(page);
-  let builder = new AxeBuilder({ page });
-  for (const selector of selectors) {
-    builder = builder.include(selector);
-  }
-  expect((await builder.analyze()).violations).toEqual([]);
-}
-
-/**
- * How the walkthrough works the screen: with the keyboard alone on a desktop,
- * or by touch alone on a phone (GA-6, NF-12.5).
- */
-interface Hands {
-  /** Activates a button, a link or a menu item. */
-  press(target: Locator): Promise<void>;
-  /** Asks an unavailable button why: a keyboard press or a tap shows its reason (GA-8). */
-  explain(target: Locator): Promise<void>;
-  /** Ticks or unticks a checkbox. */
-  toggle(target: Locator): Promise<void>;
-  /** Types `text` at the end of a field or the editor. */
-  typeInto(target: Locator, text: string): Promise<void>;
-  /** Chooses the radio button `name` of `group`. */
-  choose(group: Locator, name: string): Promise<void>;
+/** {@link Hands}, with what this walkthrough does with the file tree and **Changes**. */
+interface FileHands extends Hands {
   /** Opens a file from the file tree. */
   openFile(name: string): Promise<void>;
   /** Deletes a file from the file tree, confirming it. */
@@ -96,74 +71,9 @@ interface Hands {
   push(): Promise<void>;
 }
 
-/**
- * Presses Shift+Tab until `target` has the focus, and checks that the focus
- * can be seen (NF-13.3). Backwards, because the editor is the last control of
- * the page, and Firefox keeps the focus there on Tab. The editor takes Tab for
- * indenting until Escape is pressed (ED-11).
- */
-async function tabTo(page: Page, target: Locator, limit = 150): Promise<void> {
-  // A toolbar is one stop of Tab, and its arrow keys move between its buttons (NF-13.4).
-  const orientation = await target.evaluate(element =>
-    element.closest('[role="toolbar"]')?.getAttribute('aria-orientation') ?? null
-  );
-  const reached = () =>
-    target.evaluate((element, inToolbar) => {
-      const active = document.activeElement;
-      return inToolbar ? element.closest('[role="toolbar"]')?.contains(active) === true : element === active;
-    }, orientation !== null);
-  for (let presses = 0; !(await reached()); presses++) {
-    if (presses === limit) {
-      throw new Error(`Shift+Tab did not reach ${target}`);
-    }
-    if (await page.evaluate(() => document.activeElement?.closest('.cm-editor') != null)) {
-      await page.keyboard.press('Escape');
-    }
-    await page.keyboard.press('Shift+Tab');
-  }
-  if (orientation !== null) {
-    await arrowTo(page, target, orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown');
-  }
-  expect(await target.evaluate(element => element.matches(':focus-visible')), 'the focus is visible').toBe(true);
-}
-
-/** Presses `key` until `target` has the focus, such as an item of an open menu. */
-async function arrowTo(page: Page, target: Locator, key = 'ArrowDown', limit = 20): Promise<void> {
-  for (let presses = 0; presses < limit; presses++) {
-    if (await target.evaluate(element => element === document.activeElement)) {
-      return;
-    }
-    await page.keyboard.press(key);
-  }
-  throw new Error(`${key} did not reach ${target}`);
-}
-
-function keyboard(page: Page): Hands {
-  const hands: Hands = {
-    press: async target => {
-      await tabTo(page, target);
-      await page.keyboard.press('Enter');
-    },
-    explain: async target => {
-      await tabTo(page, target);
-      await page.keyboard.press('Enter');
-    },
-    toggle: async target => {
-      await tabTo(page, target);
-      await page.keyboard.press('Space');
-    },
-    typeInto: async (target, text) => {
-      await tabTo(page, target);
-      await page.keyboard.press('ControlOrMeta+End');
-      await page.keyboard.type(text);
-    },
-    choose: async (group, name) => {
-      const radios = group.getByRole('radio');
-      const checked = radios.and(group.locator(':checked'));
-      await tabTo(page, (await checked.count()) > 0 ? checked : radios.first());
-      await arrowTo(page, group.getByRole('radio', { name }));
-      await expect(group.getByRole('radio', { name })).toBeChecked();
-    },
+function keyboard(page: Page): FileHands {
+  const hands: FileHands = {
+    ...keyboardHands(page),
     openFile: async name => {
       await tabTo(page, tree(page));
       await page.keyboard.type(name);
@@ -189,29 +99,14 @@ function keyboard(page: Page): Hands {
       }
       await expect(changesPane(page)).toBeVisible();
     },
-    push: async () => {
-      await hands.press(bar(page).getByRole('button', { name: 'Push', exact: true }));
-    }
+    push: () => hands.gitAction('Push')
   };
   return hands;
 }
 
-function touch(page: Page): Hands {
-  const hands: Hands = {
-    press: target => target.tap(),
-    // `force`: Playwright waits for an `aria-disabled` button to be enabled, but a tap here says why.
-    explain: target => target.tap({ force: true }),
-    toggle: target => target.tap(),
-    typeInto: async (target, text) => {
-      await target.tap();
-      await page.keyboard.press('ControlOrMeta+End');
-      await page.keyboard.type(text);
-    },
-    // The radio is visually hidden, so its label is tapped.
-    choose: async (group, name) => {
-      await group.getByText(name, { exact: true }).tap();
-      await expect(group.getByRole('radio', { name })).toBeChecked();
-    },
+function touch(page: Page): FileHands {
+  const hands: FileHands = {
+    ...touchHands(page),
     openFile: async name => {
       await showTree();
       await entry(page, name).tap();
@@ -234,10 +129,7 @@ function touch(page: Page): Hands {
       }
       await expect(changesPane(page)).toBeVisible();
     },
-    push: async () => {
-      await bar(page).getByRole('button', { name: 'Git actions' }).tap();
-      await page.getByRole('menuitem', { name: 'Push' }).tap();
-    }
+    push: () => hands.gitAction('Push')
   };
   async function showTree(): Promise<void> {
     if (await filesButton(page).getAttribute('aria-pressed') === 'false') {
@@ -273,28 +165,6 @@ async function openScreen(page: Page, url: string): Promise<void> {
   await page.goto(url);
   await logIn(page);
   await opened;
-}
-
-/**
- * Collects what the CDK live announcer says, so that a test can count how
- * often a banner was announced (RC-25).
- */
-async function recordAnnouncements(page: Page): Promise<() => Promise<string[]>> {
-  await page.addInitScript(() => {
-    const said: string[] = [];
-    (window as unknown as { announcements: string[]; }).announcements = said;
-    new MutationObserver(records => {
-      for (const record of records) {
-        const element = record.target instanceof Element ? record.target : record.target.parentElement;
-        const region = element?.closest('.cdk-live-announcer-element');
-        const text = region?.textContent?.trim();
-        if (region && text) {
-          said.push(text);
-        }
-      }
-    }).observe(document, { subtree: true, childList: true, characterData: true });
-  });
-  return () => page.evaluate(() => [ ...(window as unknown as { announcements: string[]; }).announcements ]);
 }
 
 test.describe('commit and push', () => {
@@ -352,7 +222,7 @@ test.describe('commit and push', () => {
    * the two left with a message; pushes and sees the counts go; then a push
    * fails for a token that may only read, and the banner's fix pushes.
    */
-  async function walkThrough(page: Page, hands: Hands, instance: { url: string; dataDir: string; }) {
+  async function walkThrough(page: Page, hands: FileHands, instance: { url: string; dataDir: string; }) {
     const { id, dir, bare } = await addHandbook(instance);
     await openScreen(page, `/repositories/${id}`);
     await expect(editorOf(page, 'README.md')).toBeVisible();
@@ -533,7 +403,12 @@ test.describe('every action, by touch and by keyboard', () => {
     return { id, dir };
   }
 
-  async function everyAction(page: Page, hands: Hands, isMobile: boolean, instance: { url: string; dataDir: string; }) {
+  async function everyAction(
+    page: Page,
+    hands: FileHands,
+    isMobile: boolean,
+    instance: { url: string; dataDir: string; }
+  ) {
     const { id, dir } = await published(instance);
     await openScreen(page, `/repositories/${id}/files/docs/guide.md`);
     await expect(summary(page)).toHaveText('main');
