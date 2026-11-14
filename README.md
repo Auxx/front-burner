@@ -74,6 +74,59 @@ npx nx serve server
 npx nx serve web
 ```
 
+## Docker image for testing
+
+`tools/docker` holds a `Dockerfile` and a `compose.yaml` that run Front Burner
+in a container, built from the working tree. They are for local testing only,
+not production: the image is not scanned or signed, and the compose file uses
+public, development-only secrets. Run the commands below from the workspace
+root.
+
+The image builds the backend and the web client inside the container, so it
+needs no local build or `node_modules`. The runtime image is based on Debian
+trixie (for git 2.47 or later), has git and `openssh-client`, and runs as UID
+1000. The compose file runs it with a read-only root file system, `/tmp` as a
+tmpfs, `cap_drop: ALL` and `no-new-privileges`, as NF-11.13 asks.
+
+### Build and rebuild the image
+
+```sh
+docker build -f tools/docker/Dockerfile -t front-burner:test .
+```
+
+Run the same command to rebuild after changing the code: Docker reuses the
+cached `npm ci` layer while `package.json` and `package-lock.json` are
+unchanged, and rebuilds the rest. To rebuild from scratch, for example after a
+new Node.js base image, add `--no-cache --pull`. The build context excludes
+`node_modules`, `dist`, `.env` and other local files
+(`tools/docker/Dockerfile.dockerignore`).
+
+### Run with Docker Compose
+
+```sh
+# Build (if needed) and start in the background
+docker compose -f tools/docker/compose.yaml up -d --build
+
+# Follow the log
+docker compose -f tools/docker/compose.yaml logs -f
+
+# Stop; the data volume is kept
+docker compose -f tools/docker/compose.yaml down
+
+# Stop and delete all data (users, repositories, settings)
+docker compose -f tools/docker/compose.yaml down -v
+```
+
+Open <http://localhost:8080> and complete administrator onboarding with the
+setup token `test-setup-token`. Set `FRONT_BURNER_HOST_PORT` to publish on
+another port, for example `FRONT_BURNER_HOST_PORT=9090 docker compose -f
+tools/docker/compose.yaml up -d`. The data lives in the `front-burner-test_data`
+volume, mounted on `/data`. To change other settings, edit the `environment`
+section of `tools/docker/compose.yaml`; `.env.example` lists the variables.
+
+`up --build` rebuilds the image only where the code changed, and recreates the
+container when the image changed.
+
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every pull request and every

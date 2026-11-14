@@ -1,0 +1,18 @@
+# Read by BuildKit for builds that use tools/docker/Dockerfile, whose context is
+# the workspace root.
+**/node_modules
+dist
+tmp
+coverage
+out-tsc
+.nx
+.angular
+.git
+.idea
+.vscode
+.junie
+.superpowers
+.claude
+.env
+**/test-results
+**/playwright-report
