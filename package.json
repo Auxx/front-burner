@@ -75,7 +75,7 @@
     "remark-parse": "11.0.0",
     "remark-rehype": "11.1.2",
     "rxjs": "7.8.2",
-    "shiki": "4.5.0",
+    "shiki": "4.6.0",
     "ssh2": "1.17.0",
     "undici": "7.30.1",
     "unified": "11.0.5",
