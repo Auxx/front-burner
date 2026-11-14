@@ -1,0 +1,33 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ConflictBarComponent'">
+  @let shown = position();
+  @let atCursor = at();
+  <div class="bar"
+       role="group"
+       [attr.aria-label]="t('label')">
+    <p class="position">{{ t(shown.key, shown.params) }}</p>
+    <div class="moves">
+      <button uiButton
+              size="small"
+              [unavailable]="previous() === null"
+              (click)="goTo(previous())">{{ t('previous') }}</button>
+      <button uiButton
+              size="small"
+              [unavailable]="next() === null"
+              (click)="goTo(next())">{{ t('next') }}</button>
+    </div>
+    <div class="accepts">
+      <button uiButton
+              size="small"
+              [unavailable]="atCursor === null"
+              (click)="acceptAt('ours')">{{ t('acceptOurs') }}</button>
+      <button uiButton
+              size="small"
+              [unavailable]="atCursor === null"
+              (click)="acceptAt('theirs')">{{ t('acceptTheirs') }}</button>
+      <button uiButton
+              size="small"
+              [unavailable]="atCursor === null"
+              (click)="acceptAt('both')">{{ t('acceptBoth') }}</button>
+    </div>
+  </div>
+</ng-container>
