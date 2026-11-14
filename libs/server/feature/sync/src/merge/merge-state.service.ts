@@ -17,6 +17,21 @@ export function mayBeEditable({ path, oursMode, theirsMode }: ConflictEntry): bo
 }
 
 /**
+ * What GC-17 asks of one version before it is read: the name is Markdown's, and
+ * the version exists as a regular file of at most the editor's limit (ED-2). The
+ * read then checks that it is valid UTF-8.
+ */
+export function mayBeShown(entry: ConflictEntry, side: 'ours' | 'theirs'): boolean {
+  const [ oid, mode, size ] = side === 'ours'
+    ? [ entry.oursOid, entry.oursMode, entry.oursSize ]
+    : [ entry.theirsOid, entry.theirsMode, entry.theirsSize ];
+  return oid !== null
+    && isMarkdownName(entry.path.split('/').at(-1) ?? '')
+    && REGULAR_FILE.test(mode ?? '')
+    && (size === null || size <= EDITABLE_FILE_LIMIT);
+}
+
+/**
  * The merge in progress, read from git each time, so that any device can carry
  * on and a restart changes nothing (A-4.5, GC-4). Takes no lock (A-5.3).
  */
@@ -45,19 +60,12 @@ export class MergeStateService {
       }
       throw new ApiErrorException(409, 'not-conflicting');
     }
-    const sideValues = side === 'ours'
-      ? { oid: entry.oursOid, mode: entry.oursMode, size: entry.oursSize }
-      : { oid: entry.theirsOid, mode: entry.theirsMode, size: entry.theirsSize };
+    const oid = side === 'ours' ? entry.oursOid : entry.theirsOid;
     // Check all readability conditions before reading the blob (ED-2).
-    if (
-      sideValues.oid === null
-      || !isMarkdownName(entry.path.split('/').at(-1) ?? '')
-      || !REGULAR_FILE.test(sideValues.mode ?? '')
-      || (sideValues.size !== null && sideValues.size > EDITABLE_FILE_LIMIT)
-    ) {
+    if (oid === null || !mayBeShown(entry, side)) {
       throw new ApiErrorException(409, 'version-not-readable');
     }
-    const decoded = decodeMarkdown(await this.merge.readVersion(root, sideValues.oid));
+    const decoded = decodeMarkdown(await this.merge.readVersion(root, oid));
     if (decoded === 'not-utf8') {
       throw new ApiErrorException(409, 'version-not-readable');
     }
@@ -93,7 +101,17 @@ export class MergeStateService {
 
   private async toFile(root: string, entry: ConflictEntry): Promise<GitConflictFile> {
     const { path, kind, resolved, edited, oursSize, theirsSize } = entry;
-    return { path, kind, resolved, edited, oursSize, theirsSize, editable: await this.isEditable(root, entry) };
+    return {
+      path,
+      kind,
+      resolved,
+      edited,
+      oursSize,
+      theirsSize,
+      oursShowable: mayBeShown(entry, 'ours'),
+      theirsShowable: mayBeShown(entry, 'theirs'),
+      editable: await this.isEditable(root, entry)
+    };
   }
 
   /**

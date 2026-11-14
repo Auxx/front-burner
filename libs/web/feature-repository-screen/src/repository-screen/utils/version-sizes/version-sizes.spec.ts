@@ -11,6 +11,8 @@ function file(changes: Partial<GitConflictFile>): GitConflictFile {
     edited: false,
     oursSize: 1,
     theirsSize: 1,
+    oursShowable: false,
+    theirsShowable: false,
     ...changes
   };
 }

@@ -25,7 +25,15 @@ export const GitConflictFileSchema = z
     edited: z.boolean(),
     /** In bytes; `null` when this version does not exist or is a submodule. */
     oursSize: z.number().int().min(0).nullable(),
-    theirsSize: z.number().int().min(0).nullable()
+    theirsSize: z.number().int().min(0).nullable(),
+    /**
+     * This version can be shown read-only with **Show mine** (GC-17): the name is
+     * Markdown's, and the version exists as a regular file of at most the
+     * editor's limit (ED-2). Whether it is valid UTF-8 is known only when it is read.
+     */
+    oursShowable: z.boolean(),
+    /** The same for **Show theirs**. */
+    theirsShowable: z.boolean()
   })
   .meta({ id: 'GitConflictFile' });
 

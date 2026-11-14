@@ -1,0 +1,29 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.banner,
+.failure {
+  margin: var(--ui-space-2);
+}
+
+.failure {
+  margin-block-start: 0;
+}
+
+.reference {
+  display: block;
+  margin-block-start: var(--ui-space-1);
+}
+
+.editor {
+  flex: 1;
+  min-block-size: 0;
+}
+
+.loading {
+  margin: var(--ui-space-4);
+}

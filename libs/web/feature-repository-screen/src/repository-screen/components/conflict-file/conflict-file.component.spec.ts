@@ -1,6 +1,9 @@
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import type { GitConflictFile, GitResolution } from '@front-burner/shared-contracts';
+import { GitApi } from '@front-burner/web-api-client';
+import { of } from 'rxjs';
 
+import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { ConflictFileComponent } from './conflict-file.component';
 
@@ -8,6 +11,7 @@ const KEY = 'web-feature-repository-screen.ConflictFileComponent';
 
 describe('ConflictFileComponent', () => {
   let fixture: ComponentFixture<ConflictFileComponent>;
+  let gitMergeVersion: ReturnType<typeof vi.fn>;
 
   const host = () => fixture.nativeElement as HTMLElement;
   const text = (selector: string) => host().querySelector(selector)?.textContent?.trim();
@@ -15,6 +19,7 @@ describe('ConflictFileComponent', () => {
   const labels = () => buttons().map(button => button.textContent?.trim());
 
   async function show(file: Partial<GitConflictFile>, resolving: GitResolution | null = null): Promise<void> {
+    fixture.componentRef.setInput('repositoryId', 12);
     fixture.componentRef.setInput('file', {
       path: 'docs/guide.md',
       kind: 'both-changed',
@@ -23,6 +28,8 @@ describe('ConflictFileComponent', () => {
       edited: false,
       oursSize: 1,
       theirsSize: 1,
+      oursShowable: true,
+      theirsShowable: true,
       ...file
     });
     fixture.componentRef.setInput('into', 'main');
@@ -32,6 +39,9 @@ describe('ConflictFileComponent', () => {
   }
 
   beforeEach(() => {
+    gitMergeVersion = vi.fn((_id: number, query: { path: string; side: string; }) =>
+      of({ content: `${query.side} of ${query.path}` })
+    );
     TestBed.configureTestingModule({
       imports: [
         ConflictFileComponent,
@@ -41,7 +51,8 @@ describe('ConflictFileComponent', () => {
           [`${KEY}.mine`]: 'Mine ({{ into }})',
           [`${KEY}.theirs`]: 'Theirs ({{ from }})'
         })
-      ]
+      ],
+      providers: [ { provide: GitApi, useValue: { gitMergeVersion } } ]
     });
     fixture = TestBed.createComponent(ConflictFileComponent);
   });
@@ -133,5 +144,104 @@ describe('ConflictFileComponent', () => {
 
     ours.click();
     expect(chosen).toEqual([]);
+  });
+
+  describe('Show mine and Show theirs', () => {
+    const showButtons = () => [ ...host().querySelectorAll<HTMLButtonElement>('.shows button') ];
+    const version = () => host().querySelector('rs-conflict-version');
+
+    it('offers both for a Markdown file, resolved or not', async () => {
+      await show({});
+      expect(showButtons().map(button => button.textContent?.trim())).toEqual([
+        `${KEY}.show.ours`,
+        `${KEY}.show.theirs`
+      ]);
+
+      await show({ resolved: true });
+      expect(showButtons()).toHaveLength(2);
+    });
+
+    it('offers no button for a large file or a PNG', async () => {
+      await show({
+        oursSize: 2 * 1024 * 1024,
+        theirsSize: 2 * 1024 * 1024,
+        oursShowable: false,
+        theirsShowable: false
+      });
+      expect(showButtons()).toEqual([]);
+      expect(text('.versions')).toMatch(/2 MB/);
+
+      await show({ path: 'logo.png', editable: false, oursShowable: false, theirsShowable: false });
+      expect(showButtons()).toEqual([]);
+
+      await show({ kind: 'deleted-by-them', theirsSize: null, theirsShowable: false });
+      expect(showButtons().map(button => button.textContent?.trim())).toEqual([ `${KEY}.show.ours` ]);
+    });
+
+    /** Clicks a show button, and waits for the deferred version to load and answer. */
+    async function open(index: number): Promise<void> {
+      showButtons()[index].click();
+      await settle(fixture);
+      await settle(fixture);
+    }
+
+    it('opens the version read-only in place of the file\'s choices', async () => {
+      await show({});
+
+      await open(1);
+
+      expect(gitMergeVersion).toHaveBeenCalledExactlyOnceWith(12, { path: 'docs/guide.md', side: 'theirs' });
+      expect(version()?.querySelector('.cm-content')?.textContent).toBe('theirs of docs/guide.md');
+      expect(host().querySelector('.offers')).toBeNull();
+      expect(host().classList).toContain('showing');
+    });
+
+    it('Back returns focus to its button', async () => {
+      await show({});
+      await open(1);
+
+      (version()?.querySelector('ui-inline-banner button') as HTMLButtonElement).click();
+      await settle(fixture);
+
+      expect(version()).toBeNull();
+      expect(host().classList).not.toContain('showing');
+      expect(document.activeElement).toBe(showButtons()[1]);
+    });
+
+    it('gives the focus to Back when a version opens, as its button is gone', async () => {
+      await show({});
+      showButtons()[0].focus();
+
+      await open(0);
+
+      expect(document.activeElement?.textContent?.trim()).toBe(
+        'web-feature-repository-screen.ConflictVersionComponent.back'
+      );
+    });
+
+    it('gives the focus to the file\'s name after Back when the version\'s button has gone meanwhile', async () => {
+      await show({});
+      await open(1);
+
+      await show({ theirsShowable: false });
+      (version()?.querySelector('ui-inline-banner button') as HTMLButtonElement).click();
+      await settle(fixture);
+
+      expect(document.activeElement).toBe(host().querySelector('h2'));
+    });
+
+    it('goes when another file is selected, and stays when the same file is read again', async () => {
+      await show({});
+      await open(0);
+      expect(version()).not.toBeNull();
+
+      await show({ resolved: true });
+      expect(version()).not.toBeNull();
+      expect(gitMergeVersion).toHaveBeenCalledOnce();
+
+      await show({ path: 'notes.md' });
+      expect(version()).toBeNull();
+      expect(text('h2')).toBe('notes.md');
+    });
   });
 });

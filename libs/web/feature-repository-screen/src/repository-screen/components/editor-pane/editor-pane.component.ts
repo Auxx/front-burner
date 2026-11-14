@@ -30,7 +30,6 @@ import {
   createEditorState,
   cursorOf,
   type EditorStateChange,
-  type FindPanelLabels,
   isHighlighting,
   isSoftWrapping,
   replaceContent,
@@ -48,6 +47,7 @@ import { type OpenFile, OpenFilesService } from '../../services/open-files/open-
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 import { type ViewModeName, ViewModeService } from '../../services/view-mode/view-mode.service';
 import { fileName } from '../../utils/file-name/file-name';
+import { findPanelLabels } from '../../utils/find-panel-labels/find-panel-labels';
 import { type ScrollPane, ScrollSync } from '../../utils/scroll-sync/scroll-sync';
 import { ChangedOnDiskComponent } from '../changed-on-disk/changed-on-disk.component';
 import { DraftOfferComponent } from '../draft-offer/draft-offer.component';
@@ -240,32 +240,6 @@ export class EditorPaneComponent {
     });
   }
 
-  /** The find panel's texts (ED-11), in the language of the moment. */
-  private findLabels(): FindPanelLabels {
-    const t = (key: string, params?: Record<string, string>) =>
-      this.transloco.translate(`web-feature-repository-screen.EditorPaneComponent.findPanel.${key}`, params);
-    const numbers = new Intl.NumberFormat(this.transloco.getActiveLang());
-    return {
-      find: t('find'),
-      replace: t('replace'),
-      toggleReplace: t('toggleReplace'),
-      matchCase: t('matchCase'),
-      wholeWord: t('wholeWord'),
-      regexp: t('regexp'),
-      previous: t('previous'),
-      next: t('next'),
-      close: t('close'),
-      replaceOne: t('replaceOne'),
-      replaceAll: t('replaceAll'),
-      noResults: t('noResults'),
-      invalid: t('invalid'),
-      count: (current, total, more) => {
-        const all = more ? t('more', { total: numbers.format(total) }) : numbers.format(total);
-        return current > 0 ? t('count', { current: numbers.format(current), total: all }) : t('found', { total: all });
-      }
-    };
-  }
-
   protected openSearch(): void {
     this.editor()?.openSearch();
   }
@@ -418,7 +392,7 @@ export class EditorPaneComponent {
         label,
         readOnly,
         cursor: reloaded ? cursorOf(existing) : undefined,
-        findLabels: this.findLabels(),
+        findLabels: findPanelLabels(this.transloco),
         findIconSprite: this.iconSprite
       })
       : existing.update(

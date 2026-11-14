@@ -37,6 +37,7 @@ import { restoreLayout, stubViewportLayout } from '../../../testing/viewport-lay
 import { routes } from '../../repository-screen.routes';
 import { FileTreeStoreService } from '../../services/file-tree-store/file-tree-store.service';
 import { GitStatusStore } from '../../services/git-status-store/git-status-store.service';
+import { OpenFilesService } from '../../services/open-files/open-files.service';
 import { RepositorySessionService } from '../../services/repository-session/repository-session.service';
 
 import { RepositoryScreenPage } from './repository-screen.page';
@@ -161,6 +162,8 @@ describe('RepositoryScreenPage', () => {
             gitBranches,
             switchBranch,
             gitMerge: () => of(mergeAnswer),
+            gitMergeVersion: (_id: number, query: { path: string; side: string; }) =>
+              of({ content: `${query.side} of ${query.path}\n` }),
             abortMerge,
             resolveConflict
           }
@@ -1396,7 +1399,9 @@ describe('RepositoryScreenPage', () => {
           editable: true,
           edited: false,
           oursSize: 1,
-          theirsSize: 1
+          theirsSize: 1,
+          oursShowable: true,
+          theirsShowable: true
         });
         const conflictList = () => page().querySelector('rs-conflict-list') as HTMLElement | null;
         const conflictFile = () => page().querySelector('rs-conflict-file h2')?.textContent?.trim();
@@ -1559,6 +1564,57 @@ describe('RepositoryScreenPage', () => {
           await settle(harness.fixture);
 
           expect(offers().map(button => button.getAttribute('aria-disabled'))).toEqual([ null, null ]);
+        });
+
+        describe('a version shown', () => {
+          const version = () => page().querySelector('rs-conflict-version');
+          const versionText = () => version()?.querySelector('.cm-content')?.textContent ?? '';
+
+          async function showVersion(index: number): Promise<void> {
+            page().querySelectorAll<HTMLButtonElement>('rs-conflict-file .shows button')[index].click();
+            await settle(harness.fixture);
+            await settle(harness.fixture);
+          }
+
+          it('keeps the file\'s editor as it was', async () => {
+            await visit('/repositories/12/files/docs/guide.md');
+            const openFiles = harness.fixture.debugElement.query(By.directive(RepositoryScreenPage)).injector
+              .get(OpenFilesService);
+            const before = openFiles.current()?.editorState;
+            expect(before).toBeTruthy();
+
+            await startMerge();
+            await showVersion(0);
+            expect(versionText()).toBe('ours of docs/guide.md');
+
+            (version()?.querySelector('ui-inline-banner button') as HTMLButtonElement).click();
+            await settle(harness.fixture);
+            await endMerge();
+
+            expect(openFiles.current()?.editorState).toBe(before);
+            expect(page().querySelector('rs-editor-pane .cm-content')?.textContent).toContain('# docs/guide.md');
+          });
+
+          it('goes when another file is selected or the merge ends', async () => {
+            await visit('/repositories/12');
+            await startMerge();
+            await showVersion(1);
+            expect(versionText()).toBe('theirs of docs/guide.md');
+
+            entryButton('README.md').click();
+            await settle(harness.fixture);
+
+            expect(version()).toBeNull();
+            expect(conflictFile()).toBe('README.md');
+
+            await showVersion(1);
+            expect(versionText()).toBe('theirs of README.md');
+
+            await endMerge();
+
+            expect(version()).toBeNull();
+            expect(page().querySelector('rs-conflict-file')).toBeNull();
+          });
         });
 
         it('hides the diff during a merge', async () => {

@@ -18,3 +18,19 @@ const OFFERS: Record<GitConflictKind, readonly GitResolution[]> = {
 export function conflictOffers(file: GitConflictFile): GitResolution[] {
   return file.resolved ? [] : [ ...OFFERS[file.kind] ];
 }
+
+/** A side of a conflicting file whose version can be shown. */
+export type VersionSide = 'ours' | 'theirs';
+
+/**
+ * The versions of `file` that **Show mine** and **Show theirs** can open, in that
+ * order, resolved or not (GC-17): those the backend says can be shown, a Markdown
+ * file's regular file of at most the editor's limit (ED-2). Any other side has no
+ * button; the size shown is enough.
+ */
+export function shownVersions(file: GitConflictFile): VersionSide[] {
+  return [
+    ...(file.oursShowable ? [ 'ours' as const ] : []),
+    ...(file.theirsShowable ? [ 'theirs' as const ] : [])
+  ];
+}

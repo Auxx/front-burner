@@ -4,6 +4,16 @@
   overflow: auto;
   padding: var(--ui-space-4);
   box-sizing: border-box;
+
+  // A version open read-only fills the editor area and scrolls in its editor.
+  &.showing {
+    overflow: hidden;
+    padding: 0;
+  }
+}
+
+.opening {
+  margin: var(--ui-space-4);
 }
 
 .name {
@@ -67,6 +77,7 @@
   }
 }
 
+.shows,
 .offers {
   display: flex;
   flex-wrap: wrap;

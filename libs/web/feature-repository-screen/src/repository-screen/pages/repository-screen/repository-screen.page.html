@@ -156,7 +156,8 @@
           @if (merging) {
             @let mergeState = merge.state();
             @if (merge.selectedFile(); as conflict) {
-              <rs-conflict-file [file]="conflict"
+              <rs-conflict-file [repositoryId]="session.repository()!.id"
+                                [file]="conflict"
                                 [into]="mergeState?.into ?? ''"
                                 [from]="mergeState?.from ?? ''"
                                 [resolving]="conflictResolving()"
