@@ -92,6 +92,12 @@ export class AuthSessionService {
     return this.session()?.authToken;
   }
 
+  /** When the auth token expires, in epoch milliseconds. */
+  authTokenExpiresAt(): number | undefined {
+    const at = Date.parse(this.session()?.authTokenExpiresAt ?? '');
+    return Number.isNaN(at) ? undefined : at;
+  }
+
   /** Logs in with the refresh token in a cookie; rejects with the `HttpErrorResponse`. */
   async login(email: string, password: string): Promise<void> {
     this.store(await firstValueFrom(this.api.login({ email, password, refreshTokenDelivery: 'cookie' })));
@@ -109,6 +115,21 @@ export class AuthSessionService {
    * failure the session expires and the promise rejects.
    */
   refresh(failedToken: string): Promise<string> {
+    return this.exchange(failedToken, false);
+  }
+
+  /**
+   * A new auth token shortly before `token` expires, so that the push channel
+   * can hand its stream over without a gap (A-3.10). As {@link refresh}, but a
+   * backend that cannot be reached leaves the session as it is: `token` still
+   * works until it expires, and a request after that refreshes it as usual.
+   */
+  renew(token: string): Promise<string> {
+    return this.exchange(token, true);
+  }
+
+  /** {@link refresh}, or with `ahead` {@link renew}. */
+  private exchange(failedToken: string, ahead: boolean): Promise<string> {
     return this.withLock(async waited => {
       // Where storage works it is the truth: no session there means another tab
       // logged out, and this tab follows it on the storage event.
@@ -130,7 +151,9 @@ export class AuthSessionService {
       try {
         tokens = await firstValueFrom(this.api.refresh({}));
       } catch (error) {
-        await this.expire(this.router.url, unreachable(error) ? 'unreachable' : 'refused');
+        if (!(ahead && unreachable(error))) {
+          await this.expire(this.router.url, unreachable(error) ? 'unreachable' : 'refused');
+        }
         throw error;
       }
       this.store(tokens);

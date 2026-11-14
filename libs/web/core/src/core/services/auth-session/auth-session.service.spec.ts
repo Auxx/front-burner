@@ -250,6 +250,55 @@ describe('AuthSessionService', () => {
     expect(ended).toEqual([ cause ]);
   });
 
+  it('tells when the auth token expires', () => {
+    localStorage.setItem(AUTH_STORAGE_KEY, stored('kept'));
+    const { service } = create();
+
+    expect(service.authTokenExpiresAt()).toBe(Date.parse('2026-10-26T10:15:00.000Z'));
+  });
+
+  describe('renewing a token before it expires', () => {
+    it('stores the new token, as a refresh does', async () => {
+      localStorage.setItem(AUTH_STORAGE_KEY, stored('old'));
+      api.refresh.mockReturnValue(of(tokens('new')));
+      const { service } = create();
+
+      expect(await service.renew('old')).toBe('new');
+      expect(service.authToken()).toBe('new');
+    });
+
+    it.each([
+      [ 'is offline', new HttpErrorResponse({ status: 0 }) ],
+      [ 'answers 502', new HttpErrorResponse({ status: 502 }) ]
+    ])('keeps the session, whose token still works, when the backend %s', async (_, failure) => {
+      localStorage.setItem(AUTH_STORAGE_KEY, stored('old'));
+      api.refresh.mockReturnValue(throwError(() => failure));
+      const { service } = create();
+      const ended: string[] = [];
+      service.ended.subscribe(end => ended.push(end));
+
+      await expect(service.renew('old')).rejects.toBe(failure);
+
+      expect(ended).toEqual([]);
+      expect(service.loggedIn()).toBe(true);
+      expect(service.authToken()).toBe('old');
+    });
+
+    it('ends the session when the backend refuses it', async () => {
+      localStorage.setItem(AUTH_STORAGE_KEY, stored('old'));
+      const failure = new HttpErrorResponse({ status: 401, error: { code: 'refresh-refused' } });
+      api.refresh.mockReturnValue(throwError(() => failure));
+      const { service } = create();
+      const ended: string[] = [];
+      service.ended.subscribe(end => ended.push(end));
+
+      await expect(service.renew('old')).rejects.toBe(failure);
+
+      expect(ended).toEqual([ 'refused' ]);
+      expect(service.loggedIn()).toBe(false);
+    });
+  });
+
   it('reports a logout and an expired session as ended', async () => {
     localStorage.setItem(AUTH_STORAGE_KEY, stored('kept'));
     api.logout.mockReturnValue(of(undefined));
