@@ -11,6 +11,8 @@ function file(kind: GitConflictKind, changes: Partial<GitConflictFile> = {}): Gi
     edited: false,
     oursSize: 1,
     theirsSize: 1,
+    oursShowable: false,
+    theirsShowable: false,
     ...changes
   };
 }
@@ -34,26 +36,22 @@ describe('conflictOffers', () => {
 });
 
 describe('shownVersions', () => {
-  it('shows both versions of a Markdown file, resolved or not', () => {
-    expect(shownVersions(file('both-changed', { path: 'docs/guide.md' }))).toEqual([ 'ours', 'theirs' ]);
-    expect(shownVersions(file('both-added', { path: 'README.MARKDOWN', resolved: true }))).toEqual([
-      'ours',
-      'theirs'
-    ]);
+  const markdown = { path: 'guide.md', oursShowable: true, theirsShowable: true };
+
+  it('shows both versions the backend says can be shown, resolved or not, mine first', () => {
+    expect(shownVersions(file('both-changed', markdown))).toEqual([ 'ours', 'theirs' ]);
+    expect(shownVersions(file('both-added', { ...markdown, resolved: true }))).toEqual([ 'ours', 'theirs' ]);
   });
 
-  it('shows no version a side deleted, or that has no size', () => {
-    expect(shownVersions(file('deleted-by-us', { path: 'a.md', oursSize: null }))).toEqual([ 'theirs' ]);
-    expect(shownVersions(file('deleted-by-them', { path: 'a.md', theirsSize: null }))).toEqual([ 'ours' ]);
-  });
-
-  it('shows a version up to the editor\'s limit, and none above it', () => {
-    expect(shownVersions(file('both-changed', { path: 'a.md', oursSize: 1_048_576, theirsSize: 1_048_577 })))
+  it('shows only the side that can be shown', () => {
+    expect(shownVersions(file('deleted-by-us', { ...markdown, oursSize: null, oursShowable: false })))
+      .toEqual([ 'theirs' ]);
+    expect(shownVersions(file('deleted-by-them', { ...markdown, theirsSize: null, theirsShowable: false })))
       .toEqual([ 'ours' ]);
   });
 
-  it('shows nothing for a file that is not Markdown', () => {
+  it('shows nothing the backend refuses, whatever its name and size, such as a symbolic link', () => {
+    expect(shownVersions(file('both-changed', { path: 'link.md' }))).toEqual([]);
     expect(shownVersions(file('both-changed'))).toEqual([]);
-    expect(shownVersions(file('both-changed', { path: 'docs/.md' }))).toEqual([]);
   });
 });

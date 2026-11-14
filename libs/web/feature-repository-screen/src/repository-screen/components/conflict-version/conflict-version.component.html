@@ -1,18 +1,22 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.ConflictVersionComponent'">
   <ui-inline-banner class="banner">
-    {{ t(message(), { from: from() }) }}
+    <span [id]="messageId">{{ t(message(), { from: from() }) }}</span>
     <div uiBannerActions>
-      <button uiButton
+      <button #backButton
+              uiButton
               size="small"
+              [attr.aria-describedby]="messageId"
               (click)="back.emit()">{{ t('back') }}</button>
     </div>
   </ui-inline-banner>
   @let version = read();
   @switch (version.kind) {
     @case ('loaded') {
-      <ce-code-editor class="editor"
-                      [state]="version.state"
-                      (stateChange)="changed($event)" />
+      @if (state(); as state) {
+        <ce-code-editor class="editor"
+                        [state]="state"
+                        (stateChange)="changed($event)" />
+      }
     }
     @case ('failed') {
       <ui-inline-banner class="failure"

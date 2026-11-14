@@ -19,7 +19,9 @@ const merge: GitMergeState = {
     edited: false,
     editable: true,
     oursSize: 1,
-    theirsSize: 1
+    theirsSize: 1,
+    oursShowable: true,
+    theirsShowable: true
   })),
   otherFiles: [],
   message: 'Merge'

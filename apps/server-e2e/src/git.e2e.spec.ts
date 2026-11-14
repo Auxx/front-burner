@@ -917,7 +917,9 @@ describe('pull (REQ-GIT-002, REQ-GIT-001)', () => {
           edited: false,
           editable: true,
           oursSize: 5,
-          theirsSize: 7
+          theirsSize: 7,
+          oursShowable: true,
+          theirsShowable: true
         }
       ],
       otherFiles: [],

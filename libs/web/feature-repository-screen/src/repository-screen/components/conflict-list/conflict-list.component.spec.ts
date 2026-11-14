@@ -7,7 +7,17 @@ import { ConflictListComponent, OTHER_FILES_SHOWN } from './conflict-list.compon
 const KEY = 'web-feature-repository-screen.ConflictListComponent';
 
 function conflict(path: string, kind: GitConflictKind = 'both-changed', resolved = false): GitConflictFile {
-  return { path, kind, resolved, editable: true, edited: false, oursSize: 1, theirsSize: 1 };
+  return {
+    path,
+    kind,
+    resolved,
+    editable: true,
+    edited: false,
+    oursSize: 1,
+    theirsSize: 1,
+    oursShowable: true,
+    theirsShowable: true
+  };
 }
 
 function merge(files: GitConflictFile[], otherFiles: string[] = []): GitMergeState {

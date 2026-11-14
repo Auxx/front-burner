@@ -1366,6 +1366,8 @@ test.describe('pushing', () => {
 
           await showMine.click();
           await expect(main).toContainText('This is your version, read-only.');
+          // Its button is gone, so the focus goes to Back.
+          await expect(main.getByRole('button', { name: 'Back', exact: true })).toBeFocused();
           const mine = main.getByRole('textbox', { name: 'guide.md, my version' });
           await expect(mine).toHaveText('mine');
           await expect(mine).toHaveAttribute('contenteditable', 'false');

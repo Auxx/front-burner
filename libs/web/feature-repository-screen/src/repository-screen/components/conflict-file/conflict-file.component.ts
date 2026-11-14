@@ -10,6 +10,7 @@ import {
   input,
   linkedSignal,
   output,
+  viewChild,
   viewChildren
 } from '@angular/core';
 import type { GitConflictFile, GitResolution } from '@front-burner/shared-contracts';
@@ -62,6 +63,7 @@ export class ConflictFileComponent {
   readonly resolve = output<GitResolution>();
 
   private readonly showButtons = viewChildren('showButton', { read: ElementRef<HTMLButtonElement> });
+  private readonly heading = viewChild('heading', { read: ElementRef<HTMLElement> });
 
   private readonly path = computed(() => this.file().path);
   protected readonly name = computed(() => fileName(this.path()));
@@ -91,10 +93,17 @@ export class ConflictFileComponent {
     this.shown.set(side);
   }
 
-  /** **Back**: the file's choices again, with the focus on the button that opened the version. */
+  /**
+   * **Back**: the file's choices again, with the focus on the button that opened
+   * the version, or on the file's name when that button has gone meanwhile, such
+   * as when the merge was read again and the version can no longer be shown.
+   */
   protected back(): void {
-    const index = this.shows().indexOf(this.shown() ?? 'ours');
+    const side = this.shown();
     this.shown.set(null);
-    afterNextRender(() => this.showButtons()[index]?.nativeElement.focus(), { injector: this.injector });
+    afterNextRender(() => {
+      const index = side === null ? -1 : this.shows().indexOf(side);
+      (this.showButtons()[index] ?? this.heading())?.nativeElement.focus();
+    }, { injector: this.injector });
   }
 }

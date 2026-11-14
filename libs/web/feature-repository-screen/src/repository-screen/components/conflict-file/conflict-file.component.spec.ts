@@ -28,6 +28,8 @@ describe('ConflictFileComponent', () => {
       edited: false,
       oursSize: 1,
       theirsSize: 1,
+      oursShowable: true,
+      theirsShowable: true,
       ...file
     });
     fixture.componentRef.setInput('into', 'main');
@@ -160,14 +162,19 @@ describe('ConflictFileComponent', () => {
     });
 
     it('offers no button for a large file or a PNG', async () => {
-      await show({ oursSize: 2 * 1024 * 1024, theirsSize: 2 * 1024 * 1024 });
+      await show({
+        oursSize: 2 * 1024 * 1024,
+        theirsSize: 2 * 1024 * 1024,
+        oursShowable: false,
+        theirsShowable: false
+      });
       expect(showButtons()).toEqual([]);
       expect(text('.versions')).toMatch(/2 MB/);
 
-      await show({ path: 'logo.png', editable: false });
+      await show({ path: 'logo.png', editable: false, oursShowable: false, theirsShowable: false });
       expect(showButtons()).toEqual([]);
 
-      await show({ kind: 'deleted-by-them', theirsSize: null });
+      await show({ kind: 'deleted-by-them', theirsSize: null, theirsShowable: false });
       expect(showButtons().map(button => button.textContent?.trim())).toEqual([ `${KEY}.show.ours` ]);
     });
 
@@ -199,6 +206,28 @@ describe('ConflictFileComponent', () => {
       expect(version()).toBeNull();
       expect(host().classList).not.toContain('showing');
       expect(document.activeElement).toBe(showButtons()[1]);
+    });
+
+    it('gives the focus to Back when a version opens, as its button is gone', async () => {
+      await show({});
+      showButtons()[0].focus();
+
+      await open(0);
+
+      expect(document.activeElement?.textContent?.trim()).toBe(
+        'web-feature-repository-screen.ConflictVersionComponent.back'
+      );
+    });
+
+    it('gives the focus to the file\'s name after Back when the version\'s button has gone meanwhile', async () => {
+      await show({});
+      await open(1);
+
+      await show({ theirsShowable: false });
+      (version()?.querySelector('ui-inline-banner button') as HTMLButtonElement).click();
+      await settle(fixture);
+
+      expect(document.activeElement).toBe(host().querySelector('h2'));
     });
 
     it('goes when another file is selected, and stays when the same file is read again', async () => {

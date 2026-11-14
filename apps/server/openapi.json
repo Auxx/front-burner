@@ -3596,6 +3596,12 @@
             "minimum": 0,
             "maximum": 9007199254740991,
             "nullable": true
+          },
+          "oursShowable": {
+            "type": "boolean"
+          },
+          "theirsShowable": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -3605,7 +3611,9 @@
           "editable",
           "edited",
           "oursSize",
-          "theirsSize"
+          "theirsSize",
+          "oursShowable",
+          "theirsShowable"
         ]
       },
       "GitConflictKind": {

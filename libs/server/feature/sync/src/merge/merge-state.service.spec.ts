@@ -155,7 +155,9 @@ describe('MergeStateService', () => {
           edited: false,
           editable: true,
           oursSize: 5,
-          theirsSize: 11
+          theirsSize: 11,
+          oursShowable: true,
+          theirsShowable: true
         }
       ],
       otherFiles: [ 'clean.md', 'new.md' ],
@@ -254,7 +256,9 @@ describe('MergeStateService', () => {
         edited: false,
         editable: false,
         oursSize: null,
-        theirsSize: 7
+        theirsSize: 7,
+        oursShowable: false,
+        theirsShowable: true
       },
       {
         path: 'by-them.md',
@@ -263,7 +267,9 @@ describe('MergeStateService', () => {
         edited: false,
         editable: false,
         oursSize: 5,
-        theirsSize: null
+        theirsSize: null,
+        oursShowable: true,
+        theirsShowable: false
       }
     ]);
   });
@@ -274,16 +280,31 @@ describe('MergeStateService', () => {
     git(work, 'add', 'a.md');
 
     expect((await service.read(work)).files).toEqual([
-      { path: 'a.md', kind: 'both-changed', resolved: true, edited: true, editable: true, oursSize: 5, theirsSize: 7 }
+      {
+        path: 'a.md',
+        kind: 'both-changed',
+        resolved: true,
+        edited: true,
+        editable: true,
+        oursSize: 5,
+        theirsSize: 7,
+        oursShowable: true,
+        theirsShowable: true
+      }
     ]);
   });
 
-  it('refuses readVersion for symbolic links with version-not-readable', async () => {
+  it('refuses readVersion for symbolic links with version-not-readable, and says they can\'t be shown', async () => {
     await merged(
       { 'link.md': { link: 'base.txt' } },
       { 'link.md': { link: 'mine.txt' } },
       { 'link.md': { link: 'theirs.txt' } }
     );
+
+    // A link has a size, as any blob does, so the size alone can't tell.
+    expect((await service.read(work)).files).toMatchObject([
+      { path: 'link.md', oursShowable: false, theirsShowable: false }
+    ]);
 
     await expect(service.readVersion(work, 'link.md', 'ours')).rejects.toMatchObject({
       code: 'version-not-readable'
@@ -308,6 +329,10 @@ describe('MergeStateService', () => {
     });
     await expect(service.readVersion(work, 'app.ts', 'ours')).rejects.toMatchObject({ code: 'version-not-readable' });
     await expect(service.readVersion(work, 'app.ts', 'theirs')).rejects.toMatchObject({ code: 'version-not-readable' });
+    expect((await service.read(work)).files).toMatchObject([
+      { path: 'app.ts', oursShowable: false, theirsShowable: false },
+      { path: 'config.env', oursShowable: false, theirsShowable: false }
+    ]);
   });
 
   it('refuses a large version without reading the blob', async () => {
@@ -319,6 +344,9 @@ describe('MergeStateService', () => {
     );
     const readBlob = vi.spyOn(merge, 'readVersion');
 
+    expect((await service.read(work)).files).toMatchObject([
+      { path: 'large.md', oursShowable: false, theirsShowable: true }
+    ]);
     await expect(service.readVersion(work, 'large.md', 'ours')).rejects.toMatchObject({
       code: 'version-not-readable'
     });

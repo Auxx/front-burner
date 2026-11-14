@@ -15,7 +15,9 @@ describe('GitMergeStateSchema', () => {
     editable: false,
     edited: false,
     oursSize: null,
-    theirsSize: 12
+    theirsSize: 12,
+    oursShowable: false,
+    theirsShowable: true
   };
 
   it('parses a merge in progress', () => {

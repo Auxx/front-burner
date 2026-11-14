@@ -2,11 +2,12 @@ import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import type { GitMergeVersion } from '@front-burner/shared-contracts';
 import { GitApi } from '@front-burner/web-api-client';
-import type { EditorStateChange } from '@front-burner/web-code-editor';
+import { type EditorStateChange, isSoftWrapping } from '@front-burner/web-code-editor';
+import { TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
 import { type Observable, of, Subject, throwError } from 'rxjs';
 
 import { settle } from '../../../testing/settle';
-import { translocoTesting } from '../../../testing/transloco-testing';
+import { EditorSettingsService } from '../../services/editor-settings/editor-settings.service';
 import { ConflictVersionComponent } from './conflict-version.component';
 
 const KEY = 'web-feature-repository-screen.ConflictVersionComponent';
@@ -36,11 +37,23 @@ describe('ConflictVersionComponent', () => {
     TestBed.configureTestingModule({
       imports: [
         ConflictVersionComponent,
-        translocoTesting({
-          [`${KEY}.mine`]: 'This is your version, read-only.',
-          [`${KEY}.theirs`]: 'This is their version ({{ from }}), read-only.',
-          [`${KEY}.label.ours`]: '{{ name }}, my version',
-          'errors.version-not-readable': 'This version of the file cannot be read.'
+        // With a second language, to follow a change of language.
+        TranslocoTestingModule.forRoot({
+          langs: {
+            en: {
+              [`${KEY}.mine`]: 'This is your version, read-only.',
+              [`${KEY}.theirs`]: 'This is their version ({{ from }}), read-only.',
+              [`${KEY}.label.ours`]: '{{ name }}, my version',
+              'errors.version-not-readable': 'This version of the file cannot be read.'
+            },
+            fr: { [`${KEY}.label.ours`]: '{{ name }}, ma version' }
+          },
+          preloadLangs: true,
+          translocoConfig: {
+            availableLangs: [ 'en', 'fr' ],
+            defaultLang: 'en',
+            missingHandler: { logMissingKey: false }
+          }
         })
       ],
       providers: [ { provide: GitApi, useValue: { gitMergeVersion } } ]
@@ -118,6 +131,38 @@ describe('ConflictVersionComponent', () => {
     backButton().click();
 
     expect(backs).toBe(1);
+  });
+
+  it('takes the focus on Back, which reads the banner as its description', async () => {
+    await render('ours');
+
+    expect(document.activeElement).toBe(backButton());
+    const description = host().querySelector(`#${backButton().getAttribute('aria-describedby')}`);
+    expect(description?.textContent?.trim()).toBe('This is your version, read-only.');
+  });
+
+  it('follows Wrap and the language, keeping the cursor', async () => {
+    await render();
+    const code = () =>
+      fixture.debugElement.query(element => element.name === 'ce-code-editor').componentInstance as {
+        state(): EditorStateChange['state'];
+        stateChange: { emit(change: EditorStateChange): void; };
+      };
+    const moved = code().state().update({ selection: { anchor: 3 } }).state;
+    code().stateChange.emit({ state: moved, docChanged: false });
+    await settle(fixture);
+
+    TestBed.inject(EditorSettingsService).softWrap.set(false);
+    await settle(fixture);
+
+    expect(isSoftWrapping(code().state())).toBe(false);
+    expect(code().state().selection.main.head).toBe(3);
+
+    TestBed.inject(TranslocoService).setActiveLang('fr');
+    await settle(fixture);
+
+    expect(content()?.getAttribute('aria-label')).toBe('guide.md, ma version');
+    expect(code().state().selection.main.head).toBe(3);
   });
 
   it('reads the other version when the side changes', async () => {

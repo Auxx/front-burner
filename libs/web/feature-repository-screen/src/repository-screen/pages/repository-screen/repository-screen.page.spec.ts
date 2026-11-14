@@ -1399,7 +1399,9 @@ describe('RepositoryScreenPage', () => {
           editable: true,
           edited: false,
           oursSize: 1,
-          theirsSize: 1
+          theirsSize: 1,
+          oursShowable: true,
+          theirsShowable: true
         });
         const conflictList = () => page().querySelector('rs-conflict-list') as HTMLElement | null;
         const conflictFile = () => page().querySelector('rs-conflict-file h2')?.textContent?.trim();

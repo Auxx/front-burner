@@ -2,7 +2,8 @@
   @let conflict = file();
   @let side = shown();
   @if (side) {
-    @defer {
+    <!-- At once, not when the browser is idle: the choices are gone already, and only the spinner may fill the gap. -->
+    @defer (on immediate) {
       <rs-conflict-version [repositoryId]="repositoryId()"
                            [path]="conflict.path"
                            [side]="side"
@@ -14,7 +15,9 @@
     }
   } @else {
     <header class="header">
-      <h2 class="name">{{ name() }}</h2>
+      <h2 #heading
+          class="name"
+          tabindex="-1">{{ name() }}</h2>
       @if (folder(); as folder) {
         <p class="folder">{{ folder }}</p>
       }
