@@ -1,0 +1,13 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repository-screen.UndoMergeDialog'">
+  <ui-dialog [heading]="t('heading')">
+    <p class="message">{{ t('message') }}</p>
+    <div uiDialogFooter>
+      <button uiButton
+              data-autofocus
+              (click)="ref.close(false)">{{ t('cancel') }}</button>
+      <button uiButton
+              variant="danger"
+              (click)="ref.close(true)">{{ t('undo') }}</button>
+    </div>
+  </ui-dialog>
+</ng-container>

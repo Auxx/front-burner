@@ -60,6 +60,7 @@
       @if (mergeCommitted()) {
         <rs-merge-committed uiAppShellBanner
                             (push)="pushMerge()"
+                            (undo)="mergeActions.undo()"
                             (dismissed)="dismissMergeCommitted()" />
       }
       @switch (state) {

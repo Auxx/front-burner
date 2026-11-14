@@ -386,6 +386,20 @@ describe('BranchListDialog', () => {
     expect(overlay().querySelector('rs-branch-list')).not.toBeNull();
   });
 
+  it('offers Undo merge while the merge can be undone, and closes with it', async () => {
+    const { closed } = await open({ undoableMerge: true });
+
+    dialogButton(`${K}.undoMerge`)?.click();
+
+    expect(await closed).toEqual({ kind: 'undo-merge' });
+  });
+
+  it('does not offer Undo merge otherwise', async () => {
+    await open();
+
+    expect(dialogButton(`${K}.undoMerge`)).toBeUndefined();
+  });
+
   it('keeps New branch button available on a detached HEAD', async () => {
     gitBranches = vi.fn(() => of({ current: null, local: [], remote: [], singleBranch: false }));
     const { closed } = await open({ noCommits: false });

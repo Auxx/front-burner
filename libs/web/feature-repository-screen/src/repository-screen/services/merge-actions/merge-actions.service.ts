@@ -1,9 +1,10 @@
 import { computed, inject, Injectable, signal, type Type } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import type { GitResolution } from '@front-burner/shared-contracts';
-import { DialogService } from '@front-burner/ui';
+import type { ApiError, GitResolution } from '@front-burner/shared-contracts';
+import { DialogService, ToastService } from '@front-burner/ui';
 import { GitApi } from '@front-burner/web-api-client';
 import { toApiError } from '@front-burner/web-core';
+import { TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom, type Observable } from 'rxjs';
 
 import { AbortMergeDialog } from '../../dialogs/abort-merge/abort-merge.dialog';
@@ -14,14 +15,18 @@ import {
 } from '../../dialogs/commit-merge/commit-merge.dialog';
 import { MarkersLeftDialog } from '../../dialogs/markers-left/markers-left.dialog';
 import { StartOverDialog } from '../../dialogs/start-over/start-over.dialog';
+import { UndoMergeDialog } from '../../dialogs/undo-merge/undo-merge.dialog';
 import type { ConflictAction } from '../../models/conflict-action.model';
 import { CommitAuthorGate } from '../commit-author-gate/commit-author-gate.service';
+import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { EntryCommandsService, OWN_CHANGE_MS } from '../entry-commands/entry-commands.service';
 import { FailureToastService } from '../failure-toast/failure-toast.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
 import { MergeStore } from '../merge-store/merge-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
+
+const KEY = 'web-feature-repository-screen.MergeActionsService';
 
 /**
  * How a change to the merge ended: it went through, it stopped (failed, said why,
@@ -70,8 +75,12 @@ export class MergeActionsService {
   private readonly route = inject(ActivatedRoute);
   private readonly failures = inject(FailureToastService);
   private readonly gate = inject(CommitAuthorGate);
+  private readonly diskChanges = inject(DiskChangesService);
+  private readonly toast = inject(ToastService);
+  private readonly transloco = inject(TranslocoService);
 
   private readonly abortRunning = signal(false);
+  private readonly undoRunning = signal(false);
   private readonly resolveRunning = signal<{ path: string; resolution: ConflictAction; } | null>(null);
   private asking = false;
   /** Settles when the last resolve has ended; it never rejects. */
@@ -79,6 +88,8 @@ export class MergeActionsService {
 
   /** Whether an abort the user confirmed is running. */
   readonly aborting = this.abortRunning.asReadonly();
+  /** Whether an undo the user confirmed is running. */
+  readonly undoing = this.undoRunning.asReadonly();
   /** The resolve running, if any. */
   readonly resolving = this.resolveRunning.asReadonly();
 
@@ -203,6 +214,79 @@ export class MergeActionsService {
   }
 
   /**
+   * **Undo merge** (GC-25, GC-26), from the merge-committed notice or the branch
+   * list. It asks first. Then, as a branch switch does:
+   *
+   * 1. the waiting saves are sent, as the backend refuses with uncommitted
+   *    changes, and a save that lands after the reset would bring the merge's
+   *    content back. One that did not reach the disk stops it and says why;
+   * 2. every saver is held, so that an edit typed meanwhile waits;
+   * 3. the backend decides whether the merge can still be undone, and undoes it;
+   * 4. the open file is compared with the disk, which reloads it or asks (ED-24),
+   *    before the savers are released. The event may not come, or come too late.
+   *
+   * A toast says "Merge undone.", or why it failed (GC-27), such as when the merge
+   * commit was pushed meanwhile (`undo-not-allowed`). Either way the status is read
+   * again, which brings the **to pull** count back, or takes the stale button away.
+   * Ignored while anything else is asked or running. Settles when it has ended.
+   */
+  async undo(): Promise<void> {
+    const repositoryId = this.idleOn();
+    if (repositoryId === null || !(await this.ask(UndoMergeDialog)) || this.idleOn() !== repositoryId) {
+      return;
+    }
+    this.undoRunning.set(true);
+    try {
+      await this.sendUndo(repositoryId);
+    } finally {
+      this.undoRunning.set(false);
+    }
+  }
+
+  private async sendUndo(repositoryId: number): Promise<void> {
+    const notSaved = await this.openFiles.flushed(repositoryId);
+    if (!this.stillOn(repositoryId)) {
+      return;
+    }
+    if (notSaved !== null) {
+      this.failures.show(notSaved.error);
+      return;
+    }
+    const release = this.openFiles.hold();
+    let failure: ApiError | null = null;
+    try {
+      await firstValueFrom(this.api.undoMerge(repositoryId), { defaultValue: undefined });
+    } catch (error) {
+      failure = toApiError(error);
+    } finally {
+      await this.followOpenFile(repositoryId);
+      release();
+    }
+    if (!this.stillOn(repositoryId)) {
+      return;
+    }
+    if (failure === null) {
+      this.toast.show({
+        message: this.transloco.translate(`${KEY}.undone`),
+        dismissLabel: this.transloco.translate(`${KEY}.dismiss`),
+        status: 'success'
+      });
+    } else {
+      this.failures.show(failure);
+    }
+    await this.status.refresh();
+  }
+
+  /** Only the open file can be typed in; the others follow `files.changed` when they are opened. */
+  private async followOpenFile(repositoryId: number): Promise<void> {
+    const file = this.openFiles.current();
+    if (file !== null && this.stillOn(repositoryId)) {
+      this.diskChanges.notice(file.path());
+      await this.diskChanges.settled();
+    }
+  }
+
+  /**
    * One press of the dialog's **Commit merge**. An author that can't be read
    * fails like the commit itself, as the commit form does.
    */
@@ -243,7 +327,7 @@ export class MergeActionsService {
   /** The open repository, when nothing is asked or running that a resolve must wait for; otherwise `null`. */
   private idleOn(): number | null {
     const repositoryId = this.session.repository()?.id;
-    const busy = this.asking || this.abortRunning() || this.resolveRunning() !== null;
+    const busy = this.asking || this.abortRunning() || this.undoRunning() || this.resolveRunning() !== null;
     return repositoryId === undefined || busy ? null : repositoryId;
   }
 

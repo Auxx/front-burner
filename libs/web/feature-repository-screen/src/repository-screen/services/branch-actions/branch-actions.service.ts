@@ -12,6 +12,7 @@ import { type SwitchRefusedData, SwitchRefusedDialog } from '../../dialogs/switc
 import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { FailureToastService } from '../failure-toast/failure-toast.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
+import { MergeActionsService } from '../merge-actions/merge-actions.service';
 import { MergeStore } from '../merge-store/merge-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
@@ -25,6 +26,7 @@ type SwitchChoice = Extract<BranchChoice, { kind: 'local' | 'remote'; }>;
 
 /**
  * The branch list (GA-36) and what its choice does (GA-37). Provided by the page.
+ * **Undo merge** in the list is `MergeActionsService.undo` (GC-25).
  * The order of the steps is what keeps edits from landing on the other branch:
  *
  * 1. the waiting saves are sent (GA-40), so that a save counts as a change and
@@ -59,6 +61,7 @@ export class BranchActionsService {
   private readonly failures = inject(FailureToastService);
   private readonly transloco = inject(TranslocoService);
   private readonly merge = inject(MergeStore);
+  private readonly mergeActions = inject(MergeActionsService);
   private readonly changesAsked = new Subject<void>();
   private readonly running = signal(false);
 
@@ -95,14 +98,17 @@ export class BranchActionsService {
     const ref = this.dialogs.open<BranchListDialog, BranchListData, BranchChoice>(BranchListDialog, {
       data: {
         repositoryId,
-        noCommits: this.status.status()?.noCommits ?? false
+        noCommits: this.status.status()?.noCommits ?? false,
+        undoableMerge: this.status.status()?.undoableMerge ?? false
       }
     });
     this.list = ref;
     const choice = await firstValueFrom(ref.closed, { defaultValue: undefined });
     this.list = null;
     if (choice && this.stillOn(repositoryId)) {
-      if (choice.kind === 'new') {
+      if (choice.kind === 'undo-merge') {
+        await this.mergeActions.undo();
+      } else if (choice.kind === 'new') {
         if (this.merge.merging()) {
           return;
         }

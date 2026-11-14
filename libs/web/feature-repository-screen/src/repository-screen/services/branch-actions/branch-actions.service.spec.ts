@@ -21,6 +21,7 @@ import { fileContent } from '../../../testing/open-files';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { DiskChangesService } from '../disk-changes/disk-changes.service';
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
+import { MergeActionsService } from '../merge-actions/merge-actions.service';
 import { MergeStore } from '../merge-store/merge-store.service';
 import { OpenFilesService } from '../open-files/open-files.service';
 import { RepositorySessionService } from '../repository-session/repository-session.service';
@@ -60,6 +61,7 @@ describe('BranchActionsService', () => {
   let branches: GitBranchList;
   let branchesAnswer: (() => Observable<GitBranchList>) | null;
   let merging: ReturnType<typeof signal<boolean>>;
+  let undo: ReturnType<typeof vi.fn>;
 
   const row = (text: string) =>
     [ ...overlay().querySelectorAll<HTMLButtonElement>('rs-branch-list li button') ].find(button =>
@@ -94,6 +96,7 @@ describe('BranchActionsService', () => {
     branches = BRANCHES;
     branchesAnswer = null;
     merging = signal(false);
+    undo = vi.fn(() => Promise.resolve());
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
@@ -115,6 +118,7 @@ describe('BranchActionsService', () => {
         { provide: RepositorySessionService, useValue: { repository } },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         { provide: MergeStore, useValue: { merging } },
+        { provide: MergeActionsService, useValue: { undo } },
         {
           provide: GitStatusStore,
           useValue: {
@@ -330,6 +334,33 @@ describe('BranchActionsService', () => {
     await done;
 
     expect(overlay().querySelector('rs-new-branch')).toBeNull();
+  });
+
+  describe('Undo merge', () => {
+    const undoButton = () => dialogButton('web-feature-repository-screen.BranchListDialog.undoMerge');
+
+    it('offers Undo merge in the branch list after the notice is dismissed', async () => {
+      // The notice is the page's: the list follows the status alone.
+      status.set({ ...changed(), undoableMerge: true });
+      const done = service.open();
+      await settleDialog();
+
+      undoButton()?.click();
+      await done;
+
+      expect(undo).toHaveBeenCalledOnce();
+      expect(switches).toEqual([]);
+    });
+
+    it('does not offer it with uncommitted changes', async () => {
+      // The backend says so: `undoableMerge` is false with uncommitted changes (GC-25).
+      status.set({ ...changed('guide.md'), undoableMerge: false });
+      void service.open();
+      await settleDialog();
+
+      expect(overlay().querySelector('rs-branch-list')).not.toBeNull();
+      expect(undoButton()).toBeUndefined();
+    });
   });
 
   it('does not open when a merge is in progress', async () => {

@@ -1149,7 +1149,7 @@ test.describe('pushing', () => {
         }
       });
 
-      test('commits with git\'s message, as edited, and the screen returns to normal on every device, with the notice', async ({ page, context, instance, isMobile, monitor }) => {
+      test('AC-GIT-003.11: Commit merge is disabled until every file is resolved; it commits with git\'s default message, as edited, and the user\'s commit author; the screen then returns to normal on every device, and the notice offers Push and Undo merge', async ({ page, context, instance, isMobile, monitor }) => {
         await confirmCommitAuthor(instance.url);
         const { id, dir, bare } = pushable(instance, 'cloned');
         publishGuide(dir, bare);
@@ -1203,7 +1203,10 @@ test.describe('pushing', () => {
           await expect(mergeSummary(tab)).toHaveCount(0);
           await expect(summary(tab)).toHaveText(/main\s*·\s*2 to push/);
           await expect(notice(tab)).toContainText(NOTICE);
+          await expect(notice(tab).getByRole('button', { name: 'Undo merge', exact: true })).toBeVisible();
         }
+        const author = `${TEST_ADMIN.displayName} <${TEST_ADMIN.email}>`;
+        expect(gitIn(dir, 'log', '-1', '--format=%an <%ae>|%cn <%ce>').trim()).toBe(`${author}|${author}`);
         expect(gitIn(dir, 'log', '-1', '--format=%s%n%P').toString().trim().split('\n')).toEqual([
           'Merge origin/main, edited',
           expect.stringMatching(/^[0-9a-f]+ [0-9a-f]+$/)
@@ -1220,6 +1223,106 @@ test.describe('pushing', () => {
         await other.close();
         // A merge read while it ended.
         drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+      });
+
+      test.describe('undoing it', () => {
+        const notice = (page: Page) => page.locator('rs-merge-committed');
+        const undoQuestion = (page: Page) => page.getByRole('dialog', { name: 'Undo the merge?' });
+
+        /**
+         * A pull of `guide.md` that conflicts, resolved with `version` and committed
+         * on screen. Returns the working copy, its remote, and the commit before the pull.
+         */
+        async function committedMerge(
+          page: Page,
+          instance: { url: string; dataDir: string; },
+          version: 'Use my version' | 'Use their version'
+        ): Promise<{ id: number; dir: string; bare: string; before: string; }> {
+          await confirmCommitAuthor(instance.url);
+          const { id, dir, bare } = pushable(instance, 'cloned');
+          publishGuide(dir, bare);
+          writeFileSync(join(dir, 'guide.md'), 'mine\n');
+          gitIn(dir, 'commit', '-q', '-am', 'mine');
+          const before = gitIn(dir, 'rev-parse', 'HEAD').trim();
+          pushFromElsewhere(bare, 'main', [ { 'guide.md': 'theirs\n' } ]);
+          await openScreen(page, `/repositories/${id}`);
+          await gitAction(page, 'Pull');
+          await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+          await showConflicts(page);
+          await conflictList(page).getByRole('button', { name: /^guide\.md\s/ }).click();
+          await page.getByRole('main').getByRole('button', { name: version, exact: true }).click();
+          await expect(mergeSummary(page)).toContainText('1 of 1 file resolved');
+          await gitAction(page, 'Commit merge');
+          const dialog = page.getByRole('dialog', { name: 'Commit merge' });
+          await dialog.getByRole('button', { name: 'Commit merge', exact: true }).click();
+          await expect(notice(page)).toBeVisible();
+          return { id, dir, bare, before };
+        }
+
+        test('AC-GIT-003.13: Undo merge after committing and before pushing puts the branch back to its commit before the pull; after pushing, Undo merge is no longer offered', async ({ page, instance, monitor }) => {
+          const { id, dir, bare, before } = await committedMerge(page, instance, 'Use my version');
+
+          // Cancelling changes nothing.
+          await notice(page).getByRole('button', { name: 'Undo merge', exact: true }).click();
+          await expect(undoQuestion(page)).toContainText(
+            'Your branch goes back to how it was before the pull. The merge commit is no longer on the branch.'
+          );
+          await undoQuestion(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+          await expect(summary(page)).toHaveText(/main\s*·\s*2 to push/);
+
+          await notice(page).getByRole('button', { name: 'Undo merge', exact: true }).click();
+          await undoQuestion(page).getByRole('button', { name: 'Undo merge', exact: true }).click();
+
+          await expect(toasts(page).getByText('Merge undone.', { exact: true })).toBeVisible();
+          await expect(notice(page)).toHaveCount(0);
+          // The upstream's commits show as to pull again (GC-26).
+          await expect(summary(page)).toHaveText(/main\s*·\s*1 to push, 1 to pull/);
+          expect(gitIn(dir, 'rev-parse', 'HEAD').trim()).toBe(before);
+          expect(gitIn(dir, 'status', '--porcelain').trim()).toBe('');
+
+          // Merged again and pushed: it is no longer offered, in the notice or the branch list.
+          await gitAction(page, 'Pull');
+          await expect(mergeSummary(page)).toContainText('0 of 1 file resolved');
+          await showConflicts(page);
+          await conflictList(page).getByRole('button', { name: /^guide\.md\s/ }).click();
+          await page.getByRole('main').getByRole('button', { name: 'Use my version', exact: true }).click();
+          await gitAction(page, 'Commit merge');
+          await page.getByRole('dialog', { name: 'Commit merge' })
+            .getByRole('button', { name: 'Commit merge', exact: true }).click();
+          await expect(notice(page)).toBeVisible();
+          await page.locator('rs-git-status-summary').getByRole('button').click();
+          const branches = page.getByRole('dialog', { name: 'Branches' });
+          await expect(branches.getByRole('button', { name: 'Undo merge', exact: true })).toBeVisible();
+          await page.keyboard.press('Escape');
+
+          await notice(page).getByRole('button', { name: 'Push', exact: true }).click();
+          await expect.poll(() => gitIn(bare, 'rev-parse', 'main').toString())
+            .toBe(gitIn(dir, 'rev-parse', 'HEAD').toString());
+          await expect(summary(page)).toHaveText('main');
+          await page.reload();
+          await expect(summary(page)).toHaveText('main');
+          await expect(notice(page)).toHaveCount(0);
+          await page.locator('rs-git-status-summary').getByRole('button').click();
+          await expect(branches.getByRole('button', { name: 'main' })).toBeVisible();
+          await expect(branches.getByRole('button', { name: 'Undo merge', exact: true })).toHaveCount(0);
+          // The API refuses it too.
+          expect(await api(instance, 'POST', `/repositories/${id}/git/merge/undo`))
+            .toEqual({ status: 409, code: 'undo-not-allowed' });
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
+
+        test('reloads the open file after an undo', async ({ page, instance, monitor }) => {
+          const { id } = await committedMerge(page, instance, 'Use their version');
+          await page.goto(`/repositories/${id}/files/guide.md`);
+          await expect(page.locator('.cm-content')).toContainText('theirs');
+
+          await notice(page).getByRole('button', { name: 'Undo merge', exact: true }).click();
+          await undoQuestion(page).getByRole('button', { name: 'Undo merge', exact: true }).click();
+
+          await expect(toasts(page).getByText('Merge undone.', { exact: true })).toBeVisible();
+          await expect(page.locator('.cm-content')).toContainText('mine');
+          drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
+        });
       });
 
       test('keeps focus in the side pane when the bar goes', async ({ page, context, instance, isMobile, monitor }) => {

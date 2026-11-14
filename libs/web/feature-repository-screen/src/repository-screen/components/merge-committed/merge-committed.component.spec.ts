@@ -25,6 +25,7 @@ describe('MergeCommittedComponent', () => {
         translocoTesting({
           [`${K}.message`]: 'Merge committed. Push to publish it.',
           [`${K}.push`]: 'Push',
+          [`${K}.undo`]: 'Undo merge',
           [`${K}.dismiss`]: 'Dismiss'
         })
       ],
@@ -46,6 +47,15 @@ describe('MergeCommittedComponent', () => {
     button('Push')?.click();
 
     expect(pushed).toBe(1);
+  });
+
+  it('offers Undo merge', () => {
+    let undone = 0;
+    fixture.componentInstance.undo.subscribe(() => undone++);
+
+    button('Undo merge')?.click();
+
+    expect(undone).toBe(1);
   });
 
   it('can be dismissed', () => {
