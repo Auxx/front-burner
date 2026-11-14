@@ -11,6 +11,22 @@ const SOURCE_DIR = join(WORKSPACE_ROOT, 'tools/ai-tools/src/typing-test');
 
 export const DEFAULT_OUT_DIR = 'tmp/typing-test';
 
+/**
+ * The editor's conflict extension, bundled from its source so that the page measures the real
+ * one: the page can't import a library by path, so it names it `typing-test:conflict-extension`.
+ * It depends on CodeMirror alone.
+ */
+export const CONFLICT_EXTENSION = 'libs/web/code-editor/src/code-editor/conflicts/conflict-extension.ts';
+
+const workspaceSources = {
+  name: 'workspace-sources',
+  setup(builder) {
+    builder.onResolve({ filter: /^typing-test:conflict-extension$/ }, () => ({
+      path: resolveInWorkspace(CONFLICT_EXTENSION)
+    }));
+  }
+};
+
 /** Every file the site has, by URL path, with its content type: the server serves nothing else. */
 export const SITE_FILES = Object.freeze({
   '/index.html': { name: 'index.html', type: 'text/html; charset=utf-8' },
@@ -34,6 +50,7 @@ export async function buildSite(out = DEFAULT_OUT_DIR) {
     format: 'esm',
     target: 'es2022',
     outfile: join(dir, 'app.js'),
+    plugins: [ workspaceSources ],
     logLevel: 'silent'
   });
   writeFileSync(join(dir, 'index.html'), readFileSync(join(SOURCE_DIR, 'index.html')));

@@ -9,6 +9,7 @@ import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { search, searchKeymap } from '@codemirror/search';
 import { EditorSelection, EditorState, RangeSetBuilder } from '@codemirror/state';
 import {
+  BlockType,
   Decoration,
   drawSelection,
   EditorView,
@@ -19,6 +20,9 @@ import {
   lineNumbers,
   ViewPlugin
 } from '@codemirror/view';
+// The editor's own conflict extension, not a copy: the build maps this name to its source in
+// libs/web/code-editor (`CONFLICT_EXTENSION` in typing-test-site.mjs).
+import { conflictExtension } from 'typing-test:conflict-extension';
 import {
   formatResults,
   isOn,
@@ -27,7 +31,8 @@ import {
   SETUPS,
   summarise,
   SWITCHES,
-  TYPING_TEST_FILES
+  TYPING_TEST_FILES,
+  withConflicts
 } from '../lib/typing-test.mjs';
 
 /** A keystroke not followed by a change of the text within this long is dropped (a key that edits nothing). */
@@ -156,11 +161,15 @@ class WrapMarker extends GutterMarker {
   }
 }
 const marker = new WrapMarker();
+const textHeight = block =>
+  Array.isArray(block.type)
+    ? block.type.filter(part => part.type === BlockType.Text).reduce((sum, part) => sum + part.height, 0)
+    : block.height;
 const wrapMarker = () =>
   gutter({
     class: 'cm-wrapMarkers',
     initialSpacer: () => marker,
-    lineMarker: (view, line) => view.lineBlockAt(line.from).height > view.defaultLineHeight * 1.5 ? marker : null,
+    lineMarker: (view, line) => textHeight(view.lineBlockAt(line.from)) > view.defaultLineHeight * 1.5 ? marker : null,
     lineMarkerChange: update => update.geometryChanged || update.docChanged
   });
 
@@ -184,10 +193,20 @@ function extensions() {
         ? { spellcheck: 'true', autocorrect: 'on', autocapitalize: 'sentences' }
         : { spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }
     ),
+    setup.conflicts ? conflictExtension(CONFLICT_TEXTS) : [],
     measure,
     listen
   ];
 }
+
+/** The conflict view's words, in English as the product's own. */
+const CONFLICT_TEXTS = {
+  ours: branch => `Mine (${branch})`,
+  theirs: branch => `Theirs (${branch})`,
+  acceptOurs: 'Accept mine',
+  acceptTheirs: 'Accept theirs',
+  acceptBoth: 'Accept both'
+};
 
 if (eventTiming !== null) {
   new PerformanceObserver(list => {
@@ -221,7 +240,8 @@ async function load(name) {
   status.textContent = 'Loading…';
   status.className = 'loading';
   const response = await fetch(`./${name}`, { cache: 'no-store' });
-  const text = await response.text();
+  const fetched = await response.text();
+  const text = setup.conflicts ? withConflicts(fetched) : fetched;
   file = name;
   bytes = new TextEncoder().encode(text).length;
   view.setState(EditorState.create({ doc: text, extensions: extensions() }));
@@ -229,7 +249,9 @@ async function load(name) {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       setTimeout(() => {
-        status.textContent = `Ready: ${name}${setup.off.length ? ` · off: ${setup.off.join(', ')}` : ''}`;
+        status.textContent = `Ready: ${name}${setup.off.length ? ` · off: ${setup.off.join(', ')}` : ''}${
+          setup.conflicts ? ' · conflicts' : ''
+        }`;
         status.className = 'ready';
       }, SETTLE_MS);
     })
@@ -261,6 +283,7 @@ async function copy() {
     starts,
     eventTiming,
     off: setup.off,
+    conflicts: setup.conflicts,
     userAgent: navigator.userAgent,
     screen: `${window.innerWidth}×${window.innerHeight} @${window.devicePixelRatio}x`
   });
@@ -284,11 +307,15 @@ for (const off of SETUPS) {
   const label = off.length ? `Without ${off.map(name => SWITCHES[name]).join(', ')}` : 'Everything on';
   $('setup').append(new Option(label, value, false, value === setup.off.join(',')));
 }
+$('conflicts').checked = setup.conflicts;
 $('file').addEventListener('change', event => {
-  location.search = setupQuery({ file: event.target.value, off: setup.off });
+  location.search = setupQuery({ ...setup, file: event.target.value });
 });
 $('setup').addEventListener('change', event => {
-  location.search = setupQuery({ file: setup.file, off: event.target.value ? event.target.value.split(',') : [] });
+  location.search = setupQuery({ ...setup, off: event.target.value ? event.target.value.split(',') : [] });
+});
+$('conflicts').addEventListener('change', event => {
+  location.search = setupQuery({ ...setup, conflicts: event.target.checked });
 });
 $('start').addEventListener('click', () => placeCursor(0.02));
 $('middle').addEventListener('click', () => placeCursor(0.5));

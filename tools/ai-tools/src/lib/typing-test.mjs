@@ -51,16 +51,40 @@ export function parseSetup(search) {
   const names = Object.keys(TYPING_TEST_FILES);
   const file = names.includes(params.get('file')) ? params.get('file') : names[0];
   const asked = (params.get('off') ?? '').split(',').map(name => name.trim()).filter(Boolean);
+  const conflicts = params.get('conflicts');
   return {
     file,
     off: Object.keys(SWITCHES).filter(name => asked.includes(name)),
-    unknown: asked.filter(name => !(name in SWITCHES))
+    conflicts: conflicts === 'on',
+    unknown: [
+      ...asked.filter(name => !(name in SWITCHES)),
+      ...(conflicts === null || conflicts === 'on' ? [] : [ `conflicts=${conflicts}` ])
+    ]
   };
 }
 
 /** The address query of a setup, the inverse of `parseSetup`. */
-export function setupQuery({ file, off }) {
-  return off.length ? `?file=${file}&off=${off.join(',')}` : `?file=${file}`;
+export function setupQuery({ file, off, conflicts = false }) {
+  return `?file=${file}${off.length ? `&off=${off.join(',')}` : ''}${conflicts ? '&conflicts=on' : ''}`;
+}
+
+/** With `?conflicts=on`, every this many lines of the test file is in a conflict. */
+export const CONFLICT_EVERY_LINES = 40;
+
+/**
+ * The text with every `every`th non-empty line made into a conflict with git's plain markers
+ * (GC-5), as a file left by a merge with many conflicts: the worst case for the editor's
+ * conflict view (plan 98). Mine is the line, theirs the line with a word added.
+ */
+export function withConflicts(text, every = CONFLICT_EVERY_LINES) {
+  return text
+    .split('\n')
+    .map((line, index) =>
+      index > 0 && index % every === 0 && line
+        ? `<<<<<<< main\n${line}\n=======\n${line} again\n>>>>>>> origin/main`
+        : line
+    )
+    .join('\n');
 }
 
 /** The keystroke budget of NF-2.4, in milliseconds. */
@@ -213,6 +237,7 @@ export function formatResults(run) {
   const lines = [
     `file: ${run.file} (${run.bytes.toLocaleString('en')} bytes)`,
     `switched off: ${run.off.length ? run.off.join(', ') : 'nothing'}`,
+    `conflict view: ${run.conflicts ? `on, a conflict every ${CONFLICT_EVERY_LINES} lines` : 'off'}`,
     `typed at: ${run.position === null ? 'n/a' : `${run.position} % of the file`}`,
     `keystrokes: ${own.count}`,
     `typing speed: ${typingSpeed(run.starts) ?? '—'} keys/s`,

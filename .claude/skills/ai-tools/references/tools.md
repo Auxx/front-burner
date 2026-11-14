@@ -350,7 +350,11 @@ setup to switch off, `?file=1mb.md&off=frontmatter,wrap` (`SWITCHES`:
 `wrapmarker` a mirror of the editor's wrap-marker gutter, which the page turns
 off whenever `wrap` is off, as the product does); the page refuses unknown
 switches rather than measure the wrong setup, and its menus offer the setups of
-`SETUPS`.
+`SETUPS`. `&conflicts=on` (the **Conflicts** box) puts every 40th non-empty line
+of the file in a conflict (`withConflicts`) and turns on the editor's conflict
+view: its real source, which the build bundles from `libs/web/code-editor` under
+the name `typing-test:conflict-extension` (`CONFLICT_EXTENSION`), since the page
+can't import a library by path.
 
 | Command                                          | Does                                                                  |
 | ------------------------------------------------ | --------------------------------------------------------------------- |

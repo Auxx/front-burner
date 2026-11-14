@@ -1,5 +1,5 @@
 import { StateEffect } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { BlockType, EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEditorState, setSoftWrap } from './editor-state';
 
@@ -73,6 +73,23 @@ describe('wrapMarker', () => {
     });
     internals.measure();
     expect(geometryChanged).toBe(true);
+    expect(markers(view)).toEqual([ '↪' ]);
+    view.destroy();
+  });
+
+  it('does not count a block widget above a line, such as the conflict buttons', () => {
+    const view = open();
+    vi.spyOn(view, 'defaultLineHeight', 'get').mockReturnValue(LINE_HEIGHT);
+    vi.spyOn(view, 'lineBlockAt').mockImplementation((pos: number) => {
+      const line = view.state.doc.lineAt(pos);
+      const text = { type: BlockType.Text, height: (line.text.length > 100 ? 5 : 1) * LINE_HEIGHT };
+      const widget = { type: BlockType.WidgetBefore, height: 28 };
+      return { height: widget.height + text.height, type: [ widget, text ] } as unknown as ReturnType<
+        EditorView['lineBlockAt']
+      >;
+    });
+    view.dispatch({ changes: { from: 0, insert: 'a' } });
+
     expect(markers(view)).toEqual([ '↪' ]);
     view.destroy();
   });
