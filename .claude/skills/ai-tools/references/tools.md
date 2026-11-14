@@ -186,7 +186,7 @@ the `@vscode/codicons` package, and builds the sprite that `ui-icon` draws from.
 | Command          | Does                                                                         |
 | ---------------- | ---------------------------------------------------------------------------- |
 | `find <word...>` | Icons matching every word, best first: names and aliases, tags, descriptions |
-| `show <name...>` | The SVG of each icon (16 × 16, `fill="currentColor"`)                        |
+| `show <name...>` | The SVG of each icon (16 × 16, or 24 × 24 for a few; `fill="currentColor"`)  |
 | `sprite`         | Builds `libs/ui/src/assets/icons.svg` from `ICON_NAMES`; 1 if out of date    |
 
 ```shell
@@ -199,6 +199,9 @@ icons.mjs sprite --write
 - Icons are named by their SVG file in the package (`warning`, `ellipsis`),
   which is the name `ui-icon` takes. `find` and `show` also accept an alias from
   the package's `mapping.json` (`alert`, `more`) and print the file name.
+- Most icons are drawn on a 16 × 16 grid, but a few (`files`, `source-control`)
+  on 24 × 24. Each `<symbol>` keeps its icon's own `viewBox`, so `ui-icon` draws
+  every icon at the same size.
 - The package's own `dist/codicon.svg` is not used: it lacks icons whose file is
   named by a later alias, such as `warning`, `sync` and `lock`.
 - To give `ui-icon` a new icon, check it with `find`, add its name in order to

@@ -111,15 +111,20 @@ export function buildSprite(icons, names, dir = CODICONS_DIR) {
       throw new Error(`Unknown Codicon: ${name}`);
     }
     const { svg } = readIcon(icons, name, dir);
-    const inner = /^<svg[^>]*>([\s\S]*)<\/svg>$/.exec(svg)?.[1];
+    const [ , attributes, inner ] = /^<svg([^>]*)>([\s\S]*)<\/svg>$/.exec(svg) ?? [];
     if (inner === undefined) {
       throw new Error(`Codicon ${name}: not a single <svg> element`);
+    }
+    // Most Codicons are drawn on 16×16, but some on 24×24: each symbol keeps its own grid.
+    const viewBox = /\sviewBox="([^"]+)"/.exec(attributes)?.[1];
+    if (viewBox === undefined) {
+      throw new Error(`Codicon ${name}: its <svg> has no viewBox`);
     }
     const scoped = inner
       .replace(/\sid="([^"]+)"/g, ` id="${name}--$1"`)
       .replace(/url\(#([^)]+)\)/g, `url(#${name}--$1)`)
       .replace(/href="#([^"]+)"/g, `href="#${name}--$1"`);
-    return `<symbol id="${name}" viewBox="0 0 16 16">${scoped}</symbol>`;
+    return `<symbol id="${name}" viewBox="${viewBox}">${scoped}</symbol>`;
   });
   return [
     '<svg xmlns="http://www.w3.org/2000/svg">',

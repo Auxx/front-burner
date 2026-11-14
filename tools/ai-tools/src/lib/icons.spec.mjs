@@ -50,6 +50,12 @@ describe('icons', () => {
     expect(() => buildSprite(icons, [ 'close', 'nope' ])).toThrow('Unknown Codicon: nope');
   });
 
+  it('keeps the grid of an icon drawn on 24×24, so that it is not drawn larger than the others', () => {
+    const sprite = buildSprite(icons, [ 'files', 'source-control' ]);
+    expect(sprite).toContain('<symbol id="files" viewBox="0 0 24 24"><path');
+    expect(sprite).toContain('<symbol id="source-control" viewBox="0 0 24 24"><path');
+  });
+
   it('prefixes the ids inside an icon with its name, and the references to them', () => {
     mkdirSync(join(WORKSPACE_ROOT, 'tmp'), { recursive: true });
     const fixture = mkdtempSync(join(WORKSPACE_ROOT, 'tmp', 'ai-tools-icons-'));
