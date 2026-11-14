@@ -12,18 +12,26 @@ const SOURCE_DIR = join(WORKSPACE_ROOT, 'tools/ai-tools/src/typing-test');
 export const DEFAULT_OUT_DIR = 'tmp/typing-test';
 
 /**
- * The editor's conflict extension, bundled from its source so that the page measures the real
- * one: the page can't import a library by path, so it names it `typing-test:conflict-extension`.
- * It depends on CodeMirror alone.
+ * The editor's own extensions that the page uses, bundled from their sources so that it
+ * measures the real ones rather than copies. The page can't import a library by path, so it
+ * names each `typing-test:<name>`. Each depends on CodeMirror alone.
  */
-export const CONFLICT_EXTENSION = 'libs/web/code-editor/src/code-editor/conflicts/conflict-extension.ts';
+export const EDITOR_SOURCES = Object.freeze({
+  'conflict-extension': 'libs/web/code-editor/src/code-editor/conflicts/conflict-extension.ts',
+  'line-direction': 'libs/web/code-editor/src/code-editor/state/line-direction.ts',
+  'wrap-marker': 'libs/web/code-editor/src/code-editor/state/wrap-marker.ts'
+});
 
-const workspaceSources = {
-  name: 'workspace-sources',
+const editorSources = {
+  name: 'editor-sources',
   setup(builder) {
-    builder.onResolve({ filter: /^typing-test:conflict-extension$/ }, () => ({
-      path: resolveInWorkspace(CONFLICT_EXTENSION)
-    }));
+    builder.onResolve({ filter: /^typing-test:/ }, ({ path }) => {
+      const name = path.slice('typing-test:'.length);
+      if (!Object.hasOwn(EDITOR_SOURCES, name)) {
+        return { errors: [ { text: `Unknown editor source: ${path}` } ] };
+      }
+      return { path: resolveInWorkspace(EDITOR_SOURCES[name]) };
+    });
   }
 };
 
@@ -50,7 +58,7 @@ export async function buildSite(out = DEFAULT_OUT_DIR) {
     format: 'esm',
     target: 'es2022',
     outfile: join(dir, 'app.js'),
-    plugins: [ workspaceSources ],
+    plugins: [ editorSources ],
     logLevel: 'silent'
   });
   writeFileSync(join(dir, 'index.html'), readFileSync(join(SOURCE_DIR, 'index.html')));

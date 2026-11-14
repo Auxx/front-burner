@@ -347,14 +347,15 @@ is the same) and two meters. The address names the file and the parts of the
 setup to switch off, `?file=1mb.md&off=frontmatter,wrap` (`SWITCHES`:
 `frontmatter`, `language`, `wrap`, `linenumbers`, `wrapmarker`, `spellcheck`,
 `direction`; `linenumbers` is line numbers with the active-line gutter,
-`wrapmarker` a mirror of the editor's wrap-marker gutter, which the page turns
-off whenever `wrap` is off, as the product does); the page refuses unknown
-switches rather than measure the wrong setup, and its menus offer the setups of
-`SETUPS`. `&conflicts=on` (the **Conflicts** box) puts every 40th non-empty line
-of the file in a conflict (`withConflicts`) and turns on the editor's conflict
-view: its real source, which the build bundles from `libs/web/code-editor` under
-the name `typing-test:conflict-extension` (`CONFLICT_EXTENSION`), since the page
-can't import a library by path.
+`wrapmarker` the editor's wrap-marker gutter, which the page turns off whenever
+`wrap` is off, as the product does); the page refuses unknown switches rather
+than measure the wrong setup, and its menus offer the setups of `SETUPS`.
+`&conflicts=on` (the **Conflicts** box) puts every 40th non-empty line of the
+file in a conflict (`withConflicts`) and turns on the editor's conflict view.
+The wrap-marker gutter, per-line direction and the conflict view are the
+editor's real sources, not copies: the page imports them as `typing-test:<name>`
+and the build bundles them from `libs/web/code-editor` (`EDITOR_SOURCES`), since
+the page can't import a library by path.
 
 | Command                                          | Does                                                                  |
 | ------------------------------------------------ | --------------------------------------------------------------------- |

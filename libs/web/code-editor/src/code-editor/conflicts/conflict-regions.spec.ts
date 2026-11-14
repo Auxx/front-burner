@@ -67,6 +67,12 @@ describe('conflictRegions', () => {
     ).toEqual([]);
   });
 
+  it('ignores a region with a second middle, which could be either side\'s heading underline', () => {
+    const text = `<<<<<<< main\nTitle\n=======\nmine\n=======\ntheirs\n>>>>>>> origin/main\n${CONFLICT}`;
+
+    expect(conflictRegions(text).map(region => parts(text, region).whole)).toEqual([ CONFLICT ]);
+  });
+
   it('restarts at a nested start', () => {
     const text = `<<<<<<< x\nmine\n${CONFLICT}\n`;
 

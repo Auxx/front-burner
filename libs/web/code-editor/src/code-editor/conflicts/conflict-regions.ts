@@ -29,13 +29,18 @@ interface Open {
   oursFrom: number;
   oursLabel: string;
   middle: { from: number; to: number; } | null;
+  /** A second middle was found, so the region is left out. */
+  ambiguous: boolean;
 }
 
 /**
  * The conflict regions in `lines`, the lines of a document without their line breaks. Goes
  * through them once. Lines that do not make up a whole region are plain text (GC-11): a
  * region with no middle or no end is left out, and a second start before the end starts over,
- * since git's markers do not nest.
+ * since git's markers do not nest. A region with two middles is left out too: git writes its
+ * markers seven characters long whatever the text holds, so one of them is a line of either
+ * version, such as a Markdown heading's underline, and which side it belongs to can't be told.
+ * The user edits such a region by hand rather than have **Accept** drop lines.
  */
 export function regionsInLines(lines: Iterable<string>): ConflictRegion[] {
   const regions: ConflictRegion[] = [];
@@ -48,12 +53,17 @@ export function regionsInLines(lines: Iterable<string>): ConflictRegion[] {
         from,
         oursFrom: to + 1,
         oursLabel: line.slice(START.length).trimEnd(),
-        middle: null
+        middle: null,
+        ambiguous: false
       };
-    } else if (open && !open.middle && line === MIDDLE) {
-      open.middle = { from, to };
-    } else if (open && line.startsWith(END)) {
+    } else if (open && line === MIDDLE) {
       if (open.middle) {
+        open.ambiguous = true;
+      } else {
+        open.middle = { from, to };
+      }
+    } else if (open && line.startsWith(END)) {
+      if (open.middle && !open.ambiguous) {
         regions.push({
           from: open.from,
           to,
@@ -70,7 +80,11 @@ export function regionsInLines(lines: Iterable<string>): ConflictRegion[] {
   return regions;
 }
 
-/** The conflict regions in `text`, whose lines end with `\n`. */
+/**
+ * The conflict regions in `text`, whose lines end with `\n` as an editor document's do; its
+ * offsets would be wrong for a file's raw text with `\r\n`, so it is not exported from the
+ * library, where `conflictsIn` reads the editor's document.
+ */
 export function conflictRegions(text: string): ConflictRegion[] {
   return regionsInLines(text.split('\n'));
 }

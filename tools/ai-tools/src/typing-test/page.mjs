@@ -7,22 +7,13 @@ import { markdown } from '@codemirror/lang-markdown';
 import { yamlFrontmatter } from '@codemirror/lang-yaml';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { search, searchKeymap } from '@codemirror/search';
-import { EditorSelection, EditorState, RangeSetBuilder } from '@codemirror/state';
-import {
-  BlockType,
-  Decoration,
-  drawSelection,
-  EditorView,
-  gutter,
-  GutterMarker,
-  highlightActiveLineGutter,
-  keymap,
-  lineNumbers,
-  ViewPlugin
-} from '@codemirror/view';
-// The editor's own conflict extension, not a copy: the build maps this name to its source in
-// libs/web/code-editor (`CONFLICT_EXTENSION` in typing-test-site.mjs).
+import { EditorSelection, EditorState } from '@codemirror/state';
+import { drawSelection, EditorView, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
+// The editor's own extensions, not copies: the build maps these names to their sources in
+// libs/web/code-editor (`EDITOR_SOURCES` in typing-test-site.mjs).
 import { conflictExtension } from 'typing-test:conflict-extension';
+import { lineDirection } from 'typing-test:line-direction';
+import { wrapMarker } from 'typing-test:wrap-marker';
 import {
   formatResults,
   isOn,
@@ -116,62 +107,6 @@ const view = new EditorView({
   parent: $('editor'),
   state: EditorState.create({ doc: 'Loading…' })
 });
-
-const autoDirection = Decoration.line({ attributes: { dir: 'auto' } });
-
-/** A copy of the editor's `lineDirection` (libs/web/code-editor): `dir="auto"` on every visible line. */
-const lineDirection = ViewPlugin.fromClass(
-  class {
-    constructor(view) {
-      this.decorations = decorateLines(view);
-    }
-
-    update(update) {
-      if (update.docChanged || update.viewportChanged) {
-        this.decorations = decorateLines(update.view);
-      }
-    }
-  },
-  { decorations: plugin => plugin.decorations }
-);
-
-function decorateLines(view) {
-  const builder = new RangeSetBuilder();
-  for (const { from, to } of view.visibleRanges) {
-    for (let position = from; position <= to;) {
-      const line = view.state.doc.lineAt(position);
-      builder.add(line.from, line.from, autoDirection);
-      position = line.to + 1;
-    }
-  }
-  return builder.finish();
-}
-
-/**
- * A mirror of `wrapMarker()` in libs/web/code-editor/src/code-editor/state/wrap-marker.ts (a
- * library cannot be imported from here), so that the test measures the same gutter.
- */
-class WrapMarker extends GutterMarker {
-  toDOM() {
-    const element = document.createElement('span');
-    element.className = 'cm-wrap-marker';
-    element.textContent = '↪';
-    element.setAttribute('aria-hidden', 'true');
-    return element;
-  }
-}
-const marker = new WrapMarker();
-const textHeight = block =>
-  Array.isArray(block.type)
-    ? block.type.filter(part => part.type === BlockType.Text).reduce((sum, part) => sum + part.height, 0)
-    : block.height;
-const wrapMarker = () =>
-  gutter({
-    class: 'cm-wrapMarkers',
-    initialSpacer: () => marker,
-    lineMarker: (view, line) => textHeight(view.lineBlockAt(line.from)) > view.defaultLineHeight * 1.5 ? marker : null,
-    lineMarkerChange: update => update.geometryChanged || update.docChanged
-  });
 
 /** The editor's setup as A-8.11 plans it, without the parts the address switches off. */
 function extensions() {

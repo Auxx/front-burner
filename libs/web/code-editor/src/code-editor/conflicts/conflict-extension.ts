@@ -191,7 +191,11 @@ export function acceptConflict(view: EditorView, index: number, choice: Conflict
   });
 }
 
-/** Moves the cursor to the start of a conflict, and scrolls to it (GC-10). */
+/**
+ * Moves the cursor to the start of a conflict, and scrolls to it (GC-10). The focus stays
+ * where it is, so that the conflict bar's **Next** can be pressed again; the caller moves it
+ * into the editor when it should.
+ */
 export function goToConflict(view: EditorView, index: number): void {
   const region = conflictsIn(view.state)[index];
   if (!region) {
