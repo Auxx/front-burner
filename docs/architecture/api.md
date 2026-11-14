@@ -24,11 +24,16 @@ numbering conventions.
   57's call.)_
 - **A-3.2a** `GET /repositories` answers all of the user's repositories, in any
   status, as the `RepositorySummary` of the dashboard, sorted by name ignoring
-  case and then by ID (RM-5). SQLite's `lower` folds ASCII only, as the
-  uniqueness of AR-15 does, so the order and the uniqueness agree. The list is
-  not paged and its schema has no maximum: adding keeps a user to at most 50
-  repositories (NF-1.3). Listing changes nothing, not even the last access time
-  (DS-9). _(Plan 104's call.)_
+  case and then by ID (RM-5). Names are compared in TypeScript with
+  `shared-util`, not with SQLite's `lower`, which folds ASCII only:
+  `compareRepositoryNames` sorts with a fixed-locale collator, as file names are
+  sorted (FB-17), so `É` is next to `e`, and the dashboard's ties (DS-17) use it
+  too; `sameRepositoryName` is AR-15's check when adding, with Unicode case
+  folding, as the web client's early check. The database's unique index stays
+  ASCII-only, as a backstop. The list is not paged and its schema has no
+  maximum, since a user is expected to have about 50 repositories (NF-1.3);
+  adding does not enforce that number. Listing changes nothing, not even the
+  last access time (DS-9). _(Plan 104's call.)_
 
 ## A-3: Contracts
 

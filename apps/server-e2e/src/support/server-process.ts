@@ -218,13 +218,28 @@ export function postJson(
 }
 
 /** Completes administrator onboarding with {@link E2E_ADMIN}. */
-export async function onboard(server: ServerProcess): Promise<void> {
+export async function onboard(server: ServerProcess): Promise<number> {
   const response = await postJson(server, '/api/v1/onboarding/password-setup', {
     setupToken: E2E_SETUP_TOKEN,
     ...E2E_ADMIN
   });
   if (response.status !== 204) {
     throw new Error(`Onboarding failed with ${response.status}: ${await response.text()}`);
+  }
+  return userIdOf(server.dataDir, E2E_ADMIN.email);
+}
+
+/** The ID of the user with this email, read from the running server's database. */
+export function userIdOf(dataDir: string, email: string): number {
+  const sqlite = new BetterSqlite3(join(dataDir, 'db', 'front-burner.sqlite'), { readonly: true });
+  try {
+    const row = sqlite.prepare('SELECT id FROM users WHERE email = ?').get(email) as { id: number; } | undefined;
+    if (row === undefined) {
+      throw new Error(`No user ${email}`);
+    }
+    return row.id;
+  } finally {
+    sqlite.close();
   }
 }
 

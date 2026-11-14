@@ -115,11 +115,19 @@ describe('RepositoryQueries', () => {
       expect(queries.all(alice).map(row => row.name)).toEqual([ 'alpha', 'Beta', 'gamma' ]);
     });
 
+    it('sorts non-ASCII names ignoring case', () => {
+      for (const name of [ 'zeta', 'éclair-notes', 'Éclair', 'echo' ]) {
+        insertRepository(database, alice, { name });
+      }
+
+      expect(queries.all(alice).map(row => row.name)).toEqual([ 'echo', 'Éclair', 'éclair-notes', 'zeta' ]);
+    });
+
     it('ties by ID', () => {
-      // The uniqueness of AR-15 forbids a tie; dropped here so that the order is shown stable anyway.
-      database.sqlite.exec('DROP INDEX repositories_user_name_unique');
-      const first = insertRepository(database, alice, { name: 'Notes' });
-      const second = insertRepository(database, alice, { name: 'notes' });
+      // Adding refuses this pair (AR-15), but the ASCII-only index of the
+      // database lets it in, as rows from before that check might be.
+      const first = insertRepository(database, alice, { name: 'über' });
+      const second = insertRepository(database, alice, { name: 'Über' });
 
       expect(queries.all(alice).map(row => row.id)).toEqual([ first, second ]);
     });

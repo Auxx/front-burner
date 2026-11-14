@@ -21,11 +21,12 @@ const at = (minutes: number) => new Date(Date.UTC(2026, 9, 26, 10, minutes));
 
 describe('recent repositories (REQ-DASH-001)', () => {
   let server: ServerProcess;
+  let adminId: number;
   let users = 0;
 
   beforeAll(async () => {
     server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
-    await onboard(server);
+    adminId = await onboard(server);
   });
 
   afterAll(async () => {
@@ -110,7 +111,7 @@ describe('recent repositories (REQ-DASH-001)', () => {
     const email = `user${users}@example.com`;
     seed(server.dataDir, {
       repositories: [
-        { userId: 1, name: 'admin-notes', lastAccessedAt: at(0) },
+        { userId: adminId, name: 'admin-notes', lastAccessedAt: at(0) },
         { userId, name: 'user-notes', lastAccessedAt: at(0) }
       ]
     });
@@ -144,11 +145,12 @@ describe('recent repositories (REQ-DASH-001)', () => {
 
 describe('all repositories (REQ-REPO-003)', () => {
   let server: ServerProcess;
+  let adminId: number;
   let users = 0;
 
   beforeAll(async () => {
     server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
-    await onboard(server);
+    adminId = await onboard(server);
   });
 
   afterAll(async () => {
@@ -171,7 +173,7 @@ describe('all repositories (REQ-REPO-003)', () => {
     return ((await response.json()) as { repositories: Summary[]; }).repositories;
   }
 
-  it('lists all 12 of 12 repositories in every status, by name ignoring case', async () => {
+  it('lists every repository of the user in every status, by name ignoring case', async () => {
     const { userId, email } = newUser();
     const names = Array.from({ length: 12 }, (_, i) => (i % 2 === 0 ? `Repo-${i + 10}` : `repo-${i + 10}`));
     seed(server.dataDir, {
@@ -179,7 +181,7 @@ describe('all repositories (REQ-REPO-003)', () => {
         ...names.map((name, i) => ({ userId, name, lastAccessedAt: at(i) })),
         { userId, name: 'zeta', status: 'error', errorCode: 'clone-failed', lastAccessedAt: at(30) },
         { userId, name: 'Alpha', status: 'cloning', lastAccessedAt: at(0) },
-        { userId: 1, name: 'admin-notes', lastAccessedAt: at(0) }
+        { userId: adminId, name: 'admin-notes', lastAccessedAt: at(0) }
       ]
     });
 

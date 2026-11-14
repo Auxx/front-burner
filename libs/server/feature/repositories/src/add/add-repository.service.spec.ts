@@ -236,6 +236,13 @@ describe('AddRepositoryService', () => {
     );
   });
 
+  it('refuses a taken non-ASCII name in any case', async () => {
+    insertRepository(database, alice.id, { name: 'Über' });
+    expect(await rejectionOf(service.add(alice, request({ name: 'über' })))).toEqual(
+      fieldError('name', 'name-taken', { name: 'über' })
+    );
+  });
+
   // The broker listens on a Unix socket in a POSIX path: not on Windows.
   it.skipIf(process.platform === 'win32')('accepts a remote the user already has under a new name', async () => {
     insertRepository(database, alice.id, { name: 'Handbook', remoteUrl: handbookUrl() });
