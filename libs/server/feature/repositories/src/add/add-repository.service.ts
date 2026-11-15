@@ -9,8 +9,9 @@ import {
   type GitLevel,
   type RepositorySummary
 } from '@front-burner/shared-contracts';
+import { sameRepositoryName } from '@front-burner/shared-util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { toSummary } from '../repositories/repository-queries';
 import { CredentialsCheck } from './credentials-check';
 import { RequestCredentials } from './request-credentials';
@@ -137,10 +138,12 @@ export class AddRepositoryService {
   }
 
   private assertNameFree(db: Tx | Database['db'], userId: number, name: string): void {
-    const taken = db.select({ id: repositories.id }).from(repositories)
-      .where(and(eq(repositories.userId, userId), eq(sql`lower(${repositories.name})`, name.toLowerCase())))
-      .get();
-    if (taken !== undefined) {
+    // Compared in TypeScript: SQLite's `lower`, and so the database's index, folds ASCII only (AR-15).
+    const taken = db.select({ name: repositories.name }).from(repositories)
+      .where(eq(repositories.userId, userId))
+      .all()
+      .some(row => sameRepositoryName(row.name, name));
+    if (taken) {
       throw fieldError('name', 'name-taken', { name });
     }
   }

@@ -5,6 +5,7 @@ import type {
   AccessCheckResult,
   RecentRepositories,
   RepositoryIndex,
+  RepositoryList,
   RepositorySummary
 } from '@front-burner/shared-contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
@@ -19,6 +20,7 @@ import {
   RecentQueryDto,
   RecentRepositoriesDto,
   RepositoryIndexDto,
+  RepositoryListDto,
   RepositoryParamsDto,
   RepositorySummaryDto
 } from './repositories.dto';
@@ -52,6 +54,14 @@ export class RepositoriesController {
   @ZodSerializerDto(RepositoryIndexDto)
   index(@Req() req: Request): RepositoryIndex {
     return this.queries.index(authOf(req).userId);
+  }
+
+  /** Every repository, in any status, by name ignoring case, for the repository management page (RM-5). */
+  @Get()
+  @ApiOkResponse({ type: RepositoryListDto })
+  @ZodSerializerDto(RepositoryListDto)
+  list(@Req() req: Request): RepositoryList {
+    return { repositories: this.queries.all(authOf(req).userId).map(toSummary) };
   }
 
   /** The remote's branches for the form (AR-35); limited with the submit (AR-55). */

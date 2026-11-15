@@ -425,6 +425,56 @@
         ]
       }
     },
+    "/api/v1/repositories": {
+      "get": {
+        "operationId": "list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "repositories"
+        ]
+      },
+      "post": {
+        "operationId": "add",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddRepositoryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositorySummary"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
     "/api/v1/repositories/access-check": {
       "post": {
         "operationId": "accessCheck",
@@ -446,37 +496,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccessCheckResult"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "repositories"
-        ]
-      }
-    },
-    "/api/v1/repositories": {
-      "post": {
-        "operationId": "add",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddRepositoryRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RepositorySummary"
                 }
               }
             }
@@ -2644,6 +2663,20 @@
                 "name",
                 "remoteKey"
               ]
+            }
+          }
+        },
+        "required": [
+          "repositories"
+        ]
+      },
+      "RepositoryList": {
+        "type": "object",
+        "properties": {
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RepositorySummary"
             }
           }
         },

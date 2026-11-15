@@ -1,8 +1,8 @@
 import { DATABASE, Database, repositories, Repository } from '@front-burner/server-core-database';
 import type { RepositoryIndex, RepositorySummary } from '@front-burner/shared-contracts';
-import { remoteDisplay } from '@front-burner/shared-util';
+import { compareRepositoryNames, remoteDisplay } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 
 /** Reads a user's repositories; every query is limited to that user (DS-3, A-7.3). */
 @Injectable()
@@ -18,6 +18,14 @@ export class RepositoryQueries {
       .all();
     // The display form is the remote's key for every URL that parses (AR-12, DS-18).
     return { repositories: rows.map(row => ({ name: row.name, remoteKey: remoteDisplay(row.remoteUrl) })) };
+  }
+
+  /**
+   * Every repository of the user, in any status, by name ignoring case, then
+   * by ID (RM-5). Reading changes nothing, not even the last access time (DS-9).
+   */
+  all(userId: number): Repository[] {
+    return this.own(userId).sort(byName);
   }
 
   /** One of the user's repositories; another user's is not found, like a missing one (FB-2). */
@@ -45,13 +53,24 @@ export class RepositoryQueries {
    * switcher still gets ten others (NV-10); another user's ID changes nothing.
    */
   recent(userId: number, limit = 10, exclude?: number): Repository[] {
-    const own = eq(repositories.userId, userId);
-    return this.database.db.select().from(repositories)
-      .where(exclude === undefined ? own : and(own, ne(repositories.id, exclude)))
-      .orderBy(desc(repositories.lastAccessedAt), asc(sql`lower(${repositories.name})`), asc(repositories.id))
-      .limit(limit)
-      .all();
+    return this.own(userId)
+      .filter(row => row.id !== exclude)
+      .sort((a, b) => b.lastAccessedAt.getTime() - a.lastAccessedAt.getTime() || byName(a, b))
+      .slice(0, limit);
   }
+
+  /**
+   * All of the user's rows, unsorted. Both lists sort in TypeScript, since
+   * SQLite's `lower` folds ASCII only (RM-5); a user has about 50 (NF-1.3).
+   */
+  private own(userId: number): Repository[] {
+    return this.database.db.select().from(repositories).where(eq(repositories.userId, userId)).all();
+  }
+}
+
+/** By name ignoring case, then by ID, so that the order is stable (RM-5, DS-17). */
+function byName(a: Repository, b: Repository): number {
+  return compareRepositoryNames(a.name, b.name) || a.id - b.id;
 }
 
 /** A repository as clients see it: the remote without credentials (DS-19). */

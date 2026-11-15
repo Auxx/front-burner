@@ -16,11 +16,12 @@ import {
 describe('preferences API (REQ-GIT-001)', () => {
   let server: ServerProcess;
   let dataDir: string;
+  let adminId: number;
 
   beforeAll(async () => {
     dataDir = mkdtempSync(join(tmpdir(), 'front-burner-e2e-preferences-'));
     server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN, FRONT_BURNER_DATA_DIR: dataDir });
-    await onboard(server);
+    adminId = await onboard(server);
   });
 
   afterAll(async () => {
@@ -87,7 +88,7 @@ describe('preferences API (REQ-GIT-001)', () => {
     const { repositoryIds } = seed(dataDir, {
       repositories: [
         {
-          userId: 1,
+          userId: adminId,
           name: 'admin-repo',
           remoteUrl: 'https://github.com/acme/admin-repo.git',
           lastAccessedAt: new Date()

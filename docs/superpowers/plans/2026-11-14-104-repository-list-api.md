@@ -11,8 +11,9 @@ name ignoring case.
 
 **Architecture:** One more query in `RepositoryQueries` and one more route in
 `RepositoriesController`, answering the same `RepositorySummary` as the
-dashboard. The list is not paged: a user has at most 50 repositories (NF-1.3),
-which adding enforces, so the schema has no `.max` _(plan's call)_.
+dashboard. The list is not paged: a user is expected to have about 50
+repositories (NF-1.3), so the schema has no `.max` _(plan's call)_. Adding does
+not enforce that number.
 
 **Tech Stack:** as before. No new packages.
 
@@ -22,9 +23,11 @@ which adding enforces, so the schema has no `.max` _(plan's call)_.
 
 - The shared constraints of [the step 5 index](2026-11-14-00-roadmap-step-5.md)
   apply.
-- Sorted by `lower(name)`, then by ID, so that the order is stable: SQLite's
-  `lower` folds ASCII only, as the uniqueness index of AR-15 does, so the
-  sorting and the uniqueness agree _(plan's call)_.
+- Sorted by name ignoring case, then by ID, so that the order is stable. Names
+  are compared in TypeScript with `compareRepositoryNames` of `shared-util`,
+  since SQLite's `lower` folds ASCII only; the dashboard's ties use it too, and
+  adding checks AR-15 with `sameRepositoryName` (A-3.2a) _(plan's call, after
+  review)_.
 - Listing changes nothing: no last access time (DS-9), no job.
 - `GET /repositories` is declared before `GET /repositories/:id`, as `recent`
   and `index` are.

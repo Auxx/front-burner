@@ -23,4 +23,5 @@ export * from './onboarding/onboarding.schema';
 export * from './preferences/commit-author.schema';
 export * from './repositories/add-repository.schema';
 export * from './repositories/repository-credentials.schema';
+export * from './repositories/repository-list.schema';
 export * from './repositories/repository-summary.schema';
