@@ -75,6 +75,33 @@ numbering conventions.
   (`WorkingTreeLock.isRemoved`). Publishes `repository.removed` to the owner.
   Another user's repository is answered like a missing one (RM-1,
   AC-REPO-003.14). _(Plan 111's call.)_
+- **A-3.2e** `POST /repositories/:id/clone` clones a repository in the `error`
+  status again and answers its summary, now `cloning` (`200`): **Retry clone**
+  after a failed, timed out or interrupted clone (RM-11) and **Clone again**
+  after a missing or damaged working copy (RM-12) are one endpoint, as the error
+  code says which applies. Any other status answers `409
+  repository-not-in-error` with `{ status }` (RM-2), so a second retry while the
+  first clones changes nothing; so does a clone job still queued or running,
+  answered with `{ status: 'cloning' }` whatever the row says. The clone uses
+  the same remote, clone mode and branch and the repository's current
+  credentials; a protected key not unlocked in this session answers `409
+  key-locked` with the key, as adding does, so that the client unlocks it and
+  sends again (RC-16). Limited as adding is: the `access-check` rate limit group
+  and the clone per-user limit (RM-13). Every refusal changes nothing. Inside
+  the working-tree lock and then the network lock, as removing: what is left of
+  the working copy is moved into `tmp/`, and one transaction sets the status,
+  clears the error record and the `sync_state` row, which describes the old
+  working copy, and queues the clone with this request's ID. If that fails, the
+  working copy is put back. Then, before the clone can start: the work that
+  waited for the working-tree lock for the old working copy refuses with `409
+  repository-not-openable` (`WorkingTreeLock.markReplaced` and `generation`);
+  the repository's jobs of the `fetch` pool (fetch, pull, push) are cancelled,
+  while its Delete folder jobs run on; `repository.status` is published, so that
+  it comes before the clone's own end; and the delete job of **Remove
+  repository** (A-6) is queued for the old working copy alone, leaving the
+  trash. Kept: the name, credentials, level, commit author override, last access
+  time and date added. Another user's repository is answered like a missing one
+  (RM-1). _(Plan 112's call.)_
 
 ## A-3: Contracts
 

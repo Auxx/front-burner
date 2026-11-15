@@ -80,7 +80,7 @@ AC-REPO-003.4, AC-REPO-003.5); `docs/requirements/repo-add.md` (AR-49 to AR-55);
 - Produces: `POST /api/v1/repositories/:id/clone` (`cloneAgain`, `200`, the
   `RepositorySummary` in `cloning`); `409 repository-not-in-error`.
 
-- [ ] **Step 1: Write the failing tests**: `retries a failed clone with the same
+- [x] **Step 1: Write the failing tests**: `retries a failed clone with the same
       settings`; `retries a timed out clone`; `uses the credentials changed
       since`; `trashes the old working copy first`; `keeps the name, override
       and last access time`; `forgets the old sync state`; `a second retry is
@@ -88,13 +88,13 @@ AC-REPO-003.4, AC-REPO-003.5); `docs/requirements/repo-add.md` (AR-49 to AR-55);
       when it is locked`; `counts towards the clone limit`; `counts towards the
       access check limit`; `publishes repository.status`; `answers another
       user's repository like a missing one`.
-- [ ] **Step 2: Run them and see them fail** — `npx nx test
+- [x] **Step 2: Run them and see them fail** — `npx nx test
       server-feature-repositories`.
-- [ ] **Step 3: Implement**; `npx nx run web-api-client:generate`.
-- [ ] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
+- [x] **Step 3: Implement**; `npx nx run web-api-client:generate`.
+- [x] **Step 4: Run them and see them pass** — same command, then `npx nx e2e
       server-e2e`.
-- [ ] **Step 5: Update the status**: REQ-REPO-003 adds `retry-clone-api`.
+- [x] **Step 5: Update the status**: REQ-REPO-003 adds `retry-clone-api`.
       AC-REPO-003.4 and .5 are plan 117's.
-- [ ] **Step 6: Check and commit** — as in the index's "Verifying"; set this
+- [x] **Step 6: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(repositories): clone a repository
       again`.

@@ -1,8 +1,10 @@
+import { type GitHttpServer, startGitHttpServer } from '@front-burner/server-core-git/testing';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { waitFor as waitUntil } from './support/git-api';
 import { createRemotes } from './support/git-remotes';
 import {
   E2E_ADMIN,
@@ -479,6 +481,90 @@ describe('removing a repository (REQ-REPO-003)', () => {
 
   it('requires a login', async () => {
     const response = await fetch(`${server.url}/api/v1/repositories/1`, { method: 'DELETE' });
+    expect(response.status).toBe(401);
+  });
+});
+
+describe('cloning a repository again (REQ-REPO-003)', () => {
+  let server: ServerProcess;
+  let adminId: number;
+  let remotesRoot: string;
+  let gitServer: GitHttpServer;
+
+  beforeAll(async () => {
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
+    adminId = await onboard(server);
+    remotesRoot = mkdtempSync(join(tmpdir(), 'fb-clone-again-e2e-'));
+    gitServer = await startGitHttpServer({ repositories: { 'handbook.git': createRemotes(remotesRoot).handbook } });
+  });
+
+  afterAll(async () => {
+    await gitServer?.close();
+    await server?.stop();
+    rmSync(remotesRoot, { recursive: true, force: true });
+  });
+
+  async function as(email: string, method: string, path: string): Promise<Response> {
+    const { authToken } = await login(server, 'body', { email, password: E2E_ADMIN.password });
+    return fetch(`${server.url}/api/v1${path}`, { method, headers: { authorization: `Bearer ${authToken}` } });
+  }
+
+  const summaryOf = async (id: number) =>
+    (await (await as(E2E_ADMIN.email, 'GET', `/repositories/${id}`)).json()) as Summary & { error: string | null; };
+
+  it('clones a damaged working copy again, keeping the last access time', async () => {
+    const [ id ] = seed(server.dataDir, {
+      repositories: [ {
+        userId: adminId,
+        name: 'damaged',
+        remoteUrl: `${gitServer.url}/handbook.git`,
+        status: 'error',
+        errorCode: 'working-copy-missing',
+        lastAccessedAt: at(5)
+      } ]
+    }).repositoryIds as [ number ];
+    const work = join(server.dataDir, 'repos', String(adminId), String(id));
+    mkdirSync(work, { recursive: true });
+    writeFileSync(join(work, 'left-over.md'), '# Left over\n');
+
+    const response = await as(E2E_ADMIN.email, 'POST', `/repositories/${id}/clone`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ id, status: 'cloning', error: null });
+    await waitUntil(async () => (await summaryOf(id)).status !== 'cloning');
+    expect(await summaryOf(id)).toMatchObject({ status: 'ready', error: null, lastAccessedAt: at(5).toISOString() });
+    expect(existsSync(join(work, '.git'))).toBe(true);
+    expect(existsSync(join(work, 'left-over.md'))).toBe(false);
+  });
+
+  it('refuses a ready repository', async () => {
+    const [ id ] = seed(server.dataDir, { repositories: [ { userId: adminId, name: 'ready', lastAccessedAt: at(0) } ] })
+      .repositoryIds as [ number ];
+
+    const response = await as(E2E_ADMIN.email, 'POST', `/repositories/${id}/clone`);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'repository-not-in-error', params: { status: 'ready' } });
+  });
+
+  it('answers another user\'s repository like a missing one', async () => {
+    const email = 'clone-again-other@example.com';
+    const userId = seed(server.dataDir, { users: [ { email } ] }).userIds[0] as number;
+    const [ secret ] = seed(server.dataDir, {
+      repositories: [ { userId, name: 'secret', status: 'error', errorCode: 'clone-failed', lastAccessedAt: at(0) } ]
+    }).repositoryIds as [ number ];
+
+    const other = await as(E2E_ADMIN.email, 'POST', `/repositories/${secret}/clone`);
+    const none = await as(E2E_ADMIN.email, 'POST', `/repositories/${secret + 100}/clone`);
+
+    expect(other.status).toBe(404);
+    expect(none.status).toBe(404);
+    // Not cloned again either.
+    expect(await (await as(email, 'GET', `/repositories/${secret}`)).json()).toMatchObject({ status: 'error' });
+  });
+
+  it('requires a login', async () => {
+    const response = await fetch(`${server.url}/api/v1/repositories/1/clone`, { method: 'POST' });
     expect(response.status).toBe(401);
   });
 });

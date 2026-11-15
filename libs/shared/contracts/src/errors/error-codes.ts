@@ -117,6 +117,11 @@ export const ERROR_CODES = [
    * name; params are the removal check's answer (RM-18). Nothing changed.
    */
   'removal-needs-confirmation',
+  /**
+   * 409; the repository can be cloned again only in the status Error; params
+   * `{ status }`, its status now (RM-2, RM-11, RM-12). Nothing changed.
+   */
+  'repository-not-in-error',
   // How a pull job ended, besides the codes above and `merge-in-progress` and `commit-author-not-confirmed`.
   /** The current branch is not the one the pull was asked for; params `{ branch }`, the one asked for. */
   'branch-changed',

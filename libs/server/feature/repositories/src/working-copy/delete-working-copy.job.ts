@@ -4,7 +4,7 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-/** The job of **Remove repository** in A-6 (RM-19, RM-21). */
+/** The job of **Remove repository** in A-6 (RM-19, RM-21), also queued by **Clone again** (RM-12). */
 export const DELETE_WORKING_COPY_JOB_TYPE = 'repositories.delete-working-copy';
 
 /** Never a secret, nor anything from the user (A-6.3). */
@@ -12,14 +12,21 @@ export interface DeleteWorkingCopyJobPayload {
   repositoryId: number;
   /** The moved working copy's name in `tmp/`, from `newRemovedName`; null when there was none. */
   name: string | null;
+  /**
+   * Whether to delete the repository's trashed folders too: for a removed
+   * repository, whose Delete folder jobs went with its rows (A-4.5b). Not for
+   * one cloned again, whose Delete folder jobs still run, and whose new working
+   * copy may have trashed folders of its own by then. A job queued before this
+   * was recorded empties the trash.
+   */
+  emptyTrash?: boolean;
 }
 
 /**
- * Deletes the working copy of a removed repository from `tmp/`, and the
- * folders deleted from it that are still in the trash (`emptyTrashOf`): their
- * Delete folder jobs went with the repository's rows (A-4.5b). The repository
- * is already gone, so a failure is only logged; `tmp/` is emptied on the next
- * start (NF-5.1).
+ * Deletes a working copy moved into `tmp/`, by removing its repository or
+ * cloning it again, and for a removed repository its trashed folders
+ * (`emptyTrashOf`). Nothing waits for it, so a failure is only logged; `tmp/`
+ * is emptied on the next start (NF-5.1).
  */
 @Injectable()
 export class DeleteWorkingCopyJob implements OnModuleInit {
@@ -41,7 +48,7 @@ export class DeleteWorkingCopyJob implements OnModuleInit {
   }
 
   private async delete(job: RunningJob<DeleteWorkingCopyJobPayload>): Promise<void> {
-    const { repositoryId, name } = job.payload;
+    const { repositoryId, name, emptyTrash = true } = job.payload;
     if (
       !Number.isSafeInteger(repositoryId)
       || (name !== null && !(isRemovedName(name) && name.startsWith(`remove-${repositoryId}-`)))
@@ -53,7 +60,9 @@ export class DeleteWorkingCopyJob implements OnModuleInit {
       if (name !== null) {
         await rm(join(this.layout.tmpDir, name), { recursive: true, force: true });
       }
-      await emptyTrashOf(this.layout, repositoryId);
+      if (emptyTrash) {
+        await emptyTrashOf(this.layout, repositoryId);
+      }
     } catch {
       // The job ID only: the error names the repository's files.
       this.logger.warn(`Delete working copy job ${job.id} could not delete everything`);

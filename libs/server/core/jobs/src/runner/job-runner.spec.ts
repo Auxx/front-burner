@@ -432,6 +432,29 @@ describe('JobRunner', () => {
       expect(rowOf(id)).toMatchObject({ status: 'cancelled', finishedAt: NOW });
     });
 
+    it('cancels only the jobs of the pools asked for', () => {
+      controlledType();
+      runner.register({ type: 'test.fetch', pool: 'fetch', onInterrupted: 'fail', handler: () => Promise.resolve() });
+      const repositoryId = addRepository('handbook');
+      const clone = runner.enqueue({ type: 'test.controlled', userId, repositoryId, payload: {} });
+      const fetch = runner.enqueue({ type: 'test.fetch', userId, repositoryId, payload: {} });
+
+      void runner.cancel({ repositoryId, pools: [ 'fetch' ] });
+
+      expect(rowOf(fetch)?.status).toBe('cancelled');
+      expect(rowOf(clone)?.status).toBe('queued');
+    });
+
+    it('cancels nothing for a pool without registered types', async () => {
+      controlledType();
+      const repositoryId = addRepository('handbook');
+      const clone = runner.enqueue({ type: 'test.controlled', userId, repositoryId, payload: {} });
+
+      await expect(runner.cancel({ repositoryId, pools: [ 'email' ] })).resolves.toBe(true);
+
+      expect(rowOf(clone)?.status).toBe('queued');
+    });
+
     it('aborts running jobs of one repository', async () => {
       const started = controlledType();
       runner.start();

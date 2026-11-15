@@ -70,4 +70,6 @@ export interface CancelFilter {
   /** Every job of one repository: its clone, fetches, a push or pull that waits. */
   repositoryId?: number;
   types?: string[];
+  /** Only the registered types of these pools, such as `fetch` for every job that runs git on a working copy. */
+  pools?: JobPool[];
 }

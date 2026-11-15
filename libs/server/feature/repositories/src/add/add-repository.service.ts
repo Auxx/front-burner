@@ -12,22 +12,11 @@ import {
 import { sameRepositoryName } from '@front-burner/shared-util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
+import { queueClone } from '../clone/clone-queue';
 import { toSummary } from '../repositories/repository-queries';
 import { CredentialsCheck } from './credentials-check';
 import { RequestCredentials } from './request-credentials';
 import { fieldError, remoteOf } from './request-fields';
-
-/** The job type of the background clone (AR-49). */
-export const CLONE_JOB_TYPE = 'repositories.clone';
-
-export interface CloneJobPayload {
-  repositoryId: number;
-  /**
-   * The ID of the request that queued the clone, kept with a failed clone's
-   * error (RM-10, NF-10.6); none in a job queued before it was recorded.
-   */
-  requestId?: string;
-}
 
 export interface RequestUser {
   id: number;
@@ -108,15 +97,7 @@ export class AddRepositoryService {
       } catch (error) {
         throw isUniqueViolation(error) ? fieldError('name', 'name-taken', { name: request.name }) : error;
       }
-      const payload: CloneJobPayload = { repositoryId: inserted.id, requestId: user.requestId };
-      const id = this.runner.enqueue({
-        type: CLONE_JOB_TYPE,
-        userId: user.id,
-        repositoryId: inserted.id,
-        payload,
-        dedupeKey: `clone:${inserted.id}`
-      }, tx);
-      return { row: inserted, jobId: id };
+      return { row: inserted, jobId: queueClone(this.runner, tx, user, inserted.id) };
     });
     // Synchronously after the commit, before the runner's loop can start the job (AR-49).
     if (credentials.protectedKey && credentials.git.kind === 'ssh' && row.credentialId !== null) {

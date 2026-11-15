@@ -65,6 +65,15 @@ describe('DeleteWorkingCopyJob', () => {
     expect(readdirSync(layout.tmpDir)).toEqual([ other ]);
   });
 
+  it('leaves the trash alone for a repository cloned again', async () => {
+    const removed = trash(newRemovedName(7));
+    const kept = trash(newTrashName(7));
+
+    await run({ repositoryId: 7, name: removed, emptyTrash: false });
+
+    expect(readdirSync(layout.tmpDir)).toEqual([ kept ]);
+  });
+
   it('empties the trash of a repository that had no working copy', async () => {
     trash(newTrashName(7));
 

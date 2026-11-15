@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AddRepositoryService } from './add/add-repository.service';
 import { CredentialsCheck } from './add/credentials-check';
 import { RequestCredentials } from './add/request-credentials';
+import { CloneAgainService } from './clone/clone-again.service';
 import { CloneJob } from './clone/clone.job';
 import { RepositoryCredentialsChanges } from './credentials/repository-credentials-changes';
 import { RepositoryCredentialsController } from './credentials/repository-credentials.controller';
@@ -10,7 +11,6 @@ import { RepositoryCredentialsService } from './credentials/repository-credentia
 import { WorkingCopyDamage } from './damage/working-copy-damage';
 import { WorkingCopyDamageInterceptor } from './damage/working-copy-damage.interceptor';
 import { WorkingCopyCheck } from './recovery/working-copy-check';
-import { DeleteWorkingCopyJob } from './remove/delete-working-copy.job';
 import { RemovalCheck } from './remove/removal-check';
 import { RemoveRepositoryService } from './remove/remove-repository.service';
 import { InstanceRepositories } from './repositories/instance-repositories';
@@ -18,6 +18,7 @@ import { RepositoriesController } from './repositories/repositories.controller';
 import { RepositoryQueries } from './repositories/repository-queries';
 import { RemoteProblemsSource } from './warnings/remote-problems-source';
 import { RepositoryWarnings } from './warnings/repository-warnings';
+import { DeleteWorkingCopyJob } from './working-copy/delete-working-copy.job';
 
 /** The user's repositories and the credentials they use (REQ-DASH-001, REQ-REPO-001, REQ-REPO-002). Needs the global auth guard. */
 @Module({
@@ -32,6 +33,7 @@ import { RepositoryWarnings } from './warnings/repository-warnings';
     CredentialsCheck,
     AddRepositoryService,
     CloneJob,
+    CloneAgainService,
     WorkingCopyCheck,
     RemoteProblemsSource,
     RepositoryWarnings,

@@ -14,6 +14,7 @@ import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { AddRepositoryService } from '../add/add-repository.service';
+import { CloneAgainService } from '../clone/clone-again.service';
 import { RemovalCheck } from '../remove/removal-check';
 import { RemoveRepositoryService } from '../remove/remove-repository.service';
 import { RepositoryWarnings, WarningsViewer } from '../warnings/repository-warnings';
@@ -42,7 +43,8 @@ export class RepositoriesController {
     private readonly adding: AddRepositoryService,
     private readonly warnings: RepositoryWarnings,
     private readonly removal: RemovalCheck,
-    private readonly removing: RemoveRepositoryService
+    private readonly removing: RemoveRepositoryService,
+    private readonly cloning: CloneAgainService
   ) {}
 
   /** The dashboard's recent list (DS-16, DS-17); the switcher's without the current repository (NV-10). */
@@ -141,6 +143,21 @@ export class RepositoriesController {
     @Query() query: RemoveRepositoryQueryDto
   ): Promise<void> {
     return this.removing.remove(authOf(req).userId, params.id, query.confirmName);
+  }
+
+  /**
+   * **Retry clone** and **Clone again** (RM-11, RM-12): clones a repository in
+   * the status Error again, with its current credentials, and answers it
+   * `cloning`. Limited as adding is (RM-13); a locked key answers `409 key-locked` (RC-16).
+   */
+  @Post(':id/clone')
+  @HttpCode(200)
+  @RateLimitGroup('access-check')
+  @ApiOkResponse({ type: RepositorySummaryDto })
+  @ZodSerializerDto(RepositorySummaryDto)
+  cloneAgain(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<RepositorySummary> {
+    const { userId, sessionId } = authOf(req);
+    return this.cloning.cloneAgain({ id: userId, sessionId, requestId: String(req.id) }, params.id);
   }
 
   /**

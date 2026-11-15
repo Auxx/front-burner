@@ -32,6 +32,16 @@ describe('MergeGuard', () => {
     expect(task).not.toHaveBeenCalled();
   });
 
+  it('refuses a repository cloned again while the task waited', async () => {
+    const cloneAgain = lock.run(REPOSITORY, async () => lock.markReplaced(REPOSITORY));
+
+    const refusal = await guard.change(REPOSITORY, '/work', task).catch((error: unknown) => error);
+    await cloneAgain;
+
+    expect(refusal).toMatchObject({ status: 409, code: 'repository-not-openable', params: { status: 'cloning' } });
+    expect(task).not.toHaveBeenCalled();
+  });
+
   it('refuses the task when there is no merge', async () => {
     inProgress = false;
 
