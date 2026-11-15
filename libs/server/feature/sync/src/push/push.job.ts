@@ -75,10 +75,10 @@ export class PushJob implements OnModuleInit {
     }
     // Network steps take the network lock only, so saves never wait behind the remote (A-5.3).
     const outcome = await this.networkLock.run(repositoryId, async (): Promise<GitJobOutcome> => {
-      const attempt = this.outcomes.begin(repositoryId, 'push');
+      const attempt = this.outcomes.begin(userId, repositoryId, 'push');
       const pushed = await this.pushOnce(id, userId, repositoryId, job.payload.branch);
       // A push's warning outlives a successful fetch; only a push clears it (RM-8, AC-REPO-003.6).
-      // Stored before the lock is let go, in the order the operations ran. The change is told by plan 108's event.
+      // Stored before the lock is let go, in the order the operations ran; a change publishes repository.warning.
       if (pushed.kind === 'pushed' || pushed.kind === 'failed') {
         this.outcomes.end(attempt, pushed.kind === 'pushed' ? null : { code: pushed.code, params: pushed.params });
       }

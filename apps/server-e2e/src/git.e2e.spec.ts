@@ -454,6 +454,64 @@ describe('push (REQ-GIT-002, REQ-REPO-002)', () => {
     expect(gitOutput(workingCopy, 'status', '--porcelain')).toBe('');
   });
 
+  it('a refused push shows in the summary until a push succeeds', async () => {
+    remote('warning-gate');
+    const credentials = { mode: 'new-https', name: 'Warning token', username: 'alice', password: TOKEN };
+    const { id, workingCopy } = await add('warning-gate', `${privateGit.url}/warning-gate.git`, credentials);
+    const warnings = async () => (await (await api(`/repositories/${id}`)).json() as { warnings: string[]; }).warnings;
+    const listed = async () =>
+      (await (await api('/repositories')).json() as { repositories: { id: number; warnings: string[]; }[]; })
+        .repositories.find(repository => repository.id === id)?.warnings;
+    // The user's stream, which tells of every change of the warning (A-3.11).
+    const listening = new AbortController();
+    const stream = await fetch(`${server.url}/api/v1/events`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: listening.signal
+    });
+    expect(stream.status).toBe(200);
+    let received = '';
+    const reading = (async () => {
+      const reader = stream.body?.getReader();
+      for (;;) {
+        const chunk = await reader?.read().catch(() => undefined);
+        if (chunk === undefined || chunk.done) {
+          return;
+        }
+        received += new TextDecoder().decode(chunk.value);
+      }
+    })();
+    const warningEvents = () =>
+      received.split('\n').filter(line =>
+        line.includes('"repository.warning"') && line.includes(`"repositoryId":${id}`)
+      )
+        .length;
+    commitIn(workingCopy, 'mine');
+
+    try {
+      expect(await warnings()).toEqual([]);
+      privateOptions.refusePush = 403;
+      try {
+        expect((await pushed(id)).outcome).toMatchObject({ kind: 'failed', code: 'push-not-allowed' });
+      } finally {
+        delete privateOptions.refusePush;
+      }
+      expect(await warnings()).toEqual([ 'cannot-push' ]);
+      expect(await listed()).toEqual([ 'cannot-push' ]);
+      await waitFor(() => warningEvents() === 1);
+
+      // A successful fetch does not clear a push's warning (AC-REPO-003.6).
+      expect((await client.fetched(id)).outcome).toMatchObject({ kind: 'fetched' });
+      expect(await warnings()).toEqual([ 'cannot-push' ]);
+
+      expect((await pushed(id)).outcome).toMatchObject({ kind: 'pushed' });
+      expect(await warnings()).toEqual([]);
+      await waitFor(() => warningEvents() === 2);
+    } finally {
+      listening.abort();
+      await reading;
+    }
+  });
+
   it('a fetch with refused credentials is kept in the status until a fetch succeeds', async () => {
     remote('fetch-gate');
     const credentials = { mode: 'new-https', name: 'Fetch token', username: 'alice', password: TOKEN };

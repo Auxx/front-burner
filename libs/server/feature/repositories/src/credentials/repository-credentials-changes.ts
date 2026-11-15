@@ -9,11 +9,11 @@ import { Observable, Subject } from 'rxjs';
  */
 @Injectable()
 export class RepositoryCredentialsChanges {
-  readonly #changed = new Subject<number>();
+  readonly #changed = new Subject<RepositoryCredentialsChange>();
   readonly #generations = new Map<number, number>();
 
-  /** The IDs of repositories whose credentials changed, from now on. */
-  readonly changed: Observable<number> = this.#changed.asObservable();
+  /** The repositories whose credentials changed, from now on, with their owner, who is told of what follows. */
+  readonly changed: Observable<RepositoryCredentialsChange> = this.#changed.asObservable();
 
   /**
    * How many times the repository's credentials changed since the start. An
@@ -25,10 +25,17 @@ export class RepositoryCredentialsChanges {
     return this.#generations.get(repositoryId) ?? 0;
   }
 
-  notifyChanged(repositoryIds: readonly number[]): void {
-    for (const id of repositoryIds) {
-      this.#generations.set(id, this.generation(id) + 1);
-      this.#changed.next(id);
+  /** The user's repositories whose credentials changed. */
+  notifyChanged(userId: number, repositoryIds: readonly number[]): void {
+    for (const repositoryId of repositoryIds) {
+      this.#generations.set(repositoryId, this.generation(repositoryId) + 1);
+      this.#changed.next({ userId, repositoryId });
     }
   }
+}
+
+/** One repository whose credentials changed, and its owner. */
+export interface RepositoryCredentialsChange {
+  userId: number;
+  repositoryId: number;
 }

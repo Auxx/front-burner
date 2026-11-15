@@ -57,7 +57,7 @@ export class FetchStep {
     // The outcome is stored before the lock is let go, in the order the operations ran.
     const { result, problemChanged } = await this.networkLock.run(repositoryId, async () => {
       // A pull fetches first, so its refusal is a fetch's (RM-8).
-      const attempt = this.outcomes.begin(repositoryId, 'fetch');
+      const attempt = this.outcomes.begin(userId, repositoryId, 'fetch');
       const fetched = await this.fetch(job);
       return { result: fetched, problemChanged: this.store(attempt, fetched) };
     });
@@ -99,7 +99,7 @@ export class FetchStep {
     }
     const problem = failure === undefined ? null : { code: failure.code, params: failure.params };
     const problemChanged = this.syncState.setFetchProblem(attempt.repositoryId, problem);
-    // The change is told by plan 108's event.
+    // A change of the warning publishes repository.warning.
     this.outcomes.end(attempt, problem);
     return problemChanged;
   }
