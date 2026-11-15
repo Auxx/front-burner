@@ -300,6 +300,36 @@ describe.skipIf(process.platform === 'win32')('PullJob', () => {
     ]);
   });
 
+  it('a working copy found gone during the merge is not undone, and is reported with git\'s message', async () => {
+    harness.confirmAuthor();
+    harness.commitFile('notes.md', 'mine\n');
+    harness.pushFileFromElsewhere('notes.md', 'theirs\n');
+    const gone = new GitOperationError('working-copy-missing', 'fatal: not a git repository');
+    vi.spyOn(harness.merge, 'merge').mockRejectedValueOnce(gone);
+    const undo = vi.spyOn(harness.merge, 'undoCutShort');
+    harness.runner.start();
+
+    const id = enqueue();
+    await harness.finished(id);
+
+    expect(harness.jobOf(id)?.status).toBe('done');
+    expect(JSON.parse(harness.jobOf(id)?.result ?? 'null')).toEqual({
+      kind: 'failed',
+      code: 'working-copy-missing',
+      params: {}
+    });
+    expect(undo).not.toHaveBeenCalled();
+    // Blocked until recovery finds the working copy back.
+    expect(record().applying).toBe(true);
+    expect(harness.database.db.select().from(repositories).where(eq(repositories.id, harness.repositoryId)).get())
+      .toMatchObject({
+        status: 'error',
+        errorCode: 'working-copy-missing',
+        errorDetail: 'fatal: not a git repository'
+      });
+    expect(published('repository.status')).toHaveLength(1);
+  });
+
   it('asks for the author only when a merge commit is needed', async () => {
     harness.runner.start();
     harness.pushFileFromElsewhere('a.md', 'a\n');

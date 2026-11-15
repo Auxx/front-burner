@@ -82,7 +82,8 @@ export class FetchStep {
       });
       return { ok: true, moved, upstreamMoved };
     } catch (error) {
-      if (!(error instanceof GitOperationError)) {
+      // Not the remote's problem: the job reports a working copy that is gone (RM-6).
+      if (!(error instanceof GitOperationError) || error.code === 'working-copy-missing') {
         throw error;
       }
       // git's own lines, without credentials (NF-10.5); only the code and params are kept.

@@ -1,6 +1,8 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { GitOperationError, WORKING_COPY_FOLDER_GONE } from '../engine/git-errors';
 import { GitRunner } from './git-runner';
 
 /** Processes whose command line contains every one of `parts`, as separate arguments. */
@@ -160,5 +162,104 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
 
     expect(result.stderr).not.toContain('p4ss');
     expect(result.stderr).toContain('https://***@example.com/x');
+  });
+
+  describe('a working copy that is gone (RM-6)', () => {
+    const failure = (run: Promise<unknown>) =>
+      run.then(() => {
+        throw new Error('did not throw');
+      }, (error: unknown) => error as GitOperationError);
+
+    it('reports a folder without .git as working-copy-missing, with git\'s message', async () => {
+      const error = await failure(runner.run([ 'status' ], { cwd: dir, timeoutMs: 10_000 }));
+
+      expect(error).toBeInstanceOf(GitOperationError);
+      expect(error.code).toBe('working-copy-missing');
+      expect(error.detail).toMatch(/^fatal: not a git repository/);
+    });
+
+    it('reports a folder that is gone as working-copy-missing', async () => {
+      const error = await failure(runner.run([ 'status' ], { cwd: join(dir, 'gone'), timeoutMs: 10_000 }));
+
+      expect(error.code).toBe('working-copy-missing');
+      expect(error.detail).toBe(WORKING_COPY_FOLDER_GONE);
+    });
+
+    it('never uses a repository in a folder above the working copy', async () => {
+      await runner.run([ 'init', '-q', dir ], { timeoutMs: 10_000 });
+      const workingCopy = join(dir, 'repos', '7');
+      mkdirSync(workingCopy, { recursive: true });
+
+      const error = await failure(runner.run([ 'status' ], { cwd: workingCopy, timeoutMs: 10_000 }));
+
+      expect(error.code).toBe('working-copy-missing');
+    });
+
+    it('reports a .git file that points nowhere as working-copy-missing', async () => {
+      writeFileSync(join(dir, '.git'), `gitdir: ${join(dir, 'nowhere')}\n`);
+
+      const error = await failure(runner.run([ 'status' ], { cwd: dir, timeoutMs: 10_000 }));
+
+      expect(error.code).toBe('working-copy-missing');
+    });
+
+    it('does not take a broken submodule for a damaged working copy', async () => {
+      const fixtureEnv = {
+        PATH: process.env['PATH'] ?? '/usr/bin:/bin',
+        HOME: dir,
+        GIT_CONFIG_NOSYSTEM: '1',
+        GIT_CONFIG_GLOBAL: '/dev/null',
+        GIT_AUTHOR_NAME: 'Fixture',
+        GIT_AUTHOR_EMAIL: 'fixture@example.com',
+        GIT_COMMITTER_NAME: 'Fixture',
+        GIT_COMMITTER_EMAIL: 'fixture@example.com'
+      };
+      const git = (cwd: string, ...args: string[]) =>
+        execFileSync('git', args, { cwd, env: fixtureEnv, stdio: 'pipe' });
+      const lib = join(dir, 'lib');
+      const workingCopy = join(dir, 'copy');
+      for (const repository of [ lib, workingCopy ]) {
+        mkdirSync(repository);
+        git(repository, 'init', '-q', '-b', 'main');
+        git(repository, 'commit', '-q', '--allow-empty', '-m', 'first');
+      }
+      git(workingCopy, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', lib, 'lib');
+      git(workingCopy, 'commit', '-q', '-m', 'submodule');
+      rmSync(join(workingCopy, '.git', 'modules', 'lib'), { recursive: true, force: true });
+
+      const result = await runner.run([ 'status', '--porcelain=v2' ], { cwd: workingCopy, timeoutMs: 10_000 });
+
+      // git's words differ by version: "not a git repository: …modules/lib" up to 2.47, "gitfile does not point
+      // to a valid repository: lib/.git" after. Either way it names the submodule, and the result comes back.
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toMatch(/^fatal: .*lib/m);
+    });
+
+    it('reports a .git file that is not a gitfile as working-copy-missing', async () => {
+      writeFileSync(join(dir, '.git'), 'junk\n');
+
+      const error = await failure(runner.run([ 'status' ], { cwd: dir, timeoutMs: 10_000 }));
+
+      expect(error.code).toBe('working-copy-missing');
+      expect(error.detail).toMatch(/^fatal: invalid gitfile format/);
+    });
+
+    it('gives the result of any other failure', async () => {
+      await runner.run([ 'init', '-q', dir ], { timeoutMs: 10_000 });
+      writeFileSync(join(dir, '.git', 'index.lock'), '');
+
+      const result = await runner.run([ 'rev-parse', '--verify', 'nope' ], { cwd: dir, timeoutMs: 10_000 });
+      const locked = await runner.run([ 'add', '.' ], { cwd: dir, timeoutMs: 10_000 });
+
+      expect(result.exitCode).not.toBe(0);
+      expect(locked.exitCode).not.toBe(0);
+      expect(locked.stderr).toContain('index.lock');
+    });
+
+    it('gives the result of a git without a working copy that failed', async () => {
+      const result = await runner.run([ 'rev-parse', '--verify', 'nope' ], { timeoutMs: 10_000 });
+
+      expect(result.exitCode).not.toBe(0);
+    });
   });
 });

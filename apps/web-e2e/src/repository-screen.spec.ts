@@ -942,6 +942,26 @@ test.describe('repository screen, kept up to date', () => {
     drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/file/state`);
   });
 
+  test('leaves a repository whose working copy is found damaged (RM-6)', async ({ page, instance, monitor }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
+    await openScreen(page, `/repositories/${handbook}/files/README.md`);
+    await expect(editorOf(page, 'README.md')).toBeVisible();
+
+    rmSync(join(workingCopyOf(instance.dataDir, handbook), '.git'), { recursive: true, force: true });
+    // The save is not git's; the status read after it is, and finds the working copy damaged.
+    await editorOf(page, 'README.md').click();
+    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.type('more');
+
+    await expect(page.getByText('This repository\'s working copy is missing or damaged.')).toBeVisible();
+    await expect(editorOf(page, 'README.md')).toHaveCount(0);
+    await expect(tree(page)).toHaveCount(0);
+    // The read that found it, and whatever else the screen read before it left.
+    for (const read of [ 'git/status', 'folder', 'file/state' ]) {
+      drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/${read}`);
+    }
+  });
+
   test('AC-GIT-002.2: lists two modified files and one deleted file, and not an ignored file', async ({ page, instance }) => {
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
     const dir = workingCopyOf(instance.dataDir, handbook);

@@ -282,6 +282,20 @@ describe.skipIf(process.platform === 'win32')('WorkingCopyRecovery', () => {
     expect(syncState.record(id).applying).toBe(true);
   });
 
+  it('marks a working copy whose .git git can\'t read damaged, with git\'s message', async () => {
+    const { id, work } = workingCopyOf('handbook');
+    writeFileSync(join(work, '.git', 'HEAD'), 'garbage\n');
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    await recovery.onModuleInit();
+
+    expect(statusOf(id)).toEqual({ status: 'error', errorCode: 'working-copy-missing' });
+    expect(
+      database.db.select({ detail: repositories.errorDetail }).from(repositories).where(eq(repositories.id, id)).get()
+    )
+      .toEqual({ detail: expect.stringMatching(/^fatal: not a git repository/) });
+  });
+
   it('leaves a damaged repository with no merge to undo alone', async () => {
     const { id, work } = workingCopyOf('handbook');
     writeFileSync(join(work, '.git', 'index.lock'), '');

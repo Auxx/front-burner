@@ -2,7 +2,7 @@ import { jobs, repositories } from '@front-burner/server-core-database';
 import { unlockPrivateKey } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { eq } from 'drizzle-orm';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { git, trustTestCertificate } from '../testing/git-fixtures';
 import { PushHarness } from '../testing/push-harness';
@@ -152,6 +152,42 @@ describe.skipIf(process.platform === 'win32')('FetchJob', () => {
       expect(harness.jobOf(id)?.status).toBe('done');
       expect(harness.syncState.fetchProblem(harness.repositoryId)).toBeNull();
       expect(harness.published.filter(({ event }) => event.type === 'git.changed')).toEqual([]);
+    });
+
+    it('a background fetch marks it damaged', async () => {
+      rmSync(join(harness.workingCopy, '.git'), { recursive: true, force: true });
+
+      const id = harness.runner.enqueue({
+        type: BACKGROUND_FETCH_JOB_TYPE,
+        userId: harness.alice,
+        repositoryId: harness.repositoryId,
+        payload: {},
+        dedupeKey: backgroundFetchDedupeKey(harness.repositoryId)
+      });
+      harness.runner.start();
+      await harness.finished(id);
+
+      expect(harness.jobOf(id)?.status).toBe('done');
+      expect(resultOf(id)).toEqual({ kind: 'failed', code: 'working-copy-missing', params: {} });
+      expect(
+        harness.database.db.select().from(repositories).where(eq(repositories.id, harness.repositoryId)).get()
+      )
+        .toMatchObject({
+          status: 'error',
+          errorCode: 'working-copy-missing',
+          errorDetail: expect.stringMatching(/^fatal: not a git repository/)
+        });
+      // Not a problem of the remote: no warning, and no fetch problem.
+      expect(harness.syncState.fetchProblem(harness.repositoryId)).toBeNull();
+      expect(harness.published.map(({ event }) => event).filter(event => event.type.startsWith('repository.')))
+        .toEqual([
+          {
+            type: 'repository.status',
+            repositoryId: harness.repositoryId,
+            status: 'error',
+            error: 'working-copy-missing'
+          }
+        ]);
     });
   });
 });

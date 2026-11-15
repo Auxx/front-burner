@@ -11,9 +11,10 @@ import {
   WorkingTreeLock
 } from '@front-burner/server-core-git';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
-import type { DataLayout } from '@front-burner/server-core-storage';
+import { DATA_LAYOUT, type DataLayout } from '@front-burner/server-core-storage';
 import { FileContents, OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
+import { WorkingCopyDamage } from '@front-burner/server-feature-repositories';
 import type { GitStatus, PushEvent, RepositoryCommitAuthor } from '@front-burner/shared-contracts';
 import { INestApplication } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
@@ -82,6 +83,7 @@ describe('GitController', () => {
   let cloneMode: 'full' | 'single-branch';
   let record: { recordedCommit: string | null; mergeCommit: string | null; applying: boolean; };
   let forgotten: number;
+  let damaged: ReturnType<typeof vi.fn<WorkingCopyDamage['report']>>;
 
   const status = (id = READY) => request(app.getHttpServer()).get(`/repositories/${id}/git/status`);
   const commit = (body: object, id = READY) =>
@@ -102,6 +104,7 @@ describe('GitController', () => {
     cloneMode = 'full';
     record = { recordedCommit: null, mergeCommit: null, applying: false };
     forgotten = 0;
+    damaged = vi.fn();
     const repositories = {
       root: (userId: number, id: number) => {
         if (userId !== USER || (id !== READY && id !== CLONING)) {
@@ -180,6 +183,8 @@ describe('GitController', () => {
         },
         { provide: GitJobs, useValue: { networkJob: () => null } },
         { provide: EventsHub, useValue: { publish: (_userId: number, event: PushEvent) => published.push(event) } },
+        { provide: WorkingCopyDamage, useValue: { report: damaged } },
+        { provide: DATA_LAYOUT, useValue: { workingCopy: () => root } },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
         { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor }
@@ -258,6 +263,38 @@ describe('GitController', () => {
     expect(body).toMatchObject({
       mergeInProgress: true,
       changes: [ { path: 'notes.md', state: 'modified' } ]
+    });
+  });
+
+  // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  describe.skipIf(process.platform === 'win32')('a working copy found missing or damaged (RM-6)', () => {
+    it('a status read on a working copy without .git marks it damaged', async () => {
+      rmSync(join(root, '.git'), { recursive: true, force: true });
+
+      const { body } = await status().expect(409);
+
+      expect(body).toMatchObject({ code: 'working-copy-missing' });
+      expect(damaged).toHaveBeenCalledWith(USER, READY, expect.stringMatching(/^fatal: not a git repository/));
+    });
+
+    it('a deleted working copy folder marks it damaged', async () => {
+      rmSync(root, { recursive: true, force: true });
+
+      const { body } = await status().expect(409);
+
+      expect(body).toMatchObject({ code: 'working-copy-missing' });
+      expect(damaged).toHaveBeenCalledWith(USER, READY, expect.any(String));
+    });
+
+    it('other git errors leave the status alone', async () => {
+      writeFileSync(join(root, 'notes.md'), 'changed\n');
+      // Another git at work.
+      writeFileSync(join(root, '.git', 'index.lock'), '');
+
+      await discard({ paths: [ 'notes.md' ] }).expect(500);
+      await status().expect(200);
+
+      expect(damaged).not.toHaveBeenCalled();
     });
   });
 

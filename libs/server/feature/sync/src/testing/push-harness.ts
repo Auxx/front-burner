@@ -27,7 +27,8 @@ import { CommitAuthors } from '@front-burner/server-feature-preferences';
 import {
   InstanceRepositories,
   RepositoryCredentialsChanges,
-  RepositoryQueries
+  RepositoryQueries,
+  WorkingCopyDamage
 } from '@front-burner/server-feature-repositories';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
@@ -91,6 +92,8 @@ export class PushHarness {
   readonly credentialsChanges = new RepositoryCredentialsChanges();
   readonly outcomes = new RemoteOutcomes(this.syncState, this.credentialsChanges, this.events);
   readonly commitAuthors = new CommitAuthors(this.database, this.queries);
+  readonly instance = new InstanceRepositories(this.database);
+  readonly damage = new WorkingCopyDamage(this.instance, this.events);
   readonly alice = insertUser(this.database, 'alice@x.io');
   readonly bob = insertUser(this.database, 'bob@x.io');
   server!: GitHttpServer;
@@ -186,9 +189,10 @@ export class PushHarness {
       this.events,
       this.workingTreeLock,
       this.mergeRecord,
-      this.outcomes
+      this.outcomes,
+      this.damage
     ).onModuleInit();
-    new FetchJob(this.runner, this.fetchStep, this.jobKeys).onModuleInit();
+    new FetchJob(this.runner, this.fetchStep, this.jobKeys, this.damage).onModuleInit();
     new PullJob(
       this.runner,
       this.fetchStep,
@@ -199,9 +203,10 @@ export class PushHarness {
       this.commitAuthors,
       this.syncState,
       this.mergeRecord,
-      new InstanceRepositories(this.database),
+      this.instance,
       this.jobKeys,
-      this.events
+      this.events,
+      this.damage
     ).onModuleInit();
     this.networkJobs = new NetworkJobs(this.runner, this.saved, this.jobKeys, this.events);
     this.fetchService = new FetchService(this.openable, this.networkJobs);

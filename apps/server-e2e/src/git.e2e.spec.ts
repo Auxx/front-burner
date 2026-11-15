@@ -43,6 +43,8 @@ describe('git status (REQ-GIT-002)', () => {
   let cloning: number;
   let notes: number;
   let notesRoot: string;
+  let damaged: number;
+  let damagedRoot: string;
 
   const status = (id: number, token?: string) =>
     fetch(`${server.url}/api/v1/repositories/${id}/git/status`, {
@@ -64,12 +66,17 @@ describe('git status (REQ-GIT-002)', () => {
       repositories: [
         { userId: aliceId as number, name: 'handbook', lastAccessedAt: new Date(0) },
         { userId: aliceId as number, name: 'cloning', status: 'cloning', lastAccessedAt: new Date(0) },
-        { userId: aliceId as number, name: 'notes', lastAccessedAt: new Date(0) }
+        { userId: aliceId as number, name: 'notes', lastAccessedAt: new Date(0) },
+        { userId: aliceId as number, name: 'damaged', lastAccessedAt: new Date(0) }
       ]
     }).repositoryIds;
     handbook = seeded[0] as number;
     cloning = seeded[1] as number;
     notes = seeded[2] as number;
+    damaged = seeded[3] as number;
+    damagedRoot = join(server.dataDir, 'repos', String(aliceId), String(damaged));
+    mkdirSync(damagedRoot, { recursive: true });
+    execFileSync('git', [ 'init', '-q', '-b', 'main', damagedRoot ]);
     notesRoot = join(server.dataDir, 'repos', String(aliceId), String(notes));
     mkdirSync(notesRoot, { recursive: true });
     execFileSync('git', [ 'init', '-q', '-b', 'trunk', notesRoot ]);
@@ -136,6 +143,32 @@ describe('git status (REQ-GIT-002)', () => {
 
   it('needs a login', async () => {
     expect((await status(handbook)).status).toBe(401);
+  });
+
+  it('a status read on a working copy without .git marks it damaged (RM-6)', async () => {
+    rmSync(join(damagedRoot, '.git'), { recursive: true, force: true });
+    const read = (path: string) =>
+      fetch(`${server.url}/api/v1/repositories${path}`, { headers: { authorization: `Bearer ${aliceToken}` } });
+
+    const found = await status(damaged, aliceToken);
+    expect(found.status).toBe(409);
+    expect(await found.json()).toMatchObject({ code: 'working-copy-missing' });
+
+    const { repositories: summaries } = await (await read('')).json() as {
+      repositories: { id: number; status: string; error: string | null; }[];
+    };
+    expect(summaries.find(({ id }) => id === damaged)).toMatchObject({
+      status: 'error',
+      error: 'working-copy-missing'
+    });
+    expect(await (await read(`/${damaged}/details`)).json()).toMatchObject({
+      errorDetail: expect.stringMatching(/^fatal: not a git repository/),
+      errorRequestId: null
+    });
+    // From now on it is not openable, as after a start that found it (FB-3).
+    const after = await status(damaged, aliceToken);
+    expect(after.status).toBe(409);
+    expect(await after.json()).toMatchObject({ code: 'repository-not-openable', params: { status: 'error' } });
   });
 
   describe('commits', () => {

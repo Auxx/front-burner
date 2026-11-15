@@ -107,6 +107,11 @@ export const ERROR_CODES = [
   'switch-blocked',
   /** 409; another git holds a lock this needs, such as a push writing the upstream; nothing changed, so try again. */
   'git-busy',
+  /**
+   * 409, and how a git job ended; the working copy turned out to be missing or
+   * damaged, so the repository now has the status Error (RM-6).
+   */
+  'working-copy-missing',
   // How a pull job ended, besides the codes above and `merge-in-progress` and `commit-author-not-confirmed`.
   /** The current branch is not the one the pull was asked for; params `{ branch }`, the one asked for. */
   'branch-changed',

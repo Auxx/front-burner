@@ -415,6 +415,21 @@ describe('RepositoryScreenPage', () => {
     expect(TestBed.inject(Router).url).toBe('/repositories/12/files/README.md');
   });
 
+  it('the screen shows the repository as not openable', async () => {
+    await visit('/repositories/12/files/README.md');
+    expect(page().querySelector('rs-editor-area')).not.toBeNull();
+
+    // A git operation found the working copy gone while the file was open (RM-6).
+    events.next({ type: 'repository.status', repositoryId: 12, status: 'error', error: 'working-copy-missing' });
+    await settle(harness.fixture);
+
+    expect(page().querySelector('rs-editor-area')).toBeNull();
+    expect(page().querySelector('rs-file-tree')).toBeNull();
+    expect(page().querySelector('rs-not-openable')?.textContent).toContain(
+      'web-feature-repository-screen.NotOpenableComponent.workingCopyMissing'
+    );
+  });
+
   it('lists the tree afresh when the repository is ready again after an error', async () => {
     await visit('/repositories/12/files/README.md');
     folders[''] = listing('', [ entry('README.md'), entry('fresh.md') ]);

@@ -1,3 +1,4 @@
+import { isFolder } from '@front-burner/server-core-storage';
 import type { EgressRefusal } from '../egress/egress-proxy';
 import type { GitResult } from '../runner/git-runner';
 import { redactCredentials } from '../runner/redact';
@@ -50,6 +51,12 @@ export const GIT_ERROR_CODES = [
   'no-commits',
   /** Another git holds a lock that this command needs, such as a push writing the upstream; nothing changed. */
   'git-busy',
+  /**
+   * The working copy folder is gone, or git can't read a repository in it
+   * (RM-6). Any command run in a working copy can give it; `GitRunner` checks
+   * for it only when the command failed.
+   */
+  'working-copy-missing',
   'failed'
 ] as const;
 
@@ -100,6 +107,51 @@ export function classifyGitFailure(result: GitResult, refusals: EgressRefusal[])
     return 'host-unreachable';
   }
   return PATTERNS.find(([ pattern ]) => pattern.test(result.stderr))?.[1] ?? 'failed';
+}
+
+/**
+ * What git says when it finds no repository in its folder, or one it can't
+ * read, such as a `.git` without `HEAD`. It says the same of any repository it
+ * reads, such as a submodule whose folder in `.git/modules` is gone, so it is
+ * only a hint, which `assertWorkingCopyFound` checks against the working copy.
+ * Git's words depend on its version and on what it found: a `.git` file that
+ * points nowhere is "not a git repository: <path>" up to git 2.47 and "gitfile
+ * does not point to a valid repository" after, one that is not a gitfile is
+ * "invalid gitfile format", and `git config --local` outside a repository says
+ * it in its own words.
+ */
+const NOT_A_REPOSITORY =
+  /^fatal: (not a git repository|gitfile does not point to a valid repository|invalid gitfile format|--local can only be used inside a git repository)/m;
+
+/** The detail of a working copy folder that is gone; git never started, so it said nothing. */
+export const WORKING_COPY_FOLDER_GONE = 'The working copy folder does not exist.';
+
+/**
+ * Throws `working-copy-missing` when a git that failed in `cwd` did so because
+ * the folder is gone or holds no repository git can read (RM-6), with git's
+ * message about the working copy as the detail. When git said it found no
+ * repository, `readsRepository` asks again of the working copy alone (`git
+ * rev-parse --git-dir` in `cwd`), so that a broken submodule is not taken for
+ * a damaged working copy. Only that: any other failure, such as a lock file or
+ * a timeout, is not damage, and calling a working copy damaged sends the user
+ * to **Clone again**, which loses work (RM-12).
+ */
+export async function assertWorkingCopyFound(
+  cwd: string,
+  result: GitResult,
+  readsRepository: () => Promise<GitResult>
+): Promise<void> {
+  if (NOT_A_REPOSITORY.test(result.stderr)) {
+    const check = await readsRepository();
+    if (check.exitCode !== 0 && !check.timedOut && NOT_A_REPOSITORY.test(check.stderr)) {
+      throw new GitOperationError('working-copy-missing', check.stderr);
+    }
+    return;
+  }
+  // Node can't start a process in a folder that is gone: no exit code, and no timeout either.
+  if (result.exitCode === null && !result.timedOut && !(await isFolder(cwd))) {
+    throw new GitOperationError('working-copy-missing', WORKING_COPY_FOLDER_GONE);
+  }
 }
 
 /** What git says when another git holds a lock that it needs; nothing changed. */

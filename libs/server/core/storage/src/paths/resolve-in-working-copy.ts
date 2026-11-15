@@ -1,5 +1,5 @@
 import type { Stats } from 'node:fs';
-import { lstat } from 'node:fs/promises';
+import { lstat, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export type EntryType = 'file' | 'folder' | 'symlink' | 'other' | 'missing';
@@ -29,6 +29,15 @@ export interface ResolveOptions {
 
 const typeOf = (stats: Stats): EntryType =>
   stats.isSymbolicLink() ? 'symlink' : stats.isDirectory() ? 'folder' : stats.isFile() ? 'file' : 'other';
+
+/** Whether `path` is a folder, following links; false for anything that can't be read, such as a path that is gone. */
+export async function isFolder(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 /** The entry's stats without following a link, or `undefined` when it is missing or its name is too long to exist. */
 export async function lstatOrMissing(path: string): Promise<Stats | undefined> {

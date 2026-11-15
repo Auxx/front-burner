@@ -1,5 +1,5 @@
 import { authOf } from '@front-burner/server-core-security';
-import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
+import { RepositoryParamsDto, WorkingCopyDamageInterceptor } from '@front-burner/server-feature-repositories';
 import type {
   EntryPath,
   EntrySummary,
@@ -8,7 +8,7 @@ import type {
   FolderListing,
   IgnoreResult
 } from '@front-burner/shared-contracts';
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query, Req, UseInterceptors } from '@nestjs/common';
 import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
@@ -38,6 +38,7 @@ import {
 /** The files of the logged-in user's working copies (REQ-FILE-001). */
 @ApiTags('files')
 @Controller('repositories/:id')
+@UseInterceptors(WorkingCopyDamageInterceptor)
 export class FilesController {
   constructor(
     private readonly repositories: OpenableRepository,

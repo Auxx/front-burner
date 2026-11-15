@@ -1,6 +1,7 @@
 import type { Job } from '@front-burner/server-core-database';
 import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
 import { JobKeys } from '@front-burner/server-feature-credentials';
+import { WorkingCopyDamage } from '@front-burner/server-feature-repositories';
 import type { GitJobOutcome } from '@front-burner/shared-contracts';
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { FetchStep } from './fetch-step';
@@ -34,7 +35,8 @@ export class FetchJob implements OnModuleInit {
   constructor(
     private readonly runner: JobRunner,
     private readonly step: FetchStep,
-    private readonly jobKeys: JobKeys
+    private readonly jobKeys: JobKeys,
+    private readonly damage: WorkingCopyDamage
   ) {}
 
   onModuleInit(): void {
@@ -64,10 +66,12 @@ export class FetchJob implements OnModuleInit {
     if (userId === null || repositoryId === null) {
       throw new Error('A fetch job needs its user and repository');
     }
-    const result = await this.step.run({ id, userId, repositoryId });
-    return 'failure' in result
-      ? result.failure
-      : { kind: 'fetched', moved: result.moved, upstreamMoved: result.upstreamMoved };
+    return this.damage.inJob(userId, repositoryId, async () => {
+      const result = await this.step.run({ id, userId, repositoryId });
+      return 'failure' in result
+        ? result.failure
+        : { kind: 'fetched', moved: result.moved, upstreamMoved: result.upstreamMoved };
+    });
   }
 
   /**

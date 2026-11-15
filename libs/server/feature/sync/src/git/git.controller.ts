@@ -5,7 +5,7 @@ import { authOf } from '@front-burner/server-core-security';
 import { inBatches, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
 import { OpenableRepository, toFilesError, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
-import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
+import { RepositoryParamsDto, WorkingCopyDamageInterceptor } from '@front-burner/server-feature-repositories';
 import type {
   CommitResult,
   GitBranchList,
@@ -17,7 +17,7 @@ import type {
   GitMergeVersion,
   GitStatus
 } from '@front-burner/shared-contracts';
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UseInterceptors } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
@@ -103,6 +103,7 @@ const mayHaveChanged = (onChange: () => void) => (error: unknown): never => {
 /** Git in the logged-in user's working copies (REQ-GIT-002). */
 @ApiTags('git')
 @Controller('repositories/:id/git')
+@UseInterceptors(WorkingCopyDamageInterceptor)
 export class GitController {
   constructor(
     private readonly repositories: OpenableRepository,
