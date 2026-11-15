@@ -80,7 +80,8 @@ export function toSummary(row: Repository): RepositorySummary {
     name: row.name,
     remote: remoteDisplay(row.remoteUrl),
     status: row.status,
-    error: row.errorCode,
+    // Only in the `error` status (RM-6), as the details' error record, even if a stale code is left.
+    error: row.status === 'error' ? row.errorCode : null,
     // Recorded once the git engine reports operations with the remote (REQ-REPO-002).
     warnings: [],
     lastAccessedAt: row.lastAccessedAt.toISOString()
@@ -89,7 +90,10 @@ export function toSummary(row: Repository): RepositorySummary {
 
 /**
  * The settings page's view of a repository (RM-9, RM-10, RM-16). The error
- * record is answered only in the `error` status, even if a stale one is left.
+ * record is answered only in the `error` status, as the summary's error code,
+ * even if a stale one is left. `branch` belongs to a single-branch clone only:
+ * a full clone's is never answered, and adding refuses a single-branch clone
+ * without one (AR-34), so `null` there means a damaged row, shown as no branch.
  */
 export function toDetails(row: Repository): RepositoryDetails {
   const failed = row.status === 'error';

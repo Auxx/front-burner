@@ -39,7 +39,8 @@ numbering conventions.
   `RepositorySummary` as `summary`, the clone mode, the cloned `branch` of a
   single-branch clone (else `null`), the git control level, `addedAt` and a
   failed clone's error record, `errorDetail` and `errorRequestId` (RM-10,
-  RM-16), which are `null` outside the `error` status. A separate endpoint, so
+  RM-16), which are `null` outside the `error` status, as is every summary's
+  `error`, even when a stale value is left in the row. A separate endpoint, so
   that the lists do not carry git's error text for every repository. Another
   user's repository is answered like a missing one (RM-1). _(Plan 106's call.)_
 

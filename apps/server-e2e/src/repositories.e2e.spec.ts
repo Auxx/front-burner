@@ -241,6 +241,7 @@ describe('repository details (REQ-REPO-003)', () => {
         errorCode: 'clone-failed',
         errorDetail: 'fatal: repository not found',
         errorRequestId: 'request-1',
+        createdAt: at(1),
         lastAccessedAt: at(5)
       } ]
     }).repositoryIds;
@@ -262,7 +263,7 @@ describe('repository details (REQ-REPO-003)', () => {
       cloneMode: 'single-branch',
       branch: 'main',
       gitLevel: 'advanced',
-      addedAt: at(5).toISOString(),
+      addedAt: at(1).toISOString(),
       errorDetail: 'fatal: repository not found',
       errorRequestId: 'request-1'
     });
@@ -280,7 +281,10 @@ describe('repository details (REQ-REPO-003)', () => {
 
     expect(other.status).toBe(404);
     expect(none.status).toBe(404);
-    expect(((await other.json()) as { code: string; }).code).toBe('not-found');
+    const strip = (body: Record<string, unknown>) => ({ ...body, requestId: undefined });
+    const otherBody = (await other.json()) as Record<string, unknown>;
+    expect(otherBody.code).toBe('not-found');
+    expect(strip(otherBody)).toEqual(strip((await none.json()) as Record<string, unknown>));
   });
 
   it('requires a login', async () => {

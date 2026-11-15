@@ -541,7 +541,7 @@
     },
     "/api/v1/repositories/{id}/details": {
       "get": {
-        "operationId": "details",
+        "operationId": "repositoryDetails",
         "parameters": [
           {
             "name": "id",

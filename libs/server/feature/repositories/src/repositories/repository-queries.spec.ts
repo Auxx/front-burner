@@ -1,5 +1,5 @@
-import { Database, Repository } from '@front-burner/server-core-database';
-import { insertRepository, insertUser } from '../testing/fixtures';
+import { Database } from '@front-burner/server-core-database';
+import { insertRepository, insertUser, repositoryRow } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
 import { RepositoryQueries, toDetails, toSummary } from './repository-queries';
 
@@ -169,24 +169,15 @@ describe('RepositoryQueries', () => {
   });
 });
 
-const failedRow: Repository = {
+const failedRow = repositoryRow({
   id: 3,
-  userId: 1,
-  name: 'handbook',
   remoteUrl: 'https://u:t@github.com/acme/handbook.git',
-  credentialId: null,
-  commitAuthorName: null,
-  commitAuthorEmail: null,
-  cloneMode: 'full',
-  branch: null,
-  gitLevel: 'advanced',
   status: 'error',
   errorCode: 'clone-failed',
   errorDetail: 'fatal: repository not found',
   errorRequestId: 'request-1',
-  createdAt: new Date(0),
   lastAccessedAt: new Date(Date.UTC(2026, 9, 26, 10))
-};
+});
 
 describe('toDetails', () => {
   it('answers the clone mode, level and date added', () => {
@@ -206,6 +197,15 @@ describe('toDetails', () => {
       .toMatchObject({ cloneMode: 'single-branch', branch: 'main' });
   });
 
+  it('never answers a full clone\'s branch', () => {
+    expect(toDetails({ ...failedRow, cloneMode: 'full', branch: 'main' })).toMatchObject({ branch: null });
+  });
+
+  it('answers no branch for a single-branch row that lost it', () => {
+    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: null }))
+      .toMatchObject({ cloneMode: 'single-branch', branch: null });
+  });
+
   it('answers the error record of a failed clone', () => {
     expect(toDetails(failedRow))
       .toMatchObject({ errorDetail: 'fatal: repository not found', errorRequestId: 'request-1' });
@@ -213,9 +213,10 @@ describe('toDetails', () => {
 
   it('answers no error record when ready', () => {
     // Plan 105 clears the record; a stale one is still never answered outside `error`.
-    const ready = { ...failedRow, status: 'ready', errorCode: null } as const;
+    const ready = { ...failedRow, status: 'ready' } as const;
 
-    expect(toDetails(ready)).toMatchObject({ errorDetail: null, errorRequestId: null });
+    expect(toDetails(ready))
+      .toMatchObject({ summary: { error: null }, errorDetail: null, errorRequestId: null });
   });
 
   it('answers the remote without credentials', () => {
@@ -239,5 +240,11 @@ describe('toSummary', () => {
       warnings: [],
       lastAccessedAt: '2026-10-26T10:00:00.000Z'
     });
+  });
+
+  it('answers no error code outside the error status, even a stale one', () => {
+    for (const status of [ 'ready', 'cloning' ] as const) {
+      expect(toSummary({ ...failedRow, status }).error).toBeNull();
+    }
   });
 });

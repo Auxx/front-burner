@@ -53,7 +53,7 @@ export class RepositoriesApi {
       `/api/v1/repositories/${encodeURIComponent(id)}`
     );
   }
-  details(id: number): Observable<RepositoryDetails> {
+  repositoryDetails(id: number): Observable<RepositoryDetails> {
     return this.http.get<RepositoryDetails>(
       `/api/v1/repositories/${encodeURIComponent(id)}/details`
     );

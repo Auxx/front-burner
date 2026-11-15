@@ -107,7 +107,7 @@ export class RepositoriesController {
   @Get(':id/details')
   @ApiOkResponse({ type: RepositoryDetailsDto })
   @ZodSerializerDto(RepositoryDetailsDto)
-  details(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositoryDetails {
+  repositoryDetails(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositoryDetails {
     return toDetails(ownRow(this.queries.find(authOf(req).userId, params.id)));
   }
 

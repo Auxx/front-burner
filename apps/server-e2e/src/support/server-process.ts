@@ -299,6 +299,8 @@ export interface SeedRepository {
   errorRequestId?: string;
   /** A branch makes it a single-branch clone; without one it is a full clone. */
   branch?: string;
+  /** When it was added; the last access time by default. */
+  createdAt?: Date;
   lastAccessedAt: Date;
 }
 
@@ -348,7 +350,7 @@ export function seed(
           repository.errorCode ?? null,
           repository.errorDetail ?? null,
           repository.errorRequestId ?? null,
-          repository.lastAccessedAt.getTime(),
+          (repository.createdAt ?? repository.lastAccessedAt).getTime(),
           repository.lastAccessedAt.getTime()
         ).lastInsertRowid
       )
