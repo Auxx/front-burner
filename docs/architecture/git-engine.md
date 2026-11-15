@@ -35,16 +35,24 @@ where git may connect. Lives in `server/git` (A-2). See
     working copy that is gone (no folder to start git in) or that git can't read
     as a repository ("fatal: not a git repository", such as a `.git` deleted or
     without `HEAD`) and throws the error code `working-copy-missing`, with git's
-    message as its detail. Any other failure, such as a lock file or a timeout,
-    is not damage: calling a working copy damaged sends the user to **Clone
-    again**, which loses work (RM-12). `WorkingCopyDamage` in the repositories
-    feature gives the repository the status Error, "Working copy is missing or
-    damaged" (RM-6), with that detail (RM-10), and publishes `repository.status`
-    once. The endpoints of a working copy report it through an interceptor and
-    answer `409 working-copy-missing`; a file request whose working copy folder
-    is gone counts too, a missing file inside it does not. The git jobs report
-    it and end as `failed` with that code, which is not a remote problem, so
-    leaves no warning (RM-8). _(Plan 109's call.)_
+    message as its detail. Git says the same of a submodule it can't read, so
+    the message is confirmed with `git rev-parse --git-dir` in the working copy
+    before it counts. Config is read with `git config --local`, since without it
+    a folder that holds no repository reads as one without the key, and a push
+    would report an unsafe config instead. Any other failure, such as a lock
+    file or a timeout, is not damage: calling a working copy damaged sends the
+    user to **Clone again**, which loses work (RM-12). Cleanups, such as
+    removing a killed git's locks, let the caller's failure stand, and a pull
+    whose merge finds the working copy gone does not try to undo it: the record
+    stays marked as applying for recovery (A-5.15), which at a start also marks
+    damaged a working copy whose `.git` git can't read. `WorkingCopyDamage` in
+    the repositories feature gives the repository the status Error, "Working
+    copy is missing or damaged" (RM-6), with that detail (RM-10), and publishes
+    `repository.status` once. The endpoints of a working copy report it through
+    an interceptor and answer `409 working-copy-missing`; a file request whose
+    working copy folder is gone counts too, a missing file inside it does not.
+    The git jobs report it and end as `failed` with that code, which is not a
+    remote problem, so leaves no warning (RM-8). _(Plan 109's call.)_
 - **A-5.2** Submodules and Git LFS objects are not fetched (AR-50).
 
 ## A-5: One operation at a time per working copy

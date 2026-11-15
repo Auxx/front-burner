@@ -46,7 +46,12 @@ export interface LocalRunOptions {
 export class LocalGit {
   constructor(private readonly runner: GitRunner) {}
 
-  /** Runs with `LOCAL_TIMEOUT_MS` unless `options` says otherwise. */
+  /**
+   * Runs with `LOCAL_TIMEOUT_MS` unless `options` says otherwise. A failure is
+   * a result, except one in a working copy that is gone or damaged.
+   *
+   * @throws GitOperationError `working-copy-missing` (RM-6).
+   */
   run(cwd: string, args: string[], options: LocalRunOptions = {}): Promise<GitResult> {
     return this.runner.run(args, {
       cwd,
@@ -60,7 +65,8 @@ export class LocalGit {
   /**
    * A local command that must succeed; gives its output.
    *
-   * @throws GitOperationError `timeout` when it ran out of time.
+   * @throws GitOperationError `timeout` when it ran out of time, or
+   *   `working-copy-missing` (RM-6).
    */
   async checked(cwd: string, args: string[], options: LocalRunOptions = {}): Promise<string> {
     const result = await this.run(cwd, args, options);
@@ -73,9 +79,16 @@ export class LocalGit {
     return result.stdout;
   }
 
-  /** Every value of a config key, in order; none when it is not set. */
+  /**
+   * Every value of a config key of the repository, in order; none when it is
+   * not set. Only the repository's own config can set one, as git runs without
+   * a global or system config. `--local`, since without it a folder that holds
+   * no repository reads as a repository without the key.
+   *
+   * @throws GitOperationError `working-copy-missing` (RM-6), or `timeout`.
+   */
   async configValues(cwd: string, key: string): Promise<string[]> {
-    const result = await this.run(cwd, [ 'config', '--get-all', key ]);
+    const result = await this.run(cwd, [ 'config', '--local', '--includes', '--get-all', key ]);
     if (result.timedOut) {
       throw new GitOperationError('timeout', result.stderr);
     }
@@ -92,8 +105,9 @@ export class LocalGit {
    * The branch `HEAD` names, as git follows it, also before that branch's first
    * commit; `null` when `HEAD` is detached or names something else.
    *
-   * @throws GitOperationError `timeout` when it ran out of time.
-   * @throws Error when git could not read `HEAD`, which is not the same as detached.
+   * @throws GitOperationError `timeout` when it ran out of time, or
+   *   `working-copy-missing` when git finds no repository (RM-6).
+   * @throws Error when git could not read `HEAD` otherwise, which is not the same as detached.
    */
   async currentBranch(cwd: string): Promise<string | null> {
     const head = await this.run(cwd, [ 'symbolic-ref', '--quiet', 'HEAD' ]);
@@ -132,8 +146,14 @@ export class LocalGit {
    */
   async removeOwnLocks(cwd: string, refs: readonly string[] = []): Promise<void> {
     const gitDir = join(cwd, '.git');
-    const head = await this.run(cwd, [ 'symbolic-ref', '-q', 'HEAD' ]);
-    const current = head.exitCode === 0 ? [ head.stdout.trim() ] : [];
+    // A cleanup: a working copy found gone or damaged has no locks to remove, and the caller's failure stands.
+    const head = await this.run(cwd, [ 'symbolic-ref', '-q', 'HEAD' ]).catch((error: unknown) => {
+      if (error instanceof GitOperationError && error.code === 'working-copy-missing') {
+        return undefined;
+      }
+      throw error;
+    });
+    const current = head?.exitCode === 0 ? [ head.stdout.trim() ] : [];
     const refLocks = [ ...current, ...refs ].map(ref => `${ref}.lock`);
     for (const lock of [ 'index.lock', 'HEAD.lock', 'ORIG_HEAD.lock', ...refLocks ]) {
       await rm(join(gitDir, lock), { force: true });

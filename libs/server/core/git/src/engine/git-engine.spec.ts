@@ -2044,6 +2044,17 @@ describe('GitEngine', () => {
         expect(remoteLog()).toBe('second\nfirst');
       });
 
+      it('reports a working copy without .git as working-copy-missing, not as an unsafe config (RM-6)', async () => {
+        await cloneIt();
+        rmSync(join(work(), '.git'), { recursive: true, force: true });
+
+        const failure = await failureOf(push());
+
+        expect(failure.code).toBe('working-copy-missing');
+        expect(failure.detail).toMatch(/^fatal: not a git repository/);
+        expect(remoteLog()).toBe('second\nfirst');
+      });
+
       it('leaves what a single-branch clone fetches as it was when the push fails', async () => {
         await cloneIt('single-branch');
         git(work(), 'checkout', '-q', '-b', 'topic');

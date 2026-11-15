@@ -30,6 +30,9 @@ const PASSED_THROUGH = [ 'GIT_SSL_CAINFO', 'SSL_CERT_FILE', 'SSL_CERT_DIR' ];
 
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024;
 
+/** `git rev-parse --git-dir` reads only `.git`; a check that runs out of time finds no damage. */
+const CHECK_TIMEOUT_MS = 10_000;
+
 export interface GitRunOptions {
   cwd?: string;
   /** Added to the environment built from scratch. */
@@ -95,16 +98,20 @@ export class GitRunner {
    */
   async run(args: string[], options: GitRunOptions): Promise<GitResult> {
     const home = await mkdtemp(join(tmpdir(), 'fb-home-'));
-    let result: GitResult;
     try {
-      result = await this.spawn(args, options, home);
+      const result = await this.spawn(args, options, home);
+      const { cwd } = options;
+      if (cwd !== undefined && result.exitCode !== 0) {
+        await assertWorkingCopyFound(
+          cwd,
+          result,
+          () => this.spawn([ 'rev-parse', '--git-dir' ], { cwd, timeoutMs: CHECK_TIMEOUT_MS }, home)
+        );
+      }
+      return result;
     } finally {
       await rm(home, { recursive: true, force: true });
     }
-    if (options.cwd !== undefined && result.exitCode !== 0) {
-      await assertWorkingCopyFound(options.cwd, result);
-    }
-    return result;
   }
 
   /** Kills every running git and its children, and waits for them to end (A-1.14). */

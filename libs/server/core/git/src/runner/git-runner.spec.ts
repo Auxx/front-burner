@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -192,6 +193,44 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
       const error = await failure(runner.run([ 'status' ], { cwd: workingCopy, timeoutMs: 10_000 }));
 
       expect(error.code).toBe('working-copy-missing');
+    });
+
+    it('reports a .git file that points nowhere as working-copy-missing', async () => {
+      writeFileSync(join(dir, '.git'), `gitdir: ${join(dir, 'nowhere')}\n`);
+
+      const error = await failure(runner.run([ 'status' ], { cwd: dir, timeoutMs: 10_000 }));
+
+      expect(error.code).toBe('working-copy-missing');
+    });
+
+    it('does not take a broken submodule for a damaged working copy', async () => {
+      const fixtureEnv = {
+        PATH: process.env['PATH'] ?? '/usr/bin:/bin',
+        HOME: dir,
+        GIT_CONFIG_NOSYSTEM: '1',
+        GIT_CONFIG_GLOBAL: '/dev/null',
+        GIT_AUTHOR_NAME: 'Fixture',
+        GIT_AUTHOR_EMAIL: 'fixture@example.com',
+        GIT_COMMITTER_NAME: 'Fixture',
+        GIT_COMMITTER_EMAIL: 'fixture@example.com'
+      };
+      const git = (cwd: string, ...args: string[]) =>
+        execFileSync('git', args, { cwd, env: fixtureEnv, stdio: 'pipe' });
+      const lib = join(dir, 'lib');
+      const workingCopy = join(dir, 'copy');
+      for (const repository of [ lib, workingCopy ]) {
+        mkdirSync(repository);
+        git(repository, 'init', '-q', '-b', 'main');
+        git(repository, 'commit', '-q', '--allow-empty', '-m', 'first');
+      }
+      git(workingCopy, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', lib, 'lib');
+      git(workingCopy, 'commit', '-q', '-m', 'submodule');
+      rmSync(join(workingCopy, '.git', 'modules', 'lib'), { recursive: true, force: true });
+
+      const result = await runner.run([ 'status', '--porcelain=v2' ], { cwd: workingCopy, timeoutMs: 10_000 });
+
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toMatch(/^fatal: not a git repository: .*modules\/lib/m);
     });
 
     it('gives the result of any other failure', async () => {

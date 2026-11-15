@@ -1,9 +1,8 @@
 import { WORKING_COPY_FOLDER_GONE } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { DATA_LAYOUT, DataLayout, PathRefusedError } from '@front-burner/server-core-storage';
+import { DATA_LAYOUT, DataLayout, isFolder, PathRefusedError } from '@front-burner/server-core-storage';
 import { CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor } from '@nestjs/common';
 import type { Request } from 'express';
-import { stat } from 'node:fs/promises';
 import { catchError, from, Observable, switchMap } from 'rxjs';
 import { isWorkingCopyMissing, WorkingCopyDamage } from './working-copy-damage';
 
@@ -12,14 +11,6 @@ function isNotFound(error: unknown): boolean {
   return (error instanceof ApiErrorException && error.code === 'entry-not-found')
     || (error instanceof PathRefusedError && error.reason === 'not-found')
     || (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT');
-}
-
-async function isFolder(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory();
-  } catch {
-    return false;
-  }
 }
 
 /**

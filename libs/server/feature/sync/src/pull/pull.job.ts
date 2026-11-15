@@ -6,7 +6,11 @@ import { ApiErrorException } from '@front-burner/server-core-observability';
 import { JobKeys } from '@front-burner/server-feature-credentials';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
-import { InstanceRepositories, WorkingCopyDamage } from '@front-burner/server-feature-repositories';
+import {
+  InstanceRepositories,
+  isWorkingCopyMissing,
+  WorkingCopyDamage
+} from '@front-burner/server-feature-repositories';
 import type { GitJobFailed, GitJobOutcome } from '@front-burner/shared-contracts';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { FetchStep } from '../fetch/fetch-step';
@@ -148,7 +152,10 @@ export class PullJob implements OnModuleInit {
     try {
       return await this.applyMerge(repositoryId, root, recorded, { branch, upstream, author });
     } catch (error) {
-      this.blockIfStillApplying(userId, repositoryId);
+      // The job reports a working copy found gone or damaged, with git's message; it is blocked either way.
+      if (!isWorkingCopyMissing(error)) {
+        this.blockIfStillApplying(userId, repositoryId);
+      }
       throw error;
     }
   }
@@ -220,6 +227,11 @@ export class PullJob implements OnModuleInit {
     if (error instanceof GitOperationError && error.code === 'merge-blocked') {
       await this.mergeRecord.restoreEarlier(repositoryId, root);
       return failed('merge-blocked', error.params);
+    }
+    // Nothing to undo it in: the record stays marked as applying, and recovery
+    // tries again at a start that finds the working copy back (A-5.15).
+    if (isWorkingCopyMissing(error)) {
+      throw error;
     }
     this.logger.warn(`Merge of repository ${repositoryId} failed; undoing it: ${String(error)}`);
     await this.merges.undoCutShort(root, recorded);
