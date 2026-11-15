@@ -229,8 +229,19 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
 
       const result = await runner.run([ 'status', '--porcelain=v2' ], { cwd: workingCopy, timeoutMs: 10_000 });
 
+      // git's words differ by version: "not a git repository: …modules/lib" up to 2.47, "gitfile does not point
+      // to a valid repository: lib/.git" after. Either way it names the submodule, and the result comes back.
       expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toMatch(/^fatal: not a git repository: .*modules\/lib/m);
+      expect(result.stderr).toMatch(/^fatal: .*lib/m);
+    });
+
+    it('reports a .git file that is not a gitfile as working-copy-missing', async () => {
+      writeFileSync(join(dir, '.git'), 'junk\n');
+
+      const error = await failure(runner.run([ 'status' ], { cwd: dir, timeoutMs: 10_000 }));
+
+      expect(error.code).toBe('working-copy-missing');
+      expect(error.detail).toMatch(/^fatal: invalid gitfile format/);
     });
 
     it('gives the result of any other failure', async () => {

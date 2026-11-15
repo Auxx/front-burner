@@ -114,9 +114,14 @@ export function classifyGitFailure(result: GitResult, refusals: EgressRefusal[])
  * read, such as a `.git` without `HEAD`. It says the same of any repository it
  * reads, such as a submodule whose folder in `.git/modules` is gone, so it is
  * only a hint, which `assertWorkingCopyFound` checks against the working copy.
- * `git config --local` outside a repository says it in its own words.
+ * Git's words depend on its version and on what it found: a `.git` file that
+ * points nowhere is "not a git repository: <path>" up to git 2.47 and "gitfile
+ * does not point to a valid repository" after, one that is not a gitfile is
+ * "invalid gitfile format", and `git config --local` outside a repository says
+ * it in its own words.
  */
-const NOT_A_REPOSITORY = /^fatal: (not a git repository|--local can only be used inside a git repository)/m;
+const NOT_A_REPOSITORY =
+  /^fatal: (not a git repository|gitfile does not point to a valid repository|invalid gitfile format|--local can only be used inside a git repository)/m;
 
 /** The detail of a working copy folder that is gone; git never started, so it said nothing. */
 export const WORKING_COPY_FOLDER_GONE = 'The working copy folder does not exist.';
