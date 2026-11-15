@@ -305,8 +305,29 @@ Confirmed by spike 2 (spikes.md).
     remote branch (GA-37); adding a pushed branch to a single-branch clone's
     fetch refspec (GA-41); starting a conflicting file over (`git update-index
     --unresolve`, then the markers, GC-18); undoing a merge by resetting to the
-    recorded commit (GC-26); and recognising credential problems in git's and
-    the server's messages (RC-5).
+    recorded commit (GC-26); recognising credential problems in git's and the
+    server's messages (RC-5); and what removing a working copy would lose
+    (`unsavedWork`, RM-18).
+  - `unsavedWork` is read-only and runs outside the working-tree lock, as status
+    does. Its four reads run in parallel. It counts the paths of `git status
+    --porcelain=v2 --untracked-files=all --no-renames --ignored=no` as the
+    Changes tab lists them, each path once (a file removed from the index but
+    kept on disk is one file, not two), so untracked files count and ignored
+    ones do not, plus one for each nested repository; the commits of `git
+    rev-list --count HEAD --branches --not --remotes`, so commits on a branch
+    never pushed or on a detached `HEAD` count; the entries of `git stash list`;
+    and a merge or rebase in progress, as `mergeInProgress` reads it. When
+    `HEAD` has no commit yet, the count runs again without it, but only when
+    `HEAD` names a branch, which `--branches` then covers; a detached `HEAD`
+    that git cannot read is a failure, never 0. In a single-branch clone,
+    commits on other local branches count as not pushed, which is true. _(Plan
+    110's call.)_
+  - Remote branches are as of the last fetch: the check never connects to the
+    remote. A commit on a branch that was deleted on the remote after the last
+    fetch still counts as pushed until a fetch prunes the branch. Front Burner
+    fetches often (GA-33), with `--prune`, so the window is short, and checking
+    the remote would make the dialog wait on the network and fail offline.
+    _(Plan 110's call.)_
   - Every operation that writes a commit sets the commit author itself (CA-2),
     and every merge sets `merge.conflictStyle=merge` (GC-5), so the working
     copy's own configuration decides neither.

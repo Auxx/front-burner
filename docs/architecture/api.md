@@ -43,6 +43,21 @@ numbering conventions.
   `error`, even when a stale value is left in the row. A separate endpoint, so
   that the lists do not carry git's error text for every repository. Another
   user's repository is answered like a missing one (RM-1). _(Plan 106's call.)_
+- **A-3.2c** `GET /repositories/:id/removal` answers what removing the
+  repository would lose, as `RemovalCheckResult` (RM-18): `uncommittedFiles`
+  (untracked files counted, ignored ones not), `unpushedCommits` (on `HEAD` or
+  any local branch, and on no remote branch as of the last fetch), `stashes`
+  (the entries of `git stash list`), `mergeInProgress`, and `unreadable`, true
+  when git could not read the working copy, or its status is already "Working
+  copy is missing or damaged": nothing then proves that there is nothing to
+  lose, so the dialog asks for the typed name; a git failure here, a timeout
+  included, is answered the same way. A repository being cloned, or whose clone
+  failed, has nothing to lose, and git is not run. Work would be lost when a
+  count is above 0 or a flag is true (`wouldLoseWork` in `shared/contracts`).
+  The check is read-only, runs outside the working-tree lock, and never changes
+  the status, not even for a working copy that git finds damaged; removing runs
+  it again inside the lock. Another user's repository is answered like a missing
+  one (RM-1). _(Plan 110's call.)_
 
 ## A-3: Contracts
 

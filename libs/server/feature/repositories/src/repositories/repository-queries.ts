@@ -1,4 +1,5 @@
 import { DATABASE, Database, repositories, Repository } from '@front-burner/server-core-database';
+import { ApiErrorException } from '@front-burner/server-core-observability';
 import type {
   RepositoryDetails,
   RepositoryIndex,
@@ -8,6 +9,14 @@ import type {
 import { compareRepositoryNames, remoteDisplay } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq } from 'drizzle-orm';
+
+/** The user's row, or `404 not-found`, also for another user's (FB-2, RM-1). */
+export function ownRow(row: Repository | undefined): Repository {
+  if (row === undefined) {
+    throw new ApiErrorException(404, 'not-found');
+  }
+  return row;
+}
 
 /** Reads a user's repositories; every query is limited to that user (DS-3, A-7.3). */
 @Injectable()

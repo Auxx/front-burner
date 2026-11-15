@@ -6,6 +6,7 @@ import {
   RecentRepositoriesSchema,
   refineAddRepository,
   refineCredentialsProtocol,
+  RemovalCheckResultSchema,
   RepositoryCredentialsInfoSchema,
   RepositoryCredentialsSchema,
   RepositoryDetailsSchema,
@@ -33,6 +34,9 @@ export class RepositorySummaryDto extends createZodDto(z.object(RepositorySummar
 
 @ApiSchema({ name: 'RepositoryDetails' })
 export class RepositoryDetailsDto extends createZodDto(z.object(RepositoryDetailsSchema.shape)) {}
+
+@ApiSchema({ name: 'RemovalCheckResult' })
+export class RemovalCheckResultDto extends createZodDto(z.object(RemovalCheckResultSchema.shape)) {}
 
 @ApiSchema({ name: 'RepositoryList' })
 export class RepositoryListDto extends createZodDto(z.object(RepositoryListSchema.shape)) {}

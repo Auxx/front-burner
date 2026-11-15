@@ -20,13 +20,13 @@ import { Test } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import type { NextFunction, Request, Response } from 'express';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
 import { RepositoriesModule } from '../repositories.module';
 import { insertRepository, insertUser } from '../testing/fixtures';
-import { createRemotes, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
+import { createRemotes, git, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
 import { createTestDatabase } from '../testing/test-database';
 import { RemoteProblemsSource } from '../warnings/remote-problems-source';
 
@@ -326,6 +326,59 @@ describe('RepositoriesController', () => {
 
       const other = await details(alice, secret).expect(404);
       const none = await details(alice, secret + 100).expect(404);
+
+      expect(other.body.code).toBe('not-found');
+      expect(strip(other.body)).toEqual(strip(none.body));
+    });
+  });
+
+  describe('removal check', () => {
+    const removal = (user: number, id: number) =>
+      http().get(`/api/v1/repositories/${id}/removal`).set('x-test-user', String(user));
+
+    it('answers what removing would lose', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, { name: 'handbook' });
+      const work = join(root, 'data', 'repos', String(alice), String(id));
+      mkdirSync(join(root, 'data', 'repos', String(alice)), { recursive: true });
+      git(root, 'clone', '-q', join(root, 'handbook.git'), work);
+      git(work, 'commit', '-q', '--allow-empty', '-m', 'local');
+      writeFileSync(join(work, 'notes.md'), 'notes\n');
+
+      const response = await removal(alice, id).expect(200);
+
+      expect(response.body).toEqual({
+        uncommittedFiles: 1,
+        unpushedCommits: 1,
+        stashes: 0,
+        mergeInProgress: false,
+        unreadable: false
+      });
+    });
+
+    it('answers a ready repository without a working copy as unreadable', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, { name: 'handbook' });
+
+      const response = await removal(alice, id).expect(200);
+
+      expect(response.body).toEqual({
+        uncommittedFiles: 0,
+        unpushedCommits: 0,
+        stashes: 0,
+        mergeInProgress: false,
+        unreadable: true
+      });
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const bob = insertUser(database, 'bob@example.com');
+      const secret = insertRepository(database, bob, { name: 'secret' });
+      const strip = (body: Record<string, unknown>) => ({ ...body, requestId: undefined });
+
+      const other = await removal(alice, secret).expect(404);
+      const none = await removal(alice, secret + 100).expect(404);
 
       expect(other.body.code).toBe('not-found');
       expect(strip(other.body)).toEqual(strip(none.body));
