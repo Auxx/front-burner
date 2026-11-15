@@ -9,6 +9,7 @@ import type {
   RecentRepositories,
   RepositoryCredentials,
   RepositoryCredentialsInfo,
+  RepositoryDetails,
   RepositoryIndex,
   RepositoryList,
   RepositorySummary,
@@ -50,6 +51,11 @@ export class RepositoriesApi {
   get(id: number): Observable<RepositorySummary> {
     return this.http.get<RepositorySummary>(
       `/api/v1/repositories/${encodeURIComponent(id)}`
+    );
+  }
+  repositoryDetails(id: number): Observable<RepositoryDetails> {
+    return this.http.get<RepositoryDetails>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/details`
     );
   }
   open(id: number): Observable<RepositorySummary> {

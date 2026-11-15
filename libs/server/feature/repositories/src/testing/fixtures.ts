@@ -3,6 +3,7 @@ import {
   insertUserPreferences,
   NewRepository,
   repositories,
+  Repository,
   users
 } from '@front-burner/server-core-database';
 
@@ -18,6 +19,32 @@ export function insertUser(database: Database, email: string): number {
   }).returning().get();
   insertUserPreferences(database.db, user);
   return user.id;
+}
+
+/**
+ * A ready, fully cloned repository row, as read from the database, for the
+ * mapping functions; `values` override the defaults.
+ */
+export function repositoryRow(values: Partial<Repository> = {}): Repository {
+  return {
+    id: 1,
+    userId: 1,
+    name: 'handbook',
+    remoteUrl: 'https://github.com/acme/handbook.git',
+    credentialId: null,
+    cloneMode: 'full',
+    branch: null,
+    gitLevel: 'advanced',
+    status: 'ready',
+    errorCode: null,
+    errorDetail: null,
+    errorRequestId: null,
+    commitAuthorName: null,
+    commitAuthorEmail: null,
+    createdAt: new Date(0),
+    lastAccessedAt: new Date(0),
+    ...values
+  };
 }
 
 /** Inserts a ready, fully cloned repository; `values` override the defaults. */

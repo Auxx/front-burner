@@ -295,6 +295,12 @@ export interface SeedRepository {
   remoteUrl?: string;
   status?: 'cloning' | 'ready' | 'error';
   errorCode?: 'clone-failed' | 'clone-timed-out' | 'working-copy-missing';
+  errorDetail?: string;
+  errorRequestId?: string;
+  /** A branch makes it a single-branch clone; without one it is a full clone. */
+  branch?: string;
+  /** When it was added; the last access time by default. */
+  createdAt?: Date;
   lastAccessedAt: Date;
 }
 
@@ -321,8 +327,9 @@ export function seed(
     );
     const insertRepository = sqlite.prepare(
       `INSERT INTO repositories
-         (user_id, name, remote_url, clone_mode, git_level, status, error_code, created_at, last_accessed_at)
-       VALUES (?, ?, ?, 'full', 'advanced', ?, ?, ?, ?)`
+         (user_id, name, remote_url, clone_mode, branch, git_level, status, error_code, error_detail,
+          error_request_id, created_at, last_accessed_at)
+       VALUES (?, ?, ?, ?, ?, 'advanced', ?, ?, ?, ?, ?, ?)`
     );
     const userIds = (rows.users ?? []).map(user => {
       const id = Number(
@@ -337,9 +344,13 @@ export function seed(
           repository.userId,
           repository.name,
           repository.remoteUrl ?? `https://github.com/acme/${repository.name}.git`,
+          repository.branch === undefined ? 'full' : 'single-branch',
+          repository.branch ?? null,
           repository.status ?? 'ready',
           repository.errorCode ?? null,
-          repository.lastAccessedAt.getTime(),
+          repository.errorDetail ?? null,
+          repository.errorRequestId ?? null,
+          (repository.createdAt ?? repository.lastAccessedAt).getTime(),
           repository.lastAccessedAt.getTime()
         ).lastInsertRowid
       )

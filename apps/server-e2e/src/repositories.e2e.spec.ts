@@ -209,3 +209,86 @@ describe('all repositories (REQ-REPO-003)', () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe('repository details (REQ-REPO-003)', () => {
+  let server: ServerProcess;
+  let adminId: number;
+
+  beforeAll(async () => {
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
+    adminId = await onboard(server);
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+  });
+
+  async function details(email: string, id: number): Promise<Response> {
+    const { authToken } = await login(server, 'body', { email, password: E2E_ADMIN.password });
+    return fetch(`${server.url}/api/v1/repositories/${id}/details`, {
+      headers: { authorization: `Bearer ${authToken}` }
+    });
+  }
+
+  it('answers a failed single-branch clone\'s details, without credentials', async () => {
+    const [ id ] = seed(server.dataDir, {
+      repositories: [ {
+        userId: adminId,
+        name: 'handbook',
+        remoteUrl: 'https://alice:ghp_token@github.com/acme/handbook.git',
+        branch: 'main',
+        status: 'error',
+        errorCode: 'clone-failed',
+        errorDetail: 'fatal: repository not found',
+        errorRequestId: 'request-1',
+        createdAt: at(1),
+        lastAccessedAt: at(5)
+      } ]
+    }).repositoryIds;
+
+    const response = await details(E2E_ADMIN.email, id as number);
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({
+      summary: {
+        id,
+        name: 'handbook',
+        remote: 'github.com/acme/handbook',
+        status: 'error',
+        error: 'clone-failed',
+        warnings: [],
+        lastAccessedAt: at(5).toISOString()
+      },
+      cloneMode: 'single-branch',
+      branch: 'main',
+      gitLevel: 'advanced',
+      addedAt: at(1).toISOString(),
+      errorDetail: 'fatal: repository not found',
+      errorRequestId: 'request-1'
+    });
+    expect(JSON.stringify(body)).not.toContain('ghp_token');
+  });
+
+  it('answers another user\'s repository like a missing one', async () => {
+    const email = 'details-other@example.com';
+    const userId = seed(server.dataDir, { users: [ { email } ] }).userIds[0] as number;
+    const [ secret ] = seed(server.dataDir, { repositories: [ { userId, name: 'secret', lastAccessedAt: at(0) } ] })
+      .repositoryIds;
+
+    const other = await details(E2E_ADMIN.email, secret as number);
+    const none = await details(E2E_ADMIN.email, (secret as number) + 100);
+
+    expect(other.status).toBe(404);
+    expect(none.status).toBe(404);
+    const strip = (body: Record<string, unknown>) => ({ ...body, requestId: undefined });
+    const otherBody = (await other.json()) as Record<string, unknown>;
+    expect(otherBody.code).toBe('not-found');
+    expect(strip(otherBody)).toEqual(strip((await none.json()) as Record<string, unknown>));
+  });
+
+  it('requires a login', async () => {
+    const response = await fetch(`${server.url}/api/v1/repositories/1/details`);
+    expect(response.status).toBe(401);
+  });
+});

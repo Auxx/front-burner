@@ -240,7 +240,98 @@ describe('RepositoriesController', () => {
     });
   });
 
+  describe('details', () => {
+    const details = (user: number, id: number) =>
+      http().get(`/api/v1/repositories/${id}/details`).set('x-test-user', String(user));
+
+    it('answers the clone mode, level and date added', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, {
+        name: 'handbook',
+        gitLevel: 'guided',
+        createdAt: new Date(Date.UTC(2026, 9, 20, 8)),
+        lastAccessedAt: new Date(Date.UTC(2026, 9, 26, 10))
+      });
+
+      const response = await details(alice, id).expect(200);
+
+      expect(response.body).toEqual({
+        summary: {
+          id,
+          name: 'handbook',
+          remote: 'github.com/acme/handbook',
+          status: 'ready',
+          error: null,
+          warnings: [],
+          lastAccessedAt: '2026-10-26T10:00:00.000Z'
+        },
+        cloneMode: 'full',
+        branch: null,
+        gitLevel: 'guided',
+        addedAt: '2026-10-20T08:00:00.000Z',
+        errorDetail: null,
+        errorRequestId: null
+      });
+    });
+
+    it('answers the branch of a single-branch clone', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, { name: 'handbook', cloneMode: 'single-branch', branch: 'draft' });
+
+      const response = await details(alice, id).expect(200);
+
+      expect(response.body).toMatchObject({ cloneMode: 'single-branch', branch: 'draft' });
+    });
+
+    it('answers the error record of a failed clone', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, {
+        name: 'handbook',
+        status: 'error',
+        errorCode: 'clone-failed',
+        errorDetail: 'fatal: repository not found',
+        errorRequestId: 'request-7'
+      });
+
+      const response = await details(alice, id).expect(200);
+
+      expect(response.body).toMatchObject({
+        summary: { status: 'error', error: 'clone-failed' },
+        errorDetail: 'fatal: repository not found',
+        errorRequestId: 'request-7'
+      });
+    });
+
+    it('answers the remote without credentials', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, {
+        name: 'handbook',
+        remoteUrl: 'https://alice:ghp_token@github.com/acme/handbook.git'
+      });
+
+      const response = await details(alice, id).expect(200);
+
+      expect(response.body.summary.remote).toBe('github.com/acme/handbook');
+      expect(JSON.stringify(response.body)).not.toContain('alice');
+      expect(JSON.stringify(response.body)).not.toContain('ghp_token');
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const bob = insertUser(database, 'bob@example.com');
+      const secret = insertRepository(database, bob, { name: 'secret' });
+      const strip = (body: Record<string, unknown>) => ({ ...body, requestId: undefined });
+
+      const other = await details(alice, secret).expect(404);
+      const none = await details(alice, secret + 100).expect(404);
+
+      expect(other.body.code).toBe('not-found');
+      expect(strip(other.body)).toEqual(strip(none.body));
+    });
+  });
+
   it('requires a login', async () => {
+    await http().get('/api/v1/repositories/1/details').expect(401);
     const response = await http().get('/api/v1/repositories/recent').expect(401);
     expect(response.body.code).toBe('unauthenticated');
     await http().get('/api/v1/repositories').expect(401);
