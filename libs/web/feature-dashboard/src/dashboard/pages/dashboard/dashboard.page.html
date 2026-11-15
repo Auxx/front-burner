@@ -1,7 +1,7 @@
 <ng-container *transloco="let t; prefix: 'web-feature-dashboard.DashboardPage'">
   <ui-page>
     <h1 uiPageTitle>{{ t('heading') }}</h1>
-    <dash-add-repository-guide [form]="guideForm()" />
+    <shell-add-repository-guide [form]="guideForm()" />
     @if (repositories(); as repositories) {
       @if (repositories.length > 0) {
         <dash-recent-repositories [repositories]="repositories" />

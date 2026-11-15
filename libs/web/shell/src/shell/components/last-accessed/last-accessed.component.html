@@ -1,0 +1,7 @@
+<ng-container *transloco="let t; prefix: 'web-shell.LastAccessedComponent'">
+  {{ t('label') }}
+  <time tabindex="0"
+        [attr.datetime]="at()"
+        [uiTooltip]="exact()"
+        uiTooltipShowOnClick>{{ relative() }}</time>
+</ng-container>

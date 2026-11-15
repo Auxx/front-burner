@@ -5,7 +5,7 @@ import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { AddRepositoryGuideComponent } from './add-repository-guide.component';
 
-const KEY = 'web-feature-dashboard.AddRepositoryGuideComponent';
+const KEY = 'web-shell.AddRepositoryGuideComponent';
 
 describe('AddRepositoryGuideComponent', () => {
   let fixture: ComponentFixture<AddRepositoryGuideComponent>;

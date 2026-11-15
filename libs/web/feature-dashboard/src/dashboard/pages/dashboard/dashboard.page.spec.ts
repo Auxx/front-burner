@@ -44,7 +44,7 @@ describe('DashboardPage', () => {
   let requests: number;
 
   const page = () => fixture.nativeElement as HTMLElement;
-  const guide = () => page().querySelector('dash-add-repository-guide');
+  const guide = () => page().querySelector('shell-add-repository-guide');
   const recent = () => page().querySelector('dash-recent-repositories');
   const retry = () =>
     [ ...page().querySelectorAll('button') ].find(button => button.textContent?.trim() === `${KEY}.retry`);
