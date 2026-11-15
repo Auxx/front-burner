@@ -1,0 +1,54 @@
+:host {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+.loading {
+  justify-self: center;
+}
+
+.crumb-name {
+  overflow-wrap: anywhere;
+}
+
+// The repository and Open side by side, with Open below them once they no longer fit.
+.repository {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2) var(--ui-space-3);
+}
+
+.identity {
+  display: grid;
+  flex: 1 1 16rem;
+  gap: var(--ui-space-1);
+  min-inline-size: 0;
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1) var(--ui-space-2);
+}
+
+.name {
+  font-size: var(--ui-font-size-lg);
+  font-weight: var(--ui-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.remote {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.sections {
+  display: grid;
+  gap: var(--ui-space-5);
+  padding-block-start: var(--ui-space-3);
+}

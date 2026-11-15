@@ -8,3 +8,4 @@ export { onboardingGuard } from './core/guards/onboarding/onboarding.guard';
 export type { LoginMessage } from './core/models/login-message.model';
 export { provideCore } from './core/providers/provide-core';
 export { AuthSessionService } from './core/services/auth-session/auth-session.service';
+export { isRepositoryId } from './core/utils/is-repository-id/is-repository-id';

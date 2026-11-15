@@ -1,0 +1,56 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.RepositorySettingsPage'">
+  @let state = store.state();
+  @if (state === 'missing') {
+    <shell-page-not-found />
+  } @else {
+    @let summary = this.summary();
+    <ui-page column="48rem"
+             [breadcrumbsLabel]="t('breadcrumbs')">
+      <a *uiBreadcrumb
+         routerLink="/repositories">{{ t('repositories') }}</a>
+      @if (summary) {
+        <a *uiBreadcrumb
+           class="crumb-name"
+           [routerLink]="nameLink()">{{ summary.name }}</a>
+      }
+      <h1 uiPageTitle>{{ t('heading') }}</h1>
+      @let details = store.details();
+      @if (summary && details) {
+        <div class="repository">
+          <div class="identity">
+            <div class="title">
+              <span class="name">{{ summary.name }}</span>
+              <shell-repository-status showReady
+                                       [repository]="summary" />
+            </div>
+            <span class="remote">{{ summary.remote }}</span>
+          </div>
+          @if (openable()) {
+            <a uiButton
+               variant="primary"
+               class="open"
+               [routerLink]="nameLink()"
+               [attr.aria-label]="t('openLabel', { name: summary.name })">{{ t('open') }}</a>
+          }
+        </div>
+        <div class="sections">
+          <repo-clone-details [details]="details" />
+        </div>
+      } @else if (state === 'failed') {
+        <ui-inline-banner status="danger"
+                          announce>
+          {{ t('loadFailed') }}
+          <div uiBannerActions>
+            <button uiButton
+                    size="small"
+                    [busy]="store.retrying()"
+                    (click)="retry()">{{ t('retry') }}</button>
+          </div>
+        </ui-inline-banner>
+      } @else {
+        <ui-spinner class="loading"
+                    [label]="t('loading')" />
+      }
+    </ui-page>
+  }
+</ng-container>
