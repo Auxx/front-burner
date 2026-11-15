@@ -180,6 +180,25 @@ describe('SyncStateStore', () => {
       store.remoteSucceeded(repositoryId, 'push');
       expect(store.fetchProblem(repositoryId)).toEqual(unreachable);
     });
+
+    it('reads the problems of many repositories in one query', () => {
+      const user = database.db.select().from(repositories).where(eq(repositories.id, repositoryId)).get()?.userId ?? 0;
+      const other = insertRepository(database, user, { name: 'other' });
+      const clean = insertRepository(database, user, { name: 'clean' });
+      store.remoteFailed(repositoryId, 'push', notAllowed);
+      store.remoteFailed(other, 'fetch', hostKey);
+      store.setFetchProblem(clean, unreachable);
+
+      const problems = store.remoteProblemsOf([ repositoryId, other, clean, clean + 100 ]);
+
+      expect([ ...problems.entries() ].sort(([ a ], [ b ]) => a - b)).toEqual([
+        [ repositoryId, { fetch: null, push: notAllowed } ],
+        [ other, { fetch: hostKey, push: null } ],
+        // A row kept only for GA-35's fetch status has no warning.
+        [ clean, { fetch: null, push: null } ]
+      ]);
+      expect(store.remoteProblemsOf([])).toEqual(new Map());
+    });
   });
 
   it('is deleted with its repository', () => {

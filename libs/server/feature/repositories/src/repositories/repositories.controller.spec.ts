@@ -28,6 +28,7 @@ import { RepositoriesModule } from '../repositories.module';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createRemotes, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
 import { createTestDatabase } from '../testing/test-database';
+import { RemoteProblemsSource } from '../warnings/remote-problems-source';
 
 /** Mirrors the global auth guard of `server-feature-auth` (LG-34). */
 @Injectable()
@@ -96,7 +97,8 @@ describe('RepositoriesController', () => {
     app.use((req: Request, _res: Response, next: NextFunction) => {
       const userId = req.header('x-test-user');
       if (userId !== undefined) {
-        req.auth = { userId: Number(userId), sessionId: 'session', authTokenExpiresAt: Number.MAX_SAFE_INTEGER };
+        const sessionId = req.header('x-test-session') ?? 'session';
+        req.auth = { userId: Number(userId), sessionId, authTokenExpiresAt: Number.MAX_SAFE_INTEGER };
       }
       next();
     });
@@ -327,6 +329,54 @@ describe('RepositoriesController', () => {
 
       expect(other.body.code).toBe('not-found');
       expect(strip(other.body)).toEqual(strip(none.body));
+    });
+  });
+
+  describe('warnings (RM-8)', () => {
+    it('answers the stored problems in every summary', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, { name: 'handbook' });
+      app.get(RemoteProblemsSource).provide(ids =>
+        new Map(ids.map(repositoryId => [
+          repositoryId,
+          { fetch: null, push: { code: 'push-not-allowed', params: {} } }
+        ]))
+      );
+      const as = <T extends request.Test>(test: T) => test.set('x-test-user', String(alice));
+
+      const responses = await Promise.all([
+        as(http().get('/api/v1/repositories')).expect(200),
+        as(http().get('/api/v1/repositories/recent')).expect(200),
+        as(http().get(`/api/v1/repositories/${id}`)).expect(200),
+        as(http().post(`/api/v1/repositories/${id}/open`)).expect(200),
+        as(http().get(`/api/v1/repositories/${id}/details`)).expect(200)
+      ]);
+
+      expect(responses.map(response => response.body.repositories?.[0] ?? response.body.summary ?? response.body))
+        .toEqual(Array(5).fill(expect.objectContaining({ id, warnings: [ 'cannot-push' ] })));
+    });
+
+    it('answers key-locked for the session that asks', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const credentials = app.get(SavedCredentialsService);
+      const keyId = database.db.transaction(tx =>
+        credentials.createPastedKey(tx, alice, {
+          name: 'Laptop',
+          privateKey: sshKeyFixture('ed25519-passphrase'),
+          passphrase: FIXTURE_PASSPHRASE
+        })
+      );
+      const id = insertRepository(database, alice, {
+        name: 'handbook',
+        remoteUrl: 'git@github.com:acme/handbook.git',
+        credentialId: keyId
+      });
+      credentials.unlock(alice, 'unlocked', keyId, FIXTURE_PASSPHRASE);
+      const get = (session: string) =>
+        http().get(`/api/v1/repositories/${id}`).set('x-test-user', String(alice)).set('x-test-session', session);
+
+      expect((await get('unlocked').expect(200)).body.warnings).toEqual([]);
+      expect((await get('other').expect(200)).body.warnings).toEqual([ 'key-locked' ]);
     });
   });
 

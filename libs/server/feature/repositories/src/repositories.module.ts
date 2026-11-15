@@ -11,6 +11,8 @@ import { WorkingCopyCheck } from './recovery/working-copy-check';
 import { InstanceRepositories } from './repositories/instance-repositories';
 import { RepositoriesController } from './repositories/repositories.controller';
 import { RepositoryQueries } from './repositories/repository-queries';
+import { RemoteProblemsSource } from './warnings/remote-problems-source';
+import { RepositoryWarnings } from './warnings/repository-warnings';
 
 /** The user's repositories and the credentials they use (REQ-DASH-001, REQ-REPO-001, REQ-REPO-002). Needs the global auth guard. */
 @Module({
@@ -25,8 +27,10 @@ import { RepositoryQueries } from './repositories/repository-queries';
     CredentialsCheck,
     AddRepositoryService,
     CloneJob,
-    WorkingCopyCheck
+    WorkingCopyCheck,
+    RemoteProblemsSource,
+    RepositoryWarnings
   ],
-  exports: [ RepositoryQueries, InstanceRepositories, RepositoryCredentialsChanges ]
+  exports: [ RepositoryQueries, InstanceRepositories, RepositoryCredentialsChanges, RemoteProblemsSource ]
 })
 export class RepositoriesModule {}

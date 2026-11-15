@@ -124,7 +124,8 @@ export class AddRepositoryService {
     }
     this.credentialsCheck.unlockPasted(user.sessionId, row.credentialId, request.credentials);
     this.logger.debug(`User ${user.id} added repository ${row.id} (${row.name}); cloning`);
-    return toSummary(row);
+    // A new repository is cloning, and only a ready one has warnings (RM-8).
+    return toSummary(row, []);
   }
 
   /** The requested level, or the highest the user is allowed (AR-38 to AR-40). */

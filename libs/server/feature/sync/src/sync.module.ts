@@ -22,6 +22,7 @@ import { WorkingCopyRecovery } from './recovery/working-copy-recovery';
 import { CredentialsChangedListener } from './state/credentials-changed.listener';
 import { MergeRecord } from './state/merge-record';
 import { RemoteOutcomes } from './state/remote-outcomes';
+import { RemoteProblemsProvider } from './state/remote-problems.provider';
 import { SyncStateStore } from './state/sync-state.store';
 
 /**
@@ -46,6 +47,7 @@ import { SyncStateStore } from './state/sync-state.store';
     SyncStateStore,
     CredentialsChangedListener,
     RemoteOutcomes,
+    RemoteProblemsProvider,
     MergeRecord,
     MergeStateService,
     MergeGuard,
