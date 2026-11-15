@@ -22,6 +22,16 @@ describe('MergeGuard', () => {
     expect(task).toHaveBeenCalledOnce();
   });
 
+  it('refuses a repository removed while the task waited, as a missing one', async () => {
+    const removal = lock.run(REPOSITORY, async () => lock.markRemoved(REPOSITORY));
+
+    const refusal = await guard.change(REPOSITORY, '/work', task).catch((error: unknown) => error);
+    await removal;
+
+    expect(refusal).toMatchObject({ status: 404, code: 'not-found' });
+    expect(task).not.toHaveBeenCalled();
+  });
+
   it('refuses the task when there is no merge', async () => {
     inProgress = false;
 

@@ -1913,6 +1913,44 @@ describe('GitEngine', () => {
       expect(readdirSync(tmpRoot)).toEqual([]);
     });
 
+    it('moves nothing into place when cancelled before git ran', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(clone({ signal: controller.signal })).rejects.toMatchObject({ code: 'cancelled' });
+
+      expect(existsSync(join(root, 'repos', 'one'))).toBe(false);
+      expect(readdirSync(tmpRoot)).toEqual([]);
+    });
+
+    it('moves nothing into place when cancelled after git finished', async () => {
+      const controller = new AbortController();
+      // Aborted while git ends: after the clone, before the rename.
+      const aborting = new GitRunner();
+      const run = aborting.run.bind(aborting);
+      vi.spyOn(aborting, 'run').mockImplementation(async (args, runOptions) => {
+        const result = await run(args, runOptions);
+        if (args.includes('clone')) {
+          controller.abort();
+        }
+        return result;
+      });
+
+      await expect(
+        new GitEngine(options, aborting).clone({
+          remoteUrl: `${server.url}/fixture.git`,
+          credentials: NONE,
+          mode: 'full',
+          tmpRoot,
+          destination: join(root, 'repos', 'one'),
+          signal: controller.signal
+        })
+      ).rejects.toMatchObject({ code: 'cancelled' });
+
+      expect(existsSync(join(root, 'repos', 'one'))).toBe(false);
+      expect(readdirSync(tmpRoot)).toEqual([]);
+    });
+
     it('clones a single branch at depth 1', async () => {
       await clone({ mode: 'single-branch', branch: 'feature/x' });
 

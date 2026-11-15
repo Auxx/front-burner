@@ -487,15 +487,15 @@ describe('JobRunner', () => {
       await settle();
 
       let settled = false;
-      const cancelled = runner.cancel({ repositoryId }).then(() => {
+      const cancelled = runner.cancel({ repositoryId }).then(ended => {
         settled = true;
+        return ended;
       });
       await settle();
       expect(settled).toBe(false);
 
       finish();
-      await cancelled;
-      expect(settled).toBe(true);
+      expect(await cancelled).toBe(true);
       expect(rowOf(id)?.status).toBe('cancelled');
     });
 
@@ -511,13 +511,14 @@ describe('JobRunner', () => {
       runner.enqueue({ type: 'test.stuck', userId, repositoryId, payload: {} });
       await settle();
 
-      let settled = false;
-      void runner.cancel({ repositoryId }).then(() => {
-        settled = true;
+      let ended: boolean | undefined;
+      void runner.cancel({ repositoryId }).then(value => {
+        ended = value;
       });
       await vi.advanceTimersByTimeAsync(SHUTDOWN_GRACE_MS);
 
-      expect(settled).toBe(true);
+      // Resolved, but saying that the job may still run.
+      expect(ended).toBe(false);
     });
   });
 

@@ -145,11 +145,11 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
 
   /**
    * Queued jobs become `cancelled`; running ones get their signal aborted. The
-   * cancelling is done when this returns; the promise settles when the aborted
-   * jobs have ended, or after A-1.14's grace, so that a caller can wait until
-   * none of them still touches what it is about to change.
+   * cancelling is done when this returns. The promise resolves to true once the
+   * aborted jobs have ended, or to false after A-1.14's grace if one has not: a
+   * handler that ignores its signal may then still be running.
    */
-  cancel(where: CancelFilter): Promise<void> {
+  cancel(where: CancelFilter): Promise<boolean> {
     if (
       where.id === undefined && where.userId === undefined && where.repositoryId === undefined
       && where.types === undefined
@@ -191,7 +191,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
         settled.push(active.settled);
       }
     }
-    return settled.length === 0 ? Promise.resolve() : withinGrace(settled);
+    return settled.length === 0 ? Promise.resolve(true) : withinGrace(settled);
   }
 
   /** Stops claiming, aborts running jobs and waits for them a while (A-1.14). */
@@ -419,16 +419,17 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
 
 const repeatKeyOf = (type: string) => `repeat:${type}`;
 
-/** Waits for the jobs to settle, at most A-1.14's grace. */
-async function withinGrace(settled: Promise<void>[]): Promise<void> {
+/** Waits for the jobs to settle, at most A-1.14's grace; true when they all did. */
+async function withinGrace(settled: Promise<void>[]): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  await Promise.race([
-    Promise.all(settled),
-    new Promise<void>(done => {
-      timer = setTimeout(done, SHUTDOWN_GRACE_MS);
+  const ended = await Promise.race([
+    Promise.all(settled).then(() => true),
+    new Promise<boolean>(done => {
+      timer = setTimeout(() => done(false), SHUTDOWN_GRACE_MS);
     })
   ]);
   clearTimeout(timer);
+  return ended;
 }
 
 const spreadTime = () => new Date(Date.now() + Math.floor(Math.random() * START_SPREAD_MS));

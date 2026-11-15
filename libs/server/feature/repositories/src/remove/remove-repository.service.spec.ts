@@ -1,13 +1,13 @@
 import type { Config } from '@front-burner/server-core-config';
 import { Database, jobs, repositories, savedCredentials, syncState } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitRunner, WorkingTreeLock } from '@front-burner/server-core-git';
+import { GitEngine, GitRunner, NetworkLock, WorkingTreeLock } from '@front-burner/server-core-git';
 import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { DataLayout, newTrashName } from '@front-burner/server-core-storage';
 import type { PushEvent, RemovalCheckResult } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { CLONE_JOB_TYPE } from '../add/add-repository.service';
@@ -47,6 +47,8 @@ describe('RemoveRepositoryService', () => {
   let check: RemovalCheck;
   let publish: ReturnType<typeof vi.fn<(userId: number, event: PushEvent) => void>>;
   let service: RemoveRepositoryService;
+  let lock: WorkingTreeLock;
+  let networkLock: NetworkLock;
   let alice: number;
   let handbook: number;
   let work: string;
@@ -98,7 +100,9 @@ describe('RemoveRepositoryService', () => {
     runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, events);
     const queries = new RepositoryQueries(database);
     check = new RemovalCheck(queries, new GitEngine(testGitOptions(), new GitRunner()), layout);
-    service = new RemoveRepositoryService(database, queries, check, runner, new WorkingTreeLock(), events, layout);
+    lock = new WorkingTreeLock();
+    networkLock = new NetworkLock();
+    service = new RemoveRepositoryService(database, queries, check, runner, lock, networkLock, events, layout);
     new DeleteWorkingCopyJob(runner, layout).onModuleInit();
     alice = insertUser(database, 'alice@example.com');
     handbook = insertRepository(database, alice, { name: 'Handbook' });
@@ -151,20 +155,98 @@ describe('RemoveRepositoryService', () => {
   });
 
   it('checks again inside the lock', async () => {
-    // Clean when the request arrives; a file is saved before the lock is taken.
-    const of = vi.spyOn(check, 'of')
-      .mockResolvedValueOnce(NOTHING)
-      .mockResolvedValueOnce({ ...NOTHING, uncommittedFiles: 1 });
+    // Clean when the dialog opened; a save holds the lock when the confirmation arrives.
+    const of = vi.spyOn(check, 'of');
+    let save!: () => void;
+    const saving = lock.run(handbook, () =>
+      new Promise<void>(done => {
+        save = () => {
+          writeFileSync(join(work, 'a.md'), 'a\n');
+          done();
+        };
+      }));
+    const removing = removeError(service.remove(alice, handbook, undefined));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    save();
+    await saving;
 
-    const error = await removeError(service.remove(alice, handbook, undefined));
+    const error = await removing;
 
-    expect(of).toHaveBeenCalledTimes(2);
+    expect(of).toHaveBeenCalledTimes(1);
     expect(error).toMatchObject({ code: 'removal-needs-confirmation', params: { ...NOTHING, uncommittedFiles: 1 } });
     expect(rowOf(handbook)).toBeDefined();
-    expect(existsSync(work)).toBe(true);
+    expect(existsSync(join(work, 'a.md'))).toBe(true);
+    expect(lock.isRemoved(handbook)).toBe(false);
   });
 
-  it('AC-REPO-003.13: removing a repository that is cloning cancels the clone', async () => {
+  it('marks the repository as removed for the work queued behind it', async () => {
+    await service.remove(alice, handbook, undefined);
+
+    expect(lock.isRemoved(handbook)).toBe(true);
+  });
+
+  it('waits for a running fetch to end before moving the working copy', async () => {
+    let seen: boolean | undefined;
+    // A fetch holds the network lock until its git has ended (A-5.3).
+    runner.register({
+      type: 'test.fetch',
+      pool: 'fetch',
+      onInterrupted: 'fail',
+      handler: (job: RunningJob) =>
+        networkLock.run(handbook, () =>
+          new Promise<void>((_, reject) => {
+            job.signal.addEventListener('abort', () =>
+              setTimeout(() => {
+                seen = existsSync(work);
+                reject(new Error('aborted'));
+              }, 50));
+          }))
+    });
+    runner.start();
+    runner.enqueue({ type: 'test.fetch', userId: alice, repositoryId: handbook, payload: {} });
+    await waitFor(() => networkLock.size === 1);
+
+    await service.remove(alice, handbook, undefined);
+
+    // The working copy was still in place for as long as the fetch ran.
+    expect(seen).toBe(true);
+    expect(existsSync(work)).toBe(false);
+  });
+
+  // Mode bits do not make a folder unwritable on Windows, nor for root.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'changes nothing when the working copy cannot be moved',
+    async () => {
+      // The working copy cannot be renamed out of an unwritable folder.
+      chmodSync(dirname(work), 0o500);
+      try {
+        await expect(service.remove(alice, handbook, undefined)).rejects.toMatchObject({ code: 'EACCES' });
+      } finally {
+        chmodSync(dirname(work), 0o755);
+      }
+
+      expect(rowOf(handbook)).toBeDefined();
+      expect(existsSync(work)).toBe(true);
+      expect(lock.isRemoved(handbook)).toBe(false);
+      expect(publish).not.toHaveBeenCalled();
+    }
+  );
+
+  it('puts the working copy back when the row cannot be deleted', async () => {
+    vi.spyOn(database.db, 'delete').mockImplementation(() => {
+      throw new Error('database is locked');
+    });
+
+    await expect(service.remove(alice, handbook, undefined)).rejects.toThrow('database is locked');
+
+    expect(rowOf(handbook)).toBeDefined();
+    expect(existsSync(join(work, '.git'))).toBe(true);
+    expect(readdirSync(layout.tmpDir)).toEqual([]);
+    expect(lock.isRemoved(handbook)).toBe(false);
+  });
+
+  // CloneJob's spec names AC-REPO-003.13 with a real clone; this one is about the order.
+  it('waits for a cancelled clone to end before moving the working copy', async () => {
     const cloning = insertRepository(database, alice, { name: 'Notes', status: 'cloning' });
     const destination = layout.workingCopy(alice, cloning);
     // A clone that, once aborted, still renames a finished clone into place before it ends.

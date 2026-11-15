@@ -2,7 +2,15 @@ import type { Config } from '@front-burner/server-core-config';
 import { SecretBox } from '@front-burner/server-core-crypto';
 import { Database, jobs, repositories } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitOperationError, GitOptions, GitRunner, unlockPrivateKey } from '@front-burner/server-core-git';
+import {
+  GitEngine,
+  GitOperationError,
+  GitOptions,
+  GitRunner,
+  NetworkLock,
+  unlockPrivateKey,
+  WorkingTreeLock
+} from '@front-burner/server-core-git';
 import {
   FIXTURE_PASSPHRASE,
   GitHttpServer,
@@ -29,6 +37,9 @@ import { join } from 'node:path';
 import { AddRepositoryService } from '../add/add-repository.service';
 import { CredentialsCheck } from '../add/credentials-check';
 import { RequestCredentials } from '../add/request-credentials';
+import { RemovalCheck } from '../remove/removal-check';
+import { RemoveRepositoryService } from '../remove/remove-repository.service';
+import { RepositoryQueries } from '../repositories/repository-queries';
 import { insertUser } from '../testing/fixtures';
 import { createRemotes, git, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
 import { createTestDatabase } from '../testing/test-database';
@@ -146,6 +157,43 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
       error: null
     });
     expect(publish.mock.calls.filter(([ userId ]) => userId === bob)).toEqual([]);
+  });
+
+  it('AC-REPO-003.13: removing a repository that is cloning cancels the clone', async () => {
+    // A remote that answers slowly, so that git is still cloning when the repository is removed.
+    const slow = await startGitHttpServer({ repositories: { 'handbook.git': remotes.handbook }, delayMs: 30_000 });
+    try {
+      // Added against the quick one, whose access check answers at once.
+      const { id } = await add();
+      database.db.update(repositories).set({ remoteUrl: `${slow.url}/handbook.git` }).where(eq(repositories.id, id))
+        .run();
+      const queries = new RepositoryQueries(database);
+      const removing = new RemoveRepositoryService(
+        database,
+        queries,
+        new RemovalCheck(queries, engine, layout),
+        runner,
+        new WorkingTreeLock(),
+        new NetworkLock(),
+        { publish } as unknown as EventsHub,
+        layout
+      );
+      runner.start();
+      // git is running: its folder exists under tmp/.
+      await waitFor(() => readdirSync(layout.tmpDir).some(name => name.startsWith('clone-')));
+      const started = Date.now();
+
+      await removing.remove(alice.id, id, undefined);
+
+      // git was killed, not waited for until the remote answered.
+      expect(Date.now() - started).toBeLessThan(10_000);
+      expect(rowOf(id)).toBeUndefined();
+      expect(existsSync(layout.workingCopy(alice.id, id))).toBe(false);
+      expect(readdirSync(layout.tmpDir).filter(name => name.startsWith('clone-'))).toEqual([]);
+      expect(publish).not.toHaveBeenCalledWith(alice.id, expect.objectContaining({ type: 'repository.status' }));
+    } finally {
+      await slow.close();
+    }
   });
 
   it('clones only the chosen branch of a single-branch clone', async () => {

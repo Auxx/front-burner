@@ -41,6 +41,8 @@ export interface GitRunOptions {
   /** Per stream; anything past it is read and dropped. Default 1 MiB. */
   maxOutputBytes?: number;
   stdin?: string;
+  /** Kills git and its children when aborted, such as when its job is cancelled; git is not started once it is. */
+  signal?: AbortSignal;
 }
 
 export interface GitResult {
@@ -54,6 +56,8 @@ export interface GitResult {
   /** With credentials removed from URLs (NF-10.5). */
   stderr: string;
   timedOut: boolean;
+  /** Killed, or never started, because `signal` was aborted. */
+  aborted: boolean;
 }
 
 interface Collected {
@@ -101,7 +105,8 @@ export class GitRunner {
     try {
       const result = await this.spawn(args, options, home);
       const { cwd } = options;
-      if (cwd !== undefined && result.exitCode !== 0) {
+      // A killed git says nothing about the working copy.
+      if (cwd !== undefined && result.exitCode !== 0 && !result.aborted) {
         await assertWorkingCopyFound(
           cwd,
           result,
@@ -123,6 +128,18 @@ export class GitRunner {
   }
 
   private spawn(args: string[], options: GitRunOptions, home: string): Promise<GitResult> {
+    const { signal } = options;
+    if (signal?.aborted) {
+      return Promise.resolve({
+        exitCode: null,
+        stdout: '',
+        stdoutRaw: Buffer.alloc(0),
+        stdoutBytes: 0,
+        stderr: '',
+        timedOut: false,
+        aborted: true
+      });
+    }
     const env: Record<string, string> = {
       PATH: `${dirname(process.execPath)}:/usr/local/bin:/usr/bin:/bin`,
       HOME: home,
@@ -161,6 +178,12 @@ export class GitRunner {
       timedOut = true;
       killGroup(child);
     }, options.timeoutMs);
+    let aborted = false;
+    const onAbort = () => {
+      aborted = true;
+      killGroup(child);
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
 
     const done = new Promise<GitResult>(resolve => {
       let spawnError: Error | undefined;
@@ -169,6 +192,7 @@ export class GitRunner {
       });
       child.once('close', code => {
         clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
         this.running.delete(child);
         resolve({
           exitCode: spawnError ? null : code,
@@ -176,7 +200,8 @@ export class GitRunner {
           stdoutRaw: stdout.raw(),
           stdoutBytes: stdout.bytes(),
           stderr: redactCredentials(spawnError ? spawnError.message : stderr.text()),
-          timedOut
+          timedOut,
+          aborted
         });
       });
     });

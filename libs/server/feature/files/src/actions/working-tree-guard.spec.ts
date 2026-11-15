@@ -39,6 +39,20 @@ describe('WorkingTreeGuard', () => {
     expect(order).toEqual([ 'released', 'change' ]);
   });
 
+  it('refuses a change to a repository removed while it waited, as a missing one', async () => {
+    const task = vi.fn();
+    const removal = lock.run(7, async () => lock.markRemoved(7));
+
+    const error = await guard.changeFile(7, '/root', 'a.md', task).catch((thrown: unknown) => thrown);
+    await removal;
+
+    expect(error).toBeInstanceOf(ApiErrorException);
+    expect(error).toMatchObject({ status: 404, code: 'not-found' });
+    expect(task).not.toHaveBeenCalled();
+    // The working copy was not looked at.
+    expect(await guard.change(8, '/other', async () => 'other')).toBe('other');
+  });
+
   it('refuses a change during a merge without running it', async () => {
     merging = true;
     const task = vi.fn();

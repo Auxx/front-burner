@@ -87,7 +87,9 @@ export class CloneJob implements OnModuleInit {
           branch: row.branch ?? undefined,
           tmpRoot: this.layout.tmpDir,
           destination,
-          knownHosts: this.knownHosts.linesFor(row.userId)
+          knownHosts: this.knownHosts.linesFor(row.userId),
+          // Removing the repository cancels the job: git is killed, and nothing is moved into place (RM-19).
+          signal: job.signal
         });
       } catch (error) {
         if (error instanceof GitOperationError) {

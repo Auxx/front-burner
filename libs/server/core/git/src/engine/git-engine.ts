@@ -38,6 +38,11 @@ export interface CloneRequest {
   destination: string;
   /** For SSH: the user's accepted hosts as `known_hosts` lines; the instance's are always added. */
   knownHosts?: string[];
+  /**
+   * Kills git when aborted; a clone aborted after git finished is not moved to
+   * `destination` either, so that nothing appears there once its job is cancelled.
+   */
+  signal?: AbortSignal;
 }
 
 export interface PushRequest {
@@ -50,6 +55,8 @@ export interface PushRequest {
   branch: string;
   /** The working copy is a single-branch clone (GA-41). */
   singleBranch: boolean;
+  /** Kills git when aborted, such as when its job is cancelled. */
+  signal?: AbortSignal;
 }
 
 export interface PushResult {
@@ -65,6 +72,8 @@ export interface FetchRequest {
   credentials: GitCredentials;
   /** For SSH: the user's accepted hosts as `known_hosts` lines; the instance's are always added. */
   knownHosts: string[];
+  /** Kills git when aborted, such as when its job is cancelled. */
+  signal?: AbortSignal;
 }
 
 /** What the current branch's upstream has that the branch does not (GA-34). */
@@ -79,6 +88,13 @@ export interface IncomingChanges {
 /** How git says that a fetch refspec names a branch the remote no longer has. */
 const MISSING_REMOTE_REF = /^fatal: couldn't find remote ref (refs\/heads\/\S+)$/m;
 
+/** @throws GitOperationError `cancelled` once `signal` is aborted. */
+function throwIfCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new GitOperationError('cancelled', '');
+  }
+}
+
 interface NetworkRunOptions {
   /** Values for the user's message besides `host`. */
   params?: Record<string, string>;
@@ -86,6 +102,8 @@ interface NetworkRunOptions {
   cwd?: string;
   /** Classifies a failure as a push's, with the remote's own lines. */
   push?: boolean;
+  /** Kills git when aborted: `cancelled`. */
+  signal?: AbortSignal;
 }
 
 export interface CommitRequest {
@@ -226,9 +244,11 @@ export class GitEngine implements BeforeApplicationShutdown {
         request.knownHosts ?? [],
         remote => [ ...NO_LFS, 'clone', '--no-recurse-submodules', ...single, '--', remote, dir ],
         this.options.cloneTimeoutMs,
-        { params: request.branch === undefined ? {} : { branch: request.branch } }
+        { params: request.branch === undefined ? {} : { branch: request.branch }, signal: request.signal }
       );
       await this.assertSafeConfig(dir);
+      // Cancelled while git finished: the clone stays out of `destination`.
+      throwIfCancelled(request.signal);
       await rename(dir, request.destination);
     } catch (error) {
       await rm(dir, { recursive: true, force: true });
@@ -859,7 +879,7 @@ export class GitEngine implements BeforeApplicationShutdown {
           `${source}:${destination}`
         ],
         this.options.gitTimeoutMs,
-        { cwd: workingCopy, push: true, params: { branch } }
+        { cwd: workingCopy, push: true, params: { branch }, signal: request.signal }
       );
     } catch (error) {
       // Rejected as non-fast-forward, the remote branch exists: the next fetch must get it, so that Pull has
@@ -953,7 +973,7 @@ export class GitEngine implements BeforeApplicationShutdown {
             'origin'
           ],
           this.options.gitTimeoutMs,
-          { cwd: workingCopy }
+          { cwd: workingCopy, signal: request.signal }
         );
         break;
       } catch (error) {
@@ -1254,8 +1274,9 @@ export class GitEngine implements BeforeApplicationShutdown {
     userKnownHosts: string[],
     args: (remote: string) => string[],
     timeoutMs: number,
-    { params = {}, cwd, push = false }: NetworkRunOptions = {}
+    { params = {}, cwd, push = false, signal }: NetworkRunOptions = {}
   ): Promise<GitResult> {
+    throwIfCancelled(signal);
     const parsed = parseRemoteUrl(remoteUrl);
     if (!parsed.ok) {
       throw new GitOperationError('failed', 'The remote URL is not a supported HTTPS or SSH URL.');
@@ -1275,7 +1296,7 @@ export class GitEngine implements BeforeApplicationShutdown {
     let failure: GitOperationError;
     try {
       broker = await openBroker({ remote, credentials, gitOptions: this.options, knownHosts });
-      const result = await this.runner.run(args(remoteUrl), { env: broker.env, timeoutMs, cwd });
+      const result = await this.runner.run(args(remoteUrl), { env: broker.env, timeoutMs, cwd, signal });
       if (result.exitCode === 0) {
         return result;
       }

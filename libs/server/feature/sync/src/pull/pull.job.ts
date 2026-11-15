@@ -83,27 +83,34 @@ export class PullJob implements OnModuleInit {
     if (userId === null || repositoryId === null) {
       throw new Error('A pull job needs its user and repository');
     }
-    return this.damage.inJob(userId, repositoryId, () => this.fetchAndMerge(id, userId, repositoryId, job.payload));
+    return this.damage.inJob(
+      userId,
+      repositoryId,
+      () => this.fetchAndMerge(id, userId, repositoryId, job.payload, job.signal)
+    );
   }
 
   private async fetchAndMerge(
     id: number,
     userId: number,
     repositoryId: number,
-    payload: PullJobPayload
+    payload: PullJobPayload,
+    signal: AbortSignal
   ): Promise<GitJobOutcome> {
-    const fetched = await this.fetchStep.run({ id, userId, repositoryId });
+    const fetched = await this.fetchStep.run({ id, userId, repositoryId, signal });
     if ('failure' in fetched) {
       return fetched.failure;
     }
     const { root } = this.repositories.open(userId, repositoryId);
     let outcome: GitJobOutcome;
     try {
-      outcome = await this.guard.change(
-        repositoryId,
-        root,
-        () => this.merge(userId, repositoryId, root, payload.branch)
-      );
+      outcome = await this.guard.change(repositoryId, root, () => {
+        // Cancelled while it waited for the lock, such as by removing the repository: nothing is merged.
+        if (signal.aborted) {
+          throw new GitOperationError('cancelled', '');
+        }
+        return this.merge(userId, repositoryId, root, payload.branch);
+      });
     } catch (error) {
       if (error instanceof ApiErrorException && error.code === 'merge-in-progress') {
         return failed('merge-in-progress');

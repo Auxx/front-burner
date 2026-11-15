@@ -9,10 +9,18 @@ const failed = (stderr: string, timedOut = false): GitResult => ({
   stdoutRaw: Buffer.alloc(0),
   stdoutBytes: 0,
   stderr,
-  timedOut
+  timedOut,
+  aborted: false
 });
 
 describe('classifyGitFailure', () => {
+  it('reports a git killed by its signal as cancelled, whatever it said', () => {
+    const killed = { ...failed('fatal: Authentication failed', true), aborted: true };
+
+    expect(classifyGitFailure(killed, [])).toBe('cancelled');
+    expect(classifyPushFailure(killed, []).code).toBe('cancelled');
+  });
+
   it.each([
     [ 'fatal: unable to access \'https://h/r/\': SSL certificate problem: self-signed certificate', 'tls-untrusted' ],
     [
@@ -113,7 +121,8 @@ describe('classifyPushFailure', () => {
     stdoutRaw: Buffer.from(stdout, 'utf8'),
     stdoutBytes: stdout.length,
     stderr,
-    timedOut
+    timedOut,
+    aborted: false
   });
   const code = (stderr: string, stdout = '') => classifyPushFailure(pushed(stderr, stdout), []).code;
   const status = (reason: string) => `To https://h/r.git\n!\trefs/heads/main:refs/heads/main\t${reason}\nDone\n`;

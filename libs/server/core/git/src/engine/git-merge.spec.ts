@@ -630,7 +630,8 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
               stdoutRaw: Buffer.alloc(0),
               stdoutBytes: 0,
               stderr: 'spawn git: No such file or directory',
-              timedOut: false
+              timedOut: false,
+              aborted: false
             };
           }
           return run(cwd, args, options);
@@ -1848,7 +1849,8 @@ describe.skipIf(process.platform === 'win32')('GitMerge', () => {
             stdoutRaw: Buffer.alloc(0),
             stdoutBytes: 0,
             stderr: 'killed',
-            timedOut: true
+            timedOut: true,
+            aborted: false
           };
         });
         return new GitMerge(local, { gitTimeoutMs: 60_000 } as GitOptions);

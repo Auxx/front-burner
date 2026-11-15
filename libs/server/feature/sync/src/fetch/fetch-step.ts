@@ -14,6 +14,8 @@ export interface FetchStepJob {
   id: number;
   userId: number;
   repositoryId: number;
+  /** The job's: kills git when the job is cancelled, such as by removing the repository. */
+  signal?: AbortSignal;
 }
 
 export type FetchStepResult =
@@ -78,12 +80,15 @@ export class FetchStep {
       const { moved, upstreamMoved } = await this.engine.fetch(root, {
         remoteUrl: row.remoteUrl,
         credentials: resolved.credentials,
-        knownHosts: this.knownHosts.linesFor(userId)
+        knownHosts: this.knownHosts.linesFor(userId),
+        signal: job.signal
       });
       return { ok: true, moved, upstreamMoved };
     } catch (error) {
-      // Not the remote's problem: the job reports a working copy that is gone (RM-6).
-      if (!(error instanceof GitOperationError) || error.code === 'working-copy-missing') {
+      // Not the remote's problem: the job reports a working copy that is gone (RM-6), or that it was cancelled.
+      if (
+        !(error instanceof GitOperationError) || error.code === 'working-copy-missing' || error.code === 'cancelled'
+      ) {
         throw error;
       }
       // git's own lines, without credentials (NF-10.5); only the code and params are kept.

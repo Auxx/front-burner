@@ -16,7 +16,8 @@ export class WorkingTreeGuard {
    * merge or rebase is in progress. The check runs inside the lock, so that a
    * merge queued ahead of the change cannot start between the check and the change.
    *
-   * @throws ApiErrorException `409 merge-in-progress`
+   * @throws ApiErrorException `409 merge-in-progress`; `404 not-found` when the
+   *   repository was removed while the task waited for the lock (RM-19).
    */
   change<T>(repositoryId: number, root: string, task: () => Promise<T>): Promise<T> {
     return this.run(repositoryId, root, undefined, task);
@@ -47,6 +48,10 @@ export class WorkingTreeGuard {
     task: () => Promise<T>
   ): Promise<T> {
     return this.lock.run(repositoryId, async () => {
+      // Removed while this waited: its working copy is gone, as is its row (RM-19).
+      if (this.lock.isRemoved(repositoryId)) {
+        throw new ApiErrorException(404, 'not-found');
+      }
       if (await this.git.mergeInProgress(root)) {
         if (path !== undefined && await this.merge.mergeInProgress(root)) {
           // During a merge, changeFile is allowed for unresolved conflicts.
