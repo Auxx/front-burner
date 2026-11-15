@@ -8,6 +8,7 @@ import {
   refineCredentialsProtocol,
   RepositoryCredentialsInfoSchema,
   RepositoryCredentialsSchema,
+  RepositoryDetailsSchema,
   RepositoryIndexSchema,
   RepositoryListSchema,
   RepositoryParamsSchema,
@@ -29,6 +30,9 @@ export class RecentQueryDto extends createZodDto(z.object(RecentQuerySchema.shap
 
 @ApiSchema({ name: 'RepositorySummary' })
 export class RepositorySummaryDto extends createZodDto(z.object(RepositorySummarySchema.shape)) {}
+
+@ApiSchema({ name: 'RepositoryDetails' })
+export class RepositoryDetailsDto extends createZodDto(z.object(RepositoryDetailsSchema.shape)) {}
 
 @ApiSchema({ name: 'RepositoryList' })
 export class RepositoryListDto extends createZodDto(z.object(RepositoryListSchema.shape)) {}

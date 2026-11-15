@@ -34,6 +34,14 @@ numbering conventions.
   maximum, since a user is expected to have about 50 repositories (NF-1.3);
   adding does not enforce that number. Listing changes nothing, not even the
   last access time (DS-9). _(Plan 104's call.)_
+- **A-3.2b** `GET /repositories/:id/details` answers what the settings page
+  shows that a list entry does not, as `RepositoryDetails`: the
+  `RepositorySummary` as `summary`, the clone mode, the cloned `branch` of a
+  single-branch clone (else `null`), the git control level, `addedAt` and a
+  failed clone's error record, `errorDetail` and `errorRequestId` (RM-10,
+  RM-16), which are `null` outside the `error` status. A separate endpoint, so
+  that the lists do not carry git's error text for every repository. Another
+  user's repository is answered like a missing one (RM-1). _(Plan 106's call.)_
 
 ## A-3: Contracts
 

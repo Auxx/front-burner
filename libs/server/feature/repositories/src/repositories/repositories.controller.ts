@@ -4,6 +4,7 @@ import { authOf, RateLimitGroup } from '@front-burner/server-core-security';
 import type {
   AccessCheckResult,
   RecentRepositories,
+  RepositoryDetails,
   RepositoryIndex,
   RepositoryList,
   RepositorySummary
@@ -19,19 +20,25 @@ import {
   AddRepositoryRequestDto,
   RecentQueryDto,
   RecentRepositoriesDto,
+  RepositoryDetailsDto,
   RepositoryIndexDto,
   RepositoryListDto,
   RepositoryParamsDto,
   RepositorySummaryDto
 } from './repositories.dto';
-import { RepositoryQueries, toSummary } from './repository-queries';
+import { RepositoryQueries, toDetails, toSummary } from './repository-queries';
 
-/** The repository as clients see it, or `404 not-found`. */
-function found(row: Repository | undefined): RepositorySummary {
+/** The user's row, or `404 not-found`, also for another user's (FB-2, RM-1). */
+function ownRow(row: Repository | undefined): Repository {
   if (row === undefined) {
     throw new ApiErrorException(404, 'not-found');
   }
-  return toSummary(row);
+  return row;
+}
+
+/** The repository as clients see it, or `404 not-found`. */
+function found(row: Repository | undefined): RepositorySummary {
+  return toSummary(ownRow(row));
 }
 
 /** The logged-in user's repositories; never another user's (DS-3, AR-56). */
@@ -91,6 +98,17 @@ export class RepositoriesController {
   @ZodSerializerDto(RepositorySummaryDto)
   get(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositorySummary {
     return found(this.queries.find(authOf(req).userId, params.id));
+  }
+
+  /**
+   * What the settings page shows beyond the summary: clone mode, branch, level,
+   * date added and a failed clone's error record (RM-9, RM-10, RM-16).
+   */
+  @Get(':id/details')
+  @ApiOkResponse({ type: RepositoryDetailsDto })
+  @ZodSerializerDto(RepositoryDetailsDto)
+  details(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositoryDetails {
+    return toDetails(ownRow(this.queries.find(authOf(req).userId, params.id)));
   }
 
   /**

@@ -539,6 +539,39 @@
         ]
       }
     },
+    "/api/v1/repositories/{id}/details": {
+      "get": {
+        "operationId": "details",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": true,
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryDetails"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
     "/api/v1/repositories/{id}/open": {
       "post": {
         "operationId": "open",
@@ -2864,6 +2897,55 @@
           "name",
           "credentials",
           "cloneMode"
+        ]
+      },
+      "RepositoryDetails": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "$ref": "#/components/schemas/RepositorySummary"
+          },
+          "cloneMode": {
+            "type": "string",
+            "enum": [
+              "full",
+              "single-branch"
+            ]
+          },
+          "branch": {
+            "type": "string",
+            "nullable": true
+          },
+          "gitLevel": {
+            "type": "string",
+            "enum": [
+              "simple",
+              "guided",
+              "advanced"
+            ]
+          },
+          "addedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "errorDetail": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorRequestId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "summary",
+          "cloneMode",
+          "branch",
+          "gitLevel",
+          "addedAt",
+          "errorDetail",
+          "errorRequestId"
         ]
       },
       "RepositoryCredentialsInfo": {

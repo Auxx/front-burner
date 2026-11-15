@@ -1,5 +1,5 @@
 import { DATABASE, Database, repositories, Repository } from '@front-burner/server-core-database';
-import type { RepositoryIndex, RepositorySummary } from '@front-burner/shared-contracts';
+import type { RepositoryDetails, RepositoryIndex, RepositorySummary } from '@front-burner/shared-contracts';
 import { compareRepositoryNames, remoteDisplay } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq } from 'drizzle-orm';
@@ -84,5 +84,22 @@ export function toSummary(row: Repository): RepositorySummary {
     // Recorded once the git engine reports operations with the remote (REQ-REPO-002).
     warnings: [],
     lastAccessedAt: row.lastAccessedAt.toISOString()
+  };
+}
+
+/**
+ * The settings page's view of a repository (RM-9, RM-10, RM-16). The error
+ * record is answered only in the `error` status, even if a stale one is left.
+ */
+export function toDetails(row: Repository): RepositoryDetails {
+  const failed = row.status === 'error';
+  return {
+    summary: toSummary(row),
+    cloneMode: row.cloneMode,
+    branch: row.cloneMode === 'single-branch' ? row.branch : null,
+    gitLevel: row.gitLevel,
+    addedAt: row.createdAt.toISOString(),
+    errorDetail: failed ? row.errorDetail : null,
+    errorRequestId: failed ? row.errorRequestId : null
   };
 }

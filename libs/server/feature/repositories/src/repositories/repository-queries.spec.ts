@@ -1,7 +1,7 @@
-import { Database } from '@front-burner/server-core-database';
+import { Database, Repository } from '@front-burner/server-core-database';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
-import { RepositoryQueries, toSummary } from './repository-queries';
+import { RepositoryQueries, toDetails, toSummary } from './repository-queries';
 
 describe('RepositoryQueries', () => {
   let database: Database;
@@ -169,26 +169,66 @@ describe('RepositoryQueries', () => {
   });
 });
 
-describe('toSummary', () => {
-  it('shows the remote without credentials and the time as ISO', () => {
-    const summary = toSummary({
-      id: 3,
-      userId: 1,
-      name: 'handbook',
-      remoteUrl: 'https://u:t@github.com/acme/handbook.git',
-      credentialId: null,
-      commitAuthorName: null,
-      commitAuthorEmail: null,
+const failedRow: Repository = {
+  id: 3,
+  userId: 1,
+  name: 'handbook',
+  remoteUrl: 'https://u:t@github.com/acme/handbook.git',
+  credentialId: null,
+  commitAuthorName: null,
+  commitAuthorEmail: null,
+  cloneMode: 'full',
+  branch: null,
+  gitLevel: 'advanced',
+  status: 'error',
+  errorCode: 'clone-failed',
+  errorDetail: 'fatal: repository not found',
+  errorRequestId: 'request-1',
+  createdAt: new Date(0),
+  lastAccessedAt: new Date(Date.UTC(2026, 9, 26, 10))
+};
+
+describe('toDetails', () => {
+  it('answers the clone mode, level and date added', () => {
+    const details = toDetails({ ...failedRow, gitLevel: 'simple', createdAt: new Date(Date.UTC(2026, 9, 20, 8)) });
+
+    expect(details).toMatchObject({
       cloneMode: 'full',
       branch: null,
-      gitLevel: 'advanced',
-      status: 'error',
-      errorCode: 'clone-failed',
-      errorDetail: 'fatal: repository not found',
-      errorRequestId: 'request-1',
-      createdAt: new Date(0),
-      lastAccessedAt: new Date(Date.UTC(2026, 9, 26, 10))
+      gitLevel: 'simple',
+      addedAt: '2026-10-20T08:00:00.000Z'
     });
+    expect(details.summary).toEqual(toSummary(failedRow));
+  });
+
+  it('answers the branch of a single-branch clone', () => {
+    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: 'main' }))
+      .toMatchObject({ cloneMode: 'single-branch', branch: 'main' });
+  });
+
+  it('answers the error record of a failed clone', () => {
+    expect(toDetails(failedRow))
+      .toMatchObject({ errorDetail: 'fatal: repository not found', errorRequestId: 'request-1' });
+  });
+
+  it('answers no error record when ready', () => {
+    // Plan 105 clears the record; a stale one is still never answered outside `error`.
+    const ready = { ...failedRow, status: 'ready', errorCode: null } as const;
+
+    expect(toDetails(ready)).toMatchObject({ errorDetail: null, errorRequestId: null });
+  });
+
+  it('answers the remote without credentials', () => {
+    const details = toDetails(failedRow);
+
+    expect(details.summary.remote).toBe('github.com/acme/handbook');
+    expect(JSON.stringify(details)).not.toContain('u:t');
+  });
+});
+
+describe('toSummary', () => {
+  it('shows the remote without credentials and the time as ISO', () => {
+    const summary = toSummary(failedRow);
 
     expect(summary).toEqual({
       id: 3,
