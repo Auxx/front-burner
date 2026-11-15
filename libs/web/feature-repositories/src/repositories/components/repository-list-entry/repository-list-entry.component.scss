@@ -1,0 +1,40 @@
+// The details and Open side by side, with Open below them once they no longer fit.
+:host {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2) var(--ui-space-3);
+  min-inline-size: 0;
+}
+
+.details {
+  display: grid;
+  flex: 1 1 16rem;
+  gap: var(--ui-space-1);
+  min-inline-size: 0;
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1) var(--ui-space-2);
+}
+
+.name {
+  font-weight: var(--ui-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.remote,
+.accessed {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: var(--ui-danger-text);
+  font-size: var(--ui-font-size-sm);
+}

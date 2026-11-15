@@ -1,0 +1,24 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.RepositoryListEntryComponent'">
+  @let repository = this.repository();
+  <div class="details">
+    <div class="title">
+      <a class="name"
+         [routerLink]="['/repositories', repository.id, 'settings']">{{ repository.name }}</a>
+      <shell-repository-status showReady
+                               [repository]="repository" />
+    </div>
+    <span class="remote">{{ repository.remote }}</span>
+    @if (repository.error) {
+      <span class="error">{{ t('error.' + repository.error) }}</span>
+    }
+    <shell-last-accessed class="accessed"
+                         [at]="repository.lastAccessedAt" />
+  </div>
+  @if (openable()) {
+    <a uiButton
+       size="small"
+       class="open"
+       [routerLink]="['/repositories', repository.id]"
+       [attr.aria-label]="t('openLabel', { name: repository.name })">{{ t('open') }}</a>
+  }
+</ng-container>

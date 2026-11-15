@@ -33,8 +33,6 @@ export const appRoutes: Route[] = [
           },
           {
             path: 'repositories',
-            // `/repositories` itself has no page until the repository management page (REQ-REPO-003).
-            canMatch: [ (_route: Route, segments: UrlSegment[]) => segments.length > 1 ],
             canActivate: [ authGuard ],
             loadChildren: () => import('@front-burner/web-feature-repositories').then(m => m.repositoriesRoutes)
           },

@@ -5,7 +5,8 @@ and Page not found. It also holds what the dashboard and the repository
 management page both show:
 
 - `RepositoryStatusComponent`: a repository's status and warning badges (RM-6,
-  RM-8).
+  RM-8); **Ready** only with `showReady`, as the repository management page
+  shows it (RM-5).
 - `LastAccessedComponent`: "Last accessed" with the relative time and the exact
   time in a tooltip (DS-18, RM-5).
 - `AddRepositoryGuideComponent`: the full guide or the compact strip with **How

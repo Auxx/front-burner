@@ -2,6 +2,14 @@
 
 The repository pages of the web client, loaded under `/repositories` (A-2.2).
 
+- `RepositoriesPage` (`/repositories`): the repository management page of
+  REQ-REPO-003. Lists all of the user's repositories in the API's order, filters
+  them by name and remote as the user types, without a request, and follows
+  clones through `RepositoryListUpdatesService` (RM-4, RM-5, RM-7). Without
+  repositories it shows the full guide instead.
+- `RepositoryListEntryComponent`: one entry: the name, linking to the
+  repository's settings page, **Ready** or another status and the warnings, the
+  remote, "Last accessed", and **Open** for an openable repository.
 - `AddRepositoryPage` (`/repositories/new`): the Add repository form of
   REQ-REPO-001, one Signal Forms model (`AddRepositoryForm`) split into a
   component per section.

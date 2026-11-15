@@ -1,0 +1,44 @@
+:host {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+.loading {
+  justify-self: center;
+}
+
+// The filter and Add repository on one line, with Add repository below the filter once they no longer fit.
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--ui-space-2) var(--ui-space-3);
+}
+
+.filter {
+  flex: 0 1 24rem;
+  min-inline-size: min(16rem, 100%);
+}
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  padding-block: var(--ui-space-3);
+  border-block-start: var(--ui-border-width) solid var(--ui-border-subtle);
+
+  &:last-child {
+    border-block-end: var(--ui-border-width) solid var(--ui-border-subtle);
+  }
+}
+
+.no-match {
+  margin: 0;
+  color: var(--ui-text-muted);
+}
