@@ -143,9 +143,17 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     return id;
   }
 
-  /** Queued jobs become `cancelled`; running ones get their signal aborted. */
-  cancel(where: CancelFilter): void {
-    if (where.id === undefined && where.userId === undefined && where.types === undefined) {
+  /**
+   * Queued jobs become `cancelled`; running ones get their signal aborted. The
+   * cancelling is done when this returns; the promise settles when the aborted
+   * jobs have ended, or after A-1.14's grace, so that a caller can wait until
+   * none of them still touches what it is about to change.
+   */
+  cancel(where: CancelFilter): Promise<void> {
+    if (
+      where.id === undefined && where.userId === undefined && where.repositoryId === undefined
+      && where.types === undefined
+    ) {
       throw new Error('Cancelling jobs needs a filter');
     }
     const conditions: SQL[] = [];
@@ -154,6 +162,9 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     }
     if (where.userId !== undefined) {
       conditions.push(eq(jobs.userId, where.userId));
+    }
+    if (where.repositoryId !== undefined) {
+      conditions.push(eq(jobs.repositoryId, where.repositoryId));
     }
     if (where.types !== undefined) {
       conditions.push(inArray(jobs.type, where.types));
@@ -166,17 +177,21 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     for (const job of cancelled) {
       this.ended(job, 'cancelled', null);
     }
+    const settled: Promise<void>[] = [];
     for (const active of this.active.values()) {
       const { job } = active;
       if (
         (where.id === undefined || job.id === where.id)
         && (where.userId === undefined || job.userId === where.userId)
+        && (where.repositoryId === undefined || job.repositoryId === where.repositoryId)
         && (where.types === undefined || where.types.includes(job.type))
       ) {
         active.cancelled = true;
         active.controller.abort();
+        settled.push(active.settled);
       }
     }
+    return settled.length === 0 ? Promise.resolve() : withinGrace(settled);
   }
 
   /** Stops claiming, aborts running jobs and waits for them a while (A-1.14). */
@@ -187,14 +202,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
       active.controller.abort();
       return active.settled;
     });
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      Promise.all(settled),
-      new Promise<void>(done => {
-        timer = setTimeout(done, SHUTDOWN_GRACE_MS);
-      })
-    ]);
-    clearTimeout(timer);
+    await withinGrace(settled);
   }
 
   /** NF-9.5: by the type's rule; a job of a type no feature registers any more fails. */
@@ -410,6 +418,18 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
 }
 
 const repeatKeyOf = (type: string) => `repeat:${type}`;
+
+/** Waits for the jobs to settle, at most A-1.14's grace. */
+async function withinGrace(settled: Promise<void>[]): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    Promise.all(settled),
+    new Promise<void>(done => {
+      timer = setTimeout(done, SHUTDOWN_GRACE_MS);
+    })
+  ]);
+  clearTimeout(timer);
+}
 
 const spreadTime = () => new Date(Date.now() + Math.floor(Math.random() * START_SPREAD_MS));
 

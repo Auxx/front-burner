@@ -67,5 +67,7 @@ export interface EnqueueRequest {
 export interface CancelFilter {
   id?: number;
   userId?: number;
+  /** Every job of one repository: its clone, fetches, a push or pull that waits. */
+  repositoryId?: number;
   types?: string[];
 }

@@ -409,6 +409,118 @@ describe('JobRunner', () => {
     expect(started[0]?.job.repositoryId).toBe(repositoryId);
   });
 
+  describe('cancelling by repository', () => {
+    const addRepository = (name: string) =>
+      database.db.insert(repositories).values({
+        userId,
+        name,
+        remoteUrl: `https://github.com/acme/${name}.git`,
+        cloneMode: 'full',
+        gitLevel: 'advanced',
+        status: 'ready',
+        createdAt: NOW,
+        lastAccessedAt: NOW
+      }).returning().get().id;
+
+    it('cancels queued jobs of one repository', () => {
+      controlledType();
+      const repositoryId = addRepository('handbook');
+      const id = runner.enqueue({ type: 'test.controlled', userId, repositoryId, payload: {} });
+
+      void runner.cancel({ repositoryId });
+
+      expect(rowOf(id)).toMatchObject({ status: 'cancelled', finishedAt: NOW });
+    });
+
+    it('aborts running jobs of one repository', async () => {
+      const started = controlledType();
+      runner.start();
+      const repositoryId = addRepository('handbook');
+      const id = runner.enqueue({ type: 'test.controlled', userId, repositoryId, payload: {} });
+      await settle();
+
+      void runner.cancel({ repositoryId });
+      await settle();
+
+      expect(started[0]?.job.signal.aborted).toBe(true);
+      expect(rowOf(id)?.status).toBe('cancelled');
+    });
+
+    it('leaves other repositories\' jobs alone', async () => {
+      const started = controlledType();
+      runner.start();
+      const removed = addRepository('handbook');
+      const kept = addRepository('notes');
+      runner.enqueue({ type: 'test.controlled', userId, repositoryId: kept, payload: { n: 1 } });
+      await settle();
+      const queued = runner.enqueue({
+        type: 'test.controlled',
+        userId,
+        repositoryId: kept,
+        payload: { n: 2 },
+        runAt: new Date(NOW.getTime() + 60_000)
+      });
+
+      await runner.cancel({ repositoryId: removed });
+
+      expect(started[0]?.job.signal.aborted).toBe(false);
+      expect(rowOf(queued)?.status).toBe('queued');
+    });
+
+    it('settles when the running jobs have ended', async () => {
+      let finish!: () => void;
+      runner.register({
+        type: 'test.slow-abort',
+        pool: 'clone',
+        onInterrupted: 'fail',
+        // Ends a while after its abort, as a clone that cleans up does.
+        handler: (job: RunningJob) =>
+          new Promise<void>((_, reject) => {
+            job.signal.addEventListener('abort', () => {
+              finish = () => reject(new Error('aborted'));
+            });
+          })
+      });
+      runner.start();
+      const repositoryId = addRepository('handbook');
+      const id = runner.enqueue({ type: 'test.slow-abort', userId, repositoryId, payload: {} });
+      await settle();
+
+      let settled = false;
+      const cancelled = runner.cancel({ repositoryId }).then(() => {
+        settled = true;
+      });
+      await settle();
+      expect(settled).toBe(false);
+
+      finish();
+      await cancelled;
+      expect(settled).toBe(true);
+      expect(rowOf(id)?.status).toBe('cancelled');
+    });
+
+    it('stops waiting after the grace', async () => {
+      runner.register({
+        type: 'test.stuck',
+        pool: 'clone',
+        onInterrupted: 'fail',
+        handler: () => new Promise<void>(() => undefined)
+      });
+      runner.start();
+      const repositoryId = addRepository('handbook');
+      runner.enqueue({ type: 'test.stuck', userId, repositoryId, payload: {} });
+      await settle();
+
+      let settled = false;
+      void runner.cancel({ repositoryId }).then(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(SHUTDOWN_GRACE_MS);
+
+      expect(settled).toBe(true);
+    });
+  });
+
   it('enqueues inside the caller\'s transaction', async () => {
     const started = controlledType();
     runner.start();
