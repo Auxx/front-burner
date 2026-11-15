@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type { Readable } from 'node:stream';
+import { StringDecoder } from 'node:string_decoder';
 import { assertWorkingCopyFound } from '../engine/git-errors';
 import { redactCredentials } from './redact';
 
@@ -43,6 +44,12 @@ export interface GitRunOptions {
   stdin?: string;
   /** Kills git and its children when aborted, such as when its job is cancelled; git is not started once it is. */
   signal?: AbortSignal;
+  /**
+   * Called with stderr as git writes it, decoded as UTF-8, such as for a
+   * clone's progress. Credentials are not removed from it: read it, never
+   * keep or show it (NF-10.5). The result's `stderr` is collected as before.
+   */
+  onStderr?: (text: string) => void;
 }
 
 export interface GitResult {
@@ -168,6 +175,12 @@ export class GitRunner {
     const maxBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
     const stdout = collect(child.stdout, maxBytes);
     const stderr = collect(child.stderr, maxBytes);
+    const onStderr = options.onStderr;
+    if (onStderr !== undefined) {
+      // A decoder keeps a character split between chunks whole.
+      const decoder = new StringDecoder('utf8');
+      child.stderr?.on('data', (chunk: Buffer) => onStderr(decoder.write(chunk)));
+    }
     if (options.stdin !== undefined) {
       child.stdin?.on('error', () => undefined);
       child.stdin?.end(options.stdin);

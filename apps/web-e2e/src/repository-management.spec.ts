@@ -217,13 +217,20 @@ test.describe('repository management page', () => {
       await expect(entry).toContainText('Cloning');
       await expect(entry.getByRole('link', { name: 'Open handbook' })).toHaveCount(0);
 
+      // The clone runs, held while it asks for objects: its progress shows, not "Waiting".
       await expect.poll(() => held).toBe(true);
+      const progress = entry.getByRole('progressbar', { name: 'Cloning handbook' });
+      await expect(progress).toBeVisible();
+      await expect(progress).toHaveAttribute('aria-valuenow', '0');
+      await expect(entry).toContainText('0%');
+      await expect(entry).not.toContainText('Waiting for other clones to finish');
       // A reload of the page would drop this mark.
       await page.evaluate(() => Object.assign(window, { notReloaded: true }));
       release();
 
       await expect(entry).toContainText('Ready', { timeout: 30_000 });
       await expect(entry.getByRole('link', { name: 'Open handbook' })).toBeVisible();
+      await expect(progress).toHaveCount(0);
       expect(await page.evaluate(() => 'notReloaded' in window)).toBe(true);
     });
   });

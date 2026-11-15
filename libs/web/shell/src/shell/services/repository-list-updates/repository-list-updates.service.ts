@@ -22,7 +22,8 @@ export interface FollowedRepositoryList {
 /**
  * Keeps a list of repositories current while a page shows it, so that it
  * follows clones without a reload (DS-23, RM-7). Events are notifications only
- * (A-3.11): a status for a listed repository is patched in place, and anything
+ * (A-3.11): a status for a listed repository, and the progress of a listed
+ * clone (`job.progress` of its `clone.jobId`), are patched in place, and anything
  * the list cannot apply (a repository not listed) asks for the list again, as
  * does a reconnect.
  *
@@ -73,6 +74,10 @@ export class RepositoryListUpdatesService {
   }
 
   private onEvent(list: FollowedRepositoryList, event: PushEvent, askForReload: () => void): void {
+    if (event.type === 'job.progress') {
+      this.onProgress(list, event.jobId, event.percent);
+      return;
+    }
     if (event.type !== 'repository.status') {
       return;
     }
@@ -91,12 +96,40 @@ export class RepositoryListUpdatesService {
     }
     list.update(
       repositories.map(repository =>
-        repository.id === event.repositoryId ? { ...repository, status: event.status, error: event.error } : repository
+        repository.id === event.repositoryId
+          ? {
+            ...repository,
+            status: event.status,
+            error: event.error,
+            // A clone that ended is gone; a new one is known only from the list.
+            clone: event.status === 'cloning' ? repository.clone : null
+          }
+          : repository
       )
     );
-    if (list.loading()) {
-      // The answer on its way may predate the event and undo the patch.
+    // The answer on its way may predate the event and undo the patch, and a
+    // clone queued again (RM-11, RM-12) has a job the list does not know yet.
+    if (list.loading() || event.status === 'cloning') {
       askForReload();
     }
+  }
+
+  /**
+   * A listed clone's progress, which also means that it runs (AR-52). Other
+   * jobs' progress is not about the list. An answer on its way may show an
+   * older percentage, so nothing is reloaded for it: the next report corrects it.
+   */
+  private onProgress(list: FollowedRepositoryList, jobId: number, percent: number): void {
+    const repositories = list.repositories();
+    if (repositories === null || !repositories.some(repository => repository.clone?.jobId === jobId)) {
+      return;
+    }
+    list.update(
+      repositories.map(repository =>
+        repository.clone?.jobId === jobId
+          ? { ...repository, clone: { jobId, state: 'running', percent } }
+          : repository
+      )
+    );
   }
 }

@@ -265,6 +265,7 @@ describe('repository details (REQ-REPO-003)', () => {
         status: 'error',
         error: 'clone-failed',
         warnings: [],
+        clone: null,
         lastAccessedAt: at(5).toISOString()
       },
       cloneMode: 'single-branch',

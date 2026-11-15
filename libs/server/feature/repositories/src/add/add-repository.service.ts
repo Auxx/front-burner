@@ -13,7 +13,7 @@ import { sameRepositoryName } from '@front-burner/shared-util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { queueClone } from '../clone/clone-queue';
-import { toSummary } from '../repositories/repository-queries';
+import { queuedClone, toSummary } from '../repositories/repository-queries';
 import { CredentialsCheck } from './credentials-check';
 import { RequestCredentials } from './request-credentials';
 import { fieldError, remoteOf } from './request-fields';
@@ -106,7 +106,7 @@ export class AddRepositoryService {
     this.credentialsCheck.unlockPasted(user.sessionId, row.credentialId, request.credentials);
     this.logger.debug(`User ${user.id} added repository ${row.id} (${row.name}); cloning`);
     // A new repository is cloning, and only a ready one has warnings (RM-8).
-    return toSummary(row, []);
+    return toSummary(row, [], queuedClone(jobId));
   }
 
   /** The requested level, or the highest the user is allowed (AR-38 to AR-40). */

@@ -19,6 +19,7 @@ function summary(id: number, name: string, remote: string, extra: Partial<Reposi
     status: 'ready',
     error: null,
     warnings: [],
+    clone: null,
     lastAccessedAt: '2026-10-26T10:00:00.000Z',
     ...extra
   };

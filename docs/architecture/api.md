@@ -33,7 +33,14 @@ numbering conventions.
   ASCII-only, as a backstop. The list is not paged and its schema has no
   maximum, since a user is expected to have about 50 repositories (NF-1.3);
   adding does not enforce that number. Listing changes nothing, not even the
-  last access time (DS-9). _(Plan 104's call.)_
+  last access time (DS-9). _(Plan 104's call.)_ Every `RepositorySummary`
+  carries `clone` while the repository is `cloning` and its clone job has not
+  ended: the job's ID, `waiting` while it is queued (AR-52) or `running`, and
+  the last percentage it reported, read from the `jobs` row, for all listed
+  repositories in one query. Lists follow it with the `job.progress` events of
+  that job ID; the clone job reports 0 % as it starts, so that a waiting clone
+  shows as running at once. Adding and cloning again answer the clone they
+  queued as waiting. _(Plan 114's call.)_
 - **A-3.2b** `GET /repositories/:id/details` answers what the settings page
   shows that a list entry does not, as `RepositoryDetails`: the
   `RepositorySummary` as `summary`, the clone mode, the cloned `branch` of a

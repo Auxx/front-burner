@@ -31,6 +31,7 @@ const handbook: RepositorySummary = {
   status: 'ready',
   error: null,
   warnings: [],
+  clone: null,
   lastAccessedAt: '2026-10-26T10:00:00.000Z'
 };
 
@@ -210,7 +211,7 @@ describe('DashboardPage', () => {
       await statusOf({ repositoryId: 1, status: 'error', error: 'clone-failed' });
 
       expect(page().querySelector('dash-repository-entry .error')?.textContent?.trim()).toBe(
-        'web-feature-dashboard.RepositoryEntryComponent.error.clone-failed'
+        'web-shell.RepositoryStatusDetailComponent.error.clone-failed'
       );
     });
 

@@ -159,6 +159,18 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
     expect(publish.mock.calls.filter(([ userId ]) => userId === bob)).toEqual([]);
   });
 
+  it('reports its progress from 0 %, so that it no longer shows as waiting (RM-7, AR-52)', async () => {
+    const summary = await add();
+
+    runner.start();
+    await settled(summary.id);
+
+    const progress = publish.mock.calls
+      .map(([ , event ]) => event)
+      .filter(event => event.type === 'job.progress');
+    expect(progress[0]).toEqual({ type: 'job.progress', jobId: summary.clone?.jobId, percent: 0 });
+  });
+
   it('AC-REPO-003.13: removing a repository that is cloning cancels the clone', async () => {
     // A remote that answers slowly, so that git is still cloning when the repository is removed.
     const slow = await startGitHttpServer({ repositories: { 'handbook.git': remotes.handbook }, delayMs: 30_000 });

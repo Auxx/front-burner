@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  CloneProgressSchema,
   RecentQuerySchema,
   RecentRepositoriesSchema,
   RepositoryParamsSchema,
@@ -13,12 +14,25 @@ const summary = {
   status: 'ready',
   error: null,
   warnings: [],
+  clone: null,
   lastAccessedAt: '2026-10-26T10:00:00.000Z'
 };
 
 describe('RepositorySummarySchema', () => {
   it('parses a summary', () => {
     expect(RepositorySummarySchema.parse(summary)).toEqual(summary);
+  });
+
+  it('parses a clone that waits and one that runs', () => {
+    const waiting = { ...summary, status: 'cloning', clone: { jobId: 3, state: 'waiting', percent: null } };
+    const running = { ...summary, status: 'cloning', clone: { jobId: 3, state: 'running', percent: 42 } };
+    expect(RepositorySummarySchema.parse(waiting)).toEqual(waiting);
+    expect(RepositorySummarySchema.parse(running)).toEqual(running);
+  });
+
+  it('refuses a percentage above 100', () => {
+    const clone = { jobId: 3, state: 'running', percent: 101 };
+    expect(RepositorySummarySchema.safeParse({ ...summary, clone }).success).toBe(false);
   });
 
   it('refuses an unknown status', () => {
@@ -41,6 +55,7 @@ describe('registry', () => {
   it.each(
     [
       [ RepositorySummarySchema, 'RepositorySummary' ],
+      [ CloneProgressSchema, 'CloneProgress' ],
       [ RecentRepositoriesSchema, 'RecentRepositories' ],
       [ RecentQuerySchema, 'RecentQuery' ]
     ] as const

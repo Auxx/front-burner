@@ -1,5 +1,5 @@
 import { Location } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import type { RepositorySummary } from '@front-burner/shared-contracts';
 import {
@@ -12,25 +12,19 @@ import {
 } from '@front-burner/ui';
 import { RepositoriesApi } from '@front-burner/web-api-client';
 import { CurrentUserService } from '@front-burner/web-core';
-import { AddRepositoryGuideComponent, RepositoryListUpdatesService } from '@front-burner/web-shell';
+import { AddRepositoryGuideComponent, followRepositoryList } from '@front-burner/web-shell';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
-import { firstValueFrom } from 'rxjs';
 
 import { RecentRepositoriesComponent } from '../../components/recent-repositories/recent-repositories.component';
 import { DashboardHintService } from '../../services/dashboard-hint/dashboard-hint.service';
 
 const KEY = 'web-feature-dashboard.DashboardPage';
 
-type RecentList =
-  | { kind: 'loading'; }
-  | { kind: 'failed'; }
-  | { kind: 'loaded'; repositories: readonly RepositorySummary[]; };
-
 /**
  * The home page of a logged-in user (REQ-DASH-001): the Add a repository guide,
- * shown at once, then the recent repositories once they have loaded. While it
- * is open, `RepositoryListUpdatesService` keeps each repository's status
- * current (DS-23).
+ * shown at once, then the recent repositories once they have loaded.
+ * `followRepositoryList` loads them and keeps each repository's status and
+ * clone progress current while the page is open (DS-23).
  */
 @Component({
   selector: 'dash-dashboard',
@@ -52,26 +46,18 @@ export class DashboardPage {
   private readonly api = inject(RepositoriesApi);
   private readonly currentUser = inject(CurrentUserService);
   private readonly hint = inject(DashboardHintService);
-  private readonly listUpdates = inject(RepositoryListUpdatesService);
   private readonly router = inject(Router);
   private readonly location = inject(Location);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
 
-  protected readonly list = signal<RecentList>({ kind: 'loading' });
-  protected readonly retrying = signal(false);
-  /** The number of the latest request for the list. */
-  private loads = 0;
-  /** Whether the latest request for the list is still running. */
-  private readonly loading = signal(false);
-  protected readonly repositories = computed(() => {
-    const list = this.list();
-    return list.kind === 'loaded' ? list.repositories : null;
+  protected readonly list = followRepositoryList(() => this.api.recent(), {
+    loaded: repositories => void this.rememberForm(repositories)
   });
 
   /** Compact once the user has repositories; until the list has loaded, as it was last time (DS-25). */
   protected readonly guideForm = computed<'full' | 'compact'>(() => {
-    const repositories = this.repositories();
+    const repositories = this.list.repositories();
     if (repositories !== null) {
       return repositories.length > 0 ? 'compact' : 'full';
     }
@@ -79,23 +65,11 @@ export class DashboardPage {
   });
 
   constructor() {
-    void this.load();
     this.announceAdded();
-    this.listUpdates.follow({
-      repositories: this.repositories,
-      loading: this.loading,
-      update: repositories => this.list.set({ kind: 'loaded', repositories }),
-      reload: () => void this.load({ keepOnFailure: true })
-    });
   }
 
-  protected async retry(): Promise<void> {
-    this.retrying.set(true);
-    try {
-      await this.load();
-    } finally {
-      this.retrying.set(false);
-    }
+  protected retry(): void {
+    void this.list.retry();
   }
 
   /** The message of AR-45, after the Add repository page sent the user here. */
@@ -118,30 +92,8 @@ export class DashboardPage {
     );
   }
 
-  /**
-   * Fetches the list; only the answer to the latest request counts.
-   * `keepOnFailure`: a reload that fails leaves the list on screen as it was.
-   */
-  private async load(options: { keepOnFailure?: boolean; } = {}): Promise<void> {
-    const request = ++this.loads;
-    this.loading.set(true);
-    let repositories: readonly RepositorySummary[];
-    try {
-      ({ repositories } = await firstValueFrom(this.api.recent()));
-    } catch {
-      if (request === this.loads) {
-        if (!(options.keepOnFailure && this.list().kind === 'loaded')) {
-          this.list.set({ kind: 'failed' });
-        }
-        this.loading.set(false);
-      }
-      return;
-    }
-    if (request !== this.loads) {
-      return;
-    }
-    this.list.set({ kind: 'loaded', repositories });
-    this.loading.set(false);
+  /** Remembers whether the user has repositories, for the guide's form on the next visit (DS-25). */
+  private async rememberForm(repositories: readonly RepositorySummary[]): Promise<void> {
     const user = await this.currentUser.load().catch(() => undefined);
     if (user !== undefined) {
       this.hint.remember(user.id, repositories.length > 0);

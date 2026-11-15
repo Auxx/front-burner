@@ -1,7 +1,7 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repositories.RepositoriesPage'">
   <ui-page>
     <h1 uiPageTitle>{{ t('heading') }}</h1>
-    @if (repositories(); as repositories) {
+    @if (list.repositories(); as repositories) {
       @if (repositories.length > 0) {
         @let shown = matches();
         <div class="toolbar">
@@ -38,14 +38,14 @@
       } @else {
         <shell-add-repository-guide form="full" />
       }
-    } @else if (list().kind === 'failed') {
+    } @else if (list.state().kind === 'failed') {
       <ui-inline-banner status="danger"
                         announce>
         {{ t('loadFailed') }}
         <div uiBannerActions>
           <button uiButton
                   size="small"
-                  [busy]="retrying()"
+                  [busy]="list.retrying()"
                   (click)="retry()">{{ t('retry') }}</button>
         </div>
       </ui-inline-banner>

@@ -14,6 +14,7 @@ const handbook: RepositorySummary = {
   status: 'cloning',
   error: null,
   warnings: [],
+  clone: null,
   lastAccessedAt: '2026-10-26T10:00:00.000Z'
 };
 const wiki: RepositorySummary = { ...handbook, id: 2, name: 'wiki', status: 'ready' };
@@ -155,6 +156,38 @@ describe('RepositoryListUpdatesService', () => {
     status(1, { status: 'ready', error: null });
     loaded(null);
 
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('shows a clone\'s progress, which also means that it no longer waits (RM-7, AR-52)', () => {
+    const waiting = { ...handbook, clone: { jobId: 9, state: 'waiting', percent: null } } as const;
+    follow([ waiting, wiki ]);
+
+    push.events.next({ type: 'job.progress', jobId: 9, percent: 35 });
+
+    expect(update).toHaveBeenCalledWith([ { ...waiting, clone: { jobId: 9, state: 'running', percent: 35 } }, wiki ]);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('drops an ended clone, and reloads for a clone queued again, whose job it does not know', () => {
+    const running = { ...handbook, clone: { jobId: 9, state: 'running', percent: 90 } } as const;
+    follow([ running, wiki ]);
+
+    status(1, { status: 'ready', error: null });
+    expect(update).toHaveBeenLastCalledWith([ { ...running, status: 'ready', error: null, clone: null }, wiki ]);
+    expect(reload).not.toHaveBeenCalled();
+
+    status(2, { status: 'cloning', error: null });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the progress of other jobs, and before a list', () => {
+    follow([ { ...handbook, clone: { jobId: 9, state: 'running', percent: 10 } } ]);
+    push.events.next({ type: 'job.progress', jobId: 4, percent: 35 });
+    loaded(null);
+    push.events.next({ type: 'job.progress', jobId: 9, percent: 35 });
+
+    expect(update).not.toHaveBeenCalled();
     expect(reload).not.toHaveBeenCalled();
   });
 

@@ -9,7 +9,7 @@ import type { RepositorySummary } from '@front-burner/shared-contracts';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import type { RequestUser } from '../add/add-repository.service';
-import { ownRow, RepositoryQueries, toSummary } from '../repositories/repository-queries';
+import { ownRow, queuedClone, RepositoryQueries, toSummary } from '../repositories/repository-queries';
 import { moveWorkingCopy, queueWorkingCopyDeletion, restoreWorkingCopy } from '../working-copy/old-working-copy';
 import { hasUnfinishedClone, queueClone } from './clone-queue';
 
@@ -111,7 +111,7 @@ export class CloneAgainService {
         }
         this.logger.log(`User ${user.id} is cloning repository ${repositoryId} again`);
         // A cloning repository has no warnings (RM-8).
-        return toSummary(queued.updated, []);
+        return toSummary(queued.updated, [], queuedClone(queued.jobId));
       });
     });
   }

@@ -24,7 +24,24 @@ export type RepositoryWarning = (typeof REPOSITORY_WARNINGS)[number];
 export type CloneMode = (typeof CLONE_MODES)[number];
 export type GitLevel = (typeof GIT_LEVELS)[number];
 
-/** One entry of a repository list (DS-18); `remote` is the display form, without credentials (DS-19). */
+/**
+ * The clone of a `cloning` repository (RM-7, DS-23): `waiting` while the job
+ * waits its turn (AR-52), then `running`, with git's last reported percentage,
+ * `null` before the first. `jobId` ties the `job.progress` events to it.
+ */
+export const CloneProgressSchema = z
+  .object({
+    jobId: z.number().int(),
+    state: z.enum([ 'waiting', 'running' ]),
+    percent: z.number().int().min(0).max(100).nullable()
+  })
+  .meta({ id: 'CloneProgress' });
+
+/**
+ * One entry of a repository list (DS-18); `remote` is the display form, without
+ * credentials (DS-19). `clone` is set only while the repository is `cloning`
+ * and its clone job has not ended.
+ */
 export const RepositorySummarySchema = z
   .object({
     id: z.number().int(),
@@ -33,6 +50,7 @@ export const RepositorySummarySchema = z
     status: z.enum(REPOSITORY_STATUSES),
     error: z.enum(REPOSITORY_ERRORS).nullable(),
     warnings: z.array(z.enum(REPOSITORY_WARNINGS)),
+    clone: CloneProgressSchema.nullable(),
     lastAccessedAt: z.iso.datetime()
   })
   .meta({ id: 'RepositorySummary' });
@@ -47,6 +65,7 @@ export const RecentQuerySchema = z
   .object({ exclude: z.coerce.number().int().positive().optional() })
   .meta({ id: 'RecentQuery' });
 
+export type CloneProgress = z.infer<typeof CloneProgressSchema>;
 export type RepositorySummary = z.infer<typeof RepositorySummarySchema>;
 export type RecentRepositories = z.infer<typeof RecentRepositoriesSchema>;
 export type RecentQuery = z.infer<typeof RecentQuerySchema>;

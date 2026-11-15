@@ -1,5 +1,6 @@
 import { Database, jobs, Tx } from '@front-burner/server-core-database';
 import { JobRunner } from '@front-burner/server-core-jobs';
+import type { CloneProgress } from '@front-burner/shared-contracts';
 import { and, eq, inArray } from 'drizzle-orm';
 
 /** The job type of the background clone (AR-49). */
@@ -38,6 +39,40 @@ export function queueClone(
     payload,
     dedupeKey: dedupeKeyOf(repositoryId)
   }, tx);
+}
+
+/**
+ * The unfinished clone of each of the repositories that has one, by
+ * repository ID (RM-7): `waiting` while queued for the clone pool (AR-52),
+ * `running` with the last progress the job reported. One query for a list.
+ */
+export function unfinishedClones(
+  db: Tx | Database['db'],
+  repositoryIds: readonly number[]
+): Map<number, CloneProgress> {
+  if (repositoryIds.length === 0) {
+    return new Map();
+  }
+  const rows = db.select({ id: jobs.id, repositoryId: jobs.repositoryId, status: jobs.status, progress: jobs.progress })
+    .from(jobs)
+    .where(and(
+      eq(jobs.type, CLONE_JOB_TYPE),
+      inArray(jobs.repositoryId, [ ...repositoryIds ]),
+      inArray(jobs.status, [ 'queued', 'running' ])
+    ))
+    .all();
+  return new Map(rows.flatMap(row =>
+    row.repositoryId === null ? [] : [
+      [
+        row.repositoryId,
+        {
+          jobId: row.id,
+          state: row.status === 'running' ? 'running' : 'waiting',
+          percent: row.status === 'running' ? row.progress : null
+        } satisfies CloneProgress
+      ] as const
+    ]
+  ));
 }
 
 /**

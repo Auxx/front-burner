@@ -1,0 +1,30 @@
+:host {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-inline-size: 0;
+  font-size: var(--ui-font-size-sm);
+}
+
+// No space, not even a grid gap, for the statuses without a detail.
+:host(.none) {
+  display: none;
+}
+
+.error {
+  color: var(--ui-danger-text);
+}
+
+.waiting,
+.percent {
+  color: var(--ui-text-muted);
+}
+
+.bar {
+  flex: 1 1 auto;
+  max-inline-size: 12rem;
+}
+
+.percent {
+  font-variant-numeric: tabular-nums;
+}

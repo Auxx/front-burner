@@ -113,7 +113,7 @@ export class RepositoriesController {
   repositoryDetails(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositoryDetails {
     const auth = authOf(req);
     const row = ownRow(this.queries.find(auth.userId, params.id));
-    return toDetails(row, this.warnings.forRow(auth, row));
+    return toDetails(row, this.warnings.forRow(auth, row), this.queries.clones([ row ]).get(row.id));
   }
 
   /**
@@ -173,15 +173,16 @@ export class RepositoriesController {
     return this.summary(auth, this.queries.markOpened(auth.userId, params.id, new Date()));
   }
 
-  /** The rows as clients see them, with the session's warnings, read once for all of them (NF-2). */
+  /** The rows as clients see them, with the session's warnings and the clones, each read once for all (NF-2). */
   private summaries(viewer: WarningsViewer, rows: Repository[]): RepositorySummary[] {
     const warnings = this.warnings.forRows(viewer, rows);
-    return rows.map((row, i) => toSummary(row, warnings[i]));
+    const clones = this.queries.clones(rows);
+    return rows.map((row, i) => toSummary(row, warnings[i], clones.get(row.id)));
   }
 
   /** The repository as clients see it, or `404 not-found`. */
   private summary(viewer: WarningsViewer, row: Repository | undefined): RepositorySummary {
     const own = ownRow(row);
-    return toSummary(own, this.warnings.forRow(viewer, own));
+    return toSummary(own, this.warnings.forRow(viewer, own), this.queries.clones([ own ]).get(own.id));
   }
 }

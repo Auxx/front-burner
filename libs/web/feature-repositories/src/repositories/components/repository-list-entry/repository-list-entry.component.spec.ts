@@ -8,6 +8,7 @@ import { RepositoryListEntryComponent } from './repository-list-entry.component'
 
 const KEY = 'web-feature-repositories.RepositoryListEntryComponent';
 const STATUS = 'web-shell.RepositoryStatusComponent';
+const DETAIL = 'web-shell.RepositoryStatusDetailComponent';
 
 const ready: RepositorySummary = {
   id: 7,
@@ -16,6 +17,7 @@ const ready: RepositorySummary = {
   status: 'ready',
   error: null,
   warnings: [],
+  clone: null,
   lastAccessedAt: '2026-10-26T10:00:00.000Z'
 };
 
@@ -62,9 +64,10 @@ describe('RepositoryListEntryComponent', () => {
   });
 
   it('offers no Open for a cloning repository, whose name still links to its settings', async () => {
-    await render({ ...ready, status: 'cloning' });
+    await render({ ...ready, status: 'cloning', clone: { jobId: 4, state: 'running', percent: 42 } });
 
     expect(badges()).toEqual([ `${STATUS}.status.cloning` ]);
+    expect(host().querySelector('ui-progress-bar')?.getAttribute('aria-valuenow')).toBe('42');
     expect(open()).toBeNull();
     expect(name()?.getAttribute('href')).toBe('/repositories/7/settings');
   });
@@ -73,7 +76,7 @@ describe('RepositoryListEntryComponent', () => {
     await render({ ...ready, status: 'error', error: 'clone-timed-out' });
 
     expect(badges()).toEqual([ `${STATUS}.status.error` ]);
-    expect(host().querySelector('.error')?.textContent?.trim()).toBe(`${KEY}.error.clone-timed-out`);
+    expect(host().querySelector('.error')?.textContent?.trim()).toBe(`${DETAIL}.error.clone-timed-out`);
     expect(open()).toBeNull();
   });
 

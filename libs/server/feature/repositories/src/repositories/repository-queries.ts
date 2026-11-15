@@ -1,6 +1,7 @@
 import { DATABASE, Database, repositories, Repository } from '@front-burner/server-core-database';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import type {
+  CloneProgress,
   RepositoryDetails,
   RepositoryIndex,
   RepositorySummary,
@@ -9,6 +10,8 @@ import type {
 import { compareRepositoryNames, remoteDisplay } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq } from 'drizzle-orm';
+
+import { unfinishedClones } from '../clone/clone-queue';
 
 /** The user's row, or `404 not-found`, also for another user's (FB-2, RM-1). */
 export function ownRow(row: Repository | undefined): Repository {
@@ -73,6 +76,11 @@ export class RepositoryQueries {
       .slice(0, limit);
   }
 
+  /** The unfinished clone of each `cloning` row, by repository ID, in one query (RM-7, NF-2). */
+  clones(rows: readonly Repository[]): Map<number, CloneProgress> {
+    return unfinishedClones(this.database.db, rows.filter(row => row.status === 'cloning').map(row => row.id));
+  }
+
   /**
    * All of the user's rows, unsorted. Both lists sort in TypeScript, since
    * SQLite's `lower` folds ASCII only (RM-5); a user has about 50 (NF-1.3).
@@ -88,10 +96,15 @@ function byName(a: Repository, b: Repository): number {
 }
 
 /**
- * A repository as clients see it: the remote without credentials (DS-19), and
- * the warnings that `RepositoryWarnings` computed for the session (RM-8).
+ * A repository as clients see it: the remote without credentials (DS-19), the
+ * warnings that `RepositoryWarnings` computed for the session (RM-8), and its
+ * unfinished clone, if any (RM-7).
  */
-export function toSummary(row: Repository, warnings: RepositoryWarning[]): RepositorySummary {
+export function toSummary(
+  row: Repository,
+  warnings: RepositoryWarning[],
+  clone: CloneProgress | undefined
+): RepositorySummary {
   return {
     id: row.id,
     name: row.name,
@@ -100,8 +113,15 @@ export function toSummary(row: Repository, warnings: RepositoryWarning[]): Repos
     // Only in the `error` status (RM-6), as the details' error record, even if a stale code is left.
     error: row.status === 'error' ? row.errorCode : null,
     warnings,
+    // Only while `cloning`: the clone that set another status may not have ended its job yet.
+    clone: row.status === 'cloning' ? clone ?? null : null,
     lastAccessedAt: row.lastAccessedAt.toISOString()
   };
+}
+
+/** The clone that adding or cloning again just queued: it waits for the runner at first (AR-49, AR-52). */
+export function queuedClone(jobId: number): CloneProgress {
+  return { jobId, state: 'waiting', percent: null };
 }
 
 /**
@@ -111,10 +131,14 @@ export function toSummary(row: Repository, warnings: RepositoryWarning[]): Repos
  * a full clone's is never answered, and adding refuses a single-branch clone
  * without one (AR-34), so `null` there means a damaged row, shown as no branch.
  */
-export function toDetails(row: Repository, warnings: RepositoryWarning[]): RepositoryDetails {
+export function toDetails(
+  row: Repository,
+  warnings: RepositoryWarning[],
+  clone: CloneProgress | undefined
+): RepositoryDetails {
   const failed = row.status === 'error';
   return {
-    summary: toSummary(row, warnings),
+    summary: toSummary(row, warnings, clone),
     cloneMode: row.cloneMode,
     branch: row.cloneMode === 'single-branch' ? row.branch : null,
     gitLevel: row.gitLevel,

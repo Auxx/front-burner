@@ -8,9 +8,7 @@
                                [repository]="repository" />
     </div>
     <span class="remote">{{ repository.remote }}</span>
-    @if (repository.error) {
-      <span class="error">{{ t('error.' + repository.error) }}</span>
-    }
+    <shell-repository-status-detail [repository]="repository" />
     <shell-last-accessed class="accessed"
                          [at]="repository.lastAccessedAt" />
   </div>

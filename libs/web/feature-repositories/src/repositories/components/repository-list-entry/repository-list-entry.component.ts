@@ -2,17 +2,29 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { RouterLink } from '@angular/router';
 import type { RepositorySummary } from '@front-burner/shared-contracts';
 import { ButtonComponent } from '@front-burner/ui';
-import { LastAccessedComponent, RepositoryStatusComponent } from '@front-burner/web-shell';
+import {
+  LastAccessedComponent,
+  RepositoryStatusComponent,
+  RepositoryStatusDetailComponent
+} from '@front-burner/web-shell';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * One repository of the repository management page (RM-5): its name, which
  * opens its settings page, its status (**Ready** too) and warnings, its remote,
- * "Last accessed", and **Open** for an openable repository.
+ * what went wrong or the clone's progress (RM-6, RM-7), "Last accessed", and
+ * **Open** for an openable repository.
  */
 @Component({
   selector: 'repo-repository-list-entry',
-  imports: [ TranslocoDirective, RouterLink, ButtonComponent, RepositoryStatusComponent, LastAccessedComponent ],
+  imports: [
+    TranslocoDirective,
+    RouterLink,
+    ButtonComponent,
+    RepositoryStatusComponent,
+    RepositoryStatusDetailComponent,
+    LastAccessedComponent
+  ],
   templateUrl: './repository-list-entry.component.html',
   styleUrl: './repository-list-entry.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
