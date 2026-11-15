@@ -21,9 +21,11 @@ or are extracted there _(plan's call)_:
 - `RepositoryListUpdatesService`, what the dashboard page does on
   `repository.status` and on a reconnect, as a helper that patches a list of
   summaries and asks for a reload, so that both pages follow clones without a
-  reload (DS-23, RM-7). A status that arrives while the list loads asks for a
-  reload at once, rather than after the load, so the page no longer keeps a
-  flag; only the newest answer counts, as before _(plan's call)_.
+  reload (DS-23, RM-7). As the page did, statuses that arrive while a request
+  for the list runs are answered by one reload after it ends, and a reconnect
+  reloads at once. A status while the list failed to load asks for nothing:
+  **Try again** answers it. Besides, several statuses for repositories not
+  listed now share one reload _(plan's call)_.
 
 **Tech Stack:** as before. No new packages.
 
@@ -73,7 +75,8 @@ or are extracted there _(plan's call)_:
 - Produces: `AddRepositoryGuideComponent` (`shell-add-repository-guide`),
   `LastAccessedComponent` (`shell-last-accessed`, input `at: string`),
   `RepositoryListUpdatesService` (`follow(list)`, with a
-  `FollowedRepositoryList`: `repositories`, `update`, `reload`).
+  `FollowedRepositoryList`: `repositories`, `loading`, `update`, `reload`;
+  called in the page's constructor).
 
 - [x] **Step 1: Write the failing tests** for the new pieces in `web/shell`:
       `shows the relative time and the exact time on focus`; `patches the status

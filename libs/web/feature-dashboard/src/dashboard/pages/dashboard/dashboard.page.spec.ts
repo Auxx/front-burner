@@ -295,5 +295,37 @@ describe('DashboardPage', () => {
       expect(requests).toBe(2);
       expect(link()).not.toBeNull();
     });
+
+    it('reloads once after the first load for many events that arrive while it runs', async () => {
+      const first = new Subject<RecentRepositories>();
+      await open(first, of({ repositories: [ handbook ] }));
+
+      await statusOf({ repositoryId: 1, status: 'ready', error: null });
+      await statusOf({ repositoryId: 2, status: 'ready', error: null });
+      await statusOf({ repositoryId: 3, status: 'cloning', error: null });
+      expect(requests).toBe(1);
+
+      first.next({ repositories: [ cloning ] });
+      first.complete();
+      await settle(fixture);
+
+      expect(requests).toBe(2);
+      expect(link()).not.toBeNull();
+    });
+
+    it('sends no request for an event while the list failed to load', async () => {
+      await open(throwError(() => new HttpErrorResponse({ status: 0 })), of({ repositories: [ handbook ] }));
+
+      await statusOf({ repositoryId: 1, status: 'ready', error: null });
+
+      expect(requests).toBe(1);
+      expect(page().textContent).toContain(`${KEY}.loadFailed`);
+
+      retry()?.click();
+      await settle(fixture);
+
+      expect(requests).toBe(2);
+      expect(link()).not.toBeNull();
+    });
   });
 });

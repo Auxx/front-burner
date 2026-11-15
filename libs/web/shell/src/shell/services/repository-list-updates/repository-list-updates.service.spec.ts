@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { PushEvent, RepositorySummary } from '@front-burner/shared-contracts';
 import { PushChannelService } from '@front-burner/web-core';
@@ -20,7 +20,8 @@ const wiki: RepositorySummary = { ...handbook, id: 2, name: 'wiki', status: 'rea
 
 describe('RepositoryListUpdatesService', () => {
   let push: { events: Subject<PushEvent>; reconnected: Subject<void>; };
-  let shown: readonly RepositorySummary[] | null;
+  let shown: ReturnType<typeof signal<readonly RepositorySummary[] | null>>;
+  let loading: ReturnType<typeof signal<boolean>>;
   let update: Mock<FollowedRepositoryList['update']>;
   let reload: Mock<FollowedRepositoryList['reload']>;
 
@@ -28,23 +29,35 @@ describe('RepositoryListUpdatesService', () => {
   @Component({ selector: 'shell-follower', template: '' })
   class FollowerComponent {
     constructor() {
-      const list: FollowedRepositoryList = { repositories: () => shown, update, reload };
-      inject(RepositoryListUpdatesService).follow(list);
+      inject(RepositoryListUpdatesService).follow({ repositories: shown, loading, update, reload });
     }
   }
 
-  function follow(repositories: readonly RepositorySummary[] | null) {
-    shown = repositories;
+  function follow(repositories: readonly RepositorySummary[] | null, isLoading = false) {
+    shown.set(repositories);
+    loading.set(isLoading);
     TestBed.configureTestingModule({ providers: [ { provide: PushChannelService, useValue: push } ] });
-    return TestBed.createComponent(FollowerComponent);
+    const fixture = TestBed.createComponent(FollowerComponent);
+    TestBed.tick();
+    return fixture;
   }
 
   function status(repositoryId: number, event: Pick<RepositorySummary, 'status' | 'error'>): void {
     push.events.next({ type: 'repository.status', repositoryId, ...event });
+    TestBed.tick();
+  }
+
+  /** The page's request for the list ends, with `repositories` on screen. */
+  function loaded(repositories: readonly RepositorySummary[] | null): void {
+    shown.set(repositories);
+    loading.set(false);
+    TestBed.tick();
   }
 
   beforeEach(() => {
     push = { events: new Subject(), reconnected: new Subject() };
+    shown = signal(null);
+    loading = signal(false);
     update = vi.fn();
     reload = vi.fn();
   });
@@ -67,21 +80,82 @@ describe('RepositoryListUpdatesService', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('asks for a reload for a status that arrives while the list loads', () => {
-    follow(null);
-
-    status(1, { status: 'ready', error: null });
-
-    expect(reload).toHaveBeenCalledTimes(1);
-    expect(update).not.toHaveBeenCalled();
-  });
-
   it('reloads after a reconnect', () => {
     follow([ handbook ]);
 
     push.reconnected.next();
 
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads once after the first load for statuses that arrive while it runs', () => {
+    follow(null, true);
+
+    status(1, { status: 'ready', error: null });
+    status(2, { status: 'ready', error: null });
+    status(1, { status: 'ready', error: null });
+    expect(reload).not.toHaveBeenCalled();
+
+    loaded([ handbook ]);
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('asks for one reload for many unknown repositories', () => {
+    follow([ wiki ]);
+    reload.mockImplementation(() => loading.set(true));
+
+    status(1, { status: 'ready', error: null });
+    status(3, { status: 'ready', error: null });
+    status(4, { status: 'cloning', error: null });
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    loaded([ handbook, wiki ]);
+
+    expect(reload).toHaveBeenCalledTimes(2);
+  });
+
+  it('patches a listed repository during a reload, and reloads once it ends', () => {
+    follow([ handbook ], true);
+
+    status(1, { status: 'ready', error: null });
+
+    expect(update).toHaveBeenCalledWith([ { ...handbook, status: 'ready' } ]);
+    expect(reload).not.toHaveBeenCalled();
+
+    loaded([ handbook ]);
+
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads at once after a reconnect during a load, which answers the statuses waiting', () => {
+    follow([ wiki ], true);
+    status(1, { status: 'ready', error: null });
+
+    push.reconnected.next();
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    loaded([ handbook, wiki ]);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for nothing while the list failed to load', () => {
+    follow(null);
+
+    status(1, { status: 'ready', error: null });
+
+    expect(reload).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('asks for nothing after a first load that failed', () => {
+    follow(null, true);
+
+    status(1, { status: 'ready', error: null });
+    loaded(null);
+
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it('ignores other events', () => {

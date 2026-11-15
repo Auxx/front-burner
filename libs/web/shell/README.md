@@ -12,7 +12,8 @@ management page both show:
   it works** (DS-11 to DS-14, RM-5).
 - `RepositoryListUpdatesService`: keeps a page's list of repositories current
   from the push channel, patching statuses and asking for a reload after a
-  reconnect or for a repository it does not list (DS-23, RM-7).
+  reconnect or for a repository it does not list (DS-23, RM-7). Statuses that
+  arrive while a request for the list runs share one reload after it ends.
 
 ## Running unit tests
 

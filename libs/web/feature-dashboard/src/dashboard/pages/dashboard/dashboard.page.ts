@@ -62,6 +62,8 @@ export class DashboardPage {
   protected readonly retrying = signal(false);
   /** The number of the latest request for the list. */
   private loads = 0;
+  /** Whether the latest request for the list is still running. */
+  private readonly loading = signal(false);
   protected readonly repositories = computed(() => {
     const list = this.list();
     return list.kind === 'loaded' ? list.repositories : null;
@@ -81,6 +83,7 @@ export class DashboardPage {
     this.announceAdded();
     this.listUpdates.follow({
       repositories: this.repositories,
+      loading: this.loading,
       update: repositories => this.list.set({ kind: 'loaded', repositories }),
       reload: () => void this.load({ keepOnFailure: true })
     });
@@ -121,12 +124,16 @@ export class DashboardPage {
    */
   private async load(options: { keepOnFailure?: boolean; } = {}): Promise<void> {
     const request = ++this.loads;
+    this.loading.set(true);
     let repositories: readonly RepositorySummary[];
     try {
       ({ repositories } = await firstValueFrom(this.api.recent()));
     } catch {
-      if (request === this.loads && !(options.keepOnFailure && this.list().kind === 'loaded')) {
-        this.list.set({ kind: 'failed' });
+      if (request === this.loads) {
+        if (!(options.keepOnFailure && this.list().kind === 'loaded')) {
+          this.list.set({ kind: 'failed' });
+        }
+        this.loading.set(false);
       }
       return;
     }
@@ -134,6 +141,7 @@ export class DashboardPage {
       return;
     }
     this.list.set({ kind: 'loaded', repositories });
+    this.loading.set(false);
     const user = await this.currentUser.load().catch(() => undefined);
     if (user !== undefined) {
       this.hint.remember(user.id, repositories.length > 0);
