@@ -3,6 +3,23 @@ import { GitProblemState } from '@front-burner/shared-contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 
+/** A kind of operation with the remote, as RM-8 tells them apart: a pull is a fetch's kind. */
+export type RemoteOperation = 'fetch' | 'push';
+
+/** The warnings that the operations with the remote left (RM-8); each `null` when there is none. */
+export interface RemoteProblems {
+  /** Of the last fetch or pull that had one. */
+  fetch: GitProblemState | null;
+  /** Of the last push that had one. */
+  push: GitProblemState | null;
+}
+
+/** The codes kept as warnings, per kind (RM-8): only a push can be not allowed. */
+const WARNINGS: Record<RemoteOperation, ReadonlySet<string>> = {
+  fetch: new Set([ 'credentials-refused', 'host-key-changed' ]),
+  push: new Set([ 'credentials-refused', 'push-not-allowed', 'host-key-changed' ])
+};
+
 /** What is remembered per repository between synchronisations (A-4.2). */
 @Injectable()
 export class SyncStateStore {
@@ -10,19 +27,73 @@ export class SyncStateStore {
 
   /** The problem of the last fetch, or `null` when it had none. */
   fetchProblem(repositoryId: number): GitProblemState | null {
-    const row = this.database.db.select().from(syncState).where(eq(syncState.repositoryId, repositoryId)).get();
-    return row?.fetchProblem ? (JSON.parse(row.fetchProblem) as GitProblemState) : null;
+    return parsed(this.row(repositoryId)?.fetchProblem);
   }
 
   /** Stores the fetch problem (`null` clears it); true when the stored value changed. */
   setFetchProblem(repositoryId: number, problem: GitProblemState | null): boolean {
-    const json = problem === null ? null : JSON.stringify({ code: problem.code, params: sorted(problem.params) });
-    const current = this.database.db.select().from(syncState).where(eq(syncState.repositoryId, repositoryId)).get();
-    if ((current?.fetchProblem ?? null) === json) {
+    return this.setProblem(repositoryId, 'fetchProblem', problem);
+  }
+
+  /** The warning a push left (RM-8), or `null`. */
+  pushProblem(repositoryId: number): GitProblemState | null {
+    return parsed(this.row(repositoryId)?.pushProblem);
+  }
+
+  /** Stores the push's warning (`null` clears it); true when the stored value changed. */
+  setPushProblem(repositoryId: number, problem: GitProblemState | null): boolean {
+    return this.setProblem(repositoryId, 'pushProblem', problem);
+  }
+
+  /** The warnings left by fetches and pulls, and by pushes (RM-8). */
+  remoteProblems(repositoryId: number): RemoteProblems {
+    const row = this.row(repositoryId);
+    return { fetch: parsed(row?.fetchWarning), push: parsed(row?.pushProblem) };
+  }
+
+  /**
+   * An operation with the remote failed. Only a warning of RM-8 is kept, and it
+   * replaces the last one of its kind; any other failure, such as the network,
+   * proves nothing fixed and changes nothing. A pull counts as a fetch, since it
+   * fetches first. The remote's messages are not kept. True when a stored value
+   * changed.
+   */
+  remoteFailed(repositoryId: number, kind: RemoteOperation, problem: GitProblemState): boolean {
+    if (!WARNINGS[kind].has(problem.code)) {
       return false;
     }
-    this.database.db.insert(syncState).values({ repositoryId, fetchProblem: json })
-      .onConflictDoUpdate({ target: syncState.repositoryId, set: { fetchProblem: json } }).run();
+    // The remote's own lines are long, change from one try to the next, and no warning shows them.
+    const params = Object.fromEntries(Object.entries(problem.params).filter(([ name ]) => name !== 'remoteMessages'));
+    return this.setProblem(repositoryId, kind === 'push' ? 'pushProblem' : 'fetchWarning', { ...problem, params });
+  }
+
+  /**
+   * An operation with the remote succeeded: a fetch's or pull's warning goes
+   * whatever succeeded, and a push's only when a push did (RM-8). True when a
+   * stored value changed.
+   */
+  remoteSucceeded(repositoryId: number, kind: RemoteOperation): boolean {
+    const fetchCleared = this.setProblem(repositoryId, 'fetchWarning', null);
+    const pushCleared = kind === 'push' && this.setProblem(repositoryId, 'pushProblem', null);
+    return fetchCleared || pushCleared;
+  }
+
+  /** The repository's credentials changed: "Can't push with these credentials" goes (RM-8). True when it was stored. */
+  credentialsChanged(repositoryId: number): boolean {
+    return this.pushProblem(repositoryId)?.code === 'push-not-allowed' && this.setPushProblem(repositoryId, null);
+  }
+
+  private setProblem(
+    repositoryId: number,
+    column: 'fetchProblem' | 'fetchWarning' | 'pushProblem',
+    problem: GitProblemState | null
+  ): boolean {
+    const json = problem === null ? null : JSON.stringify({ code: problem.code, params: sorted(problem.params) });
+    if ((this.row(repositoryId)?.[column] ?? null) === json) {
+      return false;
+    }
+    this.database.db.insert(syncState).values({ repositoryId, [column]: json })
+      .onConflictDoUpdate({ target: syncState.repositoryId, set: { [column]: json } }).run();
     return true;
   }
 
@@ -113,6 +184,10 @@ export class SyncStateStore {
   private change(repositoryId: number, set: Partial<Omit<SyncState, 'repositoryId'>>): void {
     this.database.db.update(syncState).set(set).where(eq(syncState.repositoryId, repositoryId)).run();
   }
+}
+
+function parsed(json: string | null | undefined): GitProblemState | null {
+  return json ? (JSON.parse(json) as GitProblemState) : null;
 }
 
 function sorted(params: Record<string, string>): Record<string, string> {

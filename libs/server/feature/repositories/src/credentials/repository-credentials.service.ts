@@ -14,6 +14,7 @@ import { CredentialsCheck } from '../add/credentials-check';
 import { RequestCredentials } from '../add/request-credentials';
 import { fieldError, remoteOf } from '../add/request-fields';
 import { RepositoryQueries } from '../repositories/repository-queries';
+import { RepositoryCredentialsChanges } from './repository-credentials-changes';
 
 const notFound = () => new ApiErrorException(404, 'not-found');
 
@@ -33,7 +34,8 @@ export class RepositoryCredentialsService {
     private readonly queries: RepositoryQueries,
     private readonly saved: SavedCredentialsService,
     private readonly requestCredentials: RequestCredentials,
-    private readonly credentialsCheck: CredentialsCheck
+    private readonly credentialsCheck: CredentialsCheck,
+    private readonly changes: RepositoryCredentialsChanges
   ) {}
 
   /**
@@ -80,18 +82,23 @@ export class RepositoryCredentialsService {
     const resolved = this.requestCredentials.resolve(user, remote.protocol, credentials);
     await this.credentialsCheck.check(user, repository.remoteUrl, remote, credentials.mode, resolved);
 
-    const credentialId = this.database.db.transaction(tx => {
-      const id = this.credentialsCheck.saveNew(tx, user.id, credentials) ?? resolved.savedId ?? null;
-      const changed = tx.update(repositories).set({ credentialId: id })
-        .where(and(eq(repositories.id, repositoryId), eq(repositories.userId, user.id)))
-        .run().changes;
-      if (changed === 0) {
+    const { credentialId, previous } = this.database.db.transaction(tx => {
+      const ofRepository = and(eq(repositories.id, repositoryId), eq(repositories.userId, user.id));
+      const current = tx.select({ credentialId: repositories.credentialId }).from(repositories).where(ofRepository)
+        .get();
+      if (current === undefined) {
         // Removed while the access check ran.
         throw notFound();
       }
-      return id;
+      const id = this.credentialsCheck.saveNew(tx, user.id, credentials) ?? resolved.savedId ?? null;
+      tx.update(repositories).set({ credentialId: id }).where(ofRepository).run();
+      return { credentialId: id, previous: current.credentialId };
     });
     this.credentialsCheck.unlockPasted(user.sessionId, credentialId, credentials);
+    // The same credentials chosen again change nothing that a push would meet (RM-8).
+    if (credentialId !== previous) {
+      this.changes.notifyChanged([ repositoryId ]);
+    }
     this.logger.log(`User ${user.id} replaced the credentials of repository ${repositoryId}`);
     return this.get(user.id, user.sessionId, repositoryId);
   }
@@ -128,7 +135,7 @@ export class RepositoryCredentialsService {
       protectedKey: false
     });
 
-    this.database.db.transaction(tx => {
+    const usingThem = this.database.db.transaction(tx => {
       // The token was checked for these credentials: not for others this repository was given meanwhile.
       const current = tx.select({ credentialId: repositories.credentialId }).from(repositories)
         .where(and(eq(repositories.id, repositoryId), eq(repositories.userId, user.id)))
@@ -140,7 +147,12 @@ export class RepositoryCredentialsService {
         throw notUpdatable();
       }
       this.saved.replaceHttps(tx, user.id, credentialId, input);
+      return tx.select({ id: repositories.id }).from(repositories)
+        .where(and(eq(repositories.userId, user.id), eq(repositories.credentialId, credentialId)))
+        .all().map(row => row.id);
     });
+    // Every repository that uses them now pushes with the new token (RM-8).
+    this.changes.notifyChanged(usingThem);
     this.logger.log(`User ${user.id} updated saved credentials ${credentialId} from repository ${repositoryId}`);
     return this.get(user.id, user.sessionId, repositoryId);
   }

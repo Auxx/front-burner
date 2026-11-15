@@ -1,5 +1,5 @@
 import { repositories } from '@front-burner/server-core-database';
-import { unlockPrivateKey } from '@front-burner/server-core-git';
+import { GitOperationError, unlockPrivateKey } from '@front-burner/server-core-git';
 import { sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { eq } from 'drizzle-orm';
 import { writeFileSync } from 'node:fs';
@@ -104,6 +104,84 @@ describe.skipIf(process.platform === 'win32')('PushJob', () => {
     expect(resultOf(id)).toMatchObject({ kind: 'failed', code: 'push-non-fast-forward' });
     expect(git(harness.workingCopy, 'log', '-1', '--format=%s', 'origin/main').trim()).toBe('theirs');
     expect(await harness.engine.status(harness.workingCopy)).toMatchObject({ ahead: 1, behind: 1 });
+  });
+
+  describe('remote problems (RM-8)', () => {
+    const pushed = async () => {
+      const id = enqueue();
+      await harness.finished(id);
+      return resultOf(id);
+    };
+
+    it('a refused push is stored, until a push succeeds', async () => {
+      await harness.serve({ refusePush: 403 });
+      harness.commit('second');
+      harness.runner.start();
+
+      expect(await pushed()).toMatchObject({ kind: 'failed', code: 'push-not-allowed' });
+      expect(harness.syncState.pushProblem(harness.repositoryId)).toMatchObject({ code: 'push-not-allowed' });
+
+      await harness.serve({});
+      expect(await pushed()).toMatchObject({ kind: 'pushed' });
+      expect(harness.syncState.pushProblem(harness.repositoryId)).toBeNull();
+    });
+
+    it('a rejected push is not a problem', async () => {
+      harness.pushFromElsewhere('theirs');
+      harness.commit('mine');
+      harness.runner.start();
+
+      expect(await pushed()).toMatchObject({ kind: 'failed', code: 'push-non-fast-forward' });
+      expect(harness.syncState.remoteProblems(harness.repositoryId)).toEqual({ fetch: null, push: null });
+    });
+
+    it('a push clears a fetch\'s problem', async () => {
+      harness.syncState.remoteFailed(harness.repositoryId, 'fetch', {
+        code: 'credentials-refused',
+        params: { host: '127.0.0.1' }
+      });
+      harness.commit('second');
+      harness.runner.start();
+
+      expect(await pushed()).toMatchObject({ kind: 'pushed' });
+      expect(harness.syncState.remoteProblems(harness.repositoryId)).toEqual({ fetch: null, push: null });
+    });
+
+    it('a push with credentials that were changed while it ran is not stored', async () => {
+      harness.commit('second');
+      vi.spyOn(harness.engine, 'push').mockImplementation(() => {
+        harness.credentialsChanges.notifyChanged([ harness.repositoryId ]);
+        return Promise.reject(new GitOperationError('push-not-allowed', 'The requested URL returned error: 403', {}));
+      });
+      harness.runner.start();
+
+      expect(await pushed()).toMatchObject({ kind: 'failed', code: 'push-not-allowed' });
+      expect(harness.syncState.pushProblem(harness.repositoryId)).toBeNull();
+    });
+
+    it('stores its outcome before the network lock is let go', async () => {
+      harness.commit('second');
+      const locked: number[] = [];
+      vi.spyOn(harness.outcomes, 'end').mockImplementation(() => {
+        locked.push(harness.networkLock.size);
+        return false;
+      });
+      harness.runner.start();
+
+      expect(await pushed()).toMatchObject({ kind: 'pushed' });
+      expect(locked).toEqual([ 1 ]);
+    });
+
+    it('a network failure keeps the stored problems', async () => {
+      const notAllowed = { code: 'push-not-allowed', params: { branch: 'main' } };
+      harness.syncState.setPushProblem(harness.repositoryId, notAllowed);
+      harness.useRemote('https://127.0.0.1:1/handbook.git');
+      harness.commit('second');
+      harness.runner.start();
+
+      expect(await pushed()).toMatchObject({ kind: 'failed', code: 'host-unreachable' });
+      expect(harness.syncState.pushProblem(harness.repositoryId)).toEqual(notAllowed);
+    });
   });
 
   it('a push queued before a merge started does not run during it', async () => {

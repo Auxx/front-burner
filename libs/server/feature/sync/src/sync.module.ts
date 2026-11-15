@@ -19,7 +19,9 @@ import { PullService } from './pull/pull.service';
 import { PushJob } from './push/push.job';
 import { PushService } from './push/push.service';
 import { WorkingCopyRecovery } from './recovery/working-copy-recovery';
+import { CredentialsChangedListener } from './state/credentials-changed.listener';
 import { MergeRecord } from './state/merge-record';
+import { RemoteOutcomes } from './state/remote-outcomes';
 import { SyncStateStore } from './state/sync-state.store';
 
 /**
@@ -42,6 +44,8 @@ import { SyncStateStore } from './state/sync-state.store';
     PullService,
     PullJob,
     SyncStateStore,
+    CredentialsChangedListener,
+    RemoteOutcomes,
     MergeRecord,
     MergeStateService,
     MergeGuard,
