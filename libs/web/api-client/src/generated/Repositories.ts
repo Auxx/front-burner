@@ -76,6 +76,12 @@ export class RepositoriesApi {
       `/api/v1/repositories/${encodeURIComponent(id)}/removal`
     );
   }
+  cloneAgain(id: number): Observable<RepositorySummary> {
+    return this.http.request<RepositorySummary>(
+      'POST',
+      `/api/v1/repositories/${encodeURIComponent(id)}/clone`
+    );
+  }
   open(id: number): Observable<RepositorySummary> {
     return this.http.request<RepositorySummary>(
       'POST',

@@ -72,6 +72,8 @@ const MESSAGES: Record<ErrorCode, string> = {
   'git-busy': 'Git is busy with this repository. Try again in a moment.',
   'working-copy-missing': 'This repository\'s working copy is missing or damaged.',
   'removal-needs-confirmation': 'Removing this repository would lose work. Type its name to confirm.',
+  'repository-not-in-error':
+    'This repository can only be cloned again after its clone failed or its working copy was damaged.',
   'branch-changed': 'The branch changed, so it was not pulled.',
   'merge-blocked': 'The merge would overwrite files that git does not track.',
   'no-credentials': 'This repository has no credentials. Add credentials to push.',

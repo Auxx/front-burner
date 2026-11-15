@@ -433,6 +433,62 @@ describe('RepositoriesController', () => {
     });
   });
 
+  describe('clone again', () => {
+    const cloneAgain = (user: number, id: number) =>
+      http().post(`/api/v1/repositories/${id}/clone`).set('x-test-user', String(user));
+
+    it('clones a failed repository again and answers it cloning', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, {
+        name: 'handbook',
+        remoteUrl: `${server.url}/handbook.git`,
+        status: 'error',
+        errorCode: 'clone-failed'
+      });
+
+      const response = await cloneAgain(alice, id).expect(200);
+
+      expect(response.body).toMatchObject({ id, name: 'handbook', status: 'cloning', error: null, warnings: [] });
+      const [ job ] = database.db.select().from(jobs).where(eq(jobs.repositoryId, id)).all();
+      expect(JSON.parse(job?.payload ?? '')).toEqual({ repositoryId: id, requestId: expect.any(String) });
+    });
+
+    it('refuses a repository that is not in error', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, { name: 'handbook' });
+
+      const response = await cloneAgain(alice, id).expect(409);
+
+      expect(response.body).toMatchObject({ code: 'repository-not-in-error', params: { status: 'ready' } });
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const bob = insertUser(database, 'bob@example.com');
+      const secret = insertRepository(database, bob, { name: 'secret', status: 'error', errorCode: 'clone-failed' });
+      const strip = (body: Record<string, unknown>) => ({ ...body, requestId: undefined });
+
+      const other = await cloneAgain(alice, secret).expect(404);
+      const none = await cloneAgain(alice, secret + 100).expect(404);
+
+      expect(other.body.code).toBe('not-found');
+      expect(strip(other.body)).toEqual(strip(none.body));
+    });
+
+    it('counts towards the access check limit', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      for (let i = 0; i < 10; i++) {
+        await http().post('/api/v1/repositories/access-check').set('x-test-user', String(alice)).send({}).expect(400);
+        await http().post('/api/v1/repositories').set('x-test-user', String(alice)).send({}).expect(400);
+        await cloneAgain(alice, 999).expect(404);
+      }
+
+      const response = await cloneAgain(alice, 999).expect(429);
+
+      expect(response.body.code).toBe('rate-limited');
+    });
+  });
+
   describe('warnings (RM-8)', () => {
     it('answers the stored problems in every summary', async () => {
       const alice = insertUser(database, 'alice@example.com');

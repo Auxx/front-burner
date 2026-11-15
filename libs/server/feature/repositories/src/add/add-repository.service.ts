@@ -36,6 +36,24 @@ export interface RequestUser {
   requestId?: string;
 }
 
+/**
+ * Queues the clone of a repository, in the transaction that sets it `cloning`,
+ * with the request's ID for a failed clone's error record (RM-10). Adding and
+ * cloning again share it, and so the clone's per-user limit (NF-11.4, RM-13).
+ *
+ * @throws ApiErrorException `429 too-many-jobs` at the limit, which rolls the transaction back.
+ */
+export function queueClone(runner: JobRunner, tx: Tx, user: RequestUser, repositoryId: number): number {
+  const payload: CloneJobPayload = { repositoryId, requestId: user.requestId };
+  return runner.enqueue({
+    type: CLONE_JOB_TYPE,
+    userId: user.id,
+    repositoryId,
+    payload,
+    dedupeKey: `clone:${repositoryId}`
+  }, tx);
+}
+
 const isUniqueViolation = (error: unknown): boolean =>
   (error as { code?: unknown; }).code === 'SQLITE_CONSTRAINT_UNIQUE';
 
@@ -108,15 +126,7 @@ export class AddRepositoryService {
       } catch (error) {
         throw isUniqueViolation(error) ? fieldError('name', 'name-taken', { name: request.name }) : error;
       }
-      const payload: CloneJobPayload = { repositoryId: inserted.id, requestId: user.requestId };
-      const id = this.runner.enqueue({
-        type: CLONE_JOB_TYPE,
-        userId: user.id,
-        repositoryId: inserted.id,
-        payload,
-        dedupeKey: `clone:${inserted.id}`
-      }, tx);
-      return { row: inserted, jobId: id };
+      return { row: inserted, jobId: queueClone(this.runner, tx, user, inserted.id) };
     });
     // Synchronously after the commit, before the runner's loop can start the job (AR-49).
     if (credentials.protectedKey && credentials.git.kind === 'ssh' && row.credentialId !== null) {

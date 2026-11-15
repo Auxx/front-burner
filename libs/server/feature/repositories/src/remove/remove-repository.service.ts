@@ -3,15 +3,13 @@ import { EventsHub } from '@front-burner/server-core-events';
 import { NetworkLock, WorkingTreeLock } from '@front-burner/server-core-git';
 import { JobRunner } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { DATA_LAYOUT, DataLayout, newRemovedName } from '@front-burner/server-core-storage';
+import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
 import { confirmsName, wouldLoseWork } from '@front-burner/shared-contracts';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { mkdir, rename } from 'node:fs/promises';
-import { join } from 'node:path';
 import { CLONE_JOB_TYPE } from '../add/add-repository.service';
 import { ownRow, RepositoryQueries } from '../repositories/repository-queries';
-import { DELETE_WORKING_COPY_JOB_TYPE, DeleteWorkingCopyJobPayload } from './delete-working-copy.job';
+import { moveWorkingCopy, queueWorkingCopyDeletion, restoreWorkingCopy } from './old-working-copy';
 import { RemovalCheck } from './removal-check';
 
 /**
@@ -69,73 +67,21 @@ export class RemoveRepositoryService {
         this.logger.warn(`The cancelled clone of repository ${repositoryId} has not ended yet`);
       }
       return this.networkLock.run(repositoryId, async () => {
-        const moved = await this.moveWorkingCopy(userId, repositoryId);
+        // A failure here fails the removal before anything else changed.
+        const moved = await moveWorkingCopy(this.layout, userId, repositoryId);
         try {
           this.database.db.delete(repositories).where(eq(repositories.id, row.id)).run();
         } catch (error) {
-          await this.restoreWorkingCopy(userId, repositoryId, moved);
+          await restoreWorkingCopy(this.layout, this.logger, userId, repositoryId, moved);
           throw error;
         }
         this.workingTreeLock.markRemoved(repositoryId);
         return moved;
       });
     });
-    this.queueDeletion(repositoryId, trash);
+    // The row is already gone, so a job that cannot be queued does not fail the removal.
+    queueWorkingCopyDeletion(this.runner, this.logger, repositoryId, trash);
     this.events.publish(userId, { type: 'repository.removed', repositoryId });
     this.logger.log(`Repository ${repositoryId} removed`);
-  }
-
-  /**
-   * Moves the working copy into `tmp/` with one rename (NF-5.3), under a name
-   * made from the ID only (A-6.3). A repository whose clone never finished has
-   * none: null. `tmp/` is emptied on every start (NF-5.1), so a restart before
-   * the job ran leaves nothing behind. Any other failure fails the removal
-   * before anything else changed.
-   */
-  private async moveWorkingCopy(userId: number, repositoryId: number): Promise<string | null> {
-    const name = newRemovedName(repositoryId);
-    await mkdir(this.layout.tmpDir, { recursive: true });
-    try {
-      await rename(this.layout.workingCopy(userId, repositoryId), join(this.layout.tmpDir, name));
-      return name;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return null;
-      }
-      throw error;
-    }
-  }
-
-  /** Puts the working copy back when the row could not be deleted, so that the repository stays as it was. */
-  private async restoreWorkingCopy(userId: number, repositoryId: number, name: string | null): Promise<void> {
-    if (name === null) {
-      return;
-    }
-    try {
-      await rename(join(this.layout.tmpDir, name), this.layout.workingCopy(userId, repositoryId));
-    } catch (error) {
-      this.logger.error(
-        { err: error },
-        `Could not put back the working copy of repository ${repositoryId}; it is in tmp/ until the next start`
-      );
-    }
-  }
-
-  /**
-   * The row is already gone, so a job that cannot be queued does not fail the
-   * removal: `tmp/` is emptied on the next start (NF-5.1).
-   */
-  private queueDeletion(repositoryId: number, name: string | null): void {
-    try {
-      this.runner.enqueue({
-        type: DELETE_WORKING_COPY_JOB_TYPE,
-        // Neither a user nor a repository: the row no longer exists, and the end is nobody's business.
-        payload: { repositoryId, name } satisfies DeleteWorkingCopyJobPayload
-      });
-    } catch {
-      this.logger.warn(
-        `Could not queue the deletion of removed repository ${repositoryId}; tmp/ is emptied on the next start`
-      );
-    }
   }
 }

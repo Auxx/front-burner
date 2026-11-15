@@ -66,6 +66,7 @@
   "errors.git-busy": "Git is busy with this repository. Try again in a moment.",
   "errors.working-copy-missing": "This repository's working copy is missing or damaged.",
   "errors.removal-needs-confirmation": "Removing this repository would lose work. Type its name to confirm.",
+  "errors.repository-not-in-error": "This repository can only be cloned again after its clone failed or its working copy was damaged.",
   "errors.branch-changed": "You switched branch, so {{ branch }} was not pulled. Pull again.",
   "errors.merge-blocked": "This pull would overwrite ignored files. Move them first.",
   "errors.no-credentials": "This repository has no credentials. Add credentials to push.",

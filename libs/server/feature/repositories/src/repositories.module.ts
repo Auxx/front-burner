@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AddRepositoryService } from './add/add-repository.service';
 import { CredentialsCheck } from './add/credentials-check';
 import { RequestCredentials } from './add/request-credentials';
+import { CloneAgainService } from './clone/clone-again.service';
 import { CloneJob } from './clone/clone.job';
 import { RepositoryCredentialsChanges } from './credentials/repository-credentials-changes';
 import { RepositoryCredentialsController } from './credentials/repository-credentials.controller';
@@ -32,6 +33,7 @@ import { RepositoryWarnings } from './warnings/repository-warnings';
     CredentialsCheck,
     AddRepositoryService,
     CloneJob,
+    CloneAgainService,
     WorkingCopyCheck,
     RemoteProblemsSource,
     RepositoryWarnings,
