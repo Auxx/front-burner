@@ -35,6 +35,15 @@ export const PushEventSchema = z.discriminatedUnion('type', [
     folders: z.union([ z.array(z.string()), z.literal('all') ]),
     files: z.array(z.object({ path: z.string(), hash: z.string() })).optional()
   }),
+  /**
+   * A stored problem of the operations with the remote changed, so the
+   * repository's warnings may have: read its summary again (RM-8, A-3.11). A
+   * key's lock has `key.locked` and `key.unlocked`.
+   */
+  z.object({
+    type: z.literal('repository.warning'),
+    repositoryId: z.number().int()
+  }),
   /** Git state changed: a commit or a push changes no files, so `files.changed` does not cover it (A-3.11). */
   z.object({
     type: z.literal('git.changed'),

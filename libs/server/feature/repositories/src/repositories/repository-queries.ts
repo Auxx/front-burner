@@ -1,5 +1,10 @@
 import { DATABASE, Database, repositories, Repository } from '@front-burner/server-core-database';
-import type { RepositoryDetails, RepositoryIndex, RepositorySummary } from '@front-burner/shared-contracts';
+import type {
+  RepositoryDetails,
+  RepositoryIndex,
+  RepositorySummary,
+  RepositoryWarning
+} from '@front-burner/shared-contracts';
 import { compareRepositoryNames, remoteDisplay } from '@front-burner/shared-util';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq } from 'drizzle-orm';
@@ -73,8 +78,11 @@ function byName(a: Repository, b: Repository): number {
   return compareRepositoryNames(a.name, b.name) || a.id - b.id;
 }
 
-/** A repository as clients see it: the remote without credentials (DS-19). */
-export function toSummary(row: Repository): RepositorySummary {
+/**
+ * A repository as clients see it: the remote without credentials (DS-19), and
+ * the warnings that `RepositoryWarnings` computed for the session (RM-8).
+ */
+export function toSummary(row: Repository, warnings: RepositoryWarning[]): RepositorySummary {
   return {
     id: row.id,
     name: row.name,
@@ -82,8 +90,7 @@ export function toSummary(row: Repository): RepositorySummary {
     status: row.status,
     // Only in the `error` status (RM-6), as the details' error record, even if a stale code is left.
     error: row.status === 'error' ? row.errorCode : null,
-    // Recorded once the git engine reports operations with the remote (REQ-REPO-002).
-    warnings: [],
+    warnings,
     lastAccessedAt: row.lastAccessedAt.toISOString()
   };
 }
@@ -95,10 +102,10 @@ export function toSummary(row: Repository): RepositorySummary {
  * a full clone's is never answered, and adding refuses a single-branch clone
  * without one (AR-34), so `null` there means a damaged row, shown as no branch.
  */
-export function toDetails(row: Repository): RepositoryDetails {
+export function toDetails(row: Repository, warnings: RepositoryWarning[]): RepositoryDetails {
   const failed = row.status === 'error';
   return {
-    summary: toSummary(row),
+    summary: toSummary(row, warnings),
     cloneMode: row.cloneMode,
     branch: row.cloneMode === 'single-branch' ? row.branch : null,
     gitLevel: row.gitLevel,

@@ -25,6 +25,7 @@ const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 /** Every event type the client knows; a new member of `PushEvent` fails to compile until it is listed. */
 const EVENT_TYPES: Record<PushEvent['type'], true> = {
   'repository.status': true,
+  'repository.warning': true,
   'job.progress': true,
   'job.finished': true,
   'files.changed': true,

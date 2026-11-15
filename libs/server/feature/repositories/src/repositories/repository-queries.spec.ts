@@ -181,7 +181,10 @@ const failedRow = repositoryRow({
 
 describe('toDetails', () => {
   it('answers the clone mode, level and date added', () => {
-    const details = toDetails({ ...failedRow, gitLevel: 'simple', createdAt: new Date(Date.UTC(2026, 9, 20, 8)) });
+    const details = toDetails(
+      { ...failedRow, gitLevel: 'simple', createdAt: new Date(Date.UTC(2026, 9, 20, 8)) },
+      []
+    );
 
     expect(details).toMatchObject({
       cloneMode: 'full',
@@ -189,25 +192,31 @@ describe('toDetails', () => {
       gitLevel: 'simple',
       addedAt: '2026-10-20T08:00:00.000Z'
     });
-    expect(details.summary).toEqual(toSummary(failedRow));
+    expect(details.summary).toEqual(toSummary(failedRow, []));
+  });
+
+  it('answers the warnings in its summary', () => {
+    const ready = { ...failedRow, status: 'ready' } as const;
+
+    expect(toDetails(ready, [ 'key-locked' ]).summary.warnings).toEqual([ 'key-locked' ]);
   });
 
   it('answers the branch of a single-branch clone', () => {
-    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: 'main' }))
+    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: 'main' }, []))
       .toMatchObject({ cloneMode: 'single-branch', branch: 'main' });
   });
 
   it('never answers a full clone\'s branch', () => {
-    expect(toDetails({ ...failedRow, cloneMode: 'full', branch: 'main' })).toMatchObject({ branch: null });
+    expect(toDetails({ ...failedRow, cloneMode: 'full', branch: 'main' }, [])).toMatchObject({ branch: null });
   });
 
   it('answers no branch for a single-branch row that lost it', () => {
-    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: null }))
+    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: null }, []))
       .toMatchObject({ cloneMode: 'single-branch', branch: null });
   });
 
   it('answers the error record of a failed clone', () => {
-    expect(toDetails(failedRow))
+    expect(toDetails(failedRow, []))
       .toMatchObject({ errorDetail: 'fatal: repository not found', errorRequestId: 'request-1' });
   });
 
@@ -215,12 +224,12 @@ describe('toDetails', () => {
     // Plan 105 clears the record; a stale one is still never answered outside `error`.
     const ready = { ...failedRow, status: 'ready' } as const;
 
-    expect(toDetails(ready))
+    expect(toDetails(ready, []))
       .toMatchObject({ summary: { error: null }, errorDetail: null, errorRequestId: null });
   });
 
   it('answers the remote without credentials', () => {
-    const details = toDetails(failedRow);
+    const details = toDetails(failedRow, []);
 
     expect(details.summary.remote).toBe('github.com/acme/handbook');
     expect(JSON.stringify(details)).not.toContain('u:t');
@@ -229,7 +238,7 @@ describe('toDetails', () => {
 
 describe('toSummary', () => {
   it('shows the remote without credentials and the time as ISO', () => {
-    const summary = toSummary(failedRow);
+    const summary = toSummary(failedRow, []);
 
     expect(summary).toEqual({
       id: 3,
@@ -244,7 +253,7 @@ describe('toSummary', () => {
 
   it('answers no error code outside the error status, even a stale one', () => {
     for (const status of [ 'ready', 'cloning' ] as const) {
-      expect(toSummary({ ...failedRow, status }).error).toBeNull();
+      expect(toSummary({ ...failedRow, status }, []).error).toBeNull();
     }
   });
 });

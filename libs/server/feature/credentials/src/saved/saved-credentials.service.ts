@@ -20,7 +20,7 @@ import type {
   SshKeyType
 } from '@front-burner/shared-contracts';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { KeyUnlockStore } from '../unlocks/key-unlock-store';
 import { UnlockAttempts } from '../unlocks/unlock-attempts';
 
@@ -32,6 +32,14 @@ const bindingOf = (row: Pick<SavedCredential, 'id' | 'userId'>): SecretBinding =
 
 function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: unknown; }).code === 'SQLITE_CONSTRAINT_UNIQUE';
+}
+
+/**
+ * A key that a session must unlock before git can use it: passphrase-protected,
+ * with its secret still there (a missing one is reported as such, NF-8.6).
+ */
+function isLockable(row: SavedCredential): boolean {
+  return row.secret !== null && row.kind === 'ssh-key' && row.sshPassphraseProtected === true;
 }
 
 /** Runs an SSH key check and reports its problem on the form field it belongs to (AR-27). */
@@ -213,7 +221,7 @@ export class SavedCredentialsService {
     id: number
   ): { usable: boolean; key: UnlockedKey | undefined; } {
     const row = this.findOwned(userId, id);
-    if (row.secret === null || row.kind !== 'ssh-key' || !row.sshPassphraseProtected) {
+    if (!isLockable(row)) {
       return { usable: true, key: undefined };
     }
     const key = this.unlocks.get(sessionId, row.id, { touch: false });
@@ -240,6 +248,25 @@ export class SavedCredentialsService {
     }
     // HTTPS credentials and unprotected keys need no session.
     return this.resolveForGit(userId, '', id, { touch: false });
+  }
+
+  /**
+   * Of the user's credentials with these IDs, the keys that are locked in this
+   * session, as `keyForBackgroundJob` sees them: passphrase-protected keys not
+   * unlocked here, and never one whose secret is missing, as the job reports
+   * that (NF-8.6). For "Key locked" (RM-8, RC-15); one query for all IDs, and
+   * reading does not keep a key unlocked. Another user's IDs are left out.
+   */
+  lockedKeyIds(userId: number, sessionId: string, ids: readonly number[]): Set<number> {
+    if (ids.length === 0) {
+      return new Set();
+    }
+    const rows = this.database.db.select().from(savedCredentials)
+      .where(and(eq(savedCredentials.userId, userId), inArray(savedCredentials.id, [ ...new Set(ids) ])))
+      .all();
+    return new Set(
+      rows.filter(row => isLockable(row) && !this.unlocks.isUnlocked(sessionId, row.id)).map(row => row.id)
+    );
   }
 
   /**

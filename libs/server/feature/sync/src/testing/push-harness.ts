@@ -89,7 +89,7 @@ export class PushHarness {
   readonly networkLock = new NetworkLock();
   readonly syncState = new SyncStateStore(this.database);
   readonly credentialsChanges = new RepositoryCredentialsChanges();
-  readonly outcomes = new RemoteOutcomes(this.syncState, this.credentialsChanges);
+  readonly outcomes = new RemoteOutcomes(this.syncState, this.credentialsChanges, this.events);
   readonly commitAuthors = new CommitAuthors(this.database, this.queries);
   readonly alice = insertUser(this.database, 'alice@x.io');
   readonly bob = insertUser(this.database, 'bob@x.io');

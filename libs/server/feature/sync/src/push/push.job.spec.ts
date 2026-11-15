@@ -113,6 +113,48 @@ describe.skipIf(process.platform === 'win32')('PushJob', () => {
       return resultOf(id);
     };
 
+    const warningEvents = () => harness.published.filter(({ event }) => event.type === 'repository.warning');
+
+    it('publishes repository.warning when a push is refused', async () => {
+      await harness.serve({ refusePush: 403 });
+      harness.commit('second');
+      harness.runner.start();
+
+      expect(await pushed()).toMatchObject({ kind: 'failed', code: 'push-not-allowed' });
+
+      expect(warningEvents()).toEqual([
+        { userId: harness.alice, event: { type: 'repository.warning', repositoryId: harness.repositoryId } }
+      ]);
+    });
+
+    it('does not publish when nothing changed', async () => {
+      await harness.serve({ refusePush: 403 });
+      harness.commit('second');
+      harness.runner.start();
+      await pushed();
+      harness.published.length = 0;
+
+      // The same refusal again, and a rejected push, which is no warning.
+      expect(await pushed()).toMatchObject({ kind: 'failed', code: 'push-not-allowed' });
+      expect(warningEvents()).toEqual([]);
+    });
+
+    it('publishes when a successful push clears it', async () => {
+      harness.syncState.remoteFailed(harness.repositoryId, 'push', { code: 'push-not-allowed', params: {} });
+      harness.commit('second');
+      harness.runner.start();
+
+      expect(await pushed()).toMatchObject({ kind: 'pushed' });
+      expect(warningEvents()).toEqual([
+        { userId: harness.alice, event: { type: 'repository.warning', repositoryId: harness.repositoryId } }
+      ]);
+
+      harness.published.length = 0;
+      harness.commit('third');
+      expect(await pushed()).toMatchObject({ kind: 'pushed' });
+      expect(warningEvents()).toEqual([]);
+    });
+
     it('a refused push is stored, until a push succeeds', async () => {
       await harness.serve({ refusePush: 403 });
       harness.commit('second');
@@ -150,7 +192,7 @@ describe.skipIf(process.platform === 'win32')('PushJob', () => {
     it('a push with credentials that were changed while it ran is not stored', async () => {
       harness.commit('second');
       vi.spyOn(harness.engine, 'push').mockImplementation(() => {
-        harness.credentialsChanges.notifyChanged([ harness.repositoryId ]);
+        harness.credentialsChanges.notifyChanged(harness.alice, [ harness.repositoryId ]);
         return Promise.reject(new GitOperationError('push-not-allowed', 'The requested URL returned error: 403', {}));
       });
       harness.runner.start();

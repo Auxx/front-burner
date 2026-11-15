@@ -292,6 +292,36 @@ describe('SavedCredentialsService', () => {
     expect(service.keyForBackgroundJob(alice, 's1', locked)).toEqual({ usable: true, key: undefined });
   });
 
+  describe('lockedKeyIds (RM-8, RC-15)', () => {
+    it('names the protected keys locked in this session, without keeping any unlock alive', () => {
+      const https = createHttps();
+      const plain = createKey(PLAIN, undefined, 'Plain');
+      const locked = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+      const get = vi.spyOn(unlocks, 'get');
+
+      expect(service.lockedKeyIds(alice, 's1', [ https, plain, locked, locked ])).toEqual(new Set([ locked ]));
+      service.unlock(alice, 's1', locked, FIXTURE_PASSPHRASE);
+      expect(service.lockedKeyIds(alice, 's1', [ locked ])).toEqual(new Set());
+      expect(service.lockedKeyIds(alice, 's2', [ locked ])).toEqual(new Set([ locked ]));
+      expect(service.lockedKeyIds(alice, 's1', [])).toEqual(new Set());
+      expect(get).not.toHaveBeenCalled();
+    });
+
+    it('agrees with a background job about a secret that is gone', () => {
+      const locked = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+      database.db.update(savedCredentials).set({ secret: null }).run();
+
+      expect(service.lockedKeyIds(alice, 's1', [ locked ])).toEqual(new Set());
+      expect(service.keyForBackgroundJob(alice, 's1', locked).usable).toBe(true);
+    });
+
+    it('leaves out another user\'s key', () => {
+      const locked = createKey(PROTECTED, FIXTURE_PASSPHRASE);
+
+      expect(service.lockedKeyIds(bob, 's1', [ locked ])).toEqual(new Set());
+    });
+  });
+
   it('refuses a job credentials whose secret is gone', () => {
     const https = createHttps();
     database.db.update(savedCredentials).set({ secret: null }).where(eq(savedCredentials.id, https)).run();

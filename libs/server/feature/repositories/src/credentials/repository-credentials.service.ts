@@ -97,7 +97,7 @@ export class RepositoryCredentialsService {
     this.credentialsCheck.unlockPasted(user.sessionId, credentialId, credentials);
     // The same credentials chosen again change nothing that a push would meet (RM-8).
     if (credentialId !== previous) {
-      this.changes.notifyChanged([ repositoryId ]);
+      this.changes.notifyChanged(user.id, [ repositoryId ]);
     }
     this.logger.log(`User ${user.id} replaced the credentials of repository ${repositoryId}`);
     return this.get(user.id, user.sessionId, repositoryId);
@@ -152,7 +152,7 @@ export class RepositoryCredentialsService {
         .all().map(row => row.id);
     });
     // Every repository that uses them now pushes with the new token (RM-8).
-    this.changes.notifyChanged(usingThem);
+    this.changes.notifyChanged(user.id, usingThem);
     this.logger.log(`User ${user.id} updated saved credentials ${credentialId} from repository ${repositoryId}`);
     return this.get(user.id, user.sessionId, repositoryId);
   }

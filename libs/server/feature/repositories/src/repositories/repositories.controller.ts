@@ -14,6 +14,7 @@ import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { AddRepositoryService } from '../add/add-repository.service';
+import { RepositoryWarnings, WarningsViewer } from '../warnings/repository-warnings';
 import {
   AccessCheckRequestDto,
   AccessCheckResultDto,
@@ -36,23 +37,23 @@ function ownRow(row: Repository | undefined): Repository {
   return row;
 }
 
-/** The repository as clients see it, or `404 not-found`. */
-function found(row: Repository | undefined): RepositorySummary {
-  return toSummary(ownRow(row));
-}
-
 /** The logged-in user's repositories; never another user's (DS-3, AR-56). */
 @ApiTags('repositories')
 @Controller('repositories')
 export class RepositoriesController {
-  constructor(private readonly queries: RepositoryQueries, private readonly adding: AddRepositoryService) {}
+  constructor(
+    private readonly queries: RepositoryQueries,
+    private readonly adding: AddRepositoryService,
+    private readonly warnings: RepositoryWarnings
+  ) {}
 
   /** The dashboard's recent list (DS-16, DS-17); the switcher's without the current repository (NV-10). */
   @Get('recent')
   @ApiOkResponse({ type: RecentRepositoriesDto })
   @ZodSerializerDto(RecentRepositoriesDto)
   recent(@Req() req: Request, @Query() query: RecentQueryDto): RecentRepositories {
-    return { repositories: this.queries.recent(authOf(req).userId, 10, query.exclude).map(toSummary) };
+    const auth = authOf(req);
+    return { repositories: this.summaries(auth, this.queries.recent(auth.userId, 10, query.exclude)) };
   }
 
   /** Every repository's name and remote, for the Add repository form (AR-12, AR-15). */
@@ -68,7 +69,8 @@ export class RepositoriesController {
   @ApiOkResponse({ type: RepositoryListDto })
   @ZodSerializerDto(RepositoryListDto)
   list(@Req() req: Request): RepositoryList {
-    return { repositories: this.queries.all(authOf(req).userId).map(toSummary) };
+    const auth = authOf(req);
+    return { repositories: this.summaries(auth, this.queries.all(auth.userId)) };
   }
 
   /** The remote's branches for the form (AR-35); limited with the submit (AR-55). */
@@ -97,7 +99,8 @@ export class RepositoriesController {
   @ApiOkResponse({ type: RepositorySummaryDto })
   @ZodSerializerDto(RepositorySummaryDto)
   get(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositorySummary {
-    return found(this.queries.find(authOf(req).userId, params.id));
+    const auth = authOf(req);
+    return this.summary(auth, this.queries.find(auth.userId, params.id));
   }
 
   /**
@@ -108,7 +111,9 @@ export class RepositoriesController {
   @ApiOkResponse({ type: RepositoryDetailsDto })
   @ZodSerializerDto(RepositoryDetailsDto)
   repositoryDetails(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositoryDetails {
-    return toDetails(ownRow(this.queries.find(authOf(req).userId, params.id)));
+    const auth = authOf(req);
+    const row = ownRow(this.queries.find(auth.userId, params.id));
+    return toDetails(row, this.warnings.forRow(auth, row));
   }
 
   /**
@@ -120,6 +125,19 @@ export class RepositoriesController {
   @ApiOkResponse({ type: RepositorySummaryDto })
   @ZodSerializerDto(RepositorySummaryDto)
   open(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositorySummary {
-    return found(this.queries.markOpened(authOf(req).userId, params.id, new Date()));
+    const auth = authOf(req);
+    return this.summary(auth, this.queries.markOpened(auth.userId, params.id, new Date()));
+  }
+
+  /** The rows as clients see them, with the session's warnings, read once for all of them (NF-2). */
+  private summaries(viewer: WarningsViewer, rows: Repository[]): RepositorySummary[] {
+    const warnings = this.warnings.forRows(viewer, rows);
+    return rows.map((row, i) => toSummary(row, warnings[i]));
+  }
+
+  /** The repository as clients see it, or `404 not-found`. */
+  private summary(viewer: WarningsViewer, row: Repository | undefined): RepositorySummary {
+    const own = ownRow(row);
+    return toSummary(own, this.warnings.forRow(viewer, own));
   }
 }

@@ -28,6 +28,7 @@ describe.skipIf(process.platform === 'win32')('FetchStep', () => {
     harness.published.filter(({ event }) =>
       event.type === 'git.changed' && event.repositoryId === harness.repositoryId
     );
+  const warningEvents = () => harness.published.filter(({ event }) => event.type === 'repository.warning');
 
   /** Gives the repository saved HTTPS credentials whose password is `password`. */
   function useHttpsCredentials(password: string): void {
@@ -104,23 +105,31 @@ describe.skipIf(process.platform === 'win32')('FetchStep', () => {
 
     await run();
     expect(harness.syncState.remoteProblems(harness.repositoryId)).toEqual({ fetch: refused, push: null });
+    expect(warningEvents()).toHaveLength(1);
 
     harness.useRemote('https://127.0.0.1:1/handbook.git');
     await run();
     expect(harness.syncState.fetchProblem(harness.repositoryId)).toMatchObject({ code: 'host-unreachable' });
     expect(harness.syncState.remoteProblems(harness.repositoryId).fetch).toEqual(refused);
+    expect(warningEvents()).toHaveLength(1);
 
     // A remote that takes any credentials, as if they were fixed.
     await harness.serve({});
     expect(await run()).toMatchObject({ ok: true });
     expect(harness.syncState.remoteProblems(harness.repositoryId).fetch).toBeNull();
+    expect(warningEvents()).toEqual(
+      Array(2).fill({
+        userId: harness.alice,
+        event: { type: 'repository.warning', repositoryId: harness.repositoryId }
+      })
+    );
   });
 
   it('a fetch with credentials that were changed while it ran leaves the warnings alone', async () => {
     const refused = { code: 'credentials-refused', params: { host: '127.0.0.1' } };
     harness.syncState.remoteFailed(harness.repositoryId, 'fetch', refused);
     vi.spyOn(harness.engine, 'fetch').mockImplementation(() => {
-      harness.credentialsChanges.notifyChanged([ harness.repositoryId ]);
+      harness.credentialsChanges.notifyChanged(harness.alice, [ harness.repositoryId ]);
       return Promise.reject(new GitOperationError('host-key-changed', 'Host key verification failed.', { host: 'h' }));
     });
 

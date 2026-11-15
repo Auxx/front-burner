@@ -61,6 +61,7 @@ describe('RepositoryCredentialsService', () => {
   let service: RepositoryCredentialsService;
   let changes: RepositoryCredentialsChanges;
   let changed: number[];
+  let owners: Set<number>;
   let alice: number;
   let bob: number;
 
@@ -101,7 +102,11 @@ describe('RepositoryCredentialsService', () => {
     engine = new GitEngine(gitOptions, new GitRunner());
     changes = new RepositoryCredentialsChanges();
     changed = [];
-    changes.changed.subscribe(id => changed.push(id));
+    owners = new Set();
+    changes.changed.subscribe(change => {
+      changed.push(change.repositoryId);
+      owners.add(change.userId);
+    });
     service = new RepositoryCredentialsService(
       database,
       new RepositoryQueries(database),
@@ -407,6 +412,7 @@ describe('RepositoryCredentialsService', () => {
 
       expect(changed.sort()).toEqual([ handbook, wiki ].sort());
       expect(changed).not.toContain(elsewhere);
+      expect(owners).toEqual(new Set([ alice ]));
     });
 
     it('an update whose access check fails changes nothing', async () => {

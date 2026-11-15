@@ -1,18 +1,11 @@
 import { DATABASE, Database, SyncState, syncState } from '@front-burner/server-core-database';
+import type { RemoteProblems } from '@front-burner/server-feature-repositories';
 import { GitProblemState } from '@front-burner/shared-contracts';
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 /** A kind of operation with the remote, as RM-8 tells them apart: a pull is a fetch's kind. */
 export type RemoteOperation = 'fetch' | 'push';
-
-/** The warnings that the operations with the remote left (RM-8); each `null` when there is none. */
-export interface RemoteProblems {
-  /** Of the last fetch or pull that had one. */
-  fetch: GitProblemState | null;
-  /** Of the last push that had one. */
-  push: GitProblemState | null;
-}
 
 /** The codes kept as warnings, per kind (RM-8): only a push can be not allowed. */
 const WARNINGS: Record<RemoteOperation, ReadonlySet<string>> = {
@@ -47,8 +40,21 @@ export class SyncStateStore {
 
   /** The warnings left by fetches and pulls, and by pushes (RM-8). */
   remoteProblems(repositoryId: number): RemoteProblems {
-    const row = this.row(repositoryId);
-    return { fetch: parsed(row?.fetchWarning), push: parsed(row?.pushProblem) };
+    // Through the read that the warnings use, so that both say the same.
+    return this.remoteProblemsOf([ repositoryId ]).get(repositoryId) ?? { fetch: null, push: null };
+  }
+
+  /** The same for many repositories, in one query (NF-2); a repository without a row is left out. */
+  remoteProblemsOf(repositoryIds: readonly number[]): Map<number, RemoteProblems> {
+    if (repositoryIds.length === 0) {
+      return new Map();
+    }
+    const rows = this.database.db
+      .select({ repositoryId: syncState.repositoryId, fetch: syncState.fetchWarning, push: syncState.pushProblem })
+      .from(syncState)
+      .where(inArray(syncState.repositoryId, [ ...repositoryIds ]))
+      .all();
+    return new Map(rows.map(row => [ row.repositoryId, { fetch: parsed(row.fetch), push: parsed(row.push) } ]));
   }
 
   /**
