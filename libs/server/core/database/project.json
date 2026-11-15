@@ -29,8 +29,8 @@
     "db-generate": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "drizzle-kit generate --config libs/server/core/database/drizzle.config.ts",
-        "cwd": "{workspaceRoot}"
+        "command": "drizzle-kit generate --config drizzle.config.ts",
+        "cwd": "{projectRoot}"
       }
     },
     "typecheck": {
