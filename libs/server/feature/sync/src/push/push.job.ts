@@ -75,19 +75,24 @@ export class PushJob implements OnModuleInit {
     if (userId === null || repositoryId === null) {
       throw new Error('A push job needs its user and repository');
     }
-    return this.damage.inJob(userId, repositoryId, () => this.pushAndFollowUp(id, userId, repositoryId, job.payload));
+    return this.damage.inJob(
+      userId,
+      repositoryId,
+      () => this.pushAndFollowUp(id, userId, repositoryId, job.payload, job.signal)
+    );
   }
 
   private async pushAndFollowUp(
     id: number,
     userId: number,
     repositoryId: number,
-    payload: PushJobPayload
+    payload: PushJobPayload,
+    signal: AbortSignal
   ): Promise<GitJobOutcome> {
     // Network steps take the network lock only, so saves never wait behind the remote (A-5.3).
     const outcome = await this.networkLock.run(repositoryId, async (): Promise<GitJobOutcome> => {
       const attempt = this.outcomes.begin(userId, repositoryId, 'push');
-      const pushed = await this.pushOnce(id, userId, repositoryId, payload.branch);
+      const pushed = await this.pushOnce(id, userId, repositoryId, payload.branch, signal);
       // A push's warning outlives a successful fetch; only a push clears it (RM-8, AC-REPO-003.6).
       // Stored before the lock is let go, in the order the operations ran; a change publishes repository.warning.
       if (pushed.kind === 'pushed' || pushed.kind === 'failed') {
@@ -95,17 +100,28 @@ export class PushJob implements OnModuleInit {
       }
       return pushed;
     });
+    // Cancelled once the push ended, such as by removing the repository: its outcome stands, but no
+    // follow-up touches the working copy.
+    if (signal.aborted) {
+      return outcome;
+    }
     if (outcome.kind === 'pushed') {
-      await this.forgetPushedMerge(userId, repositoryId);
+      await this.forgetPushedMerge(userId, repositoryId, signal);
     }
     if (outcome.kind === 'failed' && outcome.code === 'push-non-fast-forward') {
-      await this.fetchAfterRejection({ id, userId, repositoryId });
+      await this.fetchAfterRejection({ id, userId, repositoryId, signal });
     }
     return outcome;
   }
 
   /** The push itself, inside the network lock. */
-  private async pushOnce(jobId: number, userId: number, repositoryId: number, branch: string): Promise<GitJobOutcome> {
+  private async pushOnce(
+    jobId: number,
+    userId: number,
+    repositoryId: number,
+    branch: string,
+    signal: AbortSignal
+  ): Promise<GitJobOutcome> {
     const { row, root } = this.repositories.open(userId, repositoryId);
     // A pull's merge may have started after the push was queued (GC-3).
     if (await this.engine.mergeInProgress(root)) {
@@ -121,12 +137,15 @@ export class PushJob implements OnModuleInit {
         credentials: resolved.credentials,
         knownHosts: this.knownHosts.linesFor(userId),
         branch,
-        singleBranch: row.cloneMode === 'single-branch'
+        singleBranch: row.cloneMode === 'single-branch',
+        signal
       });
       return { kind: 'pushed', commits: result.commits, upstream: result.upstream };
     } catch (error) {
-      // Not the remote's problem: the job reports a working copy that is gone (RM-6).
-      if (!(error instanceof GitOperationError) || error.code === 'working-copy-missing') {
+      // Not the remote's problem: the job reports a working copy that is gone (RM-6), or that it was cancelled.
+      if (
+        !(error instanceof GitOperationError) || error.code === 'working-copy-missing' || error.code === 'cancelled'
+      ) {
         throw error;
       }
       // git's own lines, without credentials (NF-10.5); the user gets the code and the remote's lines.
@@ -142,12 +161,14 @@ export class PushJob implements OnModuleInit {
    * push itself succeeded, so a failure here is only logged: the next push
    * tries again, and **Undo merge** is not offered for a pushed merge anyway.
    */
-  private async forgetPushedMerge(userId: number, repositoryId: number): Promise<void> {
+  private async forgetPushedMerge(userId: number, repositoryId: number, signal: AbortSignal): Promise<void> {
     try {
-      await this.workingTreeLock.run(
-        repositoryId,
-        () => this.mergeRecord.forgetIfPushed(repositoryId, this.repositories.root(userId, repositoryId))
-      );
+      await this.workingTreeLock.run(repositoryId, async () => {
+        // Cancelled while it waited for the lock, such as by removing the repository.
+        if (!signal.aborted) {
+          await this.mergeRecord.forgetIfPushed(repositoryId, this.repositories.root(userId, repositoryId));
+        }
+      });
     } catch (error) {
       this.logger.warn(`Could not forget the pushed merge of repository ${repositoryId}: ${String(error)}`);
     }

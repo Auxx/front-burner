@@ -7,6 +7,8 @@ import { redactCredentials } from '../runner/redact';
 export const GIT_ERROR_CODES = [
   'host-unreachable',
   'timeout',
+  /** git was killed because its job was cancelled; nothing about the remote. */
+  'cancelled',
   'tls-untrusted',
   'auth-failed',
   'repository-not-found',
@@ -100,6 +102,9 @@ const PATTERNS: [ RegExp, GitErrorCode ][] = [
 
 /** Maps a failed git run to an error code. An egress refusal reads as an unreachable host (AR-57). */
 export function classifyGitFailure(result: GitResult, refusals: EgressRefusal[]): GitErrorCode {
+  if (result.aborted) {
+    return 'cancelled';
+  }
   if (result.timedOut) {
     return 'timeout';
   }
@@ -231,7 +236,7 @@ export function classifyPushFailure(
 }
 
 function pushCode(result: GitResult, refusals: EgressRefusal[], own: string, remote: string): GitErrorCode {
-  if (result.timedOut || refusals.length > 0) {
+  if (result.aborted || result.timedOut || refusals.length > 0) {
     return classifyGitFailure(result, refusals);
   }
   const code = PUSH_PATTERNS.find(([ pattern ]) => pattern.test(own))?.[1];

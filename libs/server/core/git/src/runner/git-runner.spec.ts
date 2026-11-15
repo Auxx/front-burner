@@ -138,6 +138,42 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
     expect(processesRunning('sleep', '32.3')).toEqual([]);
   });
 
+  // Reads /proc, which only Linux has.
+  it.skipIf(process.platform !== 'linux')('kills the whole process group when its signal is aborted', async () => {
+    const controller = new AbortController();
+    const run = runner.run([ '-c', 'alias.slow=!sleep 33.1', 'slow' ], {
+      timeoutMs: 60_000,
+      signal: controller.signal
+    });
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const started = Date.now();
+
+    controller.abort();
+    const result = await run;
+
+    expect(result).toMatchObject({ aborted: true, timedOut: false, exitCode: null });
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(processesRunning('sleep', '33.1')).toEqual([]);
+  });
+
+  it('does not start git once its signal is aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await runner.run([ 'version' ], { timeoutMs: 10_000, signal: controller.signal });
+
+    expect(result).toMatchObject({ aborted: true, exitCode: null, stdout: '' });
+  });
+
+  it('a killed git is not taken for a damaged working copy', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    // A folder without .git: a failed git there would be working-copy-missing.
+    await expect(runner.run([ 'status' ], { cwd: dir, timeoutMs: 10_000, signal: controller.signal })).resolves
+      .toMatchObject({ aborted: true });
+  });
+
   it('caps the output', async () => {
     const result = await runner.run([ '-c', 'alias.big=!head -c 300000 /dev/zero | tr "\\0" a', 'big' ], {
       maxOutputBytes: 1000,

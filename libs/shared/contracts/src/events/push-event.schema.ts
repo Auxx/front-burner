@@ -44,6 +44,14 @@ export const PushEventSchema = z.discriminatedUnion('type', [
     type: z.literal('repository.warning'),
     repositoryId: z.number().int()
   }),
+  /**
+   * The repository was removed, maybe on another device: it is gone from
+   * every list and can no longer be opened (RM-19, RM-20).
+   */
+  z.object({
+    type: z.literal('repository.removed'),
+    repositoryId: z.number().int()
+  }),
   /** Git state changed: a commit or a push changes no files, so `files.changed` does not cover it (A-3.11). */
   z.object({
     type: z.literal('git.changed'),

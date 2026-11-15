@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { RemovalCheckResultSchema, wouldLoseWork } from './removal-check.schema';
+import {
+  confirmsName,
+  RemovalCheckResultSchema,
+  RemoveRepositoryQuerySchema,
+  wouldLoseWork
+} from './removal-check.schema';
 
 const nothing = { uncommittedFiles: 0, unpushedCommits: 0, stashes: 0, mergeInProgress: false, unreadable: false };
 
@@ -15,6 +20,23 @@ describe('RemovalCheckResultSchema', () => {
 
   it('registers the schema for OpenAPI', () => {
     expect(z.globalRegistry.get(RemovalCheckResultSchema)?.id).toBe('RemovalCheckResult');
+  });
+});
+
+describe('RemoveRepositoryQuerySchema', () => {
+  it('takes an optional name', () => {
+    expect(RemoveRepositoryQuerySchema.parse({})).toEqual({});
+    expect(RemoveRepositoryQuerySchema.parse({ confirmName: 'handbook' })).toEqual({ confirmName: 'handbook' });
+    expect(z.globalRegistry.get(RemoveRepositoryQuerySchema)?.id).toBe('RemoveRepositoryQuery');
+  });
+});
+
+describe('confirmsName', () => {
+  it('needs the exact name, spaces around it trimmed', () => {
+    expect(confirmsName('Handbook', ' Handbook  ')).toBe(true);
+    expect(confirmsName('Handbook', 'handbook')).toBe(false);
+    expect(confirmsName('Handbook', 'Hand book')).toBe(false);
+    expect(confirmsName('Handbook', undefined)).toBe(false);
   });
 });
 

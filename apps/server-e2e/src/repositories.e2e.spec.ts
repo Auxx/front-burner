@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -377,6 +377,108 @@ describe('what removing would lose (REQ-REPO-003)', () => {
 
   it('requires a login', async () => {
     const response = await fetch(`${server.url}/api/v1/repositories/1/removal`);
+    expect(response.status).toBe(401);
+  });
+});
+
+describe('removing a repository (REQ-REPO-003)', () => {
+  let server: ServerProcess;
+  let adminId: number;
+  let remotesRoot: string;
+  let handbook: string;
+
+  beforeAll(async () => {
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
+    adminId = await onboard(server);
+    remotesRoot = mkdtempSync(join(tmpdir(), 'fb-remove-e2e-'));
+    handbook = createRemotes(remotesRoot).handbook;
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+    rmSync(remotesRoot, { recursive: true, force: true });
+  });
+
+  async function as(email: string, method: string, path: string): Promise<Response> {
+    const { authToken } = await login(server, 'body', { email, password: E2E_ADMIN.password });
+    return fetch(`${server.url}/api/v1${path}`, { method, headers: { authorization: `Bearer ${authToken}` } });
+  }
+
+  /** A ready repository of the administrator's, with a clone of the fixture remote as its working copy. */
+  function cloned(name: string): { id: number; work: string; } {
+    const id = seed(server.dataDir, { repositories: [ { userId: adminId, name, lastAccessedAt: at(0) } ] })
+      .repositoryIds[0] as number;
+    const work = join(server.dataDir, 'repos', String(adminId), String(id));
+    mkdirSync(join(server.dataDir, 'repos', String(adminId)), { recursive: true });
+    execFileSync('git', [ 'clone', '-q', handbook, work ]);
+    return { id, work };
+  }
+
+  /** Polls until `check` holds, for at most 10 seconds. */
+  async function waitFor(check: () => boolean): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (!check()) {
+      if (Date.now() > deadline) {
+        throw new Error('timed out waiting');
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
+
+  it('removes a clean repository with one request, and deletes its working copy', async () => {
+    const { id, work } = cloned('clean');
+
+    const response = await as(E2E_ADMIN.email, 'DELETE', `/repositories/${id}`);
+
+    expect(response.status).toBe(204);
+    expect(existsSync(work)).toBe(false);
+    const list = (await (await as(E2E_ADMIN.email, 'GET', '/repositories')).json()) as {
+      repositories: Summary[];
+    };
+    expect(list.repositories.map(repository => repository.id)).not.toContain(id);
+    expect((await as(E2E_ADMIN.email, 'GET', `/repositories/${id}`)).status).toBe(404);
+    await waitFor(() => readdirSync(join(server.dataDir, 'tmp')).every(name => !name.startsWith(`remove-${id}-`)));
+  });
+
+  it('needs the name when work would be lost', async () => {
+    const { id, work } = cloned('Dirty');
+    writeFileSync(join(work, 'a.md'), '# A\n');
+
+    const refused = await as(E2E_ADMIN.email, 'DELETE', `/repositories/${id}?confirmName=dirty`);
+
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({
+      code: 'removal-needs-confirmation',
+      params: { uncommittedFiles: 1, unpushedCommits: 0, stashes: 0, mergeInProgress: false, unreadable: false }
+    });
+    expect(existsSync(join(work, 'a.md'))).toBe(true);
+
+    const removed = await as(E2E_ADMIN.email, 'DELETE', `/repositories/${id}?confirmName=Dirty`);
+
+    expect(removed.status).toBe(204);
+    expect(existsSync(work)).toBe(false);
+  });
+
+  it('answers another user\'s repository like a missing one', async () => {
+    const email = 'remove-other@example.com';
+    const userId = seed(server.dataDir, { users: [ { email } ] }).userIds[0] as number;
+    const [ secret ] = seed(server.dataDir, { repositories: [ { userId, name: 'secret', lastAccessedAt: at(0) } ] })
+      .repositoryIds;
+
+    const other = await as(E2E_ADMIN.email, 'DELETE', `/repositories/${secret}?confirmName=secret`);
+    const none = await as(E2E_ADMIN.email, 'DELETE', `/repositories/${(secret as number) + 100}?confirmName=secret`);
+
+    expect(other.status).toBe(404);
+    expect(none.status).toBe(404);
+    const strip = (body: Record<string, unknown>) => ({ ...body, requestId: undefined });
+    expect(strip((await other.json()) as Record<string, unknown>)).toEqual(
+      strip((await none.json()) as Record<string, unknown>)
+    );
+    expect((await as(email, 'GET', `/repositories/${secret}`)).status).toBe(200);
+  });
+
+  it('requires a login', async () => {
+    const response = await fetch(`${server.url}/api/v1/repositories/1`, { method: 'DELETE' });
     expect(response.status).toBe(401);
   });
 });

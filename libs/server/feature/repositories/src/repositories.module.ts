@@ -10,7 +10,9 @@ import { RepositoryCredentialsService } from './credentials/repository-credentia
 import { WorkingCopyDamage } from './damage/working-copy-damage';
 import { WorkingCopyDamageInterceptor } from './damage/working-copy-damage.interceptor';
 import { WorkingCopyCheck } from './recovery/working-copy-check';
+import { DeleteWorkingCopyJob } from './remove/delete-working-copy.job';
 import { RemovalCheck } from './remove/removal-check';
+import { RemoveRepositoryService } from './remove/remove-repository.service';
 import { InstanceRepositories } from './repositories/instance-repositories';
 import { RepositoriesController } from './repositories/repositories.controller';
 import { RepositoryQueries } from './repositories/repository-queries';
@@ -35,7 +37,9 @@ import { RepositoryWarnings } from './warnings/repository-warnings';
     RepositoryWarnings,
     WorkingCopyDamage,
     WorkingCopyDamageInterceptor,
-    RemovalCheck
+    RemovalCheck,
+    RemoveRepositoryService,
+    DeleteWorkingCopyJob
   ],
   exports: [
     RepositoryQueries,

@@ -58,6 +58,23 @@ numbering conventions.
   the status, not even for a working copy that git finds damaged; removing runs
   it again inside the lock. Another user's repository is answered like a missing
   one (RM-1). _(Plan 110's call.)_
+- **A-3.2d** `DELETE /repositories/:id?confirmName=` removes the repository in
+  any status and answers `204` (RM-17 to RM-21). When the removal check of
+  A-3.2c says work would be lost, `confirmName` must be the repository's name
+  exactly, spaces around it trimmed (`confirmsName` in `shared/contracts`), or
+  the answer is `409 removal-needs-confirmation` with the check's answer as
+  params, and nothing changes, not even its jobs. Without lost work no name is
+  needed. The name is a query parameter, as a `DELETE` body is not portable. The
+  check runs inside the working-tree lock, so that a file saved since the dialog
+  opened is caught. The rest is **Remove repository** in A-6: the response comes
+  once the working copy is moved out and the row deleted, so the repository is
+  gone from every list, cannot be opened, and its name is free at once (RM-20,
+  RM-21). A move that fails changes nothing but the cancelled jobs, and a row
+  that cannot be deleted puts the working copy back. A request that waited for
+  the working-tree lock behind the removal answers `404 not-found`
+  (`WorkingTreeLock.isRemoved`). Publishes `repository.removed` to the owner.
+  Another user's repository is answered like a missing one (RM-1,
+  AC-REPO-003.14). _(Plan 111's call.)_
 
 ## A-3: Contracts
 

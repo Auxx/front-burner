@@ -23,7 +23,11 @@ where git may connect. Lives in `server/git` (A-2). See
     `submodule.recurse=false`;
   - every run has a timeout (`FRONT_BURNER_CLONE_TIMEOUT` for clones,
     `FRONT_BURNER_GIT_TIMEOUT` otherwise, NF-11.8) and a cap on the output it
-    reads; on timeout or shutdown the whole process group is killed;
+    reads; on timeout or shutdown the whole process group is killed, and so it
+    is when the run's abort signal fires: a clone, a fetch and a push take their
+    job's signal, so that cancelling the job stops git, with the code
+    `cancelled`, which is never stored as a remote's problem. A clone cancelled
+    after git finished is not moved into place. _(Plan 111's call.)_;
   - output is read in machine-readable forms only (`--porcelain=v2 -z`, `-z`,
     `--format` with explicit separators);
   - stderr is kept for the log, with credentials removed from any URL (NF-10.5),

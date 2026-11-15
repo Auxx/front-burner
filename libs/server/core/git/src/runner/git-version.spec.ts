@@ -11,6 +11,7 @@ const runnerAnswering = (result: Partial<GitResult>) =>
       stdoutBytes: 0,
       stderr: '',
       timedOut: false,
+      aborted: false,
       ...result
     })
   }) as unknown as GitRunner;

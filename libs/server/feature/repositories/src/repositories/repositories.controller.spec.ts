@@ -385,6 +385,54 @@ describe('RepositoriesController', () => {
     });
   });
 
+  describe('remove', () => {
+    const remove = (user: number, id: number, query = '') =>
+      http().delete(`/api/v1/repositories/${id}${query}`).set('x-test-user', String(user));
+
+    it('removes a clean repository without a name', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, { name: 'handbook' });
+      const work = join(root, 'data', 'repos', String(alice), String(id));
+      mkdirSync(join(root, 'data', 'repos', String(alice)), { recursive: true });
+      git(root, 'clone', '-q', join(root, 'handbook.git'), work);
+
+      await remove(alice, id).expect(204);
+
+      await http().get(`/api/v1/repositories/${id}`).set('x-test-user', String(alice)).expect(404);
+    });
+
+    it('refuses without the name when work would be lost, with what would be lost', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, { name: 'Handbook' });
+      const work = join(root, 'data', 'repos', String(alice), String(id));
+      mkdirSync(join(root, 'data', 'repos', String(alice)), { recursive: true });
+      git(root, 'clone', '-q', join(root, 'handbook.git'), work);
+      writeFileSync(join(work, 'notes.md'), 'notes\n');
+
+      const refused = await remove(alice, id).expect(409);
+
+      expect(refused.body).toMatchObject({
+        code: 'removal-needs-confirmation',
+        params: { uncommittedFiles: 1, unpushedCommits: 0, stashes: 0, mergeInProgress: false, unreadable: false }
+      });
+      await remove(alice, id, '?confirmName=%20Handbook%20').expect(204);
+    });
+
+    it('answers another user\'s repository like a missing one', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const bob = insertUser(database, 'bob@example.com');
+      const secret = insertRepository(database, bob, { name: 'secret' });
+      const strip = (body: Record<string, unknown>) => ({ ...body, requestId: undefined });
+
+      const other = await remove(alice, secret, '?confirmName=secret').expect(404);
+      const none = await remove(alice, secret + 100, '?confirmName=secret').expect(404);
+
+      expect(other.body.code).toBe('not-found');
+      expect(strip(other.body)).toEqual(strip(none.body));
+      await http().get(`/api/v1/repositories/${secret}`).set('x-test-user', String(bob)).expect(200);
+    });
+  });
+
   describe('warnings (RM-8)', () => {
     it('answers the stored problems in every summary', async () => {
       const alice = insertUser(database, 'alice@example.com');

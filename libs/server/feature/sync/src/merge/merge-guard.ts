@@ -12,10 +12,14 @@ export class MergeGuard {
    * is no merge, also during a rebase. The check runs inside the lock, so that an
    * operation queued ahead of this one can have ended the merge (A-5.3).
    *
-   * @throws ApiErrorException `409 no-merge-in-progress`
+   * @throws ApiErrorException `409 no-merge-in-progress`; `404 not-found` when
+   *   the repository was removed while the task waited for the lock (RM-19).
    */
   change<T>(repositoryId: number, root: string, task: () => Promise<T>): Promise<T> {
     return this.lock.run(repositoryId, async () => {
+      if (this.lock.isRemoved(repositoryId)) {
+        throw new ApiErrorException(404, 'not-found');
+      }
       if (!await this.merges.mergeInProgress(root)) {
         throw new ApiErrorException(409, 'no-merge-in-progress');
       }

@@ -47,6 +47,18 @@ describe('prepareDataDir', () => {
     expect(readdirSync(join(dataDir, 'repos', '1', '2'))).toEqual([ 'README.md' ]);
   });
 
+  it('a leftover removed working copy is deleted on start', () => {
+    // A restart between Remove repository's move and its job (RM-19, NF-5.1).
+    const dataDir = join(root, 'data');
+    const removed = join(dataDir, 'tmp', 'remove-2-0b6f4f3c-6d1e-4f7a-9c2b-1d2e3f4a5b6c');
+    mkdirSync(join(removed, '.git'), { recursive: true });
+    writeFileSync(join(removed, 'README.md'), '# Hi');
+
+    prepareDataDir(dataDir);
+
+    expect(readdirSync(join(dataDir, 'tmp'))).toEqual([]);
+  });
+
   // Mode bits do not make a folder unwritable on Windows, nor for root.
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'throws naming the path when the directory is not writable',
