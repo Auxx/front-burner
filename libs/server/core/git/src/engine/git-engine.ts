@@ -109,6 +109,16 @@ export interface LastCommit {
   message: string | null;
 }
 
+/** What removing a working copy would lose (RM-18). */
+export interface UnsavedWork {
+  /** Files that differ from the last commit, untracked ones included and ignored ones not. */
+  uncommittedFiles: number;
+  /** Commits on `HEAD` or a local branch that no remote branch has. */
+  unpushedCommits: number;
+  /** A merge or rebase waits for the user. */
+  mergeInProgress: boolean;
+}
+
 /** GA-16: a diff larger than this, with 3 lines of context, is not shown. */
 const DIFF_LIMIT_BYTES = 1_000_000;
 
@@ -702,6 +712,58 @@ export class GitEngine implements BeforeApplicationShutdown {
       IN_PROGRESS_MARKERS.map(marker => access(join(workingCopy, '.git', marker)).then(() => true, () => false))
     );
     return found.includes(true);
+  }
+
+  /**
+   * What removing the working copy would lose (RM-18): files that differ from
+   * the last commit, untracked ones included and ignored ones not, commits that
+   * no remote branch has, on any local branch or a detached `HEAD`, and a merge
+   * or rebase in progress. Never writes the index, so it can run outside the
+   * working-tree lock (A-5.3).
+   *
+   * @throws GitOperationError `working-copy-missing` (RM-6) or `timeout`.
+   */
+  async unsavedWork(workingCopy: string): Promise<UnsavedWork> {
+    const [ uncommittedFiles, unpushedCommits, mergeInProgress ] = await Promise.all([
+      this.uncommittedFiles(workingCopy),
+      this.unpushedCommits(workingCopy),
+      this.mergeInProgress(workingCopy)
+    ]);
+    return { uncommittedFiles, unpushedCommits, mergeInProgress };
+  }
+
+  /** Changed, unmerged and untracked entries; a nested repository counts as one. */
+  private async uncommittedFiles(workingCopy: string): Promise<number> {
+    const output = await this.local.checked(workingCopy, [
+      '--no-optional-locks',
+      'status',
+      '--porcelain=v2',
+      '-z',
+      '--untracked-files=all',
+      '--no-renames',
+      '--ignored=no'
+    ]);
+    // Without renames, every record is one NUL-terminated entry.
+    return output.split('\0').filter(record => /^[1u?] /.test(record)).length;
+  }
+
+  /** Commits of `HEAD` and every local branch that no remote branch has; `HEAD` only once it has a commit. */
+  private async unpushedCommits(workingCopy: string): Promise<number> {
+    const head = await this.local.run(workingCopy, [ 'rev-parse', '--verify', '--quiet', 'HEAD^{commit}' ]);
+    if (head.timedOut) {
+      throw new GitOperationError('timeout', head.stderr);
+    }
+    const output = await this.local.checked(workingCopy, [
+      '--no-optional-locks',
+      'rev-list',
+      '--count',
+      ...(head.exitCode === 0 ? [ 'HEAD' ] : []),
+      '--branches',
+      '--not',
+      '--remotes',
+      '--'
+    ]);
+    return Number.parseInt(output.trim(), 10);
   }
 
   /**

@@ -305,8 +305,19 @@ Confirmed by spike 2 (spikes.md).
     remote branch (GA-37); adding a pushed branch to a single-branch clone's
     fetch refspec (GA-41); starting a conflicting file over (`git update-index
     --unresolve`, then the markers, GC-18); undoing a merge by resetting to the
-    recorded commit (GC-26); and recognising credential problems in git's and
-    the server's messages (RC-5).
+    recorded commit (GC-26); recognising credential problems in git's and the
+    server's messages (RC-5); and what removing a working copy would lose
+    (`unsavedWork`, RM-18).
+  - `unsavedWork` is read-only and runs outside the working-tree lock, as status
+    does. It counts the entries of `git status --porcelain=v2
+    --untracked-files=all --no-renames --ignored=no`, so untracked files count
+    and ignored ones do not, and a nested repository counts as one file; the
+    commits of `git rev-list --count HEAD --branches --not --remotes`, so
+    commits on a branch never pushed or on a detached `HEAD` count, and a branch
+    without commits counts 0 (`HEAD` is left out until it has one); and a merge
+    or rebase in progress, as `mergeInProgress` reads it. In a single-branch
+    clone, commits on other local branches count as not pushed, which is true.
+    _(Plan 110's call.)_
   - Every operation that writes a commit sets the commit author itself (CA-2),
     and every merge sets `merge.conflictStyle=merge` (GC-5), so the working
     copy's own configuration decides neither.

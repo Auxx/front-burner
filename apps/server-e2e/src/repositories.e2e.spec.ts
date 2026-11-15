@@ -1,4 +1,9 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createRemotes } from './support/git-remotes';
 import {
   E2E_ADMIN,
   E2E_SETUP_TOKEN,
@@ -289,6 +294,88 @@ describe('repository details (REQ-REPO-003)', () => {
 
   it('requires a login', async () => {
     const response = await fetch(`${server.url}/api/v1/repositories/1/details`);
+    expect(response.status).toBe(401);
+  });
+});
+
+describe('what removing would lose (REQ-REPO-003)', () => {
+  let server: ServerProcess;
+  let adminId: number;
+  let remotesRoot: string;
+  let handbook: string;
+
+  beforeAll(async () => {
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
+    adminId = await onboard(server);
+    remotesRoot = mkdtempSync(join(tmpdir(), 'fb-removal-e2e-'));
+    handbook = createRemotes(remotesRoot).handbook;
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+    rmSync(remotesRoot, { recursive: true, force: true });
+  });
+
+  async function removal(email: string, id: number): Promise<Response> {
+    const { authToken } = await login(server, 'body', { email, password: E2E_ADMIN.password });
+    return fetch(`${server.url}/api/v1/repositories/${id}/removal`, {
+      headers: { authorization: `Bearer ${authToken}` }
+    });
+  }
+
+  it('counts 2 uncommitted files and 3 commits not pushed', async () => {
+    const [ id ] = seed(server.dataDir, {
+      repositories: [ { userId: adminId, name: 'handbook', lastAccessedAt: at(0) } ]
+    }).repositoryIds;
+    const work = join(server.dataDir, 'repos', String(adminId), String(id));
+    mkdirSync(join(server.dataDir, 'repos', String(adminId)), { recursive: true });
+    execFileSync('git', [ 'clone', '-q', handbook, work ]);
+    for (const subject of [ 'one', 'two', 'three' ]) {
+      execFileSync('git', [
+        '-c',
+        'user.name=E2E',
+        '-c',
+        'user.email=e2e@example.com',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        subject
+      ], { cwd: work });
+    }
+    writeFileSync(join(work, 'a.md'), '# A\n');
+    writeFileSync(join(work, 'b.md'), '# B\n');
+
+    const response = await removal(E2E_ADMIN.email, id as number);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      uncommittedFiles: 2,
+      unpushedCommits: 3,
+      mergeInProgress: false,
+      unreadable: false
+    });
+  });
+
+  it('answers another user\'s repository like a missing one', async () => {
+    const email = 'removal-other@example.com';
+    const userId = seed(server.dataDir, { users: [ { email } ] }).userIds[0] as number;
+    const [ secret ] = seed(server.dataDir, { repositories: [ { userId, name: 'secret', lastAccessedAt: at(0) } ] })
+      .repositoryIds;
+
+    const other = await removal(E2E_ADMIN.email, secret as number);
+    const none = await removal(E2E_ADMIN.email, (secret as number) + 100);
+
+    expect(other.status).toBe(404);
+    expect(none.status).toBe(404);
+    const strip = (body: Record<string, unknown>) => ({ ...body, requestId: undefined });
+    const otherBody = (await other.json()) as Record<string, unknown>;
+    expect(otherBody.code).toBe('not-found');
+    expect(strip(otherBody)).toEqual(strip((await none.json()) as Record<string, unknown>));
+  });
+
+  it('requires a login', async () => {
+    const response = await fetch(`${server.url}/api/v1/repositories/1/removal`);
     expect(response.status).toBe(401);
   });
 });

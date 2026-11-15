@@ -288,6 +288,131 @@ describe('GitEngine', () => {
     });
   });
 
+  describe('unsavedWork', () => {
+    let work: string;
+
+    /** A clone of the fixture, so that `main` and `feature/x` are on the remote. */
+    beforeEach(() => {
+      work = join(root, 'unsaved');
+      git(root, 'clone', '-q', join(root, 'fixture.git'), work);
+    });
+
+    const commit = (message: string) => git(work, 'commit', '-q', '--allow-empty', '-m', message);
+
+    it('answers nothing to lose for a clean working copy', async () => {
+      expect(await engine().unsavedWork(work)).toEqual({
+        uncommittedFiles: 0,
+        unpushedCommits: 0,
+        mergeInProgress: false
+      });
+    });
+
+    it('counts uncommitted files and commits not pushed', async () => {
+      commit('one');
+      commit('two');
+      commit('three');
+      writeFileSync(join(work, 'a.md'), 'a\n');
+      writeFileSync(join(work, 'b.md'), 'b\n');
+
+      expect(await engine().unsavedWork(work)).toEqual({
+        uncommittedFiles: 2,
+        unpushedCommits: 3,
+        mergeInProgress: false
+      });
+    });
+
+    it('counts untracked files, not ignored ones', async () => {
+      writeFileSync(join(work, '.gitignore'), 'build/\n*.log\n');
+      git(work, 'add', '.gitignore');
+      git(work, 'commit', '-q', '-m', 'ignore');
+      git(work, 'push', '-q', 'origin', 'main');
+      mkdirSync(join(work, 'build'));
+      writeFileSync(join(work, 'build', 'out.html'), 'out\n');
+      writeFileSync(join(work, 'debug.log'), 'log\n');
+      mkdirSync(join(work, 'notes'));
+      writeFileSync(join(work, 'notes', 'one.md'), 'one\n');
+      writeFileSync(join(work, 'notes', 'two.md'), 'two\n');
+
+      expect((await engine().unsavedWork(work)).uncommittedFiles).toBe(2);
+    });
+
+    it('counts the commits of a branch that was never pushed', async () => {
+      git(work, 'checkout', '-q', '-b', 'local');
+      commit('local one');
+      commit('local two');
+      git(work, 'checkout', '-q', 'main');
+
+      expect((await engine().unsavedWork(work)).unpushedCommits).toBe(2);
+    });
+
+    it('counts commits on a detached HEAD', async () => {
+      git(work, 'checkout', '-q', '--detach');
+      commit('detached');
+
+      expect((await engine().unsavedWork(work)).unpushedCommits).toBe(1);
+    });
+
+    it('counts no commits on a branch without any', async () => {
+      const fresh = join(root, 'fresh');
+      git(root, 'clone', '-q', join(root, 'empty.git'), fresh);
+      writeFileSync(join(fresh, 'a.md'), 'a\n');
+
+      expect(await engine().unsavedWork(fresh)).toEqual({
+        uncommittedFiles: 1,
+        unpushedCommits: 0,
+        mergeInProgress: false
+      });
+    });
+
+    it('reports a merge in progress', async () => {
+      writeFileSync(join(work, 'notes.md'), 'base\n');
+      git(work, 'add', 'notes.md');
+      git(work, 'commit', '-q', '-m', 'base');
+      git(work, 'checkout', '-q', '-b', 'other');
+      writeFileSync(join(work, 'notes.md'), 'theirs\n');
+      git(work, 'commit', '-q', '-am', 'theirs');
+      git(work, 'checkout', '-q', 'main');
+      writeFileSync(join(work, 'notes.md'), 'ours\n');
+      git(work, 'commit', '-q', '-am', 'ours');
+      expect(() => git(work, 'merge', '-q', 'other')).toThrow();
+
+      const unsaved = await engine().unsavedWork(work);
+
+      expect(unsaved.mergeInProgress).toBe(true);
+      expect(unsaved.uncommittedFiles).toBe(1);
+    });
+
+    it('takes no lock', async () => {
+      writeFileSync(join(work, 'tracked.md'), 'tracked\n');
+      git(work, 'add', 'tracked.md');
+      git(work, 'commit', '-q', '-m', 'tracked');
+      // A new modification time makes the file stat-dirty: a git status that may lock would rewrite the index.
+      const later = new Date(Date.now() + 60_000);
+      utimesSync(join(work, 'tracked.md'), later, later);
+      const index = join(work, '.git', 'index');
+      const before = { bytes: readFileSync(index), mtimeMs: statSync(index).mtimeMs };
+
+      expect((await engine().unsavedWork(work)).uncommittedFiles).toBe(0);
+      expect(readFileSync(index)).toEqual(before.bytes);
+      expect(statSync(index).mtimeMs).toBe(before.mtimeMs);
+    });
+
+    it('answers while another command holds the index lock', async () => {
+      writeFileSync(join(work, 'a.md'), 'a\n');
+      writeFileSync(join(work, '.git', 'index.lock'), '');
+
+      expect((await engine().unsavedWork(work)).uncommittedFiles).toBe(1);
+    });
+
+    it('reports a working copy without a repository as missing', async () => {
+      rmSync(join(work, '.git'), { recursive: true, force: true });
+
+      const failure = await failureOf(engine().unsavedWork(work));
+
+      expect(failure.code).toBe('working-copy-missing');
+    });
+  });
+
   describe('isUnresolved', () => {
     let work: string;
 

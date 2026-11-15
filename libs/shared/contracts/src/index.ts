@@ -22,6 +22,7 @@ export * from './health/health-status.schema';
 export * from './onboarding/onboarding.schema';
 export * from './preferences/commit-author.schema';
 export * from './repositories/add-repository.schema';
+export * from './repositories/removal-check.schema';
 export * from './repositories/repository-credentials.schema';
 export * from './repositories/repository-details.schema';
 export * from './repositories/repository-list.schema';

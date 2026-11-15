@@ -4,6 +4,7 @@ import { authOf, RateLimitGroup } from '@front-burner/server-core-security';
 import type {
   AccessCheckResult,
   RecentRepositories,
+  RemovalCheckResult,
   RepositoryDetails,
   RepositoryIndex,
   RepositoryList,
@@ -14,6 +15,7 @@ import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { AddRepositoryService } from '../add/add-repository.service';
+import { RemovalCheck } from '../remove/removal-check';
 import { RepositoryWarnings, WarningsViewer } from '../warnings/repository-warnings';
 import {
   AccessCheckRequestDto,
@@ -21,6 +23,7 @@ import {
   AddRepositoryRequestDto,
   RecentQueryDto,
   RecentRepositoriesDto,
+  RemovalCheckResultDto,
   RepositoryDetailsDto,
   RepositoryIndexDto,
   RepositoryListDto,
@@ -44,7 +47,8 @@ export class RepositoriesController {
   constructor(
     private readonly queries: RepositoryQueries,
     private readonly adding: AddRepositoryService,
-    private readonly warnings: RepositoryWarnings
+    private readonly warnings: RepositoryWarnings,
+    private readonly removal: RemovalCheck
   ) {}
 
   /** The dashboard's recent list (DS-16, DS-17); the switcher's without the current repository (NV-10). */
@@ -114,6 +118,18 @@ export class RepositoriesController {
     const auth = authOf(req);
     const row = ownRow(this.queries.find(auth.userId, params.id));
     return toDetails(row, this.warnings.forRow(auth, row));
+  }
+
+  /**
+   * What removing the repository would lose, for the remove dialog: uncommitted
+   * files, commits not pushed, a merge in progress, or a working copy that git
+   * cannot read (RM-18). Changes nothing.
+   */
+  @Get(':id/removal')
+  @ApiOkResponse({ type: RemovalCheckResultDto })
+  @ZodSerializerDto(RemovalCheckResultDto)
+  removalCheck(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<RemovalCheckResult> {
+    return this.removal.of(authOf(req).userId, params.id);
   }
 
   /**
