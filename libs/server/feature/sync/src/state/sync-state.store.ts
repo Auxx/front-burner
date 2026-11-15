@@ -40,8 +40,8 @@ export class SyncStateStore {
 
   /** The warnings left by fetches and pulls, and by pushes (RM-8). */
   remoteProblems(repositoryId: number): RemoteProblems {
-    const row = this.row(repositoryId);
-    return { fetch: parsed(row?.fetchWarning), push: parsed(row?.pushProblem) };
+    // Through the read that the warnings use, so that both say the same.
+    return this.remoteProblemsOf([ repositoryId ]).get(repositoryId) ?? { fetch: null, push: null };
   }
 
   /** The same for many repositories, in one query (NF-2); a repository without a row is left out. */

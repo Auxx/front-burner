@@ -4,8 +4,9 @@ import { Observable, Subject } from 'rxjs';
 /**
  * Tells other features which repositories now use other credentials, or new
  * secrets of the same saved credentials, so that the sync feature can forget
- * "Can't push with these credentials" (RM-8) without this feature depending
- * on it, as `SessionLifecycle` does for sessions _(plan 107's call)_.
+ * "Can't push with these credentials" (RM-8) and tell clients that the
+ * warnings may have changed, without this feature depending on it, as
+ * `SessionLifecycle` does for sessions _(plan 107's call)_.
  */
 @Injectable()
 export class RepositoryCredentialsChanges {

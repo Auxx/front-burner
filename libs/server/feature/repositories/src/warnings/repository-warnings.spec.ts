@@ -1,6 +1,6 @@
 import type { Config } from '@front-burner/server-core-config';
 import { SecretBox } from '@front-burner/server-core-crypto';
-import { Database, repositories, Repository } from '@front-burner/server-core-database';
+import { Database, repositories, Repository, savedCredentials } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { SessionLifecycle } from '@front-burner/server-core-security';
@@ -32,7 +32,9 @@ describe('RepositoryWarnings', () => {
     database.db.select().from(repositories).where(eq(repositories.id, id)).get() as Repository;
   const saveKey = (privateKey: string, passphrase?: string) =>
     database.db.transaction(tx => saved.createPastedKey(tx, alice, { name: 'Laptop', privateKey, passphrase }));
-  const forOne = (id: number, sessionId = SESSION) => warnings.forRow(sessionId, row(id));
+  const forOne = (id: number, sessionId = SESSION) => warnings.forRow({ userId: alice, sessionId }, row(id));
+  const withKey = (keyId: number, name = 'notes') =>
+    insertRepository(database, alice, { name, remoteUrl: 'git@github.com:acme/notes.git', credentialId: keyId });
 
   const newUnlocks = () =>
     new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, new SessionLifecycle(), new EventsHub());
@@ -46,7 +48,7 @@ describe('RepositoryWarnings', () => {
     source.provide(ids =>
       new Map(ids.flatMap(id => (stored.has(id) ? [ [ id, stored.get(id) as RemoteProblems ] ] : [])))
     );
-    warnings = new RepositoryWarnings(database, source, unlocks);
+    warnings = new RepositoryWarnings(source, saved);
     alice = insertUser(database, 'alice@example.com');
   });
 
@@ -116,9 +118,19 @@ describe('RepositoryWarnings', () => {
     // The unlocks live in memory only: a new process starts with none (RC-15).
     unlocks.onModuleDestroy();
     unlocks = newUnlocks();
-    warnings = new RepositoryWarnings(database, source, unlocks);
+    saved = new SavedCredentialsService(database, box, unlocks, new UnlockAttempts());
+    warnings = new RepositoryWarnings(source, saved);
 
     expect(forOne(id)).toEqual([ 'key-locked' ]);
+  });
+
+  it('a protected key whose secret is missing is not locked', () => {
+    const keyId = saveKey(PROTECTED, FIXTURE_PASSPHRASE);
+    const id = withKey(keyId);
+    // An encryption key reset deletes the secrets (NF-8.6): no unlock could help, and the job reports it.
+    database.db.update(savedCredentials).set({ secret: null }).where(eq(savedCredentials.id, keyId)).run();
+
+    expect(forOne(id)).toEqual([]);
   });
 
   it('a key without a passphrase is never locked', () => {
@@ -164,16 +176,23 @@ describe('RepositoryWarnings', () => {
     const ids = Array.from({ length: 5 }, (_, i) => insertRepository(database, alice, { name: `repo-${i}` }));
     const failed = insertRepository(database, alice, { name: 'failed', status: 'error', errorCode: 'clone-failed' });
     stored.set(ids[2], { fetch: problem('credentials-refused'), push: null });
+    const keyId = saveKey(PROTECTED, FIXTURE_PASSPHRASE);
+    const locked = withKey(keyId, 'locked');
     const read = vi.spyOn(source, 'read');
+    const keys = vi.spyOn(saved, 'lockedKeyIds');
 
-    const result = warnings.forRows(SESSION, [ ...ids, failed ].map(row));
+    const result = warnings.forRows({ userId: alice, sessionId: SESSION }, [ ...ids, locked, failed ].map(row));
 
-    expect(read).toHaveBeenCalledTimes(1);
     // Only the ready ones: the others have no warnings to read (RM-8).
-    expect(read).toHaveBeenCalledWith(ids);
-    expect([ ...result.entries() ]).toEqual([
-      ...ids.map(id => [ id, id === ids[2] ? [ 'credentials-refused' ] : [] ]),
-      [ failed, [] ]
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledWith([ ...ids, locked ]);
+    expect(keys).toHaveBeenCalledTimes(1);
+    expect(keys).toHaveBeenCalledWith(alice, SESSION, [ keyId ]);
+    // In the rows' order.
+    expect(result).toEqual([
+      ...ids.map(id => (id === ids[2] ? [ 'credentials-refused' ] : [])),
+      [ 'key-locked' ],
+      []
     ]);
   });
 });

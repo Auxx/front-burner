@@ -6,9 +6,10 @@ import { SyncStateStore } from './sync-state.store';
 
 /**
  * Forgets "Can't push with these credentials" when a repository's credentials
- * change, as RM-8 says, and tells the owner's clients with
- * `repository.warning`; the other warnings wait for an operation with the
- * remote to succeed.
+ * change, as RM-8 says; the other stored warnings wait for an operation with
+ * the remote to succeed. Tells the owner's clients with `repository.warning`
+ * every time, also when nothing was stored: other credentials can bring or
+ * take away "Key locked" (RC-15).
  */
 @Injectable()
 export class CredentialsChangedListener implements OnModuleDestroy {
@@ -19,11 +20,14 @@ export class CredentialsChangedListener implements OnModuleDestroy {
     this.#subscription = changes.changed.subscribe(({ userId, repositoryId }) => {
       // RxJS throws a subscriber's error again outside any caller, where it would stop the process.
       try {
-        if (syncState.credentialsChanged(repositoryId)) {
-          events.publish(userId, { type: 'repository.warning', repositoryId });
-        }
+        syncState.credentialsChanged(repositoryId);
       } catch (error) {
         this.logger.error(`Could not forget the push problem of repository ${repositoryId}: ${String(error)}`);
+      }
+      try {
+        events.publish(userId, { type: 'repository.warning', repositoryId });
+      } catch (error) {
+        this.logger.error(`Could not tell of the warnings of repository ${repositoryId}: ${String(error)}`);
       }
     });
   }

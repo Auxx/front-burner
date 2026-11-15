@@ -45,7 +45,7 @@ describe('CredentialsChangedListener', () => {
     expect(published).toEqual([ { userId, event: { type: 'repository.warning', repositoryId } } ]);
   });
 
-  it('changing the credentials keeps credentials-refused, and publishes nothing', () => {
+  it('changing the credentials keeps credentials-refused', () => {
     const refused = { code: 'credentials-refused', params: { host: 'h' } };
     store.remoteFailed(repositoryId, 'fetch', refused);
     store.remoteFailed(repositoryId, 'push', refused);
@@ -53,7 +53,28 @@ describe('CredentialsChangedListener', () => {
     changes.notifyChanged(userId, [ repositoryId ]);
 
     expect(store.remoteProblems(repositoryId)).toEqual({ fetch: refused, push: refused });
-    expect(published).toEqual([]);
+  });
+
+  it('publishes repository.warning for every change, also with nothing stored, as Key locked may change', () => {
+    const other = insertRepository(database, userId, { name: 'other' });
+
+    changes.notifyChanged(userId, [ repositoryId, other ]);
+
+    expect(published).toEqual([
+      { userId, event: { type: 'repository.warning', repositoryId } },
+      { userId, event: { type: 'repository.warning', repositoryId: other } }
+    ]);
+  });
+
+  it('still publishes when forgetting the push problem fails', () => {
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    vi.spyOn(store, 'credentialsChanged').mockImplementationOnce(() => {
+      throw new Error('SQLITE_BUSY');
+    });
+
+    changes.notifyChanged(userId, [ repositoryId ]);
+
+    expect(published).toEqual([ { userId, event: { type: 'repository.warning', repositoryId } } ]);
   });
 
   it('logs a failure instead of letting RxJS throw it later, and keeps listening', () => {
