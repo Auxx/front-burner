@@ -4,8 +4,7 @@ import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqli
 import { savedCredentials } from './saved-credentials';
 import { users } from './users';
 
-// drizzle-kit loads this file without the workspace's path aliases, so only a
-// type may come from the contracts; a test checks that the lists agree.
+// A test checks that these lists agree with the contracts.
 export const CLONE_MODES = [ 'full', 'single-branch' ] as const satisfies readonly CloneMode[];
 export const GIT_LEVELS = [ 'simple', 'guided', 'advanced' ] as const satisfies readonly GitLevel[];
 /** "Needs your confirmation" is not stored: adding on a user's behalf is not in the MVP. */
