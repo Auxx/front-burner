@@ -42,6 +42,30 @@ describe('InstanceRepositories', () => {
     expect(instance.ready()).toEqual([]);
   });
 
+  it('marks a repository damaged with git\'s message and no request ID', () => {
+    const handbook = insertRepository(database, alice, { name: 'handbook' });
+    const onStart = insertRepository(database, alice, { name: 'on-start' });
+
+    instance.markDamaged(handbook, 'fatal: not a git repository');
+    instance.markDamaged(onStart);
+
+    const recordOf = (id: number) =>
+      database.db.select({ detail: repositories.errorDetail, requestId: repositories.errorRequestId })
+        .from(repositories).where(eq(repositories.id, id)).get();
+    expect(recordOf(handbook)).toEqual({ detail: 'fatal: not a git repository', requestId: null });
+    expect(recordOf(onStart)).toEqual({ detail: null, requestId: null });
+  });
+
+  it('a repair clears the error record', () => {
+    const damaged = insertRepository(database, alice, { name: 'damaged' });
+    instance.markDamaged(damaged, 'fatal: bad object HEAD');
+
+    instance.markRepaired(damaged);
+
+    expect(database.db.select().from(repositories).where(eq(repositories.id, damaged)).get())
+      .toMatchObject({ status: 'ready', errorCode: null, errorDetail: null, errorRequestId: null });
+  });
+
   it('gives no user for a repository that is gone', () => {
     expect(instance.markDamaged(999)).toBeUndefined();
   });

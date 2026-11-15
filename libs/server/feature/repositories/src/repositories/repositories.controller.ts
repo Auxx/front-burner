@@ -82,7 +82,7 @@ export class RepositoriesController {
   @ZodSerializerDto(RepositorySummaryDto)
   add(@Req() req: Request, @Body() body: AddRepositoryRequestDto): Promise<RepositorySummary> {
     const { userId, sessionId } = authOf(req);
-    return this.adding.add({ id: userId, sessionId }, body);
+    return this.adding.add({ id: userId, sessionId, requestId: String(req.id) }, body);
   }
 
   /** One repository; another user's is answered like a missing one (FB-2). */

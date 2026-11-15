@@ -14,6 +14,27 @@ import { CLONE_JOB_TYPE, CloneJobPayload } from '../add/add-repository.service';
 /** How many clones of one user may wait or run at once (NF-11.4). */
 const CLONE_PER_USER_LIMIT = 3;
 
+/** The longest error detail kept on a repository (RM-10). */
+const ERROR_DETAIL_MAX_LENGTH = 4_000;
+
+/**
+ * git's message for a failed clone, as kept on the repository: already without
+ * credentials (AR-53), trimmed, and cut to its end, where git puts the cause. A
+ * timeout has none: its error code says what happened.
+ */
+function errorDetailOf(error: GitOperationError): string | null {
+  if (error.code === 'timeout') {
+    return null;
+  }
+  const detail = error.detail.trim();
+  return detail === '' ? null : detail.slice(-ERROR_DETAIL_MAX_LENGTH);
+}
+
+/** The request that queued a clone, or null for a job queued before it was recorded. */
+function requestIdOf(job: Job): string | null {
+  return (JSON.parse(job.payload) as CloneJobPayload).requestId ?? null;
+}
+
 /**
  * The background clone of a new repository (AR-49 to AR-54, the **Clone** job
  * of A-6). Its outcome sets the repository's status and tells the owner's
@@ -22,6 +43,8 @@ const CLONE_PER_USER_LIMIT = 3;
 @Injectable()
 export class CloneJob implements OnModuleInit {
   private readonly logger = new Logger(CloneJob.name);
+  /** git's message of a failed clone, by job, from its handler until its end is recorded. */
+  private readonly details = new Map<number, string | null>();
 
   constructor(
     @Inject(DATABASE) private readonly database: Database,
@@ -70,6 +93,7 @@ export class CloneJob implements OnModuleInit {
         if (error instanceof GitOperationError) {
           // git's error, with credentials removed by the engine (AR-53, NF-10.5).
           this.logger.warn(`Clone of repository ${row.id} failed with ${error.code}: ${error.detail.trim()}`);
+          this.details.set(job.id, errorDetailOf(error));
         }
         throw error;
       }
@@ -89,6 +113,9 @@ export class CloneJob implements OnModuleInit {
   private finished(job: Job, outcome: 'done' | 'failed' | 'cancelled', errorCode: string | null): void {
     // Also for a job that never ran, such as one cancelled while queued (AR-49).
     this.jobKeys.release(job.id);
+    // An interrupted clone ran in an earlier process, and so has no detail.
+    const detail = this.details.get(job.id) ?? null;
+    this.details.delete(job.id);
     if (outcome === 'cancelled' || job.repositoryId === null) {
       return;
     }
@@ -101,7 +128,12 @@ export class CloneJob implements OnModuleInit {
       ? 'clone-timed-out'
       : 'clone-failed';
     const row = this.database.db.update(repositories)
-      .set({ status: error === null ? 'ready' : 'error', errorCode: error })
+      .set({
+        status: error === null ? 'ready' : 'error',
+        errorCode: error,
+        errorDetail: error === null ? null : detail,
+        errorRequestId: error === null ? null : requestIdOf(job)
+      })
       .where(eq(repositories.id, job.repositoryId))
       .returning()
       .get();

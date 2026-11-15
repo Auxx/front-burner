@@ -2,7 +2,7 @@ import type { Config } from '@front-burner/server-core-config';
 import { SecretBox } from '@front-burner/server-core-crypto';
 import { Database, jobs, repositories } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
-import { GitEngine, GitOptions, GitRunner, unlockPrivateKey } from '@front-burner/server-core-git';
+import { GitEngine, GitOperationError, GitOptions, GitRunner, unlockPrivateKey } from '@front-burner/server-core-git';
 import {
   FIXTURE_PASSPHRASE,
   GitHttpServer,
@@ -177,6 +177,72 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
     });
   });
 
+  it('records git\'s error', async () => {
+    const { id } = await add();
+    rmSync(remotes.handbook, { recursive: true, force: true });
+
+    runner.start();
+    await settled(id);
+
+    expect(rowOf(id)?.errorDetail).toMatch(/not found|404/i);
+  });
+
+  it('stores no credentials', async () => {
+    const { id } = await add();
+    rmSync(remotes.handbook, { recursive: true, force: true });
+    const withToken = `${server.url.replace('://', '://user:secret-token@')}/handbook.git`;
+    database.db.update(repositories).set({ remoteUrl: withToken }).run();
+
+    runner.start();
+    await settled(id);
+
+    const row = rowOf(id);
+    expect(row?.errorCode).toBe('clone-failed');
+    expect(row?.errorDetail).toBeTruthy();
+    expect(row?.errorDetail).not.toContain('secret-token');
+  });
+
+  it('keeps the end of a long error', async () => {
+    const { id } = await add();
+    const long = `${'a'.repeat(5_000)}fatal: the cause\n`;
+    vi.spyOn(engine, 'clone').mockRejectedValue(new GitOperationError('failed', long));
+
+    runner.start();
+    await settled(id);
+
+    const detail = rowOf(id)?.errorDetail ?? '';
+    expect(detail).toHaveLength(4_000);
+    expect(detail.endsWith('fatal: the cause')).toBe(true);
+  });
+
+  it('records the request ID of the add request', async () => {
+    const { id } = await adding.add({ ...alice, requestId: 'request-42' }, {
+      remoteUrl: `${server.url}/handbook.git`,
+      name: 'Handbook',
+      credentials: { mode: 'none' },
+      cloneMode: 'full'
+    });
+    rmSync(remotes.handbook, { recursive: true, force: true });
+
+    runner.start();
+    await settled(id);
+
+    expect(rowOf(id)).toMatchObject({ errorCode: 'clone-failed', errorRequestId: 'request-42' });
+  });
+
+  it('a clone that ends well clears the record', async () => {
+    const { id } = await add();
+    database.db.update(repositories)
+      .set({ errorCode: 'clone-failed', errorDetail: 'fatal: earlier', errorRequestId: 'request-1' })
+      .where(eq(repositories.id, id))
+      .run();
+
+    runner.start();
+    await settled(id);
+
+    expect(rowOf(id)).toMatchObject({ status: 'ready', errorCode: null, errorDetail: null, errorRequestId: null });
+  });
+
   it('fails with Clone timed out', async () => {
     const { id } = await add();
     await server.close();
@@ -191,6 +257,30 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
 
     expect(rowOf(id)).toMatchObject({ status: 'error', errorCode: 'clone-timed-out' });
     expect(existsSync(layout.workingCopy(alice.id, id))).toBe(false);
+  });
+
+  it('a timeout has no detail', async () => {
+    const { id } = await add();
+    vi.spyOn(engine, 'clone').mockRejectedValue(new GitOperationError('timeout', 'Cloning into…'));
+
+    runner.start();
+    await settled(id);
+
+    expect(rowOf(id)).toMatchObject({ errorCode: 'clone-timed-out', errorDetail: null });
+  });
+
+  it('an interrupted clone has no detail', async () => {
+    const { id } = await adding.add({ ...alice, requestId: 'request-7' }, {
+      remoteUrl: `${server.url}/handbook.git`,
+      name: 'Handbook',
+      credentials: { mode: 'none' },
+      cloneMode: 'full'
+    });
+    database.db.update(jobs).set({ status: 'running', attempts: 1 }).where(eq(jobs.type, 'repositories.clone')).run();
+
+    runner.start();
+
+    expect(rowOf(id)).toMatchObject({ errorCode: 'clone-failed', errorDetail: null, errorRequestId: 'request-7' });
   });
 
   it('drops the held key of a clone cancelled before it ran', async () => {

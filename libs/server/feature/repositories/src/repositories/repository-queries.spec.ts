@@ -184,6 +184,8 @@ describe('toSummary', () => {
       gitLevel: 'advanced',
       status: 'error',
       errorCode: 'clone-failed',
+      errorDetail: 'fatal: repository not found',
+      errorRequestId: 'request-1',
       createdAt: new Date(0),
       lastAccessedAt: new Date(Date.UTC(2026, 9, 26, 10))
     });
