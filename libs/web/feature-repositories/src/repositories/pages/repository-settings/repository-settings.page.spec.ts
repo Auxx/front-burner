@@ -4,7 +4,7 @@ import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { PushEvent, RepositoryDetails } from '@front-burner/shared-contracts';
 import { RepositoriesApi } from '@front-burner/web-api-client';
-import { PushChannelService } from '@front-burner/web-core';
+import { PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { NEVER, Observable, of, Subject, throwError } from 'rxjs';
 
 import { apiFailure } from '../../../testing/api-failure';
@@ -109,6 +109,18 @@ describe('RepositorySettingsPage', () => {
     expect(page().querySelector('shell-page-not-found')).not.toBeNull();
     expect(page().querySelector('ui-page')).toBeNull();
     expect(TestBed.inject(Title).getTitle()).toBe('Page not found · Front Burner');
+  });
+
+  it('publishes a title to announce when the repository could not be loaded', async () => {
+    const published: string[] = [];
+    const failed = new Subject<RepositoryDetails>();
+    await open('/repositories/7/settings', failed);
+    TestBed.inject(PageTitleService).changes.subscribe(title => published.push(title));
+
+    failed.error(apiFailure(500, 'internal'));
+    await settle();
+
+    expect(published).toEqual([ 'Front Burner' ]);
   });
 
   it('offers Try again when the repository could not be loaded', async () => {

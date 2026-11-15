@@ -59,9 +59,9 @@ export class RepositorySettingsStore {
     this.fetch();
   }
 
-  /** Reads the details of the shown repository again. */
+  /** Reads the details of the shown repository again; nothing for a missing one, which stays missing. */
   reload(): void {
-    if (this.id !== undefined) {
+    if (this.id !== undefined && this.currentState() !== 'missing') {
       this.fetch();
     }
   }

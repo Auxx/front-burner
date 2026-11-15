@@ -447,6 +447,7 @@
   "web-feature-repositories.CloneDetailsComponent.cloneMode": "Clone mode",
   "web-feature-repositories.CloneDetailsComponent.full": "Full clone",
   "web-feature-repositories.CloneDetailsComponent.singleBranch": "Single branch: {{ branch }}",
+  "web-feature-repositories.CloneDetailsComponent.singleBranchUnknown": "Single branch",
   "web-feature-repositories.CloneDetailsComponent.gitLevel": "Git control level",
   "web-feature-repositories.CloneDetailsComponent.levels.simple": "Simple",
   "web-feature-repositories.CloneDetailsComponent.levels.guided": "Guided",

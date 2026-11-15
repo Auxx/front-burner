@@ -59,6 +59,12 @@ describe('CloneDetailsComponent', () => {
     expect(values(host)[`${KEY}.cloneMode`]).toBe('Single branch: main');
   });
 
+  it('shows a single-branch clone without a recorded branch as "Single branch"', async () => {
+    const host = await show(repositoryDetails({}, { cloneMode: 'single-branch', branch: null }));
+
+    expect(values(host)[`${KEY}.cloneMode`]).toBe(`${KEY}.singleBranchUnknown`);
+  });
+
   it('shows the git control level with its description', async () => {
     const host = await show(repositoryDetails());
 

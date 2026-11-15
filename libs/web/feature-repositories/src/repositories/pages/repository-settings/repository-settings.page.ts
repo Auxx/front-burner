@@ -91,7 +91,8 @@ export class RepositorySettingsPage {
   /**
    * "Settings · <name> · Front Burner" once the name is known, published so
    * that it is announced (NV-18), and again only when the name changes. Page not
-   * found has that page's title; until then, the product name alone.
+   * found has that page's title, and a failed load publishes the product name
+   * alone; until then, the product name is set without announcing it.
    */
   private updateTitle(): void {
     const pageTitle = inject(PageTitleService);
@@ -104,6 +105,9 @@ export class RepositorySettingsPage {
           const pending = transloco.selectTranslate('web-shell.PageNotFoundPage.title').pipe(take(1))
             .subscribe(text => pageTitle.publish(text));
           onCleanup(() => pending.unsubscribe());
+        } else if (state === 'failed' && name === undefined) {
+          // The product name alone, published so that the page is still announced.
+          pageTitle.publish();
         } else if (name === undefined) {
           pageTitle.setPending();
         } else {

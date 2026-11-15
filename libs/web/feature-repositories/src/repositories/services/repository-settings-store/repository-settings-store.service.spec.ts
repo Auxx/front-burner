@@ -108,6 +108,18 @@ describe('RepositorySettingsStore', () => {
     expect(store.details()?.summary.name).toBe('newer');
   });
 
+  it('asks for nothing more once the repository is missing', () => {
+    answers = [ failure(404, 'not-found') ];
+    store.load(7);
+
+    push.events.next({ type: 'key.unlocked', keyId: 3 });
+    push.events.next({ type: 'repository.status', repositoryId: 7, status: 'ready', error: null });
+    push.reconnected.next();
+
+    expect(requested).toEqual([ 7 ]);
+    expect(store.state()).toBe('missing');
+  });
+
   it('asks for nothing before a repository is shown', () => {
     push.reconnected.next();
 
