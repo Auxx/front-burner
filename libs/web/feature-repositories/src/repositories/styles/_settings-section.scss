@@ -1,0 +1,14 @@
+// A section of the repository settings page (RM-9): its heading above its content.
+@mixin settings-section {
+  section {
+    display: grid;
+    gap: var(--ui-space-2);
+    min-inline-size: 0;
+  }
+
+  .heading {
+    margin: 0;
+    font-size: var(--ui-font-size-lg);
+    font-weight: var(--ui-font-weight-semibold);
+  }
+}

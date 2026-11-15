@@ -16,5 +16,6 @@ export { OnboardingStateService, type OnboardingView } from './core/services/onb
 export { ownsTitle, PageTitleService } from './core/services/page-title/page-title.service';
 export { PushChannelService } from './core/services/push-channel/push-channel.service';
 export { fieldErrorCode } from './core/utils/field-error-code/field-error-code';
+export { isRepositoryId } from './core/utils/is-repository-id/is-repository-id';
 export { relativeTime } from './core/utils/relative-time/relative-time';
 export { safeReturnUrl } from './core/utils/safe-return-url/safe-return-url';

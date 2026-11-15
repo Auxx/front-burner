@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { expect, test } from './support/fixtures';
+import { drainFailedRequests, expect, test } from './support/fixtures';
 import {
   createHandbookRemote,
   type GitHttpServer,
@@ -174,6 +174,124 @@ test.describe('repository management page', () => {
     await filter(page).fill('zzz');
     await expect(page.getByText('No repositories match zzz.')).toBeVisible();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  });
+
+  test.describe('repository settings page', () => {
+    /** Logs in at the settings page of `id` and waits for its details. */
+    async function openSettings(page: Page, id: number | string): Promise<void> {
+      const loaded = page.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/v1/repositories/${id}/details`
+      );
+      await page.goto(`/repositories/${id}/settings`);
+      await logIn(page);
+      await loaded;
+    }
+
+    const cloneDetails = (page: Page) => page.getByRole('region', { name: 'Clone details' });
+
+    test('AC-REPO-003.10: Clone details shows "Single branch: main" for a single-branch clone, and the git control level', async ({ page, instance }) => {
+      const [ single, full ] = seedRepositories(instance.dataDir, [
+        { name: 'single', cloneMode: 'single-branch', branch: 'main' },
+        { name: 'full' }
+      ]);
+      await openSettings(page, single);
+
+      await expect(heading(page, 'Clone details')).toBeVisible();
+      const details = cloneDetails(page);
+      await expect(details.locator('div[uiKeyValue]', { hasText: 'Clone mode' }).locator('dd')).toHaveText(
+        'Single branch: main'
+      );
+      const level = details.locator('div[uiKeyValue]', { hasText: 'Git control level' }).locator('dd');
+      await expect(level).toContainText('Advanced');
+      await expect(level).toContainText('Full control over branches, commits and sync.');
+      await expect(details.locator('div[uiKeyValue]', { hasText: 'Added' }).locator('time')).toBeVisible();
+
+      await page.goto(`/repositories/${full}/settings`);
+      await expect(cloneDetails(page).locator('div[uiKeyValue]', { hasText: 'Clone mode' }).locator('dd')).toHaveText(
+        'Full clone'
+      );
+    });
+
+    test('AC-APP-001.10: the repository settings page shows "Repositories › handbook › Settings", and the first two items are links', async ({ page, instance }) => {
+      const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook' } ]);
+      await openSettings(page, handbook);
+
+      const breadcrumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+      await expect(breadcrumbs.getByRole('listitem')).toHaveText([ 'Repositories', 'handbook' ]);
+      await expect(breadcrumbs.getByRole('link', { name: 'Repositories' })).toHaveAttribute('href', '/repositories');
+      await expect(breadcrumbs.getByRole('link', { name: 'handbook' })).toHaveAttribute(
+        'href',
+        `/repositories/${handbook}`
+      );
+      // The last item is the page's heading, not a link.
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings');
+      await expect(page).toHaveTitle('Settings · handbook · Front Burner');
+    });
+
+    test('shows the name, remote, status and Open, and moves focus to the heading', async ({ page, instance }) => {
+      const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook' } ]);
+      await openRepositories(page);
+
+      await entries(page).getByRole('link', { name: 'handbook', exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/settings$`));
+      await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
+      const main = page.getByRole('main');
+      await expect(main).toContainText('git.invalid/acme/handbook');
+      await expect(main).toContainText('Ready');
+
+      await main.getByRole('link', { name: 'Open handbook' }).click();
+      await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}$`));
+    });
+
+    test('offers no Open for a repository that cannot be opened', async ({ page, instance }) => {
+      const [ failed ] = seedRepositories(instance.dataDir, [
+        { name: 'failed-one', status: 'error', errorCode: 'clone-failed' }
+      ]);
+      await openSettings(page, failed);
+
+      await expect(page.getByRole('main')).toContainText('Error');
+      await expect(page.getByRole('link', { name: 'Open failed-one' })).toHaveCount(0);
+      await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'failed-one' }))
+        .toHaveAttribute('href', `/repositories/${failed}/settings`);
+    });
+
+    test('shows Page not found for a missing, another user\'s or malformed repository', async ({ page, instance, monitor }) => {
+      const { userIds: [ other ] } = seed(instance.dataDir, { users: [ { email: 'other@example.com' } ] });
+      const { repositoryIds: [ theirs ] } = seed(instance.dataDir, {
+        repositories: [ { userId: other, name: 'theirs' } ]
+      });
+      await openSettings(page, 999);
+      await expect(page.getByRole('heading', { name: 'This page doesn\'t exist.' })).toBeVisible();
+      await expect(page).toHaveTitle('Page not found · Front Burner');
+
+      await page.goto(`/repositories/${theirs}/settings`);
+      await expect(page.getByRole('heading', { name: 'This page doesn\'t exist.' })).toBeVisible();
+      await expect(page.getByRole('main')).not.toContainText('theirs');
+
+      await page.goto('/repositories/007/settings');
+      await expect(page.getByRole('heading', { name: 'This page doesn\'t exist.' })).toBeVisible();
+      drainFailedRequests(monitor, '/api/v1/repositories/999/details');
+      drainFailedRequests(monitor, `/api/v1/repositories/${theirs}/details`);
+    });
+
+    test('fits a phone and has no accessibility violations', async ({ page, instance, isMobile }) => {
+      const [ long ] = seedRepositories(instance.dataDir, [
+        {
+          name: 'a-repository-with-a-rather-long-name-that-goes-on',
+          remoteUrl: `https://github.com/acme/${'a'.repeat(80)}.git`,
+          cloneMode: 'single-branch',
+          branch: 'main'
+        }
+      ]);
+      if (!isMobile) {
+        await page.setViewportSize({ width: 360, height: 720 });
+      }
+      await openSettings(page, long);
+
+      await expect(heading(page, 'Clone details')).toBeVisible();
+      expect(await fitsWidth(page)).toBe(true);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    });
   });
 
   test.describe('with a git server', () => {

@@ -174,12 +174,19 @@ describe('appRoutes', () => {
       expect(screen(harness)).toBeNull();
     });
 
-    it('leaves /repositories/12/settings to Page not found', async () => {
-      const { harness, heading } = await open('/repositories/12/settings', { loggedIn: true });
+    it('leaves /repositories/12/settings to the repository settings page, with the app header', async () => {
+      const { harness, heading, header } = await open('/repositories/12/settings', { loggedIn: true });
 
       expect(TestBed.inject(Router).url).toBe('/repositories/12/settings');
-      expect(heading()).toBe('This page doesn\'t exist.');
+      expect(heading()).toBe('Settings');
       expect(screen(harness)).toBeNull();
+      await vi.waitFor(() => expect(header()).not.toBeNull());
+    });
+
+    it('shows Page not found for the settings of an ID that no repository can have', async () => {
+      const { heading } = await open('/repositories/007/settings', { loggedIn: true });
+
+      expect(heading()).toBe('This page doesn\'t exist.');
     });
 
     it.each([ '/repositories/0', '/repositories/007', '/repositories/9007199254740993' ])(

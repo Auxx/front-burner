@@ -11,6 +11,21 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
   repository's settings page, **Ready** or another status and the warnings, the
   remote, what went wrong or the clone's progress, "Last accessed", and **Open**
   for an openable repository.
+- `RepositorySettingsPage` (`/repositories/<id>/settings`): the repository
+  settings page of RM-9: the breadcrumbs "Repositories › _name_ › Settings"
+  (NV-14), whose name links to the repository screen, or to this page while the
+  repository cannot be opened; the name, status and warnings, remote and
+  **Open**; then its sections in the order of RM-9. A missing, malformed or
+  another user's ID is Page not found (RM-1). It titles itself "Settings ·
+  _name_ · Front Burner" (NV-13).
+- `RepositorySettingsStore`: the page's repository details (`GET
+  /repositories/:id/details`), provided by the page and read by its sections. It
+  reads them again on the repository's `repository.status` and
+  `repository.warning`, on `key.locked` and `key.unlocked`, and after a
+  reconnect; only the latest answer counts, and a reload that fails keeps them.
+- `CloneDetailsComponent`: the **Clone details** section, a key-value list of
+  the clone mode, the git control level and when the repository was added
+  (RM-16).
 - `AddRepositoryPage` (`/repositories/new`): the Add repository form of
   REQ-REPO-001, one Signal Forms model (`AddRepositoryForm`) split into a
   component per section.

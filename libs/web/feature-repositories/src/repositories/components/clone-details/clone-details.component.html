@@ -1,0 +1,29 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.CloneDetailsComponent'">
+  @let details = this.details();
+  <section aria-labelledby="repo-clone-details-heading">
+    <h2 id="repo-clone-details-heading"
+        class="heading">{{ t('heading') }}</h2>
+    <dl uiKeyValueList>
+      <div uiKeyValue
+           [label]="t('cloneMode')">
+        @if (details.cloneMode === 'single-branch') {
+          {{ t('singleBranch', { branch: details.branch }) }}
+        } @else {
+          {{ t('full') }}
+        }
+      </div>
+      <div uiKeyValue
+           [label]="t('gitLevel')">
+        {{ t('levels.' + details.gitLevel) }}
+        <span class="description">{{ t('descriptions.' + details.gitLevel) }}</span>
+      </div>
+      <div uiKeyValue
+           [label]="t('added')">
+        <time tabindex="0"
+              uiTooltipShowOnClick
+              [attr.datetime]="details.addedAt"
+              [uiTooltip]="addedExact()">{{ addedDay() }}</time>
+      </div>
+    </dl>
+  </section>
+</ng-container>

@@ -1,0 +1,13 @@
+@use '../../styles/settings-section' as *;
+
+:host {
+  display: block;
+}
+
+@include settings-section;
+
+.description {
+  display: block;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}

@@ -250,6 +250,8 @@ export interface SeedRepository {
   remoteUrl?: string;
   /** `full` by default. */
   cloneMode?: 'full' | 'single-branch';
+  /** The cloned branch of a single-branch clone; none by default. */
+  branch?: string;
   status?: 'cloning' | 'ready' | 'error';
   errorCode?: 'clone-failed' | 'clone-timed-out' | 'working-copy-missing';
   lastAccessedAt?: Date;
@@ -291,8 +293,8 @@ export function seed(
     );
     const insertRepository = sqlite.prepare(
       `INSERT INTO repositories
-         (user_id, name, remote_url, clone_mode, git_level, status, error_code, created_at, last_accessed_at)
-       VALUES (?, ?, ?, ?, 'advanced', ?, ?, ?, ?)`
+         (user_id, name, remote_url, clone_mode, branch, git_level, status, error_code, created_at, last_accessed_at)
+       VALUES (?, ?, ?, ?, ?, 'advanced', ?, ?, ?, ?)`
     );
     const userIds = (rows.users ?? []).map(user => {
       const id = Number(
@@ -309,6 +311,7 @@ export function seed(
           repository.name,
           repository.remoteUrl ?? seededRemoteUrl(repository.name),
           repository.cloneMode ?? 'full',
+          repository.branch ?? null,
           repository.status ?? 'ready',
           repository.errorCode ?? null,
           at,
