@@ -12,46 +12,17 @@ import {
 import { sameRepositoryName } from '@front-burner/shared-util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
+import { queueClone } from '../clone/clone-queue';
 import { toSummary } from '../repositories/repository-queries';
 import { CredentialsCheck } from './credentials-check';
 import { RequestCredentials } from './request-credentials';
 import { fieldError, remoteOf } from './request-fields';
-
-/** The job type of the background clone (AR-49). */
-export const CLONE_JOB_TYPE = 'repositories.clone';
-
-export interface CloneJobPayload {
-  repositoryId: number;
-  /**
-   * The ID of the request that queued the clone, kept with a failed clone's
-   * error (RM-10, NF-10.6); none in a job queued before it was recorded.
-   */
-  requestId?: string;
-}
 
 export interface RequestUser {
   id: number;
   sessionId: string;
   /** The ID of the request, as in its log lines and error responses (NF-10.6). */
   requestId?: string;
-}
-
-/**
- * Queues the clone of a repository, in the transaction that sets it `cloning`,
- * with the request's ID for a failed clone's error record (RM-10). Adding and
- * cloning again share it, and so the clone's per-user limit (NF-11.4, RM-13).
- *
- * @throws ApiErrorException `429 too-many-jobs` at the limit, which rolls the transaction back.
- */
-export function queueClone(runner: JobRunner, tx: Tx, user: RequestUser, repositoryId: number): number {
-  const payload: CloneJobPayload = { repositoryId, requestId: user.requestId };
-  return runner.enqueue({
-    type: CLONE_JOB_TYPE,
-    userId: user.id,
-    repositoryId,
-    payload,
-    dedupeKey: `clone:${repositoryId}`
-  }, tx);
 }
 
 const isUniqueViolation = (error: unknown): boolean =>

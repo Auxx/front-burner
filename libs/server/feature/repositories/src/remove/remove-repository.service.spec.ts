@@ -10,12 +10,12 @@ import { eq } from 'drizzle-orm';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { CLONE_JOB_TYPE } from '../add/add-repository.service';
+import { CLONE_JOB_TYPE } from '../clone/clone-queue';
 import { RepositoryQueries } from '../repositories/repository-queries';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createRemotes, git, testGitOptions } from '../testing/git-fixtures';
 import { createTestDatabase } from '../testing/test-database';
-import { DELETE_WORKING_COPY_JOB_TYPE, DeleteWorkingCopyJob } from './delete-working-copy.job';
+import { DELETE_WORKING_COPY_JOB_TYPE, DeleteWorkingCopyJob } from '../working-copy/delete-working-copy.job';
 import { RemovalCheck } from './removal-check';
 import { RemoveRepositoryService } from './remove-repository.service';
 

@@ -17,7 +17,8 @@ export class WorkingTreeGuard {
    * merge queued ahead of the change cannot start between the check and the change.
    *
    * @throws ApiErrorException `409 merge-in-progress`; `404 not-found` when the
-   *   repository was removed while the task waited for the lock (RM-19).
+   *   repository was removed while the task waited for the lock (RM-19);
+   *   `409 repository-not-openable` when it was cloned again meanwhile (RM-12).
    */
   change<T>(repositoryId: number, root: string, task: () => Promise<T>): Promise<T> {
     return this.run(repositoryId, root, undefined, task);
@@ -47,10 +48,15 @@ export class WorkingTreeGuard {
     path: string | undefined,
     task: () => Promise<T>
   ): Promise<T> {
+    const generation = this.lock.generation(repositoryId);
     return this.lock.run(repositoryId, async () => {
       // Removed while this waited: its working copy is gone, as is its row (RM-19).
       if (this.lock.isRemoved(repositoryId)) {
         throw new ApiErrorException(404, 'not-found');
+      }
+      // Cloned again while this waited: the working copy it was meant for is gone (RM-12).
+      if (this.lock.generation(repositoryId) !== generation) {
+        throw new ApiErrorException(409, 'repository-not-openable', { status: 'cloning' });
       }
       if (await this.git.mergeInProgress(root)) {
         if (path !== undefined && await this.merge.mergeInProgress(root)) {

@@ -4,7 +4,7 @@ import { Database, jobs, repositories, syncState } from '@front-burner/server-co
 import type { EventsHub } from '@front-burner/server-core-events';
 import { CloneRequest, GitEngine, NetworkLock, WorkingTreeLock } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
-import { JobRunner } from '@front-burner/server-core-jobs';
+import { JobPool, JobRunner } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { SessionLifecycle } from '@front-burner/server-core-security';
 import { DataLayout } from '@front-burner/server-core-storage';
@@ -20,13 +20,14 @@ import { eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CLONE_JOB_TYPE, RequestUser } from '../add/add-repository.service';
-import { DeleteWorkingCopyJob } from '../remove/delete-working-copy.job';
+import type { RequestUser } from '../add/add-repository.service';
 import { RepositoryQueries } from '../repositories/repository-queries';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { testGitOptions } from '../testing/git-fixtures';
 import { createTestDatabase } from '../testing/test-database';
+import { DeleteWorkingCopyJob } from '../working-copy/delete-working-copy.job';
 import { CloneAgainService } from './clone-again.service';
+import { CLONE_JOB_TYPE } from './clone-queue';
 import { CloneJob } from './clone.job';
 
 const box = new SecretBox('clone-again-spec-key-0123456789abcdef');
@@ -58,10 +59,17 @@ describe('CloneAgainService', () => {
   /** What the clone job asked git for; resolves at once unless a test holds it. */
   let clone: ReturnType<typeof vi.fn<(options: CloneRequest) => Promise<void>>>;
   let service: CloneAgainService;
+  let lock: WorkingTreeLock;
   let alice: RequestUser;
   let handbook: number;
 
   const rowOf = (id: number) => database.db.select().from(repositories).where(eq(repositories.id, id)).get();
+  const statusOf = (id: number) => database.db.select().from(jobs).where(eq(jobs.id, id)).get()?.status;
+  /** A job of the repository's own, of a type in `pool` that never runs here: the runner is not started. */
+  const queueOther = (type: string, pool: JobPool) => {
+    runner.register({ type, pool, onInterrupted: 'fail', handler: () => Promise.resolve() });
+    return runner.enqueue({ type, userId: alice.id, repositoryId: handbook, payload: {} });
+  };
   const cloneJobs = () => database.db.select().from(jobs).where(eq(jobs.type, CLONE_JOB_TYPE)).all();
   const workOf = (id: number) => layout.workingCopy(alice.id, id);
   const removedInTmp = () => readdirSync(layout.tmpDir).filter(name => name.startsWith('remove-'));
@@ -86,6 +94,7 @@ describe('CloneAgainService', () => {
     runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, events);
     jobKeys = new JobKeys();
     clone = vi.fn(() => Promise.resolve());
+    lock = new WorkingTreeLock();
     const engine = { clone } as unknown as GitEngine;
     new CloneJob(
       database,
@@ -104,7 +113,7 @@ describe('CloneAgainService', () => {
       runner,
       saved,
       jobKeys,
-      new WorkingTreeLock(),
+      lock,
       new NetworkLock(),
       events,
       layout
@@ -338,15 +347,19 @@ describe('CloneAgainService', () => {
     database.db.update(repositories).set({ errorCode: 'working-copy-missing' })
       .where(eq(repositories.id, handbook)).run();
     const work = leftOver(handbook);
+    const fetch = queueOther('test.fetch', 'fetch');
 
     const error = await errorOf(service.cloneAgain(alice, handbook));
 
     expect(error).toMatchObject({ code: 'too-many-jobs' });
     expect(error?.getStatus()).toBe(429);
-    // As it was: the working copy is put back.
+    // As it was: the working copy is put back, and no job was cancelled.
     expect(rowOf(handbook)).toMatchObject({ status: 'error', errorCode: 'working-copy-missing' });
     expect(readFileSync(join(work, 'old.md'), 'utf8')).toBe('old\n');
     expect(removedInTmp()).toEqual([]);
+    expect(statusOf(fetch)).toBe('queued');
+    expect(lock.generation(handbook)).toBe(0);
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it('publishes repository.status', async () => {
@@ -360,14 +373,52 @@ describe('CloneAgainService', () => {
     });
   });
 
-  it('cancels the repository\'s other jobs', async () => {
-    runner.register({ type: 'test.fetch', pool: 'fetch', onInterrupted: 'fail', handler: () => Promise.resolve() });
-    const fetch = runner.enqueue({ type: 'test.fetch', userId: alice.id, repositoryId: handbook, payload: {} });
+  it('publishes cloning before a clone that fails at once ends', async () => {
+    clone.mockRejectedValue(new Error('refused'));
+    runner.start();
+
+    await service.cloneAgain(alice, handbook);
+    await waitFor(() => rowOf(handbook)?.status === 'error');
+
+    const statuses = publish.mock.calls.map(([ , event ]) => event)
+      .filter(event => event.type === 'repository.status')
+      .map(event => 'status' in event ? event.status : undefined);
+    expect(statuses).toEqual([ 'cloning', 'error' ]);
+  });
+
+  it('cancels the repository\'s fetches, pulls and pushes, not its Delete folder jobs', async () => {
+    const fetch = queueOther('test.fetch', 'fetch');
+    const deleteFolder = queueOther('test.delete-folder', 'housekeeping');
 
     await service.cloneAgain(alice, handbook);
 
-    expect(database.db.select().from(jobs).where(eq(jobs.id, fetch)).get()?.status).toBe('cancelled');
+    expect(statusOf(fetch)).toBe('cancelled');
+    expect(statusOf(deleteFolder)).toBe('queued');
     expect(cloneJobs().map(job => job.status)).toEqual([ 'queued' ]);
+  });
+
+  it('tells the work queued for the old working copy to refuse', async () => {
+    const before = lock.generation(handbook);
+
+    await service.cloneAgain(alice, handbook);
+
+    expect(lock.generation(handbook)).not.toBe(before);
+  });
+
+  it('refuses while an earlier clone is unfinished, whatever the status says', async () => {
+    runner.enqueue({
+      type: CLONE_JOB_TYPE,
+      userId: alice.id,
+      repositoryId: handbook,
+      payload: { repositoryId: handbook },
+      dedupeKey: `clone:${handbook}`
+    });
+
+    const error = await errorOf(service.cloneAgain(alice, handbook));
+
+    expect(error).toMatchObject({ code: 'repository-not-in-error', params: { status: 'cloning' } });
+    expect(rowOf(handbook)?.status).toBe('error');
+    expect(cloneJobs()).toHaveLength(1);
   });
 
   it('answers another user\'s repository like a missing one', async () => {

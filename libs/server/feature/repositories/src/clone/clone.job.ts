@@ -9,7 +9,7 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { CLONE_JOB_TYPE, CloneJobPayload } from '../add/add-repository.service';
+import { CLONE_JOB_TYPE, CloneJobPayload } from './clone-queue';
 
 /** How many clones of one user may wait or run at once (NF-11.4). */
 const CLONE_PER_USER_LIMIT = 3;

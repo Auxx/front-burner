@@ -52,22 +52,22 @@ export async function restoreWorkingCopy(
 }
 
 /**
- * Queues the job that deletes the moved working copy and the repository's
- * trashed folders, whose Delete folder jobs were cancelled or deleted. One that
- * cannot be queued does not fail the request: `tmp/` is emptied on the next
- * start (NF-5.1).
+ * Queues the job that deletes the moved working copy, and with `emptyTrash`
+ * the repository's trashed folders (see `DeleteWorkingCopyJobPayload`). One
+ * that cannot be queued does not fail the request: `tmp/` is emptied on the
+ * next start (NF-5.1).
  */
 export function queueWorkingCopyDeletion(
   runner: JobRunner,
   logger: Logger,
-  repositoryId: number,
-  name: string | null
+  payload: DeleteWorkingCopyJobPayload
 ): void {
+  const { repositoryId } = payload;
   try {
     runner.enqueue({
       type: DELETE_WORKING_COPY_JOB_TYPE,
       // Neither a user nor a repository: the end is nobody's business, and a removed repository's row is gone.
-      payload: { repositoryId, name } satisfies DeleteWorkingCopyJobPayload
+      payload
     });
   } catch {
     logger.warn(

@@ -7,9 +7,9 @@ import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
 import { confirmsName, wouldLoseWork } from '@front-burner/shared-contracts';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { CLONE_JOB_TYPE } from '../add/add-repository.service';
+import { CLONE_JOB_TYPE } from '../clone/clone-queue';
 import { ownRow, RepositoryQueries } from '../repositories/repository-queries';
-import { moveWorkingCopy, queueWorkingCopyDeletion, restoreWorkingCopy } from './old-working-copy';
+import { moveWorkingCopy, queueWorkingCopyDeletion, restoreWorkingCopy } from '../working-copy/old-working-copy';
 import { RemovalCheck } from './removal-check';
 
 /**
@@ -80,7 +80,8 @@ export class RemoveRepositoryService {
       });
     });
     // The row is already gone, so a job that cannot be queued does not fail the removal.
-    queueWorkingCopyDeletion(this.runner, this.logger, repositoryId, trash);
+    // Its trashed folders too: their Delete folder jobs went with its rows (A-4.5b).
+    queueWorkingCopyDeletion(this.runner, this.logger, { repositoryId, name: trash, emptyTrash: true });
     this.events.publish(userId, { type: 'repository.removed', repositoryId });
     this.logger.log(`Repository ${repositoryId} removed`);
   }

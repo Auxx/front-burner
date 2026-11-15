@@ -53,6 +53,19 @@ describe('WorkingTreeGuard', () => {
     expect(await guard.change(8, '/other', async () => 'other')).toBe('other');
   });
 
+  it('refuses a change to a repository cloned again while it waited, then runs the next', async () => {
+    const task = vi.fn();
+    const cloneAgain = lock.run(7, async () => lock.markReplaced(7));
+
+    const error = await guard.changeFile(7, '/root', 'a.md', task).catch((thrown: unknown) => thrown);
+    await cloneAgain;
+
+    expect(error).toMatchObject({ status: 409, code: 'repository-not-openable', params: { status: 'cloning' } });
+    expect(task).not.toHaveBeenCalled();
+    // Work queued for the new working copy runs.
+    expect(await guard.change(7, '/root', async () => 'new')).toBe('new');
+  });
+
   it('refuses a change during a merge without running it', async () => {
     merging = true;
     const task = vi.fn();

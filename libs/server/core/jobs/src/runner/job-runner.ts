@@ -149,12 +149,16 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
    * aborted jobs have ended, or to false after A-1.14's grace if one has not: a
    * handler that ignores its signal may then still be running.
    */
-  cancel(where: CancelFilter): Promise<boolean> {
+  cancel(filter: CancelFilter): Promise<boolean> {
     if (
-      where.id === undefined && where.userId === undefined && where.repositoryId === undefined
-      && where.types === undefined
+      filter.id === undefined && filter.userId === undefined && filter.repositoryId === undefined
+      && filter.types === undefined && filter.pools === undefined
     ) {
       throw new Error('Cancelling jobs needs a filter');
+    }
+    const where = { ...filter, types: this.typesOf(filter) };
+    if (where.types?.length === 0) {
+      return Promise.resolve(true);
     }
     const conditions: SQL[] = [];
     if (where.id !== undefined) {
@@ -192,6 +196,17 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
       }
     }
     return settled.length === 0 ? Promise.resolve(true) : withinGrace(settled);
+  }
+
+  /** The filter's types, narrowed to the registered types of its pools; undefined for any type. */
+  private typesOf(filter: CancelFilter): string[] | undefined {
+    if (filter.pools === undefined) {
+      return filter.types;
+    }
+    const pools = filter.pools;
+    const ofPools = [ ...this.types.values() ].filter(definition => pools.includes(definition.pool))
+      .map(definition => definition.type);
+    return filter.types === undefined ? ofPools : ofPools.filter(type => filter.types?.includes(type));
   }
 
   /** Stops claiming, aborts running jobs and waits for them a while (A-1.14). */
