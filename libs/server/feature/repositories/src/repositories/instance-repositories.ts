@@ -24,10 +24,14 @@ export class InstanceRepositories {
     return this.listed(and(eq(repositories.status, 'error'), eq(repositories.errorCode, 'working-copy-missing')));
   }
 
-  /** The status Error, "Working copy is missing or damaged" (RM-6); gives the row's user, or `undefined` without one. */
-  markDamaged(id: number): number | undefined {
+  /**
+   * The status Error, "Working copy is missing or damaged" (RM-6), with git's
+   * message when git found it (RM-10); gives the row's user, or `undefined`
+   * without one. No request started the work, so there is no request ID.
+   */
+  markDamaged(id: number, detail: string | null = null): number | undefined {
     return this.database.db.update(repositories)
-      .set({ status: 'error', errorCode: 'working-copy-missing' })
+      .set({ status: 'error', errorCode: 'working-copy-missing', errorDetail: detail, errorRequestId: null })
       .where(eq(repositories.id, id))
       .returning({ userId: repositories.userId })
       .get()?.userId;
@@ -36,7 +40,7 @@ export class InstanceRepositories {
   /** A damaged repository's working copy was put right; any other is left as it is. */
   markRepaired(id: number): void {
     this.database.db.update(repositories)
-      .set({ status: 'ready', errorCode: null })
+      .set({ status: 'ready', errorCode: null, errorDetail: null, errorRequestId: null })
       .where(and(
         eq(repositories.id, id),
         eq(repositories.status, 'error'),

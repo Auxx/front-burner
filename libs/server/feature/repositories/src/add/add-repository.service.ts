@@ -22,11 +22,18 @@ export const CLONE_JOB_TYPE = 'repositories.clone';
 
 export interface CloneJobPayload {
   repositoryId: number;
+  /**
+   * The ID of the request that queued the clone, kept with a failed clone's
+   * error (RM-10, NF-10.6); none in a job queued before it was recorded.
+   */
+  requestId?: string;
 }
 
 export interface RequestUser {
   id: number;
   sessionId: string;
+  /** The ID of the request, as in its log lines and error responses (NF-10.6). */
+  requestId?: string;
 }
 
 const isUniqueViolation = (error: unknown): boolean =>
@@ -101,7 +108,7 @@ export class AddRepositoryService {
       } catch (error) {
         throw isUniqueViolation(error) ? fieldError('name', 'name-taken', { name: request.name }) : error;
       }
-      const payload: CloneJobPayload = { repositoryId: inserted.id };
+      const payload: CloneJobPayload = { repositoryId: inserted.id, requestId: user.requestId };
       const id = this.runner.enqueue({
         type: CLONE_JOB_TYPE,
         userId: user.id,

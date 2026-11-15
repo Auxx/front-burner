@@ -37,6 +37,13 @@ export const repositories = sqliteTable(
     status: text('status', { enum: REPOSITORY_STATUS_VALUES }).notNull(),
     /** Set only in the `error` status (RM-6). */
     errorCode: text('error_code', { enum: REPOSITORY_ERROR_VALUES }),
+    /**
+     * git's message for the error, without credentials (AR-53, RM-10); null
+     * when nothing ran git, such as after a timeout.
+     */
+    errorDetail: text('error_detail'),
+    /** The ID of the request that started the failed work (NF-10.6, RM-10). */
+    errorRequestId: text('error_request_id'),
     /** Per-repository author override (REQ-GIT-001, CA-8). */
     commitAuthorName: text('commit_author_name'),
     commitAuthorEmail: text('commit_author_email'),

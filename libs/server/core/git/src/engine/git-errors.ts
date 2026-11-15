@@ -57,7 +57,8 @@ export type GitErrorCode = (typeof GIT_ERROR_CODES)[number];
 
 export class GitOperationError extends Error {
   /**
-   * @param detail git's stderr, with credentials removed; for the log only.
+   * @param detail git's stderr, with credentials removed; for the log and a
+   *   failed clone's error record (RM-10), never for an API error response.
    * @param params Values for the user's message, such as `host` (AR-42).
    */
   constructor(readonly code: GitErrorCode, readonly detail: string, readonly params: Record<string, string> = {}) {

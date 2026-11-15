@@ -150,6 +150,13 @@ describe('AddRepositoryService', () => {
   });
 
   // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('passes the request ID to the clone', async () => {
+    const summary = await service.add({ ...alice, requestId: 'request-42' }, request());
+
+    expect(all().jobs[0]?.payload).toBe(JSON.stringify({ repositoryId: summary.id, requestId: 'request-42' }));
+  });
+
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
   it.skipIf(process.platform === 'win32')('adds a public repository with no credentials', async () => {
     const summary = await service.add(alice, request());
 
