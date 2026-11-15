@@ -1,5 +1,6 @@
 import { Database } from '@front-burner/server-core-database';
 import { RepositoryCredentialsChanges } from '@front-burner/server-feature-repositories';
+import { Logger } from '@nestjs/common';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
 import { CredentialsChangedListener } from './credentials-changed.listener';
@@ -21,6 +22,7 @@ describe('CredentialsChangedListener', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     listener.onModuleDestroy();
     database.sqlite.close();
   });
@@ -41,6 +43,20 @@ describe('CredentialsChangedListener', () => {
     changes.notifyChanged([ repositoryId ]);
 
     expect(store.remoteProblems(repositoryId)).toEqual({ fetch: refused, push: refused });
+  });
+
+  it('logs a failure instead of letting RxJS throw it later, and keeps listening', () => {
+    const logged = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    vi.spyOn(store, 'credentialsChanged').mockImplementationOnce(() => {
+      throw new Error('SQLITE_BUSY');
+    });
+    store.remoteFailed(repositoryId, 'push', { code: 'push-not-allowed', params: {} });
+
+    changes.notifyChanged([ repositoryId ]);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('SQLITE_BUSY'));
+    changes.notifyChanged([ repositoryId ]);
+
+    expect(store.pushProblem(repositoryId)).toBeNull();
   });
 
   it('stops listening when the module is destroyed', () => {

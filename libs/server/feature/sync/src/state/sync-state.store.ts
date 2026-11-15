@@ -55,13 +55,16 @@ export class SyncStateStore {
    * An operation with the remote failed. Only a warning of RM-8 is kept, and it
    * replaces the last one of its kind; any other failure, such as the network,
    * proves nothing fixed and changes nothing. A pull counts as a fetch, since it
-   * fetches first. True when a stored value changed.
+   * fetches first. The remote's messages are not kept. True when a stored value
+   * changed.
    */
   remoteFailed(repositoryId: number, kind: RemoteOperation, problem: GitProblemState): boolean {
     if (!WARNINGS[kind].has(problem.code)) {
       return false;
     }
-    return this.setProblem(repositoryId, kind === 'push' ? 'pushProblem' : 'fetchWarning', problem);
+    // The remote's own lines are long, change from one try to the next, and no warning shows them.
+    const params = Object.fromEntries(Object.entries(problem.params).filter(([ name ]) => name !== 'remoteMessages'));
+    return this.setProblem(repositoryId, kind === 'push' ? 'pushProblem' : 'fetchWarning', { ...problem, params });
   }
 
   /**

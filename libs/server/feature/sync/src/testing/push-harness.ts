@@ -24,7 +24,11 @@ import {
 } from '@front-burner/server-feature-credentials';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
-import { InstanceRepositories, RepositoryQueries } from '@front-burner/server-feature-repositories';
+import {
+  InstanceRepositories,
+  RepositoryCredentialsChanges,
+  RepositoryQueries
+} from '@front-burner/server-feature-repositories';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -41,6 +45,7 @@ import { PullService } from '../pull/pull.service';
 import { PushJob } from '../push/push.job';
 import { PushService } from '../push/push.service';
 import { MergeRecord } from '../state/merge-record';
+import { RemoteOutcomes } from '../state/remote-outcomes';
 import { SyncStateStore } from '../state/sync-state.store';
 import { insertRepository, insertUser } from './fixtures';
 import { createRemote, git, testGitOptions } from './git-fixtures';
@@ -83,6 +88,8 @@ export class PushHarness {
   readonly openable = new OpenableRepository(this.queries, this.layout);
   readonly networkLock = new NetworkLock();
   readonly syncState = new SyncStateStore(this.database);
+  readonly credentialsChanges = new RepositoryCredentialsChanges();
+  readonly outcomes = new RemoteOutcomes(this.syncState, this.credentialsChanges);
   readonly commitAuthors = new CommitAuthors(this.database, this.queries);
   readonly alice = insertUser(this.database, 'alice@x.io');
   readonly bob = insertUser(this.database, 'bob@x.io');
@@ -164,6 +171,7 @@ export class PushHarness {
       this.jobCredentials,
       knownHosts,
       this.syncState,
+      this.outcomes,
       this.events
     );
     new PushJob(
@@ -178,7 +186,7 @@ export class PushHarness {
       this.events,
       this.workingTreeLock,
       this.mergeRecord,
-      this.syncState
+      this.outcomes
     ).onModuleInit();
     new FetchJob(this.runner, this.fetchStep, this.jobKeys).onModuleInit();
     new PullJob(

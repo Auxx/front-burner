@@ -95,6 +95,18 @@ describe('SyncStateStore', () => {
       expect(store.remoteProblems(repositoryId)).toEqual({ fetch: null, push: refused });
     });
 
+    it('keeps no remote messages, so that a new wording is no change', () => {
+      const withMessages = (remoteMessages: string) => ({
+        ...notAllowed,
+        params: { ...notAllowed.params, remoteMessages }
+      });
+
+      expect(store.remoteFailed(repositoryId, 'push', withMessages('Request a1: denied'))).toBe(true);
+      expect(store.remoteFailed(repositoryId, 'push', withMessages('Request b2: denied'))).toBe(false);
+
+      expect(store.pushProblem(repositoryId)).toEqual(notAllowed);
+    });
+
     it('a rejected push is not a problem', () => {
       expect(store.remoteFailed(repositoryId, 'push', { code: 'push-non-fast-forward', params: {} })).toBe(false);
       expect(store.remoteFailed(repositoryId, 'push', { code: 'push-rejected', params: {} })).toBe(false);

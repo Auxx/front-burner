@@ -82,19 +82,23 @@ export class RepositoryCredentialsService {
     const resolved = this.requestCredentials.resolve(user, remote.protocol, credentials);
     await this.credentialsCheck.check(user, repository.remoteUrl, remote, credentials.mode, resolved);
 
-    const credentialId = this.database.db.transaction(tx => {
-      const id = this.credentialsCheck.saveNew(tx, user.id, credentials) ?? resolved.savedId ?? null;
-      const changed = tx.update(repositories).set({ credentialId: id })
-        .where(and(eq(repositories.id, repositoryId), eq(repositories.userId, user.id)))
-        .run().changes;
-      if (changed === 0) {
+    const { credentialId, previous } = this.database.db.transaction(tx => {
+      const ofRepository = and(eq(repositories.id, repositoryId), eq(repositories.userId, user.id));
+      const current = tx.select({ credentialId: repositories.credentialId }).from(repositories).where(ofRepository)
+        .get();
+      if (current === undefined) {
         // Removed while the access check ran.
         throw notFound();
       }
-      return id;
+      const id = this.credentialsCheck.saveNew(tx, user.id, credentials) ?? resolved.savedId ?? null;
+      tx.update(repositories).set({ credentialId: id }).where(ofRepository).run();
+      return { credentialId: id, previous: current.credentialId };
     });
     this.credentialsCheck.unlockPasted(user.sessionId, credentialId, credentials);
-    this.changes.notifyChanged([ repositoryId ]);
+    // The same credentials chosen again change nothing that a push would meet (RM-8).
+    if (credentialId !== previous) {
+      this.changes.notifyChanged([ repositoryId ]);
+    }
     this.logger.log(`User ${user.id} replaced the credentials of repository ${repositoryId}`);
     return this.get(user.id, user.sessionId, repositoryId);
   }

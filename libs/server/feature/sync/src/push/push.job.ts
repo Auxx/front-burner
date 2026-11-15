@@ -10,7 +10,7 @@ import { FetchStep, FetchStepJob } from '../fetch/fetch-step';
 import { JobCredentials } from '../jobs/job-credentials.service';
 import { networkFailure } from '../jobs/network-failure';
 import { MergeRecord } from '../state/merge-record';
-import { SyncStateStore } from '../state/sync-state.store';
+import { RemoteOutcomes } from '../state/remote-outcomes';
 
 export const PUSH_JOB_TYPE = 'sync.push';
 
@@ -53,7 +53,7 @@ export class PushJob implements OnModuleInit {
     private readonly events: EventsHub,
     private readonly workingTreeLock: WorkingTreeLock,
     private readonly mergeRecord: MergeRecord,
-    private readonly syncState: SyncStateStore
+    private readonly outcomes: RemoteOutcomes
   ) {}
 
   onModuleInit(): void {
@@ -75,47 +75,52 @@ export class PushJob implements OnModuleInit {
     }
     // Network steps take the network lock only, so saves never wait behind the remote (A-5.3).
     const outcome = await this.networkLock.run(repositoryId, async (): Promise<GitJobOutcome> => {
-      const { row, root } = this.repositories.open(userId, repositoryId);
-      const { branch } = job.payload;
-      // A pull's merge may have started after the push was queued (GC-3).
-      if (await this.engine.mergeInProgress(root)) {
-        return { kind: 'failed', code: 'merge-in-progress', params: { branch } };
+      const attempt = this.outcomes.begin(repositoryId, 'push');
+      const pushed = await this.pushOnce(id, userId, repositoryId, job.payload.branch);
+      // A push's warning outlives a successful fetch; only a push clears it (RM-8, AC-REPO-003.6).
+      // Stored before the lock is let go, in the order the operations ran. The change is told by plan 108's event.
+      if (pushed.kind === 'pushed' || pushed.kind === 'failed') {
+        this.outcomes.end(attempt, pushed.kind === 'pushed' ? null : { code: pushed.code, params: pushed.params });
       }
-      const resolved = this.credentials.resolve(job.id, userId, row);
-      if ('failure' in resolved) {
-        return resolved.failure;
-      }
-      const { credentials } = resolved;
-      try {
-        const result = await this.engine.push(root, {
-          remoteUrl: row.remoteUrl,
-          credentials,
-          knownHosts: this.knownHosts.linesFor(userId),
-          branch,
-          singleBranch: row.cloneMode === 'single-branch'
-        });
-        return { kind: 'pushed', commits: result.commits, upstream: result.upstream };
-      } catch (error) {
-        if (!(error instanceof GitOperationError)) {
-          throw error;
-        }
-        // git's own lines, without credentials (NF-10.5); the user gets the code and the remote's lines.
-        this.logger.warn(`Push of repository ${repositoryId} failed with ${error.code}: ${error.detail.trim()}`);
-        return networkFailure(error, row.credentialId !== null, { branch });
-      }
+      return pushed;
     });
-    // A push's warning outlives a successful fetch; only a push clears it (RM-8, AC-REPO-003.6).
-    // The change is told by plan 108's event.
     if (outcome.kind === 'pushed') {
-      this.syncState.remoteSucceeded(repositoryId, 'push');
       await this.forgetPushedMerge(userId, repositoryId);
-    } else if (outcome.kind === 'failed') {
-      this.syncState.remoteFailed(repositoryId, 'push', { code: outcome.code, params: outcome.params });
     }
     if (outcome.kind === 'failed' && outcome.code === 'push-non-fast-forward') {
       await this.fetchAfterRejection({ id, userId, repositoryId });
     }
     return outcome;
+  }
+
+  /** The push itself, inside the network lock. */
+  private async pushOnce(jobId: number, userId: number, repositoryId: number, branch: string): Promise<GitJobOutcome> {
+    const { row, root } = this.repositories.open(userId, repositoryId);
+    // A pull's merge may have started after the push was queued (GC-3).
+    if (await this.engine.mergeInProgress(root)) {
+      return { kind: 'failed', code: 'merge-in-progress', params: { branch } };
+    }
+    const resolved = this.credentials.resolve(jobId, userId, row);
+    if ('failure' in resolved) {
+      return resolved.failure;
+    }
+    try {
+      const result = await this.engine.push(root, {
+        remoteUrl: row.remoteUrl,
+        credentials: resolved.credentials,
+        knownHosts: this.knownHosts.linesFor(userId),
+        branch,
+        singleBranch: row.cloneMode === 'single-branch'
+      });
+      return { kind: 'pushed', commits: result.commits, upstream: result.upstream };
+    } catch (error) {
+      if (!(error instanceof GitOperationError)) {
+        throw error;
+      }
+      // git's own lines, without credentials (NF-10.5); the user gets the code and the remote's lines.
+      this.logger.warn(`Push of repository ${repositoryId} failed with ${error.code}: ${error.detail.trim()}`);
+      return networkFailure(error, row.credentialId !== null, { branch });
+    }
   }
 
   /**

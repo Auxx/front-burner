@@ -227,6 +227,16 @@ describe('RepositoryCredentialsService', () => {
       expect(changed).toEqual([ id ]);
     });
 
+    it('does not tell of a change when the same saved credentials are chosen again', async () => {
+      const work = createHttps(alice, 'Work', NEW_TOKEN);
+      const id = insertRepository(database, alice, { name: 'handbook', remoteUrl: handbookUrl(), credentialId: work });
+
+      await service.replace(user(), id, { mode: 'saved', credentialId: work });
+
+      expect(changed).toEqual([]);
+      expect(changes.generation(id)).toBe(0);
+    });
+
     it('AC-REPO-002.6: replacing keeps the old saved credentials, and other repositories keep working', async () => {
       const shared = createHttps(alice, 'Shared', NEW_TOKEN);
       const id = insertRepository(database, alice, {

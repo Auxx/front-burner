@@ -21,6 +21,7 @@ import { PushService } from './push/push.service';
 import { WorkingCopyRecovery } from './recovery/working-copy-recovery';
 import { CredentialsChangedListener } from './state/credentials-changed.listener';
 import { MergeRecord } from './state/merge-record';
+import { RemoteOutcomes } from './state/remote-outcomes';
 import { SyncStateStore } from './state/sync-state.store';
 
 /**
@@ -44,6 +45,7 @@ import { SyncStateStore } from './state/sync-state.store';
     PullJob,
     SyncStateStore,
     CredentialsChangedListener,
+    RemoteOutcomes,
     MergeRecord,
     MergeStateService,
     MergeGuard,

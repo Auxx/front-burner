@@ -1,5 +1,5 @@
 import { RepositoryCredentialsChanges } from '@front-burner/server-feature-repositories';
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import type { Subscription } from 'rxjs';
 import { SyncStateStore } from './sync-state.store';
 
@@ -10,11 +10,19 @@ import { SyncStateStore } from './sync-state.store';
  */
 @Injectable()
 export class CredentialsChangedListener implements OnModuleDestroy {
+  private readonly logger = new Logger(CredentialsChangedListener.name);
   readonly #subscription: Subscription;
 
   constructor(changes: RepositoryCredentialsChanges, syncState: SyncStateStore) {
     // The change is told by plan 108's event.
-    this.#subscription = changes.changed.subscribe(repositoryId => syncState.credentialsChanged(repositoryId));
+    this.#subscription = changes.changed.subscribe(repositoryId => {
+      // RxJS throws a subscriber's error again outside any caller, where it would stop the process.
+      try {
+        syncState.credentialsChanged(repositoryId);
+      } catch (error) {
+        this.logger.error(`Could not forget the push problem of repository ${repositoryId}: ${String(error)}`);
+      }
+    });
   }
 
   onModuleDestroy(): void {

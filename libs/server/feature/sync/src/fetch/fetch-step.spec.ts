@@ -116,6 +116,34 @@ describe.skipIf(process.platform === 'win32')('FetchStep', () => {
     expect(harness.syncState.remoteProblems(harness.repositoryId).fetch).toBeNull();
   });
 
+  it('a fetch with credentials that were changed while it ran leaves the warnings alone', async () => {
+    const refused = { code: 'credentials-refused', params: { host: '127.0.0.1' } };
+    harness.syncState.remoteFailed(harness.repositoryId, 'fetch', refused);
+    vi.spyOn(harness.engine, 'fetch').mockImplementation(() => {
+      harness.credentialsChanges.notifyChanged([ harness.repositoryId ]);
+      return Promise.reject(new GitOperationError('host-key-changed', 'Host key verification failed.', { host: 'h' }));
+    });
+
+    await run();
+
+    // The fetch's own problem is the quiet status of GA-35, whatever the credentials.
+    expect(harness.syncState.fetchProblem(harness.repositoryId)).toMatchObject({ code: 'host-key-changed' });
+    expect(harness.syncState.remoteProblems(harness.repositoryId).fetch).toEqual(refused);
+  });
+
+  it('stores its outcome before the network lock is let go', async () => {
+    const locked: number[] = [];
+    const end = harness.outcomes.end.bind(harness.outcomes);
+    vi.spyOn(harness.outcomes, 'end').mockImplementation((...args) => {
+      locked.push(harness.networkLock.size);
+      return end(...args);
+    });
+
+    expect(await run()).toMatchObject({ ok: true });
+
+    expect(locked).toEqual([ 1 ]);
+  });
+
   it('a fetch does not clear a push\'s problem', async () => {
     const refused = { code: 'credentials-refused', params: { host: '127.0.0.1' } };
     harness.syncState.setPushProblem(harness.repositoryId, refused);
@@ -148,6 +176,7 @@ describe.skipIf(process.platform === 'win32')('FetchStep', () => {
       harness.jobCredentials,
       new KnownHostsService(harness.database, testGitOptions()),
       harness.syncState,
+      harness.outcomes,
       harness.events
     );
     await step.run({ id: nextJob++, userId: harness.alice, repositoryId: harness.repositoryId });

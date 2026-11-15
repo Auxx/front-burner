@@ -77,7 +77,13 @@ numbering conventions.
   change. Any other failure, such as the network or a rejected push, changes
   neither, since it proves nothing fixed. `fetch_problem` stays apart: it is the
   last fetch's own problem, whatever it was, for the quiet status of GA-35, and
-  a network failure must replace it there. _(Plan 107's call.)_
+  a network failure must replace it there. _(Plan 107's call.)_ Outcomes are
+  stored while the operation still holds the network lock (A-5.3), so that they
+  land in the order the operations ran. An operation whose repository's
+  credentials changed while it ran stores no warning, as it used the old ones
+  (RC-19); a change of credentials that leaves the same saved credentials in
+  place clears nothing. Warnings keep their params without the remote's
+  messages. _(Plan 107's review.)_
 
 ## A-4: Migrations
 
