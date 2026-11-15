@@ -177,6 +177,8 @@ managing saved credentials as a list come later ([mvp.md](../product/mvp.md)).
   the working copy has:
   - uncommitted changes (with how many files);
   - commits that are not on any remote branch (with how many);
+  - stashed changes (with how many stashes); _(plan 110's call: git keeps a
+    stash only in the working copy, so removing loses it)_
   - a merge in progress.
 
   When none of these apply, one click on **Remove** confirms. _(My call: the

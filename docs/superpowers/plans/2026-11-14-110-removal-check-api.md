@@ -25,9 +25,10 @@ AC-REPO-003.11); `docs/architecture/git-engine.md`.
 
 - The shared constraints of [the step 5 index](2026-11-14-00-roadmap-step-5.md)
   apply.
-- Answer: `{ uncommittedFiles: number, unpushedCommits: number, mergeInProgress:
-  boolean, unreadable: boolean }`. Work would be lost when any count is above 0,
-  a merge is in progress, or `unreadable` is true.
+- Answer: `{ uncommittedFiles: number, unpushedCommits: number, stashes: number,
+  mergeInProgress: boolean, unreadable: boolean }`. Work would be lost when any
+  count is above 0, a merge is in progress, or `unreadable` is true. Stashes
+  were added after review: git keeps them only in the working copy.
 - Ignored files are not counted: they are not work that git would keep either
   _(plan's call)_. Untracked files are.
 - `HEAD` is counted as well as every branch, so that commits on a detached

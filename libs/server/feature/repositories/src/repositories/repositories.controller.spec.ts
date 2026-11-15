@@ -350,6 +350,7 @@ describe('RepositoriesController', () => {
       expect(response.body).toEqual({
         uncommittedFiles: 1,
         unpushedCommits: 1,
+        stashes: 0,
         mergeInProgress: false,
         unreadable: false
       });
@@ -364,6 +365,7 @@ describe('RepositoriesController', () => {
       expect(response.body).toEqual({
         uncommittedFiles: 0,
         unpushedCommits: 0,
+        stashes: 0,
         mergeInProgress: false,
         unreadable: true
       });

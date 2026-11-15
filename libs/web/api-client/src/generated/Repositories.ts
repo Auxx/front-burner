@@ -7,6 +7,7 @@ import type {
   AccessCheckResult,
   AddRepositoryRequest,
   RecentRepositories,
+  RemovalCheckResult,
   RepositoryCredentials,
   RepositoryCredentialsInfo,
   RepositoryDetails,
@@ -56,6 +57,11 @@ export class RepositoriesApi {
   repositoryDetails(id: number): Observable<RepositoryDetails> {
     return this.http.get<RepositoryDetails>(
       `/api/v1/repositories/${encodeURIComponent(id)}/details`
+    );
+  }
+  removalCheck(id: number): Observable<RemovalCheckResult> {
+    return this.http.get<RemovalCheckResult>(
+      `/api/v1/repositories/${encodeURIComponent(id)}/removal`
     );
   }
   open(id: number): Observable<RepositorySummary> {

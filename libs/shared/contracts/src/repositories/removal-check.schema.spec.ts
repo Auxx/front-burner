@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { RemovalCheckResultSchema, wouldLoseWork } from './removal-check.schema';
 
-const nothing = { uncommittedFiles: 0, unpushedCommits: 0, mergeInProgress: false, unreadable: false };
+const nothing = { uncommittedFiles: 0, unpushedCommits: 0, stashes: 0, mergeInProgress: false, unreadable: false };
 
 describe('RemovalCheckResultSchema', () => {
   it('accepts counts and flags', () => {
@@ -26,6 +26,7 @@ describe('wouldLoseWork', () => {
   it.each([
     [ 'uncommitted files', { uncommittedFiles: 1 } ],
     [ 'commits not pushed', { unpushedCommits: 1 } ],
+    [ 'stashed changes', { stashes: 1 } ],
     [ 'a merge in progress', { mergeInProgress: true } ],
     [ 'an unreadable working copy', { unreadable: true } ]
   ])('is true with %s', (_name, change) => {

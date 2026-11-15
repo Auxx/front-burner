@@ -303,6 +303,7 @@ describe('GitEngine', () => {
       expect(await engine().unsavedWork(work)).toEqual({
         uncommittedFiles: 0,
         unpushedCommits: 0,
+        stashes: 0,
         mergeInProgress: false
       });
     });
@@ -317,6 +318,41 @@ describe('GitEngine', () => {
       expect(await engine().unsavedWork(work)).toEqual({
         uncommittedFiles: 2,
         unpushedCommits: 3,
+        stashes: 0,
+        mergeInProgress: false
+      });
+    });
+
+    it('counts a file removed from the index but kept on disk once', async () => {
+      writeFileSync(join(work, 'kept.md'), 'kept\n');
+      git(work, 'add', 'kept.md');
+      git(work, 'commit', '-q', '-m', 'kept');
+      git(work, 'push', '-q', 'origin', 'main');
+      git(work, 'rm', '-q', '--cached', 'kept.md');
+
+      expect((await engine().unsavedWork(work)).uncommittedFiles).toBe(1);
+    });
+
+    it('counts a nested repository as one file', async () => {
+      const nested = join(work, 'vendor');
+      mkdirSync(nested);
+      git(nested, 'init', '-q', '-b', 'main');
+      writeFileSync(join(nested, 'a.md'), 'a\n');
+      writeFileSync(join(work, 'b.md'), 'b\n');
+
+      expect((await engine().unsavedWork(work)).uncommittedFiles).toBe(2);
+    });
+
+    it('counts stashed changes', async () => {
+      writeFileSync(join(work, 'first.md'), 'first\n');
+      git(work, 'stash', 'push', '-q', '--include-untracked');
+      writeFileSync(join(work, 'second.md'), 'second\n');
+      git(work, 'stash', 'push', '-q', '--include-untracked');
+
+      expect(await engine().unsavedWork(work)).toEqual({
+        uncommittedFiles: 0,
+        unpushedCommits: 0,
+        stashes: 2,
         mergeInProgress: false
       });
     });
@@ -352,6 +388,12 @@ describe('GitEngine', () => {
       expect((await engine().unsavedWork(work)).unpushedCommits).toBe(1);
     });
 
+    it('fails on a detached HEAD that git cannot read', async () => {
+      writeFileSync(join(work, '.git', 'HEAD'), `${'1'.repeat(40)}\n`);
+
+      await expect(engine().unsavedWork(work)).rejects.toThrow();
+    });
+
     it('counts no commits on a branch without any', async () => {
       const fresh = join(root, 'fresh');
       git(root, 'clone', '-q', join(root, 'empty.git'), fresh);
@@ -360,8 +402,17 @@ describe('GitEngine', () => {
       expect(await engine().unsavedWork(fresh)).toEqual({
         uncommittedFiles: 1,
         unpushedCommits: 0,
+        stashes: 0,
         mergeInProgress: false
       });
+    });
+
+    it('counts the commits of other branches while the current one has none', async () => {
+      git(work, 'checkout', '-q', '-b', 'local');
+      commit('local');
+      git(work, 'checkout', '-q', '--orphan', 'fresh');
+
+      expect((await engine().unsavedWork(work)).unpushedCommits).toBe(1);
     });
 
     it('reports a merge in progress', async () => {

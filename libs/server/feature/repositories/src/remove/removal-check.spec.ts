@@ -20,7 +20,7 @@ describe('RemovalCheck', () => {
   let handbook: number;
   let work: string;
 
-  const nothing = { uncommittedFiles: 0, unpushedCommits: 0, mergeInProgress: false, unreadable: false };
+  const nothing = { uncommittedFiles: 0, unpushedCommits: 0, stashes: 0, mergeInProgress: false, unreadable: false };
   const commit = (message: string) => git(work, 'commit', '-q', '--allow-empty', '-m', message);
 
   beforeEach(() => {
@@ -61,6 +61,13 @@ describe('RemovalCheck', () => {
     git(work, 'checkout', '-q', 'main');
 
     expect(await check.of(alice, handbook)).toEqual({ ...nothing, unpushedCommits: 1 });
+  });
+
+  it('counts stashed changes', async () => {
+    writeFileSync(join(work, 'a.md'), 'a\n');
+    git(work, 'stash', 'push', '-q', '--include-untracked');
+
+    expect(await check.of(alice, handbook)).toEqual({ ...nothing, stashes: 1 });
   });
 
   it('answers nothing to lose for a failed clone, without running git', async () => {

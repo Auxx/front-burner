@@ -352,6 +352,7 @@ describe('what removing would lose (REQ-REPO-003)', () => {
     expect(await response.json()).toEqual({
       uncommittedFiles: 2,
       unpushedCommits: 3,
+      stashes: 0,
       mergeInProgress: false,
       unreadable: false
     });

@@ -1,14 +1,14 @@
 import { GitEngine } from '@front-burner/server-core-git';
-import { ApiErrorException } from '@front-burner/server-core-observability';
 import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
 import type { RemovalCheckResult } from '@front-burner/shared-contracts';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { RepositoryQueries } from '../repositories/repository-queries';
+import { ownRow, RepositoryQueries } from '../repositories/repository-queries';
 
 /** Nothing would be lost. */
 const NOTHING: RemovalCheckResult = {
   uncommittedFiles: 0,
   unpushedCommits: 0,
+  stashes: 0,
   mergeInProgress: false,
   unreadable: false
 };
@@ -35,15 +35,12 @@ export class RemovalCheck {
   /**
    * The user's repository's unsaved work. A repository being cloned, or whose
    * clone failed, has none; one whose working copy is missing or damaged is
-   * unreadable.
+   * unreadable, as is one that git fails to read here, a timeout included.
    *
    * @throws ApiErrorException `404 not-found`, also for another user's repository (RM-1).
    */
   async of(userId: number, repositoryId: number): Promise<RemovalCheckResult> {
-    const row = this.queries.find(userId, repositoryId);
-    if (row === undefined) {
-      throw new ApiErrorException(404, 'not-found');
-    }
+    const row = ownRow(this.queries.find(userId, repositoryId));
     if (row.status === 'error' && row.errorCode === 'working-copy-missing') {
       return UNREADABLE;
     }

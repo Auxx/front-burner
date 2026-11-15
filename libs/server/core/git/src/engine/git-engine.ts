@@ -113,8 +113,10 @@ export interface LastCommit {
 export interface UnsavedWork {
   /** Files that differ from the last commit, untracked ones included and ignored ones not. */
   uncommittedFiles: number;
-  /** Commits on `HEAD` or a local branch that no remote branch has. */
+  /** Commits on `HEAD` or a local branch that no remote branch has, as of the last fetch. */
   unpushedCommits: number;
+  /** Entries of `git stash list`. */
+  stashes: number;
   /** A merge or rebase waits for the user. */
   mergeInProgress: boolean;
 }
@@ -717,22 +719,27 @@ export class GitEngine implements BeforeApplicationShutdown {
   /**
    * What removing the working copy would lose (RM-18): files that differ from
    * the last commit, untracked ones included and ignored ones not, commits that
-   * no remote branch has, on any local branch or a detached `HEAD`, and a merge
-   * or rebase in progress. Never writes the index, so it can run outside the
-   * working-tree lock (A-5.3).
+   * no remote branch has, on any local branch or a detached `HEAD`, stashed
+   * changes, and a merge or rebase in progress. Remote branches are as of the
+   * last fetch: nothing here connects to the remote. Never writes the index, so
+   * it can run outside the working-tree lock (A-5.3).
    *
    * @throws GitOperationError `working-copy-missing` (RM-6) or `timeout`.
    */
   async unsavedWork(workingCopy: string): Promise<UnsavedWork> {
-    const [ uncommittedFiles, unpushedCommits, mergeInProgress ] = await Promise.all([
+    const [ uncommittedFiles, unpushedCommits, stashes, mergeInProgress ] = await Promise.all([
       this.uncommittedFiles(workingCopy),
       this.unpushedCommits(workingCopy),
+      this.stashes(workingCopy),
       this.mergeInProgress(workingCopy)
     ]);
-    return { uncommittedFiles, unpushedCommits, mergeInProgress };
+    return { uncommittedFiles, unpushedCommits, stashes, mergeInProgress };
   }
 
-  /** Changed, unmerged and untracked entries; a nested repository counts as one. */
+  /**
+   * Changes as the Changes tab lists them, each path once (GA-11), and each
+   * nested repository as one more, since removing would lose it too.
+   */
   private async uncommittedFiles(workingCopy: string): Promise<number> {
     const output = await this.local.checked(workingCopy, [
       '--no-optional-locks',
@@ -743,27 +750,46 @@ export class GitEngine implements BeforeApplicationShutdown {
       '--no-renames',
       '--ignored=no'
     ]);
-    // Without renames, every record is one NUL-terminated entry.
-    return output.split('\0').filter(record => /^[1u?] /.test(record)).length;
+    // With --untracked-files=all, only a nested repository is still a folder; parseStatus leaves it out.
+    const nested = output.split('\0').filter(record => record.startsWith('? ') && record.endsWith('/')).length;
+    return parseStatus(output).changes.length + nested;
   }
 
-  /** Commits of `HEAD` and every local branch that no remote branch has; `HEAD` only once it has a commit. */
+  /**
+   * Commits of `HEAD` and every local branch that no remote branch has. When
+   * `HEAD` cannot be read, it is left out only if it names a branch, which then
+   * has no commit yet; a detached `HEAD` that cannot be read is a failure.
+   */
   private async unpushedCommits(workingCopy: string): Promise<number> {
-    const head = await this.local.run(workingCopy, [ 'rev-parse', '--verify', '--quiet', 'HEAD^{commit}' ]);
-    if (head.timedOut) {
-      throw new GitOperationError('timeout', head.stderr);
+    const count = (head: string[]) =>
+      this.local.run(workingCopy, [
+        '--no-optional-locks',
+        'rev-list',
+        '--count',
+        ...head,
+        '--branches',
+        '--not',
+        '--remotes',
+        '--'
+      ]);
+    let result = await count([ 'HEAD' ]);
+    if (result.exitCode !== 0 && !result.timedOut && (await this.local.currentBranch(workingCopy)) !== null) {
+      // An unborn branch: `--branches` covers every branch that has commits.
+      result = await count([]);
     }
-    const output = await this.local.checked(workingCopy, [
-      '--no-optional-locks',
-      'rev-list',
-      '--count',
-      ...(head.exitCode === 0 ? [ 'HEAD' ] : []),
-      '--branches',
-      '--not',
-      '--remotes',
-      '--'
-    ]);
-    return Number.parseInt(output.trim(), 10);
+    if (result.timedOut) {
+      throw new GitOperationError('timeout', result.stderr);
+    }
+    if (result.exitCode !== 0) {
+      throw new Error(`git rev-list failed: ${result.stderr.trim()}`);
+    }
+    return Number.parseInt(result.stdout.trim(), 10);
+  }
+
+  /** The entries of `git stash list`; none without a stash. */
+  private async stashes(workingCopy: string): Promise<number> {
+    const output = await this.local.checked(workingCopy, [ '--no-optional-locks', 'stash', 'list', '--format=%H' ]);
+    return output.split('\n').filter(line => line !== '').length;
   }
 
   /**

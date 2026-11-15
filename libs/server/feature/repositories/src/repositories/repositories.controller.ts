@@ -1,5 +1,4 @@
 import type { Repository } from '@front-burner/server-core-database';
-import { ApiErrorException } from '@front-burner/server-core-observability';
 import { authOf, RateLimitGroup } from '@front-burner/server-core-security';
 import type {
   AccessCheckResult,
@@ -30,15 +29,7 @@ import {
   RepositoryParamsDto,
   RepositorySummaryDto
 } from './repositories.dto';
-import { RepositoryQueries, toDetails, toSummary } from './repository-queries';
-
-/** The user's row, or `404 not-found`, also for another user's (FB-2, RM-1). */
-function ownRow(row: Repository | undefined): Repository {
-  if (row === undefined) {
-    throw new ApiErrorException(404, 'not-found');
-  }
-  return row;
-}
+import { ownRow, RepositoryQueries, toDetails, toSummary } from './repository-queries';
 
 /** The logged-in user's repositories; never another user's (DS-3, AR-56). */
 @ApiTags('repositories')

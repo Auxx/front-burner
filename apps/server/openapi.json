@@ -2994,6 +2994,11 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "stashes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "mergeInProgress": {
             "type": "boolean"
           },
@@ -3004,6 +3009,7 @@
         "required": [
           "uncommittedFiles",
           "unpushedCommits",
+          "stashes",
           "mergeInProgress",
           "unreadable"
         ]
