@@ -222,7 +222,11 @@ libraries and [overview.md](overview.md) for the numbering conventions.
 - **A-8.14** `web/shell` (A-2.5) renders the app header, the user menu, the
   global banners, page titles and breadcrumbs (REQ-APP-001). The routes of NV-1
   live in `apps/web`; logging out in one tab reaches the others through a
-  `storage` event (NV-8).
+  `storage` event (NV-8). It also holds what the dashboard and the repository
+  management page both show, since web features may not import each other
+  (A-2.4): a repository's status and warnings, "Last accessed", the Add a
+  repository guide, and `RepositoryListUpdatesService`, which keeps a page's
+  list current from the push channel (DS-23, RM-7).
 - **A-8.15** `feature-repository-screen` keeps the state of the open file —
   content, undo history, save queue, browser draft, content hash of the last
   load or save — in a per-file store keyed by repository and path, not in the

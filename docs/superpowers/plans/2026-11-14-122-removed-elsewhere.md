@@ -15,9 +15,9 @@ once; and a device that finds a repository gone deletes its browser drafts
 handles `repository.removed`: if the current route belongs to that repository
 (the repository screen or its settings page), it navigates to the dashboard with
 the toast, and it deletes the device's drafts for it. The lists drop the entry
-through `RepositoryListUpdates` (plan 113). A device that was offline learns it
-on its next request: a `404 not-found` for a repository it holds drafts for
-deletes them, as it would after the event _(plan's call)_.
+through `RepositoryListUpdatesService` (plan 113). A device that was offline
+learns it on its next request: a `404 not-found` for a repository it holds
+drafts for deletes them, as it would after the event _(plan's call)_.
 
 **Tech Stack:** as before. No new packages.
 

@@ -71,7 +71,7 @@ to AC-REPO-003.3); `docs/requirements/navigation.md` (NV-1, NV-5, NV-13);
 
 **Interfaces:**
 
-- Consumes: `RepositoriesApi.list` (plan 104), `RepositoryListUpdates`,
+- Consumes: `RepositoriesApi.list` (plan 104), `RepositoryListUpdatesService`,
   `LastAccessedComponent`, `AddRepositoryGuideComponent` (plan 113).
 - Produces: `RepositoriesPage` at `/repositories`.
 

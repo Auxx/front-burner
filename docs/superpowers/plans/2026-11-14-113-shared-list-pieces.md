@@ -18,9 +18,14 @@ or are extracted there _(plan's call)_:
   with no repositories);
 - `LastAccessedComponent`, "Last accessed" with the relative time and its exact
   time in a tooltip, taken out of `RepositoryEntryComponent`;
-- `RepositoryListUpdates`, what the dashboard page does on `repository.status`
-  and on a reconnect, as a helper that patches a list of summaries and asks for
-  a reload, so that both pages follow clones without a reload (DS-23, RM-7).
+- `RepositoryListUpdatesService`, what the dashboard page does on
+  `repository.status` and on a reconnect, as a helper that patches a list of
+  summaries and asks for a reload, so that both pages follow clones without a
+  reload (DS-23, RM-7). As the page did, statuses that arrive while a request
+  for the list runs are answered by one reload after it ends, and a reconnect
+  reloads at once. A status while the list failed to load asks for nothing:
+  **Try again** answers it. Besides, several statuses for repositories not
+  listed now share one reload _(plan's call)_.
 
 **Tech Stack:** as before. No new packages.
 
@@ -69,17 +74,19 @@ or are extracted there _(plan's call)_:
 
 - Produces: `AddRepositoryGuideComponent` (`shell-add-repository-guide`),
   `LastAccessedComponent` (`shell-last-accessed`, input `at: string`),
-  `RepositoryListUpdates`.
+  `RepositoryListUpdatesService` (`follow(list)`, with a
+  `FollowedRepositoryList`: `repositories`, `loading`, `update`, `reload`;
+  called in the page's constructor).
 
-- [ ] **Step 1: Write the failing tests** for the new pieces in `web/shell`:
+- [x] **Step 1: Write the failing tests** for the new pieces in `web/shell`:
       `shows the relative time and the exact time on focus`; `patches the status
       of a listed repository`; `asks for a reload for an unknown repository`;
       `reloads after a reconnect`.
-- [ ] **Step 2: Run them and see them fail** — `npx nx test web-shell`.
-- [ ] **Step 3: Implement**, then switch the dashboard to the moved pieces.
+- [x] **Step 2: Run them and see them fail** — `npx nx test web-shell`.
+- [x] **Step 3: Implement**, then switch the dashboard to the moved pieces.
       Follow the `angular-templates` skill.
-- [ ] **Step 4: Run them and see them pass** — `npx nx run-many -t test -p
+- [x] **Step 4: Run them and see them pass** — `npx nx run-many -t test -p
       web-shell web-feature-dashboard`, then `npx nx e2e web-e2e`.
-- [ ] **Step 5: Check and commit** — as in the index's "Verifying"; set this
+- [x] **Step 5: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `refactor(shell): share the repository list
       pieces`.

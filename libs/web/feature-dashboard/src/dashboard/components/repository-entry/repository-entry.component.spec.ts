@@ -41,7 +41,7 @@ describe('RepositoryEntryComponent', () => {
 
     expect(host().textContent).toContain('handbook');
     expect(host().textContent).toContain('github.com/acme/handbook');
-    expect(host().textContent).toContain(`${KEY}.lastAccessed`);
+    expect(host().textContent).toContain('web-shell.LastAccessedComponent.label');
     expect(host().querySelector('time')?.getAttribute('datetime')).toBe(ready.lastAccessedAt);
     expect(host().querySelector('time')?.textContent?.trim()).toMatch(/ago$|^yesterday$/);
   });

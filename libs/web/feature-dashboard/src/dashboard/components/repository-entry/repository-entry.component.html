@@ -14,13 +14,7 @@
     <span class="error">{{ t('error.' + repository.error) }}</span>
   }
   <div class="meta">
-    <span class="accessed">
-      {{ t('lastAccessed') }}
-      <time tabindex="0"
-            [attr.datetime]="repository.lastAccessedAt"
-            [uiTooltip]="exact()"
-            uiTooltipShowOnClick>{{ relative() }}</time>
-    </span>
+    <shell-last-accessed [at]="repository.lastAccessedAt" />
     @if (hasSettingsLink()) {
       <a class="settings"
          [routerLink]="['/repositories', repository.id, 'settings']"

@@ -1,10 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { RepositorySummary } from '@front-burner/shared-contracts';
-import { TooltipDirective } from '@front-burner/ui';
-import { relativeTime } from '@front-burner/web-core';
-import { RepositoryStatusComponent } from '@front-burner/web-shell';
-import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
+import { LastAccessedComponent, RepositoryStatusComponent } from '@front-burner/web-shell';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * One repository of the recent list (DS-18 to DS-22). Only a ready repository
@@ -14,7 +12,7 @@ import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
  */
 @Component({
   selector: 'dash-repository-entry',
-  imports: [ TranslocoDirective, RouterLink, TooltipDirective, RepositoryStatusComponent ],
+  imports: [ TranslocoDirective, RouterLink, RepositoryStatusComponent, LastAccessedComponent ],
   templateUrl: './repository-entry.component.html',
   styleUrl: './repository-entry.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -22,19 +20,8 @@ import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 export class RepositoryEntryComponent {
   readonly repository = input.required<RepositorySummary>();
 
-  private readonly transloco = inject(TranslocoService);
-
   protected readonly openable = computed(() => this.repository().status === 'ready');
   protected readonly hasSettingsLink = computed(() =>
     this.repository().status === 'cloning' || this.repository().status === 'error'
-  );
-
-  private readonly accessedAt = computed(() => new Date(this.repository().lastAccessedAt));
-  protected readonly relative = computed(() =>
-    relativeTime(this.accessedAt(), new Date(), this.transloco.getActiveLang())
-  );
-  protected readonly exact = computed(() =>
-    new Intl.DateTimeFormat(this.transloco.getActiveLang(), { dateStyle: 'medium', timeStyle: 'short' })
-      .format(this.accessedAt())
   );
 }
