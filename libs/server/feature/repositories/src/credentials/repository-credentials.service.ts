@@ -14,6 +14,7 @@ import { CredentialsCheck } from '../add/credentials-check';
 import { RequestCredentials } from '../add/request-credentials';
 import { fieldError, remoteOf } from '../add/request-fields';
 import { RepositoryQueries } from '../repositories/repository-queries';
+import { RepositoryCredentialsChanges } from './repository-credentials-changes';
 
 const notFound = () => new ApiErrorException(404, 'not-found');
 
@@ -33,7 +34,8 @@ export class RepositoryCredentialsService {
     private readonly queries: RepositoryQueries,
     private readonly saved: SavedCredentialsService,
     private readonly requestCredentials: RequestCredentials,
-    private readonly credentialsCheck: CredentialsCheck
+    private readonly credentialsCheck: CredentialsCheck,
+    private readonly changes: RepositoryCredentialsChanges
   ) {}
 
   /**
@@ -92,6 +94,7 @@ export class RepositoryCredentialsService {
       return id;
     });
     this.credentialsCheck.unlockPasted(user.sessionId, credentialId, credentials);
+    this.changes.notifyChanged([ repositoryId ]);
     this.logger.log(`User ${user.id} replaced the credentials of repository ${repositoryId}`);
     return this.get(user.id, user.sessionId, repositoryId);
   }
@@ -128,7 +131,7 @@ export class RepositoryCredentialsService {
       protectedKey: false
     });
 
-    this.database.db.transaction(tx => {
+    const usingThem = this.database.db.transaction(tx => {
       // The token was checked for these credentials: not for others this repository was given meanwhile.
       const current = tx.select({ credentialId: repositories.credentialId }).from(repositories)
         .where(and(eq(repositories.id, repositoryId), eq(repositories.userId, user.id)))
@@ -140,7 +143,12 @@ export class RepositoryCredentialsService {
         throw notUpdatable();
       }
       this.saved.replaceHttps(tx, user.id, credentialId, input);
+      return tx.select({ id: repositories.id }).from(repositories)
+        .where(and(eq(repositories.userId, user.id), eq(repositories.credentialId, credentialId)))
+        .all().map(row => row.id);
     });
+    // Every repository that uses them now pushes with the new token (RM-8).
+    this.changes.notifyChanged(usingThem);
     this.logger.log(`User ${user.id} updated saved credentials ${credentialId} from repository ${repositoryId}`);
     return this.get(user.id, user.sessionId, repositoryId);
   }

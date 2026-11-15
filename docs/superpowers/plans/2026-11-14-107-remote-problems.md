@@ -18,6 +18,15 @@ warnings are kept in `push_problem`: `credentials-refused`, `push-not-allowed`
 and `host-key-changed` _(plan's call)_; a rejected push (non-fast-forward) is
 not a warning.
 
+**As built:** `fetch_problem` must keep a network failure for GA-35, which would
+drop a kept `credentials-refused` there, so a fetch's or pull's warning went
+into a second new column, `fetch_warning`, and `fetch_problem` is left as it was
+(A-4.5d). `SyncStateStore.remoteProblems(repositoryId)` reads both;
+`remoteFailed` and `remoteSucceeded` take `'fetch' | 'push'`, a pull being a
+fetch. The credentials change is told through `RepositoryCredentialsChanges` (an
+RxJS subject, as `SessionLifecycle`), which `server/feature/sync` already may
+import.
+
 **Tech Stack:** as before; a drizzle migration. No new packages.
 
 **Spec:** `docs/requirements/repo-manage.md` (RM-8, AC-REPO-003.6);

@@ -6,6 +6,16 @@ export const syncState = sqliteTable('sync_state', {
   repositoryId: integer('repository_id').primaryKey().references(() => repositories.id, { onDelete: 'cascade' }),
   /** JSON `{ code, params }` of the last fetch's problem; `null` when it had none. */
   fetchProblem: text('fetch_problem'),
+  /**
+   * JSON `{ code, params }` of the last warning of a fetch or pull (RM-8): `credentials-refused` or
+   * `host-key-changed`. Kept until an operation with the remote succeeds, whatever fetches fail meanwhile.
+   */
+  fetchWarning: text('fetch_warning'),
+  /**
+   * JSON `{ code, params }` of the last warning of a push (RM-8): `credentials-refused`, `push-not-allowed` or
+   * `host-key-changed`. Kept until a push succeeds; `push-not-allowed` also until the credentials change.
+   */
+  pushProblem: text('push_problem'),
   /** The commit the branch was at just before the last merge (D-4.6, A-4.5a); `null` when none is recorded. */
   recordedCommit: text('recorded_commit'),
   /** The merge commit that the recorded commit belongs to; `null` until the merge is committed. */

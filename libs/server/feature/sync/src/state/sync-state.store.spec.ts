@@ -83,6 +83,93 @@ describe('SyncStateStore', () => {
     expect(store.record(repositoryId)).toEqual({ recordedCommit: null, mergeCommit: null, applying: false });
   });
 
+  describe('remote problems (RM-8)', () => {
+    const refused = { code: 'credentials-refused', params: { host: 'h' } };
+    const notAllowed = { code: 'push-not-allowed', params: { branch: 'main' } };
+    const hostKey = { code: 'host-key-changed', params: { host: 'h' } };
+    const unreachable = { code: 'host-unreachable', params: { host: 'h' } };
+
+    it('a refused push is stored', () => {
+      expect(store.remoteFailed(repositoryId, 'push', refused)).toBe(true);
+      expect(store.pushProblem(repositoryId)).toEqual(refused);
+      expect(store.remoteProblems(repositoryId)).toEqual({ fetch: null, push: refused });
+    });
+
+    it('a rejected push is not a problem', () => {
+      expect(store.remoteFailed(repositoryId, 'push', { code: 'push-non-fast-forward', params: {} })).toBe(false);
+      expect(store.remoteFailed(repositoryId, 'push', { code: 'push-rejected', params: {} })).toBe(false);
+      expect(store.pushProblem(repositoryId)).toBeNull();
+    });
+
+    it('a fetch does not clear a push\'s problem', () => {
+      store.remoteFailed(repositoryId, 'push', refused);
+      store.remoteFailed(repositoryId, 'fetch', hostKey);
+      expect(store.remoteSucceeded(repositoryId, 'fetch')).toBe(true);
+      expect(store.remoteProblems(repositoryId)).toEqual({ fetch: null, push: refused });
+    });
+
+    it('a push clears a fetch\'s problem', () => {
+      store.remoteFailed(repositoryId, 'fetch', refused);
+      expect(store.remoteSucceeded(repositoryId, 'push')).toBe(true);
+      expect(store.remoteProblems(repositoryId)).toEqual({ fetch: null, push: null });
+    });
+
+    it('a successful push clears its own problem', () => {
+      store.remoteFailed(repositoryId, 'push', hostKey);
+      expect(store.remoteSucceeded(repositoryId, 'push')).toBe(true);
+      expect(store.pushProblem(repositoryId)).toBeNull();
+    });
+
+    it('a push\'s problem replaces the last one, and only a push may not be allowed', () => {
+      store.remoteFailed(repositoryId, 'push', refused);
+      expect(store.remoteFailed(repositoryId, 'push', notAllowed)).toBe(true);
+      expect(store.pushProblem(repositoryId)).toEqual(notAllowed);
+      expect(store.remoteFailed(repositoryId, 'fetch', notAllowed)).toBe(false);
+      expect(store.remoteProblems(repositoryId).fetch).toBeNull();
+    });
+
+    it('changing the credentials clears push-not-allowed', () => {
+      store.remoteFailed(repositoryId, 'push', notAllowed);
+      expect(store.credentialsChanged(repositoryId)).toBe(true);
+      expect(store.pushProblem(repositoryId)).toBeNull();
+    });
+
+    it('changing the credentials keeps credentials-refused of a fetch', () => {
+      store.remoteFailed(repositoryId, 'fetch', refused);
+      store.remoteFailed(repositoryId, 'push', refused);
+      expect(store.credentialsChanged(repositoryId)).toBe(false);
+      expect(store.remoteProblems(repositoryId)).toEqual({ fetch: refused, push: refused });
+    });
+
+    it('a network failure keeps the stored problems', () => {
+      store.remoteFailed(repositoryId, 'fetch', refused);
+      store.remoteFailed(repositoryId, 'push', notAllowed);
+      expect(store.remoteFailed(repositoryId, 'fetch', unreachable)).toBe(false);
+      expect(store.remoteFailed(repositoryId, 'push', unreachable)).toBe(false);
+      expect(store.remoteProblems(repositoryId)).toEqual({ fetch: refused, push: notAllowed });
+    });
+
+    it('reports whether anything changed', () => {
+      expect(store.remoteSucceeded(repositoryId, 'push')).toBe(false);
+      expect(store.credentialsChanged(repositoryId)).toBe(false);
+      expect(store.remoteFailed(repositoryId, 'fetch', refused)).toBe(true);
+      expect(store.remoteFailed(repositoryId, 'fetch', { ...refused, params: { host: 'h' } })).toBe(false);
+      expect(store.remoteFailed(repositoryId, 'fetch', { ...refused, params: { host: 'other' } })).toBe(true);
+      expect(store.remoteSucceeded(repositoryId, 'fetch')).toBe(true);
+      expect(store.remoteSucceeded(repositoryId, 'fetch')).toBe(false);
+      expect(store.setPushProblem(repositoryId, refused)).toBe(true);
+      expect(store.setPushProblem(repositoryId, refused)).toBe(false);
+      expect(store.setPushProblem(repositoryId, null)).toBe(true);
+    });
+
+    it('leaves the fetch status of GA-35 alone', () => {
+      store.setFetchProblem(repositoryId, unreachable);
+      store.remoteFailed(repositoryId, 'push', refused);
+      store.remoteSucceeded(repositoryId, 'push');
+      expect(store.fetchProblem(repositoryId)).toEqual(unreachable);
+    });
+  });
+
   it('is deleted with its repository', () => {
     store.setFetchProblem(repositoryId, { code: 'x', params: {} });
     database.db.delete(repositories).where(eq(repositories.id, repositoryId)).run();

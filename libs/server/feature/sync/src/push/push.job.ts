@@ -10,6 +10,7 @@ import { FetchStep, FetchStepJob } from '../fetch/fetch-step';
 import { JobCredentials } from '../jobs/job-credentials.service';
 import { networkFailure } from '../jobs/network-failure';
 import { MergeRecord } from '../state/merge-record';
+import { SyncStateStore } from '../state/sync-state.store';
 
 export const PUSH_JOB_TYPE = 'sync.push';
 
@@ -51,7 +52,8 @@ export class PushJob implements OnModuleInit {
     private readonly jobKeys: JobKeys,
     private readonly events: EventsHub,
     private readonly workingTreeLock: WorkingTreeLock,
-    private readonly mergeRecord: MergeRecord
+    private readonly mergeRecord: MergeRecord,
+    private readonly syncState: SyncStateStore
   ) {}
 
   onModuleInit(): void {
@@ -102,8 +104,13 @@ export class PushJob implements OnModuleInit {
         return networkFailure(error, row.credentialId !== null, { branch });
       }
     });
+    // A push's warning outlives a successful fetch; only a push clears it (RM-8, AC-REPO-003.6).
+    // The change is told by plan 108's event.
     if (outcome.kind === 'pushed') {
+      this.syncState.remoteSucceeded(repositoryId, 'push');
       await this.forgetPushedMerge(userId, repositoryId);
+    } else if (outcome.kind === 'failed') {
+      this.syncState.remoteFailed(repositoryId, 'push', { code: outcome.code, params: outcome.params });
     }
     if (outcome.kind === 'failed' && outcome.code === 'push-non-fast-forward') {
       await this.fetchAfterRejection({ id, userId, repositoryId });

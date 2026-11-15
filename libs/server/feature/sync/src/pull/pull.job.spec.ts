@@ -333,6 +333,22 @@ describe.skipIf(process.platform === 'win32')('PullJob', () => {
     expect(head()).toBe(before);
   });
 
+  it('a refused pull is stored as the fetch problem', async () => {
+    await harness.serve({ users: { alice: 'the-right-token' } });
+    const credentialId = harness.database.db.transaction(tx =>
+      harness.saved.createHttps(tx, harness.alice, { name: 'Token', username: 'alice', password: 'wrong' })
+    );
+    harness.database.db.update(repositories).set({ credentialId }).where(eq(repositories.id, harness.repositoryId))
+      .run();
+    harness.runner.start();
+
+    expect(await pulled()).toMatchObject({ kind: 'failed', code: 'credentials-refused' });
+    expect(harness.syncState.remoteProblems(harness.repositoryId)).toEqual({
+      fetch: { code: 'credentials-refused', params: { host: '127.0.0.1' } },
+      push: null
+    });
+  });
+
   it('publishes git.changed and files.changed', async () => {
     harness.pushFileFromElsewhere('a.md', 'a\n');
     harness.runner.start();

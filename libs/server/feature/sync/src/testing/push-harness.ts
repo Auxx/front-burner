@@ -177,7 +177,8 @@ export class PushHarness {
       this.jobKeys,
       this.events,
       this.workingTreeLock,
-      this.mergeRecord
+      this.mergeRecord,
+      this.syncState
     ).onModuleInit();
     new FetchJob(this.runner, this.fetchStep, this.jobKeys).onModuleInit();
     new PullJob(

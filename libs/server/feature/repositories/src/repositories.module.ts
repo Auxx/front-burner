@@ -4,6 +4,7 @@ import { AddRepositoryService } from './add/add-repository.service';
 import { CredentialsCheck } from './add/credentials-check';
 import { RequestCredentials } from './add/request-credentials';
 import { CloneJob } from './clone/clone.job';
+import { RepositoryCredentialsChanges } from './credentials/repository-credentials-changes';
 import { RepositoryCredentialsController } from './credentials/repository-credentials.controller';
 import { RepositoryCredentialsService } from './credentials/repository-credentials.service';
 import { WorkingCopyCheck } from './recovery/working-copy-check';
@@ -19,12 +20,13 @@ import { RepositoryQueries } from './repositories/repository-queries';
     RepositoryQueries,
     InstanceRepositories,
     RepositoryCredentialsService,
+    RepositoryCredentialsChanges,
     RequestCredentials,
     CredentialsCheck,
     AddRepositoryService,
     CloneJob,
     WorkingCopyCheck
   ],
-  exports: [ RepositoryQueries, InstanceRepositories ]
+  exports: [ RepositoryQueries, InstanceRepositories, RepositoryCredentialsChanges ]
 })
 export class RepositoriesModule {}

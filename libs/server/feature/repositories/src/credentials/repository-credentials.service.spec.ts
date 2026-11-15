@@ -28,6 +28,7 @@ import { RepositoryQueries } from '../repositories/repository-queries';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createRemotes, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
 import { createTestDatabase } from '../testing/test-database';
+import { RepositoryCredentialsChanges } from './repository-credentials-changes';
 import { RepositoryCredentialsService } from './repository-credentials.service';
 
 const IDLE = 60 * 60_000;
@@ -58,6 +59,8 @@ describe('RepositoryCredentialsService', () => {
   let saved: SavedCredentialsService;
   let engine: GitEngine;
   let service: RepositoryCredentialsService;
+  let changes: RepositoryCredentialsChanges;
+  let changed: number[];
   let alice: number;
   let bob: number;
 
@@ -96,12 +99,16 @@ describe('RepositoryCredentialsService', () => {
     saved = new SavedCredentialsService(database, box, unlocks, new UnlockAttempts());
     const gitOptions = testGitOptions();
     engine = new GitEngine(gitOptions, new GitRunner());
+    changes = new RepositoryCredentialsChanges();
+    changed = [];
+    changes.changed.subscribe(id => changed.push(id));
     service = new RepositoryCredentialsService(
       database,
       new RepositoryQueries(database),
       saved,
       new RequestCredentials(saved, unlocks),
-      new CredentialsCheck(database, saved, new KnownHostsService(database, gitOptions), engine, unlocks)
+      new CredentialsCheck(database, saved, new KnownHostsService(database, gitOptions), engine, unlocks),
+      changes
     );
     alice = insertUser(database, 'alice@x.io');
     bob = insertUser(database, 'bob@x.io');
@@ -206,6 +213,18 @@ describe('RepositoryCredentialsService', () => {
         inUse: { kind: 'https', id: credential?.id, name: 'GitHub work', username: 'alice', missing: false, usedBy: 1 }
       });
       expect(saved.resolveForJob(alice, credential?.id ?? 0, undefined)).toMatchObject({ password: NEW_TOKEN });
+    });
+
+    it('tells the sync feature that the repository\'s credentials changed, only once they did', async () => {
+      const id = insertRepository(database, alice, { name: 'handbook', remoteUrl: handbookUrl() });
+
+      await rejectionOf(
+        service.replace(user(), id, { mode: 'new-https', name: 'X', username: 'alice', password: 'no' })
+      );
+      expect(changed).toEqual([]);
+
+      await service.replace(user(), id, { mode: 'new-https', name: 'Y', username: 'alice', password: NEW_TOKEN });
+      expect(changed).toEqual([ id ]);
     });
 
     it('AC-REPO-002.6: replacing keeps the old saved credentials, and other repositories keep working', async () => {
@@ -371,11 +390,21 @@ describe('RepositoryCredentialsService', () => {
       }
     });
 
+    it('tells the sync feature about every repository that uses the updated credentials', async () => {
+      const elsewhere = insertRepository(database, bob, { name: 'handbook', remoteUrl: handbookUrl() });
+
+      await service.updateToken(user(), handbook, { username: 'alice', password: NEW_TOKEN });
+
+      expect(changed.sort()).toEqual([ handbook, wiki ].sort());
+      expect(changed).not.toContain(elsewhere);
+    });
+
     it('an update whose access check fails changes nothing', async () => {
       const before = all();
 
       const error = await rejectionOf(service.updateToken(user(), handbook, { username: 'alice', password: 'wrong' }));
 
+      expect(changed).toEqual([]);
       expect(error).toEqual(fieldError('credentials', 'credentials-refused', { generatedKey: false }));
       // Byte for byte: not even encrypted again.
       expect(all()).toEqual(before);

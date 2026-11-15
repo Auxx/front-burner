@@ -43,8 +43,9 @@ export class FetchStep {
    * Fetches the repository for the job, then stores the failure's code and
    * params, or clears the stored one on success. A locked key is returned but
    * never stored, as it is locked per session (RC-20) and the stored problem is
-   * per repository. Publishes `git.changed` when a remote branch moved, or the
-   * stored problem changed.
+   * per repository. The warning of RM-8 that a refusal leaves is kept apart,
+   * as `SyncStateStore.remoteFailed` says. Publishes `git.changed` when a
+   * remote branch moved, or the stored problem changed.
    *
    * @throws what `OpenableRepository.open` throws, and what is not git's refusal.
    */
@@ -79,6 +80,12 @@ export class FetchStep {
     }
     const problem = failure === undefined ? null : { code: failure.code, params: failure.params };
     const problemChanged = this.syncState.setFetchProblem(repositoryId, problem);
+    // A pull fetches first, so its refusal is a fetch's (RM-8). The change is told by plan 108's event.
+    if (problem === null) {
+      this.syncState.remoteSucceeded(repositoryId, 'fetch');
+    } else {
+      this.syncState.remoteFailed(repositoryId, 'fetch', problem);
+    }
     if (('moved' in result && result.moved) || problemChanged) {
       this.events.publish(userId, { type: 'git.changed', repositoryId });
     }

@@ -97,6 +97,34 @@ describe.skipIf(process.platform === 'win32')('FetchStep', () => {
     });
   });
 
+  it('keeps refused credentials as a warning until a fetch succeeds, through a network failure', async () => {
+    await harness.serve({ users: { alice: 'the-right-token' } });
+    useHttpsCredentials('a-wrong-token');
+    const refused = { code: 'credentials-refused', params: { host: '127.0.0.1' } };
+
+    await run();
+    expect(harness.syncState.remoteProblems(harness.repositoryId)).toEqual({ fetch: refused, push: null });
+
+    harness.useRemote('https://127.0.0.1:1/handbook.git');
+    await run();
+    expect(harness.syncState.fetchProblem(harness.repositoryId)).toMatchObject({ code: 'host-unreachable' });
+    expect(harness.syncState.remoteProblems(harness.repositoryId).fetch).toEqual(refused);
+
+    // A remote that takes any credentials, as if they were fixed.
+    await harness.serve({});
+    expect(await run()).toMatchObject({ ok: true });
+    expect(harness.syncState.remoteProblems(harness.repositoryId).fetch).toBeNull();
+  });
+
+  it('a fetch does not clear a push\'s problem', async () => {
+    const refused = { code: 'credentials-refused', params: { host: '127.0.0.1' } };
+    harness.syncState.setPushProblem(harness.repositoryId, refused);
+
+    expect(await run()).toMatchObject({ ok: true });
+
+    expect(harness.syncState.pushProblem(harness.repositoryId)).toEqual(refused);
+  });
+
   it('stores no secret', async () => {
     // The credentials the remote refuses carry the token.
     await harness.serve({ users: { alice: 'the-right-token' } });
