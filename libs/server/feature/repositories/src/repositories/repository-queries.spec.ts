@@ -1,7 +1,8 @@
-import { Database } from '@front-burner/server-core-database';
+import { Database, jobs } from '@front-burner/server-core-database';
+import { CLONE_JOB_TYPE } from '../clone/clone-queue';
 import { insertRepository, insertUser, repositoryRow } from '../testing/fixtures';
 import { createTestDatabase } from '../testing/test-database';
-import { RepositoryQueries, toDetails, toSummary } from './repository-queries';
+import { queuedClone, RepositoryQueries, toDetails, toSummary } from './repository-queries';
 
 describe('RepositoryQueries', () => {
   let database: Database;
@@ -167,6 +168,55 @@ describe('RepositoryQueries', () => {
     insertRepository(database, alice, { name: 'b' });
     expect(queries.recent(alice, 1)).toHaveLength(1);
   });
+
+  describe('clones', () => {
+    function insertJob(
+      repositoryId: number,
+      values: { type?: string; status: 'queued' | 'running' | 'done'; progress?: number; }
+    ): number {
+      return database.db.insert(jobs).values({
+        type: values.type ?? CLONE_JOB_TYPE,
+        userId: alice,
+        repositoryId,
+        status: values.status,
+        progress: values.progress ?? null,
+        runAt: new Date(0),
+        createdAt: new Date(0)
+      }).returning({ id: jobs.id }).get().id;
+    }
+
+    it('answers a queued clone as waiting and a running one with its progress (RM-7, AR-52)', () => {
+      const waiting = insertRepository(database, alice, { name: 'waiting', status: 'cloning' });
+      const running = insertRepository(database, alice, { name: 'running', status: 'cloning' });
+      const waitingJob = insertJob(waiting, { status: 'queued' });
+      const runningJob = insertJob(running, { status: 'running', progress: 42 });
+
+      expect(queries.clones(queries.all(alice))).toEqual(
+        new Map([
+          [ running, { jobId: runningJob, state: 'running', percent: 42 } ],
+          [ waiting, { jobId: waitingJob, state: 'waiting', percent: null } ]
+        ])
+      );
+    });
+
+    it('answers a running clone without a report yet with no percentage', () => {
+      const id = insertRepository(database, alice, { name: 'handbook', status: 'cloning' });
+      const job = insertJob(id, { status: 'running' });
+
+      expect(queries.clones(queries.all(alice)).get(id)).toEqual({ jobId: job, state: 'running', percent: null });
+    });
+
+    it('leaves out ended clones, other jobs and rows that are not cloning', () => {
+      const ended = insertRepository(database, alice, { name: 'ended', status: 'cloning' });
+      const ready = insertRepository(database, alice, { name: 'ready', status: 'ready' });
+      insertJob(ended, { status: 'done', progress: 100 });
+      insertJob(ended, { type: 'sync.fetch', status: 'running' });
+      // A ready row's clone job may not have recorded its end yet.
+      insertJob(ready, { status: 'running', progress: 100 });
+
+      expect(queries.clones(queries.all(alice))).toEqual(new Map());
+    });
+  });
 });
 
 const failedRow = repositoryRow({
@@ -183,7 +233,8 @@ describe('toDetails', () => {
   it('answers the clone mode, level and date added', () => {
     const details = toDetails(
       { ...failedRow, gitLevel: 'simple', createdAt: new Date(Date.UTC(2026, 9, 20, 8)) },
-      []
+      [],
+      undefined
     );
 
     expect(details).toMatchObject({
@@ -192,31 +243,38 @@ describe('toDetails', () => {
       gitLevel: 'simple',
       addedAt: '2026-10-20T08:00:00.000Z'
     });
-    expect(details.summary).toEqual(toSummary(failedRow, []));
+    expect(details.summary).toEqual(toSummary(failedRow, [], undefined));
   });
 
   it('answers the warnings in its summary', () => {
     const ready = { ...failedRow, status: 'ready' } as const;
 
-    expect(toDetails(ready, [ 'key-locked' ]).summary.warnings).toEqual([ 'key-locked' ]);
+    expect(toDetails(ready, [ 'key-locked' ], undefined).summary.warnings).toEqual([ 'key-locked' ]);
+  });
+
+  it('answers the clone in its summary', () => {
+    const cloning = { ...failedRow, status: 'cloning' } as const;
+
+    expect(toDetails(cloning, [], queuedClone(5)).summary.clone).toEqual(queuedClone(5));
   });
 
   it('answers the branch of a single-branch clone', () => {
-    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: 'main' }, []))
+    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: 'main' }, [], undefined))
       .toMatchObject({ cloneMode: 'single-branch', branch: 'main' });
   });
 
   it('never answers a full clone\'s branch', () => {
-    expect(toDetails({ ...failedRow, cloneMode: 'full', branch: 'main' }, [])).toMatchObject({ branch: null });
+    expect(toDetails({ ...failedRow, cloneMode: 'full', branch: 'main' }, [], undefined))
+      .toMatchObject({ branch: null });
   });
 
   it('answers no branch for a single-branch row that lost it', () => {
-    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: null }, []))
+    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: null }, [], undefined))
       .toMatchObject({ cloneMode: 'single-branch', branch: null });
   });
 
   it('answers the error record of a failed clone', () => {
-    expect(toDetails(failedRow, []))
+    expect(toDetails(failedRow, [], undefined))
       .toMatchObject({ errorDetail: 'fatal: repository not found', errorRequestId: 'request-1' });
   });
 
@@ -224,12 +282,12 @@ describe('toDetails', () => {
     // Plan 105 clears the record; a stale one is still never answered outside `error`.
     const ready = { ...failedRow, status: 'ready' } as const;
 
-    expect(toDetails(ready, []))
+    expect(toDetails(ready, [], undefined))
       .toMatchObject({ summary: { error: null }, errorDetail: null, errorRequestId: null });
   });
 
   it('answers the remote without credentials', () => {
-    const details = toDetails(failedRow, []);
+    const details = toDetails(failedRow, [], undefined);
 
     expect(details.summary.remote).toBe('github.com/acme/handbook');
     expect(JSON.stringify(details)).not.toContain('u:t');
@@ -238,7 +296,7 @@ describe('toDetails', () => {
 
 describe('toSummary', () => {
   it('shows the remote without credentials and the time as ISO', () => {
-    const summary = toSummary(failedRow, []);
+    const summary = toSummary(failedRow, [], undefined);
 
     expect(summary).toEqual({
       id: 3,
@@ -247,13 +305,28 @@ describe('toSummary', () => {
       status: 'error',
       error: 'clone-failed',
       warnings: [],
+      clone: null,
       lastAccessedAt: '2026-10-26T10:00:00.000Z'
     });
   });
 
   it('answers no error code outside the error status, even a stale one', () => {
     for (const status of [ 'ready', 'cloning' ] as const) {
-      expect(toSummary({ ...failedRow, status }, []).error).toBeNull();
+      expect(toSummary({ ...failedRow, status }, [], undefined).error).toBeNull();
     }
+  });
+
+  it('answers the clone only while cloning (RM-7)', () => {
+    const clone = { jobId: 5, state: 'running', percent: 40 } as const;
+
+    expect(toSummary({ ...failedRow, status: 'cloning' }, [], clone).clone).toEqual(clone);
+    expect(toSummary({ ...failedRow, status: 'cloning' }, [], undefined).clone).toBeNull();
+    for (const status of [ 'ready', 'error' ] as const) {
+      expect(toSummary({ ...failedRow, status }, [], clone).clone).toBeNull();
+    }
+  });
+
+  it('answers a clone just queued as waiting, with no percentage (AR-52)', () => {
+    expect(queuedClone(5)).toEqual({ jobId: 5, state: 'waiting', percent: null });
   });
 });

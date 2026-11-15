@@ -2745,6 +2745,14 @@
               ]
             }
           },
+          "clone": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CloneProgress"
+              }
+            ],
+            "nullable": true
+          },
           "lastAccessedAt": {
             "type": "string",
             "format": "date-time",
@@ -2758,7 +2766,36 @@
           "status",
           "error",
           "warnings",
+          "clone",
           "lastAccessedAt"
+        ]
+      },
+      "CloneProgress": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "running"
+            ]
+          },
+          "percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "nullable": true
+          }
+        },
+        "required": [
+          "jobId",
+          "state",
+          "percent"
         ]
       },
       "RecentRepositories": {

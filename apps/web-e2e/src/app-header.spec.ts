@@ -47,14 +47,14 @@ test.describe('app header', () => {
     }
   });
 
-  test('leads to the repositories, which are not built yet, and back', async ({ page, isMobile }) => {
+  test('leads to the repository management page and back', async ({ page, isMobile }) => {
     test.skip(isMobile, 'the phone layout has its own test');
     await openDashboard(page);
     const navigation = page.getByRole('banner').getByRole('navigation');
 
     await navigation.getByRole('link', { name: 'Repositories' }).click();
     await expect(page).toHaveURL(/\/repositories$/);
-    await expect(heading(page, 'This page doesn\'t exist.')).toBeVisible();
+    await expect(heading(page, 'Repositories')).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'Repositories' })).toHaveAttribute('aria-current', 'page');
 
     await navigation.getByRole('link', { name: 'Dashboard', exact: true }).click();
@@ -108,7 +108,7 @@ test.describe('app header', () => {
     await expect(banner.getByRole('link', { name: 'Repositories' })).toBeHidden();
     await banner.getByRole('button', { name: 'Menu', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Repositories' }).click();
-    await expect(heading(page, 'This page doesn\'t exist.')).toBeVisible();
+    await expect(heading(page, 'Repositories')).toBeVisible();
     expect(await fitsWidth(page)).toBe(true);
   });
 
@@ -129,8 +129,8 @@ test.describe('app header', () => {
     await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
 
     await page.getByRole('banner').getByRole('link', { name: 'Repositories' }).click();
-    await expect(heading(page, 'This page doesn\'t exist.')).toBeFocused();
-    await expect(page.locator('shell-route-announcer [aria-live]')).toHaveText('Page not found · Front Burner');
+    await expect(heading(page, 'Repositories')).toBeFocused();
+    await expect(page.locator('shell-route-announcer [aria-live]')).toHaveText('Repositories · Front Burner');
   });
 
   test('opens and closes the user menu with the keyboard', async ({ page, isMobile }) => {

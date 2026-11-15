@@ -1,0 +1,57 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.RepositoriesPage'">
+  <ui-page>
+    <h1 uiPageTitle>{{ t('heading') }}</h1>
+    @if (list.repositories(); as repositories) {
+      @if (repositories.length > 0) {
+        @let shown = matches();
+        <div class="toolbar">
+          <ui-field class="filter"
+                    [label]="t('filter')">
+            <input uiInput
+                   type="search"
+                   autocomplete="off"
+                   spellcheck="false"
+                   [value]="query()"
+                   (input)="filter($event)" />
+          </ui-field>
+          <a uiButton
+             variant="primary"
+             class="add"
+             routerLink="/repositories/new">{{ t('add') }}</a>
+        </div>
+        <!-- Always in the page: a live region added together with its text may not be announced. -->
+        <p class="cdk-visually-hidden"
+           aria-live="polite">
+          @if (filtering()) {
+            {{ t('matches', { count: shown.length, total: repositories.length }) }}
+          }
+        </p>
+        @if (shown.length > 0) {
+          <ul class="list">
+            @for (repository of shown; track repository.id) {
+              <li class="item"><repo-repository-list-entry [repository]="repository" /></li>
+            }
+          </ul>
+        } @else {
+          <p class="no-match">{{ t('noMatch', { query: trimmedQuery() }) }}</p>
+        }
+      } @else {
+        <shell-add-repository-guide form="full" />
+      }
+    } @else if (list.state().kind === 'failed') {
+      <ui-inline-banner status="danger"
+                        announce>
+        {{ t('loadFailed') }}
+        <div uiBannerActions>
+          <button uiButton
+                  size="small"
+                  [busy]="list.retrying()"
+                  (click)="retry()">{{ t('retry') }}</button>
+        </div>
+      </ui-inline-banner>
+    } @else {
+      <ui-spinner class="loading"
+                  [label]="t('loading')" />
+    }
+  </ui-page>
+</ng-container>

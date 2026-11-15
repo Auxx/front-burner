@@ -77,6 +77,8 @@ export class CloneJob implements OnModuleInit {
       if (row === undefined) {
         return;
       }
+      // At once, so that the lists no longer show it waiting for other clones (RM-7, AR-52).
+      job.reportProgress(0);
       const destination = this.layout.workingCopy(row.userId, row.id);
       await mkdir(dirname(destination), { recursive: true });
       try {
@@ -89,7 +91,9 @@ export class CloneJob implements OnModuleInit {
           destination,
           knownHosts: this.knownHosts.linesFor(row.userId),
           // Removing the repository cancels the job: git is killed, and nothing is moved into place (RM-19).
-          signal: job.signal
+          signal: job.signal,
+          // The runner stores it and tells the owner's tabs, at most once a second (RM-7, DS-23).
+          onProgress: percent => job.reportProgress(percent)
         });
       } catch (error) {
         if (error instanceof GitOperationError) {

@@ -24,6 +24,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
+import { CLONE_JOB_TYPE } from '../clone/clone-queue';
 import { RepositoriesModule } from '../repositories.module';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createRemotes, git, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
@@ -131,6 +132,7 @@ describe('RepositoriesController', () => {
         status: 'ready',
         error: null,
         warnings: [],
+        clone: null,
         lastAccessedAt: '2026-10-26T10:00:00.000Z'
       } ]
     });
@@ -216,9 +218,28 @@ describe('RepositoriesController', () => {
         status: 'error',
         error: 'clone-failed',
         warnings: [],
+        clone: null,
         lastAccessedAt: '2026-10-26T10:00:00.000Z'
       });
       expect(JSON.stringify(response.body)).not.toContain('u:t');
+    });
+
+    it('answers the clone of a cloning repository, with its progress (RM-7)', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, { name: 'a', status: 'cloning' });
+      const job = database.db.insert(jobs).values({
+        type: CLONE_JOB_TYPE,
+        userId: alice,
+        repositoryId: id,
+        status: 'running',
+        progress: 30,
+        runAt: new Date(0),
+        createdAt: new Date(0)
+      }).returning({ id: jobs.id }).get().id;
+
+      const response = await http().get('/api/v1/repositories').set('x-test-user', String(alice)).expect(200);
+
+      expect(response.body.repositories[0].clone).toEqual({ jobId: job, state: 'running', percent: 30 });
     });
 
     it('lists only the user\'s own', async () => {
@@ -265,6 +286,7 @@ describe('RepositoriesController', () => {
           status: 'ready',
           error: null,
           warnings: [],
+          clone: null,
           lastAccessedAt: '2026-10-26T10:00:00.000Z'
         },
         cloneMode: 'full',
@@ -451,6 +473,8 @@ describe('RepositoriesController', () => {
       expect(response.body).toMatchObject({ id, name: 'handbook', status: 'cloning', error: null, warnings: [] });
       const [ job ] = database.db.select().from(jobs).where(eq(jobs.repositoryId, id)).all();
       expect(JSON.parse(job?.payload ?? '')).toEqual({ repositoryId: id, requestId: expect.any(String) });
+      // The clone just queued waits for the runner (RM-7, AR-52).
+      expect(response.body.clone).toEqual({ jobId: job?.id, state: 'waiting', percent: null });
     });
 
     it('refuses a repository that is not in error', async () => {

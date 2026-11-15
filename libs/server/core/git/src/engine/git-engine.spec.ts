@@ -1913,6 +1913,23 @@ describe('GitEngine', () => {
       expect(readdirSync(tmpRoot)).toEqual([]);
     });
 
+    it('reports its progress up to 100 % (RM-7)', async () => {
+      const reported: number[] = [];
+
+      await clone({ onProgress: percent => reported.push(percent) });
+
+      expect(reported.length).toBeGreaterThan(0);
+      expect(reported.at(-1)).toBe(100);
+      expect([ ...reported ].sort((a, b) => a - b)).toEqual(reported);
+    });
+
+    it('classifies a failure with progress as without it, and keeps progress out of its detail', async () => {
+      const error = await failureOf(clone({ remoteUrl: `${server.url}/missing.git`, onProgress: () => undefined }));
+
+      expect(error.code).toBe('repository-not-found');
+      expect(error.detail).not.toMatch(/\d+%/);
+    });
+
     it('moves nothing into place when cancelled before git ran', async () => {
       const controller = new AbortController();
       controller.abort();

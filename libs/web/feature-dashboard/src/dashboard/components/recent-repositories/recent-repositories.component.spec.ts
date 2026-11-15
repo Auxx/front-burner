@@ -15,6 +15,7 @@ const repository = (id: number, name: string): RepositorySummary => ({
   status: 'ready',
   error: null,
   warnings: [],
+  clone: null,
   lastAccessedAt: '2026-10-26T10:00:00.000Z'
 });
 

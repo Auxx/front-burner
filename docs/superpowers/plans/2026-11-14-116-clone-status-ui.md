@@ -10,9 +10,10 @@
 label with a **Details** section that holds git's error and the request ID.
 
 **Architecture:** One component, shown only for `cloning` and `error` (RM-9).
-Progress reuses what the lists show (`shell-repository-status` with its progress
-bar, DS-23); the page's store (plan 115) reloads the details when the status
-changes, so the error record appears when a clone fails while the page is open.
+Progress reuses what the lists show (`shell-repository-status-detail`, from the
+summary's `clone` and its `job.progress` events, plan 114); the page's store
+(plan 115) reloads the details when the status changes, so the error record
+appears when a clone fails while the page is open.
 
 **Tech Stack:** as before. No new packages.
 

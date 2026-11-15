@@ -11,6 +11,7 @@ import { GitResult, GitRunner } from '../runner/git-runner';
 import { redactCredentials } from '../runner/redact';
 import { probeHostKey } from '../ssh/host-key-probe';
 import { hasHostEntry, HostKey, trustedKeysFor } from '../ssh/known-hosts';
+import { CloneProgressParser, withoutProgress } from './clone-progress';
 import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
 import { FIRST_BRANCH, parseStatus, WorkingCopyStatus } from './git-status';
@@ -43,6 +44,8 @@ export interface CloneRequest {
    * `destination` either, so that nothing appears there once its job is cancelled.
    */
   signal?: AbortSignal;
+  /** Called with the clone's percentage as it rises (RM-7); see `CloneProgressParser`. */
+  onProgress?: (percent: number) => void;
 }
 
 export interface PushRequest {
@@ -104,6 +107,11 @@ interface NetworkRunOptions {
   push?: boolean;
   /** Kills git when aborted: `cancelled`. */
   signal?: AbortSignal;
+  /**
+   * Reads stderr as git writes it, for a run with `--progress`; the progress
+   * lines are left out of the stderr that a failure is classified and recorded from.
+   */
+  onStderr?: (text: string) => void;
 }
 
 export interface CommitRequest {
@@ -237,14 +245,22 @@ export class GitEngine implements BeforeApplicationShutdown {
       const single = request.mode === 'single-branch'
         ? [ '--single-branch', '--branch', request.branch ?? '', '--depth', '1' ]
         : [];
+      const onProgress = request.onProgress;
+      const parser = onProgress === undefined ? undefined : new CloneProgressParser(onProgress);
+      // git writes progress only to a terminal, unless asked.
+      const progress = parser === undefined ? [] : [ '--progress' ];
       await this.runNetwork(
         'clone',
         request.remoteUrl,
         request.credentials,
         request.knownHosts ?? [],
-        remote => [ ...NO_LFS, 'clone', '--no-recurse-submodules', ...single, '--', remote, dir ],
+        remote => [ ...NO_LFS, 'clone', '--no-recurse-submodules', ...progress, ...single, '--', remote, dir ],
         this.options.cloneTimeoutMs,
-        { params: request.branch === undefined ? {} : { branch: request.branch }, signal: request.signal }
+        {
+          params: request.branch === undefined ? {} : { branch: request.branch },
+          signal: request.signal,
+          onStderr: parser === undefined ? undefined : text => parser.push(text)
+        }
       );
       await this.assertSafeConfig(dir);
       // Cancelled while git finished: the clone stays out of `destination`.
@@ -1274,7 +1290,7 @@ export class GitEngine implements BeforeApplicationShutdown {
     userKnownHosts: string[],
     args: (remote: string) => string[],
     timeoutMs: number,
-    { params = {}, cwd, push = false, signal }: NetworkRunOptions = {}
+    { params = {}, cwd, push = false, signal, onStderr }: NetworkRunOptions = {}
   ): Promise<GitResult> {
     throwIfCancelled(signal);
     const parsed = parseRemoteUrl(remoteUrl);
@@ -1296,7 +1312,8 @@ export class GitEngine implements BeforeApplicationShutdown {
     let failure: GitOperationError;
     try {
       broker = await openBroker({ remote, credentials, gitOptions: this.options, knownHosts });
-      const result = await this.runner.run(args(remoteUrl), { env: broker.env, timeoutMs, cwd, signal });
+      const run = await this.runner.run(args(remoteUrl), { env: broker.env, timeoutMs, cwd, signal, onStderr });
+      const result = onStderr === undefined ? run : { ...run, stderr: withoutProgress(run.stderr) };
       if (result.exitCode === 0) {
         return result;
       }

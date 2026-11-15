@@ -9,6 +9,7 @@ const details = {
     status: 'error',
     error: 'clone-failed',
     warnings: [],
+    clone: null,
     lastAccessedAt: '2026-10-26T10:00:00.000Z'
   },
   cloneMode: 'single-branch',

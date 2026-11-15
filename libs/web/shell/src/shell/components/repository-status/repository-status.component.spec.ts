@@ -14,6 +14,7 @@ const ready: RepositorySummary = {
   status: 'ready',
   error: null,
   warnings: [],
+  clone: null,
   lastAccessedAt: '2026-10-26T10:00:00.000Z'
 };
 
@@ -26,13 +27,25 @@ describe('RepositoryStatusComponent', () => {
       look: badge.getAttribute('data-status')
     }));
 
-  async function render(repository: RepositorySummary): Promise<void> {
+  async function render(repository: RepositorySummary, showReady = false): Promise<void> {
     await TestBed.configureTestingModule({ imports: [ RepositoryStatusComponent, translocoTesting() ] })
       .compileComponents();
     fixture = TestBed.createComponent(RepositoryStatusComponent);
     fixture.componentRef.setInput('repository', repository);
+    if (showReady) {
+      fixture.componentRef.setInput('showReady', true);
+    }
     await settle(fixture);
   }
+
+  it('shows Ready, before the warnings, where the list asks for it (RM-5)', async () => {
+    await render({ ...ready, warnings: [ 'key-locked' ] }, true);
+
+    expect(badges()).toEqual([
+      { text: `${KEY}.status.ready`, look: 'success' },
+      { text: `${KEY}.warning.key-locked`, look: 'warning' }
+    ]);
+  });
 
   it('shows no badge for a ready repository', async () => {
     await render(ready);

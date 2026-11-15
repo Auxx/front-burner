@@ -15,6 +15,7 @@ const handbook: RepositorySummary = {
   status: 'cloning',
   error: null,
   warnings: [],
+  clone: null,
   lastAccessedAt: '2026-10-28T10:00:00.000Z'
 };
 

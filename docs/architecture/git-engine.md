@@ -377,7 +377,13 @@ Confirmed by spike 2 (spikes.md).
   That loses uncommitted changes from before the merge, which only a merge that
   the product did not start can have. _(Plan 80's call.)_
 - **A-5.13** Clones are made in `tmp/` and moved into place with one rename when
-  they succeed (NF-5.3).
+  they succeed (NF-5.3). A clone with `onProgress` runs with `--progress` and
+  reads git's stderr as it is written (`GitRunOptions.onStderr`): receiving
+  objects is the first 80 % of the clone, resolving deltas the rest, and the
+  percentage only rises (`CloneProgressParser`, RM-7). The progress lines are
+  left out of the stderr that a failure is classified and recorded from, so a
+  clone's error record holds git's messages only (AR-53, RM-10). _(Plan 114's
+  call.)_
 - **A-5.14** Status at 100,000 files (NF-1.4) needs no git setting: about 100 ms
   warm and 1.4 s with a cold cache (spike 4, not yet on the reference host).
   `core.untrackedCache` gains nothing, and `core.fsmonitor` is not supported by

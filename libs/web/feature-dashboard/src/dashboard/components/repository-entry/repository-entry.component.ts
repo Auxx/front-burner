@@ -1,7 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { RepositorySummary } from '@front-burner/shared-contracts';
-import { LastAccessedComponent, RepositoryStatusComponent } from '@front-burner/web-shell';
+import {
+  LastAccessedComponent,
+  RepositoryStatusComponent,
+  RepositoryStatusDetailComponent
+} from '@front-burner/web-shell';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
@@ -12,7 +16,13 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'dash-repository-entry',
-  imports: [ TranslocoDirective, RouterLink, RepositoryStatusComponent, LastAccessedComponent ],
+  imports: [
+    TranslocoDirective,
+    RouterLink,
+    RepositoryStatusComponent,
+    RepositoryStatusDetailComponent,
+    LastAccessedComponent
+  ],
   templateUrl: './repository-entry.component.html',
   styleUrl: './repository-entry.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush

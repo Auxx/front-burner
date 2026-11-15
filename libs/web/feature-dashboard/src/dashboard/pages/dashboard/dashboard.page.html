@@ -2,18 +2,18 @@
   <ui-page>
     <h1 uiPageTitle>{{ t('heading') }}</h1>
     <shell-add-repository-guide [form]="guideForm()" />
-    @if (repositories(); as repositories) {
+    @if (list.repositories(); as repositories) {
       @if (repositories.length > 0) {
         <dash-recent-repositories [repositories]="repositories" />
       }
-    } @else if (list().kind === 'failed') {
+    } @else if (list.state().kind === 'failed') {
       <ui-inline-banner status="danger"
                         announce>
         {{ t('loadFailed') }}
         <div uiBannerActions>
           <button uiButton
                   size="small"
-                  [busy]="retrying()"
+                  [busy]="list.retrying()"
                   (click)="retry()">{{ t('retry') }}</button>
         </div>
       </ui-inline-banner>

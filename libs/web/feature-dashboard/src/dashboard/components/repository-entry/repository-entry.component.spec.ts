@@ -16,6 +16,7 @@ const ready: RepositorySummary = {
   status: 'ready',
   error: null,
   warnings: [],
+  clone: null,
   lastAccessedAt: '2026-10-26T10:00:00.000Z'
 };
 
@@ -68,7 +69,7 @@ describe('RepositoryEntryComponent', () => {
 
     expect(links()).toEqual([ '/repositories/7/settings' ]);
     expect(badges()).toEqual([ `${STATUS}.status.error` ]);
-    expect(host().textContent).toContain(`${KEY}.error.clone-timed-out`);
+    expect(host().textContent).toContain('web-shell.RepositoryStatusDetailComponent.error.clone-timed-out');
   });
 
   it('shows warnings and keeps the repository openable', async () => {

@@ -10,9 +10,7 @@
     <shell-repository-status [repository]="repository" />
   </div>
   <span class="remote">{{ repository.remote }}</span>
-  @if (repository.error) {
-    <span class="error">{{ t('error.' + repository.error) }}</span>
-  }
+  <shell-repository-status-detail [repository]="repository" />
   <div class="meta">
     <shell-last-accessed [at]="repository.lastAccessedAt" />
     @if (hasSettingsLink()) {

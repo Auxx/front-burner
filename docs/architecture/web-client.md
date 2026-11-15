@@ -224,9 +224,11 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   live in `apps/web`; logging out in one tab reaches the others through a
   `storage` event (NV-8). It also holds what the dashboard and the repository
   management page both show, since web features may not import each other
-  (A-2.4): a repository's status and warnings, "Last accessed", the Add a
-  repository guide, and `RepositoryListUpdatesService`, which keeps a page's
-  list current from the push channel (DS-23, RM-7).
+  (A-2.4): a repository's status and warnings, the line under them with what
+  went wrong or the clone's progress (`RepositoryStatusDetailComponent`), "Last
+  accessed", the Add a repository guide, and `followRepositoryList`, which loads
+  a page's list and keeps it current from the push channel through
+  `RepositoryListUpdatesService` (DS-23, DS-25, DS-26, RM-7).
 - **A-8.15** `feature-repository-screen` keeps the state of the open file —
   content, undo history, save queue, browser draft, content hash of the last
   load or save — in a per-file store keyed by repository and path, not in the

@@ -1,0 +1,20 @@
+<ng-container *transloco="let t; prefix: 'web-shell.RepositoryStatusDetailComponent'">
+  @let shown = detail();
+  @switch (shown?.kind) {
+    @case ('error') {
+      <span class="error">{{ t('error.' + shown?.error) }}</span>
+    }
+    @case ('waiting') {
+      <span class="waiting">{{ t('waiting') }}</span>
+    }
+    @case ('progress') {
+      @let percent = shown?.percent ?? null;
+      <ui-progress-bar class="bar"
+                       [label]="t('progress', { name: repository().name })"
+                       [value]="percent" />
+      @if (percent !== null) {
+        <span class="percent">{{ t('percent', { percent }) }}</span>
+      }
+    }
+  }
+</ng-container>

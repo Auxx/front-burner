@@ -64,6 +64,18 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
     expect(new Set(files)).toEqual(new Set([ 'file:.git/config' ]));
   });
 
+  it('passes stderr on as git writes it, and still collects it', async () => {
+    const seen: string[] = [];
+
+    const result = await runner.run([ 'ls-remote', join(dir, 'no-such-repository') ], {
+      timeoutMs: 10_000,
+      onStderr: text => seen.push(text)
+    });
+
+    expect(seen.join('')).toContain('fatal:');
+    expect(result.stderr).toBe(seen.join(''));
+  });
+
   it('starts with an empty environment', async () => {
     process.env['GIT_AUTHOR_NAME'] = 'Leaked Name';
     process.env['GIT_AUTHOR_EMAIL'] = 'leaked@example.com';
