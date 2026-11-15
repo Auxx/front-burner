@@ -3,8 +3,10 @@ import { EventsHub } from '@front-burner/server-core-events';
 import { GitBranches, GitEngine, GitMerge } from '@front-burner/server-core-git';
 import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git/testing';
 import { ApiExceptionFilter } from '@front-burner/server-core-observability';
+import { DATA_LAYOUT } from '@front-burner/server-core-storage';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
+import { WorkingCopyDamage } from '@front-burner/server-feature-repositories';
 import { INestApplication } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -63,6 +65,8 @@ describe.skipIf(process.platform === 'win32')('FetchService', () => {
         { provide: SyncStateStore, useValue: harness.syncState },
         { provide: MergeStateService, useValue: {} },
         { provide: MergeActions, useValue: { isUndoable: async () => false } },
+        { provide: WorkingCopyDamage, useValue: harness.damage },
+        { provide: DATA_LAYOUT, useValue: harness.layout },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
         { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor }

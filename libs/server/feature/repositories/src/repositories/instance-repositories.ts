@@ -37,6 +37,19 @@ export class InstanceRepositories {
       .get()?.userId;
   }
 
+  /**
+   * As `markDamaged`, for git that found the working copy unusable while the
+   * backend runs: only a ready repository of this user changes, so that
+   * requests that find it at once change it once. True when it changed.
+   */
+  markReadyDamaged(userId: number, id: number, detail: string): boolean {
+    return this.database.db.update(repositories)
+      .set({ status: 'error', errorCode: 'working-copy-missing', errorDetail: detail, errorRequestId: null })
+      .where(and(eq(repositories.id, id), eq(repositories.userId, userId), eq(repositories.status, 'ready')))
+      .returning({ id: repositories.id })
+      .get() !== undefined;
+  }
+
   /** A damaged repository's working copy was put right; any other is left as it is. */
   markRepaired(id: number): void {
     this.database.db.update(repositories)

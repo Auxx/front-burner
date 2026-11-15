@@ -28,6 +28,23 @@ where git may connect. Lives in `server/git` (A-2). See
     `--format` with explicit separators);
   - stderr is kept for the log, with credentials removed from any URL (NF-10.5),
     and mapped to error codes (A-3.8).
+  - a run in a working copy sets `GIT_CEILING_DIRECTORIES` to the folder above
+    it, so that a working copy without `.git` is never taken for part of a
+    repository higher up, such as a development checkout that holds the data
+    directory. When such a run fails, and only then, the runner checks for a
+    working copy that is gone (no folder to start git in) or that git can't read
+    as a repository ("fatal: not a git repository", such as a `.git` deleted or
+    without `HEAD`) and throws the error code `working-copy-missing`, with git's
+    message as its detail. Any other failure, such as a lock file or a timeout,
+    is not damage: calling a working copy damaged sends the user to **Clone
+    again**, which loses work (RM-12). `WorkingCopyDamage` in the repositories
+    feature gives the repository the status Error, "Working copy is missing or
+    damaged" (RM-6), with that detail (RM-10), and publishes `repository.status`
+    once. The endpoints of a working copy report it through an interceptor and
+    answer `409 working-copy-missing`; a file request whose working copy folder
+    is gone counts too, a missing file inside it does not. The git jobs report
+    it and end as `failed` with that code, which is not a remote problem, so
+    leaves no warning (RM-8). _(Plan 109's call.)_
 - **A-5.2** Submodules and Git LFS objects are not fetched (AR-50).
 
 ## A-5: One operation at a time per working copy

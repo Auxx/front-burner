@@ -7,6 +7,8 @@ import { CloneJob } from './clone/clone.job';
 import { RepositoryCredentialsChanges } from './credentials/repository-credentials-changes';
 import { RepositoryCredentialsController } from './credentials/repository-credentials.controller';
 import { RepositoryCredentialsService } from './credentials/repository-credentials.service';
+import { WorkingCopyDamage } from './damage/working-copy-damage';
+import { WorkingCopyDamageInterceptor } from './damage/working-copy-damage.interceptor';
 import { WorkingCopyCheck } from './recovery/working-copy-check';
 import { InstanceRepositories } from './repositories/instance-repositories';
 import { RepositoriesController } from './repositories/repositories.controller';
@@ -29,8 +31,17 @@ import { RepositoryWarnings } from './warnings/repository-warnings';
     CloneJob,
     WorkingCopyCheck,
     RemoteProblemsSource,
-    RepositoryWarnings
+    RepositoryWarnings,
+    WorkingCopyDamage,
+    WorkingCopyDamageInterceptor
   ],
-  exports: [ RepositoryQueries, InstanceRepositories, RepositoryCredentialsChanges, RemoteProblemsSource ]
+  exports: [
+    RepositoryQueries,
+    InstanceRepositories,
+    RepositoryCredentialsChanges,
+    RemoteProblemsSource,
+    WorkingCopyDamage,
+    WorkingCopyDamageInterceptor
+  ]
 })
 export class RepositoriesModule {}

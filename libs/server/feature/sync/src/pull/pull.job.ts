@@ -6,7 +6,7 @@ import { ApiErrorException } from '@front-burner/server-core-observability';
 import { JobKeys } from '@front-burner/server-feature-credentials';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
-import { InstanceRepositories } from '@front-burner/server-feature-repositories';
+import { InstanceRepositories, WorkingCopyDamage } from '@front-burner/server-feature-repositories';
 import type { GitJobFailed, GitJobOutcome } from '@front-burner/shared-contracts';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { FetchStep } from '../fetch/fetch-step';
@@ -58,7 +58,8 @@ export class PullJob implements OnModuleInit {
     private readonly mergeRecord: MergeRecord,
     private readonly instance: InstanceRepositories,
     private readonly jobKeys: JobKeys,
-    private readonly events: EventsHub
+    private readonly events: EventsHub,
+    private readonly damage: WorkingCopyDamage
   ) {}
 
   onModuleInit(): void {
@@ -78,6 +79,15 @@ export class PullJob implements OnModuleInit {
     if (userId === null || repositoryId === null) {
       throw new Error('A pull job needs its user and repository');
     }
+    return this.damage.inJob(userId, repositoryId, () => this.fetchAndMerge(id, userId, repositoryId, job.payload));
+  }
+
+  private async fetchAndMerge(
+    id: number,
+    userId: number,
+    repositoryId: number,
+    payload: PullJobPayload
+  ): Promise<GitJobOutcome> {
     const fetched = await this.fetchStep.run({ id, userId, repositoryId });
     if ('failure' in fetched) {
       return fetched.failure;
@@ -88,7 +98,7 @@ export class PullJob implements OnModuleInit {
       outcome = await this.guard.change(
         repositoryId,
         root,
-        () => this.merge(userId, repositoryId, root, job.payload.branch)
+        () => this.merge(userId, repositoryId, root, payload.branch)
       );
     } catch (error) {
       if (error instanceof ApiErrorException && error.code === 'merge-in-progress') {

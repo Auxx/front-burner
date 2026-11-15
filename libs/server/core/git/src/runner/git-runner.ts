@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { ChildProcess, spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import type { Readable } from 'node:stream';
+import { assertWorkingCopyFound } from '../engine/git-errors';
 import { redactCredentials } from './redact';
 
 /** Passed as `-c` on every call (A-5.1, NF-11.6, NF-11.7). */
@@ -85,13 +86,25 @@ function collect(stream: Readable | null, maxBytes: number): Collected {
 export class GitRunner {
   private readonly running = new Map<ChildProcess, Promise<unknown>>();
 
+  /**
+   * A failed git gives its result, except in a `cwd` that is gone or holds no
+   * repository: that is checked only after a failure, so a command that works
+   * pays nothing.
+   *
+   * @throws GitOperationError `working-copy-missing` (RM-6).
+   */
   async run(args: string[], options: GitRunOptions): Promise<GitResult> {
     const home = await mkdtemp(join(tmpdir(), 'fb-home-'));
+    let result: GitResult;
     try {
-      return await this.spawn(args, options, home);
+      result = await this.spawn(args, options, home);
     } finally {
       await rm(home, { recursive: true, force: true });
     }
+    if (options.cwd !== undefined && result.exitCode !== 0) {
+      await assertWorkingCopyFound(options.cwd, result);
+    }
+    return result;
   }
 
   /** Kills every running git and its children, and waits for them to end (A-1.14). */
@@ -109,7 +122,9 @@ export class GitRunner {
       GIT_CONFIG_NOSYSTEM: '1',
       GIT_CONFIG_GLOBAL: '/dev/null',
       GIT_TERMINAL_PROMPT: '0',
-      LC_ALL: 'C'
+      LC_ALL: 'C',
+      // A working copy without `.git` is not a repository: git never looks for one in the folders above it.
+      ...(options.cwd === undefined ? {} : { GIT_CEILING_DIRECTORIES: dirname(resolve(options.cwd)) })
     };
     for (const name of PASSED_THROUGH) {
       const value = process.env[name];

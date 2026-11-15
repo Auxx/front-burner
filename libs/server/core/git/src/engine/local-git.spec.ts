@@ -59,10 +59,10 @@ describe.skipIf(process.platform === 'win32')('LocalGit.currentBranch', () => {
     await expect(local.currentBranch(work)).resolves.toBeNull();
   });
 
-  it('does not call an unreadable HEAD detached', async () => {
+  it('does not call an unreadable HEAD detached: git no longer sees a repository', async () => {
     writeFileSync(join(work, '.git', 'HEAD'), 'garbage\n');
 
-    await expect(local.currentBranch(work)).rejects.toThrow('git symbolic-ref failed');
+    await expect(local.currentBranch(work)).rejects.toMatchObject({ code: 'working-copy-missing' });
   });
 
   it('does not call a git that could not run detached', async () => {

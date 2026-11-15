@@ -4,6 +4,7 @@ import { GitEngine, GitOperationError, NetworkLock, WorkingTreeLock } from '@fro
 import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
 import { JobKeys, KnownHostsService } from '@front-burner/server-feature-credentials';
 import { OpenableRepository } from '@front-burner/server-feature-files';
+import { WorkingCopyDamage } from '@front-burner/server-feature-repositories';
 import type { GitJobOutcome } from '@front-burner/shared-contracts';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { FetchStep, FetchStepJob } from '../fetch/fetch-step';
@@ -53,7 +54,8 @@ export class PushJob implements OnModuleInit {
     private readonly events: EventsHub,
     private readonly workingTreeLock: WorkingTreeLock,
     private readonly mergeRecord: MergeRecord,
-    private readonly outcomes: RemoteOutcomes
+    private readonly outcomes: RemoteOutcomes,
+    private readonly damage: WorkingCopyDamage
   ) {}
 
   onModuleInit(): void {
@@ -73,10 +75,19 @@ export class PushJob implements OnModuleInit {
     if (userId === null || repositoryId === null) {
       throw new Error('A push job needs its user and repository');
     }
+    return this.damage.inJob(userId, repositoryId, () => this.pushAndFollowUp(id, userId, repositoryId, job.payload));
+  }
+
+  private async pushAndFollowUp(
+    id: number,
+    userId: number,
+    repositoryId: number,
+    payload: PushJobPayload
+  ): Promise<GitJobOutcome> {
     // Network steps take the network lock only, so saves never wait behind the remote (A-5.3).
     const outcome = await this.networkLock.run(repositoryId, async (): Promise<GitJobOutcome> => {
       const attempt = this.outcomes.begin(userId, repositoryId, 'push');
-      const pushed = await this.pushOnce(id, userId, repositoryId, job.payload.branch);
+      const pushed = await this.pushOnce(id, userId, repositoryId, payload.branch);
       // A push's warning outlives a successful fetch; only a push clears it (RM-8, AC-REPO-003.6).
       // Stored before the lock is let go, in the order the operations ran; a change publishes repository.warning.
       if (pushed.kind === 'pushed' || pushed.kind === 'failed') {
@@ -114,7 +125,8 @@ export class PushJob implements OnModuleInit {
       });
       return { kind: 'pushed', commits: result.commits, upstream: result.upstream };
     } catch (error) {
-      if (!(error instanceof GitOperationError)) {
+      // Not the remote's problem: the job reports a working copy that is gone (RM-6).
+      if (!(error instanceof GitOperationError) || error.code === 'working-copy-missing') {
         throw error;
       }
       // git's own lines, without credentials (NF-10.5); the user gets the code and the remote's lines.

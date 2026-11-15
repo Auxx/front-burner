@@ -1,6 +1,6 @@
 import { authOf } from '@front-burner/server-core-security';
-import { RepositoryParamsDto } from '@front-burner/server-feature-repositories';
-import { Controller, Get, Logger, Param, Query, Req, Res } from '@nestjs/common';
+import { RepositoryParamsDto, WorkingCopyDamageInterceptor } from '@front-burner/server-feature-repositories';
+import { Controller, Get, Logger, Param, Query, Req, Res, UseInterceptors } from '@nestjs/common';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -36,6 +36,7 @@ function matches(ifNoneMatch: string | undefined, etag: string): boolean {
  */
 @ApiTags('files')
 @Controller('repositories/:id')
+@UseInterceptors(WorkingCopyDamageInterceptor)
 export class ImagesController {
   private readonly logger = new Logger(ImagesController.name);
 

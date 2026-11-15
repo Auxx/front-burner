@@ -56,6 +56,19 @@ describe('InstanceRepositories', () => {
     expect(recordOf(onStart)).toEqual({ detail: null, requestId: null });
   });
 
+  it('marks only a ready repository of the user damaged, once', () => {
+    const handbook = insertRepository(database, alice, { name: 'handbook' });
+    const cloning = insertRepository(database, alice, { name: 'cloning', status: 'cloning' });
+
+    expect(instance.markReadyDamaged(bob, handbook, 'fatal: not a git repository')).toBe(false);
+    expect(instance.markReadyDamaged(alice, cloning, 'fatal: not a git repository')).toBe(false);
+    expect(instance.markReadyDamaged(alice, handbook, 'fatal: not a git repository')).toBe(true);
+    expect(instance.markReadyDamaged(alice, handbook, 'fatal: not a git repository')).toBe(false);
+
+    expect(statusOf(handbook)).toEqual({ status: 'error', errorCode: 'working-copy-missing' });
+    expect(statusOf(cloning)).toEqual({ status: 'cloning', errorCode: null });
+  });
+
   it('a repair clears the error record', () => {
     const damaged = insertRepository(database, alice, { name: 'damaged' });
     instance.markDamaged(damaged, 'fatal: bad object HEAD');

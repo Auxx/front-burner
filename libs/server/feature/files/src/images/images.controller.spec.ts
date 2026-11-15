@@ -1,5 +1,7 @@
-import { GitEngine, GitOptions, GitRunner } from '@front-burner/server-core-git';
+import { GitEngine, GitOptions, GitRunner, WORKING_COPY_FOLDER_GONE } from '@front-burner/server-core-git';
 import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
+import { DATA_LAYOUT } from '@front-burner/server-core-storage';
+import { WorkingCopyDamage } from '@front-burner/server-feature-repositories';
 import { INestApplication } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -48,6 +50,7 @@ describe('ImagesController', () => {
   let dir: string;
   let root: string;
   let app: INestApplication;
+  let damaged: ReturnType<typeof vi.fn<WorkingCopyDamage['report']>>;
 
   const image = (path: string, id = REPO) =>
     request(app.getHttpServer()).get(`/repositories/${id}/image`).query({ path }).buffer(true).parse(binary);
@@ -61,6 +64,7 @@ describe('ImagesController', () => {
     writeFileSync(join(root, 'img', 'committed.png'), PNG);
     git(root, 'add', '.');
     git(root, 'commit', '-q', '-m', 'base');
+    damaged = vi.fn();
     const repositories = {
       root: (userId: number, id: number) => {
         if (userId !== USER || id !== REPO) {
@@ -75,6 +79,8 @@ describe('ImagesController', () => {
         ImageFiles,
         { provide: GitEngine, useValue: new GitEngine(options, new GitRunner()) },
         { provide: OpenableRepository, useValue: repositories },
+        { provide: WorkingCopyDamage, useValue: { report: damaged } },
+        { provide: DATA_LAYOUT, useValue: { workingCopy: () => root } },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
         { provide: APP_PIPE, useClass: ZodValidationPipe }
       ]
@@ -186,5 +192,22 @@ describe('ImagesController', () => {
     const other = await image('img/committed.png', REPO + 1).expect(404);
 
     expect(other.body.toString()).toContain('"code":"not-found"');
+    expect(damaged).not.toHaveBeenCalled();
+  });
+
+  it('a missing file is not damage', async () => {
+    const res = await image('img/nope.png').expect(404);
+
+    expect(res.body.toString()).toContain('"code":"entry-not-found"');
+    expect(damaged).not.toHaveBeenCalled();
+  });
+
+  it('a deleted working copy folder marks it damaged', async () => {
+    rmSync(root, { recursive: true, force: true });
+
+    const res = await image('img/committed.png').expect(409);
+
+    expect(res.body.toString()).toContain('"code":"working-copy-missing"');
+    expect(damaged).toHaveBeenCalledExactlyOnceWith(USER, REPO, WORKING_COPY_FOLDER_GONE);
   });
 });
