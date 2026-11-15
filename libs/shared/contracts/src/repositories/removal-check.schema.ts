@@ -20,6 +20,20 @@ export const RemovalCheckResultSchema = z
 
 export type RemovalCheckResult = z.infer<typeof RemovalCheckResultSchema>;
 
+/**
+ * The query of `DELETE /repositories/:id`: the name the user typed, needed
+ * only when removing would lose work (RM-18). A query, as a `DELETE` body is
+ * not portable.
+ */
+export const RemoveRepositoryQuerySchema = z
+  .object({ confirmName: z.string().max(1000).optional() })
+  .meta({ id: 'RemoveRepositoryQuery' });
+
+export type RemoveRepositoryQuery = z.infer<typeof RemoveRepositoryQuerySchema>;
+
+/** Whether `typed` confirms removing the repository named `name`: exactly its name, spaces around it trimmed. */
+export const confirmsName = (name: string, typed: string | undefined): boolean => typed?.trim() === name;
+
 /** Whether removing would lose work, so that the user must type the repository name (RM-18). */
 export const wouldLoseWork = (check: RemovalCheckResult): boolean =>
   check.uncommittedFiles > 0 || check.unpushedCommits > 0 || check.stashes > 0 || check.mergeInProgress

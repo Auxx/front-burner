@@ -54,6 +54,18 @@ export class RepositoriesApi {
       `/api/v1/repositories/${encodeURIComponent(id)}`
     );
   }
+  remove(
+    id: number,
+    query?: {
+      /** @maxLength 1000 */
+      confirmName?: string;
+    }
+  ): Observable<void> {
+    return this.http.delete<void>(
+      `/api/v1/repositories/${encodeURIComponent(id)}`,
+      { params: query }
+    );
+  }
   repositoryDetails(id: number): Observable<RepositoryDetails> {
     return this.http.get<RepositoryDetails>(
       `/api/v1/repositories/${encodeURIComponent(id)}/details`

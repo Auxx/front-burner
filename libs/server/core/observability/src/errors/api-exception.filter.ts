@@ -71,6 +71,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'switch-blocked': 'This switch would overwrite ignored files. Move them first.',
   'git-busy': 'Git is busy with this repository. Try again in a moment.',
   'working-copy-missing': 'This repository\'s working copy is missing or damaged.',
+  'removal-needs-confirmation': 'Removing this repository would lose work. Type its name to confirm.',
   'branch-changed': 'The branch changed, so it was not pulled.',
   'merge-blocked': 'The merge would overwrite files that git does not track.',
   'no-credentials': 'This repository has no credentials. Add credentials to push.',

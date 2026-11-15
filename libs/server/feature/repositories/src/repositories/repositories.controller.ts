@@ -9,12 +9,13 @@ import type {
   RepositoryList,
   RepositorySummary
 } from '@front-burner/shared-contracts';
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
-import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
+import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { AddRepositoryService } from '../add/add-repository.service';
 import { RemovalCheck } from '../remove/removal-check';
+import { RemoveRepositoryService } from '../remove/remove-repository.service';
 import { RepositoryWarnings, WarningsViewer } from '../warnings/repository-warnings';
 import {
   AccessCheckRequestDto,
@@ -23,6 +24,7 @@ import {
   RecentQueryDto,
   RecentRepositoriesDto,
   RemovalCheckResultDto,
+  RemoveRepositoryQueryDto,
   RepositoryDetailsDto,
   RepositoryIndexDto,
   RepositoryListDto,
@@ -39,7 +41,8 @@ export class RepositoriesController {
     private readonly queries: RepositoryQueries,
     private readonly adding: AddRepositoryService,
     private readonly warnings: RepositoryWarnings,
-    private readonly removal: RemovalCheck
+    private readonly removal: RemovalCheck,
+    private readonly removing: RemoveRepositoryService
   ) {}
 
   /** The dashboard's recent list (DS-16, DS-17); the switcher's without the current repository (NV-10). */
@@ -121,6 +124,23 @@ export class RepositoriesController {
   @ZodSerializerDto(RemovalCheckResultDto)
   removalCheck(@Req() req: Request, @Param() params: RepositoryParamsDto): Promise<RemovalCheckResult> {
     return this.removal.of(authOf(req).userId, params.id);
+  }
+
+  /**
+   * Removes the repository in any status (RM-17 to RM-21): its jobs are
+   * cancelled, its rows deleted and its working copy moved out at once, then
+   * deleted by a job. When removing would lose work, `confirmName` must be the
+   * repository's name, else `409 removal-needs-confirmation` and nothing changes (RM-18).
+   */
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  remove(
+    @Req() req: Request,
+    @Param() params: RepositoryParamsDto,
+    @Query() query: RemoveRepositoryQueryDto
+  ): Promise<void> {
+    return this.removing.remove(authOf(req).userId, params.id, query.confirmName);
   }
 
   /**

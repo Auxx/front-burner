@@ -34,6 +34,12 @@ describe('PushEventSchema', () => {
     expect(PushEventSchema.safeParse({ type: 'git.changed' }).success).toBe(false);
   });
 
+  it('the repository.removed event parses', () => {
+    const event = { type: 'repository.removed', repositoryId: 3 };
+    expect(PushEventSchema.parse(event)).toEqual(event);
+    expect(PushEventSchema.safeParse({ type: 'repository.removed' }).success).toBe(false);
+  });
+
   it('the commit-author.changed event parses', () => {
     const event = { type: 'commit-author.changed' };
     expect(PushEventSchema.parse(event)).toEqual(event);

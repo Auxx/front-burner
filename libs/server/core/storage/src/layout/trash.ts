@@ -5,6 +5,7 @@ import type { DataLayout } from './data-layout';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const TRASH_NAME = new RegExp(`^delete-\\d+-${UUID}$`);
+const REMOVED_NAME = new RegExp(`^remove-\\d+-${UUID}$`);
 
 /**
  * The name in `tmp/` of a folder deleted from a repository's working copy
@@ -15,6 +16,15 @@ export const newTrashName = (repositoryId: number): string => `delete-${reposito
 
 /** Whether `name` is one that `newTrashName` makes, and so names nothing outside `tmp/`. */
 export const isTrashName = (name: string): boolean => TRASH_NAME.test(name);
+
+/**
+ * The name in `tmp/` of the working copy of a removed repository (RM-19): its
+ * repository's ID and a random UUID, never anything from the user (A-6.3).
+ */
+export const newRemovedName = (repositoryId: number): string => `remove-${repositoryId}-${randomUUID()}`;
+
+/** Whether `name` is one that `newRemovedName` makes, and so names nothing outside `tmp/`. */
+export const isRemovedName = (name: string): boolean => REMOVED_NAME.test(name);
 
 /**
  * Removes every trashed folder of a repository from `tmp/`. Removing a

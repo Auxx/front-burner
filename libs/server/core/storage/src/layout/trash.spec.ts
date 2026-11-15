@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DataLayout } from './data-layout';
-import { emptyTrashOf, isTrashName, newTrashName } from './trash';
+import { emptyTrashOf, isRemovedName, isTrashName, newRemovedName, newTrashName } from './trash';
 
 describe('trash', () => {
   let dataDir: string;
@@ -31,6 +31,24 @@ describe('trash', () => {
       const name of [ '', '..', 'clone-1', 'delete-x', 'delete-7', `${newTrashName(7)}/..`, `../${newTrashName(7)}` ]
     ) {
       expect(isTrashName(name), name).toBe(false);
+    }
+  });
+
+  it('names a removed working copy after its repository and a random UUID', () => {
+    const name = newRemovedName(7);
+
+    expect(name).toMatch(/^remove-7-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(newRemovedName(7)).not.toBe(name);
+    expect(isRemovedName(name)).toBe(true);
+    expect(isTrashName(name)).toBe(false);
+    expect(isRemovedName(newTrashName(7))).toBe(false);
+  });
+
+  it('recognises only the removed names it makes', () => {
+    for (
+      const name of [ '', '..', 'remove-x', 'remove-7', `${newRemovedName(7)}/..`, `../${newRemovedName(7)}` ]
+    ) {
+      expect(isRemovedName(name), name).toBe(false);
     }
   });
 

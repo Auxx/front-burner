@@ -26,6 +26,7 @@ const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 const EVENT_TYPES: Record<PushEvent['type'], true> = {
   'repository.status': true,
   'repository.warning': true,
+  'repository.removed': true,
   'job.progress': true,
   'job.finished': true,
   'files.changed': true,

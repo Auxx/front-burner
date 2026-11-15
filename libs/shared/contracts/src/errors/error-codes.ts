@@ -112,6 +112,11 @@ export const ERROR_CODES = [
    * damaged, so the repository now has the status Error (RM-6).
    */
   'working-copy-missing',
+  /**
+   * 409; removing would lose work and `confirmName` is not the repository's
+   * name; params are the removal check's answer (RM-18). Nothing changed.
+   */
+  'removal-needs-confirmation',
   // How a pull job ended, besides the codes above and `merge-in-progress` and `commit-author-not-confirmed`.
   /** The current branch is not the one the pull was asked for; params `{ branch }`, the one asked for. */
   'branch-changed',
