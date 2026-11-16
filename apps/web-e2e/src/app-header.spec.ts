@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { expect, test } from './support/fixtures';
+import { drainFailedRequests, expect, test } from './support/fixtures';
 import { logIn, TEST_ADMIN } from './support/instance';
+import { answerWithVersion } from './support/versions';
 
 test.use({ instanceOptions: { onboarded: true } });
 
@@ -149,6 +150,36 @@ test.describe('app header', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menu')).toBeHidden();
     await expect(accountButton(page)).toBeFocused();
+  });
+
+  test('AC-APP-001.11: after a new version is deployed, every page shows "A new version of Front Burner is available." with Reload; turning the network off shows the offline banner, which goes away when the network returns', async ({ page, context, monitor }) => {
+    await openDashboard(page);
+    const newVersion = page.getByRole('banner').getByText('A new version of Front Burner is available.');
+    const offline = page.getByRole('banner').getByText(
+      'You\'re offline. Changes are kept and saved when you\'re back online.'
+    );
+    await expect(newVersion).toBeHidden();
+
+    const upgraded = await answerWithVersion(page, '999.0.0');
+    for (const [ url, name ] of [ [ '/repositories', 'Repositories' ], [ '/', 'Dashboard' ] ]) {
+      await page.goto(url);
+      await expect(heading(page, name)).toBeVisible();
+      await expect(newVersion).toBeVisible();
+    }
+
+    // The reloaded web client is the new version, which matches the backend.
+    await upgraded();
+    await page.getByRole('banner').getByRole('button', { name: 'Reload' }).click();
+    await expect(heading(page, 'Dashboard')).toBeVisible();
+    await expect(accountButton(page)).toBeVisible();
+    await expect(newVersion).toBeHidden();
+
+    await context.setOffline(true);
+    await expect(offline).toBeVisible();
+    await context.setOffline(false);
+    await expect(offline).toBeHidden();
+    // The banner's icon, a symbol of the sprite not drawn before, cannot be fetched offline.
+    drainFailedRequests(monitor, '/assets/icons.svg');
   });
 
   test('has no accessibility violations', async ({ page }) => {

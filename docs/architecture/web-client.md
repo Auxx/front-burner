@@ -40,7 +40,21 @@ libraries and [overview.md](overview.md) for the numbering conventions.
 - **A-8.6** **Errors:** maps error codes to text with Transloco (A-3.8) and
   shows the request ID reference (NF-10.6).
 - **A-8.7** **Version check:** when a response's version header differs from the
-  loaded version, asks the user to reload (NF-7.6).
+  loaded version, asks the user to reload (NF-7.6). An HTTP interceptor in
+  `web/core` reads `X-Front-Burner-Version` on every answer of `HttpClient`,
+  errors too, and compares it with `APP_VERSION` for equality only; an answer
+  without the header, such as a proxy's error page, changes nothing. Once on,
+  the new-version banner (NV-15) stays until the page reloads. **Reload** runs
+  what the open pages registered with `VersionCheckService.beforeReload` (the
+  repository screen sends its waiting saves, ED-17), then reloads whatever they
+  answered, without the browser's "Leave page?" question: a save that failed
+  keeps its browser draft (NF-3). The offline banner follows the browser's
+  `online` and `offline` events (`OnlineStatusService`). Both banners are
+  `shell-app-banners`, below the app header and, on the repository screen, below
+  its bar, above the page's own notices (NV-16); each is announced once when it
+  appears. _(Plan 124's call: the offline banner's warning icon may be missing,
+  since browsers fetch the icon sprite again, with revalidation, for a newly
+  drawn icon, which fails offline; the text says it all.)_
 - **A-8.8** **Transloco:** English at launch, translation files loaded on
   demand, language switched without reloading, ICU messages through our own
   Transloco transpiler on `intl-messageformat` (FormatJS, no `eval`), because

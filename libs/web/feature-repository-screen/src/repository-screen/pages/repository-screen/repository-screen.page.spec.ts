@@ -24,7 +24,14 @@ import type {
 import { DialogService, ToastService } from '@front-burner/ui';
 import { CredentialsApi, FilesApi, GitApi, RepositoriesApi } from '@front-burner/web-api-client';
 import type { EditorStateChange } from '@front-burner/web-code-editor';
-import { AuthSessionService, CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
+import {
+  AuthSessionService,
+  CurrentUserService,
+  PAGE_RELOAD,
+  PageTitleService,
+  PushChannelService,
+  VersionCheckService
+} from '@front-burner/web-core';
 import { BehaviorSubject, map, Observable, of, Subject, take, throwError } from 'rxjs';
 
 import { dialogButton, overlay, settleDialog } from '../../../testing/dialog-testing';
@@ -116,6 +123,8 @@ describe('RepositoryScreenPage', () => {
   let mergeAnswer: GitMergeState;
   let gitBranches: ReturnType<typeof vi.fn<(id: number) => Observable<GitBranchList>>>;
   let switchBranch: ReturnType<typeof vi.fn<() => Observable<void>>>;
+  /** Reloads the page, for **Reload** of the new-version banner. */
+  let reloadPage: ReturnType<typeof vi.fn<() => void>>;
 
   const baseStatus = (): GitStatus => ({
     branch: 'main',
@@ -199,6 +208,7 @@ describe('RepositoryScreenPage', () => {
         },
         { provide: CurrentUserService, useValue: { user: signal(ada), load: () => Promise.resolve(ada) } },
         provideMemoryDrafts(drafts),
+        { provide: PAGE_RELOAD, useValue: reloadPage },
         { provide: AuthSessionService, useValue: { loggedIn: signal(true), logout: vi.fn() } },
         { provide: PushChannelService, useValue: { events, reconnected: new Subject<void>(), view } },
         {
@@ -225,6 +235,7 @@ describe('RepositoryScreenPage', () => {
 
   beforeEach(() => {
     drafts = new MemoryDraftStore();
+    reloadPage = vi.fn();
     answers = [];
     failOnce = new Set();
     folders = {
@@ -1927,7 +1938,10 @@ describe('RepositoryScreenPage', () => {
 
         const shown = notice() as HTMLElement;
         expect(shown.closest('header')).toBeTruthy();
-        expect(shown.previousElementSibling?.contains(page().querySelector('rs-repository-bar'))).toBe(true);
+        // Below the banners of the whole web client (NV-16).
+        const banners = shown.previousElementSibling;
+        expect(banners?.localName).toBe('shell-app-banners');
+        expect(banners?.previousElementSibling?.contains(page().querySelector('rs-repository-bar'))).toBe(true);
       });
 
       it('shows nothing when nothing is new', async () => {
@@ -2195,6 +2209,24 @@ describe('RepositoryScreenPage', () => {
             usedBy: 1
           }
         };
+      });
+
+      it('shows the app banners on the repository screen, below the bar and above its own notices', async () => {
+        await visit('/repositories/12');
+        TestBed.inject(VersionCheckService).seen('99.0.0');
+        window.dispatchEvent(new Event('offline'));
+        try {
+          await settle(harness.fixture);
+
+          const header = page().querySelector('ui-app-shell header') as HTMLElement;
+          const banners = header.querySelectorAll('shell-app-banners ui-inline-banner');
+          expect(banners).toHaveLength(2);
+          expect(banners[0].closest('rs-repository-bar')).toBeNull();
+          const order = [ ...header.querySelectorAll('shell-app-banners, rs-locked-key-banner') ];
+          expect(order.map(element => element.localName)).toEqual([ 'shell-app-banners', 'rs-locked-key-banner' ]);
+        } finally {
+          window.dispatchEvent(new Event('online'));
+        }
       });
 
       it('shows the banner below the bar, and Unlock removes it after the unlock', async () => {
@@ -2908,6 +2940,39 @@ describe('RepositoryScreenPage', () => {
       typeAtEnd('More.\n');
 
       expect(unload()).toBe(true);
+    });
+
+    describe('Reload for a new version (NV-15)', () => {
+      const unload = () => {
+        const event = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+
+      it('saves before reloading', async () => {
+        await visit('/repositories/12/files/README.md');
+        typeAtEnd('More.\n');
+        reloadPage.mockImplementation(() => expect(savedPaths()).toEqual([ 'README.md' ]));
+
+        await TestBed.inject(VersionCheckService).reload();
+
+        expect(reloadPage).toHaveBeenCalledOnce();
+        expect(unload()).toBe(false);
+      });
+
+      it('reloads when the save fails, keeping the draft', async () => {
+        saveFile.mockReturnValue(failure(500, 'internal'));
+        await visit('/repositories/12/files/README.md');
+        typeAtEnd('More.\n');
+
+        await TestBed.inject(VersionCheckService).reload();
+        await settle(harness.fixture);
+
+        expect(reloadPage).toHaveBeenCalledOnce();
+        expect(drafts.at('README.md', 12, ada.id)?.content).toBe('# README.md\nMore.\n');
+        // The browser does not ask: the reload goes ahead.
+        expect(unload()).toBe(false);
+      });
     });
 
     it('writes the waiting content as a draft when the page is hidden for good', async () => {

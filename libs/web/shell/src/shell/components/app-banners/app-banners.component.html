@@ -1,0 +1,20 @@
+<ng-container *transloco="let t; prefix: 'web-shell.AppBannersComponent'">
+  @if (newVersion()) {
+    <ui-inline-banner class="new-version"
+                      status="info"
+                      announce>
+      {{ t('newVersion') }}
+      <div uiBannerActions>
+        <button uiButton
+                size="small"
+                [busy]="reloading()"
+                (click)="reload()">{{ t('reload') }}</button>
+      </div>
+    </ui-inline-banner>
+  }
+  @if (!online()) {
+    <ui-inline-banner class="offline"
+                      status="warning"
+                      announce>{{ t('offline') }}</ui-inline-banner>
+  }
+</ng-container>

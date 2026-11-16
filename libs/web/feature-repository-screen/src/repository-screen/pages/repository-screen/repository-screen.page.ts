@@ -29,10 +29,11 @@ import {
   SpinnerComponent
 } from '@front-burner/ui';
 import { GitApi } from '@front-burner/web-api-client';
-import { CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
+import { CurrentUserService, PageTitleService, PushChannelService, VersionCheckService } from '@front-burner/web-core';
 import type { PreviewPathLink } from '@front-burner/web-markdown';
 import { ImageCache } from '@front-burner/web-markdown/images';
 import {
+  AppBannersComponent,
   AppHeaderComponent,
   PageNotFoundPage,
   RemovedElsewhereService,
@@ -146,6 +147,7 @@ const MAX_BADGE_COUNT = 99;
     InlineBannerComponent,
     SpinnerComponent,
     AppHeaderComponent,
+    AppBannersComponent,
     PageNotFoundPage,
     RouteAnnouncerComponent,
     ChangesPaneComponent,
@@ -917,7 +919,8 @@ export class RepositoryScreenPage {
    * Sends the waiting saves at once when the tab is hidden or the screen is
    * left (ED-17). When the page is hidden for good, such as on a reload, the
    * waiting content is also written as browser drafts (ED-20); closing or
-   * reloading the tab with unsaved edits makes the browser ask first (ED-22).
+   * reloading the tab with unsaved edits makes the browser ask first (ED-22),
+   * except on **Reload** for a new version, which has sent them (NV-15).
    */
   private flushWhenLeft(): void {
     const document = inject(DOCUMENT);
@@ -928,7 +931,19 @@ export class RepositoryScreenPage {
       }
     };
     const pageHidden = () => this.openFiles.writeDrafts();
+    // **Reload** of the new-version banner sends the waiting saves first and
+    // then reloads without asking: a save that failed keeps its browser draft
+    // (NV-15, NF-3).
+    let reloading = false;
+    inject(VersionCheckService).beforeReload(async () => {
+      await this.openFiles.flushAll();
+      this.openFiles.writeDrafts();
+      reloading = true;
+    });
     const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (reloading) {
+        return;
+      }
       event.preventDefault();
       // Browsers that ask only when it is set.
       event.returnValue = '';

@@ -82,6 +82,14 @@ describe('ShellLayoutComponent', () => {
     expect(host().querySelector('shell-app-header')).toBeNull();
   });
 
+  it('shows the banners directly below the app header', async () => {
+    await open('/');
+
+    const header = host().querySelector('header');
+    expect(header?.querySelector('.bar shell-app-header')).not.toBeNull();
+    expect(header?.querySelector(':scope > shell-app-banners')).not.toBeNull();
+  });
+
   it('tries again to load the user when the backend could not be reached', async () => {
     user.set(undefined);
     load.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => {

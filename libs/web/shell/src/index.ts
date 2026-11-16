@@ -1,4 +1,5 @@
 export { AddRepositoryGuideComponent } from './shell/components/add-repository-guide/add-repository-guide.component';
+export { AppBannersComponent } from './shell/components/app-banners/app-banners.component';
 export { AppHeaderComponent } from './shell/components/app-header/app-header.component';
 export { BrandLinkComponent } from './shell/components/brand-link/brand-link.component';
 export { LastAccessedComponent } from './shell/components/last-accessed/last-accessed.component';
