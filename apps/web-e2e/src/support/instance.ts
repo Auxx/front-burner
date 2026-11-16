@@ -254,6 +254,10 @@ export interface SeedRepository {
   branch?: string;
   status?: 'cloning' | 'ready' | 'error';
   errorCode?: 'clone-failed' | 'clone-timed-out' | 'working-copy-missing';
+  /** git's error of a repository in error, as the backend records it (AR-53); none by default. */
+  errorDetail?: string;
+  /** The request ID that goes with the error; none by default. */
+  errorRequestId?: string;
   lastAccessedAt?: Date;
   /** The working copy of a ready repository; `empty` by default. */
   workingCopy?: WorkingCopyFixture;
@@ -293,8 +297,9 @@ export function seed(
     );
     const insertRepository = sqlite.prepare(
       `INSERT INTO repositories
-         (user_id, name, remote_url, clone_mode, branch, git_level, status, error_code, created_at, last_accessed_at)
-       VALUES (?, ?, ?, ?, ?, 'advanced', ?, ?, ?, ?)`
+         (user_id, name, remote_url, clone_mode, branch, git_level, status, error_code, error_detail,
+          error_request_id, created_at, last_accessed_at)
+       VALUES (?, ?, ?, ?, ?, 'advanced', ?, ?, ?, ?, ?, ?)`
     );
     const userIds = (rows.users ?? []).map(user => {
       const id = Number(
@@ -314,6 +319,8 @@ export function seed(
           repository.branch ?? null,
           repository.status ?? 'ready',
           repository.errorCode ?? null,
+          repository.errorDetail ?? null,
+          repository.errorRequestId ?? null,
           at,
           at
         ).lastInsertRowid

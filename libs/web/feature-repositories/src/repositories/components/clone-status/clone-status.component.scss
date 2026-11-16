@@ -1,0 +1,61 @@
+@use '../../styles/settings-section' as *;
+
+:host {
+  display: block;
+}
+
+// Nothing, not even the page's gap, for the statuses without this section.
+:host(.none) {
+  display: none;
+}
+
+@include settings-section;
+
+// One chevron, which turns to point down while Details is open, as the guide's does.
+.chevron {
+  transition: transform var(--ui-duration-base) var(--ui-easing-standard);
+}
+
+.toggle[aria-expanded='true'] .chevron {
+  transform: rotate(90deg);
+
+  &:dir(rtl) {
+    transform: rotate(-90deg);
+  }
+}
+
+.details {
+  display: grid;
+  gap: var(--ui-space-2);
+  padding-block-start: var(--ui-space-1);
+}
+
+// git's error keeps its lines, and wraps on a phone instead of widening the page.
+.message {
+  margin: 0;
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-sunken);
+  font-family: var(--ui-font-family-mono);
+  font-size: var(--ui-font-size-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.no-message {
+  margin: 0;
+  color: var(--ui-text-muted);
+}
+
+.request {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1) var(--ui-space-2);
+  margin: 0;
+  font-size: var(--ui-font-size-sm);
+
+  code {
+    overflow-wrap: anywhere;
+  }
+}

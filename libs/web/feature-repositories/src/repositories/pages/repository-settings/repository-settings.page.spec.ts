@@ -154,6 +154,31 @@ describe('RepositorySettingsPage', () => {
     expect(openLink()).not.toBeNull();
   });
 
+  it('shows the error of a clone that fails while open', async () => {
+    await open(
+      '/repositories/7/settings',
+      of(repositoryDetails({ status: 'cloning', clone: { jobId: 3, state: 'running', percent: 10 } })),
+      of(repositoryDetails(
+        { status: 'error', error: 'clone-failed' },
+        { errorDetail: 'fatal: repository not found', errorRequestId: 'req-1' }
+      ))
+    );
+    expect(page().querySelector('repo-clone-status ui-progress-bar')).not.toBeNull();
+
+    push.events.next({ type: 'job.progress', jobId: 3, percent: 55 });
+    await settle();
+    expect(page().querySelector('repo-clone-status ui-progress-bar')?.getAttribute('aria-valuenow')).toBe('55');
+
+    push.events.next({ type: 'repository.status', repositoryId: 7, status: 'error', error: 'clone-failed' });
+    await settle();
+
+    const status = page().querySelector('repo-clone-status');
+    expect(status?.querySelector('ui-progress-bar')).toBeNull();
+    expect(status?.textContent).toContain('web-shell.RepositoryStatusDetailComponent.error.clone-failed');
+    expect(status?.querySelector('pre.message')?.textContent).toBe('fatal: repository not found');
+    expect(status?.querySelector('.request code')?.textContent).toBe('req-1');
+  });
+
   it('reloads after a reconnect', async () => {
     await open(
       '/repositories/7/settings',

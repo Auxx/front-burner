@@ -15,8 +15,9 @@ export type RepositorySettingsState = 'loading' | 'ready' | 'missing' | 'failed'
 /**
  * The details of the repository that the settings page shows (RM-9, RM-16),
  * provided by the page so that each of its sections reads the same ones. They
- * follow the repository without a reload: events are notifications only
- * (A-3.11), so its status and warnings (`repository.status`,
+ * follow the repository without a reload: its clone's `job.progress` is
+ * patched in place (RM-7), and as events are otherwise notifications only
+ * (A-3.11), its status and warnings (`repository.status`,
  * `repository.warning`), a key's lock (`key.locked`, `key.unlocked`, which
  * change "Key locked") and a reconnect read the details again. Only the answer
  * to the latest request counts, and a reload that fails keeps the details on
@@ -43,7 +44,9 @@ export class RepositorySettingsStore {
     const push = inject(PushChannelService);
     const destroyRef = inject(DestroyRef);
     push.events.pipe(takeUntilDestroyed(destroyRef)).subscribe(event => {
-      if (this.concerns(event)) {
+      if (event.type === 'job.progress') {
+        this.progress(event.jobId, event.percent);
+      } else if (this.concerns(event)) {
         this.reload();
       }
     });
@@ -70,6 +73,20 @@ export class RepositorySettingsStore {
   retry(): void {
     this.reloading.set(true);
     this.reload();
+  }
+
+  /**
+   * The progress of the repository's clone, which also means that it runs
+   * (RM-7, AR-52), patched in place as the lists do. Other jobs' progress is
+   * not about this repository. An answer on its way may show an older
+   * percentage, so nothing is read again: the next report corrects it.
+   */
+  private progress(jobId: number, percent: number): void {
+    const details = this.current();
+    if (details?.summary.clone?.jobId !== jobId) {
+      return;
+    }
+    this.current.set({ ...details, summary: { ...details.summary, clone: { jobId, state: 'running', percent } } });
   }
 
   private concerns(event: PushEvent): boolean {

@@ -98,6 +98,18 @@ describe('RepositorySettingsStore', () => {
     expect(requested).toEqual([ 7, 7, 7, 7 ]);
   });
 
+  it('follows the progress of the repository\'s clone, not of other jobs', () => {
+    answers = [ of(repositoryDetails({ status: 'cloning', clone: { jobId: 9, state: 'waiting', percent: null } })) ];
+    store.load(7);
+
+    push.events.next({ type: 'job.progress', jobId: 4, percent: 80 });
+    expect(store.details()?.summary.clone).toEqual({ jobId: 9, state: 'waiting', percent: null });
+
+    push.events.next({ type: 'job.progress', jobId: 9, percent: 42 });
+    expect(store.details()?.summary.clone).toEqual({ jobId: 9, state: 'running', percent: 42 });
+    expect(requested).toEqual([ 7 ]);
+  });
+
   it('lets only the latest answer count', () => {
     const first = new Subject<RepositoryDetails>();
     answers = [ first, of(repositoryDetails({ name: 'newer' })) ];
