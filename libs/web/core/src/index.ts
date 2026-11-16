@@ -21,6 +21,7 @@ export {
   type RemovedRepositoryViewer
 } from './core/services/removed-repositories/removed-repositories.service';
 export {
+  BEFORE_RELOAD_TIMEOUT_MS,
   type BeforeReload,
   PAGE_RELOAD,
   VersionCheckService

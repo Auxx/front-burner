@@ -23,7 +23,8 @@ import { DraftStore } from '../saving/draft-store';
  */
 export function provideCore(): EnvironmentProviders {
   return makeEnvironmentProviders([
-    // The version check sees the answer the auth interceptor ends with, a retried request's too.
+    // The version check sees the answer the auth interceptor ends with, a
+    // retried request's too.
     provideHttpClient(withFetch(), withInterceptors([ versionCheckInterceptor, authInterceptor ])),
     provideTransloco({
       config: {

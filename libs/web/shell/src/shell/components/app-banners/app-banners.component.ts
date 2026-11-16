@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ButtonComponent, InlineBannerComponent } from '@front-burner/ui';
 import { OnlineStatusService, VersionCheckService } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
@@ -11,6 +11,8 @@ import { TranslocoDirective } from '@jsverse/transloco';
  * - "A new version of Front Burner is available." once the version check
  *   finds another backend version (A-8.7). It cannot be dismissed; **Reload**
  *   sends the waiting saves first (ED-17) and reloads whatever they answer.
+ *   It is busy while the reload is under way, and usable again if the browser
+ *   stays on the page.
  * - The offline banner while the browser is offline (NF-3.2); it goes away on
  *   its own.
  */
@@ -25,11 +27,10 @@ export class AppBannersComponent {
   private readonly versions = inject(VersionCheckService);
 
   protected readonly newVersion = this.versions.newVersion;
+  protected readonly reloading = this.versions.reloading;
   protected readonly online = inject(OnlineStatusService).online;
-  protected readonly reloading = signal(false);
 
   protected reload(): void {
-    this.reloading.set(true);
     void this.versions.reload();
   }
 }

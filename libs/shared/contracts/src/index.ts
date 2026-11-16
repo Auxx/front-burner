@@ -27,3 +27,4 @@ export * from './repositories/repository-credentials.schema';
 export * from './repositories/repository-details.schema';
 export * from './repositories/repository-list.schema';
 export * from './repositories/repository-summary.schema';
+export * from './versions/version-header';

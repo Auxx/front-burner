@@ -6,6 +6,7 @@ import type { PushEvent } from '@front-burner/shared-contracts';
 import { BehaviorSubject, distinctUntilChanged, EMPTY, Observable, share, Subject, switchMap } from 'rxjs';
 
 import { AuthSessionService } from '../auth-session/auth-session.service';
+import { VERSION_HEADER, VersionCheckService } from '../version-check/version-check.service';
 import { INITIAL_SSE_STATE, parseSse } from './sse-parser';
 
 const EVENTS_URL = '/api/v1/events';
@@ -68,6 +69,7 @@ async function codeOf(response: Response): Promise<string | undefined> {
 @Injectable({ providedIn: 'root' })
 export class PushChannelService {
   private readonly auth = inject(AuthSessionService);
+  private readonly versions = inject(VersionCheckService);
   private readonly document = inject(DOCUMENT);
   private readonly router = inject(Router);
   private readonly reconnectedSubject = new Subject<void>();
@@ -112,13 +114,19 @@ export class PushChannelService {
     this.viewed.next(repositoryId !== null && Number.isInteger(repositoryId) && repositoryId > 0 ? repositoryId : null);
   }
 
-  /** Opens the stream at `url` with `token`; aborted with `controller`. */
-  private open(url: string, token: string, controller: AbortController): Promise<Response> {
-    return fetch(url, {
+  /**
+   * Opens the stream at `url` with `token`; aborted with `controller`. Its
+   * answer's version goes to the version check, as `HttpClient`'s do (A-8.7):
+   * a tab that only listens learns of an upgrade when the stream reconnects.
+   */
+  private async open(url: string, token: string, controller: AbortController): Promise<Response> {
+    const response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
       cache: 'no-store',
       signal: controller.signal
     });
+    this.versions.seen(response.headers.get(VERSION_HEADER));
+    return response;
   }
 
   /**

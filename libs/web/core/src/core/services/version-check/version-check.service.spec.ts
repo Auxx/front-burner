@@ -2,7 +2,7 @@ import { Component, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { APP_VERSION } from '../../tokens/app-version';
-import { PAGE_RELOAD, VersionCheckService } from './version-check.service';
+import { BEFORE_RELOAD_TIMEOUT_MS, PAGE_RELOAD, VersionCheckService } from './version-check.service';
 
 @Component({ template: '' })
 class Page {
@@ -26,6 +26,8 @@ describe('VersionCheckService', () => {
     });
     service = TestBed.inject(VersionCheckService);
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it('turns on when a response carries another version, and stays on', () => {
     service.seen('1.4.2');
@@ -59,6 +61,43 @@ describe('VersionCheckService', () => {
     await service.reload();
 
     expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('reloads when what a page registered does not finish in time', async () => {
+    vi.useFakeTimers({ toFake: [ 'setTimeout', 'clearTimeout' ] });
+    TestBed.runInInjectionContext(() => service.beforeReload(() => new Promise<void>(() => undefined)));
+
+    const reloading = service.reload();
+    await vi.advanceTimersByTimeAsync(BEFORE_RELOAD_TIMEOUT_MS - 1);
+    expect(reload).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await reloading;
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('is reloading until the browser stays on the page, then can reload again', async () => {
+    vi.useFakeTimers({ toFake: [ 'setTimeout', 'clearTimeout' ] });
+    let saved: () => void = () => undefined;
+    TestBed.runInInjectionContext(() => service.beforeReload(() => new Promise<void>(resolve => (saved = resolve))));
+
+    const reloading = service.reload();
+    expect(service.reloading()).toBe(true);
+    // A second click while the first waits does nothing more.
+    await service.reload();
+    saved();
+    await reloading;
+    expect(reload).toHaveBeenCalledOnce();
+    // The browser may still ask "Leave page?" after reload() returns.
+    expect(service.reloading()).toBe(true);
+
+    // Still here: such as Stay on another page's question.
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(service.reloading()).toBe(false);
+    const again = service.reload();
+    saved();
+    await again;
+    expect(reload).toHaveBeenCalledTimes(2);
   });
 
   it('forgets what a page registered once the page is gone', async () => {

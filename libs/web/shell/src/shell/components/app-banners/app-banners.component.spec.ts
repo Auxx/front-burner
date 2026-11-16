@@ -14,6 +14,7 @@ describe('AppBannersComponent', () => {
   let newVersion: ReturnType<typeof signal<boolean>>;
   let online: ReturnType<typeof signal<boolean>>;
   let reload: ReturnType<typeof vi.fn>;
+  let reloading: ReturnType<typeof signal<boolean>>;
   let announce: ReturnType<typeof vi.fn>;
 
   const element = () => fixture.nativeElement as HTMLElement;
@@ -24,12 +25,16 @@ describe('AppBannersComponent', () => {
   beforeEach(async () => {
     newVersion = signal(false);
     online = signal(true);
-    reload = vi.fn(() => Promise.resolve());
+    reloading = signal(false);
+    reload = vi.fn(() => {
+      reloading.set(true);
+      return Promise.resolve();
+    });
     announce = vi.fn(async () => undefined);
     TestBed.configureTestingModule({
       imports: [ AppBannersComponent, translocoTesting() ],
       providers: [
-        { provide: VersionCheckService, useValue: { newVersion, reload } },
+        { provide: VersionCheckService, useValue: { newVersion, reloading, reload } },
         { provide: OnlineStatusService, useValue: { online } },
         { provide: LiveAnnouncer, useValue: { announce } }
       ]
@@ -67,6 +72,11 @@ describe('AppBannersComponent', () => {
 
     expect(reload).toHaveBeenCalledOnce();
     expect(reloadButton()?.getAttribute('aria-disabled')).toBe('true');
+
+    // The browser stayed on the page, such as after Stay on a "Leave page?" question.
+    reloading.set(false);
+    await settle(fixture);
+    expect(reloadButton()?.hasAttribute('aria-disabled')).toBe(false);
   });
 
   it('shows the offline banner while offline, and hides it when back', async () => {

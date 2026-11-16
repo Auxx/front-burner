@@ -932,16 +932,16 @@ export class RepositoryScreenPage {
     };
     const pageHidden = () => this.openFiles.writeDrafts();
     // **Reload** of the new-version banner sends the waiting saves first and
-    // then reloads without asking: a save that failed keeps its browser draft
+    // then reloads without asking: the waiting content is a browser draft
+    // first, which a save that fails, or does not answer in time, keeps
     // (NV-15, NF-3).
-    let reloading = false;
-    inject(VersionCheckService).beforeReload(async () => {
-      await this.openFiles.flushAll();
+    const versions = inject(VersionCheckService);
+    versions.beforeReload(async () => {
       this.openFiles.writeDrafts();
-      reloading = true;
+      await this.openFiles.flushAll();
     });
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (reloading) {
+      if (versions.reloading()) {
         return;
       }
       event.preventDefault();

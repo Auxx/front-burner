@@ -15,8 +15,15 @@ export async function answerWithVersion(page: Page, version: string): Promise<()
       await route.fallback();
       return;
     }
-    const response = await route.fetch();
-    await route.fulfill({ response, headers: { ...response.headers(), 'x-front-burner-version': version } });
+    try {
+      const response = await route.fetch();
+      await route.fulfill({ response, headers: { ...response.headers(), 'x-front-burner-version': version } });
+    } catch (error) {
+      // A request the page dropped meanwhile, such as on a reload, is already handled.
+      if (!/already handled|Test ended|Target page, context or browser has been closed/.test(String(error))) {
+        throw error;
+      }
+    }
   });
-  return () => page.unroute(API);
+  return () => page.unrouteAll({ behavior: 'ignoreErrors' });
 }

@@ -1,8 +1,12 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.RepositoryScreenPage'">
   @let state = session.state();
   @if (state === 'loading') {
-    <ui-spinner class="loading"
-                [label]="t('loading')" />
+    <div class="loading">
+      <!-- The banners of the whole web client, also while the repository opens (NV-15). -->
+      <div class="loading-banners"><shell-app-banners /></div>
+      <ui-spinner class="loading-spinner"
+                  [label]="t('loading')" />
+    </div>
   } @else {
     <ui-app-shell #shell
                   [skipLinkLabel]="t('skipToContent')"

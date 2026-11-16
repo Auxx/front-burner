@@ -2,15 +2,13 @@ import { HttpErrorResponse, type HttpInterceptorFn, HttpResponse } from '@angula
 import { inject } from '@angular/core';
 import { tap } from 'rxjs';
 
-import { VersionCheckService } from '../../services/version-check/version-check.service';
-
-/** The backend's version, on every response but the health probes' (NF-7.6). */
-const VERSION_HEADER = 'X-Front-Burner-Version';
+import { VERSION_HEADER, VersionCheckService } from '../../services/version-check/version-check.service';
 
 /**
  * Reports the version header of every response, an error's too, to the
  * version check (A-8.7). A response without it, such as a proxy's error page,
- * changes nothing.
+ * changes nothing. The push channel, which does not use `HttpClient`, reports
+ * its own.
  */
 export const versionCheckInterceptor: HttpInterceptorFn = (request, next) => {
   const versions = inject(VersionCheckService);

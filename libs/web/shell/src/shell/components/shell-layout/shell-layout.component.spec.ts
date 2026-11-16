@@ -90,6 +90,23 @@ describe('ShellLayoutComponent', () => {
     expect(header?.querySelector(':scope > shell-app-banners')).not.toBeNull();
   });
 
+  it('shows the banners before the user has loaded, such as while offline', async () => {
+    user.set(undefined);
+    load.mockReturnValue(new Promise(() => undefined));
+    await open('/');
+
+    expect(host().querySelector('shell-app-header')).toBeNull();
+    expect(host().querySelector('header shell-app-banners')).not.toBeNull();
+  });
+
+  it('shows no banners when logged out', async () => {
+    loggedIn.set(false);
+    user.set(undefined);
+    await open('/');
+
+    expect(host().querySelector('shell-app-banners')).toBeNull();
+  });
+
   it('tries again to load the user when the backend could not be reached', async () => {
     user.set(undefined);
     load.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => {

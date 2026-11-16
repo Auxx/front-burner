@@ -26,6 +26,7 @@ import { CredentialsApi, FilesApi, GitApi, RepositoriesApi } from '@front-burner
 import type { EditorStateChange } from '@front-burner/web-code-editor';
 import {
   AuthSessionService,
+  BEFORE_RELOAD_TIMEOUT_MS,
   CurrentUserService,
   PAGE_RELOAD,
   PageTitleService,
@@ -405,6 +406,21 @@ describe('RepositoryScreenPage', () => {
       await visit('/repositories/12');
 
       expect(page().querySelector('ui-app-shell')).toBeNull();
+    });
+
+    it('shows the app banners while the repository opens', async () => {
+      answers.push(new Subject<RepositorySummary>());
+      await visit('/repositories/12');
+      window.dispatchEvent(new Event('offline'));
+      try {
+        await settle(harness.fixture);
+
+        const banners = page().querySelector('.loading shell-app-banners');
+        expect(banners?.querySelector('ui-inline-banner')).not.toBeNull();
+        expect(page().querySelector('ui-spinner')).not.toBeNull();
+      } finally {
+        window.dispatchEvent(new Event('online'));
+      }
     });
   });
 
@@ -2958,6 +2974,24 @@ describe('RepositoryScreenPage', () => {
 
         expect(reloadPage).toHaveBeenCalledOnce();
         expect(unload()).toBe(false);
+      });
+
+      it('reloads when the save does not answer in time, keeping the draft', async () => {
+        saveFile.mockReturnValue(new Subject());
+        await visit('/repositories/12/files/README.md');
+        typeAtEnd('More.\n');
+        vi.useFakeTimers({ toFake: [ 'setTimeout', 'clearTimeout' ] });
+        try {
+          const reloading = TestBed.inject(VersionCheckService).reload();
+          await vi.advanceTimersByTimeAsync(BEFORE_RELOAD_TIMEOUT_MS);
+          await reloading;
+
+          expect(reloadPage).toHaveBeenCalledOnce();
+          expect(drafts.at('README.md', 12, ada.id)?.content).toBe('# README.md\nMore.\n');
+          expect(unload()).toBe(false);
+        } finally {
+          vi.useRealTimers();
+        }
       });
 
       it('reloads when the save fails, keeping the draft', async () => {
