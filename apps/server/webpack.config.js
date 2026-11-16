@@ -1,6 +1,9 @@
 const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
-const { chmodSync, readdirSync } = require('fs');
+const { chmodSync, readdirSync, readFileSync } = require('fs');
 const { join } = require('path');
+const { DefinePlugin } = require('webpack');
+
+const { version } = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
 
 const GIT_HELPERS = join(__dirname, '../../dist/apps/server/git-helpers');
 
@@ -40,6 +43,9 @@ module.exports = {
       generatePackageJson: true,
       sourceMap: true
     }),
-    new ExecutableGitHelpersPlugin()
+    new ExecutableGitHelpersPlugin(),
+    // The instance's version is fixed at build time, from the same field the
+    // web client's build reads, so that the two always match (A-8.7).
+    new DefinePlugin({ FRONT_BURNER_VERSION: JSON.stringify(version) })
   ]
 };

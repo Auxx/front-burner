@@ -33,6 +33,7 @@ describe('loadConfig', () => {
   it('uses the defaults', () => {
     const { config, warnings } = loadConfig(BASE);
     expect(config).toEqual({
+      version: 'unknown',
       port: 8080,
       trustedProxies: [ 'loopback', 'linklocal', 'uniquelocal' ],
       logLevel: 'info',
@@ -54,6 +55,16 @@ describe('loadConfig', () => {
       oidc: undefined
     });
     expect(warnings).toEqual([]);
+  });
+
+  it('takes the version from the build', () => {
+    expect(loadConfig(BASE, { version: '1.4.2' }).config.version).toBe('1.4.2');
+  });
+
+  it('does not take the version from the environment, so that it cannot differ from the web client\'s', () => {
+    const { config, warnings } = loadConfig({ ...BASE, FRONT_BURNER_VERSION: '9.9.9' }, { version: '1.4.2' });
+    expect(config.version).toBe('1.4.2');
+    expect(warnings).toEqual([ 'Unknown variable FRONT_BURNER_VERSION is ignored.' ]);
   });
 
   it('requires FRONT_BURNER_JWT_SECRET', () => {

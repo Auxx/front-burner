@@ -1,6 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type ServerProcess, startServerProcess } from './support/server-process';
 
+/** The build's version: the root package.json's (NF-7.6). */
+const VERSION = (JSON.parse(
+  readFileSync(resolve(import.meta.dirname, '../../../package.json'), 'utf8')
+) as { version: string; }).version;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 describe('server API', () => {
@@ -33,6 +39,20 @@ describe('server API', () => {
     expect(response.headers.get('strict-transport-security')).toBeNull();
     const rateLimit = [ ...response.headers.keys() ].filter(name => name.startsWith('x-ratelimit'));
     expect(rateLimit).toEqual([]);
+  });
+
+  it('sets the version on every API response, errors included', async () => {
+    for (const path of [ '/api/v1/auth/methods', '/api/v1/me', '/api/v1/nope', '/api/nope' ]) {
+      const response = await fetch(`${server.url}${path}`);
+      expect(response.headers.get('x-front-burner-version'), path).toBe(VERSION);
+    }
+  });
+
+  it('the health endpoints have no version', async () => {
+    for (const path of [ 'live', 'ready' ]) {
+      const response = await fetch(`${server.url}/api/health/${path}`);
+      expect(response.headers.get('x-front-burner-version')).toBeNull();
+    }
   });
 
   it('unknown API path returns the JSON 404', async () => {

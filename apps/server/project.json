@@ -8,6 +8,31 @@
     "type:app"
   ],
   "targets": {
+    "build": {
+      "inputs": [
+        "production",
+        "^production",
+        {
+          "externalDependencies": [
+            "webpack-cli"
+          ]
+        },
+        {
+          "json": "{workspaceRoot}/tsconfig.json",
+          "fields": [
+            "extends",
+            "files",
+            "include"
+          ]
+        },
+        {
+          "json": "{workspaceRoot}/package.json",
+          "fields": [
+            "version"
+          ]
+        }
+      ]
+    },
     "prune-lockfile": {
       "dependsOn": [
         "build"

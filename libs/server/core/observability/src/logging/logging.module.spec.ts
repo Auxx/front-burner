@@ -29,6 +29,7 @@ class LogController {
 }
 
 const config: Config = {
+  version: '0.0.0',
   port: 3000,
   trustedProxies: [],
   logLevel: 'info',
