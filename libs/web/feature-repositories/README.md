@@ -44,6 +44,13 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
   credentials again on the repository's `repository.status` and
   `repository.warning` and after a reconnect, and says when their secret was
   deleted by an encryption key reset (NF-8.6).
+- `RepositoryCommitAuthorComponent`: the **Commit author** section, "Commits use
+  _Name &lt;email&gt;_" and whether that is the default or an override (RM-15,
+  CA-9), in every status. **Use a different author for this repository** opens
+  `web-repository-dialogs`' `ChangeCommitAuthorDialog` for the override only;
+  **Use my default** removes the override without asking. It reads the author
+  again on `commit-author.changed` and after a reconnect, so a default changed
+  on the Preferences page shows here.
 - `CloneDetailsComponent`: the **Clone details** section, a key-value list of
   the clone mode, the git control level and when the repository was added
   (RM-16).

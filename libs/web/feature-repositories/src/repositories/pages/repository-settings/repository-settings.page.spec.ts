@@ -3,7 +3,7 @@ import { Title } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { PushEvent, RepositoryDetails } from '@front-burner/shared-contracts';
-import { RepositoriesApi } from '@front-burner/web-api-client';
+import { PreferencesApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { NEVER, Observable, of, Subject, throwError } from 'rxjs';
 
@@ -52,6 +52,13 @@ describe('RepositorySettingsPage', () => {
           provide: RepositoriesApi,
           useValue: { repositoryDetails: details, repositoryCredentials: () => of({ protocol: 'https', inUse: null }) }
         },
+        {
+          provide: PreferencesApi,
+          useValue: {
+            repositoryCommitAuthor: () =>
+              of({ author: { name: 'Ada', email: 'ada@example.com' }, source: 'default', confirmed: true })
+          }
+        },
         { provide: PushChannelService, useValue: push }
       ]
     });
@@ -74,6 +81,17 @@ describe('RepositorySettingsPage', () => {
     expect(status()?.hasAttribute('showready')).toBe(true);
     expect(status()?.textContent).toContain('web-shell.RepositoryStatusComponent.warning.key-locked');
     expect(page().querySelector('repo-clone-details')).not.toBeNull();
+  });
+
+  it('shows the sections in the order of RM-9', async () => {
+    await open('/repositories/7/settings', of(repositoryDetails()));
+
+    expect([ ...page().querySelectorAll('.sections > *') ].map(section => section.tagName.toLowerCase())).toEqual([
+      'repo-clone-status',
+      'repo-credentials-in-use',
+      'repo-repository-commit-author',
+      'repo-clone-details'
+    ]);
   });
 
   it('shows "Repositories › handbook › Settings", with links to the list and the repository', async () => {

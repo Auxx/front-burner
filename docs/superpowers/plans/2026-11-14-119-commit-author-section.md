@@ -32,6 +32,12 @@ bullet of CA-9).
 - **Use my default** asks nothing: the override is one click to set again, and
   the default stays as it is.
 - Shown in every status, as an override can be set before the clone ends.
+- _Changed while implementing:_ the author in use is the one line "Commits use
+  _Name &lt;email&gt;_" rather than `CommitAuthorSummaryComponent`'s key-value
+  list, which would say the same twice. `ChangeCommitAuthorDialog` gets an
+  `overrideOnly` option, which hides its choice of the default and has its own
+  heading, "Commit author for this repository". With an override, both buttons
+  are shown: the first edits the override.
 
 ## Review Focus
 

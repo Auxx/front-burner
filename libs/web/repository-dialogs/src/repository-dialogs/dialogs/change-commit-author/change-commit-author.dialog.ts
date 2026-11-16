@@ -6,8 +6,9 @@ import { CommitAuthorEditorComponent } from '../../components/commit-author-edit
 
 /**
  * **Change** on the commit form (CA-9): edits the commit author, as the default
- * or for this repository. Opened with `CommitAuthorDialogData`; it closes with the
- * author that now applies, or with nothing when cancelled.
+ * or for this repository; with `overrideOnly`, for this repository only, as on
+ * the settings page (RM-15). Opened with `CommitAuthorDialogData`; it closes with
+ * the author that now applies, or with nothing when cancelled.
  */
 @Component({
   selector: 'dlg-change-commit-author',
