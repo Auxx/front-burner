@@ -21,6 +21,14 @@ async function openDashboard(page: Page, email?: string): Promise<void> {
   await expect(heading(page, 'Dashboard')).toBeVisible();
 }
 
+/** Shows the dashboard again, loaded afresh, and waits for its list. */
+async function showDashboard(page: Page): Promise<void> {
+  const loaded = page.waitForResponse('**/api/v1/repositories/recent');
+  await page.goto('/');
+  await loaded;
+  await expect(heading(page, 'Recent repositories')).toBeVisible();
+}
+
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000);
 
 function seedRepositories(dataDir: string, repositories: Omit<SeedRepository, 'userId'>[]): number[] {
@@ -123,6 +131,47 @@ test.describe('dashboard', () => {
     const names = recentList(page).getByRole('link', { name: /^repo-/ });
     await expect(names).toHaveText([ 11, 10, 9, 8, 7, 6, 5, 4, 3, 2 ].map(i => `repo-${i}`));
     await expect(page.getByRole('link', { name: 'All repositories' })).toHaveAttribute('href', '/repositories');
+  });
+
+  test('AC-DASH-001.6: opening a repository in the editor moves it to the top of the list the next time the dashboard is shown; opening the dashboard or the repository management page does not change the order', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [
+      { name: 'handbook', lastAccessedAt: minutesAgo(60) },
+      { name: 'guides', lastAccessedAt: minutesAgo(30) },
+      { name: 'notes', lastAccessedAt: minutesAgo(5) }
+    ]);
+    const names = recentList(page).getByRole('link', { name: /^(handbook|guides|notes)$/ });
+    await openDashboard(page);
+    await expect(names).toHaveText([ 'notes', 'guides', 'handbook' ]);
+
+    const listed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/repositories');
+    await page.goto('/repositories');
+    await listed;
+    await expect(heading(page, 'Repositories')).toBeVisible();
+    await expect(page.getByRole('main').getByRole('link', { name: 'handbook', exact: true })).toBeVisible();
+    await showDashboard(page);
+    await expect(names).toHaveText([ 'notes', 'guides', 'handbook' ]);
+    await showDashboard(page);
+    await expect(names).toHaveText([ 'notes', 'guides', 'handbook' ]);
+
+    const opened = page.waitForResponse(response => /\/api\/v1\/repositories\/\d+\/open$/.test(response.url()));
+    await page.goto(`/repositories/${handbook}`);
+    await opened;
+    await showDashboard(page);
+    await expect(names).toHaveText([ 'handbook', 'notes', 'guides' ]);
+  });
+
+  test('AC-DASH-001.11: clicking an openable repository opens it in the editor', async ({ page, instance }) => {
+    const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook' } ]);
+    await openDashboard(page);
+
+    const opened = page.waitForResponse(response => response.url().endsWith(`/api/v1/repositories/${handbook}/open`));
+    await recentList(page).getByRole('link', { name: 'handbook', exact: true }).click();
+    expect((await opened).ok()).toBe(true);
+    await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}$`));
+    await expect(page.getByRole('banner').getByRole('heading', { name: 'handbook' })).toBeVisible();
+    await expect(
+      page.getByRole('main', { name: 'Editor' }).getByText('Choose a file from the tree, or create one')
+    ).toBeVisible();
   });
 
   test('one tile keeps a readable width, and a long remote wraps inside it', async ({ page, instance }) => {

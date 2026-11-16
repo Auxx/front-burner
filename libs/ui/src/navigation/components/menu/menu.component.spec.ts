@@ -104,6 +104,22 @@ class ConditionalHostComponent {
   readonly show = signal(true);
 }
 
+/** A shared menu of rows, as the file tree's, without any rows: no trigger claims it. */
+@Component({
+  imports: [ MenuComponent, MenuItemComponent, MenuTriggerDirective ],
+  template: `
+    @for (row of rows(); track row) {
+      <button [uiMenuTrigger]="menu.aria">{{ row }}</button>
+    }
+    <ui-menu #menu="uiMenu">
+      <button uiMenuItem="rename">Rename</button>
+    </ui-menu>
+  `
+})
+class RowsHostComponent {
+  readonly rows = signal<string[]>([]);
+}
+
 @Component({
   imports: [ MenuComponent, MenuItemComponent, MenuTriggerDirective ],
   template: `
@@ -159,7 +175,8 @@ describe('MenuComponent', () => {
         GroupHostComponent,
         SharedHostComponent,
         ConditionalHostComponent,
-        LoadingHostComponent
+        LoadingHostComponent,
+        RowsHostComponent
       ]
     }).compileComponents();
 
@@ -309,6 +326,33 @@ describe('MenuComponent', () => {
     await press('Escape');
     expect(inOverlay()).toBeNull();
     expect(document.activeElement).toBe(first);
+  });
+
+  it('is shown only while it is open', async () => {
+    const menu = el('ui-menu');
+    expect(menu.classList).not.toContain('open');
+
+    await open();
+    expect(menu.classList).toContain('open');
+
+    await press('Escape');
+    expect(menu.classList).not.toContain('open');
+  });
+
+  it('stays hidden while no trigger has claimed it, such as a shared menu of rows without rows', async () => {
+    const rows = TestBed.createComponent(RowsHostComponent);
+    await rows.whenStable();
+    const menu = rows.nativeElement.querySelector('ui-menu') as HTMLElement;
+
+    expect(menu.classList).not.toContain('open');
+    expect(inOverlay()).toBeNull();
+
+    rows.componentInstance.rows.set([ 'guide.md' ]);
+    await rows.whenStable();
+    (rows.nativeElement.querySelector('button') as HTMLButtonElement).click();
+    await rows.whenStable();
+    expect(menu.classList).toContain('open');
+    expect(inOverlay()).toBe(menu);
   });
 
   it('leaves nothing in the page when it is destroyed while open', async () => {

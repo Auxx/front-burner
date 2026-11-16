@@ -3,8 +3,9 @@
     display: none;
   }
 
-  // Aria sets `data-visible` while the menu is open; it is then in the overlay.
-  :host([data-visible='true']) {
+  // Shown only while it is in the overlay. Aria's `data-visible` is also true
+  // for a menu that no trigger has claimed yet, which would show in place.
+  :host(.open) {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;

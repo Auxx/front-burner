@@ -36,6 +36,11 @@ nav {
 
 @include header-link.label('.link');
 
+// The current page's item of the Menu is bold too (NV-5).
+[uiMenuItem].active {
+  font-weight: var(--ui-font-weight-semibold);
+}
+
 .narrow {
   display: none;
 }

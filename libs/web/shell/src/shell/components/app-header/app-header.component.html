@@ -17,9 +17,14 @@
     </button>
     <ui-menu #links="uiMenu">
       <a uiMenuItem="dashboard"
-         routerLink="/">{{ t('dashboard') }}</a>
+         routerLink="/"
+         routerLinkActive="active"
+         ariaCurrentWhenActive="page"
+         [routerLinkActiveOptions]="{ exact: true }">{{ t('dashboard') }}</a>
       <a uiMenuItem="repositories"
-         routerLink="/repositories">{{ t('repositories') }}</a>
+         routerLink="/repositories"
+         routerLinkActive="active"
+         ariaCurrentWhenActive="page">{{ t('repositories') }}</a>
     </ui-menu>
   </nav>
   <shell-user-menu [user]="user()" />
