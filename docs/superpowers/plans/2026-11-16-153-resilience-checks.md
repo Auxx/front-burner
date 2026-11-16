@@ -13,12 +13,27 @@ full disk.
 
 **Architecture:** More tests in plan 138's container suite, in a file of their
 own, `apps/server-e2e/src/container-resilience.e2e.spec.ts`, run by the same CI
-job. A kill is `docker kill --signal KILL`, not a stop. The upgrade test needs
-an older image: it builds the image of the merge base with the previous release
-tag, or, before the first release, of `master` at plan 129's merge _(plan's
-call)_, with an extra migration added in a throwaway build so that a migration
-is pending. The full disk uses a small `tmpfs` (`size=64m`) as the repositories
-volume, with `FRONT_BURNER_REPOS_DIR` (plan 127).
+job. A kill is `docker kill --signal KILL`, not a stop. The full disk uses a
+small `tmpfs` (`size=64m`) as the repositories volume, with
+`FRONT_BURNER_REPOS_DIR` (plan 127).
+
+The upgrade test needs two images, one with a migration the other lacks _(plan's
+call)_:
+
+- **old:** the image the job already built (`front-burner:test`), as it is;
+- **new:** the same source plus one throwaway migration (a harmless new table,
+  `upgrade_test`), built from a copy of the workspace in a temporary folder with
+  `--build-arg FRONT_BURNER_VERSION=0.0.0-upgrade-test`, so that the two
+  versions differ. Nothing of it is committed, and the build reuses the job's
+  layer cache up to the server's build.
+
+The test then: starts **old** and makes data; stops it and starts **new**, which
+writes the pre-upgrade snapshot and migrates; stops it and starts **old** on the
+upgraded volume, which refuses with NF-7.3's message naming
+`0.0.0-upgrade-test`; restores the pre-upgrade snapshot as the guide says, and
+starts **old** again with the data made before the upgrade. Building the second
+image makes this the slowest test, so it runs on pushes to `master` and in plan
+139's release workflow, not on pull requests _(plan's call)_.
 
 **Tech Stack:** as plan 138.
 
@@ -73,12 +88,20 @@ the procedures this follows).
 **Files:**
 
 - Modify: `apps/server-e2e/src/container-resilience.e2e.spec.ts`,
-  `apps/server-e2e/src/support/container.ts` (building the older image),
-  `docs/wiki/deployment.md` (fixes to procedures), `docs/wiki/
-  release-checks.md`
+  `apps/server-e2e/src/support/container.ts` (building the **new** image with
+  the throwaway migration), `.github/workflows/ci.yml` (the upgrade test on
+  pushes to `master` only), `.github/workflows/release.yml` (the same test
+  before pushing), `docs/wiki/deployment.md` (fixes to procedures),
+  `docs/wiki/release-checks.md`
+
+**Interfaces:**
+
+- Produces: `buildUpgradeImage(baseImage: string): Promise<string>` (the new
+  image's tag).
 
 - [ ] **Step 1: Write the tests**: `NF-6.2: a copy of a running instance
-      restores from its snapshot`; `NF-6.5: a stopped copy restores as it was`;
+      restores from its snapshot` (the first snapshot is written a moment after
+      the start, plan 129); `NF-6.5: a stopped copy restores as it was`;
       `NF-6.4: a restore moves newer working copies to orphans`; `NF-7.1: an
       upgrade writes a pre-upgrade snapshot and migrates`; `NF-7.3: the old
       image refuses the upgraded database and starts from the pre-upgrade

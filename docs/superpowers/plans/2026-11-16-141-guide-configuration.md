@@ -34,6 +34,13 @@ non-functional.md` NF-8.2, NF-10.2, NF-10.3;
   each with a comment saying why.
 - Defaults in the guide are the schema's; the spec checks the defaults it can
   read from the schema against the guide's tables.
+- The list comes from the schema, never from a search of the source for
+  `FRONT_BURNER_`: many such strings are Nest injection tokens, not variables
+  (`FRONT_BURNER_CONFIG`, `FRONT_BURNER_DATABASE`, `FRONT_BURNER_GIT_OPTIONS`,
+  `FRONT_BURNER_SECRET_BOX`, `FRONT_BURNER_DATA_LAYOUT`, and others). Before
+  writing the test, find out what `FRONT_BURNER_PROT` in the source is.
+- The guide lists `FRONT_BURNER_SERVER_TIMING` (plan 150) with the logging and
+  metrics variables, as off by default and meant for performance checks.
 
 ## Review Focus
 

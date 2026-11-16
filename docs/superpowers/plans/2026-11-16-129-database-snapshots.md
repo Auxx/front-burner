@@ -16,8 +16,14 @@ half-written snapshot never looks like a good one. Names sort by time:
 `front-burner-<UTC time>-v<version>.sqlite` _(plan's call)_, with `:` written as
 `-`. Pruning keeps the newest `FRONT_BURNER_DB_SNAPSHOT_KEEP` of these and never
 touches files with another prefix (plan 130's `pre-upgrade-…`). A housekeeping
-job, `database.snapshot`, repeats every `FRONT_BURNER_DB_SNAPSHOT_INTERVAL`.
-Plan 130 calls the same writer with another prefix.
+job, `database.snapshot`, runs every hour and from the start, without
+`spreadOnStart`, and writes a snapshot only when the newest one of its own
+prefix is older than `FRONT_BURNER_DB_SNAPSHOT_INTERVAL`, or there is none
+_(plan's call: the age of the newest file decides, not a timer. A fresh instance
+has its first snapshot a moment after it starts, which plans 142 and 153 rely
+on. A crash loop writes at most one, and a restart never restarts the
+interval.)_ The runner needs no change. Plan 130 calls the same writer with
+another prefix.
 
 **Tech Stack:** as before (`better-sqlite3`). No new packages.
 
@@ -63,14 +69,17 @@ Plan 130 calls the same writer with another prefix.
 - Produces: `Config.dbSnapshotIntervalMs: number`, `Config.dbSnapshotKeep:
   number`; `DatabaseSnapshots.write(prefix: string): string` (the file's path),
   `DatabaseSnapshots.prune(prefix: string, keep: number): string[]` (removed
-  files); `SNAPSHOT_PREFIX = 'front-burner'`.
+  files); `DatabaseSnapshots.newest(prefix: string): Date | undefined` (from the
+  file names, not the file times, which a restore changes); `SNAPSHOT_PREFIX =
+  'front-burner'`.
 
 - [ ] **Step 1: Write the failing tests**: `writes a snapshot named with the
       time and version`; `a snapshot during writes opens and passes
       integrity_check`; `a failed snapshot removes its partial file and prunes
       nothing`; `keeps the newest seven`; `prunes only its own snapshots`;
-      config: `reads the snapshot interval and count`, `refuses a count of 0`,
-      `refuses an interval under an hour`.
+      `finds the newest snapshot by its name`; config: `reads the snapshot
+      interval and count`, `refuses a count of 0`, `refuses an interval under an
+      hour`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx test
       server-core-database`, `npx nx test server-core-config`.
 - [ ] **Step 3: Implement.**
@@ -90,9 +99,10 @@ Plan 130 calls the same writer with another prefix.
   `docs/architecture/data.md` (A-4.12: the file names)
 
 - [ ] **Step 1: Write the failing tests**: `registers database.snapshot every
-      interval`; `writes and prunes on each run`; `the first run waits a full
-      interval after a start` _(plan's call: a crash loop must not fill the disk
-      with snapshots)_.
+      hour`; `writes a snapshot at the first run when there is none`; `skips a
+      run while the newest snapshot is younger than the interval`; `writes once
+      the newest is older than the interval, and prunes`; `restarts in a loop
+      write one snapshot` (a crash loop must not fill the disk).
 - [ ] **Step 2: Run them, implement, run them again.**
 - [ ] **Step 3: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(jobs): daily database snapshot`.

@@ -17,8 +17,9 @@ sheet and turns the output into the checklist and, if a target is missed, a
 plan. The run sheet, in `docs/wiki/release-checks.md`'s "Reference host"
 section, says:
 
-1. start the image of plan 137 with the guide's compose example (plan 140) and a
-   metrics token;
+1. start the image of plan 137 with the guide's compose example (plan 140), a
+   metrics token and `FRONT_BURNER_SERVER_TIMING=true` (plan 150), which is
+   removed again after the run;
 2. `node tools/ai-tools/src/bin/perf-api.mjs --large …` from another machine on
    the same network, then with `--cold` on the host as root;
 3. `node tools/ai-tools/src/bin/perf-screen.mjs --profile desktop` and

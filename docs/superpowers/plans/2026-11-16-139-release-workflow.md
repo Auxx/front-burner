@@ -14,10 +14,11 @@ creates a GitHub release (NF-11.12, NF-7.2, NF-7.6).
 and on `workflow_dispatch` with `push: false` for a dry run. One job:
 
 1. check that the tag is semantic versioning (NF-7.2) and strip the `v`;
-2. build `tools/docker/Dockerfile` for `linux/amd64` and `linux/arm64` _(plan's
-   call: self-hosters run small ARM machines)_ with `FRONT_BURNER_VERSION` set
-   to the version (plan 123's build argument);
-3. scan each platform's image with Trivy, as plan 137 does, before pushing;
+2. build `tools/docker/Dockerfile` for `linux/amd64` only, loaded into the
+   runner's Docker, with `FRONT_BURNER_VERSION` set to the version (plan 123's
+   build argument). An `arm64` image is left until after the MVP (the index's
+   "Left out"; `docs/wiki/todo.md`);
+3. scan the loaded image with Trivy, as plan 137 does, before pushing;
 4. push to `ghcr.io/<owner>/front-burner` _(plan's call: the GitHub Container
    Registry, with the workflow's own token)_ as `<version>`, `<major>.<minor>`
    and, for a version without a pre-release part, `latest`;
@@ -64,7 +65,9 @@ NF-7.6; plan 123's "As built" (the build argument).
 
 - Create: `.github/workflows/release.yml`, `.github/release-notes.md`
 - Modify: `README.md` (how a release is made), `docs/architecture/
-  non-functional.md` (NF-11.12: where it runs)
+  non-functional.md` (NF-11.12: where it runs), `docs/wiki/todo.md` (an `arm64`
+  image, after the MVP: it needs a native ARM runner or a long emulated build,
+  and `better-sqlite3` built for ARM in the deps stage)
 
 - [ ] **Step 1: Write the workflow** with the eight steps above.
 - [ ] **Step 2: Lint it** — `npx --yes @action-validator/cli

@@ -15,9 +15,13 @@ example lives in `docs/wiki/compose.example.yaml` _(plan's call: a real file, so
 plan 138's suite can start the exact example)_ and is quoted in the guide. It
 has the image by tag, `read_only: true`, `/tmp` as tmpfs, `cap_drop: ALL`,
 `no-new-privileges`, `restart: unless-stopped`, `stop_grace_period: 30s`, the
-`/data` volume, the optional repositories volume, secrets as Docker secrets with
-`…_FILE` variables, and a Caddy service in front _(plan's call: Caddy, as the
-simplest HTTPS)_.
+`/data` volume, the optional repositories volume, and secrets as Docker secrets
+with `…_FILE` variables. It has no HTTPS terminator: HTTPS is the reverse
+proxy's job, which the image, the example and the tests leave out. The guide's
+"How to set up HTTPS" gets a Caddy example, as text in the guide only: a
+`Caddyfile` of a few lines and how to put Caddy next to the compose example
+_(plan's call: Caddy, as the simplest HTTPS)_. Traefik and nginx stay named, as
+now.
 
 **Tech Stack:** Markdown, YAML.
 
@@ -55,10 +59,10 @@ NF-11.13, NF-8.2; `docs/product/mvp.md` (target user, out of scope);
 - Create: `docs/wiki/compose.example.yaml`
 - Modify: `docs/wiki/deployment.md` (new sections: "The image", "Verifying the
   image", "Volumes and the UID", "Compose example", "First start", "What this
-  release does not have"; the "Before you start" list),
-  `apps/server-e2e/src/container.e2e.spec.ts` (start the example too),
-  `docs/wiki/todo.md` (remove what is now written), `docs/product/mvp.md` (the
-  **Deployment guide** row: **Built in**)
+  release does not have"; the "Before you start" list; the Caddy example in "How
+  to set up HTTPS"), `apps/server-e2e/src/container.e2e.spec.ts` (start the
+  example too), `docs/wiki/todo.md` (remove what is now written),
+  `docs/product/mvp.md` (the **Deployment guide** row: **Built in**)
 
 - [ ] **Step 1: Write the sections and the example.**
 - [ ] **Step 2: Prove the example**: add `the guide's compose example becomes

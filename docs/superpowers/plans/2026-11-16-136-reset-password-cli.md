@@ -20,9 +20,14 @@ database, newer-schema check), but **does not migrate**: a database that needs
 migrations is refused, "Start the instance once to upgrade the database, then
 stop it and run this again". It reads the password twice from standard input,
 without echo on a terminal and as two lines from a pipe, and uses the auth
-library's existing password hashing and policy check (REQ-AUTH-002). It writes a
-login audit record with the reason `password-reset-cli` _(plan's call)_ and
-exits 0; any refusal exits 1 with one line on stderr.
+library's existing password hashing and policy check (REQ-AUTH-002). It logs one
+line at `warn` with the user's ID, "Password of user 1 reset from the command
+line; every session revoked", and exits 0. Any refusal exits 1 with one line on
+stderr. The login audit log is not written: a reset is not a login attempt, and
+LG-43's reasons stay as they are.
+
+The command is new MVP scope. `mvp.md` gets it in section 1 of "In scope", as an
+operator tool with no requirement points, and plan 143 marks the risk resolved.
 
 **Tech Stack:** as before. `node:readline` for the prompt. No new packages.
 
@@ -38,11 +43,10 @@ where all administrators are lost); `docs/requirements/auth-password-policy.md`;
 - Only a password user can be reset; an OIDC user is refused with "This user
   signs in with OIDC". An unknown email is refused with "No password user with
   this email". Emails match ignoring case, as at login.
-- The password never appears in the process arguments, the log or the audit
-  record.
-- The command refuses to run while the instance is running _(plan's call)_: it
-  takes SQLite's write lock with `BEGIN IMMEDIATE` and a 1 s busy timeout and
-  says "Stop the instance first" when it can't. NF-4.2 allows one process.
+- The password never appears in the process arguments or the log.
+- The command does not detect a running instance. The guide (plan 143) says to
+  stop the instance first, and the command's `--help` says the same. NF-4.2
+  allows one process.
 - `docs/requirements/auth-onboarding.md` is not changed: this is an operator
   tool, recorded in `docs/architecture/security.md` (A-7) and the guide.
 
@@ -51,7 +55,6 @@ where all administrators are lost); `docs/requirements/auth-password-policy.md`;
 - **A password that breaks the policy** is refused with the policy's own message
   and changes nothing → test `refuses a password that breaks the policy`.
 - **Two entries that differ** → test `refuses when the two entries differ`.
-- **The instance still running** → test `refuses while the database is locked`.
 - **Old sessions** on the operator's lost phone stop working → test `revokes
   every session of the user`.
 
@@ -64,7 +67,8 @@ where all administrators are lost); `docs/requirements/auth-password-policy.md`;
 - Create: `apps/server/src/startup/reset-password.ts` (+ spec)
 - Modify: `apps/server/src/startup/cli.ts` (+ spec), `apps/server/src/main.ts`,
   the auth library's exports if the hashing and policy are not exported yet,
-  `docs/architecture/security.md`
+  `docs/architecture/security.md`, `docs/product/mvp.md` (section 1 of "In
+  scope": the command, as an operator tool)
 
 **Interfaces:**
 
@@ -78,8 +82,8 @@ where all administrators are lost); `docs/requirements/auth-password-policy.md`;
       and the user can log in with it`; `revokes every session of the user`;
       `refuses a password that breaks the policy`; `refuses when the two entries
       differ`; `refuses an unknown email`; `refuses an OIDC user`; `refuses a
-      database that needs migrations`; `refuses while the database is locked`;
-      `writes a login audit record without the password`.
+      database that needs migrations`; `logs the reset with the user's ID and
+      without the password`; `writes nothing to the login audit log`.
 - [ ] **Step 2: Run them and see them fail** — `npx nx test server`.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run them and see them pass** — same command.

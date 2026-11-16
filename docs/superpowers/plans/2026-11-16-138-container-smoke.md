@@ -19,7 +19,10 @@ file of its own, `apps/server-e2e/src/support/container-compose.yaml`, which has
 the hardening of `tools/docker/compose.yaml` and the guide's restart policy and
 `stop_grace_period: 30s`. The clone uses the suite's HTTPS git server, reached
 from the container with `FRONT_BURNER_BLOCK_PRIVATE_NETWORKS=false` and the test
-certificate trusted through a mounted CA _(plan's call)_. The `image` job of
+certificate mounted read-only and named by `GIT_SSL_CAINFO`, which `GitRunner`
+passes through to git, and by `NODE_EXTRA_CA_CERTS` for the backend's own HTTPS
+calls _(plan's call)_. The suite talks to the instance over plain HTTP on
+`localhost`, with no HTTPS terminator in front (plan 140). The `image` job of
 plan 137 runs the suite after its scan, with `E2E_IMAGE=front-burner:test`.
 
 **Tech Stack:** Docker Compose v2 on the runner. No new packages.

@@ -75,7 +75,11 @@ closed.
       definition. Only ED-10's limited point may remain.
 - [ ] **Step 2: Tidy `todo.md`**: nothing about the deployment guide or the
       release checks is left; known gaps found in step 6 are added.
-- [ ] **Step 3: Check and commit** — as in the index's "Verifying"; set this
+- [ ] **Step 3: Review the dependency findings** (NF-11.9, NF-11.10): every
+      entry of `.trivyignore` still has a reason and has not passed its "until"
+      date, and no Dependabot pull request for a production dependency with a
+      security fix is left open. Record the result in the checklist.
+- [ ] **Step 4: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `docs: the MVP is ready to release`. The
       operator then chooses the version and pushes the tag (the index's "Left
       out").

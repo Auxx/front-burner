@@ -38,6 +38,13 @@ becomes a `doc-ids.mjs` subcommand in plan 157.)_
   count).
 - Rules decided by design and visible in code only (for example NF-4.2, a single
   process) are **Document** rows pointing at the architecture.
+- NF-3 (unsaved edits) and NF-14 (localisation) have no check plan of their own
+  in the index: their rows are filled from the tests that steps 2 and 1 wrote. A
+  rule there with no test goes to plan 149, or to Part F if a test is not
+  enough.
+- The "already tested" list in plan 149 comes from a quick search: each item is
+  confirmed here by reading the test, and plan 149's gap list is corrected to
+  match.
 
 ## Review Focus
 
