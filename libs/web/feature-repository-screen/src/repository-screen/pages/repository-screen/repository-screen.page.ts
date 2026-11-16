@@ -32,7 +32,12 @@ import { GitApi } from '@front-burner/web-api-client';
 import { CurrentUserService, PageTitleService, PushChannelService } from '@front-burner/web-core';
 import type { PreviewPathLink } from '@front-burner/web-markdown';
 import { ImageCache } from '@front-burner/web-markdown/images';
-import { AppHeaderComponent, PageNotFoundPage, RouteAnnouncerComponent } from '@front-burner/web-shell';
+import {
+  AppHeaderComponent,
+  PageNotFoundPage,
+  RemovedElsewhereService,
+  RouteAnnouncerComponent
+} from '@front-burner/web-shell';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { map, merge, take } from 'rxjs';
 
@@ -379,6 +384,12 @@ export class RepositoryScreenPage {
     this.updateTitle();
     this.flushWhenLeft();
     this.viewRepository();
+    // Removed elsewhere (RM-20): the waiting saves are dropped, not sent to a repository that is gone, and
+    // the tab goes to the dashboard without the leave checks, since nothing is left to save.
+    inject(RemovedElsewhereService).watch({
+      repository: () => this.session.repository(),
+      dropUnsaved: () => this.openFiles.discardAll()
+    });
     this.keepFocusWhenNoticeGoes();
     this.closeBranchListWhenMergeStarts();
     this.followMergeInSidePane();

@@ -21,7 +21,7 @@ import {
   SpinnerComponent
 } from '@front-burner/ui';
 import { PageTitleService } from '@front-burner/web-core';
-import { PageNotFoundPage, RepositoryStatusComponent } from '@front-burner/web-shell';
+import { PageNotFoundPage, RemovedElsewhereService, RepositoryStatusComponent } from '@front-burner/web-shell';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { map, take } from 'rxjs';
 
@@ -45,7 +45,9 @@ import { RepositorySettingsStore } from '../../services/repository-settings-stor
  * The breadcrumb with the name links to the repository screen when the
  * repository is openable, and to this page otherwise, so that it always leads
  * somewhere useful. The page titles itself "Settings · <name> · Front Burner"
- * (NV-13).
+ * (NV-13). When the repository is removed in another tab or on another
+ * device, the tab goes to the dashboard with "Repository <name> removed."
+ * (RM-20).
  */
 @Component({
   selector: 'repo-repository-settings',
@@ -93,6 +95,8 @@ export class RepositorySettingsPage {
     });
     this.updateTitle();
     this.focusPageNotFound();
+    // Removed elsewhere: to the dashboard with "Repository <name> removed." (RM-20).
+    inject(RemovedElsewhereService).watch({ repository: () => this.summary() ?? null });
   }
 
   protected retry(): void {

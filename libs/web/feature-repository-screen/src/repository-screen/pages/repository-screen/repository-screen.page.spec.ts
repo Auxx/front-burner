@@ -141,7 +141,11 @@ describe('RepositoryScreenPage', () => {
     TestBed.configureTestingModule({
       imports: [ translocoTesting({ 'errors.internal': 'Something went wrong.' }) ],
       providers: [
-        provideRouter([ { path: 'repositories/:id', children: routes } ]),
+        // The dashboard, where a repository removed elsewhere leads (RM-20).
+        provideRouter([ { path: '', pathMatch: 'full', children: [] }, {
+          path: 'repositories/:id',
+          children: routes
+        } ]),
         {
           provide: RepositoriesApi,
           useValue: { open, repositoryCredentials: () => of(credentialsInfo) }
@@ -2783,6 +2787,36 @@ describe('RepositoryScreenPage', () => {
 
       expect(saveFile).toHaveBeenCalledTimes(1);
       expect(saveFile.mock.calls[0][0]).toBe(12);
+    });
+
+    it('drops a waiting save when the repository is removed elsewhere, and goes to the dashboard', async () => {
+      await visit('/repositories/12/files/README.md');
+      typeAtEnd('More.\n');
+      await drafts.put({ userId: 4, repositoryId: 12, path: 'docs/guide.md' }, {
+        content: '# Earlier',
+        savedAt: '2026-10-29T10:00:00.000Z'
+      });
+
+      events.next({ type: 'repository.removed', repositoryId: 12 });
+      await settle(harness.fixture);
+      await settle(harness.fixture);
+
+      expect(TestBed.inject(Router).url).toBe('/');
+      expect(saveFile).not.toHaveBeenCalled();
+      expect(drafts.at('README.md')).toBeUndefined();
+      expect(drafts.at('docs/guide.md')).toBeUndefined();
+      expect(TestBed.inject(ToastService).toasts()).toEqual([
+        expect.objectContaining({ message: 'web-shell.RemovedElsewhereService.removedUnsaved', status: 'warning' })
+      ]);
+    });
+
+    it('stays when another repository is removed elsewhere', async () => {
+      await visit('/repositories/12/files/README.md');
+
+      events.next({ type: 'repository.removed', repositoryId: 13 });
+      await settle(harness.fixture);
+
+      expect(TestBed.inject(Router).url).toBe('/repositories/12/files/README.md');
     });
 
     it('does not flush saves when pushing: a push sends what was committed', async () => {

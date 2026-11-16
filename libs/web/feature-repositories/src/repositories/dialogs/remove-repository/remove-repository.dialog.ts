@@ -28,7 +28,7 @@ import {
   SpinnerComponent
 } from '@front-burner/ui';
 import { RepositoriesApi } from '@front-burner/web-api-client';
-import { type ApiErrorText, ApiErrorTextService, toApiError } from '@front-burner/web-core';
+import { type ApiErrorText, ApiErrorTextService, RemovedRepositoriesService, toApiError } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { firstValueFrom, type Subscription } from 'rxjs';
 
@@ -88,6 +88,7 @@ export class RemoveRepositoryDialog {
   protected readonly data = inject(DIALOG_DATA) as RemoveRepositoryData;
   private readonly api = inject(RepositoriesApi);
   private readonly errorText = inject(ApiErrorTextService);
+  private readonly removals = inject(RemovedRepositoriesService);
   private readonly destroyRef = inject(DestroyRef);
   private checkRequest: Subscription | undefined;
 
@@ -171,6 +172,8 @@ export class RemoveRepositoryDialog {
     this.busy.set(true);
     this.ref.dismissible.set(false);
     this.failure.set(null);
+    // Its event, which may come before the answer, is this tab's own: the tab goes to the list, not the dashboard.
+    const notRemoving = this.removals.expect(this.data.id);
     try {
       const query = this.needsName() ? { confirmName: this.typed() } : undefined;
       await firstValueFrom(this.api.remove(this.data.id, query), { defaultValue: undefined });
@@ -181,6 +184,7 @@ export class RemoveRepositoryDialog {
         this.ref.close(true);
         return;
       }
+      notRemoving();
       const check = apiError.code === 'removal-needs-confirmation'
         ? RemovalCheckResultSchema.safeParse(apiError.params)
         : null;

@@ -420,6 +420,36 @@ describe('OpenFilesService', () => {
       expect(drafts.at('README.md')).toBeUndefined();
     });
 
+    it('drops a waiting save when the repository was removed elsewhere', async () => {
+      const file = await service.open('README.md');
+      const other = await service.open('docs/guide.md');
+      file.saver.edit(() => '# Typed just now');
+
+      expect(service.discardAll()).toBe(true);
+      await service.flushAll();
+      service.writeDrafts();
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(saves).toHaveLength(0);
+      expect(drafts.at('README.md')).toBeUndefined();
+      expect(file.saver.unsaved()).toBe(false);
+      expect(other.saver.unsaved()).toBe(false);
+      expect(service.discardAll()).toBe(false);
+    });
+
+    it('stops retrying a save that failed when the repository was removed elsewhere', async () => {
+      const file = await service.open('README.md');
+      file.saver.edit(() => '# Offline edit');
+      await vi.advanceTimersByTimeAsync(1500);
+      await answer(0);
+
+      expect(service.discardAll()).toBe(true);
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(saves).toHaveLength(1);
+      expect(file.saver.status()).toEqual({ kind: 'saved' });
+    });
+
     it('writes the waiting content when asked, such as when the page is hidden', async () => {
       const file = await service.open('README.md');
       file.saver.edit(() => '# Typed just now');

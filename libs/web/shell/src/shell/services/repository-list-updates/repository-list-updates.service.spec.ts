@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { PushEvent, RepositorySummary } from '@front-burner/shared-contracts';
-import { PushChannelService } from '@front-burner/web-core';
+import { PushChannelService, RemovedRepositoriesService } from '@front-burner/web-core';
 import { Subject } from 'rxjs';
 import type { Mock } from 'vitest';
 
@@ -25,6 +25,7 @@ describe('RepositoryListUpdatesService', () => {
   let loading: ReturnType<typeof signal<boolean>>;
   let update: Mock<FollowedRepositoryList['update']>;
   let reload: Mock<FollowedRepositoryList['reload']>;
+  let watch: Mock<() => void>;
 
   /** A component that follows its list, as a page does. */
   @Component({ selector: 'shell-follower', template: '' })
@@ -37,7 +38,12 @@ describe('RepositoryListUpdatesService', () => {
   function follow(repositories: readonly RepositorySummary[] | null, isLoading = false) {
     shown.set(repositories);
     loading.set(isLoading);
-    TestBed.configureTestingModule({ providers: [ { provide: PushChannelService, useValue: push } ] });
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: PushChannelService, useValue: push },
+        { provide: RemovedRepositoriesService, useValue: { watch } }
+      ]
+    });
     const fixture = TestBed.createComponent(FollowerComponent);
     TestBed.tick();
     return fixture;
@@ -61,6 +67,43 @@ describe('RepositoryListUpdatesService', () => {
     loading = signal(false);
     update = vi.fn();
     reload = vi.fn();
+    watch = vi.fn();
+  });
+
+  it('drops the entry from the lists when it is removed elsewhere', () => {
+    follow([ handbook, wiki ]);
+
+    push.events.next({ type: 'repository.removed', repositoryId: 1 });
+    TestBed.tick();
+
+    expect(update).toHaveBeenCalledWith([ wiki ]);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('asks again after a load that may still list a removed repository', () => {
+    follow([ handbook, wiki ], true);
+
+    push.events.next({ type: 'repository.removed', repositoryId: 1 });
+    loaded([ handbook, wiki ]);
+
+    expect(update).toHaveBeenCalledWith([ wiki ]);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the removal of a repository not listed', () => {
+    follow([ wiki ]);
+
+    push.events.next({ type: 'repository.removed', repositoryId: 1 });
+    TestBed.tick();
+
+    expect(update).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('watches for removals while it follows, so that this device\'s drafts are deleted', () => {
+    follow([ wiki ]);
+
+    expect(watch).toHaveBeenCalledTimes(1);
   });
 
   it('patches the status of a listed repository', () => {

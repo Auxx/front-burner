@@ -9,6 +9,10 @@ export { ShellLayoutComponent } from './shell/components/shell-layout/shell-layo
 export { UserMenuComponent } from './shell/components/user-menu/user-menu.component';
 export { PageNotFoundPage } from './shell/pages/page-not-found/page-not-found.page';
 export {
+  RemovedElsewhereService,
+  type RepositoryOnScreen
+} from './shell/services/removed-elsewhere/removed-elsewhere.service';
+export {
   type FollowedRepositoryList,
   RepositoryListUpdatesService
 } from './shell/services/repository-list-updates/repository-list-updates.service';
