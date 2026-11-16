@@ -9,7 +9,8 @@
     "isolatedModules": true,
     "target": "es2025",
     "emitDecoratorMetadata": false,
-    "module": "preserve"
+    "module": "preserve",
+    "resolveJsonModule": true
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

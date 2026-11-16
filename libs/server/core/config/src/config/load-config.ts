@@ -154,6 +154,16 @@ const schema = z.object({
 
 const KNOWN_VARIABLES = new Set(Object.keys(schema.shape));
 
+/** The version of a backend whose build did not give one, such as in unit tests. */
+export const UNKNOWN_VERSION = 'unknown';
+
+export interface LoadConfigOptions {
+  cwd?: string;
+  readFile?: (path: string) => string;
+  /** The version the backend was built with (`Config.version`); not an environment variable, so it cannot differ from the web client's. */
+  version?: string;
+}
+
 /**
  * Reads the configuration from environment variables (A-1.15, NF-8.2).
  *
@@ -161,7 +171,7 @@ const KNOWN_VARIABLES = new Set(Object.keys(schema.shape));
  */
 export function loadConfig(
   env: Record<string, string | undefined>,
-  options: { cwd?: string; readFile?: (path: string) => string; } = {}
+  options: LoadConfigOptions = {}
 ): { config: Config; warnings: string[]; } {
   const cwd = options.cwd ?? process.cwd();
   const readFile = options.readFile ?? ((path: string) => readFileSync(path, 'utf8'));
@@ -286,6 +296,7 @@ export function loadConfig(
   const values = parsed.data;
   return {
     config: {
+      version: options.version ?? UNKNOWN_VERSION,
       port: values.FRONT_BURNER_PORT,
       trustedProxies: values.FRONT_BURNER_TRUSTED_PROXIES,
       logLevel: values.FRONT_BURNER_LOG_LEVEL,

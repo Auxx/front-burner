@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type ServerProcess, startServerProcess } from './support/server-process';
+import { BUILD_VERSION, type ServerProcess, startServerProcess } from './support/server-process';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -33,6 +33,21 @@ describe('server API', () => {
     expect(response.headers.get('strict-transport-security')).toBeNull();
     const rateLimit = [ ...response.headers.keys() ].filter(name => name.startsWith('x-ratelimit'));
     expect(rateLimit).toEqual([]);
+  });
+
+  it('sets the version on every API response, errors included', async () => {
+    for (const path of [ '/api/v1/auth/methods', '/api/v1/me', '/api/v1/nope', '/api/nope' ]) {
+      const response = await fetch(`${server.url}${path}`);
+      expect(response.headers.get('x-front-burner-version'), path).toBe(BUILD_VERSION);
+    }
+  });
+
+  it('the health endpoints have no version, in any case the router accepts', async () => {
+    for (const path of [ 'health/live', 'health/ready', 'HEALTH/Live', 'health/ready/' ]) {
+      const response = await fetch(`${server.url}/api/${path}`);
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get('x-front-burner-version'), path).toBeNull();
+    }
   });
 
   it('unknown API path returns the JSON 404', async () => {

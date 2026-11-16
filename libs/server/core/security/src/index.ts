@@ -8,6 +8,7 @@ export * from './egress/address-policy';
 export * from './egress/egress-http-client';
 export * from './egress/egress.module';
 export * from './headers/security-headers';
+export * from './headers/version-header';
 export * from './rate-limit/rate-limit-group.decorator';
 export * from './rate-limit/rate-limit.module';
 export * from './rate-limit/throttler.guard';

@@ -8,6 +8,12 @@
     "type:app"
   ],
   "targets": {
+    "build": {
+      "inputs": [
+        "...",
+        "buildVersion"
+      ]
+    },
     "prune-lockfile": {
       "dependsOn": [
         "build"

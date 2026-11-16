@@ -15,6 +15,16 @@ import { ReadinessService } from './readiness.service';
 @ApiSchema({ name: 'HealthStatus' })
 export class HealthStatusDto extends createZodDto(z.object(HealthStatusSchema.shape)) {}
 
+const HEALTH_BASE = 'api/health';
+const LIVE = 'live';
+const READY = 'ready';
+
+/**
+ * The probes' paths, outside the API version (NF-10.7). The startup keeps them
+ * out of the global prefix and the version header (NF-10.9).
+ */
+export const HEALTH_ROUTES: readonly string[] = [ `${HEALTH_BASE}/${LIVE}`, `${HEALTH_BASE}/${READY}` ];
+
 /**
  * Probes for the container's orchestrator (NF-10.7, NF-10.8). Open to anyone
  * and free of version or internals (NF-10.9).
@@ -22,19 +32,19 @@ export class HealthStatusDto extends createZodDto(z.object(HealthStatusSchema.sh
 @ApiTags('health')
 @Public()
 @SkipThrottle()
-@Controller('api/health')
+@Controller(HEALTH_BASE)
 export class HealthController {
   constructor(private readonly readiness: ReadinessService) {}
 
   /** The process is up. */
-  @Get('live')
+  @Get(LIVE)
   @ApiOkResponse({ type: HealthStatusDto })
   live(): HealthStatus {
     return { status: 'ok' };
   }
 
   /** The instance can serve requests. */
-  @Get('ready')
+  @Get(READY)
   @ApiOkResponse({ type: HealthStatusDto })
   @ApiServiceUnavailableResponse({ type: HealthStatusDto })
   ready(@Res({ passthrough: true }) res: Response): HealthStatus {

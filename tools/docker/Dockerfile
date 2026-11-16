@@ -3,6 +3,9 @@
 #
 # Build from the workspace root (see README.md):
 #   docker build -f tools/docker/Dockerfile -t front-burner:test .
+#
+# Add `--build-arg FRONT_BURNER_VERSION=1.4.2` to give the image a version
+# other than package.json's.
 
 ARG NODE_VERSION=24.22.1
 
@@ -20,6 +23,12 @@ COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 
 COPY . .
+
+# The instance's version (NF-7.6): a release build sets it from its tag; any
+# other build keeps package.json's. Both builds below read package.json, so the
+# backend and the web client always agree (A-8.7).
+ARG FRONT_BURNER_VERSION=
+RUN if [ -n "$FRONT_BURNER_VERSION" ]; then npm pkg set version="$FRONT_BURNER_VERSION"; fi
 
 # The backend's build also writes a package.json and lockfile with only its
 # runtime dependencies next to main.js.

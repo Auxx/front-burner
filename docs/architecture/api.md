@@ -9,7 +9,14 @@ numbering conventions.
 
 - **A-3.1** The API is REST under `/api/v1` (NF-7.6), JSON in and out except for
   file uploads and raw file downloads. It must not assume the web client is its
-  only consumer (vision goal 12).
+  only consumer (vision goal 12). Every response, errors and `304` included,
+  carries the instance's version in `X-Front-Burner-Version`, for example
+  `X-Front-Burner-Version: 1.4.2`; the health endpoints do not (NF-10.9). The
+  version is fixed when the backend is built, from the root `package.json`'s
+  `version`, which a release image's build sets from its tag; the web client's
+  build reads the same field, so a client compares the two for equality only,
+  never orders them (A-8.7). It is not an environment variable, so that it
+  cannot differ from the web client's.
 - **A-3.2** Long operations return `202 Accepted` with a job ID (A-1.13). A git
   job's state is read with `GET /repositories/:id/git/jobs/:jobId`: its status
   and, once it has ended, its outcome, such as a push's commits and upstream, a

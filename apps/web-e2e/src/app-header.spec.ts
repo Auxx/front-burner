@@ -76,13 +76,17 @@ test.describe('app header', () => {
     expect(await boxes()).toEqual(onDashboard);
   });
 
-  test('shows the user in the user menu', async ({ page }) => {
+  test('the user menu shows the display name, email and version', async ({ page }) => {
     await openDashboard(page);
     await accountButton(page).click();
 
     const menu = page.getByRole('menu');
     await expect(menu).toContainText(TEST_ADMIN.displayName);
     await expect(menu).toContainText(TEST_ADMIN.email);
+    // The web client's own version, which is the backend's (A-8.7).
+    const version = (await page.request.get('/api/v1/auth/methods')).headers()['x-front-burner-version'];
+    expect(version).toBeTruthy();
+    await expect(menu).toContainText(`Front Burner ${version}`);
     await expect(menu.getByRole('menuitem', { name: 'Log out' })).toBeVisible();
   });
 

@@ -3,6 +3,9 @@ import { parseOpenApiFile } from './startup/cli';
 import { logStartupFailure, startServer } from './startup/start-server';
 import { writeOpenApi } from './startup/write-openapi';
 
+/** The root `package.json`'s `version`, replaced by the build (`webpack.config.js`). */
+declare const FRONT_BURNER_VERSION: string;
+
 async function bootstrap(): Promise<void> {
   const openApiFile = parseOpenApiFile(process.argv);
 
@@ -11,7 +14,8 @@ async function bootstrap(): Promise<void> {
     webRoot: resolve(__dirname, '../web/browser'),
     migrationsFolder: join(__dirname, 'migrations'),
     gitHelpersDir: join(__dirname, 'git-helpers'),
-    listen: openApiFile === undefined
+    listen: openApiFile === undefined,
+    version: FRONT_BURNER_VERSION
   });
 
   if (openApiFile !== undefined) {

@@ -1,5 +1,11 @@
 /** Instance configuration, read once at startup from `FRONT_BURNER_*` variables. */
 export interface Config {
+  /**
+   * The instance's version, fixed when the backend is built: the root
+   * `package.json`'s `version`, which a release image's build sets from its
+   * tag. Sent with every API response (NF-7.6) and compared for equality only.
+   */
+  version: string;
   port: number;
   /** Entries for Express's `trust proxy` setting (A-1.15). */
   trustedProxies: string[];

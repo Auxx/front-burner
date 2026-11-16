@@ -2,8 +2,8 @@ import { Config, ConfigError, loadConfig } from '@front-burner/server-core-confi
 import { checkEncryptionKey, SecretBox } from '@front-burner/server-core-crypto';
 import { applyMigrations, assertNoNewerMigrations, Database, openDatabase } from '@front-burner/server-core-database';
 import { assertHelpersExecutable, assertSupportedGit, GitRunner } from '@front-burner/server-core-git';
-import { createBootstrapLogger, createRequestLogger } from '@front-burner/server-core-observability';
-import { securityHeaders, serveWebClient } from '@front-burner/server-core-security';
+import { createBootstrapLogger, createRequestLogger, HEALTH_ROUTES } from '@front-burner/server-core-observability';
+import { securityHeaders, serveWebClient, versionHeader } from '@front-burner/server-core-security';
 import { INestApplication, Logger as NestLogger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -32,6 +32,8 @@ export interface StartServerOptions {
   /** The folder of the git helpers shipped with the server (A-5.4). */
   gitHelpersDir: string;
   listen: boolean;
+  /** The version the backend was built with (`Config.version`). */
+  version?: string;
   /** Replaces stdout as the log destination; meant for tests. */
   logDestination?: DestinationStream;
 }
@@ -102,12 +104,14 @@ function configure(
   // First, so that every response has an ID and is logged (NF-10.6, A-1.12).
   app.use(requestLogger);
   app.use(securityHeaders());
+  // The health probes reveal no version (NF-10.9).
+  app.use(versionHeader(config.version, { except: HEALTH_ROUTES }));
   // The refresh token's cookie (LG-32).
   app.use(cookieParser());
   // Nest's own parser is off so that the limit of NF-11.5 applies.
   app.useBodyParser('json', { limit: '2mb' });
   // The health probes keep their path outside the API version (NF-10.7).
-  app.setGlobalPrefix('api/v1', { exclude: [ 'api/health/live', 'api/health/ready' ] });
+  app.setGlobalPrefix('api/v1', { exclude: [ ...HEALTH_ROUTES ] });
   if (!serveWebClient(app.getHttpAdapter().getInstance(), webRoot)) {
     log.log(`Web client not found at ${webRoot}; serving the API only.`);
   }
@@ -122,7 +126,10 @@ function configure(
  * @throws StartupError naming the step that failed.
  */
 export async function startServer(options: StartServerOptions): Promise<INestApplication> {
-  const { config, warnings } = step('config', () => loadConfig(options.env, { cwd: options.cwd }));
+  const { config, warnings } = step(
+    'config',
+    () => loadConfig(options.env, { cwd: options.cwd, version: options.version })
+  );
   const bootstrapLogger = createBootstrapLogger(config, options.logDestination);
   for (const warning of warnings) {
     bootstrapLogger.warn(warning);

@@ -14,6 +14,7 @@ describe('ReadinessService', () => {
     dir = mkdtempSync(join(tmpdir(), 'fb-ready-'));
     database = openDatabase(join(dir, 'db.sqlite'));
     config = {
+      version: '0.0.0',
       port: 3000,
       trustedProxies: [],
       logLevel: 'info',
