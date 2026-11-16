@@ -14,6 +14,7 @@ import { AuthSessionService, CurrentUserService } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { filter } from 'rxjs';
 
+import { AppBannersComponent } from '../app-banners/app-banners.component';
 import { AppHeaderComponent } from '../app-header/app-header.component';
 import { RouteAnnouncerComponent } from '../route-announcer/route-announcer.component';
 
@@ -23,13 +24,22 @@ const RETRY_MAX_MS = 30_000;
 
 /**
  * The layout of the pages inside the web client (NV-5, NV-17, NV-18): the skip
- * link, the app header while the user is logged in, and the page in `main`.
+ * link, the app header and the banners below it (NV-15) while the user is
+ * logged in, and the page in `main`. The banners do not wait for the user to
+ * load, which fails while offline.
  * After moving to another page the focus goes to its `h1`, which the page gives
  * `tabindex="-1"`.
  */
 @Component({
   selector: 'shell-layout',
-  imports: [ TranslocoDirective, RouterOutlet, AppShellComponent, AppHeaderComponent, RouteAnnouncerComponent ],
+  imports: [
+    TranslocoDirective,
+    RouterOutlet,
+    AppShellComponent,
+    AppHeaderComponent,
+    AppBannersComponent,
+    RouteAnnouncerComponent
+  ],
   templateUrl: './shell-layout.component.html',
   styleUrl: './shell-layout.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -37,10 +47,17 @@ const RETRY_MAX_MS = 30_000;
 export class ShellLayoutComponent {
   private readonly currentUser = inject(CurrentUserService);
 
+  private readonly session = inject(AuthSessionService);
+
   protected readonly user = this.currentUser.user;
+  /**
+   * The banners show while logged in, also before the user has loaded: the
+   * offline banner says why the header does not come (NV-15).
+   */
+  protected readonly loggedIn = this.session.loggedIn;
 
   constructor() {
-    const session = inject(AuthSessionService);
+    const session = this.session;
     effect(onCleanup => {
       if (!session.loggedIn()) {
         return;

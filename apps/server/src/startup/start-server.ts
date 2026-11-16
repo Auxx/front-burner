@@ -112,7 +112,7 @@ function configure(
   app.useBodyParser('json', { limit: '2mb' });
   // The health probes keep their path outside the API version (NF-10.7).
   app.setGlobalPrefix('api/v1', { exclude: [ ...HEALTH_ROUTES ] });
-  if (!serveWebClient(app.getHttpAdapter().getInstance(), webRoot)) {
+  if (!serveWebClient(app.getHttpAdapter().getInstance(), webRoot, { version: config.version })) {
     log.log(`Web client not found at ${webRoot}; serving the API only.`);
   }
   app.enableShutdownHooks();

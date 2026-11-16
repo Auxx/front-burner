@@ -1,8 +1,12 @@
 <ui-app-shell *transloco="let t; prefix: 'web-shell.ShellLayoutComponent'"
               [skipLinkLabel]="t('skipToContent')">
+  <!-- One root element per block, so that the shell projects each into its slot. -->
   @if (user(); as user) {
     <shell-app-header uiAppShellHeader
                       [user]="user" />
+  }
+  @if (loggedIn()) {
+    <shell-app-banners uiAppShellBanner />
   }
   <router-outlet />
 </ui-app-shell>

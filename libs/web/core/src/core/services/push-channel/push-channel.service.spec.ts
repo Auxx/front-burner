@@ -3,7 +3,9 @@ import { TestBed } from '@angular/core/testing';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import type { Subscription } from 'rxjs';
 
+import { APP_VERSION } from '../../tokens/app-version';
 import { AuthSessionService } from '../auth-session/auth-session.service';
+import { VersionCheckService } from '../version-check/version-check.service';
 import { PushChannelService, RENEW_BEFORE_EXPIRY_MS } from './push-channel.service';
 
 /** One request of the fake `fetch`: the test writes to its stream or ends it. */
@@ -16,8 +18,19 @@ interface FakeStream {
 const encoder = new TextEncoder();
 const finished: PushEvent = { type: 'job.finished', jobId: 1, outcome: 'done' };
 /** What the service reads of a response; jsdom's streams and Node's `Response` do not mix. */
-function fakeResponse(status: number, body: ReadableStream<Uint8Array> | null, json?: unknown): Response {
-  return { status, ok: status >= 200 && status < 300, body, json: () => Promise.resolve(json) } as Response;
+function fakeResponse(
+  status: number,
+  body: ReadableStream<Uint8Array> | null,
+  json?: unknown,
+  headers: Record<string, string> = {}
+): Response {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    body,
+    headers: new Headers(headers),
+    json: () => Promise.resolve(json)
+  } as Response;
 }
 
 /** The life of the tokens of the handover tests: 15 minutes, as the backend's default. */
@@ -39,6 +52,8 @@ describe('PushChannelService', () => {
   let streams: FakeStream[];
   let service: PushChannelService;
   let subscription: Subscription | undefined;
+  /** The version the streams' answers carry. */
+  let backendVersion: string;
 
   /** Lets the fake requests and their reads settle. */
   const settle = () => vi.advanceTimersByTimeAsync(0);
@@ -77,7 +92,12 @@ describe('PushChannelService', () => {
         changed();
       }
     });
-    return fakeResponse(200, { getReader: () => reader } as unknown as ReadableStream<Uint8Array>);
+    return fakeResponse(
+      200,
+      { getReader: () => reader } as unknown as ReadableStream<Uint8Array>,
+      undefined,
+      { 'X-Front-Burner-Version': backendVersion }
+    );
   }
 
   const refused = (code: string) => () => fakeResponse(401, null, { code, message: '', params: {} });
@@ -106,10 +126,12 @@ describe('PushChannelService', () => {
     });
     answers = [];
     streams = [];
+    backendVersion = '1.4.2';
     fetch = vi.fn((_url: string, init: RequestInit) => Promise.resolve(answers.shift()?.() ?? streamResponse(init)));
     vi.stubGlobal('fetch', fetch);
     TestBed.configureTestingModule({
       providers: [
+        { provide: APP_VERSION, useValue: '1.4.2' },
         {
           provide: AuthSessionService,
           useValue: { loggedIn, authToken: () => token, authTokenExpiresAt: () => expiresAt, refresh, renew, expire }
@@ -144,6 +166,21 @@ describe('PushChannelService', () => {
     await settle();
 
     expect(received).toEqual([ { type: 'job.progress', jobId: 1, percent: 50 }, finished ]);
+  });
+
+  it('reports the version of the backend that answers, after a reconnect too (A-8.7)', async () => {
+    const versions = TestBed.inject(VersionCheckService);
+    subscribe();
+    await settle();
+    expect(versions.newVersion()).toBe(false);
+
+    // The instance restarts with a new version; the stream reconnects to it.
+    backendVersion = '1.5.0';
+    streams[0]?.end();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(streams).toHaveLength(2);
+    expect(versions.newVersion()).toBe(true);
   });
 
   it('delivers commit-author.changed', async () => {

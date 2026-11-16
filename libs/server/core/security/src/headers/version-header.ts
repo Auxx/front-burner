@@ -1,7 +1,7 @@
+import { VERSION_HEADER } from '@front-burner/shared-contracts';
 import type { RequestHandler } from 'express';
 
-/** The response header that carries the instance's version (NF-7.6, A-8.7). */
-export const VERSION_HEADER = 'X-Front-Burner-Version';
+export { VERSION_HEADER };
 
 export interface VersionHeaderOptions {
   /** Routes that never get the header, such as the health probes (NF-10.9), without leading slash. */

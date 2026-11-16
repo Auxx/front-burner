@@ -1,8 +1,12 @@
 <ng-container *transloco="let t; prefix: 'web-feature-repository-screen.RepositoryScreenPage'">
   @let state = session.state();
   @if (state === 'loading') {
-    <ui-spinner class="loading"
-                [label]="t('loading')" />
+    <div class="loading">
+      <!-- The banners of the whole web client, also while the repository opens (NV-15). -->
+      <div class="loading-banners"><shell-app-banners /></div>
+      <ui-spinner class="loading-spinner"
+                  [label]="t('loading')" />
+    </div>
   } @else {
     <ui-app-shell #shell
                   [skipLinkLabel]="t('skipToContent')"
@@ -38,6 +42,8 @@
         <shell-app-header uiAppShellHeader
                           [user]="user" />
       }
+      <!-- The banners of the whole web client, then this page's notices (NV-15, NV-16). -->
+      <shell-app-banners uiAppShellBanner />
       <!-- One root element, so that the shell projects it below the bar (NV-16). -->
       @for (problem of gitProblems(); track problem) {
         <rs-git-problem uiAppShellBanner

@@ -40,7 +40,31 @@ libraries and [overview.md](overview.md) for the numbering conventions.
 - **A-8.6** **Errors:** maps error codes to text with Transloco (A-3.8) and
   shows the request ID reference (NF-10.6).
 - **A-8.7** **Version check:** when a response's version header differs from the
-  loaded version, asks the user to reload (NF-7.6).
+  loaded version, asks the user to reload (NF-7.6). An HTTP interceptor in
+  `web/core` reads `X-Front-Burner-Version` (`VERSION_HEADER` of the contracts)
+  on every answer of `HttpClient`, errors too, and the push channel on each
+  answer of its stream, so that a tab that only listens learns of an upgrade
+  when the stream reconnects. Both compare it with `APP_VERSION` for equality
+  only; an answer without the header, such as a proxy's error page, changes
+  nothing. Once on, the new-version banner (NV-15) stays until the page reloads.
+
+  **Reload** runs what the open pages registered with
+  `VersionCheckService.beforeReload`, for up to 5 seconds, then reloads whatever
+  they answered. The repository screen writes its waiting content as browser
+  drafts and sends its waiting saves (ED-17), so a save that fails or hangs
+  keeps its draft (NF-3), and it does not ask "Leave page?" while
+  `VersionCheckService.reloading` is on. A page whose unsaved work would be
+  lost, such as the Add repository form, still asks; when the user stays,
+  **Reload** can be used again.
+
+  The offline banner follows the browser's `online` and `offline` events
+  (`OnlineStatusService`). Both banners are `shell-app-banners`, below the app
+  header and, on the repository screen, below its bar, above the page's own
+  notices (NV-16); each is announced once when it appears. Its icon comes from
+  the sprite, which the backend lets the browser cache for good (A-7.9), so that
+  it is drawn while offline. _(Plan 124's call: the banners show whenever the
+  user is logged in, also before the user has loaded and while the repository
+  screen opens, as the offline banner then says why nothing comes.)_
 - **A-8.8** **Transloco:** English at launch, translation files loaded on
   demand, language switched without reloading, ICU messages through our own
   Transloco transpiler on `intl-messageformat` (FormatJS, no `eval`), because

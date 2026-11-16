@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
 import { contentSecurityPolicy } from '../csp/csp';
-import { serveWebClient } from './serve-web-client';
+import { serveWebClient, VERSIONED_CACHE_CONTROL } from './serve-web-client';
 
 const INDEX = '<html><body><app-root ngCspNonce="__CSP_NONCE__"></app-root></body></html>';
 
@@ -66,6 +66,29 @@ describe('serveWebClient', () => {
     const res = await request(createApp()).get('/main.js');
     expect(res.status).toBe(200);
     expect(res.text).toBe('console.log(1);');
+  });
+
+  describe('a file asked for with a version', () => {
+    function versionedApp(): express.Application {
+      mkdirSync(join(webRoot, 'assets'));
+      writeFileSync(join(webRoot, 'assets', 'icons.svg'), '<svg></svg>');
+      writeFileSync(join(webRoot, 'index.html'), INDEX);
+      const app = express();
+      serveWebClient(app, webRoot, { version: '1.4.2' });
+      return app;
+    }
+
+    it('is cached for good with the instance\'s version, so that it is there offline', async () => {
+      const res = await request(versionedApp()).get('/assets/icons.svg?v=1.4.2');
+      expect(res.status).toBe(200);
+      expect(res.headers['cache-control']).toBe(VERSIONED_CACHE_CONTROL);
+    });
+
+    it.each([ '/assets/icons.svg', '/assets/icons.svg?v=1.4.1' ])('is revalidated as %s', async path => {
+      const res = await request(versionedApp()).get(path);
+      expect(res.status).toBe(200);
+      expect(res.headers['cache-control']).toBe('public, max-age=0');
+    });
   });
 
   it('serves an existing file in a folder', async () => {

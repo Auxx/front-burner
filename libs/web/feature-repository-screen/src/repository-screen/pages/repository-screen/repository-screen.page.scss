@@ -5,8 +5,21 @@
 
 .loading {
   display: grid;
-  place-items: center;
+  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 100dvh;
+}
+
+// Placed as the app shell places them below its header.
+.loading-banners {
+  display: grid;
+  gap: var(--ui-space-2);
+  padding-block-start: var(--ui-space-2);
+  padding-inline: var(--ui-page-padding-inline);
+}
+
+.loading-spinner {
+  grid-row: 2;
+  place-self: center;
 }
 
 // The count of the Changes item (GA-10), which on a phone has no tooltip to say
