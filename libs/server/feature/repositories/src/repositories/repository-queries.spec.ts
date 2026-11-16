@@ -229,11 +229,14 @@ const failedRow = repositoryRow({
   lastAccessedAt: new Date(Date.UTC(2026, 9, 26, 10))
 });
 
+/** No warnings and no stored problems, as `RepositoryWarnings.detailsOf` answers them for a row that has none. */
+const none = { warnings: [], remoteProblems: { fetch: null, push: null } };
+
 describe('toDetails', () => {
   it('answers the clone mode, level and date added', () => {
     const details = toDetails(
       { ...failedRow, gitLevel: 'simple', createdAt: new Date(Date.UTC(2026, 9, 20, 8)) },
-      [],
+      none,
       undefined
     );
 
@@ -249,32 +252,41 @@ describe('toDetails', () => {
   it('answers the warnings in its summary', () => {
     const ready = { ...failedRow, status: 'ready' } as const;
 
-    expect(toDetails(ready, [ 'key-locked' ], undefined).summary.warnings).toEqual([ 'key-locked' ]);
+    expect(toDetails(ready, { ...none, warnings: [ 'key-locked' ] }, undefined).summary.warnings)
+      .toEqual([ 'key-locked' ]);
+  });
+
+  it('answers the stored problems it is given', () => {
+    const ready = { ...failedRow, status: 'ready' } as const;
+    const remoteProblems = { fetch: { code: 'credentials-refused', params: {} }, push: null };
+
+    expect(toDetails(ready, { warnings: [ 'credentials-refused' ], remoteProblems }, undefined).remoteProblems)
+      .toEqual(remoteProblems);
   });
 
   it('answers the clone in its summary', () => {
     const cloning = { ...failedRow, status: 'cloning' } as const;
 
-    expect(toDetails(cloning, [], queuedClone(5)).summary.clone).toEqual(queuedClone(5));
+    expect(toDetails(cloning, none, queuedClone(5)).summary.clone).toEqual(queuedClone(5));
   });
 
   it('answers the branch of a single-branch clone', () => {
-    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: 'main' }, [], undefined))
+    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: 'main' }, none, undefined))
       .toMatchObject({ cloneMode: 'single-branch', branch: 'main' });
   });
 
   it('never answers a full clone\'s branch', () => {
-    expect(toDetails({ ...failedRow, cloneMode: 'full', branch: 'main' }, [], undefined))
+    expect(toDetails({ ...failedRow, cloneMode: 'full', branch: 'main' }, none, undefined))
       .toMatchObject({ branch: null });
   });
 
   it('answers no branch for a single-branch row that lost it', () => {
-    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: null }, [], undefined))
+    expect(toDetails({ ...failedRow, cloneMode: 'single-branch', branch: null }, none, undefined))
       .toMatchObject({ cloneMode: 'single-branch', branch: null });
   });
 
   it('answers the error record of a failed clone', () => {
-    expect(toDetails(failedRow, [], undefined))
+    expect(toDetails(failedRow, none, undefined))
       .toMatchObject({ errorDetail: 'fatal: repository not found', errorRequestId: 'request-1' });
   });
 
@@ -282,20 +294,12 @@ describe('toDetails', () => {
     // Plan 105 clears the record; a stale one is still never answered outside `error`.
     const ready = { ...failedRow, status: 'ready' } as const;
 
-    expect(toDetails(ready, [], undefined))
+    expect(toDetails(ready, none, undefined))
       .toMatchObject({ summary: { error: null }, errorDetail: null, errorRequestId: null });
   });
 
-  it('answers the remote problems only when ready', () => {
-    const problems = { fetch: { code: 'credentials-refused', params: {} }, push: null };
-    const ready = { ...failedRow, status: 'ready' } as const;
-
-    expect(toDetails(ready, [], undefined, problems).remoteProblems).toEqual(problems);
-    expect(toDetails(failedRow, [], undefined, problems).remoteProblems).toEqual({ fetch: null, push: null });
-  });
-
   it('answers the remote without credentials', () => {
-    const details = toDetails(failedRow, [], undefined);
+    const details = toDetails(failedRow, none, undefined);
 
     expect(details.summary.remote).toBe('github.com/acme/handbook');
     expect(JSON.stringify(details)).not.toContain('u:t');

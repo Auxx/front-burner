@@ -453,6 +453,8 @@
   "web-feature-repositories.RepositoryWarningsComponent.fixes.cannot-push": "Use other credentials",
   "web-feature-repositories.RepositoryWarningsComponent.fixes.host-key-changed": "Review the new key",
   "web-feature-repositories.RepositoryWarningsComponent.fixes.key-locked": "Unlock",
+  "web-feature-repositories.RepositoryWarningsComponent.pushToClear": "This warning is from your last push. It goes away after your next successful push.",
+  "web-feature-repositories.RepositoryWarningsComponent.keyUnknown": "The server's new key isn't known yet. Front Burner is checking the server again; try again in a moment.",
   "web-feature-repositories.RepositoryWarningsComponent.dismiss": "Dismiss",
   "web-feature-repositories.CloneStatusComponent.heading": "Status",
   "web-feature-repositories.CloneStatusComponent.details": "Details",

@@ -1,14 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
-import {
-  type ChangedHostKey,
-  ChangedHostKeySchema,
-  type RepositoryDetails,
-  type RepositoryWarning
-} from '@front-burner/shared-contracts';
-import { ButtonComponent, DialogService, InlineBannerComponent, ToastService } from '@front-burner/ui';
+import type { RepositoryDetails, RepositoryWarning } from '@front-burner/shared-contracts';
+import { ButtonComponent, InlineBannerComponent, type Status, ToastService } from '@front-burner/ui';
 import { GitApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
-import { ChangedHostKeyDialog, UnlockKeyDialog, type UnlockKeyDialogData } from '@front-burner/web-repository-dialogs';
+import { KeyDialogsService, type ProtectedKey, protectedKeyOf } from '@front-burner/web-repository-dialogs';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 
@@ -23,6 +18,19 @@ const FETCH_AFTER: ReadonlySet<RepositoryWarning> = new Set([
   'host-key-changed',
   'key-locked'
 ]);
+
+/** The warnings that a push's stored problem can hold, with that problem's code; only a push clears them then. */
+const PUSH_CODES: Partial<Record<RepositoryWarning, string>> = {
+  'credentials-refused': 'credentials-refused',
+  'host-key-changed': 'host-key-changed'
+};
+
+/** One warning's line: whether its fix runs, or another's does. */
+interface WarningLine {
+  readonly warning: RepositoryWarning;
+  readonly busy: boolean;
+  readonly unavailable: boolean;
+}
 
 let nextId = 0;
 
@@ -41,10 +49,13 @@ let nextId = 0;
  * of its kind succeeds (RM-8). After **Fix credentials**, **Review the new
  * key** and **Unlock**, a fetch runs at once through the API, saying nothing,
  * so that a fetch's warning can go without opening the repository; how it
- * ends arrives as `repository.warning`. "Can't push with these credentials"
- * goes with the change of credentials itself. _(Plan 120's calls.)_ The page's
- * store reads the details again after a fix; cancelling one changes nothing.
- * One fix runs at a time, and its button is busy meanwhile.
+ * ends arrives as `repository.warning`, which reloads the page's store, as
+ * `key.unlocked` does. "Can't push with these credentials" goes with the
+ * change of credentials itself. A warning that the last push left goes only
+ * when a push succeeds, which this page does not start, so after its fix a
+ * notice says so. _(Plan 120's calls.)_ Cancelling a fix changes nothing.
+ *
+ * One fix runs at a time: its button is busy, and the others are unavailable.
  */
 @Component({
   selector: 'repo-repository-warnings',
@@ -52,14 +63,14 @@ let nextId = 0;
   templateUrl: './repository-warnings.component.html',
   styleUrl: './repository-warnings.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '[class.none]': 'warnings().length === 0' }
+  host: { '[class.none]': 'lines().length === 0' }
 })
 export class RepositoryWarningsComponent {
   readonly details = input.required<RepositoryDetails>();
   /** The page's **Credentials** section, whose dialog the credential fixes open. */
   readonly credentials = input.required<CredentialsInUseComponent>();
 
-  private readonly dialogs = inject(DialogService);
+  private readonly keyDialogs = inject(KeyDialogsService);
   private readonly git = inject(GitApi);
   private readonly repositories = inject(RepositoriesApi);
   private readonly store = inject(RepositorySettingsStore);
@@ -68,9 +79,16 @@ export class RepositoryWarningsComponent {
   private readonly transloco = inject(TranslocoService);
 
   protected readonly headingId = `repo-repository-warnings-heading-${nextId++}`;
-  protected readonly warnings = computed(() => this.details().summary.warnings);
   /** The warning whose fix runs, or `null`. */
-  protected readonly running = signal<RepositoryWarning | null>(null);
+  private readonly running = signal<RepositoryWarning | null>(null);
+  protected readonly lines = computed<WarningLine[]>(() => {
+    const running = this.running();
+    return this.details().summary.warnings.map(warning => ({
+      warning,
+      busy: running === warning,
+      unavailable: running !== null && running !== warning
+    }));
+  });
 
   /** Runs the fix of `warning`; nothing while another runs. */
   protected async fix(warning: RepositoryWarning): Promise<void> {
@@ -79,6 +97,9 @@ export class RepositoryWarningsComponent {
     }
     this.running.set(warning);
     const id = this.details().summary.id;
+    // As the problems were when the fix started: the fix itself may change them.
+    const pushCode = PUSH_CODES[warning];
+    const pushHeld = pushCode !== undefined && this.details().remoteProblems.push?.code === pushCode;
     try {
       if (!await this.runFix(warning)) {
         return;
@@ -86,12 +107,15 @@ export class RepositoryWarningsComponent {
       if (FETCH_AFTER.has(warning)) {
         await this.fetch(id);
       }
+      if (pushHeld) {
+        this.notify('pushToClear', 'info');
+      }
     } finally {
       this.running.set(null);
     }
   }
 
-  /** True when the fix was made; the credentials dialog reloads the store itself. */
+  /** True when the fix was made. */
   private async runFix(warning: RepositoryWarning): Promise<boolean> {
     switch (warning) {
       case 'credentials-refused':
@@ -99,35 +123,31 @@ export class RepositoryWarningsComponent {
       case 'cannot-push':
         return this.credentials().change({});
       case 'host-key-changed':
-        return this.reloadIf(await this.reviewHostKey());
+        return this.reviewHostKey();
       case 'key-locked':
-        return this.reloadIf(await this.unlock());
+        return this.unlock();
     }
-  }
-
-  private reloadIf(fixed: boolean): boolean {
-    if (fixed) {
-      this.store.reload();
-    }
-    return fixed;
   }
 
   /**
    * The changed host key dialog with the keys of the stored problem (RC-21):
    * the last fetch's or pull's, else the last push's. True once the new key is
-   * trusted, or on **Try again** when there was no new key to trust.
+   * trusted, or on **Try again** when there was no new key to trust. When the
+   * stored problem does not describe the key, such as when it changed since
+   * the page read it, a fetch meets the changed key again and stores it: the
+   * page reads it, and a notice asks to try again.
    */
   private async reviewHostKey(): Promise<boolean> {
     const { fetch, push } = this.details().remoteProblems;
     const problem = [ fetch, push ].find(stored => stored?.code === 'host-key-changed');
-    const parsed = ChangedHostKeySchema.safeParse(problem?.params);
-    if (!parsed.success) {
+    const reviewed = await this.keyDialogs.reviewHostKey(problem?.params);
+    if (reviewed === null) {
+      this.notify('keyUnknown', 'warning');
+      await this.fetch(this.details().summary.id);
+      this.store.reload();
       return false;
     }
-    const ref = this.dialogs.open<ChangedHostKeyDialog, ChangedHostKey, boolean>(ChangedHostKeyDialog, {
-      data: parsed.data
-    });
-    return await firstValueFrom(ref.closed, { defaultValue: undefined }) === true;
+    return reviewed;
   }
 
   /**
@@ -136,18 +156,9 @@ export class RepositoryWarningsComponent {
    * first. A key unlocked meanwhile, such as in another tab, needs nothing.
    */
   private async unlock(): Promise<boolean> {
-    let key: UnlockKeyDialogData;
+    let found: ProtectedKey | null;
     try {
-      const inUse = (await firstValueFrom(this.repositories.repositoryCredentials(this.details().summary.id))).inUse;
-      if (inUse?.kind !== 'ssh-key' || !inUse.passphraseProtected || inUse.missing) {
-        // Not a locked key any more: the store shows what the repository has now.
-        this.store.reload();
-        return false;
-      }
-      if (inUse.unlocked) {
-        return true;
-      }
-      key = { id: inUse.id, name: inUse.name, keyType: inUse.keyType, fingerprint: inUse.fingerprint };
+      found = protectedKeyOf(await firstValueFrom(this.repositories.repositoryCredentials(this.details().summary.id)));
     } catch (error) {
       this.toast.show({
         message: this.errorText.describe(toApiError(error)).text,
@@ -156,8 +167,12 @@ export class RepositoryWarningsComponent {
       });
       return false;
     }
-    const ref = this.dialogs.open<UnlockKeyDialog, UnlockKeyDialogData, boolean>(UnlockKeyDialog, { data: key });
-    return await firstValueFrom(ref.closed, { defaultValue: undefined }) === true;
+    if (found === null) {
+      // Not a locked key any more: the store shows what the repository has now.
+      this.store.reload();
+      return false;
+    }
+    return found.unlocked || this.keyDialogs.unlock(found.key);
   }
 
   /**
@@ -170,5 +185,13 @@ export class RepositoryWarningsComponent {
     } catch {
       // The warning stays, with its fix.
     }
+  }
+
+  private notify(message: string, status: Status): void {
+    this.toast.show({
+      message: this.transloco.translate(`${KEY}.${message}`),
+      dismissLabel: this.transloco.translate(`${KEY}.dismiss`),
+      status
+    });
   }
 }

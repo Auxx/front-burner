@@ -1,10 +1,9 @@
 import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { RepositoryCredentialsInfo } from '@front-burner/shared-contracts';
-import { DialogService } from '@front-burner/ui';
 import { RepositoriesApi } from '@front-burner/web-api-client';
 import { PushChannelService } from '@front-burner/web-core';
-import { UnlockKeyDialog, type UnlockKeyDialogData } from '@front-burner/web-repository-dialogs';
+import { KeyDialogsService, protectedKeyOf, type UnlockKeyDialogData } from '@front-burner/web-repository-dialogs';
 import { firstValueFrom } from 'rxjs';
 
 import { GitStatusStore } from '../git-status-store/git-status-store.service';
@@ -15,11 +14,8 @@ export type LockedKey = UnlockKeyDialogData;
 
 /** The key of `info` if it is passphrase-protected, locked and can be unlocked. */
 function lockedKeyOf(info: RepositoryCredentialsInfo): LockedKey | null {
-  const key = info.inUse;
-  if (key?.kind !== 'ssh-key' || !key.passphraseProtected || key.unlocked || key.missing) {
-    return null;
-  }
-  return { id: key.id, name: key.name, keyType: key.keyType, fingerprint: key.fingerprint };
+  const found = protectedKeyOf(info);
+  return found === null || found.unlocked ? null : found.key;
 }
 
 /**
@@ -40,7 +36,7 @@ function lockedKeyOf(info: RepositoryCredentialsInfo): LockedKey | null {
 @Injectable()
 export class LockedKeyService {
   private readonly api = inject(RepositoriesApi);
-  private readonly dialogs = inject(DialogService);
+  private readonly keyDialogs = inject(KeyDialogsService);
   private readonly push = inject(PushChannelService);
   private readonly session = inject(RepositorySessionService);
   private readonly store = inject(GitStatusStore);
@@ -149,8 +145,7 @@ export class LockedKeyService {
     if (key === null) {
       return true;
     }
-    const ref = this.dialogs.open<UnlockKeyDialog, UnlockKeyDialogData, boolean>(UnlockKeyDialog, { data: key });
-    const unlocked = await firstValueFrom(ref.closed, { defaultValue: undefined }) === true;
+    const unlocked = await this.keyDialogs.unlock(key);
     if (unlocked && this.current()?.id === key.id) {
       this.current.set(null);
     }

@@ -114,12 +114,7 @@ export class RepositoriesController {
   repositoryDetails(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositoryDetails {
     const auth = authOf(req);
     const row = ownRow(this.queries.find(auth.userId, params.id));
-    return toDetails(
-      row,
-      this.warnings.forRow(auth, row),
-      this.queries.clones([ row ]).get(row.id),
-      this.warnings.problemsOf(row)
-    );
+    return toDetails(row, this.warnings.detailsOf(auth, row), this.queries.clones([ row ]).get(row.id));
   }
 
   /**

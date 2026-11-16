@@ -172,6 +172,29 @@ describe('RepositoryWarnings', () => {
     }
   });
 
+  it('answers the details\' warnings and stored problems from one read', () => {
+    const id = insertRepository(database, alice, { name: 'notes' });
+    const problems = { fetch: problem('host-key-changed'), push: problem('push-not-allowed') };
+    stored.set(id, problems);
+    const read = vi.spyOn(source, 'read');
+
+    expect(warnings.detailsOf({ userId: alice, sessionId: SESSION }, row(id))).toEqual({
+      warnings: [ 'cannot-push', 'host-key-changed' ],
+      remoteProblems: problems
+    });
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers no stored problems for a repository that is not ready', () => {
+    const id = insertRepository(database, alice, { name: 'failed', status: 'error', errorCode: 'clone-failed' });
+    stored.set(id, { fetch: problem('credentials-refused'), push: null });
+
+    expect(warnings.detailsOf({ userId: alice, sessionId: SESSION }, row(id))).toEqual({
+      warnings: [],
+      remoteProblems: { fetch: null, push: null }
+    });
+  });
+
   it('reads the problems of all repositories at once', () => {
     const ids = Array.from({ length: 5 }, (_, i) => insertRepository(database, alice, { name: `repo-${i}` }));
     const failed = insertRepository(database, alice, { name: 'failed', status: 'error', errorCode: 'clone-failed' });

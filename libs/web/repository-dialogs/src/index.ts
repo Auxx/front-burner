@@ -37,3 +37,8 @@ export type { CommitAuthorDialogData } from './repository-dialogs/models/commit-
 export { commitAuthorForm } from './repository-dialogs/models/commit-author-form.model';
 export { CommitAuthorRefusals } from './repository-dialogs/models/commit-author-refusals';
 export { HostNotTrusted, HostTrustService } from './repository-dialogs/services/host-trust/host-trust.service';
+export {
+  KeyDialogsService,
+  type ProtectedKey,
+  protectedKeyOf
+} from './repository-dialogs/services/key-dialogs/key-dialogs.service';

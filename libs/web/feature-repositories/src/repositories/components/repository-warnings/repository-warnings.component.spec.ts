@@ -170,6 +170,57 @@ describe('RepositoryWarningsComponent', () => {
     await settle(fixture);
 
     expect(fetch).toHaveBeenCalledWith(7);
+    // The fetch's repository.warning reloads the store; a fix of the fetch's warning needs no notice.
+    expect(store.reload).not.toHaveBeenCalled();
+    expect(toast.show).not.toHaveBeenCalled();
+  });
+
+  it('says that a push clears a warning that the last push left', async () => {
+    await show(withWarnings([ 'host-key-changed' ], { remoteProblems: { fetch: null, push: changedKey } }));
+
+    await press();
+    closed.next(true);
+    closed.complete();
+    await settle(fixture);
+
+    expect(fetch).toHaveBeenCalledWith(7);
+    expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ message: `${KEY}.pushToClear`, status: 'info' }));
+  });
+
+  it('says that a push clears refused credentials that the last push left', async () => {
+    await show(withWarnings([ 'credentials-refused' ], {
+      remoteProblems: { fetch: null, push: { code: 'credentials-refused', params: {} } }
+    }));
+
+    await press();
+    changeAnswer.next(true);
+    await settle(fixture);
+
+    expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ message: `${KEY}.pushToClear` }));
+  });
+
+  it('says nothing about a push after cancelling', async () => {
+    await show(withWarnings([ 'credentials-refused' ], {
+      remoteProblems: { fetch: null, push: { code: 'credentials-refused', params: {} } }
+    }));
+
+    await press();
+    changeAnswer.next(false);
+    await settle(fixture);
+
+    expect(toast.show).not.toHaveBeenCalled();
+  });
+
+  it('checks the server again when the stored problem does not describe the new key', async () => {
+    await show(withWarnings([ 'host-key-changed' ], {
+      remoteProblems: { fetch: { code: 'host-key-changed', params: {} }, push: null }
+    }));
+
+    await press();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ message: `${KEY}.keyUnknown` }));
+    expect(fetch).toHaveBeenCalledWith(7);
     expect(store.reload).toHaveBeenCalled();
   });
 
@@ -191,6 +242,18 @@ describe('RepositoryWarningsComponent', () => {
     await settle(fixture);
 
     expect(fetch).toHaveBeenCalledWith(7);
+    // key.unlocked reloads the store.
+    expect(store.reload).not.toHaveBeenCalled();
+  });
+
+  it('reads the details again when the key is no longer a locked one', async () => {
+    await show(withWarnings([ 'key-locked' ]));
+    credentials = () => of({ protocol: 'ssh', inUse: null });
+
+    await press();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
     expect(store.reload).toHaveBeenCalled();
   });
 
@@ -240,10 +303,18 @@ describe('RepositoryWarningsComponent', () => {
     await show(withWarnings([ 'credentials-refused', 'cannot-push' ]));
 
     await press(0);
+    // The other fix says that it cannot run now.
+    expect(fixButton(0).getAttribute('aria-disabled')).toBe('true');
+    expect(fixButton(1).getAttribute('aria-disabled')).toBe('true');
+    expect(fixButton(1).hasAttribute('data-busy')).toBe(false);
     await press(1);
     await press(0);
 
     expect(change).toHaveBeenCalledTimes(1);
+
+    changeAnswer.next(false);
+    await settle(fixture);
+    expect(fixButton(1).hasAttribute('aria-disabled')).toBe(false);
   });
 
   it('keeps the warning when the fetch is refused', async () => {

@@ -1,17 +1,11 @@
 import { inject, Injectable } from '@angular/core';
-import {
-  type ChangedHostKey,
-  ChangedHostKeySchema,
-  type GitNetworkJobType,
-  type GitProblemState,
-  HostKeySchema
-} from '@front-burner/shared-contracts';
+import { type GitNetworkJobType, type GitProblemState, HostKeySchema } from '@front-burner/shared-contracts';
 import { DialogService, ToastService } from '@front-burner/ui';
 import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
 import {
-  ChangedHostKeyDialog,
   HostNotTrusted,
   HostTrustService,
+  KeyDialogsService,
   RepositoryCredentialsDialog,
   type RepositoryCredentialsDialogData
 } from '@front-burner/web-repository-dialogs';
@@ -46,6 +40,7 @@ import { RepositorySessionService } from '../repository-session/repository-sessi
 @Injectable()
 export class CredentialFixesService {
   private readonly dialogs = inject(DialogService);
+  private readonly keyDialogs = inject(KeyDialogsService);
   private readonly jobs = inject(NetworkJobService);
   private readonly lockedKey = inject(LockedKeyService);
   private readonly session = inject(RepositorySessionService);
@@ -143,15 +138,8 @@ export class CredentialFixesService {
   }
 
   private async reviewHostKey(params: unknown, again: () => Promise<void>): Promise<void> {
-    const parsed = ChangedHostKeySchema.safeParse(params);
-    if (!parsed.success) {
-      return;
-    }
     const repositoryId = this.store.followed();
-    const ref = this.dialogs.open<ChangedHostKeyDialog, ChangedHostKey, boolean>(ChangedHostKeyDialog, {
-      data: parsed.data
-    });
-    const trusted = await firstValueFrom(ref.closed, { defaultValue: undefined }) === true;
+    const trusted = await this.keyDialogs.reviewHostKey(params) === true;
     // Not after a switch to another repository while the dialog was open.
     if (trusted && this.store.followed() === repositoryId) {
       await again();

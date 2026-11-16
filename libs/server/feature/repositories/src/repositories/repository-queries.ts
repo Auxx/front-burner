@@ -131,16 +131,16 @@ export function queuedClone(jobId: number): CloneProgress {
  * even if a stale one is left. `branch` belongs to a single-branch clone only:
  * a full clone's is never answered, and adding refuses a single-branch clone
  * without one (AR-34), so `null` there means a damaged row, shown as no branch.
- * The stored remote problems are answered only when `ready`, as the warnings are.
+ * The warnings and the stored problems they come from are the row's as
+ * `RepositoryWarnings.detailsOf` reads them, which leaves both empty outside
+ * `ready`.
  */
 export function toDetails(
   row: Repository,
-  warnings: RepositoryWarning[],
-  clone: CloneProgress | undefined,
-  remoteProblems: RemoteProblems = { fetch: null, push: null }
+  { warnings, remoteProblems }: { warnings: RepositoryWarning[]; remoteProblems: RemoteProblems; },
+  clone: CloneProgress | undefined
 ): RepositoryDetails {
   const failed = row.status === 'error';
-  const ready = row.status === 'ready';
   return {
     summary: toSummary(row, warnings, clone),
     cloneMode: row.cloneMode,
@@ -149,6 +149,6 @@ export function toDetails(
     addedAt: row.createdAt.toISOString(),
     errorDetail: failed ? row.errorDetail : null,
     errorRequestId: failed ? row.errorRequestId : null,
-    remoteProblems: ready ? remoteProblems : { fetch: null, push: null }
+    remoteProblems
   };
 }
