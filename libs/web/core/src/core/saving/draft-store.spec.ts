@@ -97,6 +97,31 @@ describe('DraftStore', () => {
     expect(await store.get(key('a.md.bak', 12, 1))).toEqual(draft('sibling'));
   });
 
+  it('deletes only this repository\'s drafts', async () => {
+    const query = vi.fn(() => Promise.resolve({ held: [ { name: `front-burner.draft:1/12/open.md` } ] }));
+    vi.stubGlobal('navigator', { locks: { query } });
+    try {
+      await store.put(key('a.md', 12), draft('a'));
+      await store.put(key('docs/b.md', 12), draft('b'));
+      // Claimed by another tab of the same repository, which goes to the dashboard (plan 122).
+      await store.put(key('open.md', 12), draft('open'));
+      await store.put(key('a.md', 120), draft('repository 120'));
+      await store.put(key('a.md', 1), draft('repository 1'));
+      await store.put(key('12', 13), draft('path 12'));
+
+      await store.deleteRepository(12);
+
+      expect(await store.get(key('a.md', 12))).toBeNull();
+      expect(await store.get(key('docs/b.md', 12))).toBeNull();
+      expect(await store.get(key('open.md', 12))).toBeNull();
+      expect(await store.get(key('a.md', 120))).toEqual(draft('repository 120'));
+      expect(await store.get(key('a.md', 1))).toEqual(draft('repository 1'));
+      expect(await store.get(key('12', 13))).toEqual(draft('path 12'));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('deletes the drafts under a folder', async () => {
     await store.put(key('docs/a.md'), draft('a'));
     await store.put(key('docs/deep/b.md'), draft('b'));

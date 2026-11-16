@@ -1,0 +1,16 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.RemoveRepositoryComponent'">
+  <section aria-labelledby="repo-remove-repository-heading">
+    <h2 id="repo-remove-repository-heading"
+        class="heading">{{ t('heading') }}</h2>
+    <p id="repo-remove-repository-description"
+       class="description">{{ t('description') }}</p>
+    <div>
+      <button uiButton
+              variant="danger"
+              class="remove"
+              aria-describedby="repo-remove-repository-description"
+              [busy]="removing()"
+              (click)="remove()">{{ t('remove') }}</button>
+    </div>
+  </section>
+</ng-container>

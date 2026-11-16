@@ -969,3 +969,103 @@ test.describe('repository warnings', () => {
     }
   });
 });
+
+test.describe('Remove repository', () => {
+  test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
+
+  let root: string;
+  let git: GitHttpServer;
+  const remotes: Record<string, string> = {};
+  let next = 0;
+
+  test.beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-remove-'));
+    git = await startGitHttpServer({ repositories: remotes });
+  });
+
+  test.afterAll(async () => {
+    await git?.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const section = (page: Page) => page.getByRole('region', { name: 'Remove repository' });
+
+  /** A public repository of a new remote, cloned, so that nothing is lost by removing it yet. */
+  async function addHandbook(
+    instance: { url: string; dataDir: string; }
+  ): Promise<{ id: number; dir: string; name: string; }> {
+    const name = `handbook-${next++}`;
+    mkdirSync(join(root, name), { recursive: true });
+    remotes[`${name}.git`] = createHandbookRemote(join(root, name));
+    const added = await addOverApi(instance, {
+      name,
+      remoteUrl: `${git.url}/${name}.git`,
+      credentials: { mode: 'none' }
+    });
+    return { ...added, name };
+  }
+
+  /** Logs in at the settings page of `id`, waits for its details and opens the dialog. */
+  async function openDialog(page: Page, id: number, name: string): Promise<void> {
+    const loaded = page.waitForResponse(response =>
+      new URL(response.url()).pathname === `/api/v1/repositories/${id}/details`
+    );
+    await page.goto(`/repositories/${id}/settings`);
+    await logIn(page);
+    await loaded;
+    await expect(section(page)).toContainText(
+      'This deletes its working copy on Front Burner. The remote is not changed.'
+    );
+    await section(page).getByRole('button', { name: 'Remove repository' }).click();
+    await expect(page.getByRole('dialog', { name: `Remove ${name}?` })).toBeVisible();
+  }
+
+  test('AC-REPO-003.11: removing a repository with no uncommitted changes and nothing to push needs one click; with 2 uncommitted files and 3 commits not pushed, the dialog lists both and needs the repository name typed', async ({ page, instance }) => {
+    const clean = await addHandbook(instance);
+    const busy = await addHandbook(instance);
+    writeFileSync(join(busy.dir, 'README.md'), '# Changed\n');
+    writeFileSync(join(busy.dir, 'new.md'), '# New\n');
+    for (const message of [ 'one', 'two', 'three' ]) {
+      gitIn(busy.dir, 'commit', '-q', '--allow-empty', '-m', message);
+    }
+
+    await openDialog(page, clean.id, clean.name);
+    const cleanDialog = page.getByRole('dialog', { name: `Remove ${clean.name}?` });
+    await expect(cleanDialog).toContainText(
+      'This deletes its working copy on Front Burner. The remote is not changed.'
+    );
+    await expect(cleanDialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await expect(cleanDialog.getByRole('textbox')).toHaveCount(0);
+    await cleanDialog.getByRole('button', { name: 'Remove', exact: true }).click();
+
+    await expect(page).toHaveURL(/\/repositories$/);
+    await expect(page.getByText(`Repository ${clean.name} removed.`)).toBeVisible();
+    await expect(entries(page).getByRole('link', { name: clean.name, exact: true })).toHaveCount(0);
+
+    await page.goto(`/repositories/${busy.id}/settings`);
+    await section(page).getByRole('button', { name: 'Remove repository' }).click();
+    const busyDialog = page.getByRole('dialog', { name: `Remove ${busy.name}?` });
+    await expect(busyDialog.getByRole('listitem')).toHaveText([ '2 uncommitted files', '3 commits not pushed' ]);
+    const remove = busyDialog.getByRole('button', { name: 'Remove', exact: true });
+    await expect(remove).toHaveAttribute('aria-disabled', 'true');
+    expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
+    await busyDialog.getByLabel(`Type ${busy.name} to confirm`).fill(busy.name);
+    await expect(remove).not.toHaveAttribute('aria-disabled');
+    await remove.click();
+
+    await expect(page).toHaveURL(/\/repositories$/);
+    await expect(page.getByText(`Repository ${busy.name} removed.`)).toBeVisible();
+    await expect(entries(page)).toHaveCount(0);
+  });
+
+  test('cancelling changes nothing', async ({ page, instance }) => {
+    const { id, name } = await addHandbook(instance);
+    await openDialog(page, id, name);
+
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`/repositories/${id}/settings$`));
+    await expect(section(page).getByRole('button', { name: 'Remove repository' })).toBeFocused();
+  });
+});

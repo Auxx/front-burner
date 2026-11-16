@@ -41,6 +41,7 @@
                                    [repository]="summary" />
           <repo-repository-commit-author [repository]="summary" />
           <repo-clone-details [details]="details" />
+          <repo-remove-repository [repository]="summary" />
         </div>
       } @else if (state === 'failed') {
         <ui-inline-banner status="danger"
