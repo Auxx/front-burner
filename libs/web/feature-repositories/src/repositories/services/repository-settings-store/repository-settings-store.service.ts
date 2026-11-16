@@ -1,6 +1,6 @@
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import type { PushEvent, RepositoryDetails } from '@front-burner/shared-contracts';
+import type { PushEvent, RepositoryDetails, RepositorySummary } from '@front-burner/shared-contracts';
 import { RepositoriesApi } from '@front-burner/web-api-client';
 import { PushChannelService, toApiError } from '@front-burner/web-core';
 import { Subscription } from 'rxjs';
@@ -67,6 +67,22 @@ export class RepositorySettingsStore {
     if (this.id !== undefined && this.currentState() !== 'missing') {
       this.fetch();
     }
+  }
+
+  /**
+   * Shows `summary`, the API's answer to **Retry clone** or **Clone again**,
+   * at once (RM-11): the repository is **Cloning**, and the old error record
+   * is gone. A read already on its way may describe the failed clone, so it no
+   * longer counts; the clone's events read the details again.
+   */
+  cloning(summary: RepositorySummary): void {
+    const details = this.current();
+    if (details?.summary.id !== summary.id) {
+      return;
+    }
+    this.request?.unsubscribe();
+    this.reloading.set(false);
+    this.current.set({ ...details, summary, errorDetail: null, errorRequestId: null });
   }
 
   /** **Try again** after the first load failed. */

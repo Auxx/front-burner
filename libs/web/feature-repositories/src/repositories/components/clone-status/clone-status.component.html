@@ -39,6 +39,27 @@
             }
           </div>
         </ui-collapsible>
+        @let action = this.action();
+        @if (action === 'retry') {
+          <p class="hint">{{ t('retryHint') }}</p>
+        }
+        @if (failure(); as failure) {
+          <ui-inline-banner class="failure"
+                            status="danger"
+                            announce>
+            {{ failure.text }}
+            @if (failure.reference) {
+              <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+            }
+          </ui-inline-banner>
+        }
+        <div>
+          <button uiButton
+                  variant="primary"
+                  class="clone"
+                  [busy]="cloning()"
+                  (click)="clone()">{{ action === 'clone-again' ? t('cloneAgain') : t('retry') }}</button>
+        </div>
       }
     </section>
   }

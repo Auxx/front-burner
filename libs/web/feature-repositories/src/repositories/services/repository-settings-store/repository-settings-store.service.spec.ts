@@ -132,6 +132,37 @@ describe('RepositorySettingsStore', () => {
     expect(store.state()).toBe('missing');
   });
 
+  it('shows a retried clone at once, and drops the answer on its way', () => {
+    const pending = new Subject<RepositoryDetails>();
+    const failed = repositoryDetails(
+      { status: 'error', error: 'clone-failed' },
+      { errorDetail: 'fatal: not found', errorRequestId: 'req-1' }
+    );
+    answers = [ of(failed), pending ];
+    store.load(7);
+    store.reload();
+
+    const clone = { jobId: 9, state: 'waiting', percent: null } as const;
+    store.cloning({ ...failed.summary, status: 'cloning', error: null, clone });
+    pending.next(failed);
+
+    expect(store.details()).toEqual({
+      ...failed,
+      summary: { ...failed.summary, status: 'cloning', error: null, clone },
+      errorDetail: null,
+      errorRequestId: null
+    });
+  });
+
+  it('ignores a clone of another repository', () => {
+    answers = [ of(repositoryDetails()) ];
+    store.load(7);
+
+    store.cloning({ ...repositoryDetails().summary, id: 8, status: 'cloning' });
+
+    expect(store.details()?.summary.status).toBe('ready');
+  });
+
   it('asks for nothing before a repository is shown', () => {
     push.reconnected.next();
 

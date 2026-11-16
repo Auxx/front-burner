@@ -18,8 +18,8 @@ import {
   startGitSshServer
 } from './support/git-ssh-server';
 import { keyboard, touch } from './support/hands';
-import { logIn, seed, type SeedRepository } from './support/instance';
-import { addOverApi, sshRepository } from './support/repositories';
+import { adminAuthToken, logIn, seed, type SeedRepository } from './support/instance';
+import { addOverApi, api, sshRepository } from './support/repositories';
 
 test.use({ instanceOptions: { onboarded: true } });
 
@@ -544,5 +544,135 @@ test.describe('the Credentials section', () => {
 
     await section(page).getByRole('button', { name: 'Change credentials' }).click();
     await expect(dialog(page)).toBeVisible();
+  });
+});
+
+test.describe('Retry clone and Clone again', () => {
+  test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
+
+  let root: string;
+  let git: GitHttpServer;
+  let publicGit: GitHttpServer;
+  /** Whether the private remote fails every clone, while its access checks still succeed. */
+  let broken = true;
+  const READER = { username: 'reader', password: 'pull-token-0123' };
+
+  test.beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-retry-'));
+    mkdirSync(join(root, 'private'));
+    mkdirSync(join(root, 'public'));
+    git = await startGitHttpServer({
+      repositories: { 'handbook.git': createHandbookRemote(join(root, 'private')) },
+      users: { [READER.username]: READER.password },
+      refuseFetch: () => broken
+    });
+    publicGit = await startGitHttpServer({
+      repositories: { 'handbook.git': createHandbookRemote(join(root, 'public')) }
+    });
+  });
+
+  test.afterAll(async () => {
+    await Promise.all([ git?.close(), publicGit?.close() ]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const status = (page: Page) => page.getByRole('region', { name: 'Status' });
+  const credentials = (page: Page) => page.getByRole('region', { name: 'Credentials' });
+  const repository = (page: Page) => page.locator('.repository');
+
+  /** Logs in at the settings page of `id` and waits for its details. */
+  async function openSettings(page: Page, id: number): Promise<void> {
+    const loaded = page.waitForResponse(response =>
+      new URL(response.url()).pathname === `/api/v1/repositories/${id}/details`
+    );
+    await page.goto(`/repositories/${id}/settings`);
+    await logIn(page);
+    await loaded;
+  }
+
+  test('AC-REPO-003.4: a failed clone shows "Clone failed" and, under Details, the git error without secrets and with the request ID; Retry clone clones again with the same settings, and changing the credentials first is possible', async ({ page, instance }) => {
+    broken = true;
+    const token = await adminAuthToken(instance.url);
+    const added = await api(instance.url, token, 'POST', '/api/v1/repositories', {
+      name: 'handbook',
+      remoteUrl: `${git.url}/handbook.git`,
+      cloneMode: 'full',
+      credentials: { mode: 'new-https', name: 'GitHub work', ...READER }
+    });
+    expect(added.status).toBe(201);
+    const id = added.body['id'] as number;
+    await expect.poll(async () =>
+      (await api(instance.url, token, 'GET', `/api/v1/repositories/${id}/details`)).body['summary']
+    ).toMatchObject({ status: 'error', error: 'clone-failed' });
+
+    await openSettings(page, id);
+    await expect(status(page)).toContainText('Clone failed');
+    await status(page).getByRole('button', { name: 'Details' }).click();
+    await expect(status(page).locator('pre.message')).not.toBeEmpty();
+    await expect(status(page).locator('.request code')).not.toBeEmpty();
+    expect(await page.content()).not.toContain(READER.password);
+
+    // Other credentials first (RM-11): saved with the repository, and used by the retry.
+    await credentials(page).getByRole('button', { name: 'Change credentials' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Repository credentials' });
+    await dialog.getByRole('radiogroup').getByText('Add new credentials', { exact: true }).click();
+    await dialog.getByLabel('Credentials name').fill('GitHub personal');
+    await dialog.getByLabel('Username').fill(READER.username);
+    await dialog.getByLabel('Password or token', { exact: true }).fill(READER.password);
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(credentials(page)).toContainText('GitHub personal');
+
+    broken = false;
+    await status(page).getByRole('button', { name: 'Retry clone' }).click();
+
+    await expect(repository(page)).toContainText('Ready', { timeout: 30_000 });
+    await expect(repository(page).getByRole('link', { name: 'Open handbook' })).toBeVisible();
+    await expect(status(page)).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Clone details' })).toContainText('Full clone');
+    await expect(credentials(page)).toContainText('GitHub personal');
+  });
+
+  test('AC-REPO-003.5: deleting a working copy\'s directory while the backend is stopped shows "Working copy is missing or damaged" after the next start; Clone again warns about lost work, clones it, and keeps the repository\'s name and commit author override', async ({ page, instance }) => {
+    const { id, dir } = await addOverApi(instance, {
+      name: 'handbook',
+      remoteUrl: `${publicGit.url}/handbook.git`,
+      credentials: { mode: 'none' }
+    });
+    const override = { name: 'Ada Lovelace', email: 'ada@example.com' };
+    let token = await adminAuthToken(instance.url);
+    expect((await api(instance.url, token, 'PUT', `/api/v1/repositories/${id}/commit-author`, override)).status)
+      .toBe(200);
+
+    await instance.restart(() => rmSync(dir, { recursive: true, force: true }));
+
+    await openSettings(page, id);
+    await expect(status(page)).toContainText('Working copy is missing or damaged');
+    await status(page).getByRole('button', { name: 'Clone again' }).click();
+    const warning = page.getByRole('dialog', { name: 'Clone handbook again?' });
+    await expect(warning).toContainText('Any changes and commits that were only in the old working copy are lost.');
+    await warning.getByRole('button', { name: 'Clone again' }).click();
+
+    await expect(repository(page)).toContainText('Ready', { timeout: 30_000 });
+    await expect(repository(page)).toContainText('handbook');
+    token = await adminAuthToken(instance.url);
+    const author = await api(instance.url, token, 'GET', `/api/v1/repositories/${id}/commit-author`);
+    expect(author.body).toMatchObject({ author: override, source: 'override' });
+  });
+
+  test('cancelling the warning changes nothing, and the section has no accessibility violations', async ({ page, instance }) => {
+    const [ id ] = seed(instance.dataDir, {
+      repositories: [ { userId: ADMIN_ID, name: 'damaged', status: 'error', errorCode: 'working-copy-missing' } ]
+    }).repositoryIds;
+    await openSettings(page, id);
+
+    expect((await new AxeBuilder({ page }).include('repo-clone-status').analyze()).violations).toEqual([]);
+    await status(page).getByRole('button', { name: 'Clone again' }).click();
+    const warning = page.getByRole('dialog', { name: 'Clone damaged again?' });
+    await warning.getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(warning).toHaveCount(0);
+    await expect(status(page)).toContainText('Working copy is missing or damaged');
+    await expect(status(page).getByRole('button', { name: 'Clone again' })).toBeFocused();
   });
 });

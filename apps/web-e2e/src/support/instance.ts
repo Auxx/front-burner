@@ -45,8 +45,12 @@ export interface Instance {
   url: string;
   /** The instance's data directory, for {@link seed}. */
   dataDir: string;
-  /** Stops the server and starts it again on the same port and data: it forgets everything kept in memory. */
-  restart(): Promise<void>;
+  /**
+   * Stops the server and starts it again on the same port and data: it forgets
+   * everything kept in memory. `whileStopped` runs in between, such as to
+   * change the data on disk where the server cannot see it happen.
+   */
+  restart(whileStopped?: () => void | Promise<void>): Promise<void>;
   stop(): Promise<void>;
   /** What the running server process wrote, such as its log (`FRONT_BURNER_LOG_LEVEL` sets how much). */
   output(): string;
@@ -183,8 +187,9 @@ async function startOnce(options: InstanceOptions): Promise<Instance> {
     await kill(spawned);
     rmSync(dataDir, { recursive: true, force: true });
   };
-  const restart = async () => {
+  const restart = async (whileStopped?: () => void | Promise<void>) => {
     await kill(spawned);
+    await whileStopped?.();
     spawned = spawnServer(options, dataDir, port);
     await waitUntilReady(url, spawned.child, spawned.output);
   };

@@ -33,7 +33,17 @@ AC-REPO-003.5); `docs/requirements/repo-credentials.md` (RC-16).
 - The rate limit and clone limit refusals show their messages from the error
   codes, as on the Add repository page.
 - The section names the credentials in use, with a link to the **Credentials**
-  section, so the user can change them first (RM-11) _(plan's call)_.
+  section, so the user can change them first (RM-11) _(plan's call)_. _Changed
+  while implementing:_ the section says in one line that the clone uses the
+  credentials shown under **Credentials**, which can be changed first. That
+  section, just below, already names them and has **Change credentials**; naming
+  them twice would read the credentials twice and keep two copies up to date.
+- _Changed while implementing:_ the warning of **Clone again** is
+  `DialogService.confirm()` with the `danger` variant, as other confirmations
+  are, rather than a new `dialogs/clone-again/` dialog: it is a heading, one
+  sentence and two buttons. The unlock reads the repository's credentials for
+  the key's type and fingerprint, since `409 key-locked` names only its ID and
+  name, and asks once per press.
 
 ## Review Focus
 
