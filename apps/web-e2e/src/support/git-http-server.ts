@@ -121,6 +121,13 @@ export interface GitHttpServerOptions {
    * although an access check, which only lists the references, succeeds.
    */
   refuseFetch?: () => boolean;
+  /**
+   * User name → password of the users whose requests for objects (as for
+   * `beforeFetch`) are served; when given, anyone else's get `401`, so that a
+   * clone with a token revoked since its access check fails, although that
+   * check, which only lists the references, succeeded.
+   */
+  fetchers?: Record<string, string>;
 }
 
 function authorised(request: IncomingMessage, users: Record<string, string> | undefined): boolean {
@@ -249,8 +256,11 @@ export async function startGitHttpServer(options: GitHttpServerOptions): Promise
     }
     const pathInfo = path.slice(name.length + 1);
     const repository = options.repositories[name] ?? '';
-    const { beforeFetch, refuseFetch } = options;
-    if (pathInfo !== '/git-upload-pack' || (beforeFetch === undefined && refuseFetch === undefined)) {
+    const { beforeFetch, refuseFetch, fetchers } = options;
+    if (
+      pathInfo !== '/git-upload-pack'
+      || (beforeFetch === undefined && refuseFetch === undefined && fetchers === undefined)
+    ) {
       serveGit(request, response, repository, pathInfo);
       return;
     }
@@ -261,6 +271,11 @@ export async function startGitHttpServer(options: GitHttpServerOptions): Promise
       const text = (request.headers['content-encoding'] === 'gzip' ? gunzipSync(body) : body).toString('latin1');
       // Protocol v2 lists the references through `git-upload-pack` too: only `want` lines ask for objects.
       const wants = /want [0-9a-f]{40}/.test(text);
+      if (wants && fetchers !== undefined && !authorised(request, fetchers)) {
+        response.writeHead(401, { 'WWW-Authenticate': 'Basic realm="git"' });
+        response.end();
+        return;
+      }
       if (wants && refuseFetch?.() === true) {
         response.writeHead(500);
         response.end('Fetching is broken on this server');
