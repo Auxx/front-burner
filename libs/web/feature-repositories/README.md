@@ -27,6 +27,11 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
 - `CloneStatusComponent`: the **Status** section, only while cloning or in
   error: the clone's progress, or the error's label and **Details** with git's
   error as plain text and the request ID with **Copy** (RM-7, RM-10).
+- `CredentialsInUseComponent`: the **Credentials** section, the credentials in
+  use as a key-value list, never their secret, and **Change credentials** in
+  every status, which opens `web-repository-dialogs`' repository credentials
+  dialog (RM-14, RC-11). Saving there is the end: the section and the store read
+  again. Its `change()` resolves to `true` once the dialog saved.
 - `CloneDetailsComponent`: the **Clone details** section, a key-value list of
   the clone mode, the git control level and when the repository was added
   (RM-16).

@@ -48,7 +48,10 @@ describe('RepositorySettingsPage', () => {
       ],
       providers: [
         provideRouter([ { path: 'repositories/:id/settings', component: RepositorySettingsPage } ]),
-        { provide: RepositoriesApi, useValue: { repositoryDetails: details } },
+        {
+          provide: RepositoriesApi,
+          useValue: { repositoryDetails: details, repositoryCredentials: () => of({ protocol: 'https', inUse: null }) }
+        },
         { provide: PushChannelService, useValue: push }
       ]
     });

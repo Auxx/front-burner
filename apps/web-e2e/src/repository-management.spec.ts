@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -11,8 +11,15 @@ import {
   startGitHttpServer,
   TEST_CERTIFICATE_FILE
 } from './support/git-http-server';
+import {
+  type GitSshServer,
+  PROTECTED_KEY_PASSPHRASE,
+  PROTECTED_KEY_PUBLIC,
+  startGitSshServer
+} from './support/git-ssh-server';
 import { keyboard, touch } from './support/hands';
 import { logIn, seed, type SeedRepository } from './support/instance';
+import { addOverApi, sshRepository } from './support/repositories';
 
 test.use({ instanceOptions: { onboarded: true } });
 
@@ -429,5 +436,113 @@ test.describe('repository management page', () => {
       await expect(progress).toHaveCount(0);
       expect(await page.evaluate(() => 'notReloaded' in window)).toBe(true);
     });
+  });
+});
+
+test.describe('the Credentials section', () => {
+  test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
+
+  let root: string;
+  let ssh: GitSshServer;
+  let git: GitHttpServer;
+  const sshRemotes: Record<string, string> = {};
+  const httpsRemotes: Record<string, string> = {};
+  const WRITER = { username: 'writer', password: 'push-token' };
+
+  test.beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-credentials-'));
+    mkdirSync(join(root, 'https'));
+    httpsRemotes['handbook.git'] = createHandbookRemote(join(root, 'https'));
+    ssh = await startGitSshServer({ repositories: sshRemotes, authorizedKeys: [ PROTECTED_KEY_PUBLIC ] });
+    git = await startGitHttpServer({ repositories: httpsRemotes, pushers: { [WRITER.username]: WRITER.password } });
+  });
+
+  test.afterAll(async () => {
+    await Promise.all([ ssh?.close(), git?.close() ]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const section = (page: Page) => page.getByRole('region', { name: 'Credentials' });
+  const value = (page: Page, label: string) =>
+    section(page).locator('div[uiKeyValue]', { has: page.locator('dt').getByText(label, { exact: true }) }).locator(
+      'dd'
+    );
+  const dialog = (page: Page) => page.getByRole('dialog', { name: 'Repository credentials' });
+
+  /** Opens the settings page of `id`, logging in first unless `loggedIn`, and waits for its credentials. */
+  async function openSettings(page: Page, id: number, loggedIn = false): Promise<void> {
+    const loaded = page.waitForResponse(response =>
+      new URL(response.url()).pathname === `/api/v1/repositories/${id}/credentials`
+    );
+    await page.goto(`/repositories/${id}/settings`);
+    if (!loggedIn) {
+      await logIn(page);
+    }
+    await loaded;
+  }
+
+  test('AC-REPO-003.8: the Credentials section shows the credentials\' name, kind and, for an SSH key, its fingerprint, never the secret; Change credentials opens the repository credentials dialog', async ({ page, instance }) => {
+    const { id: sshId } = await sshRepository(instance, ssh, sshRemotes, join(root, 'ssh', 'notes'));
+    const { id: httpsId } = await addOverApi(instance, {
+      name: 'handbook',
+      remoteUrl: `${git.url}/handbook.git`,
+      credentials: { mode: 'new-https', name: 'GitHub work', ...WRITER }
+    });
+
+    await openSettings(page, sshId);
+    await expect(value(page, 'Name')).toHaveText('laptop');
+    await expect(value(page, 'Kind')).toHaveText('SSH key');
+    await expect(value(page, 'Key type')).toHaveText('Ed25519');
+    await expect(value(page, 'Fingerprint')).toHaveText('SHA256:8tMSEvGb0Os35JCRb/xgaMxvTHbF9IrQMdoUVq/+tX8');
+    await expect(value(page, 'Passphrase')).toHaveText('Protected');
+    let html = await page.content();
+    expect(html).not.toContain('PRIVATE KEY');
+    expect(html).not.toContain(PROTECTED_KEY_PASSPHRASE);
+
+    await openSettings(page, httpsId, true);
+    await expect(value(page, 'Name')).toHaveText('GitHub work');
+    await expect(value(page, 'Kind')).toHaveText('HTTPS credentials');
+    await expect(value(page, 'Username')).toHaveText(WRITER.username);
+    html = await page.content();
+    expect(html).not.toContain(WRITER.password);
+
+    await section(page).getByRole('button', { name: 'Change credentials' }).click();
+    await expect(dialog(page)).toBeVisible();
+    await expect(dialog(page)).toContainText('GitHub work');
+    // The radio is visually hidden, so its label is clicked.
+    await dialog(page).getByRole('radiogroup').getByText('Add new credentials', { exact: true }).click();
+    await dialog(page).getByLabel('Credentials name').fill('GitHub personal');
+    await dialog(page).getByLabel('Username').fill(WRITER.username);
+    await dialog(page).getByLabel('Password or token', { exact: true }).fill(WRITER.password);
+    await dialog(page).getByRole('button', { name: 'Save' }).click();
+
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(value(page, 'Name')).toHaveText('GitHub personal');
+    expect(await page.content()).not.toContain(WRITER.password);
+  });
+
+  test('Cancel in the dialog changes nothing, and the section has no accessibility violations', async ({ page, instance }) => {
+    const [ id ] = seed(instance.dataDir, { repositories: [ { userId: ADMIN_ID, name: 'public' } ] }).repositoryIds;
+    await openSettings(page, id);
+
+    await expect(section(page)).toContainText('No credentials (public repository)');
+    expect((await new AxeBuilder({ page }).include('repo-credentials-in-use').analyze()).violations).toEqual([]);
+    await section(page).getByRole('button', { name: 'Change credentials' }).click();
+    await expect(dialog(page)).toBeVisible();
+    await dialog(page).getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(section(page)).toContainText('No credentials (public repository)');
+    await expect(section(page).getByRole('button', { name: 'Change credentials' })).toBeFocused();
+  });
+
+  test('offers Change credentials for a failed clone', async ({ page, instance }) => {
+    const [ id ] = seed(instance.dataDir, {
+      repositories: [ { userId: ADMIN_ID, name: 'failed-one', status: 'error', errorCode: 'clone-failed' } ]
+    }).repositoryIds;
+    await openSettings(page, id);
+
+    await section(page).getByRole('button', { name: 'Change credentials' }).click();
+    await expect(dialog(page)).toBeVisible();
   });
 });
