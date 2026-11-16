@@ -230,4 +230,24 @@ describe('ChangeCommitAuthorDialog', () => {
     expect(api['setCommitAuthor']).not.toHaveBeenCalled();
     expect(await closed).toEqual(usingOverride);
   });
+
+  it('sets no override equal to the default when opened for it and saved without an edit', async () => {
+    await open(usingDefault, { overrideOnly: true });
+    const closed = firstValueFrom(ref.closed);
+
+    await save();
+
+    expect(api['setRepositoryCommitAuthor']).not.toHaveBeenCalled();
+    expect(await closed).toEqual(usingDefault);
+  });
+
+  it('saving an override without an edit changes nothing', async () => {
+    await open(usingOverride);
+    const closed = firstValueFrom(ref.closed);
+
+    await save();
+
+    expect(api['setRepositoryCommitAuthor']).not.toHaveBeenCalled();
+    expect(await closed).toEqual(usingOverride);
+  });
 });

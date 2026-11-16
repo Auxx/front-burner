@@ -48,9 +48,11 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
   _Name &lt;email&gt;_" and whether that is the default or an override (RM-15,
   CA-9), in every status. **Use a different author for this repository** opens
   `web-repository-dialogs`' `ChangeCommitAuthorDialog` for the override only;
-  **Use my default** removes the override without asking. It reads the author
-  again on `commit-author.changed` and after a reconnect, so a default changed
-  on the Preferences page shows here.
+  **Use my default** removes the override without asking. Its `change()`
+  resolves to `true` once the dialog saved, as `CredentialsInUseComponent`'s
+  does, and a cancelled dialog reads the author again. It reads the author again
+  on `commit-author.changed` and after a reconnect, so a default changed on the
+  Preferences page shows here.
 - `CloneDetailsComponent`: the **Clone details** section, a key-value list of
   the clone mode, the git control level and when the repository was added
   (RM-16).

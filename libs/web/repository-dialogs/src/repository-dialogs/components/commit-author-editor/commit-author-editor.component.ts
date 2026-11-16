@@ -178,6 +178,15 @@ export class CommitAuthorEditorComponent implements OnInit {
 
   /** Resolves `null` when the form has moved on to a default that can't be confirmed. */
   private async saveOverride(value: CommitAuthor): Promise<RepositoryCommitAuthor | null> {
+    const { current } = this.data;
+    if (
+      !this.confirming() && (this.overrideOnly || current.source === 'override')
+      && value.name === current.author.name && value.email === current.author.email
+    ) {
+      // Saving what is there changes nothing: with overrideOnly, an override equal to the default
+      // would stop the repository following later changes of the default.
+      return current;
+    }
     const saved = await firstValueFrom(this.api.setRepositoryCommitAuthor(this.data.repositoryId, value));
     if (!this.confirming()) {
       return saved;

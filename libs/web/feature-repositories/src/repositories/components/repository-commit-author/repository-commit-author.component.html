@@ -34,7 +34,7 @@
                 class="change"
                 [busy]="changing()"
                 [unavailable]="resetting()"
-                (click)="change(current)">{{ t('change') }}</button>
+                (click)="change()">{{ t('change') }}</button>
         @if (current.source === 'override') {
           <button uiButton
                   class="use-default"

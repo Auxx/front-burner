@@ -146,14 +146,62 @@ describe('RepositoryCommitAuthorComponent', () => {
   it('cancelling the dialog changes nothing', async () => {
     await show(ready(), () => of(usingDefault));
 
+    const changed = fixture.componentInstance.change();
+    closed.complete();
+
+    await expect(changed).resolves.toBe(false);
+    await settle(fixture);
+    expect(author()).toBe('Commits use Ada <ada@example.com>');
+    expect(api.removeRepositoryCommitAuthor).not.toHaveBeenCalled();
+    expect(button('change')?.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('reads the author again after cancelling, as part of a failed save may have reached the backend', async () => {
+    await show(ready(), () => of(usingDefault), () => of(usingOverride));
+
     button('change')?.click();
     closed.complete();
     await settle(fixture);
 
-    expect(author()).toBe('Commits use Ada <ada@example.com>');
+    expect(requested).toEqual([ 7, 7 ]);
+    expect(source()).toBe('Only for this repository');
+  });
+
+  it('answers a second call as the open dialog does', async () => {
+    await show(ready(), () => of(usingDefault));
+
+    const first = fixture.componentInstance.change();
+    const second = fixture.componentInstance.change();
+    closed.next(usingOverride);
+    closed.complete();
+
+    await expect(first).resolves.toBe(true);
+    await expect(second).resolves.toBe(true);
+    expect(open).toHaveBeenCalledOnce();
+  });
+
+  it('shows nothing from a dialog that outlived the page', async () => {
+    await show(ready(), () => of(usingDefault));
+
+    button('change')?.click();
+    fixture.destroy();
+    closed.complete();
+    await settle(fixture);
+
     expect(requested).toEqual([ 7 ]);
-    expect(api.removeRepositoryCommitAuthor).not.toHaveBeenCalled();
-    expect(button('change')?.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('leaves the page alone when Use my default answers after it has gone', async () => {
+    await show(ready(), () => of(usingOverride));
+    const reply = new Subject<RepositoryCommitAuthor>();
+    api.removeRepositoryCommitAuthor.mockReturnValue(reply);
+
+    button('use-default')?.click();
+    fixture.destroy();
+    reply.error(apiFailure(404, 'not-found'));
+    await new Promise(resolve => setTimeout(resolve));
+
+    expect(store.reload).not.toHaveBeenCalled();
   });
 
   it('Use my default removes the override without asking', async () => {
@@ -180,6 +228,21 @@ describe('RepositoryCommitAuthorComponent', () => {
     expect(banner?.textContent).toContain('req-1');
     expect(source()).toBe('Only for this repository');
     expect(button('use-default')).not.toBeNull();
+  });
+
+  it('drops the failure once the author is read again', async () => {
+    await show(ready(), () => of(usingOverride), () => of(usingDefault));
+    api.removeRepositoryCommitAuthor.mockReturnValue(throwError(() => apiFailure(500, 'internal')));
+    button('use-default')?.click();
+    await settle(fixture);
+    expect(host().querySelector('ui-inline-banner')).not.toBeNull();
+
+    // Another tab removes the override.
+    push.events.next({ type: 'commit-author.changed' });
+    await settle(fixture);
+
+    expect(source()).toBe('Your default commit author');
+    expect(host().querySelector('ui-inline-banner')).toBeNull();
   });
 
   it('follows a change of the default elsewhere', async () => {

@@ -22,7 +22,9 @@ type AuthorState = 'loading' | 'ready' | 'failed';
  * dialog for the override only, starting from the author in use. With an
  * override, **Use my default** removes it at once, without asking: the
  * override is one click to set again, and the default stays as it is (CA-8).
- * A failure says why, and changes nothing.
+ * A failure says why, and changes nothing, until the author is read again.
+ * Closing the dialog without a result reads the author again, as part of a
+ * failed save may have reached the backend.
  *
  * The default can change in another tab, such as on the Preferences page,
  * and an override on another device: the section reads the author again on
@@ -55,6 +57,8 @@ export class RepositoryCommitAuthorComponent implements OnInit {
   protected readonly failure = signal<ApiErrorText | null>(null);
 
   private request: Subscription | undefined;
+  /** The dialog that is open, which a second {@link change} waits for instead of opening another. */
+  private open: Promise<boolean> | undefined;
   private destroyed = false;
 
   constructor() {
@@ -76,25 +80,19 @@ export class RepositoryCommitAuthorComponent implements OnInit {
     this.load();
   }
 
-  /** **Use a different author for this repository**: the dialog, for the override only. */
-  protected async change(current: RepositoryCommitAuthor): Promise<void> {
-    if (this.changing()) {
-      return;
-    }
-    this.changing.set(true);
-    this.failure.set(null);
-    try {
-      const ref = this.dialogs.open<ChangeCommitAuthorDialog, CommitAuthorDialogData, RepositoryCommitAuthor>(
-        ChangeCommitAuthorDialog,
-        { data: { repositoryId: this.repository().id, current, overrideOnly: true } }
-      );
-      const saved = await firstValueFrom(ref.closed, { defaultValue: undefined });
-      if (saved !== undefined && !this.destroyed) {
-        this.show(saved);
-      }
-    } finally {
+  /**
+   * **Use a different author for this repository**: opens the commit author
+   * dialog for the override only, from the author shown; resolves to `true`
+   * once it saved, and to `false` when it was cancelled or nothing is shown
+   * yet. While a dialog is open, a second call opens none and resolves as the
+   * open one does, as `CredentialsInUseComponent.change()` does.
+   */
+  change(): Promise<boolean> {
+    this.open ??= this.openDialog().finally(() => {
+      this.open = undefined;
       this.changing.set(false);
-    }
+    });
+    return this.open;
   }
 
   /** **Use my default**: removes the override, without asking (CA-8). */
@@ -105,12 +103,42 @@ export class RepositoryCommitAuthorComponent implements OnInit {
     this.resetting.set(true);
     this.failure.set(null);
     try {
-      this.show(await firstValueFrom(this.api.removeRepositoryCommitAuthor(this.repository().id)));
+      const author = await firstValueFrom(this.api.removeRepositoryCommitAuthor(this.repository().id));
+      // Not after the page has gone: it has nothing to show it on.
+      if (!this.destroyed) {
+        this.show(author);
+      }
     } catch (error) {
-      this.failed(error);
+      if (!this.destroyed) {
+        this.failed(error);
+      }
     } finally {
       this.resetting.set(false);
     }
+  }
+
+  private async openDialog(): Promise<boolean> {
+    const current = this.author();
+    if (current === null) {
+      return false;
+    }
+    this.changing.set(true);
+    this.failure.set(null);
+    const ref = this.dialogs.open<ChangeCommitAuthorDialog, CommitAuthorDialogData, RepositoryCommitAuthor>(
+      ChangeCommitAuthorDialog,
+      { data: { repositoryId: this.repository().id, current, overrideOnly: true } }
+    );
+    const saved = await firstValueFrom(ref.closed, { defaultValue: undefined });
+    if (this.destroyed) {
+      return saved !== undefined;
+    }
+    if (saved === undefined) {
+      // Also after cancelling: part of a failed save may have reached the backend.
+      this.load();
+      return false;
+    }
+    this.show(saved);
+    return true;
   }
 
   /** **Try again** after the author could not be read. */
@@ -149,6 +177,8 @@ export class RepositoryCommitAuthorComponent implements OnInit {
       next: author => {
         this.author.set(author);
         this.state.set('ready');
+        // A failed change concerned the author shown before, which this one replaces.
+        this.failure.set(null);
       },
       error: (error: unknown) => {
         if (toApiError(error).code === 'not-found') {
