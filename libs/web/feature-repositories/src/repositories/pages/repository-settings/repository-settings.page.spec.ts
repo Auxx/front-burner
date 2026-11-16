@@ -83,10 +83,22 @@ describe('RepositorySettingsPage', () => {
     expect(page().querySelector('repo-clone-details')).not.toBeNull();
   });
 
+  it('an openable repository with warnings has Open', async () => {
+    await open(
+      '/repositories/7/settings',
+      of(repositoryDetails({ warnings: [ 'credentials-refused', 'cannot-push', 'host-key-changed', 'key-locked' ] }))
+    );
+
+    expect(openLink()?.getAttribute('href')).toBe('/repositories/7');
+    // Each warning's fix, under the header (RM-8).
+    expect(page().querySelectorAll('repo-repository-warnings ui-inline-banner button')).toHaveLength(4);
+  });
+
   it('shows the sections in the order of RM-9', async () => {
     await open('/repositories/7/settings', of(repositoryDetails()));
 
     expect([ ...page().querySelectorAll('.sections > *') ].map(section => section.tagName.toLowerCase())).toEqual([
+      'repo-repository-warnings',
       'repo-clone-status',
       'repo-credentials-in-use',
       'repo-repository-commit-author',

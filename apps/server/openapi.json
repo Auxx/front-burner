@@ -3035,6 +3035,49 @@
           "cloneMode"
         ]
       },
+      "RemoteProblems": {
+        "type": "object",
+        "properties": {
+          "fetch": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GitProblemState"
+              }
+            ],
+            "nullable": true
+          },
+          "push": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GitProblemState"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "fetch",
+          "push"
+        ]
+      },
+      "GitProblemState": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "params"
+        ]
+      },
       "RepositoryDetails": {
         "type": "object",
         "properties": {
@@ -3072,6 +3115,9 @@
           "errorRequestId": {
             "type": "string",
             "nullable": true
+          },
+          "remoteProblems": {
+            "$ref": "#/components/schemas/RemoteProblems"
           }
         },
         "required": [
@@ -3081,7 +3127,8 @@
           "gitLevel",
           "addedAt",
           "errorDetail",
-          "errorRequestId"
+          "errorRequestId",
+          "remoteProblems"
         ]
       },
       "RemovalCheckResult": {
@@ -3624,24 +3671,6 @@
         "required": [
           "id",
           "type"
-        ]
-      },
-      "GitProblemState": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "params": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "code",
-          "params"
         ]
       },
       "GitStatus": {

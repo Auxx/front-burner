@@ -29,14 +29,16 @@ import { CloneDetailsComponent } from '../../components/clone-details/clone-deta
 import { CloneStatusComponent } from '../../components/clone-status/clone-status.component';
 import { CredentialsInUseComponent } from '../../components/credentials-in-use/credentials-in-use.component';
 import { RepositoryCommitAuthorComponent } from '../../components/repository-commit-author/repository-commit-author.component';
+import { RepositoryWarningsComponent } from '../../components/repository-warnings/repository-warnings.component';
 import { RepositorySettingsStore } from '../../services/repository-settings-store/repository-settings-store.service';
 
 /**
  * The repository settings page at `/repositories/<id>/settings` (RM-9): the
  * breadcrumbs "Repositories › <name> › Settings" (NV-14), the repository's
- * name, status and warnings, remote, **Open** when it is openable, and its
- * sections in the order of RM-9, each a component that reads
- * `RepositorySettingsStore`. A repository that does not exist, or another
+ * name, status and warnings, remote, **Open** when it is openable, each
+ * warning with its fix (RM-8), and its sections in the order of RM-9, each a
+ * component that reads `RepositorySettingsStore`. The credential fixes open
+ * the **Credentials** section's dialog. A repository that does not exist, or another
  * user's, shows Page not found (RM-1, NV-3).
  *
  * The breadcrumb with the name links to the repository screen when the
@@ -57,6 +59,7 @@ import { RepositorySettingsStore } from '../../services/repository-settings-stor
     SpinnerComponent,
     PageNotFoundPage,
     RepositoryStatusComponent,
+    RepositoryWarningsComponent,
     CloneStatusComponent,
     CredentialsInUseComponent,
     RepositoryCommitAuthorComponent,

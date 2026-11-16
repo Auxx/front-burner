@@ -105,7 +105,8 @@ export class RepositoriesController {
 
   /**
    * What the settings page shows beyond the summary: clone mode, branch, level,
-   * date added and a failed clone's error record (RM-9, RM-10, RM-16).
+   * date added, a failed clone's error record (RM-9, RM-10, RM-16), and the
+   * stored problems that the warnings' fixes need (RM-8, RC-21).
    */
   @Get(':id/details')
   @ApiOkResponse({ type: RepositoryDetailsDto })
@@ -113,7 +114,7 @@ export class RepositoriesController {
   repositoryDetails(@Req() req: Request, @Param() params: RepositoryParamsDto): RepositoryDetails {
     const auth = authOf(req);
     const row = ownRow(this.queries.find(auth.userId, params.id));
-    return toDetails(row, this.warnings.forRow(auth, row), this.queries.clones([ row ]).get(row.id));
+    return toDetails(row, this.warnings.detailsOf(auth, row), this.queries.clones([ row ]).get(row.id));
   }
 
   /**

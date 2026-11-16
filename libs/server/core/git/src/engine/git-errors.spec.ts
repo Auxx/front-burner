@@ -40,6 +40,11 @@ describe('classifyGitFailure', () => {
       'fatal: unable to access \'https://h/r/\': server verification failed: certificate signer not trusted. (CAfile: none)',
       'tls-untrusted'
     ],
+    // Newer curl with GnuTLS, as on Ubuntu 24.04.
+    [
+      'fatal: unable to access \'https://h/r/\': SSL certificate verification failed: certificate signer not trusted. (CAfile: /etc/ssl/certs/ca-certificates.crt CRLfile: none)',
+      'tls-untrusted'
+    ],
     [ 'fatal: unable to access \'https://h/r/\': Could not resolve host: h', 'host-unreachable' ],
     [ 'fatal: unable to access \'https://h/r/\': Failed to connect to h port 443', 'host-unreachable' ],
     [ 'fatal: unable to access \'https://h/r/\': Connection refused', 'host-unreachable' ],

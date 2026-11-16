@@ -2,6 +2,7 @@ import { DATABASE, Database, repositories, Repository } from '@front-burner/serv
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import type {
   CloneProgress,
+  RemoteProblems,
   RepositoryDetails,
   RepositoryIndex,
   RepositorySummary,
@@ -130,10 +131,13 @@ export function queuedClone(jobId: number): CloneProgress {
  * even if a stale one is left. `branch` belongs to a single-branch clone only:
  * a full clone's is never answered, and adding refuses a single-branch clone
  * without one (AR-34), so `null` there means a damaged row, shown as no branch.
+ * The warnings and the stored problems they come from are the row's as
+ * `RepositoryWarnings.detailsOf` reads them, which leaves both empty outside
+ * `ready`.
  */
 export function toDetails(
   row: Repository,
-  warnings: RepositoryWarning[],
+  { warnings, remoteProblems }: { warnings: RepositoryWarning[]; remoteProblems: RemoteProblems; },
   clone: CloneProgress | undefined
 ): RepositoryDetails {
   const failed = row.status === 'error';
@@ -144,6 +148,7 @@ export function toDetails(
     gitLevel: row.gitLevel,
     addedAt: row.createdAt.toISOString(),
     errorDetail: failed ? row.errorDetail : null,
-    errorRequestId: failed ? row.errorRequestId : null
+    errorRequestId: failed ? row.errorRequestId : null,
+    remoteProblems
   };
 }

@@ -11,7 +11,7 @@ import {
 } from '@front-burner/ui';
 import { RepositoriesApi } from '@front-burner/web-api-client';
 import { type ApiErrorText, ApiErrorTextService, toApiError } from '@front-burner/web-core';
-import { UnlockKeyDialog, type UnlockKeyDialogData } from '@front-burner/web-repository-dialogs';
+import { KeyDialogsService, type ProtectedKey, protectedKeyOf } from '@front-burner/web-repository-dialogs';
 import { RepositoryStatusDetailComponent } from '@front-burner/web-shell';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
@@ -69,6 +69,7 @@ export class CloneStatusComponent {
   private readonly dialogs = inject(DialogService);
   private readonly document = inject(DOCUMENT);
   private readonly errorText = inject(ApiErrorTextService);
+  private readonly keyDialogs = inject(KeyDialogsService);
   private readonly store = inject(RepositorySettingsStore);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
@@ -190,26 +191,19 @@ export class CloneStatusComponent {
    * `impossible` when they cannot be read or are not the locked key any more.
    */
   private async unlock(id: number, refusal: ApiError): Promise<Unlock> {
-    let key: UnlockKeyDialogData;
+    let found: ProtectedKey | null;
     try {
-      const inUse = (await firstValueFrom(this.api.repositoryCredentials(id))).inUse;
-      if (
-        inUse?.kind !== 'ssh-key'
-        || !inUse.passphraseProtected
-        || inUse.missing
-        || inUse.id !== Number(refusal.params['keyId'])
-      ) {
-        return 'impossible';
-      }
-      if (inUse.unlocked) {
-        // Unlocked meanwhile, such as in another tab of this session.
-        return 'unlocked';
-      }
-      key = { id: inUse.id, name: inUse.name, keyType: inUse.keyType, fingerprint: inUse.fingerprint };
+      found = protectedKeyOf(await firstValueFrom(this.api.repositoryCredentials(id)));
     } catch {
       return 'impossible';
     }
-    const ref = this.dialogs.open<UnlockKeyDialog, UnlockKeyDialogData, boolean>(UnlockKeyDialog, { data: key });
-    return await firstValueFrom(ref.closed, { defaultValue: undefined }) === true ? 'unlocked' : 'cancelled';
+    if (found === null || found.key.id !== Number(refusal.params['keyId'])) {
+      return 'impossible';
+    }
+    if (found.unlocked) {
+      // Unlocked meanwhile, such as in another tab of this session.
+      return 'unlocked';
+    }
+    return await this.keyDialogs.unlock(found.key) ? 'unlocked' : 'cancelled';
   }
 }

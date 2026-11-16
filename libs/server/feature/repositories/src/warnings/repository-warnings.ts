@@ -26,6 +26,26 @@ export class RepositoryWarnings {
    * error (RM-6). Reads the stored problems and the keys once for all rows (NF-2).
    */
   forRows(viewer: WarningsViewer, rows: readonly Repository[]): RepositoryWarning[][] {
+    return this.withProblems(viewer, rows).map(({ warnings }) => warnings);
+  }
+
+  /** The warnings of one row. */
+  forRow(viewer: WarningsViewer, row: Repository): RepositoryWarning[] {
+    return this.forRows(viewer, [ row ])[0];
+  }
+
+  /**
+   * The warnings of one row with the stored problems they come from, with
+   * their params, for the fixes on the settings page (RM-8, RC-21). Both from
+   * one read, so that they always agree; no problems outside `ready`, as no
+   * warnings.
+   */
+  detailsOf(viewer: WarningsViewer, row: Repository): RowWarnings {
+    return this.withProblems(viewer, [ row ])[0];
+  }
+
+  /** Reads the stored problems and the keys once for all rows (NF-2). */
+  private withProblems(viewer: WarningsViewer, rows: readonly Repository[]): RowWarnings[] {
     const ready = rows.filter(row => row.status === 'ready');
     const problems = this.problems.read(ready.map(row => row.id));
     const lockedKeys = this.saved.lockedKeyIds(
@@ -33,18 +53,26 @@ export class RepositoryWarnings {
       viewer.sessionId,
       ready.flatMap(row => (row.credentialId === null ? [] : [ row.credentialId ]))
     );
-    return rows.map(row =>
-      row.status === 'ready'
-        ? warningsOf(problems.get(row.id), row.credentialId !== null && lockedKeys.has(row.credentialId))
-        : []
-    );
-  }
-
-  /** The warnings of one row. */
-  forRow(viewer: WarningsViewer, row: Repository): RepositoryWarning[] {
-    return this.forRows(viewer, [ row ])[0];
+    return rows.map(row => {
+      if (row.status !== 'ready') {
+        return { warnings: [], remoteProblems: NO_PROBLEMS };
+      }
+      const stored = problems.get(row.id);
+      return {
+        warnings: warningsOf(stored, row.credentialId !== null && lockedKeys.has(row.credentialId)),
+        remoteProblems: { fetch: stored?.fetch ?? null, push: stored?.push ?? null }
+      };
+    });
   }
 }
+
+/** A row's warnings, and the stored problems that they come from. */
+export interface RowWarnings {
+  warnings: RepositoryWarning[];
+  remoteProblems: RemoteProblems;
+}
+
+const NO_PROBLEMS: RemoteProblems = { fetch: null, push: null };
 
 /** RM-8's mapping, in the order of its table, each warning once. */
 function warningsOf(problems: RemoteProblems | undefined, keyLocked: boolean): RepositoryWarning[] {

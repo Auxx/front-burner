@@ -273,7 +273,8 @@ describe('repository details (REQ-REPO-003)', () => {
       gitLevel: 'advanced',
       addedAt: at(1).toISOString(),
       errorDetail: 'fatal: repository not found',
-      errorRequestId: 'request-1'
+      errorRequestId: 'request-1',
+      remoteProblems: { fetch: null, push: null }
     });
     expect(JSON.stringify(body)).not.toContain('ghp_token');
   });

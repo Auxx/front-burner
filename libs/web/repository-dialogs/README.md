@@ -30,6 +30,11 @@ What several web features share about a repository's git setup (A-2.4).
   its keys.
 - `TrustHostDialog`: "Do you trust this server?" for an unknown SSH host
   (AR-32).
+- `KeyDialogsService`: **Unlock** (`UnlockKeyDialog`, RC-16) and **Review the
+  new key** (`ChangedHostKeyDialog` with a `host-key-changed` problem's params,
+  RC-21), opened the same way by the repository screen and the settings page.
+  `protectedKeyOf` answers a repository's passphrase-protected key that
+  unlocking can help, and whether this session unlocked it.
 
 ## Running unit tests
 

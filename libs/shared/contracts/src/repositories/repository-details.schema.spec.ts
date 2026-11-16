@@ -17,7 +17,8 @@ const details = {
   gitLevel: 'advanced',
   addedAt: '2026-10-26T10:00:00.000Z',
   errorDetail: 'fatal: repository not found',
-  errorRequestId: 'request-1'
+  errorRequestId: 'request-1',
+  remoteProblems: { fetch: null, push: null }
 };
 
 describe('RepositoryDetailsSchema', () => {
@@ -28,6 +29,14 @@ describe('RepositoryDetailsSchema', () => {
   it('accepts a full clone without an error record', () => {
     const ready = { ...details, cloneMode: 'full', branch: null, errorDetail: null, errorRequestId: null };
     expect(RepositoryDetailsSchema.safeParse(ready).success).toBe(true);
+  });
+
+  it('accepts the stored problems with their params', () => {
+    const problems = {
+      fetch: { code: 'host-key-changed', params: { host: 'github.com', port: '22' } },
+      push: { code: 'push-not-allowed', params: {} }
+    };
+    expect(RepositoryDetailsSchema.parse({ ...details, remoteProblems: problems }).remoteProblems).toEqual(problems);
   });
 
   it('refuses an unknown clone mode', () => {

@@ -5,8 +5,8 @@ and Page not found. It also holds what the dashboard and the repository
 management page both show:
 
 - `RepositoryStatusComponent`: a repository's status and warning badges (RM-6,
-  RM-8); **Ready** only with `showReady`, as the repository management page
-  shows it (RM-5).
+  RM-8), each warning with the warning icon (NF-13.7); **Ready** only with
+  `showReady`, as the repository management page shows it (RM-5).
 - `RepositoryStatusDetailComponent`: the line under a listed repository: what
   went wrong for one in error (RM-6), and for a cloning one "Waiting for other
   clones to finish" or a progress bar with the percentage (RM-7, AR-52).

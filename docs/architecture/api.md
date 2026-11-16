@@ -50,6 +50,12 @@ numbering conventions.
   `error`, even when a stale value is left in the row. A separate endpoint, so
   that the lists do not carry git's error text for every repository. Another
   user's repository is answered like a missing one (RM-1). _(Plan 106's call.)_
+  It also answers `remoteProblems`, the stored problems of the last fetch or
+  pull (`fetch`) and of the last push (`push`) that RM-8's warnings come from,
+  each a `GitProblemState` with its params or `null`, and both `null` outside
+  `ready`: **Review the new key** needs the new host key that the problem's
+  params hold (RC-21). The params never hold a secret, and the remote's messages
+  are not stored. _(Plan 120's call.)_
 - **A-3.2c** `GET /repositories/:id/removal` answers what removing the
   repository would lose, as `RemovalCheckResult` (RM-18): `uncommittedFiles`
   (untracked files counted, ignored ones not), `unpushedCommits` (on `HEAD` or
