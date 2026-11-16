@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, linkedSignal } from '@angular/core';
 import type { RepositoryDetails } from '@front-burner/shared-contracts';
 import { ButtonComponent, CollapsibleComponent, IconComponent, ToastService } from '@front-burner/ui';
 import { RepositoryStatusDetailComponent } from '@front-burner/web-shell';
@@ -41,14 +41,18 @@ export class CloneStatusComponent {
   private readonly id = nextId++;
   protected readonly headingId = `repo-clone-status-heading-${this.id}`;
   protected readonly regionId = `repo-clone-status-details-${this.id}`;
-  protected readonly expanded = signal(false);
-
   protected readonly summary = computed(() => this.details().summary);
   protected readonly shown = computed(() => {
     const status = this.summary().status;
     return status === 'cloning' || status === 'error';
   });
   protected readonly failed = computed(() => this.summary().status === 'error');
+  /**
+   * Whether **Details** is open. Closed by default for every error (RM-10), so
+   * it closes when the repository leaves **Error**, such as for a retried clone,
+   * and stays closed when that clone fails again; a reload in **Error** keeps it.
+   */
+  protected readonly expanded = linkedSignal({ source: this.failed, computation: () => false });
 
   protected toggle(): void {
     this.expanded.update(expanded => !expanded);

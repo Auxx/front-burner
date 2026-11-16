@@ -85,6 +85,27 @@ describe('CloneStatusComponent', () => {
     expect(region()?.hasAttribute('inert')).toBe(false);
   });
 
+  it('closes Details when the repository leaves Error, and keeps it open while it stays', async () => {
+    await show(failed());
+    detailsButton()?.click();
+    await settle(fixture);
+
+    fixture.componentRef.setInput('details', failed({ errorRequestId: 'req-reloaded' }));
+    await settle(fixture);
+    expect(detailsButton()?.getAttribute('aria-expanded')).toBe('true');
+
+    fixture.componentRef.setInput(
+      'details',
+      repositoryDetails({ status: 'cloning', clone: { jobId: 4, state: 'running', percent: null } })
+    );
+    await settle(fixture);
+    fixture.componentRef.setInput('details', failed());
+    await settle(fixture);
+
+    expect(detailsButton()?.getAttribute('aria-expanded')).toBe('false');
+    expect(region()?.hasAttribute('inert')).toBe(true);
+  });
+
   it('shows git\'s error as text', async () => {
     await show(failed({ errorDetail: 'fatal: <img src=x onerror="alert(1)"> not found' }));
 
