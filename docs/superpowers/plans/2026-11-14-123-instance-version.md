@@ -21,6 +21,15 @@ version (an Angular environment value written at build time), so that the two
 can be compared (A-8.7). The user menu reads the web client's own version: it is
 the code that runs.
 
+**As built:** `FRONT_BURNER_VERSION` is a build argument only, not a runtime
+variable: the testing image's build writes it into `package.json`, and both
+builds read `package.json`'s `version` (the server's through webpack's
+`DefinePlugin`, passed to `loadConfig` as an option; the web client's through a
+JSON import that bundles only that field). A runtime variable could make the
+backend's version differ from the web client's, and plan 124's banner would then
+never go away. The header is on every response but the health probes', so
+`index.html` has it too (A-7.9).
+
 **Tech Stack:** as before. No new packages.
 
 **Spec:** `docs/requirements/navigation.md` (NV-7, AC-APP-001.3);

@@ -1,7 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
+import { workspaceRoot } from '@nx/devkit';
 import type { Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test } from './support/fixtures';
 import { logIn, TEST_ADMIN } from './support/instance';
+
+/** The build's version: the root package.json's (NV-7). */
+const VERSION = (JSON.parse(readFileSync(join(workspaceRoot, 'package.json'), 'utf8')) as { version: string; })
+  .version;
 
 test.use({ instanceOptions: { onboarded: true } });
 
@@ -76,13 +83,14 @@ test.describe('app header', () => {
     expect(await boxes()).toEqual(onDashboard);
   });
 
-  test('shows the user in the user menu', async ({ page }) => {
+  test('the user menu shows the display name, email and version', async ({ page }) => {
     await openDashboard(page);
     await accountButton(page).click();
 
     const menu = page.getByRole('menu');
     await expect(menu).toContainText(TEST_ADMIN.displayName);
     await expect(menu).toContainText(TEST_ADMIN.email);
+    await expect(menu.getByRole('group', { name: `Front Burner ${VERSION}`, exact: true })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Log out' })).toBeVisible();
   });
 

@@ -18,5 +18,14 @@
          routerLink="/preferences">{{ t('preferences') }}</a>
       <button uiMenuItem="logout">{{ t('logout') }}</button>
     </div>
+    <div uiMenuSeparator></div>
+    @let versionLine = t('version', { version });
+    <div uiMenuGroup
+         [label]="versionLine">
+      <p class="version"
+         aria-hidden="true">
+        {{ versionLine }}
+      </p>
+    </div>
   </ui-menu>
 </ng-container>

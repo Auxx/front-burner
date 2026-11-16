@@ -19,6 +19,7 @@ export {
   RemovedRepositoriesService,
   type RemovedRepositoryViewer
 } from './core/services/removed-repositories/removed-repositories.service';
+export { APP_VERSION } from './core/tokens/app-version';
 export { fieldErrorCode } from './core/utils/field-error-code/field-error-code';
 export { isRepositoryId } from './core/utils/is-repository-id/is-repository-id';
 export { relativeTime } from './core/utils/relative-time/relative-time';

@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import type { CurrentUser } from '@front-burner/shared-contracts';
-import { AuthSessionService } from '@front-burner/web-core';
+import { APP_VERSION, AuthSessionService } from '@front-burner/web-core';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -39,11 +39,13 @@ describe('UserMenuComponent', () => {
         translocoTesting({
           'web-shell.UserMenuComponent.label': 'Account menu for {{ name }}',
           'web-shell.UserMenuComponent.preferences': 'Preferences',
-          'web-shell.UserMenuComponent.logout': 'Log out'
+          'web-shell.UserMenuComponent.logout': 'Log out',
+          'web-shell.UserMenuComponent.version': 'Front Burner {{ version }}'
         })
       ],
       providers: [
         provideRouter([ { path: 'preferences', children: [] } ]),
+        { provide: APP_VERSION, useValue: '1.4.2' },
         { provide: AuthSessionService, useValue: { logout } }
       ]
     }).compileComponents();
@@ -66,6 +68,15 @@ describe('UserMenuComponent', () => {
     const menu = document.querySelector('[role="menu"]');
     expect(menu?.textContent).toContain('Ada Lovelace');
     expect(menu?.textContent).toContain('ada@example.com');
+  });
+
+  it('shows the version in the user menu', async () => {
+    trigger().click();
+    await settle(fixture);
+
+    const group = document.querySelector('[role="group"][aria-label="Front Burner 1.4.2"]');
+    expect(group?.textContent?.trim()).toBe('Front Burner 1.4.2');
+    expect(group?.querySelector('[role="menuitem"]')).toBeNull();
   });
 
   it('offers Preferences, which leads to /preferences', async () => {
