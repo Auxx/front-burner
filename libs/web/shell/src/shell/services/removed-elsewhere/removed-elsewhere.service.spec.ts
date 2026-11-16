@@ -68,7 +68,7 @@ describe('RemovedElsewhereService', () => {
 
     viewer?.removed();
 
-    expect(dropUnsaved).toHaveBeenCalledTimes(1);
+    expect(dropUnsaved).toHaveBeenCalledExactlyOnceWith(7);
     expect(show).toHaveBeenCalledWith(expect.objectContaining({
       message: 'Repository handbook removed. Your unsaved changes to its files were not saved.',
       status: 'warning'

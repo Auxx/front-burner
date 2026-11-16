@@ -103,8 +103,10 @@ export class RepositorySessionService {
       next: repository => this.follow(repository),
       error: (error: unknown) => {
         // Removed while this device did not hear of it, such as while offline: followed as after the event (RM-20).
-        if (toApiError(error).code === 'not-found') {
-          this.removals.removed(id);
+        // Without a page to leave, such as for a removal this tab made, it shows as missing here.
+        if (toApiError(error).code === 'not-found' && !this.removals.removed(id)) {
+          this.current.set(null);
+          this.currentState.set('missing');
         }
         // Otherwise the screen stays as it is; the next reconnect reads it again.
       }

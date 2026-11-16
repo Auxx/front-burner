@@ -10,10 +10,11 @@ export interface RepositoryOnScreen {
   /** The repository shown, with the name the page shows, or `null` while there is none. */
   readonly repository: () => { readonly id: number; readonly name: string; } | null;
   /**
-   * Drops every save still waiting, as its repository is gone; `true` when
-   * there were unsaved edits. Pages that save nothing leave it out.
+   * Drops every save still waiting for the repository `repositoryId`, which
+   * is gone; `true` when there were unsaved edits. Pages that save nothing
+   * leave it out.
    */
-  readonly dropUnsaved?: () => boolean;
+  readonly dropUnsaved?: (repositoryId: number) => boolean;
 }
 
 /**
@@ -39,8 +40,12 @@ export class RemovedElsewhereService {
     this.removals.watch({
       repositoryId: () => page.repository()?.id ?? null,
       removed: () => {
-        const name = page.repository()?.name ?? '';
-        const lost = page.dropUnsaved?.() ?? false;
+        const repository = page.repository();
+        if (repository === null) {
+          return;
+        }
+        const lost = page.dropUnsaved?.(repository.id) ?? false;
+        const name = repository.name;
         this.dialogs.closeAll();
         this.toast.show({
           message: this.transloco.translate(`${KEY}.${lost ? 'removedUnsaved' : 'removed'}`, { name }),

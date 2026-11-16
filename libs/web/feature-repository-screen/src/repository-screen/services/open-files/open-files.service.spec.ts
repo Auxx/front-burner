@@ -425,7 +425,7 @@ describe('OpenFilesService', () => {
       const other = await service.open('docs/guide.md');
       file.saver.edit(() => '# Typed just now');
 
-      expect(service.discardAll()).toBe(true);
+      expect(service.discardAll(12)).toBe(true);
       await service.flushAll();
       service.writeDrafts();
       await vi.advanceTimersByTimeAsync(30_000);
@@ -434,7 +434,20 @@ describe('OpenFilesService', () => {
       expect(drafts.at('README.md')).toBeUndefined();
       expect(file.saver.unsaved()).toBe(false);
       expect(other.saver.unsaved()).toBe(false);
-      expect(service.discardAll()).toBe(false);
+      expect(service.discardAll(12)).toBe(false);
+    });
+
+    it('keeps the waiting saves of another repository this page opened before', async () => {
+      const earlier = await service.open('README.md');
+      earlier.saver.edit(() => '# Edited in 12');
+      repository.set({ id: 13 } as RepositorySummary);
+      await service.open('README.md');
+
+      expect(service.discardAll(13)).toBe(false);
+      expect(earlier.saver.unsaved()).toBe(true);
+      await vi.advanceTimersByTimeAsync(1500);
+
+      expect(saves.map(save => save.id)).toEqual([ 12 ]);
     });
 
     it('stops retrying a save that failed when the repository was removed elsewhere', async () => {
@@ -443,7 +456,7 @@ describe('OpenFilesService', () => {
       await vi.advanceTimersByTimeAsync(1500);
       await answer(0);
 
-      expect(service.discardAll()).toBe(true);
+      expect(service.discardAll(12)).toBe(true);
       await vi.advanceTimersByTimeAsync(60_000);
 
       expect(saves).toHaveLength(1);

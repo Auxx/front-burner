@@ -41,6 +41,8 @@ export class RemovedRepositoriesService {
   private subscription: Subscription | undefined;
   /** The repositories this tab is removing or removed; their events are its own. */
   private readonly ownRemovals = new Set<number>();
+  /** The removals followed, with whether the tab went to the dashboard; repository IDs are never reused. */
+  private readonly followed = new Map<number, boolean>();
 
   /**
    * Listens for removals until the caller is destroyed, telling `viewer`, if
@@ -85,18 +87,30 @@ export class RemovedRepositoriesService {
    * Follows the removal of the repository `repositoryId`, from its event or
    * from a request that found it gone: the pages that show it are told and the
    * tab goes to the dashboard, and this device's browser drafts of it are
-   * deleted (RM-19). Does nothing for a removal this tab made.
+   * deleted (RM-19). Does nothing for a removal this tab made. A removal is
+   * followed once, however many times it is heard, such as from its event and
+   * from a request after a reconnect, so that the pages say it once.
+   *
+   * Answers whether the tab goes, or already went, to the dashboard for it; a
+   * caller that gets `false` shows the repository as missing itself.
    */
-  removed(repositoryId: number): void {
+  removed(repositoryId: number): boolean {
     if (this.ownRemovals.has(repositoryId)) {
-      return;
+      return false;
+    }
+    const followed = this.followed.get(repositoryId);
+    if (followed !== undefined) {
+      return followed;
     }
     const shown = [ ...this.viewers ].filter(viewer => viewer.repositoryId() === repositoryId);
     // The pages drop their waiting saves first, so that none writes a draft after the drafts are deleted.
     shown.forEach(viewer => viewer.removed());
     void this.drafts.deleteRepository(repositoryId);
-    if (shown.length > 0) {
+    const leaving = shown.length > 0;
+    this.followed.set(repositoryId, leaving);
+    if (leaving) {
       void this.router.navigateByUrl('/');
     }
+    return leaving;
   }
 }

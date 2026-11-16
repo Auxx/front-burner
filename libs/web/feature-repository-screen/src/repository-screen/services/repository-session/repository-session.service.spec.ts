@@ -113,12 +113,26 @@ describe('RepositorySessionService', () => {
   });
 
   it('follows a removal it missed when reading the repository again finds it gone', () => {
+    removed.mockReturnValue(true);
     session.start(12);
     reads.push(failure(404, 'not-found'));
 
     session.refresh();
 
     expect(removed).toHaveBeenCalledWith(12);
+    // The tab goes to the dashboard: the screen stays as it was until then.
+    expect(session.state()).toBe('ready');
+  });
+
+  it('shows a repository found gone as missing when the tab does not leave for it', () => {
+    removed.mockReturnValue(false);
+    session.start(12);
+    reads.push(failure(404, 'not-found'));
+
+    session.refresh();
+
+    expect(session.state()).toBe('missing');
+    expect(session.repository()).toBeNull();
   });
 
   it('keeps the screen when reading the repository again fails otherwise', () => {

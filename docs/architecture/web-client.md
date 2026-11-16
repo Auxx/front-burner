@@ -70,12 +70,14 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     while a page that shows a repository, or a list of them, watches, so no page
     opens the push channel for it alone. A device that missed the event learns
     it from a `404 not-found`: the repository screen deletes the user's own
-    drafts of a repository it cannot open, and one that disappears while shown
-    is followed as after the event. Pages that show the repository drop their
-    waiting saves, close their dialogs, say "Repository _name_ removed." (adding
-    that unsaved changes were not saved, when there were some) and go to the
-    dashboard (RM-20). The removing tab marks its own removal before the
-    request, since the event may come before the answer. _(Plan 122's call.)_
+    drafts of a repository it cannot open, and one that disappears while the
+    repository screen or the settings page shows it is followed as after the
+    event. A removal is followed once per tab, however many times it is heard.
+    Pages that show the repository drop its waiting saves, close their dialogs,
+    say "Repository _name_ removed." (adding that unsaved changes were not
+    saved, when there were some) and go to the dashboard (RM-20). The removing
+    tab marks its own removal before the request, since the event may come
+    before the answer. _(Plan 122's call.)_
 
 ## A-8: Editor and preview
 

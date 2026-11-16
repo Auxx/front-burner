@@ -135,6 +135,29 @@ describe('RemovedRepositoriesService', () => {
     expect(removed).not.toHaveBeenCalled();
   });
 
+  it('follows a removal once, heard from its event and from a request after a reconnect', () => {
+    const removed = vi.fn();
+    watch({ repositoryId: () => 7, removed });
+    const service = TestBed.inject(RemovedRepositoriesService);
+
+    removedElsewhere(7);
+
+    expect(service.removed(7)).toBe(true);
+    expect(removed).toHaveBeenCalledTimes(1);
+    expect(deleteRepository).toHaveBeenCalledTimes(1);
+    expect(navigateByUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers whether the tab leaves for the removal', () => {
+    watch({ repositoryId: () => 7, removed: vi.fn() });
+    const service = TestBed.inject(RemovedRepositoriesService);
+
+    expect(service.removed(8)).toBe(false);
+    expect(service.removed(7)).toBe(true);
+    service.expect(9);
+    expect(service.removed(9)).toBe(false);
+  });
+
   it('follows one event once, however many watch', () => {
     const removed = vi.fn();
     watch({ repositoryId: () => 7, removed });

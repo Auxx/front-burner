@@ -200,13 +200,16 @@ export class OpenFilesService {
   }
 
   /**
-   * Drops every file's waiting save and stops its retries, without a draft,
-   * such as when the repository was removed elsewhere (RM-19); the answer to
-   * a save in flight is ignored. `true` when any file had unsaved edits.
+   * Drops the waiting save of every file of the repository `repositoryId`
+   * and stops its retries, without a draft, such as when the repository was
+   * removed elsewhere (RM-19); the answer to a save in flight is ignored.
+   * Files of other repositories this page opened keep theirs. `true` when any
+   * of its files had unsaved edits.
    */
-  discardAll(): boolean {
-    const unsaved = this.anyUnsaved();
-    this.all().forEach(file => file.saver.discard());
+  discardAll(repositoryId: number): boolean {
+    const files = [ ...(this.files.get(repositoryId)?.values() ?? []) ];
+    const unsaved = files.some(file => file.saver.unsaved());
+    files.forEach(file => file.saver.discard());
     return unsaved;
   }
 

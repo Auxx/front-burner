@@ -388,7 +388,7 @@ export class RepositoryScreenPage {
     // the tab goes to the dashboard without the leave checks, since nothing is left to save.
     inject(RemovedElsewhereService).watch({
       repository: () => this.session.repository(),
-      dropUnsaved: () => this.openFiles.discardAll()
+      dropUnsaved: repositoryId => this.openFiles.discardAll(repositoryId)
     });
     this.keepFocusWhenNoticeGoes();
     this.closeBranchListWhenMergeStarts();
