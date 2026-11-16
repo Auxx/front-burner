@@ -1,6 +1,6 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { type ChildProcess, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -12,6 +12,11 @@ const TEST_CERTIFICATE = resolve(
   import.meta.dirname,
   '../../../../libs/server/core/security/src/testing/fixtures/test.crt'
 );
+
+/** The version the server was built with: the root package.json's (NF-7.6, `apps/server/webpack.config.js`). */
+export const BUILD_VERSION = (JSON.parse(
+  readFileSync(resolve(import.meta.dirname, '../../../../package.json'), 'utf8')
+) as { version: string; }).version;
 
 /** The `FRONT_BURNER_JWT_SECRET` of every test server unless a test sets its own. */
 export const TEST_JWT_SECRET = 'server-e2e-jwt-secret-0123456789abcdefghijklmnop';

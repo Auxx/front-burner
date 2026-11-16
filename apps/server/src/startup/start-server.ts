@@ -2,7 +2,7 @@ import { Config, ConfigError, loadConfig } from '@front-burner/server-core-confi
 import { checkEncryptionKey, SecretBox } from '@front-burner/server-core-crypto';
 import { applyMigrations, assertNoNewerMigrations, Database, openDatabase } from '@front-burner/server-core-database';
 import { assertHelpersExecutable, assertSupportedGit, GitRunner } from '@front-burner/server-core-git';
-import { createBootstrapLogger, createRequestLogger } from '@front-burner/server-core-observability';
+import { createBootstrapLogger, createRequestLogger, HEALTH_ROUTES } from '@front-burner/server-core-observability';
 import { securityHeaders, serveWebClient, versionHeader } from '@front-burner/server-core-security';
 import { INestApplication, Logger as NestLogger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -104,13 +104,14 @@ function configure(
   // First, so that every response has an ID and is logged (NF-10.6, A-1.12).
   app.use(requestLogger);
   app.use(securityHeaders());
-  app.use(versionHeader(config.version));
+  // The health probes reveal no version (NF-10.9).
+  app.use(versionHeader(config.version, { except: HEALTH_ROUTES }));
   // The refresh token's cookie (LG-32).
   app.use(cookieParser());
   // Nest's own parser is off so that the limit of NF-11.5 applies.
   app.useBodyParser('json', { limit: '2mb' });
   // The health probes keep their path outside the API version (NF-10.7).
-  app.setGlobalPrefix('api/v1', { exclude: [ 'api/health/live', 'api/health/ready' ] });
+  app.setGlobalPrefix('api/v1', { exclude: [ ...HEALTH_ROUTES ] });
   if (!serveWebClient(app.getHttpAdapter().getInstance(), webRoot)) {
     log.log(`Web client not found at ${webRoot}; serving the API only.`);
   }

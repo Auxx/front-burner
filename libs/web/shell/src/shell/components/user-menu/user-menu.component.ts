@@ -13,7 +13,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 
 import { initials } from '../../utils/initials/initials';
 
-type Item = 'preferences' | 'logout';
+type Item = 'preferences' | 'logout' | 'version';
 
 /**
  * The user menu of the app header (NV-7, NV-8): who is logged in,

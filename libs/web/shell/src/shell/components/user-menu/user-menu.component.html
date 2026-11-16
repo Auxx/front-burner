@@ -19,13 +19,10 @@
       <button uiMenuItem="logout">{{ t('logout') }}</button>
     </div>
     <div uiMenuSeparator></div>
-    @let versionLine = t('version', { version });
-    <div uiMenuGroup
-         [label]="versionLine">
-      <p class="version"
-         aria-hidden="true">
-        {{ versionLine }}
-      </p>
-    </div>
+    <!-- Disabled, not plain text: the arrow keys still reach it, so a screen reader reads it. -->
+    <button uiMenuItem="version"
+            [disabled]="true">
+      {{ t('version', { version }) }}
+    </button>
   </ui-menu>
 </ng-container>

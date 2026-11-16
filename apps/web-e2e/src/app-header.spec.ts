@@ -1,14 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
-import { workspaceRoot } from '@nx/devkit';
 import type { Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { expect, test } from './support/fixtures';
 import { logIn, TEST_ADMIN } from './support/instance';
-
-/** The build's version: the root package.json's (NV-7). */
-const VERSION = (JSON.parse(readFileSync(join(workspaceRoot, 'package.json'), 'utf8')) as { version: string; })
-  .version;
 
 test.use({ instanceOptions: { onboarded: true } });
 
@@ -90,7 +83,10 @@ test.describe('app header', () => {
     const menu = page.getByRole('menu');
     await expect(menu).toContainText(TEST_ADMIN.displayName);
     await expect(menu).toContainText(TEST_ADMIN.email);
-    await expect(menu.getByRole('group', { name: `Front Burner ${VERSION}`, exact: true })).toBeVisible();
+    // The web client's own version, which is the backend's (A-8.7).
+    const version = (await page.request.get('/api/v1/auth/methods')).headers()['x-front-burner-version'];
+    expect(version).toBeTruthy();
+    await expect(menu).toContainText(`Front Burner ${version}`);
     await expect(menu.getByRole('menuitem', { name: 'Log out' })).toBeVisible();
   });
 

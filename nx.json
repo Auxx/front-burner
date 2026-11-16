@@ -24,6 +24,14 @@
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
       "!{projectRoot}/tsconfig.spec.json"
     ],
+    "buildVersion": [
+      {
+        "json": "{workspaceRoot}/package.json",
+        "fields": [
+          "version"
+        ]
+      }
+    ],
     "sharedGlobals": [
       "{workspaceRoot}/vitest.shared.mts",
       "{workspaceRoot}/vitest-base.config.mts"

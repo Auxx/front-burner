@@ -4,7 +4,7 @@ import { versionHeader } from './version-header';
 
 function createApp(): express.Application {
   const app = express();
-  app.use(versionHeader('1.4.2'));
+  app.use(versionHeader('1.4.2', { except: [ 'api/health/live', 'api/health/ready' ] }));
   app.get('/api/v1/session', (_req, res) => {
     res.json({ ok: true });
   });
@@ -48,8 +48,18 @@ describe('versionHeader', () => {
     expect(res.headers['x-front-burner-version']).toBeUndefined();
   });
 
+  it('leaves them out however the router reaches them: in another case or with a trailing slash', async () => {
+    for (const path of [ '/API/Health/Live', '/api/HEALTH/live/' ]) {
+      const res = await request(createApp()).get(path);
+      expect(res.status, path).toBe(200);
+      expect(res.headers['x-front-burner-version'], path).toBeUndefined();
+    }
+  });
+
   it('only leaves out the health endpoints themselves', async () => {
-    const res = await request(createApp()).get('/api/healthy');
-    expect(res.headers['x-front-burner-version']).toBe('1.4.2');
+    for (const path of [ '/api/healthy', '/api/health/other', '/api/health' ]) {
+      const res = await request(createApp()).get(path);
+      expect(res.headers['x-front-burner-version'], path).toBe('1.4.2');
+    }
   });
 });

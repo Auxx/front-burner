@@ -74,9 +74,16 @@ describe('UserMenuComponent', () => {
     trigger().click();
     await settle(fixture);
 
-    const group = document.querySelector('[role="group"][aria-label="Front Burner 1.4.2"]');
-    expect(group?.textContent?.trim()).toBe('Front Burner 1.4.2');
-    expect(group?.querySelector('[role="menuitem"]')).toBeNull();
+    // A menu item, so that the arrow keys reach it and a screen reader reads it,
+    // which plain text in a menu never is; disabled, as there is nothing to do.
+    const version = menuItem('Front Burner 1.4.2') as HTMLButtonElement;
+    expect(version.getAttribute('aria-disabled')).toBe('true');
+    expect(version.disabled).toBe(false);
+
+    version.click();
+    await settle(fixture);
+    expect(TestBed.inject(Router).url).toBe('/');
+    expect(logout).not.toHaveBeenCalled();
   });
 
   it('offers Preferences, which leads to /preferences', async () => {
@@ -84,7 +91,7 @@ describe('UserMenuComponent', () => {
     await settle(fixture);
 
     const items = [ ...document.querySelectorAll('[role="menuitem"]') ].map(item => item.textContent?.trim());
-    expect(items).toEqual([ 'Preferences', 'Log out' ]);
+    expect(items).toEqual([ 'Preferences', 'Log out', 'Front Burner 1.4.2' ]);
 
     menuItem('Preferences')?.click();
     await settle(fixture);

@@ -16,14 +16,8 @@
       ],
       "defaultConfiguration": "production",
       "inputs": [
-        "production",
-        "^production",
-        {
-          "json": "{workspaceRoot}/package.json",
-          "fields": [
-            "version"
-          ]
-        }
+        "...",
+        "buildVersion"
       ],
       "options": {
         "outputPath": "dist/apps/web",
