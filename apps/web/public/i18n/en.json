@@ -466,6 +466,7 @@
   "web-feature-repositories.CredentialsInUseComponent.protected": "Protected",
   "web-feature-repositories.CredentialsInUseComponent.none": "None",
   "web-feature-repositories.CredentialsInUseComponent.noCredentials": "No credentials (public repository)",
+  "web-feature-repositories.CredentialsInUseComponent.missing": "These saved credentials are no longer available. Change credentials to give this repository new ones.",
   "web-feature-repositories.CredentialsInUseComponent.loading": "Loading the credentials",
   "web-feature-repositories.CredentialsInUseComponent.loadFailed": "The credentials could not be loaded.",
   "web-feature-repositories.CredentialsInUseComponent.retry": "Try again",

@@ -1,7 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import type { RepositoryCredentialsInfo, RepositorySummary } from '@front-burner/shared-contracts';
+import type { PushEvent, RepositoryCredentialsInfo, RepositorySummary } from '@front-burner/shared-contracts';
 import { DialogService } from '@front-burner/ui';
 import { RepositoriesApi } from '@front-burner/web-api-client';
+import { PushChannelService } from '@front-burner/web-core';
 import { RepositoryCredentialsDialog } from '@front-burner/web-repository-dialogs';
 import { type Observable, of, Subject, throwError } from 'rxjs';
 
@@ -49,6 +50,7 @@ describe('CredentialsInUseComponent', () => {
   let open: ReturnType<typeof vi.fn>;
   let closed: Subject<boolean | undefined>;
   let store: { reload: ReturnType<typeof vi.fn>; };
+  let push: { events: Subject<PushEvent>; reconnected: Subject<void>; };
 
   const host = () => fixture.nativeElement as HTMLElement;
   const changeButton = () => host().querySelector<HTMLButtonElement>('button.change');
@@ -59,6 +61,7 @@ describe('CredentialsInUseComponent', () => {
     closed = new Subject();
     open = vi.fn(() => ({ closed }));
     store = { reload: vi.fn() };
+    push = { events: new Subject(), reconnected: new Subject() };
     await TestBed.configureTestingModule({
       imports: [
         CredentialsInUseComponent,
@@ -81,7 +84,8 @@ describe('CredentialsInUseComponent', () => {
           }
         },
         { provide: DialogService, useValue: { open } },
-        { provide: RepositorySettingsStore, useValue: store }
+        { provide: RepositorySettingsStore, useValue: store },
+        { provide: PushChannelService, useValue: push }
       ]
     }).compileComponents();
     fixture = TestBed.createComponent(CredentialsInUseComponent);
@@ -248,22 +252,119 @@ describe('CredentialsInUseComponent', () => {
     expect(values()[`${KEY}.name`]).toBe('GitHub token');
   });
 
-  it('reads the credentials of another repository', async () => {
-    await show(ready(), () => of(https), () => of(sshKey));
-
-    fixture.componentRef.setInput('repository', { ...ready(), id: 8 });
-    await settle(fixture);
-
-    expect(requested).toEqual([ 7, 8 ]);
-    expect(values()[`${KEY}.name`]).toBe('Laptop key');
-  });
-
-  it('does not read again when only the status changes', async () => {
+  it('does not read again when only the summary changes', async () => {
     await show(ready(), () => of(https));
 
     fixture.componentRef.setInput('repository', { ...ready(), status: 'error', error: 'clone-failed' });
     await settle(fixture);
 
     expect(requested).toEqual([ 7 ]);
+  });
+
+  it('says when the saved credentials are no longer available', async () => {
+    await show(ready(), () => of({ ...https, inUse: { ...httpsInUse, missing: true } }));
+
+    expect(host().querySelector('ui-inline-banner.missing')?.textContent?.trim()).toBe(`${KEY}.missing`);
+    expect(values()[`${KEY}.name`]).toBe('GitHub token');
+  });
+
+  it('says nothing more of credentials that are available', async () => {
+    await show(ready(), () => of(sshKey));
+
+    expect(host().querySelector('ui-inline-banner')).toBeNull();
+  });
+
+  it('shows credentials changed elsewhere after the repository\'s event', async () => {
+    await show(ready(), () => of(https), () => of(sshKey));
+
+    push.events.next({ type: 'repository.warning', repositoryId: 7 });
+    await settle(fixture);
+
+    expect(requested).toEqual([ 7, 7 ]);
+    expect(values()[`${KEY}.name`]).toBe('Laptop key');
+  });
+
+  it('reads again on the repository\'s status, and not on another repository\'s events', async () => {
+    await show(ready(), () => of(https));
+
+    push.events.next({ type: 'repository.warning', repositoryId: 8 });
+    push.events.next({ type: 'repository.status', repositoryId: 8, status: 'ready', error: null });
+    push.events.next({ type: 'job.progress', jobId: 3, percent: 10 });
+    await settle(fixture);
+    expect(requested).toEqual([ 7 ]);
+
+    push.events.next({ type: 'repository.status', repositoryId: 7, status: 'error', error: 'clone-failed' });
+    await settle(fixture);
+    expect(requested).toEqual([ 7, 7 ]);
+  });
+
+  it('reads again after a reconnect, keeping what it shows when that fails', async () => {
+    await show(ready(), () => of(https), () => throwError(() => apiFailure(500, 'internal')));
+
+    push.reconnected.next();
+    await settle(fixture);
+
+    expect(requested).toEqual([ 7, 7 ]);
+    expect(values()[`${KEY}.name`]).toBe('GitHub token');
+    expect(host().textContent).not.toContain(`${KEY}.loadFailed`);
+  });
+
+  it('is busy while the dialog is open', async () => {
+    await show(ready(), () => of(https));
+
+    changeButton()?.click();
+    await settle(fixture);
+    expect(changeButton()?.getAttribute('aria-disabled')).toBe('true');
+
+    closed.complete();
+    await settle(fixture);
+    expect(changeButton()?.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('answers a second call as the open dialog does', async () => {
+    await show(ready(), () => of(https), () => of(sshKey));
+
+    const first = fixture.componentInstance.change();
+    const second = fixture.componentInstance.change({ offerTokenUpdate: true });
+    closed.next(true);
+    closed.complete();
+
+    await expect(first).resolves.toBe(true);
+    await expect(second).resolves.toBe(true);
+    expect(open).toHaveBeenCalledOnce();
+    expect(store.reload).toHaveBeenCalledOnce();
+  });
+
+  it('opens the dialog again once the first one has closed', async () => {
+    await show(ready(), () => of(https));
+
+    const first = fixture.componentInstance.change();
+    closed.complete();
+    await first;
+    closed = new Subject();
+    void fixture.componentInstance.change();
+
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads nothing after the page has gone', async () => {
+    await show(ready(), () => of(https));
+
+    const changed = fixture.componentInstance.change();
+    fixture.destroy();
+    closed.next(true);
+    closed.complete();
+
+    await expect(changed).resolves.toBe(true);
+    expect(requested).toEqual([ 7 ]);
+    expect(store.reload).not.toHaveBeenCalled();
+  });
+
+  it('leaves a repository that is gone to the page', async () => {
+    await show(ready(), () => throwError(() => apiFailure(404, 'not-found')));
+
+    expect(store.reload).toHaveBeenCalledOnce();
+    expect(host().textContent).not.toContain(`${KEY}.loadFailed`);
+    expect(host().querySelector('button.retry')).toBeNull();
   });
 });
