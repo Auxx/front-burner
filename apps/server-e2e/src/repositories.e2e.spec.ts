@@ -570,3 +570,96 @@ describe('cloning a repository again (REQ-REPO-003)', () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe('another user\'s repository (REQ-REPO-003)', () => {
+  let server: ServerProcess;
+
+  beforeAll(async () => {
+    server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN });
+    await onboard(server);
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+  });
+
+  /** Every endpoint of REQ-REPO-003 that names a repository, with a body it would accept. */
+  const endpoints: { method: string; path: (id: number) => string; body?: unknown; }[] = [
+    { method: 'GET', path: id => `/repositories/${id}` },
+    { method: 'GET', path: id => `/repositories/${id}/details` },
+    { method: 'GET', path: id => `/repositories/${id}/removal` },
+    { method: 'DELETE', path: id => `/repositories/${id}?confirmName=secret` },
+    { method: 'POST', path: id => `/repositories/${id}/clone` },
+    { method: 'GET', path: id => `/repositories/${id}/credentials` },
+    { method: 'PUT', path: id => `/repositories/${id}/credentials`, body: { mode: 'none' } },
+    {
+      method: 'PUT',
+      path: id => `/repositories/${id}/credentials/token`,
+      body: { username: 'mallory', password: 'stolen-token' }
+    },
+    { method: 'GET', path: id => `/repositories/${id}/commit-author` },
+    {
+      method: 'PUT',
+      path: id => `/repositories/${id}/commit-author`,
+      body: { name: 'Mallory', email: 'mallory@example.com' }
+    },
+    { method: 'DELETE', path: id => `/repositories/${id}/commit-author` }
+  ];
+
+  it('AC-REPO-003.14: a request for another user\'s repository settings, or to remove another user\'s repository, gets the same response as for a repository that does not exist', async () => {
+    const email = 'owner@example.com';
+    const ownerId = seed(server.dataDir, { users: [ { email } ] }).userIds[0] as number;
+    const [ secret ] = seed(server.dataDir, {
+      repositories: [ {
+        userId: ownerId,
+        name: 'secret',
+        remoteUrl: 'https://github.com/acme/secret.git',
+        status: 'error',
+        errorCode: 'clone-failed',
+        errorDetail: 'fatal: repository not found',
+        lastAccessedAt: at(0)
+      } ]
+    }).repositoryIds as [ number ];
+    const missing = secret + 100;
+    const { authToken } = await login(server, 'body');
+    const call = async (method: string, path: string, body?: unknown) => {
+      const response = await fetch(`${server.url}/api/v1${path}`, {
+        method,
+        headers: { authorization: `Bearer ${authToken}`, 'content-type': 'application/json' },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) })
+      });
+      const text = await response.text();
+      return {
+        status: response.status,
+        body: { ...JSON.parse(text), requestId: undefined } as Record<string, unknown>
+      };
+    };
+    const owner = await login(server, 'body', { email, password: E2E_ADMIN.password });
+    const asOwner = async (path: string) =>
+      (await fetch(`${server.url}/api/v1${path}`, { headers: { authorization: `Bearer ${owner.authToken}` } }))
+        .json();
+    const before = {
+      details: await asOwner(`/repositories/${secret}/details`),
+      credentials: await asOwner(`/repositories/${secret}/credentials`),
+      author: await asOwner(`/repositories/${secret}/commit-author`)
+    };
+
+    for (const endpoint of endpoints) {
+      const theirs = await call(endpoint.method, endpoint.path(secret), endpoint.body);
+      const none = await call(endpoint.method, endpoint.path(missing), endpoint.body);
+
+      expect(theirs, `${endpoint.method} ${endpoint.path(secret)}`).toEqual(none);
+      expect(theirs, `${endpoint.method} ${endpoint.path(secret)}`).toMatchObject({
+        status: 404,
+        body: { code: 'not-found' }
+      });
+    }
+
+    // Not listed, and nothing of the owner's changed.
+    const listed = await call('GET', '/repositories');
+    expect((listed.body['repositories'] as Summary[]).map(repository => repository.id)).not.toContain(secret);
+    expect(await asOwner(`/repositories/${secret}/details`)).toEqual(before.details);
+    expect(await asOwner(`/repositories/${secret}/credentials`)).toEqual(before.credentials);
+    expect(await asOwner(`/repositories/${secret}/commit-author`)).toEqual(before.author);
+  });
+});

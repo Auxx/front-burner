@@ -122,6 +122,15 @@ numbering conventions.
   trash. Kept: the name, credentials, level, commit author override, last access
   time and date added. Another user's repository is answered like a missing one
   (RM-1). _(Plan 112's call.)_
+- **A-3.2f** Every endpoint of REQ-REPO-003 that names a repository answers
+  another user's repository exactly as a missing one, `404 not-found` with the
+  same body apart from the request ID, and changes nothing (RM-1,
+  AC-REPO-003.14): the summary, A-3.2b to A-3.2e, `GET` and `PUT
+  /repositories/:id/credentials`, `PUT /repositories/:id/credentials/token`, and
+  `GET`, `PUT` and `DELETE /repositories/:id/commit-author`. A request body that
+  would be accepted is not checked against the remote first, so the answer tells
+  nothing about the repository. One server end-to-end test goes through them all
+  (A-7.5). _(Plan 126's call.)_
 
 ## A-3: Contracts
 
