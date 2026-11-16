@@ -72,17 +72,21 @@ export class RepositorySettingsStore {
   /**
    * Shows `summary`, the API's answer to **Retry clone** or **Clone again**,
    * at once (RM-11): the repository is **Cloning**, and the old error record
-   * is gone. A read already on its way may describe the failed clone, so it no
-   * longer counts; the clone's events read the details again.
+   * is gone. The backend announces the clone, and may even finish it, before
+   * this answer arrives, so the answer is shown only over the **Error** it
+   * replaces, never over what a read has shown since, and the details are read
+   * again either way: a read already on its way may describe the failed clone,
+   * and progress reported before the answer was not patched in.
    */
   cloning(summary: RepositorySummary): void {
     const details = this.current();
     if (details?.summary.id !== summary.id) {
       return;
     }
-    this.request?.unsubscribe();
-    this.reloading.set(false);
-    this.current.set({ ...details, summary, errorDetail: null, errorRequestId: null });
+    if (details.summary.status === 'error') {
+      this.current.set({ ...details, summary, errorDetail: null, errorRequestId: null });
+    }
+    this.fetch();
   }
 
   /** **Try again** after the first load failed. */

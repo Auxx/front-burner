@@ -76,6 +76,7 @@ export class CloneStatusComponent {
   private readonly id = nextId++;
   protected readonly headingId = `repo-clone-status-heading-${this.id}`;
   protected readonly regionId = `repo-clone-status-details-${this.id}`;
+  protected readonly hintId = `repo-clone-status-hint-${this.id}`;
   protected readonly summary = computed(() => this.details().summary);
   protected readonly shown = computed(() => {
     const status = this.summary().status;
@@ -89,6 +90,8 @@ export class CloneStatusComponent {
     }
     return summary.error === 'working-copy-missing' ? 'clone-again' : 'retry';
   });
+  /** **Retry clone** is described by the hint about its credentials, so that it is heard on the button too. */
+  protected readonly describedBy = computed(() => this.action() === 'retry' ? this.hintId : null);
   /**
    * Whether **Details** is open. Closed by default for every error (RM-10), so
    * it closes when the repository leaves **Error**, such as for a retried clone,
@@ -116,7 +119,8 @@ export class CloneStatusComponent {
     this.cloning.set(true);
     this.failure.set(null);
     try {
-      if (action === 'clone-again' && !await this.confirmed()) {
+      // Not when the repository left Error while the warning was open, such as when another tab cloned it.
+      if (action === 'clone-again' && (!await this.confirmed() || this.action() !== action)) {
         return;
       }
       await this.send(this.summary().id, true);
@@ -189,7 +193,12 @@ export class CloneStatusComponent {
     let key: UnlockKeyDialogData;
     try {
       const inUse = (await firstValueFrom(this.api.repositoryCredentials(id))).inUse;
-      if (inUse?.kind !== 'ssh-key' || inUse.missing || inUse.id !== Number(refusal.params['keyId'])) {
+      if (
+        inUse?.kind !== 'ssh-key'
+        || !inUse.passphraseProtected
+        || inUse.missing
+        || inUse.id !== Number(refusal.params['keyId'])
+      ) {
         return 'impossible';
       }
       if (inUse.unlocked) {

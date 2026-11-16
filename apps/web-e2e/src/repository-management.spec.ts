@@ -553,7 +553,7 @@ test.describe('Retry clone and Clone again', () => {
   let root: string;
   let git: GitHttpServer;
   let publicGit: GitHttpServer;
-  /** Whether the private remote fails every clone, while its access checks still succeed. */
+  /** Whether the private remote fails every clone, while its access checks still succeed; at first in every test. */
   let broken = true;
   const READER = { username: 'reader', password: 'pull-token-0123' };
 
@@ -569,6 +569,10 @@ test.describe('Retry clone and Clone again', () => {
     publicGit = await startGitHttpServer({
       repositories: { 'handbook.git': createHandbookRemote(join(root, 'public')) }
     });
+  });
+
+  test.beforeEach(() => {
+    broken = true;
   });
 
   test.afterAll(async () => {
@@ -591,7 +595,6 @@ test.describe('Retry clone and Clone again', () => {
   }
 
   test('AC-REPO-003.4: a failed clone shows "Clone failed" and, under Details, the git error without secrets and with the request ID; Retry clone clones again with the same settings, and changing the credentials first is possible', async ({ page, instance }) => {
-    broken = true;
     const token = await adminAuthToken(instance.url);
     const added = await api(instance.url, token, 'POST', '/api/v1/repositories', {
       name: 'handbook',

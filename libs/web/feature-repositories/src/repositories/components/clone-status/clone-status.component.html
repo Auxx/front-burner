@@ -41,7 +41,8 @@
         </ui-collapsible>
         @let action = this.action();
         @if (action === 'retry') {
-          <p class="hint">{{ t('retryHint') }}</p>
+          <p class="hint"
+             [id]="hintId">{{ t('retryHint') }}</p>
         }
         @if (failure(); as failure) {
           <ui-inline-banner class="failure"
@@ -58,6 +59,7 @@
                   variant="primary"
                   class="clone"
                   [busy]="cloning()"
+                  [attr.aria-describedby]="describedBy()"
                   (click)="clone()">{{ action === 'clone-again' ? t('cloneAgain') : t('retry') }}</button>
         </div>
       }

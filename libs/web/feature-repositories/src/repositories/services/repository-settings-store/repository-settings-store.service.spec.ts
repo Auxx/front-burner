@@ -132,35 +132,53 @@ describe('RepositorySettingsStore', () => {
     expect(store.state()).toBe('missing');
   });
 
-  it('shows a retried clone at once, and drops the answer on its way', () => {
-    const pending = new Subject<RepositoryDetails>();
+  describe('a retried clone', () => {
     const failed = repositoryDetails(
       { status: 'error', error: 'clone-failed' },
       { errorDetail: 'fatal: not found', errorRequestId: 'req-1' }
     );
-    answers = [ of(failed), pending ];
-    store.load(7);
-    store.reload();
-
     const clone = { jobId: 9, state: 'waiting', percent: null } as const;
-    store.cloning({ ...failed.summary, status: 'cloning', error: null, clone });
-    pending.next(failed);
+    const answer = { ...failed.summary, status: 'cloning', error: null, clone } as const;
 
-    expect(store.details()).toEqual({
-      ...failed,
-      summary: { ...failed.summary, status: 'cloning', error: null, clone },
-      errorDetail: null,
-      errorRequestId: null
+    it('shows at once, drops the read on its way and reads again', () => {
+      const pending = new Subject<RepositoryDetails>();
+      const again = new Subject<RepositoryDetails>();
+      answers = [ of(failed), pending, again ];
+      store.load(7);
+      store.reload();
+
+      store.cloning(answer);
+      pending.next(failed);
+
+      expect(requested).toEqual([ 7, 7, 7 ]);
+      expect(store.details()).toEqual({ ...failed, summary: answer, errorDetail: null, errorRequestId: null });
+
+      const running = repositoryDetails({ status: 'cloning', clone: { jobId: 9, state: 'running', percent: 40 } });
+      again.next(running);
+      expect(store.details()).toEqual(running);
     });
-  });
 
-  it('ignores a clone of another repository', () => {
-    answers = [ of(repositoryDetails()) ];
-    store.load(7);
+    it('keeps what a read showed since the clone was announced, and reads again', () => {
+      // The clone ended before the answer to the request arrived.
+      answers = [ of(failed), of(repositoryDetails()), new Subject() ];
+      store.load(7);
+      push.events.next({ type: 'repository.status', repositoryId: 7, status: 'ready', error: null });
 
-    store.cloning({ ...repositoryDetails().summary, id: 8, status: 'cloning' });
+      store.cloning(answer);
 
-    expect(store.details()?.summary.status).toBe('ready');
+      expect(store.details()?.summary.status).toBe('ready');
+      expect(requested).toEqual([ 7, 7, 7 ]);
+    });
+
+    it('ignores a clone of another repository', () => {
+      answers = [ of(repositoryDetails()) ];
+      store.load(7);
+
+      store.cloning({ ...answer, id: 8 });
+
+      expect(store.details()?.summary.status).toBe('ready');
+      expect(requested).toEqual([ 7 ]);
+    });
   });
 
   it('asks for nothing before a repository is shown', () => {

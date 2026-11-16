@@ -227,7 +227,9 @@ describe('CloneStatusComponent', () => {
       await show(repositoryDetails({ status: 'error', error: 'clone-timed-out' }));
 
       expect(cloneButton()?.textContent?.trim()).toBe(`${KEY}.retry`);
-      expect(host().querySelector('.hint')?.textContent?.trim()).toBe(`${KEY}.retryHint`);
+      const hint = host().querySelector('.hint');
+      expect(hint?.textContent?.trim()).toBe(`${KEY}.retryHint`);
+      expect(cloneButton()?.getAttribute('aria-describedby')).toBe(hint?.id);
     });
 
     it('offers nothing while cloning', async () => {
@@ -252,6 +254,7 @@ describe('CloneStatusComponent', () => {
 
       expect(cloneButton()?.textContent?.trim()).toBe(`${KEY}.cloneAgain`);
       expect(host().querySelector('.hint')).toBeNull();
+      expect(cloneButton()?.hasAttribute('aria-describedby')).toBe(false);
       await press();
 
       expect(confirm).toHaveBeenCalledWith({
@@ -335,6 +338,34 @@ describe('CloneStatusComponent', () => {
       expect(store.cloning).not.toHaveBeenCalled();
       expect(failureBanner()).toBeNull();
       expect(cloneButton()?.getAttribute('aria-busy')).not.toBe('true');
+    });
+
+    it('sends nothing when the repository left Error while the warning was open', async () => {
+      await show(damaged());
+      let answer: (confirmed: boolean) => void = () => undefined;
+      confirm.mockReturnValue(new Promise<boolean>(resolve => (answer = resolve)));
+
+      await press();
+      fixture.componentRef.setInput('details', repositoryDetails({ status: 'cloning', clone: null }));
+      await settle(fixture);
+      answer(true);
+      await settle(fixture);
+
+      expect(cloneRequests).toBe(0);
+      expect(failureBanner()).toBeNull();
+    });
+
+    it('asks for no passphrase for a key without one', async () => {
+      await show(failed());
+      cloneAnswers = [ keyLocked() ];
+      const key = sshKey();
+      credentials = () => of({ ...key, inUse: { ...key.inUse, passphraseProtected: false } as typeof key.inUse });
+
+      await press();
+
+      expect(open).not.toHaveBeenCalled();
+      expect(cloneRequests).toBe(1);
+      expect(failureBanner()).not.toBeNull();
     });
 
     it('sends one request', async () => {

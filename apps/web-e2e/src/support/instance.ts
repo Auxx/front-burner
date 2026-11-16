@@ -189,9 +189,13 @@ async function startOnce(options: InstanceOptions): Promise<Instance> {
   };
   const restart = async (whileStopped?: () => void | Promise<void>) => {
     await kill(spawned);
-    await whileStopped?.();
-    spawned = spawnServer(options, dataDir, port);
-    await waitUntilReady(url, spawned.child, spawned.output);
+    try {
+      await whileStopped?.();
+    } finally {
+      // Started again even when `whileStopped` failed, so that the instance is still usable and stoppable.
+      spawned = spawnServer(options, dataDir, port);
+      await waitUntilReady(url, spawned.child, spawned.output);
+    }
   };
 
   try {
