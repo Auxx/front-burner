@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { drainFailedRequests, expect, test } from './support/fixtures';
+import { expect, test } from './support/fixtures';
 import { logIn, TEST_ADMIN } from './support/instance';
 import { answerWithVersion } from './support/versions';
 
@@ -152,7 +152,7 @@ test.describe('app header', () => {
     await expect(accountButton(page)).toBeFocused();
   });
 
-  test('AC-APP-001.11: after a new version is deployed, every page shows "A new version of Front Burner is available." with Reload; turning the network off shows the offline banner, which goes away when the network returns', async ({ page, context, monitor }) => {
+  test('AC-APP-001.11: after a new version is deployed, every page shows "A new version of Front Burner is available." with Reload; turning the network off shows the offline banner, which goes away when the network returns', async ({ page, context }) => {
     await openDashboard(page);
     const newVersion = page.getByRole('banner').getByText('A new version of Front Burner is available.');
     const offline = page.getByRole('banner').getByText(
@@ -174,12 +174,11 @@ test.describe('app header', () => {
     await expect(accountButton(page)).toBeVisible();
     await expect(newVersion).toBeHidden();
 
+    // The banner's icon comes from the cached sprite: no request fails, which the monitor checks.
     await context.setOffline(true);
     await expect(offline).toBeVisible();
     await context.setOffline(false);
     await expect(offline).toBeHidden();
-    // The banner's icon, a symbol of the sprite not drawn before, cannot be fetched offline.
-    drainFailedRequests(monitor, '/assets/icons.svg');
   });
 
   test('has no accessibility violations', async ({ page }) => {

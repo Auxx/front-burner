@@ -89,7 +89,12 @@ top of the security rules in the requirements and NF-11. See
   path that is not a file of the build gets `index.html`, so that reloading a
   deep link such as `/repositories/1/files/docs/README.md` works; only a missing
   file under a folder of the build (`assets/`, `i18n/`, `media/`) or a missing
-  root-level file with an extension (a hashed chunk) gets 404.
+  root-level file with an extension (a hashed chunk) gets 404. Files are
+  revalidated on every use (`max-age=0`), except one asked for with `?v=` and
+  the instance's version, which is cached for good (`immutable`): the web client
+  asks for its icon sprite as `assets/icons.svg?v=<version>`, so that icons
+  drawn while offline, such as the offline banner's (NV-15), are there, and an
+  upgrade changes the URL.
 - **A-7.10** HTML from Markdown is sanitised by `rehype-sanitize` and then
   DOMPurify, both configured from the safe HTML whitelist (REQ-EDIT-002), and
   passed to Angular in one shared preview component (D-7.6). Raw repository

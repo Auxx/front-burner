@@ -60,12 +60,11 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   The offline banner follows the browser's `online` and `offline` events
   (`OnlineStatusService`). Both banners are `shell-app-banners`, below the app
   header and, on the repository screen, below its bar, above the page's own
-  notices (NV-16); each is announced once when it appears. _(Plan 124's calls:
-  the banners show whenever the user is logged in, also before the user has
-  loaded and while the repository screen opens, as the offline banner then says
-  why nothing comes; and the offline banner's warning icon may be missing, since
-  browsers fetch the icon sprite again, with revalidation, for a newly drawn
-  icon, which fails offline; the text says it all.)_
+  notices (NV-16); each is announced once when it appears. Its icon comes from
+  the sprite, which the backend lets the browser cache for good (A-7.9), so that
+  it is drawn while offline. _(Plan 124's call: the banners show whenever the
+  user is logged in, also before the user has loaded and while the repository
+  screen opens, as the offline banner then says why nothing comes.)_
 - **A-8.8** **Transloco:** English at launch, translation files loaded on
   demand, language switched without reloading, ICU messages through our own
   Transloco transpiler on `intl-messageformat` (FormatJS, no `eval`), because

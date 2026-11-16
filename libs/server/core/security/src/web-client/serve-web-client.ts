@@ -5,6 +5,22 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, posix } from 'node:path';
 import { contentSecurityPolicy, createNonce, CSP_NONCE_PLACEHOLDER } from '../csp/csp';
 
+/**
+ * A file asked for with the instance's version, such as `assets/icons.svg?v=1.4.2`:
+ * that URL's content never changes, since an upgrade changes the URL.
+ */
+export const VERSIONED_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+export interface ServeWebClientOptions {
+  /**
+   * The instance's version. A file asked for with `?v=` and this version is
+   * cached for good (`VERSIONED_CACHE_CONTROL`), so that the browser needs no
+   * network for it, also while offline (A-7.9); any other request is
+   * revalidated as usual.
+   */
+  version?: string;
+}
+
 function isApiPath(path: string): boolean {
   // Express routing ignores case, so the check does too.
   const lower = path.toLowerCase();
@@ -59,13 +75,25 @@ function isMissingBuildFile(path: string, webRoot: string): boolean {
  * client-side router can handle it. Returns `false`, registering nothing, when
  * there is no build.
  */
-export function serveWebClient(app: express.Application, webRoot: string): boolean {
+export function serveWebClient(
+  app: express.Application,
+  webRoot: string,
+  options: ServeWebClientOptions = {}
+): boolean {
   const indexPath = join(webRoot, 'index.html');
   if (!existsSync(indexPath)) {
     return false;
   }
   const template = readFileSync(indexPath, 'utf8');
-  const files = express.static(webRoot, { index: false, redirect: false });
+  const files = express.static(webRoot, {
+    index: false,
+    redirect: false,
+    setHeaders: (res: express.Response) => {
+      if (options.version !== undefined && res.req.query['v'] === options.version) {
+        res.setHeader('Cache-Control', VERSIONED_CACHE_CONTROL);
+      }
+    }
+  });
 
   app.use((req, res, next) => {
     if ((req.method !== 'GET' && req.method !== 'HEAD') || isApiPath(req.path)) {
