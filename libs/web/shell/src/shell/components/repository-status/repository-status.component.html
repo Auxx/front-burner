@@ -5,6 +5,9 @@
   }
   @for (warning of repository().warnings; track warning) {
     <span uiBadge
-          status="warning">{{ t('warning.' + warning) }}</span>
+          status="warning">
+      <ui-icon name="warning" />
+      {{ t('warning.' + warning) }}
+    </span>
   }
 </ng-container>

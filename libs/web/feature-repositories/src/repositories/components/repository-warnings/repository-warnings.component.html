@@ -1,0 +1,25 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.RepositoryWarningsComponent'">
+  @let warnings = this.warnings();
+  @if (warnings.length > 0) {
+    @let running = this.running();
+    <section [attr.aria-labelledby]="headingId">
+      <h2 class="heading"
+          [id]="headingId">{{ t('heading') }}</h2>
+      <ul class="list">
+        @for (warning of warnings; track warning) {
+          <li>
+            <ui-inline-banner status="warning">
+              {{ t('messages.' + warning) }}
+              <div uiBannerActions>
+                <button uiButton
+                        size="small"
+                        [busy]="running === warning"
+                        (click)="fix(warning)">{{ t('fixes.' + warning) }}</button>
+              </div>
+            </ui-inline-banner>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+</ng-container>

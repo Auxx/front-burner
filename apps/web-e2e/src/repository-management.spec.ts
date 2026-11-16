@@ -812,3 +812,160 @@ test.describe('the Commit author section', () => {
     await expect(section(page)).toContainText('Your default commit author');
   });
 });
+
+test.describe('repository warnings', () => {
+  test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
+
+  let root: string;
+  let ssh: GitSshServer;
+  let git: GitHttpServer;
+  const sshRemotes: Record<string, string> = {};
+  const httpsRemotes: Record<string, string> = {};
+  /** Who may push; anyone may read, as from a public repository. A test takes the writer's right away. */
+  const pushers: Record<string, string> = {};
+  const WRITER = { username: 'writer', password: 'push-token' };
+  let next = 0;
+
+  test.beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'front-burner-web-e2e-warnings-'));
+    ssh = await startGitSshServer({ repositories: sshRemotes, authorizedKeys: [ PROTECTED_KEY_PUBLIC ] });
+    git = await startGitHttpServer({ repositories: httpsRemotes, pushers });
+  });
+
+  test.beforeEach(() => {
+    pushers[WRITER.username] = WRITER.password;
+  });
+
+  test.afterAll(async () => {
+    await Promise.all([ ssh?.close(), git?.close() ]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const warnings = (page: Page) => page.getByRole('region', { name: 'Warnings' });
+  const statusOf = (page: Page) => page.locator('repo-repository-settings shell-repository-status');
+  const dashboardEntry = (page: Page, name: string) =>
+    page.locator('dash-repository-entry', { has: page.getByRole('link', { name, exact: true }) });
+
+  /** A repository of a new remote over HTTPS with the writer's token, and one commit to push. */
+  async function addHandbook(instance: { url: string; dataDir: string; }): Promise<{ id: number; name: string; }> {
+    const name = `handbook-${next++}`;
+    mkdirSync(join(root, name), { recursive: true });
+    httpsRemotes[`${name}.git`] = createHandbookRemote(join(root, name));
+    const { id, dir } = await addOverApi(instance, {
+      name,
+      remoteUrl: `${git.url}/${name}.git`,
+      credentials: { mode: 'new-https', name: 'writer token', ...WRITER }
+    });
+    gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
+    return { id, name };
+  }
+
+  /**
+   * Runs `operation` (`push` or `fetch`) over the API and waits for its job to
+   * end; answers its outcome's kind, such as `pushed` or `failed`, with a
+   * failure's code.
+   */
+  async function runJob(url: string, id: number, operation: 'push' | 'fetch'): Promise<string> {
+    const token = await adminAuthToken(url);
+    const started = await api(url, token, 'POST', `/api/v1/repositories/${id}/git/${operation}`);
+    expect(started.status).toBe(202);
+    const jobId = started.body['jobId'] as number;
+    let ended = '';
+    await expect.poll(async () => {
+      const state = await api(url, token, 'GET', `/api/v1/repositories/${id}/git/jobs/${jobId}`);
+      const outcome = state.body['outcome'] as { kind: string; code?: string; } | null;
+      ended = outcome === null
+        ? (state.body['status'] === 'cancelled' ? 'cancelled' : '')
+        : [ outcome.kind, outcome.code ].filter(Boolean).join(' ');
+      return ended;
+    }).not.toBe('');
+    return ended;
+  }
+
+  test('AC-REPO-003.6: a repository whose last push was refused shows "Credentials refused" on the dashboard, this page and its settings page, and can still be opened; a successful background fetch does not remove the warning, and the next successful push does', async ({ page, instance }) => {
+    const { id, name } = await addHandbook(instance);
+    delete pushers[WRITER.username];
+    expect(await runJob(instance.url, id, 'push')).toBe('failed credentials-refused');
+
+    // The dashboard: the label, the repository still opens, and Settings leads to the fix.
+    await page.goto('/');
+    await logIn(page);
+    const entry = dashboardEntry(page, name);
+    await expect(entry).toContainText('Credentials refused');
+    await expect(entry.getByRole('link', { name, exact: true })).toHaveAttribute('href', `/repositories/${id}`);
+    await expect(entry.getByRole('link', { name: `Settings of ${name}` })).toHaveAttribute(
+      'href',
+      `/repositories/${id}/settings`
+    );
+
+    // The repository management page: the label, and Open.
+    await page.goto('/repositories');
+    const listed = entries(page).filter({ has: page.getByRole('link', { name, exact: true }) });
+    await expect(listed).toContainText('Credentials refused');
+    await expect(listed.getByRole('link', { name: `Open ${name}` })).toBeVisible();
+
+    // The settings page: the label, Open, and the fix.
+    await listed.getByRole('link', { name, exact: true }).click();
+    await expect(statusOf(page)).toContainText('Credentials refused');
+    await expect(page.getByRole('link', { name: `Open ${name}` })).toBeVisible();
+    await expect(warnings(page)).toContainText('the remote refused this repository\'s credentials');
+    await expect(warnings(page).getByRole('button', { name: 'Fix credentials' })).toBeVisible();
+
+    // A fetch succeeds, as anyone may read: the push's warning stays.
+    expect(await runJob(instance.url, id, 'fetch')).toBe('fetched');
+    await page.reload();
+    await expect(statusOf(page)).toContainText('Credentials refused');
+
+    // The next push succeeds: the warning goes, without a reload.
+    pushers[WRITER.username] = WRITER.password;
+    gitIn(
+      join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)),
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'third'
+    );
+    expect(await runJob(instance.url, id, 'push')).toBe('pushed');
+    await expect(statusOf(page)).not.toContainText('Credentials refused');
+    await expect(warnings(page)).toHaveCount(0);
+  });
+
+  test('AC-REPO-003.7: after a backend restart, a repository with a passphrase-protected key shows "Key locked" with Unlock', async ({ page, instance }) => {
+    const { id } = await sshRepository(instance, ssh, sshRemotes, join(root, 'ssh', 'locked'));
+    await instance.restart();
+
+    await page.goto(`/repositories/${id}/settings`);
+    await logIn(page);
+    await expect(statusOf(page)).toContainText('Key locked');
+    await expect(warnings(page)).toContainText('Key locked');
+    expect((await new AxeBuilder({ page }).include('repo-repository-warnings').analyze()).violations).toEqual([]);
+
+    await warnings(page).getByRole('button', { name: 'Unlock' }).click();
+    const unlock = page.getByRole('dialog', { name: 'Unlock laptop' });
+    await expect(unlock).toContainText('SHA256:8tMSEvGb0Os35JCRb/xgaMxvTHbF9IrQMdoUVq/+tX8');
+    await unlock.getByLabel('Passphrase').fill(PROTECTED_KEY_PASSPHRASE);
+    await unlock.getByRole('button', { name: 'Unlock' }).click();
+
+    await expect(unlock).toHaveCount(0);
+    await expect(statusOf(page)).not.toContainText('Key locked');
+    await expect(warnings(page)).toHaveCount(0);
+  });
+
+  test('cancelling a fix changes nothing, and the warnings fit a phone', async ({ page, instance, isMobile }) => {
+    const { id } = await sshRepository(instance, ssh, sshRemotes, join(root, 'ssh', `cancel-${next++}`));
+    await page.goto(`/repositories/${id}/settings`);
+    await logIn(page);
+
+    const button = warnings(page).getByRole('button', { name: 'Unlock' });
+    await button.click();
+    await page.getByRole('dialog', { name: 'Unlock laptop' }).getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(warnings(page)).toContainText('Key locked');
+    await expect(button).toBeFocused();
+    if (isMobile) {
+      expect(await fitsWidth(page)).toBe(true);
+    }
+  });
+});

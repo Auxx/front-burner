@@ -63,6 +63,13 @@ describe('RepositoryStatusComponent', () => {
     ]);
   });
 
+  it('gives each warning the warning icon (NF-13.7)', async () => {
+    await render({ ...ready, warnings: [ 'credentials-refused', 'key-locked' ] });
+
+    const icons = [ ...(fixture.nativeElement as HTMLElement).querySelectorAll('[uiBadge] ui-icon') ];
+    expect(icons.map(icon => icon.getAttribute('name'))).toEqual([ 'warning', 'warning' ]);
+  });
+
   it('highlights a repository that needs confirmation', async () => {
     await render({ ...ready, status: 'needs-confirmation' });
 

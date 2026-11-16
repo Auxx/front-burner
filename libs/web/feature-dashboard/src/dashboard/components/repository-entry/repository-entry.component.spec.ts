@@ -72,10 +72,10 @@ describe('RepositoryEntryComponent', () => {
     expect(host().textContent).toContain('web-shell.RepositoryStatusDetailComponent.error.clone-timed-out');
   });
 
-  it('shows warnings and keeps the repository openable', async () => {
+  it('shows warnings, keeps the repository openable and offers its settings for the fixes', async () => {
     await render({ ...ready, warnings: [ 'credentials-refused', 'key-locked' ] });
 
-    expect(links()).toEqual([ '/repositories/7' ]);
+    expect(links()).toEqual([ '/repositories/7', '/repositories/7/settings' ]);
     expect(badges()).toEqual([ `${STATUS}.warning.credentials-refused`, `${STATUS}.warning.key-locked` ]);
   });
 
