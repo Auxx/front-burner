@@ -23,10 +23,18 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
   reads them again on the repository's `repository.status` and
   `repository.warning`, on `key.locked` and `key.unlocked`, and after a
   reconnect; only the latest answer counts, and a reload that fails keeps them.
-  Its clone's `job.progress` is patched in place.
+  Its clone's `job.progress` is patched in place, and `cloning()` shows the
+  answer to a retried clone at once, over the **Error** it replaces only, and
+  reads the details again.
 - `CloneStatusComponent`: the **Status** section, only while cloning or in
   error: the clone's progress, or the error's label and **Details** with git's
-  error as plain text and the request ID with **Copy** (RM-7, RM-10).
+  error as plain text and the request ID with **Copy** (RM-7, RM-10). In error,
+  **Retry clone** after a clone, or **Clone again**, after a warning, for a
+  working copy that is missing or damaged (RM-11, RM-12): one request per press,
+  a locked key unlocked first with `web-repository-dialogs`' `UnlockKeyDialog`
+  (RC-16), and **Cloning** shown at once through the store. Cancelling either
+  dialog changes nothing; any other refusal, such as a limit (RM-13), is shown
+  above the button.
 - `CredentialsInUseComponent`: the **Credentials** section, the credentials in
   use as a key-value list, never their secret, and **Change credentials** in
   every status, which opens `web-repository-dialogs`' repository credentials

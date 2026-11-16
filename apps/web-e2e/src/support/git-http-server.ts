@@ -115,6 +115,12 @@ export interface GitHttpServerOptions {
    * Listing the references, as an access check does, is not held.
    */
   beforeFetch?: () => Promise<void>;
+  /**
+   * Asked before each request for objects (as for `beforeFetch`); while it
+   * answers `true`, the request fails with `500`, so that a clone fails
+   * although an access check, which only lists the references, succeeds.
+   */
+  refuseFetch?: () => boolean;
 }
 
 function authorised(request: IncomingMessage, users: Record<string, string> | undefined): boolean {
@@ -243,8 +249,8 @@ export async function startGitHttpServer(options: GitHttpServerOptions): Promise
     }
     const pathInfo = path.slice(name.length + 1);
     const repository = options.repositories[name] ?? '';
-    const { beforeFetch } = options;
-    if (pathInfo !== '/git-upload-pack' || beforeFetch === undefined) {
+    const { beforeFetch, refuseFetch } = options;
+    if (pathInfo !== '/git-upload-pack' || (beforeFetch === undefined && refuseFetch === undefined)) {
       serveGit(request, response, repository, pathInfo);
       return;
     }
@@ -253,7 +259,14 @@ export async function startGitHttpServer(options: GitHttpServerOptions): Promise
     request.on('end', () => {
       const body = Buffer.concat(chunks);
       const text = (request.headers['content-encoding'] === 'gzip' ? gunzipSync(body) : body).toString('latin1');
-      const held = /want [0-9a-f]{40}/.test(text) ? beforeFetch() : Promise.resolve();
+      // Protocol v2 lists the references through `git-upload-pack` too: only `want` lines ask for objects.
+      const wants = /want [0-9a-f]{40}/.test(text);
+      if (wants && refuseFetch?.() === true) {
+        response.writeHead(500);
+        response.end('Fetching is broken on this server');
+        return;
+      }
+      const held = wants && beforeFetch !== undefined ? beforeFetch() : Promise.resolve();
       void held.then(() => serveGit(request, response, repository, pathInfo, body));
     });
   });

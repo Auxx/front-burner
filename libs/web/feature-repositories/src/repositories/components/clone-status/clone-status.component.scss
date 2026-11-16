@@ -42,6 +42,16 @@
   overflow-wrap: anywhere;
 }
 
+.hint {
+  margin: 0;
+  color: var(--ui-text-muted);
+}
+
+.reference {
+  display: block;
+  font-size: var(--ui-font-size-sm);
+}
+
 .no-message {
   margin: 0;
   color: var(--ui-text-muted);
