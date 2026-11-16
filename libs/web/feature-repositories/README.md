@@ -26,12 +26,20 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
   Its clone's `job.progress` is patched in place, and `cloning()` shows the
   answer to a retried clone at once, over the **Error** it replaces only, and
   reads the details again.
+- `RepositoryWarningsComponent`: the **Warnings** under the page's header, one
+  line per warning with its fix (RM-8, RC-6): **Fix credentials** and **Use
+  other credentials** through `CredentialsInUseComponent.change()`, **Review the
+  new key** with the new key from the details' `remoteProblems` (RC-21), and
+  **Unlock** (RC-16), the last two through `web-repository-dialogs`'
+  `KeyDialogsService`. After every fix but **Use other credentials** a fetch
+  runs, and a warning that the last push left says that a push clears it. One
+  fix runs at a time.
 - `CloneStatusComponent`: the **Status** section, only while cloning or in
   error: the clone's progress, or the error's label and **Details** with git's
   error as plain text and the request ID with **Copy** (RM-7, RM-10). In error,
   **Retry clone** after a clone, or **Clone again**, after a warning, for a
   working copy that is missing or damaged (RM-11, RM-12): one request per press,
-  a locked key unlocked first with `web-repository-dialogs`' `UnlockKeyDialog`
+  a locked key unlocked first with `web-repository-dialogs`' `KeyDialogsService`
   (RC-16), and **Cloning** shown at once through the store. Cancelling either
   dialog changes nothing; any other refusal, such as a limit (RM-13), is shown
   above the button.
