@@ -608,7 +608,9 @@ describe('another user\'s repository (REQ-REPO-003)', () => {
 
   it('AC-REPO-003.14: a request for another user\'s repository settings, or to remove another user\'s repository, gets the same response as for a repository that does not exist', async () => {
     const email = 'owner@example.com';
-    const ownerId = seed(server.dataDir, { users: [ { email } ] }).userIds[0] as number;
+    // Both plain users: the administrator may have routes of its own to other users' repositories (A-7.4).
+    const intruder = 'intruder@example.com';
+    const ownerId = seed(server.dataDir, { users: [ { email }, { email: intruder } ] }).userIds[0] as number;
     const [ secret ] = seed(server.dataDir, {
       repositories: [ {
         userId: ownerId,
@@ -621,7 +623,7 @@ describe('another user\'s repository (REQ-REPO-003)', () => {
       } ]
     }).repositoryIds as [ number ];
     const missing = secret + 100;
-    const { authToken } = await login(server, 'body');
+    const { authToken } = await login(server, 'body', { email: intruder, password: E2E_ADMIN.password });
     const call = async (method: string, path: string, body?: unknown) => {
       const response = await fetch(`${server.url}/api/v1${path}`, {
         method,
@@ -629,9 +631,10 @@ describe('another user\'s repository (REQ-REPO-003)', () => {
         ...(body === undefined ? {} : { body: JSON.stringify(body) })
       });
       const text = await response.text();
+      // An empty body, such as a 204 that removed it, fails on the comparison that names the endpoint.
       return {
         status: response.status,
-        body: { ...JSON.parse(text), requestId: undefined } as Record<string, unknown>
+        body: { ...(text === '' ? {} : JSON.parse(text)), requestId: undefined } as Record<string, unknown>
       };
     };
     const owner = await login(server, 'body', { email, password: E2E_ADMIN.password });

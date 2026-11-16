@@ -129,8 +129,11 @@ numbering conventions.
   /repositories/:id/credentials`, `PUT /repositories/:id/credentials/token`, and
   `GET`, `PUT` and `DELETE /repositories/:id/commit-author`. A request body that
   would be accepted is not checked against the remote first, so the answer tells
-  nothing about the repository. One server end-to-end test goes through them all
-  (A-7.5). _(Plan 126's call.)_
+  nothing about the repository. One server end-to-end test goes through them
+  all, as a user who is not an administrator. It covers these routes only, not
+  everything that A-7.5 asks for: the other routes that take an ID, such as
+  `/open`, `/git/*`, the file routes and `ssh-keys/:id/unlock`, have their own
+  tests or none yet. _(Plan 126's call.)_
 
 ## A-3: Contracts
 

@@ -32,6 +32,28 @@ export async function api(url: string, authToken: string, method: string, path: 
 }
 
 /**
+ * Runs `operation` (`push` or `fetch`) of the administrator's repository `id`
+ * over the API and waits for its job to end; answers its outcome's kind, such
+ * as `pushed` or `failed`, with a failure's code, or `cancelled`.
+ */
+export async function runGitJob(url: string, id: number, operation: 'push' | 'fetch'): Promise<string> {
+  const token = await adminAuthToken(url);
+  const started = await api(url, token, 'POST', `/api/v1/repositories/${id}/git/${operation}`);
+  expect(started.status).toBe(202);
+  const jobId = started.body['jobId'] as number;
+  let ended = '';
+  await expect.poll(async () => {
+    const state = await api(url, token, 'GET', `/api/v1/repositories/${id}/git/jobs/${jobId}`);
+    const outcome = state.body['outcome'] as { kind: string; code?: string; } | null;
+    ended = outcome === null
+      ? (state.body['status'] === 'cancelled' ? 'cancelled' : '')
+      : [ outcome.kind, outcome.code ].filter(Boolean).join(' ');
+    return ended;
+  }).not.toBe('');
+  return ended;
+}
+
+/**
  * Adds a repository of `remoteUrl` over the API as the administrator, as the
  * Add repository page does, and waits for its clone. Returns its ID and
  * working copy.

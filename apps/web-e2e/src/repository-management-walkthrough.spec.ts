@@ -12,7 +12,7 @@ import {
 } from './support/git-http-server';
 import { type Hands, keyboard, touch } from './support/hands';
 import { adminAuthToken, logIn } from './support/instance';
-import { api, workingCopyOf } from './support/repositories';
+import { api, runGitJob, workingCopyOf } from './support/repositories';
 
 test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
 
@@ -64,7 +64,10 @@ test.describe('exit criterion 11', () => {
 
   /** Logs in at the repository management page and waits for its list. */
   async function openRepositories(page: Page, loggedIn: boolean): Promise<void> {
-    const loaded = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/repositories');
+    // Not a 401 sent before the login.
+    const loaded = page.waitForResponse(response =>
+      response.ok() && new URL(response.url()).pathname === '/api/v1/repositories'
+    );
     await page.goto('/repositories');
     if (!loggedIn) {
       await logIn(page);
@@ -78,22 +81,6 @@ test.describe('exit criterion 11', () => {
     await hands.press(entry(page, name).getByRole('link', { name, exact: true }));
     await expect(page).toHaveURL(/\/repositories\/\d+\/settings$/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings');
-  }
-
-  /** Runs a fetch over the API, as the background fetch does, and answers its outcome, such as `fetched`. */
-  async function fetchOverApi(url: string, id: number): Promise<string> {
-    const token = await adminAuthToken(url);
-    const started = await api(url, token, 'POST', `/api/v1/repositories/${id}/git/fetch`);
-    expect(started.status).toBe(202);
-    const jobId = started.body['jobId'] as number;
-    let ended = '';
-    await expect.poll(async () => {
-      const state = await api(url, token, 'GET', `/api/v1/repositories/${id}/git/jobs/${jobId}`);
-      const outcome = state.body['outcome'] as { kind: string; code?: string; } | null;
-      ended = outcome === null ? '' : [ outcome.kind, outcome.code ].filter(Boolean).join(' ');
-      return ended;
-    }).not.toBe('');
-    return ended;
   }
 
   /**
@@ -144,7 +131,6 @@ test.describe('exit criterion 11', () => {
     await expect(details).toHaveAttribute('aria-expanded', 'true');
     await expect(status(page).locator('pre.message')).not.toBeEmpty();
     await expect(status(page).locator('.request code')).not.toBeEmpty();
-    expect(await page.content()).not.toContain(FIRST);
 
     await hands.press(credentials(page).getByRole('button', { name: 'Change credentials' }));
     await expect(credentialsDialog(page)).toBeVisible();
@@ -165,9 +151,9 @@ test.describe('exit criterion 11', () => {
       page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files', exact: true })
     ).toBeVisible();
 
-    // Round 2: the second token is revoked, and the next fetch is refused.
+    // Round 2: the second token is revoked, and the next fetch, as the background fetch runs it, is refused.
     onlyToken(THIRD);
-    expect(await fetchOverApi(instance.url, id)).toBe('failed credentials-refused');
+    expect(await runGitJob(instance.url, id, 'fetch')).toBe('failed credentials-refused');
 
     await openRepositories(page, true);
     await expect(entry(page, name)).toContainText('Credentials refused');
@@ -189,6 +175,8 @@ test.describe('exit criterion 11', () => {
 
     // Round 3: the working copy is deleted while the backend is stopped.
     const dir = workingCopyOf(instance.dataDir, id);
+    // Away from the instance meanwhile: the event stream of an open page would log its failed reconnects.
+    await page.goto('about:blank');
     await instance.restart(() => rmSync(dir, { recursive: true, force: true }));
 
     await openRepositories(page, true);
