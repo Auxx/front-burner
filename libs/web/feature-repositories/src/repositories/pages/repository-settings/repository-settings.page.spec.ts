@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { Title } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { PushEvent, RepositoryDetails } from '@front-burner/shared-contracts';
+import { ToastService } from '@front-burner/ui';
 import { PreferencesApi, RepositoriesApi } from '@front-burner/web-api-client';
 import { PageTitleService, PushChannelService } from '@front-burner/web-core';
 import { NEVER, Observable, of, Subject, throwError } from 'rxjs';
@@ -47,7 +48,11 @@ describe('RepositorySettingsPage', () => {
         })
       ],
       providers: [
-        provideRouter([ { path: 'repositories/:id/settings', component: RepositorySettingsPage } ]),
+        provideRouter([
+          // The dashboard, where a repository removed elsewhere leads (RM-20).
+          { path: '', pathMatch: 'full', children: [] },
+          { path: 'repositories/:id/settings', component: RepositorySettingsPage }
+        ]),
         {
           provide: RepositoriesApi,
           useValue: { repositoryDetails: details, repositoryCredentials: () => of({ protocol: 'https', inUse: null }) }
@@ -81,6 +86,28 @@ describe('RepositorySettingsPage', () => {
     expect(status()?.hasAttribute('showready')).toBe(true);
     expect(status()?.textContent).toContain('web-shell.RepositoryStatusComponent.warning.key-locked');
     expect(page().querySelector('repo-clone-details')).not.toBeNull();
+  });
+
+  it('goes to the dashboard from the settings page when the repository is removed elsewhere', async () => {
+    await open('/repositories/7/settings', of(repositoryDetails()));
+
+    push.events.next({ type: 'repository.removed', repositoryId: 7 });
+    await settle();
+
+    expect(TestBed.inject(Router).url).toBe('/');
+    expect(TestBed.inject(ToastService).toasts()).toEqual([
+      expect.objectContaining({ message: 'web-shell.RemovedElsewhereService.removed', status: 'info' })
+    ]);
+  });
+
+  it('stays when another repository is removed elsewhere', async () => {
+    await open('/repositories/7/settings', of(repositoryDetails()));
+
+    push.events.next({ type: 'repository.removed', repositoryId: 8 });
+    await settle();
+
+    expect(TestBed.inject(Router).url).toBe('/repositories/7/settings');
+    expect(TestBed.inject(ToastService).toasts()).toEqual([]);
   });
 
   it('an openable repository with warnings has Open', async () => {

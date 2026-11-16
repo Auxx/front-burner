@@ -157,12 +157,13 @@ export class DraftStore {
   }
 
   /**
-   * Deletes every draft of the repository `repositoryId`, of any user, also
-   * of files another tab has open, after the repository was removed (RM-19).
-   * Repository IDs are unique on the instance, so no other repository's
-   * drafts go.
+   * Deletes every draft of the repository `repositoryId`, of any user, or of
+   * the user `userId` only, also of files another tab has open, after the
+   * repository was removed (RM-19). Repository IDs are unique on the
+   * instance, so no other repository's drafts go. `userId` is for a repository
+   * found missing, which may be another user's, whose drafts stay.
    */
-  async deleteRepository(repositoryId: number): Promise<void> {
+  async deleteRepository(repositoryId: number, userId?: number): Promise<void> {
     await this.write(store => {
       const request = store.openCursor();
       request.onsuccess = () => {
@@ -170,7 +171,8 @@ export class DraftStore {
         if (!cursor) {
           return;
         }
-        if ((cursor.key as string).split('/')[1] === String(repositoryId)) {
+        const [ owner, repository ] = (cursor.key as string).split('/');
+        if (repository === String(repositoryId) && (userId === undefined || owner === String(userId))) {
           cursor.delete();
         }
         cursor.continue();

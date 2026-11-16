@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,6 +8,7 @@ import { drainFailedRequests, expect, test } from './support/fixtures';
 import {
   createHandbookRemote,
   type GitHttpServer,
+  pushFromElsewhere,
   startGitHttpServer,
   TEST_CERTIFICATE_FILE
 } from './support/git-http-server';
@@ -1056,6 +1057,55 @@ test.describe('Remove repository', () => {
     await expect(page).toHaveURL(/\/repositories$/);
     await expect(page.getByText(`Repository ${busy.name} removed.`)).toBeVisible();
     await expect(entries(page)).toHaveCount(0);
+  });
+
+  test('AC-REPO-003.12: after removing, the repository is gone from every list, its working copy is deleted from disk, its saved credentials remain in the profile, and a second device that had it open goes to the dashboard', async ({ page, browser, instance }) => {
+    await confirmCommitAuthor(instance.url);
+    const name = `handbook-${next++}`;
+    mkdirSync(join(root, name), { recursive: true });
+    remotes[`${name}.git`] = createHandbookRemote(join(root, name));
+    pushFromElsewhere(remotes[`${name}.git`], 'main', [ { 'README.md': '# Handbook\n' } ]);
+    // Saved HTTPS credentials, which a public remote accepts and ignores.
+    const { id, dir } = await addOverApi(instance, {
+      name,
+      remoteUrl: `${git.url}/${name}.git`,
+      credentials: { mode: 'new-https', name: 'GitHub work', username: 'ada', password: 'token' }
+    });
+
+    // The second device has the file open, with an edit that waits to be saved.
+    const other = await browser.newContext({ baseURL: instance.url });
+    try {
+      const second = await other.newPage();
+      const opened = second.waitForResponse(response => response.url().endsWith(`/api/v1/repositories/${id}/open`));
+      await second.goto(`/repositories/${id}/files/README.md`);
+      await logIn(second);
+      await opened;
+      const editor = second.getByRole('main', { name: 'Editor' }).getByRole('textbox', { name: 'README.md' });
+      await editor.click();
+      await second.keyboard.press('Control+End');
+      await second.keyboard.type('Typed on the second device.');
+
+      await openDialog(page, id, name);
+      await page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true }).click();
+      await expect(page).toHaveURL(/\/repositories$/);
+      await expect(page.getByText(`Repository ${name} removed.`)).toBeVisible();
+      await expect(entries(page).getByRole('link', { name, exact: true })).toHaveCount(0);
+
+      // Without a reload: the second device goes to the dashboard, which does not list it.
+      await expect(second).toHaveURL(new URL('/', instance.url).href);
+      await expect(second.getByText(`Repository ${name} removed. Your unsaved changes to its files were not saved.`))
+        .toBeVisible();
+      await expect(second.getByRole('link', { name, exact: true })).toHaveCount(0);
+    } finally {
+      await other.close();
+    }
+
+    await expect.poll(() => existsSync(dir)).toBe(false);
+    const token = await adminAuthToken(instance.url);
+    const saved = await api(instance.url, token, 'GET', '/api/v1/credentials');
+    expect((saved.body['https'] as { name: string; }[]).map(credentials => credentials.name)).toContain('GitHub work');
+    const listed = await api(instance.url, token, 'GET', '/api/v1/repositories');
+    expect((listed.body['repositories'] as { id: number; }[]).map(repository => repository.id)).not.toContain(id);
   });
 
   test('cancelling changes nothing', async ({ page, instance }) => {

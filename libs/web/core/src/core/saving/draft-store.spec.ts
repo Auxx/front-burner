@@ -122,6 +122,18 @@ describe('DraftStore', () => {
     }
   });
 
+  it('deletes only one user\'s drafts of a repository when given the user', async () => {
+    await store.put(key('a.md', 12, 1), draft('user 1'));
+    await store.put(key('a.md', 12, 2), draft('user 2'));
+    await store.put(key('a.md', 13, 1), draft('repository 13'));
+
+    await store.deleteRepository(12, 1);
+
+    expect(await store.get(key('a.md', 12, 1))).toBeNull();
+    expect(await store.get(key('a.md', 12, 2))).toEqual(draft('user 2'));
+    expect(await store.get(key('a.md', 13, 1))).toEqual(draft('repository 13'));
+  });
+
   it('deletes the drafts under a folder', async () => {
     await store.put(key('docs/a.md'), draft('a'));
     await store.put(key('docs/deep/b.md'), draft('b'));

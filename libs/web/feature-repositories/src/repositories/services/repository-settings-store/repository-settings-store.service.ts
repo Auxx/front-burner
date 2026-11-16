@@ -2,7 +2,7 @@ import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { PushEvent, RepositoryDetails, RepositorySummary } from '@front-burner/shared-contracts';
 import { RepositoriesApi } from '@front-burner/web-api-client';
-import { PushChannelService, toApiError } from '@front-burner/web-core';
+import { PushChannelService, RemovedRepositoriesService, toApiError } from '@front-burner/web-core';
 import { Subscription } from 'rxjs';
 
 /**
@@ -21,11 +21,13 @@ export type RepositorySettingsState = 'loading' | 'ready' | 'missing' | 'failed'
  * `repository.warning`), a key's lock (`key.locked`, `key.unlocked`, which
  * change "Key locked") and a reconnect read the details again. Only the answer
  * to the latest request counts, and a reload that fails keeps the details on
- * screen.
+ * screen. A reload that finds the repository gone follows its removal, as its
+ * event would (RM-20).
  */
 @Injectable()
 export class RepositorySettingsStore {
   private readonly api = inject(RepositoriesApi);
+  private readonly removals = inject(RemovedRepositoriesService);
 
   private readonly current = signal<RepositoryDetails | undefined>(undefined);
   private readonly currentState = signal<RepositorySettingsState>('loading');
@@ -135,6 +137,11 @@ export class RepositorySettingsStore {
       error: (error: unknown) => {
         this.reloading.set(false);
         if (toApiError(error).code === 'not-found') {
+          // Shown, then gone: removed while this device did not hear of it, such as while offline, which is
+          // followed as after the event, to the dashboard (RM-20). The page keeps its name until it has gone.
+          if (this.current() !== undefined && this.removals.removed(id)) {
+            return;
+          }
           this.current.set(undefined);
           this.currentState.set('missing');
         } else if (this.current() === undefined) {

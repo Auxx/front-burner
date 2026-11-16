@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import type { PushEvent, RepositoryDetails } from '@front-burner/shared-contracts';
 import { RepositoriesApi } from '@front-burner/web-api-client';
-import { PushChannelService } from '@front-burner/web-core';
+import { PushChannelService, RemovedRepositoriesService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { apiFailure } from '../../../testing/api-failure';
@@ -17,11 +17,13 @@ describe('RepositorySettingsStore', () => {
   let answers: Observable<RepositoryDetails>[];
   let requested: number[];
   let push: { events: Subject<PushEvent>; reconnected: Subject<void>; };
+  let removed: ReturnType<typeof vi.fn<(repositoryId: number) => boolean>>;
 
   beforeEach(() => {
     answers = [];
     requested = [];
     push = { events: new Subject(), reconnected: new Subject() };
+    removed = vi.fn(() => false);
     const details = (id: number) => {
       requested.push(id);
       return answers.shift() ?? new Subject<RepositoryDetails>();
@@ -30,7 +32,8 @@ describe('RepositorySettingsStore', () => {
       providers: [
         RepositorySettingsStore,
         { provide: RepositoriesApi, useValue: { repositoryDetails: details } },
-        { provide: PushChannelService, useValue: push }
+        { provide: PushChannelService, useValue: push },
+        { provide: RemovedRepositoriesService, useValue: { removed } }
       ]
     });
     store = TestBed.inject(RepositorySettingsStore);
@@ -61,6 +64,34 @@ describe('RepositorySettingsStore', () => {
     store.retry();
     expect(store.state()).toBe('ready');
     expect(store.retrying()).toBe(false);
+  });
+
+  it('does not follow a removal for a repository that was never shown', () => {
+    answers = [ failure(404, 'not-found') ];
+    store.load(7);
+
+    expect(removed).not.toHaveBeenCalled();
+  });
+
+  it('follows a removal it missed when a reload finds the repository gone, keeping the name until the page goes', () => {
+    removed.mockReturnValue(true);
+    answers = [ of(repositoryDetails()), failure(404, 'not-found') ];
+    store.load(7);
+    push.reconnected.next();
+
+    expect(removed).toHaveBeenCalledWith(7);
+    expect(store.state()).toBe('ready');
+    expect(store.details()?.summary.name).toBe('handbook');
+  });
+
+  it('shows a repository found gone as missing when the tab does not leave for it', () => {
+    removed.mockReturnValue(false);
+    answers = [ of(repositoryDetails()), failure(404, 'not-found') ];
+    store.load(7);
+    store.reload();
+
+    expect(store.state()).toBe('missing');
+    expect(store.details()).toBeUndefined();
   });
 
   it('keeps the details when a reload fails', () => {

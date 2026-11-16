@@ -1,7 +1,13 @@
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import type { RepositoryError, RepositoryStatus, RepositorySummary } from '@front-burner/shared-contracts';
 import { RepositoriesApi } from '@front-burner/web-api-client';
-import { ApiErrorTextService, toApiError } from '@front-burner/web-core';
+import {
+  ApiErrorTextService,
+  CurrentUserService,
+  DraftStore,
+  RemovedRepositoriesService,
+  toApiError
+} from '@front-burner/web-core';
 import type { Subscription } from 'rxjs';
 
 export type RepositorySessionState = 'loading' | 'missing' | 'not-openable' | 'failed' | 'ready';
@@ -15,11 +21,19 @@ export type RepositorySessionState = 'loading' | 'missing' | 'not-openable' | 'f
  * turns ready while the screen shows it as not openable is opened then
  * (`statusChanged`), as this visit's one opening; once opened, it is only
  * read again (`refresh`), which leaves the last access time alone.
+ *
+ * A repository found missing leaves no browser drafts on this device (RM-19):
+ * when opening, this user's are deleted; when reading again, it was removed
+ * while this device did not hear of it, which is followed as after its event
+ * (`RemovedRepositoriesService.removed`), so the tab goes to the dashboard.
  */
 @Injectable()
 export class RepositorySessionService {
   private readonly api = inject(RepositoriesApi);
   private readonly errorText = inject(ApiErrorTextService);
+  private readonly currentUser = inject(CurrentUserService);
+  private readonly drafts = inject(DraftStore);
+  private readonly removals = inject(RemovedRepositoriesService);
 
   private readonly currentState = signal<RepositorySessionState>('loading');
   private readonly current = signal<RepositorySummary | null>(null);
@@ -84,10 +98,18 @@ export class RepositorySessionService {
       return;
     }
     this.request?.unsubscribe();
-    this.request = this.api.get(this.id).subscribe({
+    const id = this.id;
+    this.request = this.api.get(id).subscribe({
       next: repository => this.follow(repository),
-      // The screen stays as it is; the next reconnect reads it again.
-      error: () => undefined
+      error: (error: unknown) => {
+        // Removed while this device did not hear of it, such as while offline: followed as after the event (RM-20).
+        // Without a page to leave, such as for a removal this tab made, it shows as missing here.
+        if (toApiError(error).code === 'not-found' && !this.removals.removed(id)) {
+          this.current.set(null);
+          this.currentState.set('missing');
+        }
+        // Otherwise the screen stays as it is; the next reconnect reads it again.
+      }
     });
   }
 
@@ -105,6 +127,20 @@ export class RepositorySessionService {
     }
     this.current.set(repository);
     this.currentState.set(ready ? 'ready' : 'not-openable');
+  }
+
+  /**
+   * Deletes this user's browser drafts of the repository `id`, found missing:
+   * one removed while this device did not hear of it leaves none behind
+   * (RM-19). Another user's repository is missing too, and their drafts stay.
+   */
+  private async deleteOwnDrafts(id: number): Promise<void> {
+    try {
+      const { id: userId } = await this.currentUser.load();
+      await this.drafts.deleteRepository(id, userId);
+    } catch {
+      // Without the user, the drafts stay; they are offered only for files that exist.
+    }
   }
 
   /** Only the answer to the latest request counts. */
@@ -128,6 +164,7 @@ export class RepositorySessionService {
         const apiError = toApiError(error);
         if (apiError.code === 'not-found') {
           this.currentState.set('missing');
+          void this.deleteOwnDrafts(id);
           return;
         }
         this.failure.set(this.errorText.describe(apiError));

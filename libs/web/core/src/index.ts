@@ -15,6 +15,10 @@ export { CurrentUserService } from './core/services/current-user/current-user.se
 export { OnboardingStateService, type OnboardingView } from './core/services/onboarding-state/onboarding-state.service';
 export { ownsTitle, PageTitleService } from './core/services/page-title/page-title.service';
 export { PushChannelService } from './core/services/push-channel/push-channel.service';
+export {
+  RemovedRepositoriesService,
+  type RemovedRepositoryViewer
+} from './core/services/removed-repositories/removed-repositories.service';
 export { fieldErrorCode } from './core/utils/field-error-code/field-error-code';
 export { isRepositoryId } from './core/utils/is-repository-id/is-repository-id';
 export { relativeTime } from './core/utils/relative-time/relative-time';

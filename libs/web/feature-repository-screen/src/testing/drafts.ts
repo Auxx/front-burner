@@ -15,6 +15,7 @@ export class MemoryDraftStore implements
     | 'delete'
     | 'deleteUnclaimed'
     | 'move'
+    | 'deleteRepository'
     | 'clearAll'
     | 'claim'
     | 'claimedElsewhere'
@@ -60,6 +61,15 @@ export class MemoryDraftStore implements
       if (stored === prefix || stored.startsWith(`${prefix}/`)) {
         this.drafts.delete(stored);
         this.drafts.set(keyOf(to) + stored.slice(prefix.length), draft);
+      }
+    }
+  }
+
+  async deleteRepository(repositoryId: number, userId?: number): Promise<void> {
+    for (const stored of [ ...this.drafts.keys() ]) {
+      const [ owner, repository ] = stored.split('/');
+      if (repository === String(repositoryId) && (userId === undefined || owner === String(userId))) {
+        this.drafts.delete(stored);
       }
     }
   }

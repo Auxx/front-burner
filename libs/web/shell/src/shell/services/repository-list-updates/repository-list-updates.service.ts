@@ -1,7 +1,7 @@
 import { DestroyRef, effect, inject, Injectable, Injector, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { PushEvent, RepositorySummary } from '@front-burner/shared-contracts';
-import { PushChannelService } from '@front-burner/web-core';
+import { PushChannelService, RemovedRepositoriesService } from '@front-burner/web-core';
 
 /** A page's list of repositories, as `RepositoryListUpdatesService.follow` sees it. */
 export interface FollowedRepositoryList {
@@ -25,7 +25,7 @@ export interface FollowedRepositoryList {
  * (A-3.11): a status for a listed repository, and the progress of a listed
  * clone (`job.progress` of its `clone.jobId`), are patched in place, and anything
  * the list cannot apply (a repository not listed) asks for the list again, as
- * does a reconnect.
+ * does a reconnect. A repository removed elsewhere is dropped from it (RM-20).
  *
  * At most one reload waits at a time: while a request for the list runs, the
  * statuses that need one are remembered, and a single reload follows once the
@@ -36,6 +36,7 @@ export interface FollowedRepositoryList {
 @Injectable({ providedIn: 'root' })
 export class RepositoryListUpdatesService {
   private readonly push = inject(PushChannelService);
+  private readonly removals = inject(RemovedRepositoriesService);
 
   /**
    * Follows `list` until the component that calls it is destroyed. Call it in
@@ -64,6 +65,8 @@ export class RepositoryListUpdatesService {
     }, { injector });
 
     this.push.events.pipe(takeUntilDestroyed(destroyRef)).subscribe(event => this.onEvent(list, event, askForReload));
+    // This device's drafts of a repository removed elsewhere are deleted while a list is shown too (RM-19).
+    this.removals.watch();
     // Events may have been missed while disconnected: fetch at once, even
     // during a load that may have started before the disconnect. The new
     // answer is newer than every event so far, so none still waits for one.
@@ -76,6 +79,10 @@ export class RepositoryListUpdatesService {
   private onEvent(list: FollowedRepositoryList, event: PushEvent, askForReload: () => void): void {
     if (event.type === 'job.progress') {
       this.onProgress(list, event.jobId, event.percent);
+      return;
+    }
+    if (event.type === 'repository.removed') {
+      this.onRemoved(list, event.repositoryId, askForReload);
       return;
     }
     if (event.type !== 'repository.status') {
@@ -110,6 +117,20 @@ export class RepositoryListUpdatesService {
     // The answer on its way may predate the event and undo the patch, and a
     // clone queued again (RM-11, RM-12) has a job the list does not know yet.
     if (list.loading() || event.status === 'cloning') {
+      askForReload();
+    }
+  }
+
+  /**
+   * A removed repository leaves the list at once (RM-20, RM-21). An answer on
+   * its way may still list it, so the list is asked for again after it.
+   */
+  private onRemoved(list: FollowedRepositoryList, repositoryId: number, askForReload: () => void): void {
+    const repositories = list.repositories();
+    if (repositories?.some(repository => repository.id === repositoryId)) {
+      list.update(repositories.filter(repository => repository.id !== repositoryId));
+    }
+    if (list.loading()) {
       askForReload();
     }
   }

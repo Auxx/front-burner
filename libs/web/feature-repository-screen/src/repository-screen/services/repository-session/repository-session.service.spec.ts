@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import type { RepositorySummary } from '@front-burner/shared-contracts';
 import { RepositoriesApi } from '@front-burner/web-api-client';
+import { CurrentUserService, DraftStore, RemovedRepositoriesService } from '@front-burner/web-core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -31,15 +32,25 @@ describe('RepositorySessionService', () => {
   let reads: Observable<RepositorySummary>[];
   let get: ReturnType<typeof vi.fn>;
   let session: RepositorySessionService;
+  let deleteRepository: ReturnType<typeof vi.fn>;
+  let removed: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    deleteRepository = vi.fn(() => Promise.resolve());
+    removed = vi.fn();
     answers = [];
     open = vi.fn(() => answers.shift() ?? of(handbook));
     reads = [];
     get = vi.fn(() => reads.shift() ?? of(handbook));
     TestBed.configureTestingModule({
       imports: [ translocoTesting({ 'errors.internal': 'Something went wrong.' }) ],
-      providers: [ RepositorySessionService, { provide: RepositoriesApi, useValue: { open, get } } ]
+      providers: [
+        RepositorySessionService,
+        { provide: RepositoriesApi, useValue: { open, get } },
+        { provide: CurrentUserService, useValue: { load: () => Promise.resolve({ id: 3 }) } },
+        { provide: DraftStore, useValue: { deleteRepository } },
+        { provide: RemovedRepositoriesService, useValue: { removed } }
+      ]
     });
     session = TestBed.inject(RepositorySessionService);
   });
@@ -90,6 +101,48 @@ describe('RepositorySessionService', () => {
     session.start(12);
 
     expect(session.state()).toBe('missing');
+  });
+
+  it('deletes this user\'s drafts on a 404 for that repository', async () => {
+    answers.push(failure(404, 'not-found'));
+
+    session.start(12);
+    await vi.waitFor(() => expect(deleteRepository).toHaveBeenCalledWith(12, 3));
+
+    expect(removed).not.toHaveBeenCalled();
+  });
+
+  it('follows a removal it missed when reading the repository again finds it gone', () => {
+    removed.mockReturnValue(true);
+    session.start(12);
+    reads.push(failure(404, 'not-found'));
+
+    session.refresh();
+
+    expect(removed).toHaveBeenCalledWith(12);
+    // The tab goes to the dashboard: the screen stays as it was until then.
+    expect(session.state()).toBe('ready');
+  });
+
+  it('shows a repository found gone as missing when the tab does not leave for it', () => {
+    removed.mockReturnValue(false);
+    session.start(12);
+    reads.push(failure(404, 'not-found'));
+
+    session.refresh();
+
+    expect(session.state()).toBe('missing');
+    expect(session.repository()).toBeNull();
+  });
+
+  it('keeps the screen when reading the repository again fails otherwise', () => {
+    session.start(12);
+    reads.push(failure(503, 'internal'));
+
+    session.refresh();
+
+    expect(removed).not.toHaveBeenCalled();
+    expect(session.state()).toBe('ready');
   });
 
   it('describes any other failure and opens again on retry', () => {

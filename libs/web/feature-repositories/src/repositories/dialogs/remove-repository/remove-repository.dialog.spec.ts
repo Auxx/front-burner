@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import type { RemovalCheckResult } from '@front-burner/shared-contracts';
 import { type DialogRef, DialogService } from '@front-burner/ui';
 import { RepositoriesApi } from '@front-burner/web-api-client';
+import { RemovedRepositoriesService } from '@front-burner/web-core';
 import { firstValueFrom, NEVER, type Observable, of, throwError } from 'rxjs';
 
 import { apiFailure } from '../../../testing/api-failure';
@@ -28,6 +29,9 @@ describe('RemoveRepositoryDialog', () => {
   let checks: (() => Observable<RemovalCheckResult>)[];
   let removeAnswer: () => Observable<void>;
   let removed: { id: number; query: { confirmName?: string; } | undefined; }[];
+  /** `RemovedRepositoriesService.expect`, and what it returns. */
+  let expectRemoval: ReturnType<typeof vi.fn>;
+  let notRemoving: ReturnType<typeof vi.fn>;
 
   const overlay = () => document.querySelector('.cdk-overlay-container') as HTMLElement;
   const heading = () => overlay().querySelector('h2')?.textContent?.trim();
@@ -60,6 +64,8 @@ describe('RemoveRepositoryDialog', () => {
   beforeEach(() => {
     removeAnswer = () => of(undefined);
     removed = [];
+    notRemoving = vi.fn();
+    expectRemoval = vi.fn(() => notRemoving);
     TestBed.configureTestingModule({
       imports: [
         translocoTesting({
@@ -80,7 +86,8 @@ describe('RemoveRepositoryDialog', () => {
               return removeAnswer();
             }
           }
-        }
+        },
+        { provide: RemovedRepositoriesService, useValue: { expect: expectRemoval } }
       ]
     });
   });
@@ -186,6 +193,28 @@ describe('RemoveRepositoryDialog', () => {
     expect(result).toBeUndefined();
     expect(heading()).toBe('Remove handbook?');
     expect(removeButton()).toBeDefined();
+  });
+
+  it('ignores its own removal: announces it before the request, which its event may overtake', async () => {
+    removeAnswer = () => {
+      expect(expectRemoval).toHaveBeenCalledWith(7);
+      return of(undefined);
+    };
+    await open(() => of(nothing));
+
+    await press(removeButton());
+
+    expect(removed).toHaveLength(1);
+    expect(notRemoving).not.toHaveBeenCalled();
+  });
+
+  it('follows a removal elsewhere again once its own failed', async () => {
+    removeAnswer = () => throwError(() => new HttpErrorResponse({ status: 0 }));
+    await open(() => of(nothing));
+
+    await press(removeButton());
+
+    expect(notRemoving).toHaveBeenCalledTimes(1);
   });
 
   it('counts a repository that is gone already as removed', async () => {
