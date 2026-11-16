@@ -153,11 +153,18 @@ describe('RemoveRepositoryDialog', () => {
       );
     await open(() => of(nothing));
 
+    expect(overlay().querySelector('ui-inline-banner.appeared')).toBeNull();
+    removeButton()?.focus();
     await press(removeButton());
 
-    expect(banner()).toBeUndefined();
+    // Not a failure: a warning, announced, and the focus on the field that makes Remove available.
+    expect(overlay().querySelector('ui-inline-banner[status="danger"]')).toBeNull();
+    const warning = overlay().querySelector('ui-inline-banner.appeared');
+    expect(warning?.textContent?.trim()).toBe(`${K}.appeared`);
+    expect(warning?.hasAttribute('announce')).toBe(true);
     expect(losses()).toEqual([ '2 uncommitted files', '3 commits not pushed' ]);
     expect(nameField()).not.toBeNull();
+    expect(document.activeElement).toBe(nameField());
     expect(removeButton()?.getAttribute('aria-disabled')).toBe('true');
 
     removeAnswer = () => of(undefined);

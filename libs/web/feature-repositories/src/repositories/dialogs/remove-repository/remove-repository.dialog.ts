@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  Injector,
+  signal,
+  viewChild
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   confirmsName,
@@ -49,7 +59,8 @@ let nextId = 0;
  * backend compares it (`confirmsName`), and the name is sent as `confirmName`.
  * Work that appeared after the dialog opened makes the backend answer `409
  * removal-needs-confirmation` with the new check, which turns the dialog into
- * its typed-name form instead of failing (RM-18's check on confirming).
+ * its typed-name form instead of failing (RM-18's check on confirming): a
+ * warning announces it, and the focus moves to the name field.
  *
  * **Cancel** has the focus first, as removing is the dangerous choice (NF-13).
  * The dialog closes with `true` once the repository is removed, also when it
@@ -91,6 +102,11 @@ export class RemoveRepositoryDialog {
   protected readonly busy = signal(false);
   /** What the user typed in the name field. */
   protected readonly typed = signal('');
+  /** Whether work appeared after the dialog opened, which the dialog announces (NF-13). */
+  protected readonly appeared = signal(false);
+
+  private readonly injector = inject(Injector);
+  private readonly nameInput = viewChild(InputComponent);
 
   /** Whether the user must type the name (RM-18). */
   protected readonly needsName = computed(() => {
@@ -169,8 +185,11 @@ export class RemoveRepositoryDialog {
         ? RemovalCheckResultSchema.safeParse(apiError.params)
         : null;
       if (check?.success) {
-        // Work appeared since the dialog opened: ask for the name with the new counts.
+        // Work appeared since the dialog opened: ask for the name with the new counts, saying so, and
+        // move the focus off Remove, which is unavailable now, to the field that makes it available.
         this.check.set(check.data);
+        this.appeared.set(true);
+        afterNextRender(() => this.nameInput()?.focus(), { injector: this.injector });
       } else {
         this.failure.set(this.errorText.describe(apiError));
       }

@@ -17,10 +17,11 @@ const KEY = 'web-feature-repositories.RemoveRepositoryComponent';
  * The **Remove repository** section of the settings page (RM-9, RM-17),
  * offered in every status. **Remove repository** opens the confirmation
  * dialog; once it removed the repository, this device's browser drafts of the
- * repository are deleted (RM-19, NF-3.3), and the page goes to the repository
- * management page with "Repository <name> removed." (RM-20). Cancelling
- * changes nothing. The button is busy while the dialog is open, and a press
- * meanwhile opens no second one.
+ * repository are deleted (RM-19, NF-3.3), without waiting for IndexedDB, and
+ * the page goes to the repository management page with "Repository <name>
+ * removed." (RM-20). Cancelling changes nothing. The button is busy from the
+ * press until the dialog is cancelled or the page has gone, and a press
+ * meanwhile does nothing.
  */
 @Component({
   selector: 'repo-remove-repository',
@@ -38,7 +39,7 @@ export class RemoveRepositoryComponent {
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
 
-  /** Whether the dialog is open. */
+  /** Whether a press has not ended yet: the dialog is open, or the page is going to the list. */
   protected readonly removing = signal(false);
 
   protected async remove(): Promise<void> {
@@ -54,15 +55,17 @@ export class RemoveRepositoryComponent {
       if (await firstValueFrom(ref.closed, { defaultValue: undefined }) !== true) {
         return;
       }
+      // Not waited for: the repository is gone, so nothing may keep the page from leaving it.
+      void this.drafts.deleteRepository(id);
+      this.toast.show({
+        message: this.transloco.translate(`${KEY}.removed`, { name }),
+        dismissLabel: this.transloco.translate(`${KEY}.dismiss`),
+        status: 'success'
+      });
+      await this.router.navigateByUrl('/repositories');
     } finally {
+      // Busy until the page has gone, so that a removed repository cannot be removed again.
       this.removing.set(false);
     }
-    await this.drafts.deleteRepository(id);
-    this.toast.show({
-      message: this.transloco.translate(`${KEY}.removed`, { name }),
-      dismissLabel: this.transloco.translate(`${KEY}.dismiss`),
-      status: 'success'
-    });
-    await this.router.navigateByUrl('/repositories');
   }
 }

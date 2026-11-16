@@ -13,6 +13,11 @@
           }
         </ui-inline-banner>
       }
+      @if (appeared()) {
+        <ui-inline-banner class="appeared"
+                          status="warning"
+                          announce>{{ t('appeared') }}</ui-inline-banner>
+      }
       <p class="message">{{ t('message') }}</p>
       @if (check()) {
         @if (needsName()) {

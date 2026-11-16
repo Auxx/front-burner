@@ -23,6 +23,8 @@ describe('RemoveRepositoryComponent', () => {
   let open: ReturnType<typeof vi.fn>;
   let deleteRepository: ReturnType<typeof vi.fn>;
   let show: ReturnType<typeof vi.fn>;
+  /** Whether going to the list may go on; the route waits for it. */
+  let gate: Promise<boolean>;
 
   const removeButton = () => (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button.remove');
 
@@ -37,10 +39,11 @@ describe('RemoveRepositoryComponent', () => {
     open = vi.fn(() => ({ closed }));
     deleteRepository = vi.fn(() => Promise.resolve());
     show = vi.fn();
+    gate = Promise.resolve(true);
     TestBed.configureTestingModule({
       imports: [ translocoTesting({ [`${K}.removed`]: 'Repository {{ name }} removed.' }) ],
       providers: [
-        provideRouter([ { path: 'repositories', component: ListPage } ]),
+        provideRouter([ { path: 'repositories', component: ListPage, canActivate: [ () => gate ] } ]),
         { provide: DialogService, useValue: { open } },
         { provide: DraftStore, useValue: { deleteRepository } },
         { provide: ToastService, useValue: { show } }
@@ -100,18 +103,45 @@ describe('RemoveRepositoryComponent', () => {
     expect(removeButton()?.hasAttribute('data-busy')).toBe(false);
   });
 
-  it('deletes the drafts before going to the list', async () => {
-    let finish: () => void = () => undefined;
-    deleteRepository.mockReturnValue(new Promise<void>(resolve => (finish = resolve)));
+  it('goes to the list without waiting for the drafts to be deleted', async () => {
+    // Such as IndexedDB that never answers.
+    deleteRepository.mockReturnValue(new Promise<void>(() => undefined));
     await render();
     const router = TestBed.inject(Router);
 
     open.mockReturnValue({ closed: of(true) });
     removeButton()?.click();
     await settle(fixture);
-    expect(router.url).toBe('/');
 
-    finish();
+    expect(deleteRepository).toHaveBeenCalledWith(7);
+    expect(show).toHaveBeenCalledOnce();
+    expect(router.url).toBe('/repositories');
+  });
+
+  it('stays busy until it has gone to the list, so that a second press does nothing', async () => {
+    let pass: (go: boolean) => void = () => undefined;
+    gate = new Promise(resolve => (pass = resolve));
+    await render();
+    const router = TestBed.inject(Router);
+
+    // `settle` would wait for the held navigation, so this waits for the timers and renders by hand.
+    const tick = async () => {
+      await new Promise(resolve => setTimeout(resolve));
+      fixture.detectChanges();
+    };
+
+    open.mockReturnValue({ closed: of(true) });
+    removeButton()?.click();
+    await tick();
+    expect(router.url).toBe('/');
+    expect(removeButton()?.getAttribute('data-busy')).toBe('true');
+
+    removeButton()?.click();
+    await tick();
+    expect(open).toHaveBeenCalledOnce();
+    expect(show).toHaveBeenCalledOnce();
+
+    pass(true);
     await settle(fixture);
     expect(router.url).toBe('/repositories');
   });

@@ -523,6 +523,7 @@
   "web-feature-repositories.RemoveRepositoryDialog.heading": "Remove {{ name }}?",
   "web-feature-repositories.RemoveRepositoryDialog.message": "This deletes its working copy on Front Burner. The remote is not changed.",
   "web-feature-repositories.RemoveRepositoryDialog.loading": "Checking for work that isn't pushed",
+  "web-feature-repositories.RemoveRepositoryDialog.appeared": "Work that isn't pushed appeared since this dialog opened. Type the name to confirm.",
   "web-feature-repositories.RemoveRepositoryDialog.wouldLose": "Removing it loses:",
   "web-feature-repositories.RemoveRepositoryDialog.losses.uncommitted": "{count, plural, one {# uncommitted file} other {# uncommitted files}}",
   "web-feature-repositories.RemoveRepositoryDialog.losses.unpushed": "{count, plural, one {# commit not pushed} other {# commits not pushed}}",
