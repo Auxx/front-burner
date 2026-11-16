@@ -27,6 +27,7 @@ import { map, take } from 'rxjs';
 
 import { CloneDetailsComponent } from '../../components/clone-details/clone-details.component';
 import { CloneStatusComponent } from '../../components/clone-status/clone-status.component';
+import { CredentialsInUseComponent } from '../../components/credentials-in-use/credentials-in-use.component';
 import { RepositorySettingsStore } from '../../services/repository-settings-store/repository-settings-store.service';
 
 /**
@@ -56,6 +57,7 @@ import { RepositorySettingsStore } from '../../services/repository-settings-stor
     PageNotFoundPage,
     RepositoryStatusComponent,
     CloneStatusComponent,
+    CredentialsInUseComponent,
     CloneDetailsComponent
   ],
   providers: [ RepositorySettingsStore ],
