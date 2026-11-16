@@ -20,7 +20,7 @@ import {
 } from './support/git-ssh-server';
 import { keyboard, touch } from './support/hands';
 import { adminAuthToken, confirmCommitAuthor, logIn, seed, type SeedRepository, TEST_ADMIN } from './support/instance';
-import { addOverApi, api, sshRepository } from './support/repositories';
+import { addOverApi, api, runGitJob, sshRepository } from './support/repositories';
 import { gitIn } from './support/working-copy';
 
 test.use({ instanceOptions: { onboarded: true } });
@@ -34,7 +34,10 @@ const filter = (page: Page) => page.getByLabel('Filter by name or remote');
 
 /** Logs in at `/repositories` and waits for the list to have loaded. */
 async function openRepositories(page: Page): Promise<void> {
-  const loaded = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/repositories');
+  // Not a 401 sent before the login.
+  const loaded = page.waitForResponse(response =>
+    response.ok() && new URL(response.url()).pathname === '/api/v1/repositories'
+  );
   await page.goto('/repositories');
   await logIn(page);
   await loaded;
@@ -861,32 +864,10 @@ test.describe('repository warnings', () => {
     return { id, name };
   }
 
-  /**
-   * Runs `operation` (`push` or `fetch`) over the API and waits for its job to
-   * end; answers its outcome's kind, such as `pushed` or `failed`, with a
-   * failure's code.
-   */
-  async function runJob(url: string, id: number, operation: 'push' | 'fetch'): Promise<string> {
-    const token = await adminAuthToken(url);
-    const started = await api(url, token, 'POST', `/api/v1/repositories/${id}/git/${operation}`);
-    expect(started.status).toBe(202);
-    const jobId = started.body['jobId'] as number;
-    let ended = '';
-    await expect.poll(async () => {
-      const state = await api(url, token, 'GET', `/api/v1/repositories/${id}/git/jobs/${jobId}`);
-      const outcome = state.body['outcome'] as { kind: string; code?: string; } | null;
-      ended = outcome === null
-        ? (state.body['status'] === 'cancelled' ? 'cancelled' : '')
-        : [ outcome.kind, outcome.code ].filter(Boolean).join(' ');
-      return ended;
-    }).not.toBe('');
-    return ended;
-  }
-
   test('AC-REPO-003.6: a repository whose last push was refused shows "Credentials refused" on the dashboard, this page and its settings page, and can still be opened; a successful background fetch does not remove the warning, and the next successful push does', async ({ page, instance }) => {
     const { id, name } = await addHandbook(instance);
     delete pushers[WRITER.username];
-    expect(await runJob(instance.url, id, 'push')).toBe('failed credentials-refused');
+    expect(await runGitJob(instance.url, id, 'push')).toBe('failed credentials-refused');
 
     // The dashboard: the label, the repository still opens, and Settings leads to the fix.
     await page.goto('/');
@@ -913,7 +894,7 @@ test.describe('repository warnings', () => {
     await expect(warnings(page).getByRole('button', { name: 'Fix credentials' })).toBeVisible();
 
     // A fetch succeeds, as anyone may read: the push's warning stays.
-    expect(await runJob(instance.url, id, 'fetch')).toBe('fetched');
+    expect(await runGitJob(instance.url, id, 'fetch')).toBe('fetched');
     await page.reload();
     await expect(statusOf(page)).toContainText('Credentials refused');
 
@@ -927,7 +908,7 @@ test.describe('repository warnings', () => {
       '-m',
       'third'
     );
-    expect(await runJob(instance.url, id, 'push')).toBe('pushed');
+    expect(await runGitJob(instance.url, id, 'push')).toBe('pushed');
     await expect(statusOf(page)).not.toContainText('Credentials refused');
     await expect(warnings(page)).toHaveCount(0);
   });
