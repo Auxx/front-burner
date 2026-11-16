@@ -294,8 +294,47 @@ describe('RepositoriesController', () => {
         gitLevel: 'guided',
         addedAt: '2026-10-20T08:00:00.000Z',
         errorDetail: null,
-        errorRequestId: null
+        errorRequestId: null,
+        remoteProblems: { fetch: null, push: null }
       });
+    });
+
+    it('answers the stored problems with their params', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, { name: 'handbook', remoteUrl: 'git@github.com:acme/handbook.git' });
+      const changedKey = {
+        code: 'host-key-changed',
+        params: { host: 'github.com', port: '22', type: 'ssh-ed25519', key: 'AAAAC3', fingerprint: 'SHA256:new' }
+      };
+      app.get(RemoteProblemsSource).provide(ids =>
+        new Map(ids.map(repositoryId => [
+          repositoryId,
+          { fetch: changedKey, push: { code: 'push-not-allowed', params: {} } }
+        ]))
+      );
+
+      const response = await details(alice, id).expect(200);
+
+      expect(response.body.remoteProblems).toEqual({
+        fetch: changedKey,
+        push: { code: 'push-not-allowed', params: {} }
+      });
+      expect(response.body.summary.warnings).toEqual([ 'cannot-push', 'host-key-changed' ]);
+    });
+
+    it('answers none for a repository in error', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      const id = insertRepository(database, alice, { name: 'handbook', status: 'error', errorCode: 'clone-failed' });
+      app.get(RemoteProblemsSource).provide(ids =>
+        new Map(ids.map(repositoryId => [
+          repositoryId,
+          { fetch: { code: 'credentials-refused', params: {} }, push: null }
+        ]))
+      );
+
+      const response = await details(alice, id).expect(200);
+
+      expect(response.body.remoteProblems).toEqual({ fetch: null, push: null });
     });
 
     it('answers the branch of a single-branch clone', async () => {

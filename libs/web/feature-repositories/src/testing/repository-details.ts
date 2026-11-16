@@ -23,6 +23,7 @@ export function repositoryDetails(
     addedAt: '2026-10-25T09:30:00.000Z',
     errorDetail: null,
     errorRequestId: null,
+    remoteProblems: { fetch: null, push: null },
     ...extra
   };
 }

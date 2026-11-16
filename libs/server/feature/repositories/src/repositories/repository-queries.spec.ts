@@ -286,6 +286,14 @@ describe('toDetails', () => {
       .toMatchObject({ summary: { error: null }, errorDetail: null, errorRequestId: null });
   });
 
+  it('answers the remote problems only when ready', () => {
+    const problems = { fetch: { code: 'credentials-refused', params: {} }, push: null };
+    const ready = { ...failedRow, status: 'ready' } as const;
+
+    expect(toDetails(ready, [], undefined, problems).remoteProblems).toEqual(problems);
+    expect(toDetails(failedRow, [], undefined, problems).remoteProblems).toEqual({ fetch: null, push: null });
+  });
+
   it('answers the remote without credentials', () => {
     const details = toDetails(failedRow, [], undefined);
 

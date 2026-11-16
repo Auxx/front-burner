@@ -44,6 +44,16 @@ export class RepositoryWarnings {
   forRow(viewer: WarningsViewer, row: Repository): RepositoryWarning[] {
     return this.forRows(viewer, [ row ])[0];
   }
+
+  /**
+   * The stored problems that the row's warnings come from, with their params,
+   * for the fixes on the settings page (RM-8, RC-21); none outside `ready`, as
+   * for the warnings.
+   */
+  problemsOf(row: Repository): RemoteProblems {
+    const stored = row.status === 'ready' ? this.problems.read([ row.id ]).get(row.id) : undefined;
+    return { fetch: stored?.fetch ?? null, push: stored?.push ?? null };
+  }
 }
 
 /** RM-8's mapping, in the order of its table, each warning once. */
