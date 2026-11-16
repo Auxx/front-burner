@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,8 +18,9 @@ import {
   startGitSshServer
 } from './support/git-ssh-server';
 import { keyboard, touch } from './support/hands';
-import { adminAuthToken, logIn, seed, type SeedRepository } from './support/instance';
+import { adminAuthToken, confirmCommitAuthor, logIn, seed, type SeedRepository, TEST_ADMIN } from './support/instance';
 import { addOverApi, api, sshRepository } from './support/repositories';
+import { gitIn } from './support/working-copy';
 
 test.use({ instanceOptions: { onboarded: true } });
 
@@ -677,5 +678,137 @@ test.describe('Retry clone and Clone again', () => {
     await expect(warning).toHaveCount(0);
     await expect(status(page)).toContainText('Working copy is missing or damaged');
     await expect(status(page).getByRole('button', { name: 'Clone again' })).toBeFocused();
+  });
+});
+
+test.describe('the Commit author section', () => {
+  const ADMIN_AUTHOR = `${TEST_ADMIN.displayName} <${TEST_ADMIN.email}>`;
+  const OVERRIDE = { name: 'Ada Lovelace', email: 'ada@example.com' };
+  const OVERRIDE_AUTHOR = `${OVERRIDE.name} <${OVERRIDE.email}>`;
+
+  const section = (page: Page) => page.getByRole('region', { name: 'Commit author' });
+  const dialog = (page: Page) => page.getByRole('dialog', { name: 'Commit author for this repository' });
+  const changesButton = (page: Page) =>
+    page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: /^Changes/ });
+  const changesPane = (page: Page) => page.getByRole('region', { name: 'Changes', exact: true });
+
+  /** Two ready repositories of the handbook fixture, with their working copies. */
+  function handbooks(instance: { dataDir: string; }): { id: number; dir: string; }[] {
+    return seed(instance.dataDir, {
+      repositories: [
+        { userId: ADMIN_ID, name: 'alpha', workingCopy: 'handbook' },
+        { userId: ADMIN_ID, name: 'beta', workingCopy: 'handbook' }
+      ]
+    }).repositoryIds.map(id => ({ id, dir: join(instance.dataDir, 'repos', String(ADMIN_ID), String(id)) }));
+  }
+
+  /** Opens the settings page of `id`, logging in first unless `loggedIn`, and waits for the author in use. */
+  async function openSettings(page: Page, id: number, loggedIn = true): Promise<void> {
+    const loaded = page.waitForResponse(response =>
+      new URL(response.url()).pathname === `/api/v1/repositories/${id}/commit-author`
+    );
+    await page.goto(`/repositories/${id}/settings`);
+    if (!loggedIn) {
+      await logIn(page);
+    }
+    await loaded;
+  }
+
+  /** Sets an override with **Use a different author for this repository**. */
+  async function setOverride(page: Page): Promise<void> {
+    await section(page).getByRole('button', { name: 'Use a different author for this repository' }).click();
+    await expect(dialog(page)).toBeVisible();
+    await expect(dialog(page).getByRole('radiogroup')).toHaveCount(0);
+    await dialog(page).getByLabel('Name').fill(OVERRIDE.name);
+    await dialog(page).getByLabel('Email').fill(OVERRIDE.email);
+    await dialog(page).getByRole('button', { name: 'Save' }).click();
+    await expect(dialog(page)).toHaveCount(0);
+  }
+
+  /** Changes a file of the working copy and commits it from the repository screen; returns the commit's author. */
+  async function commitIn(page: Page, repository: { id: number; dir: string; }, text: string): Promise<string> {
+    writeFileSync(join(repository.dir, 'README.md'), `# ${text}\n`);
+    await page.goto(`/repositories/${repository.id}`);
+    await expect(changesButton(page)).toHaveAccessibleName('Changes (1)');
+    if (await changesButton(page).getAttribute('aria-pressed') === 'false') {
+      await changesButton(page).click();
+    }
+    await changesPane(page).getByRole('textbox', { name: 'Commit message' }).fill(text);
+    await changesPane(page).getByRole('button', { name: 'Commit 1 file', exact: true }).click();
+    await expect(changesPane(page).getByText('No changes since the last commit.')).toBeVisible();
+    return gitIn(repository.dir, 'log', '-1', '--format=%an <%ae>').trim();
+  }
+
+  test('AC-REPO-003.9: the Commit author section shows the author in use and switches between an override and the default', async ({ page, instance }) => {
+    const [ alpha ] = handbooks(instance);
+    await openSettings(page, alpha.id, false);
+
+    await expect(section(page)).toContainText(`Commits use ${ADMIN_AUTHOR}`);
+    await expect(section(page)).toContainText('Your default commit author');
+    await expect(section(page).getByRole('button', { name: 'Use my default' })).toHaveCount(0);
+
+    await setOverride(page);
+    await expect(section(page)).toContainText(`Commits use ${OVERRIDE_AUTHOR}`);
+    await expect(section(page)).toContainText('Only for this repository');
+
+    // Still there after a reload: the backend keeps it.
+    await openSettings(page, alpha.id);
+    await expect(section(page)).toContainText(`Commits use ${OVERRIDE_AUTHOR}`);
+
+    await section(page).getByRole('button', { name: 'Use my default' }).click();
+    await expect(section(page)).toContainText(`Commits use ${ADMIN_AUTHOR}`);
+    await expect(section(page)).toContainText('Your default commit author');
+    await expect(section(page).getByRole('button', { name: 'Use my default' })).toHaveCount(0);
+  });
+
+  test('AC-GIT-001.5: setting an override for repository A makes commits in A use it, while commits in repository B keep using the default; Use my default in A brings back the default', async ({ page, instance }) => {
+    test.slow();
+    await confirmCommitAuthor(instance.url);
+    const [ alpha, beta ] = handbooks(instance);
+    await openSettings(page, alpha.id, false);
+    await setOverride(page);
+    await expect(section(page)).toContainText('Only for this repository');
+
+    expect(await commitIn(page, alpha, 'First in alpha')).toBe(OVERRIDE_AUTHOR);
+    expect(await commitIn(page, beta, 'First in beta')).toBe(ADMIN_AUTHOR);
+
+    await openSettings(page, alpha.id);
+    await section(page).getByRole('button', { name: 'Use my default' }).click();
+    await expect(section(page)).toContainText('Your default commit author');
+
+    expect(await commitIn(page, alpha, 'Second in alpha')).toBe(ADMIN_AUTHOR);
+  });
+
+  test('cancelling the dialog changes nothing, and the section has no accessibility violations', async ({ page, instance }) => {
+    const [ alpha ] = handbooks(instance);
+    await openSettings(page, alpha.id, false);
+    await expect(section(page)).toContainText(`Commits use ${ADMIN_AUTHOR}`);
+
+    expect((await new AxeBuilder({ page }).include('repo-repository-commit-author').analyze()).violations).toEqual([]);
+    const change = section(page).getByRole('button', { name: 'Use a different author for this repository' });
+    await change.click();
+    await dialog(page).getByLabel('Name').fill(OVERRIDE.name);
+    await dialog(page).getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(section(page)).toContainText(`Commits use ${ADMIN_AUTHOR}`);
+    await expect(change).toBeFocused();
+  });
+
+  test('follows a change of the default on the Preferences page in another tab', async ({ page, instance, context }) => {
+    const [ alpha ] = handbooks(instance);
+    await openSettings(page, alpha.id, false);
+    await expect(section(page)).toContainText(`Commits use ${ADMIN_AUTHOR}`);
+
+    const preferences = await context.newPage();
+    await preferences.goto('/preferences');
+    await preferences.getByRole('button', { name: 'Edit' }).click();
+    await preferences.getByLabel('Name').fill(OVERRIDE.name);
+    await preferences.getByLabel('Email').fill(OVERRIDE.email);
+    await preferences.getByRole('button', { name: 'Save' }).click();
+    await expect(preferences.getByRole('button', { name: 'Edit' })).toBeVisible();
+
+    await expect(section(page)).toContainText(`Commits use ${OVERRIDE_AUTHOR}`);
+    await expect(section(page)).toContainText('Your default commit author');
   });
 });

@@ -36,6 +36,7 @@
         <div class="sections">
           <repo-clone-status [details]="details" />
           <repo-credentials-in-use [repository]="summary" />
+          <repo-repository-commit-author [repository]="summary" />
           <repo-clone-details [details]="details" />
         </div>
       } @else if (state === 'failed') {

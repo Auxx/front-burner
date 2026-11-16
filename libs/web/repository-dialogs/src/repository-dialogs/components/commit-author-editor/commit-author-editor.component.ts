@@ -58,6 +58,9 @@ let nextId = 0;
  * which concerns the default (plan 42). If the backend refuses that default, the
  * form moves on to it, with the reason next to its field (CA-12). Correcting it
  * leaves any override alone: the commit is still made as the question said.
+ *
+ * With `overrideOnly` in the data, it edits this repository's override only,
+ * under its own heading and without the choice of the default (RM-15).
  */
 @Component({
   selector: 'dlg-commit-author-editor',
@@ -93,8 +96,10 @@ export class CommitAuthorEditorComponent implements OnInit {
   protected readonly formId = `dlg-commit-author-editor-${nextId++}`;
   protected readonly model = commitAuthorForm(this.data.current.author);
   protected readonly refusals = new CommitAuthorRefusals(this.model);
+  /** Whether only this repository's override is edited, without the choice of the default. */
+  protected readonly overrideOnly = this.data.overrideOnly === true;
   protected readonly scope = signal<Scope | undefined>(
-    this.data.current.source === 'override' ? 'repository' : 'default'
+    this.overrideOnly || this.data.current.source === 'override' ? 'repository' : 'default'
   );
   protected readonly scopes = computed<readonly ChoiceOption<Scope>[]>(() => {
     // Re-evaluated when the language changes.
@@ -173,6 +178,15 @@ export class CommitAuthorEditorComponent implements OnInit {
 
   /** Resolves `null` when the form has moved on to a default that can't be confirmed. */
   private async saveOverride(value: CommitAuthor): Promise<RepositoryCommitAuthor | null> {
+    const { current } = this.data;
+    if (
+      !this.confirming() && (this.overrideOnly || current.source === 'override')
+      && value.name === current.author.name && value.email === current.author.email
+    ) {
+      // Saving what is there changes nothing: with overrideOnly, an override equal to the default
+      // would stop the repository following later changes of the default.
+      return current;
+    }
     const saved = await firstValueFrom(this.api.setRepositoryCommitAuthor(this.data.repositoryId, value));
     if (!this.confirming()) {
       return saved;

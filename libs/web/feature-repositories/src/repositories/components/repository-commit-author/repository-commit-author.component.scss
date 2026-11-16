@@ -1,0 +1,45 @@
+@use '../../styles/settings-section' as *;
+
+:host {
+  display: block;
+}
+
+@include settings-section;
+
+.in-use {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  min-inline-size: 0;
+}
+
+.author,
+.source {
+  margin: 0;
+}
+
+.author {
+  overflow-wrap: anywhere;
+}
+
+.source {
+  color: var(--ui-text-muted);
+}
+
+.failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1) var(--ui-space-2);
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
+
+.reference {
+  display: block;
+}

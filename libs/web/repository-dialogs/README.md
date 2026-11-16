@@ -11,7 +11,8 @@ What several web features share about a repository's git setup (A-2.4).
 - `CommitAuthorRefusals`: the backend's field errors of the last request, kept
   until their field changes, and focusing the first field with an error.
 - `ChangeCommitAuthorDialog`: **Change** on the commit form, as the default or
-  for this repository.
+  for this repository; with `overrideOnly`, for this repository only, as the
+  settings page's **Commit author** section opens it.
 - `ConfirmCommitAuthorDialog`: the question before a user's first commit.
 - `CredentialsSectionComponent` (`credentials-form/`): the **Credentials**
   choices of a remote URL's protocol, reset when the protocol changes (AR-11,

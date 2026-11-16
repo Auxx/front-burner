@@ -1,0 +1,48 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.RepositoryCommitAuthorComponent'">
+  <section aria-labelledby="repo-repository-commit-author-heading">
+    <h2 id="repo-repository-commit-author-heading"
+        class="heading">{{ t('heading') }}</h2>
+    @let current = author();
+    @if (current) {
+      <div class="in-use">
+        <p class="author">{{ t('commitsUse', { name: current.author.name, email: current.author.email }) }}</p>
+        <p class="source">{{ current.source === 'override' ? t('override') : t('default') }}</p>
+      </div>
+    } @else if (state() === 'failed') {
+      <p class="failed">
+        <span>{{ t('loadFailed') }}</span>
+        <button uiButton
+                size="small"
+                class="retry"
+                (click)="retry()">{{ t('retry') }}</button>
+      </p>
+    } @else {
+      <ui-spinner [label]="t('loading')" />
+    }
+    @if (failure(); as failure) {
+      <ui-inline-banner status="danger"
+                        announce>
+        {{ failure.text }}
+        @if (failure.reference) {
+          <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+        }
+      </ui-inline-banner>
+    }
+    @if (current) {
+      <div class="actions">
+        <button uiButton
+                class="change"
+                [busy]="changing()"
+                [unavailable]="resetting()"
+                (click)="change()">{{ t('change') }}</button>
+        @if (current.source === 'override') {
+          <button uiButton
+                  class="use-default"
+                  [busy]="resetting()"
+                  [unavailable]="changing()"
+                  (click)="useDefault()">{{ t('useDefault') }}</button>
+        }
+      </div>
+    }
+  </section>
+</ng-container>

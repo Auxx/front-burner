@@ -37,10 +37,10 @@ describe('ChangeCommitAuthorDialog', () => {
     [ ...overlay().querySelectorAll<HTMLLabelElement>('ui-segmented-control label') ]
       .find(element => element.textContent?.trim() === `${KEY}.${label}`)?.querySelector('input') as HTMLInputElement;
 
-  async function open(current: RepositoryCommitAuthor): Promise<void> {
+  async function open(current: RepositoryCommitAuthor, options: Partial<CommitAuthorDialogData> = {}): Promise<void> {
     ref = TestBed.inject(DialogService).open<ChangeCommitAuthorDialog, CommitAuthorDialogData, RepositoryCommitAuthor>(
       ChangeCommitAuthorDialog,
-      { data: { repositoryId: 12, current } }
+      { data: { repositoryId: 12, current, ...options } }
     );
     await settleDialog();
   }
@@ -211,5 +211,43 @@ describe('ChangeCommitAuthorDialog', () => {
 
     expect(await closed).toBeUndefined();
     expect(api['setCommitAuthor']).not.toHaveBeenCalled();
+  });
+
+  it('edits the override only, without the choice of the default, when opened for it', async () => {
+    await open(usingDefault, { overrideOnly: true });
+    const closed = firstValueFrom(ref.closed);
+
+    expect(overlay().querySelector('h2')?.textContent?.trim()).toBe(`${KEY}.overrideHeading`);
+    expect(overlay().querySelector('ui-segmented-control')).toBeNull();
+    expect(input('name').value).toBe('Ada');
+    type(input('name'), 'Ada L');
+    type(input('email'), 'ada@work.example');
+    await settleDialog();
+
+    await save();
+
+    expect(api['setRepositoryCommitAuthor']).toHaveBeenCalledWith(12, work);
+    expect(api['setCommitAuthor']).not.toHaveBeenCalled();
+    expect(await closed).toEqual(usingOverride);
+  });
+
+  it('sets no override equal to the default when opened for it and saved without an edit', async () => {
+    await open(usingDefault, { overrideOnly: true });
+    const closed = firstValueFrom(ref.closed);
+
+    await save();
+
+    expect(api['setRepositoryCommitAuthor']).not.toHaveBeenCalled();
+    expect(await closed).toEqual(usingDefault);
+  });
+
+  it('saving an override without an edit changes nothing', async () => {
+    await open(usingOverride);
+    const closed = firstValueFrom(ref.closed);
+
+    await save();
+
+    expect(api['setRepositoryCommitAuthor']).not.toHaveBeenCalled();
+    expect(await closed).toEqual(usingOverride);
   });
 });
