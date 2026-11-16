@@ -86,6 +86,30 @@ describe('AppHeaderComponent', () => {
     ]);
   });
 
+  /** Opens the Menu, and returns each item's `aria-current` and whether it is bold (`active`). */
+  async function menuMarks(): Promise<[ string | null, boolean ][]> {
+    const menu = header().querySelector('nav button') as HTMLButtonElement;
+    menu.click();
+    await settle(harness.fixture);
+    const opened = document.getElementById(menu.getAttribute('aria-controls') ?? '');
+    return Array.from(opened?.querySelectorAll('[role="menuitem"]') ?? []).map(item => [
+      item.getAttribute('aria-current'),
+      item.classList.contains('active')
+    ]);
+  }
+
+  it('marks the dashboard\'s item of the Menu on the dashboard, for screen readers too', async () => {
+    await open('/');
+
+    expect(await menuMarks()).toEqual([ [ 'page', true ], [ null, false ] ]);
+  });
+
+  it('marks the Repositories item of the Menu on the repository management page', async () => {
+    await open('/repositories');
+
+    expect(await menuMarks()).toEqual([ [ null, false ], [ 'page', true ] ]);
+  });
+
   it('reserves the bold width of each link\'s label, so that nothing moves when the current page changes', async () => {
     await open('/');
 

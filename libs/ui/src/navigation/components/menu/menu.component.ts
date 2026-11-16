@@ -17,6 +17,7 @@ import {
   ElementRef,
   inject,
   Injector,
+  signal,
   untracked
 } from '@angular/core';
 
@@ -51,7 +52,8 @@ import { MenuItemComponent } from '../menu-item/menu-item.component';
   exportAs: 'uiMenu',
   hostDirectives: [ { directive: Menu, outputs: [ 'itemSelected' ] } ],
   host: {
-    '(keydown)': 'moved = true'
+    '(keydown)': 'moved = true',
+    '[class.open]': 'open()'
   }
 })
 export class MenuComponent<V = unknown> {
@@ -63,6 +65,13 @@ export class MenuComponent<V = unknown> {
   private readonly items = contentChildren(MenuItemComponent, { descendants: true });
   /** Whether the user has moved in the menu since it opened. */
   protected moved = false;
+  /**
+   * Whether the menu is shown in its overlay. Aria's `visible` alone is not
+   * enough: a menu that no trigger has claimed yet, such as a shared menu of
+   * rows when there are no rows, counts as a standalone menu, which Aria
+   * always shows.
+   */
+  protected readonly open = signal(false);
   private overlayRef?: OverlayRef;
   /** The trigger that the overlay is positioned next to. */
   private origin?: HTMLElement;
@@ -132,9 +141,11 @@ export class MenuComponent<V = unknown> {
     if (!this.overlayRef.hasAttached()) {
       this.overlayRef.attach(new DomPortal(this.host));
     }
+    this.open.set(true);
   }
 
   private detach(): void {
+    this.open.set(false);
     if (this.overlayRef?.hasAttached()) {
       this.overlayRef.detach();
     }

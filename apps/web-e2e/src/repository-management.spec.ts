@@ -1093,8 +1093,11 @@ test.describe('Remove repository', () => {
 
       // Without a reload: the second device goes to the dashboard, which does not list it.
       await expect(second).toHaveURL(new URL('/', instance.url).href);
-      await expect(second.getByText(`Repository ${name} removed. Your unsaved changes to its files were not saved.`))
-        .toBeVisible();
+      // In the toast: the live announcer says the same text, for a while.
+      await expect(
+        second.getByRole('region', { name: 'Notifications' })
+          .getByText(`Repository ${name} removed. Your unsaved changes to its files were not saved.`)
+      ).toBeVisible();
       await expect(second.getByRole('link', { name, exact: true })).toHaveCount(0);
     } finally {
       await other.close();

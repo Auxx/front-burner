@@ -1,13 +1,83 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { expect, test } from './support/fixtures';
-import { logIn, TEST_ADMIN } from './support/instance';
+import { axe } from './support/hands';
+import { logIn, seed, TEST_ADMIN } from './support/instance';
+import { ADMIN_ID } from './support/repositories';
 import { answerWithVersion } from './support/versions';
 
 test.use({ instanceOptions: { onboarded: true } });
 
+/** A phone's width (NF-12.2). */
+const PHONE = { width: 360, height: 740 };
+
 const heading = (page: Page, name: string) => page.getByRole('heading', { level: 1, name, exact: true });
 const accountButton = (page: Page) => page.getByRole('button', { name: `Account menu for ${TEST_ADMIN.displayName}` });
+const navigationLink = (page: Page, name: 'Dashboard' | 'Repositories') =>
+  page.getByRole('banner').getByRole('navigation').getByRole('link', { name, exact: true });
+const menuButton = (page: Page) => page.getByRole('banner').getByRole('button', { name: 'Menu', exact: true });
+const menuItem = (page: Page, name: 'Dashboard' | 'Repositories') => page.getByRole('menuitem', { name, exact: true });
+/** The repository name in the repository screen's bar, which opens the repository switcher (NV-10). */
+const switcherButton = (page: Page) => page.getByRole('banner').getByRole('heading').getByRole('button');
+
+/** Adds the ready repository `handbook`, with an empty working copy. */
+function seedHandbook(dataDir: string): number[] {
+  return seed(dataDir, { repositories: [ { userId: ADMIN_ID, name: 'handbook' } ] }).repositoryIds;
+}
+
+/**
+ * The pages that have the app header for a logged-in user, with their headings
+ * (NV-1, NV-3). The repository screen's bar has tests of its own.
+ */
+function pages(handbook: number): { url: string; name: string; }[] {
+  return [
+    { url: '/', name: 'Dashboard' },
+    { url: '/repositories', name: 'Repositories' },
+    { url: '/repositories/new', name: 'Add repository' },
+    { url: `/repositories/${handbook}/settings`, name: 'Settings' },
+    { url: '/preferences', name: 'Preferences' },
+    { url: '/no-such-page', name: 'This page doesn\'t exist.' }
+  ];
+}
+
+/** The app header, and the overlay that an open menu of it is moved into. */
+const HEADER = 'ui-app-shell > header';
+const OVERLAY = '.cdk-overlay-container';
+
+/** Opens the repository screen of `id`, and waits for it to have opened the repository. */
+async function openRepositoryScreen(page: Page, id: number): Promise<void> {
+  const opened = page.waitForResponse(response => /\/api\/v1\/repositories\/\d+\/open$/.test(response.url()));
+  await page.goto(`/repositories/${id}`);
+  await opened;
+  await expect(switcherButton(page)).toBeVisible();
+}
+
+/** Follows the app header's link `name`: in the bar on wide screens, in the Menu on a phone (NV-6). */
+async function follow(page: Page, name: 'Dashboard' | 'Repositories', isMobile: boolean): Promise<void> {
+  if (isMobile) {
+    await menuButton(page).click();
+    await menuItem(page, name).click();
+  } else {
+    await navigationLink(page, name).click();
+  }
+}
+
+/** The links marked as the current page, for screen readers: in the bar, or in the Menu on a phone. */
+async function currentLinks(page: Page, inMenu: boolean): Promise<string[]> {
+  if (!inMenu) {
+    // The closed Menu's items stay in the navigation, hidden.
+    const names = await page.getByRole('banner').getByRole('navigation').locator('a[aria-current="page"]:visible')
+      .allInnerTexts();
+    return names.map(name => name.trim());
+  }
+  await menuButton(page).click();
+  const items = page.getByRole('menu').locator('a[aria-current="page"]');
+  await expect(page.getByRole('menu')).toBeVisible();
+  const names = await items.allInnerTexts();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toBeHidden();
+  return names.map(name => name.trim());
+}
 
 /** Logs in from `/` and waits for the dashboard with its header. */
 async function openDashboard(page: Page): Promise<void> {
@@ -18,18 +88,39 @@ async function openDashboard(page: Page): Promise<void> {
 }
 
 test.describe('app header', () => {
-  test('has Dashboard, Repositories and the user menu', async ({ page, isMobile }) => {
-    test.skip(isMobile, 'the phone layout has its own test');
+  test('AC-APP-001.1: every page that needs a login has the app header with Dashboard, Repositories and the user menu; the login page has no app header', async ({ page, instance, isMobile }) => {
+    const [ handbook ] = seedHandbook(instance.dataDir);
     await openDashboard(page);
 
-    const banner = page.getByRole('banner');
-    const navigation = banner.getByRole('navigation');
-    await expect(navigation.getByRole('link', { name: 'Dashboard', exact: true })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
-    await expect(navigation.getByRole('link', { name: 'Repositories' })).not.toHaveAttribute('aria-current');
-    await expect(banner.getByRole('button', { name: /^Account menu for / })).toHaveText('A');
+    for (const { url, name } of pages(handbook)) {
+      await page.goto(url);
+      await expect(heading(page, name)).toBeVisible();
+      await expect(navigationLink(page, 'Dashboard')).toBeVisible();
+      await expect(accountButton(page)).toHaveText('A');
+      if (isMobile) {
+        await menuButton(page).click();
+        await expect(menuItem(page, 'Dashboard')).toBeVisible();
+        await expect(menuItem(page, 'Repositories')).toBeVisible();
+        await page.keyboard.press('Escape');
+      } else {
+        await expect(navigationLink(page, 'Repositories')).toBeVisible();
+      }
+    }
+
+    // The repository screen's bar: Repositories is in the repository switcher (NV-9, NV-10).
+    await openRepositoryScreen(page, handbook);
+    await expect(page.getByRole('banner').getByRole('link', { name: /^(Front Burner|Dashboard)$/ })).toBeVisible();
+    await expect(accountButton(page)).toBeVisible();
+    await switcherButton(page).click();
+    await expect(page.getByRole('menuitem', { name: 'All repositories' })).toHaveAttribute('href', '/repositories');
+    await page.keyboard.press('Escape');
+
+    await accountButton(page).click();
+    await page.getByRole('menuitem', { name: 'Log out' }).click();
+    await expect(heading(page, 'Log in')).toBeVisible();
+    await expect(page.getByRole('banner').getByRole('link')).toHaveCount(0);
+    await expect(page.getByRole('banner').getByRole('button')).toHaveCount(0);
+    await expect(page.getByRole('navigation')).toHaveCount(0);
   });
 
   test('fills the user menu button with the island shade, so that it shows on the canvas in both schemes', async ({ page }) => {
@@ -48,18 +139,19 @@ test.describe('app header', () => {
     }
   });
 
-  test('leads to the repository management page and back', async ({ page, isMobile }) => {
-    test.skip(isMobile, 'the phone layout has its own test');
+  test('AC-APP-001.2: Dashboard leads to the dashboard and Repositories to the repository management page; the current page\'s link is marked as current', async ({ page, isMobile }) => {
     await openDashboard(page);
-    const navigation = page.getByRole('banner').getByRole('navigation');
+    expect(await currentLinks(page, isMobile)).toEqual([ 'Dashboard' ]);
 
-    await navigation.getByRole('link', { name: 'Repositories' }).click();
+    await follow(page, 'Repositories', isMobile);
     await expect(page).toHaveURL(/\/repositories$/);
     await expect(heading(page, 'Repositories')).toBeVisible();
-    await expect(navigation.getByRole('link', { name: 'Repositories' })).toHaveAttribute('aria-current', 'page');
+    expect(await currentLinks(page, isMobile)).toEqual([ 'Repositories' ]);
 
-    await navigation.getByRole('link', { name: 'Dashboard', exact: true }).click();
+    await follow(page, 'Dashboard', isMobile);
+    await expect(page).toHaveURL(/\/$/);
     await expect(heading(page, 'Dashboard')).toBeVisible();
+    expect(await currentLinks(page, isMobile)).toEqual([ 'Dashboard' ]);
   });
 
   test('moves nothing when the current link changes', async ({ page, isMobile }) => {
@@ -105,15 +197,25 @@ test.describe('app header', () => {
     await expect(other.getByText('You have been logged out')).toBeVisible();
   });
 
-  test('puts the links in a Menu on a phone', async ({ page, isMobile }) => {
-    test.skip(!isMobile, 'only the mobile projects have a phone viewport of their own');
+  test('AC-APP-001.4: on a phone, the links are in a Menu button, and nothing scrolls sideways', async ({ page, instance }) => {
+    const [ handbook ] = seedHandbook(instance.dataDir);
+    await page.setViewportSize(PHONE);
     await openDashboard(page);
-    const banner = page.getByRole('banner');
 
-    await expect(banner.getByRole('link', { name: 'Repositories' })).toBeHidden();
-    await banner.getByRole('button', { name: 'Menu', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Repositories' }).click();
+    for (const { url, name } of pages(handbook)) {
+      await page.goto(url);
+      await expect(heading(page, name)).toBeVisible();
+      await expect(navigationLink(page, 'Repositories')).toBeHidden();
+      await expect(menuButton(page)).toBeVisible();
+      expect(await fitsWidth(page), `${url} fits 360 px`).toBe(true);
+    }
+
+    await page.goto('/');
+    await expect(heading(page, 'Dashboard')).toBeVisible();
+    await menuButton(page).click();
+    await menuItem(page, 'Repositories').click();
     await expect(heading(page, 'Repositories')).toBeVisible();
+    expect(await currentLinks(page, true)).toEqual([ 'Repositories' ]);
     expect(await fitsWidth(page)).toBe(true);
   });
 
@@ -124,32 +226,117 @@ test.describe('app header', () => {
     expect(await fitsWidth(page)).toBe(true);
   });
 
-  test('starts with Skip to content, and moves the focus to the new page\'s heading', async ({ page, isMobile }) => {
+  test('AC-APP-001.12: Skip to content is the first element reached with Tab; after moving to another page, focus is on its heading and a screen reader announces its title', async ({ page, instance, isMobile }) => {
     test.skip(isMobile, 'Tab moves the focus only with a keyboard');
+    const [ handbook ] = seedHandbook(instance.dataDir);
     await openDashboard(page);
-    await page.reload();
-    await expect(accountButton(page)).toBeVisible();
 
-    await page.keyboard.press('Tab');
-    await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
+    for (const { url, name } of pages(handbook)) {
+      await page.goto(url);
+      await expect(heading(page, name)).toBeVisible();
+      await expect(accountButton(page)).toBeVisible();
+      await page.keyboard.press('Tab');
+      await expect(page.getByRole('link', { name: 'Skip to content' }), `on ${url}`).toBeFocused();
+    }
 
-    await page.getByRole('banner').getByRole('link', { name: 'Repositories' }).click();
-    await expect(heading(page, 'Repositories')).toBeFocused();
-    await expect(page.locator('shell-route-announcer [aria-live]')).toHaveText('Repositories · Front Burner');
+    // Each step moves to another page inside the web client, as a user does.
+    const announcer = page.locator('shell-route-announcer [aria-live]');
+    const steps: { go: () => Promise<void>; name: string; title: string; }[] = [
+      {
+        go: () => navigationLink(page, 'Repositories').click(),
+        name: 'Repositories',
+        title: 'Repositories · Front Burner'
+      },
+      {
+        go: () => page.getByRole('main').getByRole('link', { name: 'handbook', exact: true }).click(),
+        name: 'Settings',
+        title: 'Settings · handbook · Front Burner'
+      },
+      {
+        go: () =>
+          page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Repositories' }).click(),
+        name: 'Repositories',
+        title: 'Repositories · Front Burner'
+      },
+      {
+        go: () => page.getByRole('main').getByRole('link', { name: 'Add repository' }).click(),
+        name: 'Add repository',
+        title: 'Add repository · Front Burner'
+      },
+      {
+        go: async () => {
+          await accountButton(page).click();
+          await page.getByRole('menuitem', { name: 'Preferences' }).click();
+        },
+        name: 'Preferences',
+        title: 'Preferences · Front Burner'
+      },
+      { go: () => navigationLink(page, 'Dashboard').click(), name: 'Dashboard', title: 'Dashboard · Front Burner' }
+    ];
+    for (const { go, name, title } of steps) {
+      await go();
+      await expect(heading(page, name)).toBeFocused();
+      await expect(page).toHaveTitle(title);
+      await expect(announcer).toHaveText(title);
+    }
   });
 
-  test('opens and closes the user menu with the keyboard', async ({ page, isMobile }) => {
+  test('AC-APP-001.13: the menus open and close with the keyboard, Esc returns focus to their button, and axe-core reports no violations in the app header', async ({ page, instance, isMobile }) => {
     test.skip(isMobile, 'a phone has no keyboard');
+    const [ handbook ] = seedHandbook(instance.dataDir);
     await openDashboard(page);
 
+    // The user menu.
     await accountButton(page).focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('menuitem', { name: 'Preferences' })).toBeFocused();
     await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('menuitem', { name: 'Log out' })).toBeFocused();
+    await axe(page, HEADER, OVERLAY);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menu')).toBeHidden();
     await expect(accountButton(page)).toBeFocused();
+
+    // The Menu button of narrow screens.
+    const wide = page.viewportSize();
+    if (!wide) {
+      throw new Error('the desktop projects have a viewport of their own');
+    }
+    await page.setViewportSize(PHONE);
+    await axe(page, HEADER);
+    await menuButton(page).focus();
+    await page.keyboard.press('Enter');
+    await expect(menuItem(page, 'Dashboard')).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(menuItem(page, 'Repositories')).toBeFocused();
+    await axe(page, HEADER, OVERLAY);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu')).toBeHidden();
+    await expect(menuButton(page)).toBeFocused();
+    await page.setViewportSize(wide);
+
+    // The repository switcher, in the repository screen's bar (NV-9).
+    await openRepositoryScreen(page, handbook);
+    await axe(page, HEADER);
+    await switcherButton(page).focus();
+    const listed = page.waitForResponse(response => response.url().includes('/api/v1/repositories/recent?exclude='));
+    await page.keyboard.press('Enter');
+    await listed;
+    await expect(page.getByRole('menuitem', { name: 'All repositories' })).toBeVisible();
+    await expect(page.getByText('Loading your repositories')).toHaveCount(0);
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('[role="menuitem"]:focus')).toHaveCount(1);
+    await axe(page, HEADER, OVERLAY);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu')).toBeHidden();
+    await expect(switcherButton(page)).toBeFocused();
+
+    for (const { url, name } of pages(handbook)) {
+      await page.goto(url);
+      await expect(heading(page, name)).toBeVisible();
+      await expect(accountButton(page)).toBeVisible();
+      await axe(page, HEADER);
+    }
   });
 
   test('AC-APP-001.11: after a new version is deployed, every page shows "A new version of Front Burner is available." with Reload; turning the network off shows the offline banner, which goes away when the network returns', async ({ page, context }) => {
