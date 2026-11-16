@@ -26,6 +26,7 @@ import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 import { map, take } from 'rxjs';
 
 import { CloneDetailsComponent } from '../../components/clone-details/clone-details.component';
+import { CloneStatusComponent } from '../../components/clone-status/clone-status.component';
 import { RepositorySettingsStore } from '../../services/repository-settings-store/repository-settings-store.service';
 
 /**
@@ -54,6 +55,7 @@ import { RepositorySettingsStore } from '../../services/repository-settings-stor
     SpinnerComponent,
     PageNotFoundPage,
     RepositoryStatusComponent,
+    CloneStatusComponent,
     CloneDetailsComponent
   ],
   providers: [ RepositorySettingsStore ],

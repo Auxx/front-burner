@@ -274,6 +274,84 @@ test.describe('repository management page', () => {
       drainFailedRequests(monitor, `/api/v1/repositories/${theirs}/details`);
     });
 
+    const statusSection = (page: Page) => page.getByRole('region', { name: 'Status' });
+
+    test('shows a failed clone\'s label, with git\'s error as text and the request ID under Details', async ({ page, instance }) => {
+      const [ failed ] = seedRepositories(instance.dataDir, [
+        {
+          name: 'failed-one',
+          status: 'error',
+          errorCode: 'clone-failed',
+          errorDetail: 'fatal: <img src=x onerror="window.injected = true"> not found',
+          errorRequestId: 'req-e2e-0123'
+        }
+      ]);
+      await openSettings(page, failed);
+
+      const status = statusSection(page);
+      await expect(status).toContainText('Clone failed');
+      const toggle = status.getByRole('button', { name: 'Details' });
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(status.getByText('Request ID:')).toBeHidden();
+
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(status.locator('pre')).toHaveText('fatal: <img src=x onerror="window.injected = true"> not found');
+      await expect(status.locator('img')).toHaveCount(0);
+      expect(await page.evaluate(() => 'injected' in window)).toBe(false);
+      await expect(status.locator('.request code')).toHaveText('req-e2e-0123');
+      await expect(status.getByRole('button', { name: 'Copy the request ID' })).toBeVisible();
+    });
+
+    test('says when git recorded no message, and shows no Status for a ready repository', async ({ page, instance }) => {
+      const [ timedOut, ready ] = seedRepositories(instance.dataDir, [
+        { name: 'timed-out', status: 'error', errorCode: 'clone-timed-out' },
+        { name: 'handbook' }
+      ]);
+      await openSettings(page, timedOut);
+
+      const status = statusSection(page);
+      await expect(status).toContainText('Clone timed out');
+      await status.getByRole('button', { name: 'Details' }).click();
+      await expect(status.getByText('No message from git was recorded.')).toBeVisible();
+      await expect(status.getByText('Request ID:')).toHaveCount(0);
+
+      await page.goto(`/repositories/${ready}/settings`);
+      await expect(heading(page, 'Clone details')).toBeVisible();
+      await expect(heading(page, 'Status')).toHaveCount(0);
+    });
+
+    test('shows a cloning repository\'s progress under Status', async ({ page, instance }) => {
+      const [ cloning ] = seedRepositories(instance.dataDir, [ { name: 'cloning-one', status: 'cloning' } ]);
+      await openSettings(page, cloning);
+
+      // A seeded clone has no job: it shows the indeterminate bar of a clone not yet reported.
+      await expect(statusSection(page).getByRole('progressbar', { name: 'Cloning cloning-one' })).toBeVisible();
+    });
+
+    test('fits a phone with a long error, and has no accessibility violations', async ({ page, instance, isMobile }) => {
+      const [ failed ] = seedRepositories(instance.dataDir, [
+        {
+          name: 'failed-one',
+          status: 'error',
+          errorCode: 'clone-failed',
+          errorDetail: `fatal: unable to access 'https://github.com/acme/${'a'.repeat(120)}.git/': ${
+            'x'.repeat(200)
+          }\nsecond line`,
+          errorRequestId: `req-${'0'.repeat(60)}`
+        }
+      ]);
+      if (!isMobile) {
+        await page.setViewportSize({ width: 360, height: 720 });
+      }
+      await openSettings(page, failed);
+
+      await statusSection(page).getByRole('button', { name: 'Details' }).click();
+      await expect(statusSection(page).locator('pre')).toBeVisible();
+      expect(await fitsWidth(page)).toBe(true);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    });
+
     test('fits a phone and has no accessibility violations', async ({ page, instance, isMobile }) => {
       const [ long ] = seedRepositories(instance.dataDir, [
         {

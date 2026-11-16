@@ -23,6 +23,10 @@ The repository pages of the web client, loaded under `/repositories` (A-2.2).
   reads them again on the repository's `repository.status` and
   `repository.warning`, on `key.locked` and `key.unlocked`, and after a
   reconnect; only the latest answer counts, and a reload that fails keeps them.
+  Its clone's `job.progress` is patched in place.
+- `CloneStatusComponent`: the **Status** section, only while cloning or in
+  error: the clone's progress, or the error's label and **Details** with git's
+  error as plain text and the request ID with **Copy** (RM-7, RM-10).
 - `CloneDetailsComponent`: the **Clone details** section, a key-value list of
   the clone mode, the git control level and when the repository was added
   (RM-16).

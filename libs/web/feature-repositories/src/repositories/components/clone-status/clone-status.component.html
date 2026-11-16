@@ -1,0 +1,45 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.CloneStatusComponent'">
+  @if (shown()) {
+    @let details = this.details();
+    <section [attr.aria-labelledby]="headingId">
+      <h2 class="heading"
+          [id]="headingId">{{ t('heading') }}</h2>
+      <shell-repository-status-detail [repository]="summary()" />
+      @if (failed()) {
+        <div>
+          <button uiButton
+                  variant="ghost"
+                  size="small"
+                  class="toggle"
+                  [attr.aria-expanded]="expanded()"
+                  [attr.aria-controls]="regionId"
+                  (click)="toggle()">
+            {{ t('details') }}
+            <ui-icon class="chevron"
+                     name="chevron-right" />
+          </button>
+        </div>
+        <ui-collapsible [id]="regionId"
+                        [open]="expanded()">
+          <div class="details">
+            @if (details.errorDetail) {
+              <pre class="message">{{ details.errorDetail }}</pre>
+            } @else {
+              <p class="no-message">{{ t('noMessage') }}</p>
+            }
+            @if (details.errorRequestId; as requestId) {
+              <p class="request">
+                <span>{{ t('requestId') }} <code>{{ requestId }}</code></span>
+                <button uiButton
+                        size="small"
+                        class="copy"
+                        [attr.aria-label]="t('copyLabel')"
+                        (click)="copy(requestId)">{{ t('copy') }}</button>
+              </p>
+            }
+          </div>
+        </ui-collapsible>
+      }
+    </section>
+  }
+</ng-container>

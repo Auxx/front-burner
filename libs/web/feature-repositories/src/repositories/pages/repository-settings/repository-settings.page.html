@@ -34,6 +34,7 @@
           }
         </div>
         <div class="sections">
+          <repo-clone-status [details]="details" />
           <repo-clone-details [details]="details" />
         </div>
       } @else if (state === 'failed') {
