@@ -1,0 +1,11 @@
+@use '../../styles/settings-section' as *;
+
+:host {
+  display: block;
+}
+
+@include settings-section;
+
+.description {
+  margin: 0;
+}

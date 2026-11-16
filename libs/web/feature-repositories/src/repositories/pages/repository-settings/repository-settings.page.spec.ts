@@ -102,7 +102,8 @@ describe('RepositorySettingsPage', () => {
       'repo-clone-status',
       'repo-credentials-in-use',
       'repo-repository-commit-author',
-      'repo-clone-details'
+      'repo-clone-details',
+      'repo-remove-repository'
     ]);
   });
 

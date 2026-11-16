@@ -28,6 +28,7 @@ import { map, take } from 'rxjs';
 import { CloneDetailsComponent } from '../../components/clone-details/clone-details.component';
 import { CloneStatusComponent } from '../../components/clone-status/clone-status.component';
 import { CredentialsInUseComponent } from '../../components/credentials-in-use/credentials-in-use.component';
+import { RemoveRepositoryComponent } from '../../components/remove-repository/remove-repository.component';
 import { RepositoryCommitAuthorComponent } from '../../components/repository-commit-author/repository-commit-author.component';
 import { RepositoryWarningsComponent } from '../../components/repository-warnings/repository-warnings.component';
 import { RepositorySettingsStore } from '../../services/repository-settings-store/repository-settings-store.service';
@@ -63,7 +64,8 @@ import { RepositorySettingsStore } from '../../services/repository-settings-stor
     CloneStatusComponent,
     CredentialsInUseComponent,
     RepositoryCommitAuthorComponent,
-    CloneDetailsComponent
+    CloneDetailsComponent,
+    RemoveRepositoryComponent
   ],
   providers: [ RepositorySettingsStore ],
   templateUrl: './repository-settings.page.html',

@@ -156,6 +156,28 @@ export class DraftStore {
     );
   }
 
+  /**
+   * Deletes every draft of the repository `repositoryId`, of any user, also
+   * of files another tab has open, after the repository was removed (RM-19).
+   * Repository IDs are unique on the instance, so no other repository's
+   * drafts go.
+   */
+  async deleteRepository(repositoryId: number): Promise<void> {
+    await this.write(store => {
+      const request = store.openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          return;
+        }
+        if ((cursor.key as string).split('/')[1] === String(repositoryId)) {
+          cursor.delete();
+        }
+        cursor.continue();
+      };
+    });
+  }
+
   /** Deletes every draft of every user (NF-3.5). */
   async clearAll(): Promise<void> {
     await this.write(store => store.clear());

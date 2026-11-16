@@ -1,0 +1,66 @@
+<ng-container *transloco="let t; prefix: 'web-feature-repositories.RemoveRepositoryDialog'">
+  <ui-dialog [heading]="t('heading', { name: data.name })">
+    <form novalidate
+          class="form"
+          [id]="formId"
+          (submit)="remove($event)">
+      @if (checkFailure() ?? failure(); as failure) {
+        <ui-inline-banner status="danger"
+                          announce>
+          {{ failure.text }}
+          @if (failure.reference) {
+            <span class="reference">{{ t('reference') }} <code>{{ failure.reference }}</code></span>
+          }
+        </ui-inline-banner>
+      }
+      @if (appeared()) {
+        <ui-inline-banner class="appeared"
+                          status="warning"
+                          announce>{{ t('appeared') }}</ui-inline-banner>
+      }
+      <p class="message">{{ t('message') }}</p>
+      @if (check()) {
+        @if (needsName()) {
+          @if (unreadable()) {
+            <p class="message unreadable">{{ t('unreadable') }}</p>
+          } @else {
+            <p class="message">{{ t('wouldLose') }}</p>
+            <ul class="losses">
+              @for (loss of losses(); track loss.key) {
+                <li>{{ t('losses.' + loss.key, loss.params) }}</li>
+              }
+            </ul>
+          }
+          <ui-field [label]="t('typeName', { name: data.name })">
+            <input uiInput
+                   class="name"
+                   autocomplete="off"
+                   spellcheck="false"
+                   [value]="typed()"
+                   (input)="type($event)" />
+          </ui-field>
+        }
+      } @else if (!checkFailure()) {
+        <ui-spinner [label]="t('loading')" />
+      }
+    </form>
+    <div uiDialogFooter>
+      <button uiButton
+              data-autofocus
+              [unavailable]="busy()"
+              (click)="ref.close(false)">{{ t('cancel') }}</button>
+      @if (checkFailure()) {
+        <button uiButton
+                variant="primary"
+                (click)="loadCheck()">{{ t('retry') }}</button>
+      } @else if (check()) {
+        <button uiButton
+                variant="danger"
+                type="submit"
+                [attr.form]="formId"
+                [unavailable]="!canRemove()"
+                [busy]="busy()">{{ t('remove') }}</button>
+      }
+    </div>
+  </ui-dialog>
+</ng-container>

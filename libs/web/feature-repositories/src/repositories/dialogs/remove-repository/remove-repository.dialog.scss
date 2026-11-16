@@ -1,0 +1,17 @@
+.form {
+  display: grid;
+  gap: var(--ui-space-3);
+}
+
+.message {
+  margin: 0;
+}
+
+.losses {
+  margin: 0;
+  padding-inline-start: var(--ui-space-5);
+}
+
+.reference {
+  display: block;
+}
