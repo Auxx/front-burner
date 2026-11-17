@@ -7,7 +7,7 @@ import { FIXTURE_PASSPHRASE, sshKeyFixture } from '@front-burner/server-core-git
 import { JobPool, JobRunner } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
 import { SessionLifecycle } from '@front-burner/server-core-security';
-import { DataLayout } from '@front-burner/server-core-storage';
+import { DataLayout, type DiskMonitor } from '@front-burner/server-core-storage';
 import {
   JobKeys,
   KeyUnlockStore,
@@ -62,6 +62,8 @@ describe('CloneAgainService', () => {
   let lock: WorkingTreeLock;
   let alice: RequestUser;
   let handbook: number;
+  /** Whether the disk monitor reports low space (NF-9.7). */
+  let low: boolean;
 
   const rowOf = (id: number) => database.db.select().from(repositories).where(eq(repositories.id, id)).get();
   const statusOf = (id: number) => database.db.select().from(jobs).where(eq(jobs.id, id)).get()?.status;
@@ -116,8 +118,10 @@ describe('CloneAgainService', () => {
       lock,
       new NetworkLock(),
       events,
-      layout
+      layout,
+      { isLow: () => low } as DiskMonitor
     );
+    low = false;
     alice = { id: insertUser(database, 'alice@example.com'), sessionId: SESSION, requestId: 'request-2' };
     handbook = insertRepository(database, alice.id, {
       name: 'Handbook',
@@ -161,6 +165,43 @@ describe('CloneAgainService', () => {
       credentials: { kind: 'none' },
       destination: workOf(handbook)
     }));
+  });
+
+  it('Retry clone and Clone again on low space are refused', async () => {
+    const work = leftOver(handbook);
+    low = true;
+
+    for (const errorCode of [ 'clone-failed', 'working-copy-missing' ] as const) {
+      database.db.update(repositories).set({ errorCode }).where(eq(repositories.id, handbook)).run();
+      const error = await errorOf(service.cloneAgain(alice, handbook));
+      expect(error).toBeInstanceOf(ApiErrorException);
+      expect(error).toMatchObject({ code: 'low-storage' });
+      expect(error?.getStatus()).toBe(507);
+    }
+
+    // Nothing changed: the row, the working copy, the jobs, the events.
+    expect(rowOf(handbook)).toMatchObject({ status: 'error', errorCode: 'working-copy-missing' });
+    expect(readFileSync(join(work, 'old.md'), 'utf8')).toBe('old\n');
+    expect(removedInTmp()).toEqual([]);
+    expect(cloneJobs()).toEqual([]);
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('a repository not in error is answered as before on low space', async () => {
+    low = true;
+    database.db.update(repositories).set({ status: 'ready', errorCode: null }).where(eq(repositories.id, handbook))
+      .run();
+
+    expect((await errorOf(service.cloneAgain(alice, handbook)))?.getStatus()).toBe(409);
+  });
+
+  it('leaving low space allows clones again', async () => {
+    low = true;
+    expect((await errorOf(service.cloneAgain(alice, handbook)))?.getStatus()).toBe(507);
+
+    low = false;
+    await expect(service.cloneAgain(alice, handbook)).resolves.toMatchObject({ status: 'cloning' });
+    expect(cloneJobs()).toHaveLength(1);
   });
 
   it('retries a timed out clone', async () => {

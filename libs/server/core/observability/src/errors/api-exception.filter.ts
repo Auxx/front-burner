@@ -22,6 +22,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'cross-site-refused': 'The request came from another site.',
   'oidc-code-invalid': 'OIDC login failed',
   'too-many-jobs': 'Too many tasks are waiting. Wait for one to finish and try again.',
+  'low-storage': 'The server is running low on storage. Contact your administrator.',
   'key-locked': 'Enter the passphrase of this key to unlock it for this session.',
   'unlock-too-many-attempts': 'Too many attempts. Try again in a minute.',
   'credentials-missing': 'These saved credentials are no longer available. Add them again.',

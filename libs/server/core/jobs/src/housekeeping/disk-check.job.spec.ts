@@ -21,4 +21,10 @@ describe('DiskCheckJob', () => {
     await definition.handler({ payload: {} } as RunningJob);
     expect(disks.check).toHaveBeenCalledTimes(1);
   });
+
+  it('registers nothing without the storage module, so that a test module needs no data directory', () => {
+    const register = vi.fn();
+    new DiskCheckJob(undefined, { register } as unknown as JobRunner).onModuleInit();
+    expect(register).not.toHaveBeenCalled();
+  });
 });

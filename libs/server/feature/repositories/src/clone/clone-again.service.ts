@@ -3,7 +3,7 @@ import { EventsHub } from '@front-burner/server-core-events';
 import { NetworkLock, WorkingTreeLock } from '@front-burner/server-core-git';
 import { JobRunner } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
+import { DATA_LAYOUT, DataLayout, DiskMonitor } from '@front-burner/server-core-storage';
 import { JobKeys, SavedCredentialsService } from '@front-burner/server-feature-credentials';
 import type { RepositorySummary } from '@front-burner/shared-contracts';
 import { Inject, Injectable, Logger } from '@nestjs/common';
@@ -11,7 +11,7 @@ import { and, eq } from 'drizzle-orm';
 import type { RequestUser } from '../add/add-repository.service';
 import { ownRow, queuedClone, RepositoryQueries, toSummary } from '../repositories/repository-queries';
 import { moveWorkingCopy, queueWorkingCopyDeletion, restoreWorkingCopy } from '../working-copy/old-working-copy';
-import { hasUnfinishedClone, queueClone } from './clone-queue';
+import { assertSpaceForClone, hasUnfinishedClone, queueClone } from './clone-queue';
 
 const notInError = (status: string) => new ApiErrorException(409, 'repository-not-in-error', { status });
 
@@ -37,7 +37,8 @@ export class CloneAgainService {
     private readonly workingTreeLock: WorkingTreeLock,
     private readonly networkLock: NetworkLock,
     private readonly events: EventsHub,
-    @Inject(DATA_LAYOUT) private readonly layout: DataLayout
+    @Inject(DATA_LAYOUT) private readonly layout: DataLayout,
+    private readonly disks: DiskMonitor
   ) {}
 
   /**
@@ -58,7 +59,8 @@ export class CloneAgainService {
    *
    * @throws ApiErrorException `404 not-found`, also for another user's repository (RM-1);
    *   `409 repository-not-in-error` with `{ status }` (RM-2); `409 key-locked` with the key,
-   *   or `409 credentials-missing` (RC-16, NF-8.6); `429 too-many-jobs` (NF-11.4).
+   *   or `409 credentials-missing` (RC-16, NF-8.6); `429 too-many-jobs` (NF-11.4);
+   *   `507 low-storage` while the server is low on storage (NF-9.7).
    */
   cloneAgain(user: RequestUser, repositoryId: number): Promise<RepositorySummary> {
     return this.workingTreeLock.run(repositoryId, () => {
@@ -71,6 +73,8 @@ export class CloneAgainService {
         // Whatever the row says, a clone is still on its way: queueing another would only find it.
         throw notInError('cloning');
       }
+      // Before the working copy is moved: a refusal changes nothing (NF-9.7, A-3.2g).
+      assertSpaceForClone(this.disks);
       // Before anything changes: a locked key is asked for, never cloned without (RC-16, RC-19).
       const credentialId = row.credentialId;
       const credentials = credentialId === null

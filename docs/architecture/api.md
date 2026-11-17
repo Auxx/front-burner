@@ -134,6 +134,16 @@ numbering conventions.
   everything that A-7.5 asks for: the other routes that take an ID, such as
   `/open`, `/git/*`, the file routes and `ssh-keys/:id/unlock`, have their own
   tests or none yet. _(Plan 126's call.)_
+- **A-3.2g** While the server is low on storage (`DiskMonitor.isLow()`, NF-9.7),
+  the requests that start a new clone answer `507 low-storage` and change
+  nothing: adding a repository (`POST /repositories`), and **Retry clone** and
+  **Clone again** (A-3.2e). Adding checks it after the request's own fields and
+  before the access check, so a form error still comes first and the remote is
+  not contacted for nothing; cloning again checks it after its `404` and `409`
+  answers and before the working copy is moved. A clone already queued or
+  running goes on. Saves, commits and synchronisation are not refused. The
+  English fallback is NF-9.7's text. _(Plan 131's call: `507 Insufficient
+  Storage`.)_
 
 ## A-3: Contracts
 

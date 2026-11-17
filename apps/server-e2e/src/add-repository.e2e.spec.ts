@@ -8,7 +8,7 @@ import {
   startGitSshServer
 } from '@front-burner/server-core-git/testing';
 import BetterSqlite3 from 'better-sqlite3';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -616,6 +616,69 @@ describe('adding a repository (REQ-REPO-001)', () => {
       expect(await client.statusOf(id)).toMatchObject({ status: 'error', error: 'clone-failed' });
       expect(readdirSync(join(dataDir, 'tmp'))).toEqual([]);
       expect(existsSync(join(dataDir, 'repos', '1', String(id)))).toBe(false);
+    });
+
+    it('NF-9.7: a clone on low space gets 507 low-storage, and low space refuses only clones', async () => {
+      const dataDir = mkdtempSync(join(tmpdir(), 'front-burner-e2e-low-space-'));
+      cleanups.push(async () => rmSync(dataDir, { recursive: true, force: true }));
+      const first = await onboardedServer({ FRONT_BURNER_DATA_DIR: dataDir });
+      const added = await first.client.add({ remoteUrl: publicUrl(), name: 'Handbook' });
+      const id = added.body['id'] as number;
+      expect(await first.client.settled(id)).toMatchObject({ status: 'ready' });
+      await first.server.stop();
+
+      // A threshold above any runner's free space.
+      const second = await startServerProcess({
+        FRONT_BURNER_DATA_DIR: dataDir,
+        FRONT_BURNER_LOW_DISK_THRESHOLD: '1000000GB'
+      });
+      cleanups.push(() => second.stop());
+      const client = new Client(second, (await login(second)).authToken);
+
+      const ready = await fetch(`${second.url}/api/health/ready`);
+      expect(ready.status).toBe(200);
+      expect(await ready.json()).toEqual({ status: 'degraded' });
+      expect(second.output()).toContain('The server is running low on storage');
+      // The housekeeping job that keeps checking runs in the backend.
+      await waitFor(() => {
+        const sqlite = new BetterSqlite3(join(dataDir, 'db', 'front-burner.sqlite'), { readonly: true });
+        try {
+          const { runs } = sqlite.prepare('SELECT count(*) AS runs FROM jobs WHERE type = ? AND status = ?')
+            .get('storage.disk-check', 'done') as { runs: number; };
+          return runs > 0;
+        } finally {
+          sqlite.close();
+        }
+      });
+
+      const refused = await client.add({ remoteUrl: publicUrl(), name: 'Another' });
+      expect(refused.status).toBe(507);
+      expect(refused.body).toMatchObject({
+        code: 'low-storage',
+        message: 'The server is running low on storage. Contact your administrator.'
+      });
+      expect((await client.recent()).map(summary => summary.name)).toEqual([ 'Handbook' ]);
+
+      // Saves and commits protect the user's work, so they go on.
+      writeFileSync(join(dataDir, 'repos', readdirSync(join(dataDir, 'repos'))[0] ?? '', String(id), 'notes.md'), '');
+      const saved = await client.put(`${REPOSITORIES}/${id}/file`, {
+        path: 'notes.md',
+        content: '# Notes\n',
+        lineEnding: 'lf',
+        bom: false
+      });
+      expect(saved.status).toBe(200);
+      expect(
+        (await client.put('/api/v1/preferences/commit-author', {
+          name: 'Admin Example',
+          email: 'admin.example@example.com'
+        })).status
+      ).toBe(200);
+      const committed = await client.post(`${REPOSITORIES}/${id}/git/commits`, {
+        message: 'Notes',
+        paths: [ 'notes.md' ]
+      });
+      expect(committed.status).toBe(201);
     });
 
     it('AC-REPO-001.23: refuses the 31st access check in a minute', async () => {

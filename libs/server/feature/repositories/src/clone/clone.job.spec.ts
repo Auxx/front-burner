@@ -21,7 +21,7 @@ import {
 } from '@front-burner/server-core-git/testing';
 import { JobRunner } from '@front-burner/server-core-jobs';
 import { SessionLifecycle } from '@front-burner/server-core-security';
-import { DataLayout } from '@front-burner/server-core-storage';
+import { DataLayout, type DiskMonitor } from '@front-burner/server-core-storage';
 import {
   JobKeys,
   KeyUnlockStore,
@@ -90,7 +90,8 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
       new RequestCredentials(saved, unlocks),
       new CredentialsCheck(database, saved, knownHosts, engine, unlocks),
       runner,
-      jobKeys
+      jobKeys,
+      { isLow: () => false } as DiskMonitor
     );
   }
 
