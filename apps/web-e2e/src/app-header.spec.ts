@@ -395,6 +395,42 @@ test.describe('Page not found', () => {
   });
 });
 
+test.describe('low-space banner', () => {
+  // A threshold above any runner's free space.
+  test.use({ instanceOptions: { onboarded: true, env: { FRONT_BURNER_LOW_DISK_THRESHOLD: '1000000GB' } } });
+
+  // The banners are part of the app header; the live announcer has the same text.
+  const lowSpace = (page: Page) =>
+    page.getByRole('banner').getByText(
+      'The server is running low on storage. New repositories can\'t be added until space is freed.'
+    );
+
+  test('NF-9.7: an administrator sees the low-space banner, below the app header, and it cannot be dismissed', async ({ page }) => {
+    await openDashboard(page);
+
+    await expect(lowSpace(page)).toBeVisible();
+    await expect(page.locator('ui-inline-banner.low-storage').getByRole('button')).toHaveCount(0);
+  });
+
+  test('NF-9.7: a user who is not an administrator sees no banner and never asks', async ({ page, instance }) => {
+    seed(instance.dataDir, { users: [ { email: 'bob@example.com' } ] });
+    const asked: string[] = [];
+    page.on('request', request => {
+      if (request.url().includes('/api/v1/instance/storage')) {
+        asked.push(request.url());
+      }
+    });
+
+    await page.goto('/');
+    await logIn(page, 'bob@example.com');
+    await expect(heading(page, 'Dashboard')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Account menu for / })).toBeVisible();
+
+    await expect(lowSpace(page)).toHaveCount(0);
+    expect(asked).toEqual([]);
+  });
+});
+
 function fitsWidth(page: Page): Promise<boolean> {
   return page.evaluate(
     () => document.documentElement.scrollWidth <= document.documentElement.clientWidth

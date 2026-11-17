@@ -12,20 +12,24 @@ import { provideTransloco, TRANSLOCO_TRANSPILER } from '@jsverse/transloco';
 import { IcuTranspiler } from '../i18n/icu-transpiler';
 import { TranslocoHttpLoader } from '../i18n/transloco-http.loader';
 import { authInterceptor } from '../interceptors/auth/auth.interceptor';
+import { storageStatusInterceptor } from '../interceptors/storage-status/storage-status.interceptor';
 import { versionCheckInterceptor } from '../interceptors/version-check/version-check.interceptor';
 import { PageTitleStrategy } from '../routing/page-title.strategy';
 import { DraftStore } from '../saving/draft-store';
 
 /**
  * The providers every page of the web client needs: HTTP with the auth token
- * and the version check (A-8.7), translations and page titles. Creates the draft store at start-up, so that
+ * and the version check (A-8.7), the storage status after a `low-storage` error (NF-9.7), translations and page titles. Creates the draft store at start-up, so that
  * every tab deletes the browser drafts when the session ends (NF-3.5).
  */
 export function provideCore(): EnvironmentProviders {
   return makeEnvironmentProviders([
     // The version check sees the answer the auth interceptor ends with, a
     // retried request's too.
-    provideHttpClient(withFetch(), withInterceptors([ versionCheckInterceptor, authInterceptor ])),
+    provideHttpClient(
+      withFetch(),
+      withInterceptors([ versionCheckInterceptor, storageStatusInterceptor, authInterceptor ])
+    ),
     provideTransloco({
       config: {
         availableLangs: [ 'en' ],

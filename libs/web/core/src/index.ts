@@ -21,6 +21,10 @@ export {
   type RemovedRepositoryViewer
 } from './core/services/removed-repositories/removed-repositories.service';
 export {
+  STORAGE_STATUS_INTERVAL_MS,
+  StorageStatusService
+} from './core/services/storage-status/storage-status.service';
+export {
   BEFORE_RELOAD_TIMEOUT_MS,
   type BeforeReload,
   PAGE_RELOAD,
