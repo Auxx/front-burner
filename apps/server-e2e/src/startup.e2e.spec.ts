@@ -8,8 +8,10 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   realpathSync,
-  rmSync
+  rmSync,
+  writeFileSync
 } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -22,6 +24,7 @@ import {
   login,
   onboard,
   runServerToExit,
+  seed,
   type ServerProcess,
   startServerProcess
 } from './support/server-process';
@@ -139,6 +142,46 @@ describe('server startup', () => {
     expect(readdirSync(join(reposDir, 'tmp'))).toEqual([]);
     // Nothing is written to <data>/repos, nor to a tmp/ there.
     expect(readdirSync(server.dataDir)).toEqual([ 'db' ]);
+  });
+
+  it('a working copy left by a removed row is in orphans after a restart', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'front-burner-e2e-orphans-'));
+    cleanups.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    const env = { FRONT_BURNER_DATA_DIR: dataDir, FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN };
+    const first = await startServerProcess(env);
+    const userId = await onboard(first);
+    // Error rows: neither recovery nor the start check runs git in these folders.
+    const { repositoryIds: [ kept, removed ] } = seed(dataDir, {
+      repositories: [ 'kept', 'removed' ].map(name => ({
+        userId,
+        name,
+        status: 'error' as const,
+        errorCode: 'clone-failed' as const,
+        lastAccessedAt: new Date()
+      }))
+    });
+    const workingCopy = (id: number) => join(dataDir, 'repos', String(userId), String(id));
+    for (const id of [ kept, removed ]) {
+      mkdirSync(join(workingCopy(id), '.git'), { recursive: true });
+      writeFileSync(join(workingCopy(id), 'notes.md'), 'unpushed work');
+    }
+    await first.stop();
+    // As a database restored from a snapshot older than the second repository.
+    const sqlite = new BetterSqlite3(join(dataDir, 'db', 'front-burner.sqlite'));
+    sqlite.prepare('DELETE FROM repositories WHERE id = ?').run(removed);
+    sqlite.close();
+
+    const second = await startServerProcess(env);
+    cleanups.push(() => second.stop());
+
+    expect(existsSync(workingCopy(kept))).toBe(true);
+    expect(existsSync(workingCopy(removed))).toBe(false);
+    const [ orphan ] = readdirSync(join(dataDir, 'orphans'));
+    expect(orphan).toMatch(new RegExp(`^${userId}-${removed}-\\d{4}-\\d\\d-\\d\\dT\\d\\d-\\d\\d-\\d\\dZ$`));
+    expect(readFileSync(join(dataDir, 'orphans', orphan, 'notes.md'), 'utf8')).toBe('unpushed work');
+    expect(second.output()).toContain(
+      `Working copy of repository ${removed} (user ${userId}) has no repository; moved to orphans/${orphan}`
+    );
   });
 
   it('ships executable git helpers', async () => {

@@ -152,7 +152,15 @@ sees the result.
     gets the status **Error** ("Working copy missing or damaged"), and its user
     can re-clone it;
   - a working copy with no repository in the database is moved to `orphans/` and
-    logged, never deleted, since it may hold unpushed work;
+    logged, never deleted, since it may hold unpushed work. The pair of user and
+    repository must match: a working copy under another user's folder is an
+    orphan too. It moves with one rename to `orphans/<user-id>-<repo-id>-<UTC
+    time>`, for example `orphans/3-12-2026-11-16T10-00-00Z`, with `-2`, `-3`, …
+    added when that name is taken; a user folder it leaves empty is removed.
+    Anything in `repos/` whose name is not an ID the backend makes is left where
+    it is and logged at `warn`, without its name. A move that fails, or a folder
+    that can't be read, is logged and stops neither the other moves nor the
+    start. This runs before working copy recovery (A-5.15). _(Plan 128's call.)_
   - leftover jobs are handled as in NF-9.
 - **NF-6.5** Restore: stop the container, restore the volume(s), optionally
   replace the database with a snapshot from `backups/`, start the container.
@@ -484,8 +492,8 @@ These rules add to the security rules already in the requirements.
   listings and status must stay fast at 100,000 files (NF-1.4, NF-2.10).
 - **Startup sequence.** Check configuration and secrets (NF-8.1, NF-8.5) → check
   the volume (NF-5.6) → pre-upgrade snapshot and migrations (NF-7.1) → key
-  rotation if requested (NF-8.4) → working copy and job recovery (NF-6.4,
-  NF-9.4, NF-9.5) → ready (NF-9.3).
+  rotation if requested (NF-8.4) → orphaned working copies, then working copy
+  and job recovery (NF-6.4, NF-9.4, NF-9.5) → ready (NF-9.3).
 - **Encryption module.** One shared module for every encrypted value, with
   versioned values, key rotation and the check value (NF-7.5, NF-8).
 - **Serving the web client.** The backend serves `index.html` itself, to add the

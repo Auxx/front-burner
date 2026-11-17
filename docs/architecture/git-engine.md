@@ -429,3 +429,10 @@ Confirmed by spike 2 (spikes.md).
     before any `onApplicationBootstrap`, where the job runner starts, so no job
     runs git meanwhile and a lock on a ref can only be stale. A working copy
     that fails is logged and stops neither the others nor the start.
+  - **Start order.** `tmp/` is emptied while the data directory is prepared.
+    Then, in `onModuleInit`, the repositories feature's `OrphanedWorkingCopies`
+    moves every working copy without a repository to `orphans/` (NF-6.4) before
+    the sync feature's `WorkingCopyRecovery` runs: Nest runs the hooks of an
+    imported module first, and the sync module imports the repositories module.
+    `WorkingCopyCheck` marks missing working copies (RM-6) in
+    `onApplicationBootstrap`, after both. _(Plan 128's call.)_

@@ -14,6 +14,11 @@ export type InstanceRepository = Pick<Repository, 'id' | 'userId'>;
 export class InstanceRepositories {
   constructor(@Inject(DATABASE) private readonly database: Database) {}
 
+  /** Every user's repositories, whatever their status: those that may own a working copy (NF-6.4). */
+  all(): InstanceRepository[] {
+    return this.listed();
+  }
+
   /** Every user's ready repositories. */
   ready(): InstanceRepository[] {
     return this.listed(eq(repositories.status, 'ready'));
@@ -62,7 +67,8 @@ export class InstanceRepositories {
       .run();
   }
 
-  private listed(where: ReturnType<typeof and>): InstanceRepository[] {
+  /** Without `where`, every repository. */
+  private listed(where?: ReturnType<typeof and>): InstanceRepository[] {
     return this.database.db.select({ id: repositories.id, userId: repositories.userId })
       .from(repositories)
       .where(where)
