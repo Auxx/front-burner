@@ -48,6 +48,8 @@ const config: Config = {
   cloneConcurrency: 2,
   gitTimeoutMs: 300_000,
   keyUnlockIdleMs: 3_600_000,
+  dbSnapshotIntervalMs: 86_400_000,
+  dbSnapshotKeep: 7,
   knownHostsFile: undefined,
   oidc: undefined
 };

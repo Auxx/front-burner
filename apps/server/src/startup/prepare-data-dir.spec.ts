@@ -25,13 +25,31 @@ describe('prepareDataDir', () => {
     expect(existsSync(join(dataDir, 'db', '.write-test'))).toBe(false);
   });
 
-  it('creates repos, tmp and orphans', () => {
+  it('creates backups, repos, tmp and orphans', () => {
     const dataDir = join(root, 'data');
 
     prepareDataDir(dataDir);
 
-    expect(readdirSync(dataDir).sort()).toEqual([ 'db', 'orphans', 'repos', 'tmp' ]);
+    expect(readdirSync(dataDir).sort()).toEqual([ 'backups', 'db', 'orphans', 'repos', 'tmp' ]);
+    expect(readdirSync(join(dataDir, 'backups'))).toEqual([]);
   });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'throws naming backups when it is not writable',
+    () => {
+      const dataDir = join(root, 'data');
+      mkdirSync(join(dataDir, 'backups'), { recursive: true });
+      chmodSync(join(dataDir, 'backups'), 0o500);
+
+      try {
+        expect(() => prepareDataDir(dataDir)).toThrow(
+          `The data directory ${join(dataDir, 'backups')} is not writable`
+        );
+      } finally {
+        chmodSync(join(dataDir, 'backups'), 0o700);
+      }
+    }
+  );
 
   it('puts repos, tmp and orphans under the repositories directory', () => {
     const dataDir = join(root, 'data');
@@ -41,7 +59,7 @@ describe('prepareDataDir', () => {
     const { databaseFile, warnings } = prepareDataDir(dataDir, reposRoot);
 
     expect(databaseFile).toBe(join(dataDir, 'db', 'front-burner.sqlite'));
-    expect(readdirSync(dataDir)).toEqual([ 'db' ]);
+    expect(readdirSync(dataDir).sort()).toEqual([ 'backups', 'db' ]);
     expect(readdirSync(reposRoot).sort()).toEqual([ 'orphans', 'repos', 'tmp' ]);
     expect(readdirSync(join(reposRoot, 'orphans'))).toEqual([]);
     expect(warnings).toEqual([]);
@@ -120,7 +138,7 @@ describe('prepareDataDir', () => {
 
     prepareDataDir(dataDir, dataDir);
 
-    expect(readdirSync(dataDir).sort()).toEqual([ 'db', 'orphans', 'repos', 'tmp' ]);
+    expect(readdirSync(dataDir).sort()).toEqual([ 'backups', 'db', 'orphans', 'repos', 'tmp' ]);
   });
 
   it('empties tmp on start', () => {
