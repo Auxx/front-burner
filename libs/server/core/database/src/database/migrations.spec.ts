@@ -1,7 +1,8 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { MIGRATIONS_FOLDER as MIGRATIONS, newerMigrations } from '../testing';
 import {
   applyMigrations,
   assertNoNewerMigrations,
@@ -13,7 +14,6 @@ import {
 import { Database, openDatabase } from './open-database';
 
 const fixture = (name: string) => join(__dirname, '..', 'test-fixtures', name);
-const MIGRATIONS = join(__dirname, '..', '..', 'migrations');
 
 describe('migrations', () => {
   let dir: string;
@@ -110,17 +110,38 @@ describe('migrations', () => {
 
     expect(tables().sort()).toEqual([ '__drizzle_migrations', 'a' ]);
     expect(database.sqlite.prepare('SELECT id FROM a').pluck().all()).toEqual([ 7 ]);
-    expect(migrationState(database, fixture('migrations-broken'))).toEqual({ applied: 1, pending: 2 });
+    expect(migrationState(database, fixture('migrations-broken'))).toEqual({ applied: 1, pending: 2, unknown: [] });
   });
 
-  it('counts the applied and pending migrations', () => {
-    expect(migrationState(database, fixture('migrations-two'))).toEqual({ applied: 0, pending: 2 });
-    expect(migrationState(database, join(dir, 'missing'))).toEqual({ applied: 0, pending: 0 });
+  it('counts the applied, pending and unknown migrations', () => {
+    expect(migrationState(database, fixture('migrations-two'))).toEqual({ applied: 0, pending: 2, unknown: [] });
+    expect(migrationState(database, join(dir, 'missing'))).toEqual({ applied: 0, pending: 0, unknown: [] });
 
     applyMigrations(database, fixture('migrations-one'));
 
-    expect(migrationState(database, fixture('migrations-two'))).toEqual({ applied: 1, pending: 1 });
-    expect(migrationState(database, fixture('migrations-one'))).toEqual({ applied: 1, pending: 0 });
+    expect(migrationState(database, fixture('migrations-two'))).toEqual({ applied: 1, pending: 1, unknown: [] });
+    expect(migrationState(database, fixture('migrations-one'))).toEqual({ applied: 1, pending: 0, unknown: [] });
+    expect(migrationState(database, join(dir, 'missing'))).toEqual({ applied: 1, pending: 0, unknown: [ 1000 ] });
+  });
+
+  it('counts as pending only what the migrator applies: migrations after the newest applied one', () => {
+    applyMigrations(database, fixture('migrations-two'));
+    // As two branches merged out of order: 1500 is older than the applied 2000, so Drizzle never applies it.
+    const folder = journalFolder(JSON.stringify({
+      entries: [ { when: 1000 }, { when: 1500 }, { when: 2000 }, { when: 3000 } ]
+    }));
+
+    expect(migrationState(database, folder)).toEqual({ applied: 2, pending: 1, unknown: [] });
+  });
+
+  it('returns the state of a database it accepts', () => {
+    applyMigrations(database, fixture('migrations-one'));
+
+    expect(assertNoNewerMigrations(database, fixture('migrations-two'))).toEqual({
+      applied: 1,
+      pending: 1,
+      unknown: []
+    });
   });
 });
 
@@ -138,18 +159,7 @@ describe('the last version', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  /** A migrations folder with the real migrations, plus one this version does not know. */
-  function newerFolder(): string {
-    const folder = join(dir, 'newer');
-    cpSync(MIGRATIONS, folder, { recursive: true });
-    const journalFile = join(folder, 'meta', '_journal.json');
-    const journal = JSON.parse(readFileSync(journalFile, 'utf8')) as { entries: Record<string, unknown>[]; };
-    const last = journal.entries[journal.entries.length - 1];
-    journal.entries.push({ ...last, idx: Number(last['idx']) + 1, when: Number(last['when']) + 1, tag: '9999_future' });
-    writeFileSync(journalFile, JSON.stringify(journal));
-    writeFileSync(join(folder, '9999_future.sql'), 'CREATE TABLE `future` (`id` integer PRIMARY KEY NOT NULL);');
-    return folder;
-  }
+  const newerFolder = () => newerMigrations(dir);
 
   it('records the version after migrating', () => {
     applyMigrations(database, MIGRATIONS);

@@ -4,7 +4,6 @@ import { Database, openDatabase } from '@front-burner/server-core-database';
 import { assertHelpersExecutable, assertSupportedGit, GitRunner } from '@front-burner/server-core-git';
 import { createBootstrapLogger, createRequestLogger, HEALTH_ROUTES } from '@front-burner/server-core-observability';
 import { securityHeaders, serveWebClient, versionHeader } from '@front-burner/server-core-security';
-import { DataLayout } from '@front-burner/server-core-storage';
 import { INestApplication, Logger as NestLogger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -139,7 +138,7 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
   for (const warning of warnings) {
     bootstrapLogger.warn(warning);
   }
-  const { databaseFile, warnings: dataDirWarnings } = step(
+  const { databaseFile, backupsDir, warnings: dataDirWarnings } = step(
     'data-dir',
     () => prepareDataDir(config.dataDir, config.reposRoot)
   );
@@ -152,7 +151,7 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
     step('migrations', () =>
       upgradeDatabase(database, {
         migrationsFolder: options.migrationsFolder,
-        backupsDir: new DataLayout(config.dataDir).backupsDir,
+        backupsDir,
         version: config.version,
         log: message => bootstrapLogger.info(message)
       }));

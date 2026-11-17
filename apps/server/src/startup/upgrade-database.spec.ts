@@ -9,19 +9,12 @@ import {
   recordVersion,
   SNAPSHOT_PREFIX
 } from '@front-burner/server-core-database';
+import { MIGRATIONS_FOLDER, newerMigrations, previousMigrations } from '@front-burner/server-core-database/testing';
 import BetterSqlite3 from 'better-sqlite3';
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { upgradeDatabase } from './upgrade-database';
-
-const MIGRATIONS = join(__dirname, '..', '..', '..', '..', 'libs', 'server', 'core', 'database', 'migrations');
-
-interface JournalEntry {
-  idx: number;
-  when: number;
-  tag: string;
-}
 
 describe('upgradeDatabase', () => {
   let dir: string;
@@ -37,6 +30,7 @@ describe('upgradeDatabase', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     database.sqlite.close();
     rmSync(dir, { recursive: true, force: true });
   });
@@ -44,40 +38,21 @@ describe('upgradeDatabase', () => {
   const upgrade = (migrationsFolder: string, version = '0.2.0') =>
     upgradeDatabase(database, { migrationsFolder, backupsDir, version, log: message => void logs.push(message) });
 
-  /** A copy of the real migrations, its journal changed by `edit`. */
-  function migrationsCopy(name: string, edit: (entries: JournalEntry[]) => JournalEntry[]): string {
-    const folder = join(dir, name);
-    cpSync(MIGRATIONS, folder, { recursive: true });
-    const file = join(folder, 'meta', '_journal.json');
-    const journal = JSON.parse(readFileSync(file, 'utf8')) as { entries: JournalEntry[]; };
-    journal.entries = edit(journal.entries);
-    writeFileSync(file, JSON.stringify(journal));
-    return folder;
-  }
-
-  /** The real migrations and one more, which creates the table `future`. */
-  const withFuture = () => {
-    const folder = migrationsCopy('newer', entries => {
-      const last = entries[entries.length - 1];
-      return [ ...entries, { ...last, idx: last.idx + 1, when: last.when + 1, tag: '9999_future' } ];
-    });
-    writeFileSync(join(folder, '9999_future.sql'), 'CREATE TABLE `future` (`id` integer PRIMARY KEY NOT NULL);');
-    return folder;
-  };
-
-  /** Every real migration but the last: the schema of the previous version. */
-  const previous = () => migrationsCopy('previous', entries => entries.slice(0, -1));
-
   const hasTable = (sqlite: BetterSqlite3.Database, name: string) =>
     sqlite.prepare('SELECT 1 FROM sqlite_master WHERE type = \'table\' AND name = ?').get(name) !== undefined;
 
-  const backups = () => existsSync(backupsDir) ? readdirSync(backupsDir) : [];
+  const backups = () => existsSync(backupsDir) ? readdirSync(backupsDir).sort() : [];
+
+  /** A database at version 0.1.0 with every real migration. */
+  const atOldVersion = () => {
+    applyMigrations(database, MIGRATIONS_FOLDER);
+    recordVersion(database, '0.1.0');
+  };
 
   it('writes a pre-upgrade snapshot named after the old version before migrating', () => {
-    applyMigrations(database, MIGRATIONS);
-    recordVersion(database, '0.1.0');
+    atOldVersion();
 
-    const snapshot = upgrade(withFuture());
+    const snapshot = upgrade(newerMigrations(dir));
 
     expect(backups()).toHaveLength(1);
     expect(backups()[0]).toMatch(/^pre-upgrade-v0\.1\.0-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\dZ-v0\.1\.0\.sqlite$/);
@@ -95,9 +70,9 @@ describe('upgradeDatabase', () => {
   });
 
   it('names the snapshot of a database without a recorded version "vunknown"', () => {
-    applyMigrations(database, previous());
+    applyMigrations(database, previousMigrations(dir));
 
-    upgrade(MIGRATIONS);
+    upgrade(MIGRATIONS_FOLDER);
 
     expect(backups()).toEqual([ expect.stringMatching(/^pre-upgrade-vunknown-.*-vunknown\.sqlite$/) ]);
     expect(logs[0]).toMatch(/^Upgrading the database from unknown to 0\.2\.0; snapshot backups\/pre-upgrade-vunknown-/);
@@ -105,31 +80,51 @@ describe('upgradeDatabase', () => {
   });
 
   it('a new database gets no snapshot', () => {
-    expect(upgrade(MIGRATIONS)).toBeUndefined();
+    expect(upgrade(MIGRATIONS_FOLDER)).toBeUndefined();
 
     expect(backups()).toEqual([]);
     expect(logs).toEqual([]);
-    expect(migrationState(database, MIGRATIONS).pending).toBe(0);
+    expect(migrationState(database, MIGRATIONS_FOLDER).pending).toBe(0);
     expect(readLastVersion(database)).toBe('0.2.0');
   });
 
   it('no pending migration, no snapshot', () => {
-    applyMigrations(database, MIGRATIONS);
-    recordVersion(database, '0.1.0');
+    atOldVersion();
 
-    expect(upgrade(MIGRATIONS, '0.1.1')).toBeUndefined();
+    expect(upgrade(MIGRATIONS_FOLDER, '0.1.1')).toBeUndefined();
 
     expect(backups()).toEqual([]);
     expect(logs).toEqual([]);
     expect(readLastVersion(database)).toBe('0.1.1');
   });
 
+  it('a migration the migrator would skip writes no snapshot', () => {
+    atOldVersion();
+    // As two branches merged out of order: a migration older than the newest applied one.
+    const folder = newerMigrations(dir);
+    writeFileSync(
+      join(folder, 'meta', '_journal.json'),
+      JSON.stringify({
+        version: '7',
+        dialect: 'sqlite',
+        entries: [
+          { idx: 0, version: '6', when: 1, tag: '9999_future', breakpoints: true },
+          ...(migrationJournal(MIGRATIONS_FOLDER).entries)
+        ]
+      })
+    );
+
+    expect(upgrade(folder)).toBeUndefined();
+
+    expect(backups()).toEqual([]);
+    expect(logs).toEqual([]);
+  });
+
   it('a failed snapshot stops the start before migrating', () => {
-    applyMigrations(database, MIGRATIONS);
-    recordVersion(database, '0.1.0');
+    atOldVersion();
     // As a full disk: the snapshot cannot be written.
     writeFileSync(backupsDir, 'not a folder');
-    const folder = withFuture();
+    const folder = newerMigrations(dir);
 
     expect(() => upgrade(folder)).toThrow();
 
@@ -139,22 +134,47 @@ describe('upgradeDatabase', () => {
     expect(logs).toEqual([]);
   });
 
+  it('a retry after a failed migration replaces its snapshot and keeps other versions\' ones', () => {
+    atOldVersion();
+    const folder = newerMigrations(dir);
+    writeFileSync(join(folder, '9999_future.sql'), 'INSERT INTO `missing` (`id`) VALUES (1);');
+    const older = new DatabaseSnapshots(database.sqlite, backupsDir, '0.0.9').write('pre-upgrade-v0.0.9');
+    vi.useFakeTimers({ toFake: [ 'Date' ] });
+
+    vi.setSystemTime(new Date('2026-11-17T09:00:00Z'));
+    expect(() => upgrade(folder)).toThrow(/missing/);
+    vi.setSystemTime(new Date('2026-11-17T09:00:05Z'));
+    expect(() => upgrade(folder)).toThrow(/missing/);
+
+    expect(backups()).toEqual([
+      expect.stringMatching(/^pre-upgrade-v0\.0\.9-/),
+      'pre-upgrade-v0.1.0-2026-11-17T09-00-05Z-v0.1.0.sqlite'
+    ]);
+    expect(join(backupsDir, backups()[0])).toBe(older);
+    expect(readLastVersion(database)).toBe('0.1.0');
+  });
+
+  it('a build without a version keeps the recorded version', () => {
+    atOldVersion();
+
+    upgrade(newerMigrations(dir), 'unknown');
+
+    expect(readLastVersion(database)).toBe('0.1.0');
+  });
+
   it('refuses a newer database naming its version, before any snapshot', () => {
-    applyMigrations(database, withFuture());
+    applyMigrations(database, newerMigrations(dir));
     recordVersion(database, '0.3.0');
 
-    expect(() => upgrade(MIGRATIONS)).toThrow(
-      new NewerSchemaError([], '0.3.0').message
-    );
+    expect(() => upgrade(MIGRATIONS_FOLDER)).toThrow(new NewerSchemaError([], '0.3.0').message);
 
     expect(backups()).toEqual([]);
     expect(readLastVersion(database)).toBe('0.3.0');
   });
 
   it('the daily pruning leaves pre-upgrade snapshots', () => {
-    applyMigrations(database, MIGRATIONS);
-    recordVersion(database, '0.1.0');
-    upgrade(withFuture());
+    atOldVersion();
+    upgrade(newerMigrations(dir));
     const daily = new DatabaseSnapshots(database.sqlite, backupsDir, '0.2.0');
     daily.write(SNAPSHOT_PREFIX);
 
@@ -163,3 +183,7 @@ describe('upgradeDatabase', () => {
     expect(backups()).toEqual([ expect.stringMatching(/^pre-upgrade-v0\.1\.0-/) ]);
   });
 });
+
+function migrationJournal(folder: string): { entries: unknown[]; } {
+  return JSON.parse(readFileSync(join(folder, 'meta', '_journal.json'), 'utf8')) as { entries: unknown[]; };
+}

@@ -4,13 +4,13 @@ import {
   migrationState,
   openDatabase
 } from '@front-burner/server-core-database';
+import { previousMigrations } from '@front-burner/server-core-database/testing';
 import { startGitHttpServer } from '@front-burner/server-core-git/testing';
 import BetterSqlite3 from 'better-sqlite3';
 import {
   accessSync,
   chmodSync,
   constants,
-  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -41,9 +41,6 @@ interface Summary {
   id: number;
   status: string;
 }
-
-/** The migrations the built server applies. */
-const MIGRATIONS = resolve(import.meta.dirname, '../../../libs/server/core/database/migrations');
 
 async function repositories(server: ServerProcess, authToken: string): Promise<Summary[]> {
   const response = await fetch(`${server.url}/api/v1/repositories/recent`, {
@@ -105,15 +102,11 @@ describe('server startup', () => {
     cleanups.push(() => rmSync(root, { recursive: true, force: true }));
     const dataDir = join(root, 'data');
     // The previous version's migrations: every one but the last.
-    const previous = join(root, 'previous');
-    cpSync(MIGRATIONS, previous, { recursive: true });
-    const journalFile = join(previous, 'meta', '_journal.json');
-    const journal = JSON.parse(readFileSync(journalFile, 'utf8')) as { entries: { when: number; }[]; };
-    const previousCount = journal.entries.length - 1;
-    writeFileSync(journalFile, JSON.stringify({ ...journal, entries: journal.entries.slice(0, previousCount) }));
+    const previous = previousMigrations(root);
     mkdirSync(join(dataDir, 'db'), { recursive: true });
     const old = openDatabase(join(dataDir, 'db', 'front-burner.sqlite'));
     applyMigrations(old, previous);
+    const previousCount = migrationState(old, previous).applied;
     old.sqlite.close();
 
     const server = await startServerProcess({ FRONT_BURNER_DATA_DIR: dataDir });
@@ -135,7 +128,7 @@ describe('server startup', () => {
     const restored = openDatabase(join(dataDir, 'backups', snapshot));
     try {
       expect(() => assertNoNewerMigrations(restored, previous)).not.toThrow();
-      expect(migrationState(restored, previous)).toEqual({ applied: previousCount, pending: 0 });
+      expect(migrationState(restored, previous)).toEqual({ applied: previousCount, pending: 0, unknown: [] });
     } finally {
       restored.sqlite.close();
     }

@@ -19,13 +19,13 @@ const REPOSITORIES_DIRECTORY_ENTRIES = new Set([ 'repos', 'tmp', 'orphans', 'los
  * hold nothing but its own folders, as `tmp/` is emptied on every start.
  *
  * @param reposRoot `Config.reposRoot`: the data directory unless `FRONT_BURNER_REPOS_DIR` is set.
- * @returns the database file, and warnings for the operator.
+ * @returns the database file, the snapshots' folder, and warnings for the operator.
  * @throws Error naming the directory when it cannot be used.
  */
 export function prepareDataDir(
   dataDir: string,
   reposRoot = dataDir
-): { databaseFile: string; warnings: string[]; } {
+): { databaseFile: string; backupsDir: string; warnings: string[]; } {
   const separate = reposRoot !== dataDir;
   if (separate) {
     checkRepositoriesDirectory(reposRoot);
@@ -55,6 +55,7 @@ export function prepareDataDir(
   }
   return {
     databaseFile: join(databaseDir, 'front-burner.sqlite'),
+    backupsDir: layout.backupsDir,
     warnings: separate ? leftBehind(new DataLayout(dataDir).reposDir, layout.reposDir) : []
   };
 }

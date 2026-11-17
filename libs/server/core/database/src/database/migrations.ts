@@ -21,12 +21,17 @@ export class NewerSchemaError extends Error {
   }
 }
 
-/** How many of the folder's migrations the database has and lacks. */
+/** The database's migrations against the folder's. */
 export interface MigrationState {
   /** Applied migrations; 0 for a new database. */
   applied: number;
-  /** The folder's migrations that the database does not have yet. */
+  /**
+   * The folder's migrations that Drizzle's migrator will apply: those after
+   * the newest applied one, as it compares with that alone.
+   */
   pending: number;
+  /** The `created_at` values of applied migrations that the folder does not have (NF-7.3). */
+  unknown: number[];
 }
 
 function hasTable(database: Database, name: string): boolean {
@@ -99,29 +104,31 @@ export function recordVersion(database: Database, version: string): void {
     .run();
 }
 
+/** The database's migrations against the folder's, from one read of each. */
+export function migrationState(database: Database, migrationsFolder: string): MigrationState {
+  const applied = appliedMigrations(database);
+  const known = knownMigrations(migrationsFolder);
+  const newest = applied.at(-1) ?? Number.NEGATIVE_INFINITY;
+  return {
+    applied: applied.length,
+    pending: [ ...known ].filter(when => when > newest).length,
+    unknown: applied.filter(createdAt => !known.has(createdAt))
+  };
+}
+
 /**
  * Refuses a database that has a migration this version does not know (NF-7.3),
  * naming the version that last started on it.
  *
+ * @returns the migration state, for the caller that goes on to migrate.
  * @throws NewerSchemaError
  */
-export function assertNoNewerMigrations(database: Database, migrationsFolder: string): void {
-  if (!hasTable(database, '__drizzle_migrations')) {
-    return;
+export function assertNoNewerMigrations(database: Database, migrationsFolder: string): MigrationState {
+  const state = migrationState(database, migrationsFolder);
+  if (state.unknown.length > 0) {
+    throw new NewerSchemaError(state.unknown, readLastVersion(database));
   }
-  const known = knownMigrations(migrationsFolder);
-  const unknown = appliedMigrations(database).filter(createdAt => !known.has(createdAt));
-  if (unknown.length > 0) {
-    throw new NewerSchemaError(unknown, readLastVersion(database));
-  }
-}
-
-/** How many of the folder's migrations the database has and lacks. */
-export function migrationState(database: Database, migrationsFolder: string): MigrationState {
-  const applied = appliedMigrations(database);
-  const done = new Set(applied);
-  const known = journalPath(migrationsFolder) ? knownMigrations(migrationsFolder) : new Set<number>();
-  return { applied: applied.length, pending: [ ...known ].filter(when => !done.has(when)).length };
+  return state;
 }
 
 /**

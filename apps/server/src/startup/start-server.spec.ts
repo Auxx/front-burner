@@ -1,15 +1,16 @@
 import { ConfigError } from '@front-burner/server-core-config';
 import { applyMigrations, DATABASE, Database, openDatabase, readLastVersion } from '@front-burner/server-core-database';
+import { MIGRATIONS_FOLDER, previousMigrations } from '@front-burner/server-core-database/testing';
 import type { INestApplication } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
 import { bootstrapLoggerFor, logStartupFailure, startServer, StartupError } from './start-server';
 
 // The real migrations: the application needs its tables.
-const MIGRATIONS = join(__dirname, '..', '..', '..', '..', 'libs', 'server', 'core', 'database', 'migrations');
+const MIGRATIONS = MIGRATIONS_FOLDER;
 const GIT_HELPERS = join(__dirname, '..', '..', '..', '..', 'libs', 'server', 'core', 'git', 'helpers');
 
 describe('startServer', () => {
@@ -21,8 +22,9 @@ describe('startServer', () => {
   let logs: string[];
   let app: INestApplication | undefined;
 
-  const start = (env: Record<string, string | undefined> = {}) =>
+  const start = (env: Record<string, string | undefined> = {}, version?: string) =>
     startServer({
+      version,
       env: {
         FRONT_BURNER_DATA_DIR: dataDir,
         FRONT_BURNER_LOG_FORMAT: 'json',
@@ -224,17 +226,12 @@ describe('startServer', () => {
     'writes a pre-upgrade snapshot and records the version on an upgrade',
     async () => {
       // A database of the previous version: every migration but the last.
-      const previous = join(root, 'previous');
-      cpSync(MIGRATIONS, previous, { recursive: true });
-      const journalFile = join(previous, 'meta', '_journal.json');
-      const journal = JSON.parse(readFileSync(journalFile, 'utf8')) as { entries: unknown[]; };
-      writeFileSync(journalFile, JSON.stringify({ ...journal, entries: journal.entries.slice(0, -1) }));
       mkdirSync(join(dataDir, 'db'), { recursive: true });
       const old = openDatabase(join(dataDir, 'db', 'front-burner.sqlite'));
-      applyMigrations(old, previous);
+      applyMigrations(old, previousMigrations(root));
       old.sqlite.close();
 
-      app = await start();
+      app = await start({}, '0.2.0');
 
       const snapshots = readdirSync(join(dataDir, 'backups')).filter(name => name.startsWith('pre-upgrade-'));
       expect(snapshots).toEqual([ expect.stringMatching(/^pre-upgrade-vunknown-.*\.sqlite$/) ]);
@@ -242,10 +239,10 @@ describe('startServer', () => {
       expect(upgrading).toEqual([
         expect.objectContaining({
           level: 'info',
-          message: `Upgrading the database from unknown to unknown; snapshot backups/${snapshots[0]}`
+          message: `Upgrading the database from unknown to 0.2.0; snapshot backups/${snapshots[0]}`
         })
       ]);
-      expect(readLastVersion(app.get<Database>(DATABASE))).toBe('unknown');
+      expect(readLastVersion(app.get<Database>(DATABASE))).toBe('0.2.0');
     }
   );
 
