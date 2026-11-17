@@ -14,7 +14,10 @@ export const systemSettings = sqliteTable(
     /** Encrypted with the binding `{ table: 'system_settings', recordId: 1 }` (A-4.8). */
     oidcClientSecret: text('oidc_client_secret'),
     oidcScopes: text('oidc_scopes'),
-    oidcRequireVerifiedEmail: integer('oidc_require_verified_email', { mode: 'boolean' })
+    oidcRequireVerifiedEmail: integer('oidc_require_verified_email', { mode: 'boolean' }),
+    /** A claim the ID token must carry, both or neither (AO-40; temporary MVP measure). */
+    oidcRequiredClaimName: text('oidc_required_claim_name'),
+    oidcRequiredClaimValue: text('oidc_required_claim_value')
   },
   table => [ check('system_settings_single_row', sql`${table.id} = 1`) ]
 );

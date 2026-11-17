@@ -70,6 +70,7 @@ export class OnboardingStateService implements OnModuleInit {
     return {
       state: this.current(),
       oidcFromEnvironment: this.config.oidc !== undefined,
+      requiredClaimFromEnvironment: this.config.oidcRequiredClaim !== undefined,
       setupTokenConfigured: this.config.setupToken !== undefined
     };
   }

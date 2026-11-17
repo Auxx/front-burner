@@ -54,6 +54,18 @@ export interface Config {
   knownHostsFile: string | undefined;
   /** OIDC and the first administrator from the environment (AO-30); undefined when none of the variables is set. */
   oidc: OidcEnvironment | undefined;
+  /**
+   * `FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME` and `_VALUE` (AO-41, temporary
+   * MVP measure), which win over a saved one: `null` when the name is `none`,
+   * which turns the required claim off; undefined when neither is set.
+   */
+  oidcRequiredClaim: RequiredClaim | null | undefined;
+}
+
+/** A claim the OIDC ID token must carry, trimmed (AO-40, LG-69; temporary MVP measure). */
+export interface RequiredClaim {
+  name: string;
+  value: string;
 }
 
 /** The `FRONT_BURNER_OIDC_*` variables and `FRONT_BURNER_ADMIN_EMAIL` (AO-30). */

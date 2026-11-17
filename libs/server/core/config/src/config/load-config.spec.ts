@@ -56,7 +56,8 @@ describe('loadConfig', () => {
       dbSnapshotKeep: 7,
       lowDiskThresholdBytes: 2 * 1024 ** 3,
       knownHostsFile: undefined,
-      oidc: undefined
+      oidc: undefined,
+      oidcRequiredClaim: undefined
     });
     expect(warnings).toEqual([]);
   });
@@ -470,6 +471,61 @@ describe('loadConfig', () => {
       const issues = issuesOf({ ...OIDC, FRONT_BURNER_OIDC_ISSUER: undefined });
       expect(issues.map(issue => issue.variable)).toEqual([ 'FRONT_BURNER_OIDC_ISSUER' ]);
       expect(JSON.stringify(issues)).not.toContain(CLIENT_SECRET);
+    });
+  });
+
+  describe('required claim (temporary, MVP)', () => {
+    const NAME = 'FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME';
+    const VALUE = 'FRONT_BURNER_OIDC_REQUIRED_CLAIM_VALUE';
+
+    it('AC-AUTH-001.16: refuses a required claim name without a value', () => {
+      expect(issuesOf({ [NAME]: 'https://slack.com/team_id' })).toEqual([
+        { variable: VALUE, message: `is required when ${NAME} is set` }
+      ]);
+    });
+
+    it('AC-AUTH-001.16: refuses a required claim value without a name', () => {
+      expect(issuesOf({ [VALUE]: 'T123' })).toEqual([
+        { variable: NAME, message: `is required when ${VALUE} is set` }
+      ]);
+    });
+
+    it('reads the required claim and trims it', () => {
+      const { config } = loadConfig({ ...BASE, [NAME]: ' https://slack.com/team_id ', [VALUE]: ' T123 ' });
+      expect(config.oidcRequiredClaim).toEqual({ name: 'https://slack.com/team_id', value: 'T123' });
+    });
+
+    it('is valid without the other OIDC variables', () => {
+      const { config } = loadConfig({ ...BASE, [NAME]: 'hd', [VALUE]: 'example.com' });
+      expect(config.oidc).toBeUndefined();
+      expect(config.oidcRequiredClaim).toEqual({ name: 'hd', value: 'example.com' });
+    });
+
+    it('has no required claim when neither variable is set', () => {
+      expect(loadConfig(BASE).config.oidcRequiredClaim).toBeUndefined();
+    });
+
+    it('refuses a required claim longer than 256 characters', () => {
+      expect(issuesOf({ [NAME]: 'hd', [VALUE]: 'x'.repeat(257) })).toEqual([
+        { variable: VALUE, message: 'must be at most 256 characters' }
+      ]);
+    });
+
+    it('turns the required claim off with the name none', () => {
+      const { config } = loadConfig({ ...BASE, [NAME]: ' none ' });
+      expect(config.oidcRequiredClaim).toBeNull();
+    });
+
+    it('refuses a value with the name none', () => {
+      expect(issuesOf({ [NAME]: 'none', [VALUE]: 'T123' })).toEqual([
+        { variable: VALUE, message: `cannot be set when ${NAME} is none` }
+      ]);
+    });
+
+    it('refuses a value that is empty after trimming', () => {
+      expect(issuesOf({ [NAME]: 'hd', [VALUE]: '  ' })).toEqual([
+        { variable: VALUE, message: 'must not be empty' }
+      ]);
     });
   });
 });

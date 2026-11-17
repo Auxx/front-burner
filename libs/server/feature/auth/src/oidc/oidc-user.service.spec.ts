@@ -21,14 +21,16 @@ const settings: OidcSettings = {
   clientId: 'front-burner',
   clientSecret: 'client-secret',
   scopes: 'openid email profile',
-  requireVerifiedEmail: true
+  requireVerifiedEmail: true,
+  requiredClaim: undefined
 };
 const identity: OidcIdentity = {
   issuer: ISSUER,
   subject: 'subject-1',
   email: 'Ada@Example.com',
   emailVerified: true,
-  name: 'Ada Admin'
+  name: 'Ada Admin',
+  claims: {}
 };
 
 describe('OidcUserService', () => {
@@ -286,5 +288,67 @@ describe('OidcUserService', () => {
     database.db.delete(users).run();
     const unlinked = addUser({ email: 'ada@example.com', disabled: true });
     expect(service.resolve(identity, settings)).toEqual({ ok: false, reason: 'user-disabled', userId: unlinked.id });
+  });
+
+  describe('required claim (temporary, MVP)', () => {
+    const TEAM = 'https://slack.com/team_id';
+    const withClaim: OidcSettings = { ...settings, requiredClaim: { name: TEAM, value: 'T123' } };
+    const member: OidcIdentity = { ...identity, claims: { [TEAM]: 'T123' } };
+    const outsider: OidcIdentity = { ...identity, claims: { [TEAM]: 'T999' } };
+    const automaticRegistration = () =>
+      database.db.select().from(systemSettings).where(eq(systemSettings.id, 1)).get()?.automaticRegistration;
+
+    it('AC-AUTH-003.27: creates an ordinary user for a new email that carries the required claim', () => {
+      setAutomaticRegistration(false);
+      const result = service.resolve(member, withClaim);
+      expect(result).toEqual({
+        ok: true,
+        completedOnboarding: false,
+        user: expect.objectContaining({ email: 'Ada@Example.com', role: 'user', loginMethod: 'oidc' })
+      });
+      expect(automaticRegistration()).toBe(false);
+    });
+
+    it('AC-AUTH-003.27: refuses a login without the required claim', () => {
+      setAutomaticRegistration(true);
+      expect(service.resolve(outsider, withClaim)).toEqual({ ok: false, reason: 'claim-mismatch' });
+      expect(service.resolve(identity, withClaim)).toEqual({ ok: false, reason: 'claim-mismatch' });
+      expect(userCount()).toBe(0);
+    });
+
+    it('refuses an existing linked user without the required claim', () => {
+      addUser({ email: 'ada@example.com', role: 'administrator', oidcIssuer: ISSUER, oidcSubject: 'subject-1' });
+      expect(service.resolve(outsider, withClaim)).toEqual({ ok: false, reason: 'claim-mismatch' });
+      expect(service.resolve(member, withClaim)).toMatchObject({ ok: true });
+    });
+
+    it('AC-AUTH-001.17: refuses the pending administrator without the required claim', () => {
+      startPending();
+      expect(service.resolve(outsider, withClaim)).toEqual({ ok: false, reason: 'claim-mismatch' });
+      expect(userCount()).toBe(0);
+      expect(state.current()).toBe('oidc-pending');
+
+      expect(service.resolve(member, withClaim)).toMatchObject({
+        ok: true,
+        completedOnboarding: true,
+        user: { role: 'administrator' }
+      });
+    });
+
+    it('AC-AUTH-003.28: without a required claim, a new email is still refused', () => {
+      expect(service.resolve(member, settings)).toEqual({ ok: false, reason: 'registration-disabled' });
+    });
+
+    it('checks the verified email before the claim', () => {
+      expect(service.resolve({ ...outsider, emailVerified: false }, withClaim)).toEqual({
+        ok: false,
+        reason: 'email-not-verified'
+      });
+    });
+
+    it('still refuses a password user\'s email that carries the claim', () => {
+      addUser({ email: 'ada@example.com', loginMethod: 'password', passwordHash: 'x' });
+      expect(service.resolve(member, withClaim)).toMatchObject({ ok: false, reason: 'password-user' });
+    });
   });
 });

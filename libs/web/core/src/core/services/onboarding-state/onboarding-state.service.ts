@@ -18,7 +18,12 @@ export type OnboardingView =
 // Clients treat a 404 from the state endpoint as `completed` (AO-3).
 const COMPLETED: OnboardingView = {
   kind: 'status',
-  status: { state: 'completed', oidcFromEnvironment: false, setupTokenConfigured: false }
+  status: {
+    state: 'completed',
+    oidcFromEnvironment: false,
+    requiredClaimFromEnvironment: false,
+    setupTokenConfigured: false
+  }
 };
 
 /** Asks the backend for the onboarding state once per page load (AO-2, AO-3). */

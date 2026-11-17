@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { compile } from 'proxy-addr';
 import { z } from 'zod';
-import { Config, OidcEnvironment } from './config.model';
+import { Config, OidcEnvironment, RequiredClaim } from './config.model';
 import { parseSize } from './parse-size';
 
 const PREFIX = 'FRONT_BURNER_';
@@ -23,6 +23,12 @@ const OIDC_CLIENT_SECRET_FILE = 'FRONT_BURNER_OIDC_CLIENT_SECRET_FILE';
 const OIDC_SCOPES = 'FRONT_BURNER_OIDC_SCOPES';
 const OIDC_REQUIRE_VERIFIED_EMAIL = 'FRONT_BURNER_OIDC_REQUIRE_VERIFIED_EMAIL';
 const ADMIN_EMAIL = 'FRONT_BURNER_ADMIN_EMAIL';
+// Not in OIDC_VARIABLES: they also apply to OIDC set up on the onboarding page (AO-41).
+const OIDC_REQUIRED_CLAIM_NAME = 'FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME';
+const OIDC_REQUIRED_CLAIM_VALUE = 'FRONT_BURNER_OIDC_REQUIRED_CLAIM_VALUE';
+const MAX_REQUIRED_CLAIM_LENGTH = 256;
+/** The required claim name that turns it off, also over a saved one (AO-41). */
+const REQUIRED_CLAIM_OFF = 'none';
 const OIDC_VARIABLES = [
   OIDC_ISSUER,
   OIDC_CLIENT_ID,
@@ -79,6 +85,13 @@ export class ConfigError extends Error {
     );
     this.name = 'ConfigError';
   }
+}
+
+function requiredClaimPart() {
+  return z.string().trim()
+    .min(1, { message: 'must not be empty' })
+    .max(MAX_REQUIRED_CLAIM_LENGTH, { message: `must be at most ${MAX_REQUIRED_CLAIM_LENGTH} characters` })
+    .optional();
 }
 
 function isHttpsIssuer(value: string): boolean {
@@ -171,7 +184,9 @@ const schema = z.object({
     z.email({ error: () => 'must be a valid email address' }).max(254, {
       error: () => 'must be a valid email address'
     })
-  ).optional()
+  ).optional(),
+  [OIDC_REQUIRED_CLAIM_NAME]: requiredClaimPart(),
+  [OIDC_REQUIRED_CLAIM_VALUE]: requiredClaimPart()
 }).refine(v => v[SETUP_TOKEN] === undefined || v[SETUP_TOKEN_FILE] === undefined, {
   path: [ SETUP_TOKEN ],
   message: `cannot be set together with ${SETUP_TOKEN_FILE}`
@@ -318,6 +333,36 @@ export function loadConfig(
     }
   }
 
+  // AO-41: both or neither, or the name `none` alone (temporary MVP measure).
+  let oidcRequiredClaim: RequiredClaim | null | undefined;
+  const claimName = input[OIDC_REQUIRED_CLAIM_NAME];
+  const claimValue = input[OIDC_REQUIRED_CLAIM_VALUE];
+  const claimOff = parsed.data?.[OIDC_REQUIRED_CLAIM_NAME] === REQUIRED_CLAIM_OFF;
+  if (claimOff && claimValue !== undefined) {
+    issues.push({
+      variable: OIDC_REQUIRED_CLAIM_VALUE,
+      message: `cannot be set when ${OIDC_REQUIRED_CLAIM_NAME} is ${REQUIRED_CLAIM_OFF}`
+    });
+  } else if (claimOff) {
+    oidcRequiredClaim = null;
+  } else if (claimName !== undefined && claimValue === undefined) {
+    issues.push({
+      variable: OIDC_REQUIRED_CLAIM_VALUE,
+      message: `is required when ${OIDC_REQUIRED_CLAIM_NAME} is set`
+    });
+  } else if (claimName === undefined && claimValue !== undefined) {
+    issues.push({
+      variable: OIDC_REQUIRED_CLAIM_NAME,
+      message: `is required when ${OIDC_REQUIRED_CLAIM_VALUE} is set`
+    });
+  } else {
+    const name = parsed.data?.[OIDC_REQUIRED_CLAIM_NAME];
+    const value = parsed.data?.[OIDC_REQUIRED_CLAIM_VALUE];
+    if (name !== undefined && value !== undefined) {
+      oidcRequiredClaim = { name, value };
+    }
+  }
+
   // NF-5.4: the data directory itself, or a directory that neither contains it nor lies inside it.
   const dataDir = resolve(cwd, parsed.data?.FRONT_BURNER_DATA_DIR ?? '/data');
   const reposRoot = parsed.data?.FRONT_BURNER_REPOS_DIR === undefined
@@ -367,7 +412,8 @@ export function loadConfig(
       knownHostsFile: values.FRONT_BURNER_KNOWN_HOSTS_FILE === undefined
         ? undefined
         : resolve(cwd, values.FRONT_BURNER_KNOWN_HOSTS_FILE),
-      oidc
+      oidc,
+      oidcRequiredClaim
     },
     warnings
   };

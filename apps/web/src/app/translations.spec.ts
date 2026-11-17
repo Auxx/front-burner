@@ -1,4 +1,9 @@
-import { COMMIT_AUTHOR_FIELD_CODES, ERROR_CODES, PASSWORD_RULES } from '@front-burner/shared-contracts';
+import {
+  COMMIT_AUTHOR_FIELD_CODES,
+  ERROR_CODES,
+  OIDC_FAILURE_REASONS,
+  PASSWORD_RULES
+} from '@front-burner/shared-contracts';
 import { IntlMessageFormat } from 'intl-messageformat';
 
 import en from '../../public/i18n/en.json';
@@ -17,6 +22,10 @@ describe('i18n/en.json', () => {
   it.each(COMMIT_AUTHOR_FIELD_CODES)('has the commit author field text %s', code => {
     const field = code.startsWith('name') ? 'name' : 'email';
     expect(texts[`${DIALOGS}.errors.${field}.${code}`]).toEqual(expect.any(String));
+  });
+
+  it.each(OIDC_FAILURE_REASONS)('has the OIDC login error %s', reason => {
+    expect(texts[`${AUTH}.oidcErrors.${reason}`]).toEqual(expect.any(String));
   });
 
   it.each([ 'logged-out', 'session-expired', 'password-reset' ])('has the login message %s', message => {

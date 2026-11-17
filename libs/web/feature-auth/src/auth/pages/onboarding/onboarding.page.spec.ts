@@ -19,7 +19,13 @@ class BlankComponent {}
 
 const status = (overrides: Partial<OnboardingStatus> = {}): OnboardingView => ({
   kind: 'status',
-  status: { state: 'required', oidcFromEnvironment: false, setupTokenConfigured: true, ...overrides }
+  status: {
+    state: 'required',
+    oidcFromEnvironment: false,
+    requiredClaimFromEnvironment: false,
+    setupTokenConfigured: true,
+    ...overrides
+  }
 });
 
 describe('OnboardingPage', () => {
@@ -221,6 +227,8 @@ describe('OnboardingPage', () => {
       scopes: 'openid email',
       requireVerifiedEmail: true,
       adminEmail: 'admin@example.com',
+      requiredClaimName: '',
+      requiredClaimValue: '',
       hasClientSecret: true
     };
     const oidcField = (name: string) =>

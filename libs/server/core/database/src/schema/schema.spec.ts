@@ -117,7 +117,9 @@ describe('schema', () => {
       oidcClientId: null,
       oidcClientSecret: null,
       oidcScopes: null,
-      oidcRequireVerifiedEmail: null
+      oidcRequireVerifiedEmail: null,
+      oidcRequiredClaimName: null,
+      oidcRequiredClaimValue: null
     } ]);
     expect(() => database.db.insert(systemSettings).values({ id: 2 }).run()).toThrow(
       expect.objectContaining({ code: 'SQLITE_CONSTRAINT_CHECK' })
@@ -435,9 +437,11 @@ describe('ENCRYPTED_COLUMNS', () => {
 
 describe('LOGIN_AUDIT_REASONS', () => {
   it('lists LG-43', () => {
-    expect(LOGIN_AUDIT_REASONS).toHaveLength(17);
+    expect(LOGIN_AUDIT_REASONS).toHaveLength(18);
     expect(LOGIN_AUDIT_REASONS[0]).toBe('success');
-    expect(LOGIN_AUDIT_REASONS[16]).toBe('refresh-token-reused');
+    // LG-71; temporary MVP measure.
+    expect(LOGIN_AUDIT_REASONS[16]).toBe('claim-mismatch');
+    expect(LOGIN_AUDIT_REASONS[17]).toBe('refresh-token-reused');
   });
 });
 

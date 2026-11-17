@@ -19,7 +19,12 @@ describe('OnboardingApi', () => {
   afterEach(() => http.verify());
 
   it('status() GETs /api/v1/onboarding and emits the body', () => {
-    const body: OnboardingStatus = { state: 'required', oidcFromEnvironment: false, setupTokenConfigured: true };
+    const body: OnboardingStatus = {
+      state: 'required',
+      oidcFromEnvironment: false,
+      requiredClaimFromEnvironment: false,
+      setupTokenConfigured: true
+    };
     let received: OnboardingStatus | undefined;
 
     api.status().subscribe(value => (received = value));

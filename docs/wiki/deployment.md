@@ -147,6 +147,45 @@ start, and the container log says which ones are missing.
 While these variables are set, they are the only source of the OIDC settings,
 and the system settings show them read-only.
 
+### Limiting OIDC to a Slack workspace
+
+> **Temporary.** Front Burner cannot invite or manage users yet. Until it can, a
+> **required claim** lets a limited group, such as the members of one Slack
+> workspace, log in through OIDC and get an account on their first login. Later
+> versions replace it with proper user management.
+
+When a required claim is set, Front Burner accepts an OIDC login only if the
+provider's ID token has that claim with that value. Everyone who passes gets an
+ordinary user account on their first login; everyone else sees "OIDC login
+failed", and the login audit log records `claim-mismatch`. This also applies to
+people who already have an account, and to the first administrator, who sees
+that the required claim did not match.
+
+Set it either in the **Required claim name** and **Required claim value** fields
+of the onboarding page, or with these variables, which work with either way of
+setting up OIDC and win over the fields:
+
+| Variable                                 | Meaning                                                                      |
+| ---------------------------------------- | ---------------------------------------------------------------------------- |
+| `FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME`  | Name of the claim, or `none` to turn it off. Set both variables, or neither. |
+| `FRONT_BURNER_OIDC_REQUIRED_CLAIM_VALUE` | Value the claim must have. Case-sensitive.                                   |
+
+The variables are the only way to change the required claim after onboarding. To
+turn it off, including one saved on the onboarding page, set
+`FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME=none` without a value and restart. If you
+remove both variables instead, a claim saved on the onboarding page applies
+again. While either variable is set, the onboarding page says so instead of
+offering the claim fields.
+
+For Slack, create a Slack app with **Sign in with Slack** (OpenID Connect) and
+use:
+
+- issuer `https://slack.com`, and the app's client ID and client secret;
+- scopes `openid email profile`;
+- claim name `https://slack.com/team_id`;
+- claim value: the workspace ID, which starts with `T`. It is in the workspace's
+  URL when you open Slack in a browser (`https://app.slack.com/client/T…/…`).
+
 ## Troubleshooting
 
 **The instance takes a long time to start, or a health check restarts it.** On

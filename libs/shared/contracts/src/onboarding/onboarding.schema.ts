@@ -11,6 +11,8 @@ export const OnboardingStatusSchema = z
   .object({
     state: z.enum(ONBOARDING_STATES),
     oidcFromEnvironment: z.boolean(),
+    /** The required claim is set or turned off by environment variables (AO-41; temporary MVP measure). */
+    requiredClaimFromEnvironment: z.boolean(),
     setupTokenConfigured: z.boolean()
   })
   .meta({ id: 'OnboardingStatus' });
@@ -57,11 +59,35 @@ export const oidcSetupFields = {
     .default(DEFAULT_OIDC_SCOPES)
     .refine(scopes => scopes.split(/\s+/).includes('openid'), { params: { code: 'missing-openid' } }),
   requireVerifiedEmail: z.boolean().default(true),
-  adminEmail: z.string().trim().pipe(z.email().max(254))
+  adminEmail: z.string().trim().pipe(z.email().max(254)),
+  /** A claim the ID token must carry; empty means none (AO-40; temporary MVP measure). */
+  requiredClaimName: z.string().trim().max(256).default(''),
+  requiredClaimValue: z.string().trim().max(256).default('')
 };
+
+/**
+ * The required claim's name and value are both filled or both empty (AO-40).
+ * Zod cannot extend a refined object, so each schema around
+ * {@link oidcSetupFields} applies this itself.
+ */
+export function refineRequiredClaimPair(
+  value: { requiredClaimName: string; requiredClaimValue: string; },
+  context: z.RefinementCtx
+): void {
+  const hasName = value.requiredClaimName !== '';
+  const hasValue = value.requiredClaimValue !== '';
+  if (hasName !== hasValue) {
+    context.addIssue({
+      code: 'custom',
+      path: [ hasName ? 'requiredClaimValue' : 'requiredClaimName' ],
+      params: { code: 'required-claim-pair' }
+    });
+  }
+}
 
 export const OidcSetupRequestSchema = z
   .object({ setupToken, ...oidcSetupFields })
+  .superRefine(refineRequiredClaimPair)
   .meta({ id: 'OidcSetupRequest' });
 
 /** A saved OIDC setup for the pre-filled form (AO-16, AO-26); never the secret. */
@@ -72,6 +98,9 @@ export const OidcSetupViewSchema = z
     scopes: z.string(),
     requireVerifiedEmail: z.boolean(),
     adminEmail: z.string(),
+    /** Empty when no required claim is saved (AO-40). */
+    requiredClaimName: z.string(),
+    requiredClaimValue: z.string(),
     hasClientSecret: z.boolean()
   })
   .meta({ id: 'OidcSetupView' });
