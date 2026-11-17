@@ -46,6 +46,14 @@ See [overview.md](overview.md) for the numbering conventions.
 
 - **A-6.7** _(My call.)_ The 2-minute background fetch interval is a constant,
   not an operator setting, until a reason to change it appears.
+- The **database snapshot** (`database.snapshot`, NF-6.2, A-4.12) runs every
+  hour; its first run, and an overdue run after a start, run at once rather than
+  spread (A-6.8). It writes a snapshot only when the newest daily one is
+  `FRONT_BURNER_DB_SNAPSHOT_INTERVAL` old or there is none. The age of the
+  newest file decides, not the job's schedule, so that a fresh instance has a
+  snapshot a moment after it starts, a crash loop writes at most one and a
+  restart never restarts the interval. A failure is logged at `error` and the
+  next run tries again. _(Plan 129's call.)_
 
 ## A-6: Restart
 

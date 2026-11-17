@@ -141,7 +141,37 @@ describe('server startup', () => {
     expect(readdirSync(reposDir).sort()).toEqual([ 'orphans', 'repos', 'tmp' ]);
     expect(readdirSync(join(reposDir, 'tmp'))).toEqual([]);
     // Nothing is written to <data>/repos, nor to a tmp/ there.
-    expect(readdirSync(server.dataDir)).toEqual([ 'db' ]);
+    expect(readdirSync(server.dataDir).sort()).toEqual([ 'backups', 'db' ]);
+  });
+
+  it('a fresh instance has a database snapshot a moment after it starts', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'front-burner-e2e-snapshots-'));
+    cleanups.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    const env = { FRONT_BURNER_DATA_DIR: dataDir };
+    const backups = join(dataDir, 'backups');
+    /** How many runs of the snapshot job have ended well. */
+    const snapshotRuns = () => {
+      const sqlite = new BetterSqlite3(join(dataDir, 'db', 'front-burner.sqlite'), { readonly: true });
+      try {
+        return sqlite.prepare('SELECT count(*) FROM jobs WHERE type = ? AND status = ?')
+          .pluck().get('database.snapshot', 'done') as number;
+      } finally {
+        sqlite.close();
+      }
+    };
+    const first = await startServerProcess(env);
+
+    await waitFor(() => snapshotRuns() === 1);
+    const [ snapshot ] = readdirSync(backups);
+    expect(snapshot).toMatch(/^front-burner-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\dZ-v[\w.+-]+\.sqlite$/);
+    await first.stop();
+    const copy = new BetterSqlite3(join(backups, snapshot), { readonly: true });
+    try {
+      expect(copy.pragma('integrity_check', { simple: true })).toBe('ok');
+      expect(copy.prepare('SELECT count(*) FROM __drizzle_migrations').pluck().get()).toBeGreaterThan(0);
+    } finally {
+      copy.close();
+    }
   });
 
   it('a working copy left by a removed row is in orphans after a restart', async () => {
