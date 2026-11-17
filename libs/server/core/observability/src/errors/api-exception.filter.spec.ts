@@ -82,7 +82,8 @@ const config: Config = {
   dbSnapshotKeep: 7,
   lowDiskThresholdBytes: 2_147_483_648,
   knownHostsFile: undefined,
-  oidc: undefined
+  oidc: undefined,
+  oidcRequiredClaim: undefined
 };
 
 describe('ApiExceptionFilter', () => {
