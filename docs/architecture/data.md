@@ -140,13 +140,17 @@ numbering conventions.
     in `backups/`, such as the operator's own copies. _(Plan 129's call.)_
   - `DatabaseSnapshots` (`server/core/database`) writes to a `.partial` file and
     renames it into place, so that a half-written snapshot never looks like a
-    good one. A failure (a full disk) removes the partial file and changes no
-    other snapshot; a partial file a crash left is removed by the next prune.
+    good one, and fsyncs the file and then the folder, so that the rename
+    survives a power cut. A failure (a full disk) removes the partial file and
+    changes no other snapshot; a partial file a crash left is removed by the
+    next prune. A `backups/` folder removed while the instance runs is created
+    again.
   - The age of a series is read from the newest name, never the file's time,
-    which a restore changes. The `database.snapshot` housekeeping job (A-6)
-    writes one when the newest daily snapshot is
-    `FRONT_BURNER_DB_SNAPSHOT_INTERVAL` old, or there is none, or it is in the
-    future (the clock moved back).
-  - `backups/` is in the data directory, created and checked for writing on
-    start with the other folders (NF-5.1, NF-5.6), never in the repositories
-    directory.
+    which a restore changes. A snapshot named with a time after now was written
+    while the clock was ahead: it is older than any written since, so it never
+    counts as the newest and is the first to be pruned. The `database.snapshot`
+    housekeeping job (A-6) writes one when the newest daily snapshot is
+    `FRONT_BURNER_DB_SNAPSHOT_INTERVAL` old, or there is none.
+  - `backups/` is in the data directory (`DataLayout.backupsDir`), created and
+    checked for writing on start with the other folders (NF-5.1, NF-5.6), never
+    in the repositories directory.

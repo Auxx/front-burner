@@ -1,4 +1,4 @@
-import { parseDuration } from '@front-burner/shared-util';
+import { HOUR_MS, parseDuration } from '@front-burner/shared-util';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { compile } from 'proxy-addr';
@@ -33,7 +33,6 @@ const OIDC_VARIABLES = [
 ];
 const DEFAULT_TRUSTED_PROXIES = 'loopback, linklocal, uniquelocal';
 const REPOS_DIR = 'FRONT_BURNER_REPOS_DIR';
-const HOUR_MS = 3_600_000;
 
 /** Whether the absolute path `inner` lies inside the absolute path `outer`. */
 function isInside(inner: string, outer: string): boolean {

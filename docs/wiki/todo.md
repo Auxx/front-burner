@@ -41,6 +41,13 @@ Requirements files deferred until after the MVP:
 
 Known gaps, left until someone meets them:
 
+- Database snapshots (A-4.12): `VACUUM INTO` runs on the backend's main thread,
+  so every request, the job runner and the health probes wait while it copies
+  the database. The MVP's database is small enough that this takes well under a
+  second. If plan 152's run on the reference host, or an instance with a large
+  login audit log, shows a long pause, run it in a worker thread with its own
+  connection, or use the online backup API, which copies a few pages at a time.
+
 - Recovery on start (A-5.15): when a merge is cut short after writing a file
   that the restored `.gitignore` ignores, as when the incoming commit un-ignores
   `dist/` and adds `dist/app.js`, the file stays, and every later pull fails

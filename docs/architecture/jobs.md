@@ -52,8 +52,11 @@ See [overview.md](overview.md) for the numbering conventions.
   `FRONT_BURNER_DB_SNAPSHOT_INTERVAL` old or there is none. The age of the
   newest file decides, not the job's schedule, so that a fresh instance has a
   snapshot a moment after it starts, a crash loop writes at most one and a
-  restart never restarts the interval. A failure is logged at `error` and the
-  next run tries again. _(Plan 129's call.)_
+  restart never restarts the interval. Every run prunes, so that a lowered
+  `FRONT_BURNER_DB_SNAPSHOT_KEEP` and a crash's partial files take effect within
+  the hour. A failed snapshot or prune is logged at `error`, each with its own
+  message, and the next run tries again; only a failed snapshot fails the run.
+  _(Plan 129's call.)_
 
 ## A-6: Restart
 

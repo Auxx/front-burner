@@ -1,4 +1,3 @@
-import { backupsDirOf } from '@front-burner/server-core-database';
 import { DataLayout } from '@front-burner/server-core-storage';
 import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -36,7 +35,7 @@ export function prepareDataDir(
   const name = separate ? 'repositories directory' : 'data directory';
   const folders: [ string, string ][] = [
     [ databaseDir, 'data directory' ],
-    [ backupsDirOf(dataDir), 'data directory' ],
+    [ layout.backupsDir, 'data directory' ],
     [ layout.reposDir, name ],
     [ layout.tmpDir, name ],
     [ layout.orphansDir, name ]

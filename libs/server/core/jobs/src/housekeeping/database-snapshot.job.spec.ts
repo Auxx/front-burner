@@ -105,12 +105,63 @@ describe('DatabaseSnapshotJob', () => {
     expect(files()).toEqual([ 'front-burner-2026-11-17T09-30-00Z-v1.4.2.sqlite' ]);
   });
 
-  it('writes one when the newest is in the future, as after the clock moved back', async () => {
+  it('writes one, not one an hour, when the newest is in the future, as after the clock moved back', async () => {
+    const ahead = 'front-burner-2027-01-01T00-00-00Z-v1.4.2.sqlite';
+    writeFileSync(join(backups, ahead), '');
+    const definition = start();
+
+    expect(await run(definition)).toEqual({ written: true, pruned: 0 });
+    for (let hour = 1; hour < 24; hour++) {
+      vi.setSystemTime(START.getTime() + hour * HOUR);
+      expect(await run(definition)).toEqual({ written: false, pruned: 0 });
+    }
+
+    expect(files()).toEqual([ 'front-burner-2026-11-17T09-30-00Z-v1.4.2.sqlite', ahead ]);
+  });
+
+  it('prunes the snapshot dated in the future before the daily ones', async () => {
+    config.dbSnapshotKeep = 2;
     writeFileSync(join(backups, 'front-burner-2027-01-01T00-00-00Z-v1.4.2.sqlite'), '');
+    const definition = start();
+    for (let day = 0; day < 3; day++) {
+      vi.setSystemTime(START.getTime() + day * DAY);
+      await run(definition);
+    }
+
+    expect(files()).toEqual([
+      'front-burner-2026-11-18T09-30-00Z-v1.4.2.sqlite',
+      'front-burner-2026-11-19T09-30-00Z-v1.4.2.sqlite'
+    ]);
+  });
+
+  it('prunes at every run, so that a lowered count takes effect within the hour', async () => {
+    for (let day = 0; day < 5; day++) {
+      vi.setSystemTime(START.getTime() + day * DAY);
+      await run(start());
+    }
+    writeFileSync(join(backups, 'front-burner-2026-11-20T00-00-00Z-v1.4.2.sqlite.partial'), 'half a database');
+    config.dbSnapshotKeep = 2;
+    vi.setSystemTime(START.getTime() + 4 * DAY + HOUR);
+
+    expect(await run(start())).toEqual({ written: false, pruned: 4 });
+
+    expect(files()).toEqual([
+      'front-burner-2026-11-20T09-30-00Z-v1.4.2.sqlite',
+      'front-burner-2026-11-21T09-30-00Z-v1.4.2.sqlite'
+    ]);
+  });
+
+  it('logs a failed prune as such, and keeps the snapshot it wrote', async () => {
+    const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    vi.spyOn(DatabaseSnapshots.prototype, 'prune').mockImplementation(() => {
+      throw Object.assign(new Error(`EACCES: permission denied, unlink '${backups}/x'`), { code: 'EACCES' });
+    });
 
     expect(await run(start())).toEqual({ written: true, pruned: 0 });
 
-    expect(files()).toHaveLength(2);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith({ errorCode: 'EACCES' }, 'Could not prune database snapshots');
+    expect(files()).toEqual([ 'front-burner-2026-11-17T09-30-00Z-v1.4.2.sqlite' ]);
   });
 
   it('logs a failed snapshot at error, without its path, and fails the run', () => {
@@ -122,6 +173,7 @@ describe('DatabaseSnapshotJob', () => {
     // The runner calls the handler inside a promise chain, so a throw fails the job.
     expect(() => run(start())).toThrow('ENOSPC');
 
+    expect(error).toHaveBeenCalledTimes(1);
     expect(error).toHaveBeenCalledWith({ errorCode: 'ENOSPC' }, 'Could not write a database snapshot');
   });
 });

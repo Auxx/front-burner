@@ -17,8 +17,11 @@ export class DataLayout {
   readonly tmpDir: string;
   /** Working copies whose repository no longer exists, moved aside on start (NF-6.4). */
   readonly orphansDir: string;
+  /** The database snapshots (NF-6.2, NF-7.1); always in the data directory, never the repositories root. */
+  readonly backupsDir: string;
 
   constructor(dataDir: string, reposRoot = dataDir) {
+    this.backupsDir = join(dataDir, 'backups');
     this.reposDir = join(reposRoot, 'repos');
     this.tmpDir = join(reposRoot, 'tmp');
     this.orphansDir = join(reposRoot, 'orphans');

@@ -4,11 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { Database, openDatabase } from '../database/open-database';
-import { backupsDirOf, DatabaseSnapshots, SNAPSHOT_PREFIX } from './database-snapshots';
+import { DatabaseSnapshots, SNAPSHOT_PREFIX } from './database-snapshots';
 
 const DAY = 86_400_000;
 const START = new Date('2026-11-17T09:30:15.250Z');
 const daysLater = (days: number) => new Date(START.getTime() + days * DAY);
+/** "Now" for pruning and finding: after every snapshot the tests write. */
+const LATER = daysLater(30);
 
 /** A worker that inserts rows into `file` for `ms` milliseconds, then posts how many. */
 const WRITER = `
@@ -43,7 +45,7 @@ describe('DatabaseSnapshots', () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'fb-snapshots-'));
-    dir = backupsDirOf(root);
+    dir = join(root, 'backups');
     mkdirSync(dir);
     database = openDatabase(join(root, 'front-burner.sqlite'));
     database.sqlite.exec('CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)');
@@ -54,10 +56,6 @@ describe('DatabaseSnapshots', () => {
   afterEach(() => {
     database.sqlite.close();
     rmSync(root, { recursive: true, force: true });
-  });
-
-  it('keeps the backups in the data directory', () => {
-    expect(backupsDirOf('/data')).toBe(join('/data', 'backups'));
   });
 
   it('writes a snapshot named with the time and version', () => {
@@ -151,10 +149,37 @@ describe('DatabaseSnapshots', () => {
   it('keeps the newest seven', () => {
     const written = Array.from({ length: 9 }, (_, day) => snapshots.write(SNAPSHOT_PREFIX, daysLater(day)));
 
-    expect(snapshots.prune(SNAPSHOT_PREFIX, 7)).toEqual(written.slice(0, 2));
+    expect(snapshots.prune(SNAPSHOT_PREFIX, 7, LATER)).toEqual(written.slice(0, 2));
 
     expect(files()).toEqual(written.slice(2).map(file => file.slice(dir.length + 1)));
-    expect(snapshots.prune(SNAPSHOT_PREFIX, 7)).toEqual([]);
+    expect(snapshots.prune(SNAPSHOT_PREFIX, 7, LATER)).toEqual([]);
+  });
+
+  it('counts a snapshot dated in the future as the oldest, as the clock was ahead when it was written', () => {
+    const ahead = snapshots.write(SNAPSHOT_PREFIX, new Date('2027-06-01T00:00:00Z'));
+    const written = [ 0, 1, 2 ].map(day => snapshots.write(SNAPSHOT_PREFIX, daysLater(day)));
+
+    expect(snapshots.newest(SNAPSHOT_PREFIX, LATER)).toEqual(new Date('2026-11-19T09:30:15Z'));
+    expect(snapshots.prune(SNAPSHOT_PREFIX, 3, LATER)).toEqual([ ahead ]);
+
+    expect(files()).toEqual(written.map(file => file.slice(dir.length + 1)));
+  });
+
+  it('finds no newest snapshot when every one is dated in the future', () => {
+    snapshots.write(SNAPSHOT_PREFIX, new Date('2027-06-01T00:00:00Z'));
+
+    expect(snapshots.newest(SNAPSHOT_PREFIX, LATER)).toBeUndefined();
+    expect(snapshots.newest(SNAPSHOT_PREFIX, new Date('2027-06-02T00:00:00Z'))).toEqual(
+      new Date('2027-06-01T00:00:00Z')
+    );
+  });
+
+  it('creates the folder again if it went away while the instance ran', () => {
+    rmSync(dir, { recursive: true });
+
+    snapshots.write(SNAPSHOT_PREFIX, START);
+
+    expect(files()).toEqual([ 'front-burner-2026-11-17T09-30-15Z-v1.4.2.sqlite' ]);
   });
 
   it('prunes only its own snapshots', () => {
@@ -173,7 +198,7 @@ describe('DatabaseSnapshots', () => {
     writeFileSync(join(dir, stale), '');
     const written = [ 0, 1, 2 ].map(day => snapshots.write(SNAPSHOT_PREFIX, daysLater(day)));
 
-    expect(snapshots.prune(SNAPSHOT_PREFIX, 1)).toEqual([ join(dir, stale), ...written.slice(0, 2) ]);
+    expect(snapshots.prune(SNAPSHOT_PREFIX, 1, LATER)).toEqual([ join(dir, stale), ...written.slice(0, 2) ]);
 
     expect(files()).toEqual([
       ...others,
@@ -183,16 +208,16 @@ describe('DatabaseSnapshots', () => {
   });
 
   it('finds the newest snapshot by its name', () => {
-    expect(snapshots.newest(SNAPSHOT_PREFIX)).toBeUndefined();
-    writeFileSync(join(dir, 'pre-upgrade-2027-01-01T00-00-00Z-v1.4.1.sqlite'), '');
-    writeFileSync(join(dir, 'front-burner-2027-01-01T00-00-00Z-v1.4.2.sqlite.partial'), '');
-    expect(snapshots.newest(SNAPSHOT_PREFIX)).toBeUndefined();
+    expect(snapshots.newest(SNAPSHOT_PREFIX, LATER)).toBeUndefined();
+    writeFileSync(join(dir, 'pre-upgrade-2026-12-01T00-00-00Z-v1.4.1.sqlite'), '');
+    writeFileSync(join(dir, 'front-burner-2026-12-01T00-00-00Z-v1.4.2.sqlite.partial'), '');
+    expect(snapshots.newest(SNAPSHOT_PREFIX, LATER)).toBeUndefined();
 
     snapshots.write(SNAPSHOT_PREFIX, daysLater(2));
     snapshots.write(SNAPSHOT_PREFIX, daysLater(1));
 
-    expect(snapshots.newest(SNAPSHOT_PREFIX)).toEqual(new Date('2026-11-19T09:30:15Z'));
-    expect(snapshots.newest('pre-upgrade')).toEqual(new Date('2027-01-01T00:00:00Z'));
+    expect(snapshots.newest(SNAPSHOT_PREFIX, LATER)).toEqual(new Date('2026-11-19T09:30:15Z'));
+    expect(snapshots.newest('pre-upgrade', LATER)).toEqual(new Date('2026-12-01T00:00:00Z'));
   });
 
   it('finds no snapshot in a missing folder', () => {
