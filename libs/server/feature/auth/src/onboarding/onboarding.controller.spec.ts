@@ -85,7 +85,12 @@ describe('OnboardingController', () => {
     await start();
     const response = await http().get('/api/v1/onboarding');
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ state: 'required', oidcFromEnvironment: false, setupTokenConfigured: true });
+    expect(response.body).toEqual({
+      state: 'required',
+      oidcFromEnvironment: false,
+      requiredClaimFromEnvironment: false,
+      setupTokenConfigured: true
+    });
   });
 
   it('check answers 204 for the right token and 404 for a wrong one', async () => {

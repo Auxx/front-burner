@@ -100,6 +100,7 @@ describe('administrator onboarding', () => {
     expect(await (await fetch(`${server.url}${ONBOARDING}`)).json()).toEqual({
       state: 'required',
       oidcFromEnvironment: false,
+      requiredClaimFromEnvironment: false,
       setupTokenConfigured: false
     });
     await expectSameAsUnknownRoute(server, await post(server, CHECK, { setupToken: TOKEN }), 'POST', {

@@ -30,6 +30,7 @@
               <auth-oidc-setup-step [setupToken]="setupToken()"
                                     [saved]="savedOidcSetup()"
                                     [failure]="oidcFailure"
+                                    [requiredClaimFromEnvironment]="status.requiredClaimFromEnvironment"
                                     (back)="step.set('method')"
                                     (refused)="refused()"
                                     (submitted)="oidcSetupSaved()" />

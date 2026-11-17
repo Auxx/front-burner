@@ -65,9 +65,21 @@ describe('OnboardingStateService', () => {
     expect(service().status()).toEqual({
       state: 'required',
       oidcFromEnvironment: false,
+      requiredClaimFromEnvironment: false,
       setupTokenConfigured: true
     });
     expect(service({ setupToken: undefined } as Config).status().setupTokenConfigured).toBe(false);
+  });
+
+  it('reports whether the environment sets or turns off the required claim', () => {
+    expect(service().status().requiredClaimFromEnvironment).toBe(false);
+    const claim = { name: 'https://slack.com/team_id', value: 'T123' };
+    expect(service({ ...config, oidcRequiredClaim: claim } as Config).status().requiredClaimFromEnvironment).toBe(
+      true
+    );
+    expect(service({ ...config, oidcRequiredClaim: null } as Config).status().requiredClaimFromEnvironment).toBe(
+      true
+    );
   });
 
   describe('with OIDC from the environment', () => {
@@ -91,6 +103,7 @@ describe('OnboardingStateService', () => {
       expect(created.status()).toEqual({
         state: 'oidc-pending',
         oidcFromEnvironment: true,
+        requiredClaimFromEnvironment: false,
         setupTokenConfigured: true
       });
     });

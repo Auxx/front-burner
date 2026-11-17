@@ -31,6 +31,7 @@ const SAVED: OidcSetupView = {
     <auth-oidc-setup-step [setupToken]="token"
                           [saved]="saved()"
                           [failure]="failure()"
+                          [requiredClaimFromEnvironment]="claimFromEnvironment()"
                           (back)="events.push('back')"
                           (refused)="events.push('refused')"
                           (submitted)="events.push('submitted')" />
@@ -40,6 +41,7 @@ class HostComponent {
   readonly token = TOKEN;
   readonly saved = signal<OidcSetupView | undefined>(undefined);
   readonly failure = signal<OidcFailureReason | undefined>(undefined);
+  readonly claimFromEnvironment = signal(false);
   readonly events: string[] = [];
 }
 
@@ -304,6 +306,20 @@ describe('OidcSetupStepComponent', () => {
       await submit();
       http.expectNone(SETUP);
       expect(fieldText('requiredClaimValue')).toContain(`${KEY}.fieldErrors.requiredClaimValue.required-claim-pair`);
+    });
+
+    it('AC-AUTH-001.18: says the environment sets the required claim instead of offering its fields', async () => {
+      await start({ ...SAVED, ...slack });
+      fixture.componentInstance.claimFromEnvironment.set(true);
+      await settle(fixture);
+      expect(field('requiredClaimName')).toBeNull();
+      expect(field('requiredClaimValue')).toBeNull();
+      expect(element().textContent).toContain(`${KEY}.requiredClaimFromEnvironment`);
+
+      await submit();
+      const request = http.expectOne(SETUP);
+      expect(request.request.body).toMatchObject({ requiredClaimName: '', requiredClaimValue: '' });
+      request.flush(null, { status: 204, statusText: 'No Content' });
     });
 
     it('AC-AUTH-001.17: shows the claim mismatch after a failed login', async () => {

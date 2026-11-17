@@ -11,6 +11,8 @@ export const OnboardingStatusSchema = z
   .object({
     state: z.enum(ONBOARDING_STATES),
     oidcFromEnvironment: z.boolean(),
+    /** The required claim is set or turned off by environment variables (AO-41; temporary MVP measure). */
+    requiredClaimFromEnvironment: z.boolean(),
     setupTokenConfigured: z.boolean()
   })
   .meta({ id: 'OnboardingStatus' });

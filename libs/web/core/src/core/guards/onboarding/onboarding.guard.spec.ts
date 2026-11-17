@@ -11,7 +11,7 @@ class BlankComponent {}
 
 const status = (state: OnboardingStatus['state'], oidcFromEnvironment = false): OnboardingView => ({
   kind: 'status',
-  status: { state, oidcFromEnvironment, setupTokenConfigured: true }
+  status: { state, oidcFromEnvironment, requiredClaimFromEnvironment: false, setupTokenConfigured: true }
 });
 
 const failed: OnboardingView = {

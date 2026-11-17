@@ -340,6 +340,7 @@
   "web-feature-auth.OidcSetupStepComponent.adminEmailMismatch": "The email of the OIDC account you logged in with does not match the administrator email address below.",
   "web-feature-auth.OidcSetupStepComponent.requiredClaimName": "Required claim name (optional)",
   "web-feature-auth.OidcSetupStepComponent.requiredClaimValue": "Required claim value (optional)",
+  "web-feature-auth.OidcSetupStepComponent.requiredClaimFromEnvironment": "The required claim, which limits who can log in, is set by the FRONT_BURNER_OIDC_REQUIRED_CLAIM_* environment variables. Change them and restart to change it.",
   "web-feature-auth.OidcSetupStepComponent.requiredClaimHint": "Only people whose ID token has this claim value can log in, and they get an account on their first login. For a Slack workspace, use https://slack.com/team_id and the workspace ID. Leave both empty to turn this off.",
   "web-feature-auth.OidcSetupStepComponent.back": "Back",
   "web-feature-auth.OidcSetupStepComponent.submit": "Save and continue to login",

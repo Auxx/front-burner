@@ -165,15 +165,17 @@ Set it either in the **Required claim name** and **Required claim value** fields
 of the onboarding page, or with these variables, which work with either way of
 setting up OIDC and win over the fields:
 
-| Variable                                 | Meaning                                        |
-| ---------------------------------------- | ---------------------------------------------- |
-| `FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME`  | Name of the claim. Set both variables or none. |
-| `FRONT_BURNER_OIDC_REQUIRED_CLAIM_VALUE` | Value the claim must have. Case-sensitive.     |
+| Variable                                 | Meaning                                                                      |
+| ---------------------------------------- | ---------------------------------------------------------------------------- |
+| `FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME`  | Name of the claim, or `none` to turn it off. Set both variables, or neither. |
+| `FRONT_BURNER_OIDC_REQUIRED_CLAIM_VALUE` | Value the claim must have. Case-sensitive.                                   |
 
-The variables are the only way to change the required claim after onboarding.
-They cannot remove one saved on the onboarding page: without them, the saved
-claim applies again. Plan to keep the filter for as long as the instance runs
-with this version.
+The variables are the only way to change the required claim after onboarding. To
+turn it off, including one saved on the onboarding page, set
+`FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME=none` without a value and restart. If you
+remove both variables instead, a claim saved on the onboarding page applies
+again. While either variable is set, the onboarding page says so instead of
+offering the claim fields.
 
 For Slack, create a Slack app with **Sign in with Slack** (OpenID Connect) and
 use:

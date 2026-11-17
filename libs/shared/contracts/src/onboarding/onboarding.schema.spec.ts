@@ -17,7 +17,12 @@ const valid = {
 
 describe('OnboardingStatusSchema', () => {
   it('parses a status', () => {
-    const status = { state: 'required', oidcFromEnvironment: false, setupTokenConfigured: true };
+    const status = {
+      state: 'required',
+      oidcFromEnvironment: false,
+      requiredClaimFromEnvironment: true,
+      setupTokenConfigured: true
+    };
     expect(OnboardingStatusSchema.parse(status)).toEqual(status);
   });
 

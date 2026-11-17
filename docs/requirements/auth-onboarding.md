@@ -88,10 +88,11 @@ When onboarding ends, it is disabled for good.
 - **AO-4** The backend enforces onboarding rules. Hiding pages in the web client
   is not enough, because native clients must be possible later (vision goal 12).
 - **AO-5** The API exposes the onboarding state, whether OIDC is configured
-  through environment variables, and whether a valid setup token is set (AO-8),
-  without authentication, so clients can decide what to show (AO-9). It exposes
-  no secrets and no other data, such as OIDC settings, the administrator email
-  or the setup token itself. Knowing that an instance has no setup token gives
+  through environment variables, whether the required claim is (AO-41; a
+  temporary MVP measure), and whether a valid setup token is set (AO-8), without
+  authentication, so clients can decide what to show (AO-9). It exposes no
+  secrets and no other data, such as OIDC settings, the administrator email or
+  the setup token itself. Knowing that an instance has no setup token gives
   nothing away, since nothing can be submitted without one.
 - **AO-6** Completing onboarding is atomic. If two onboarding requests arrive at
   the same time, exactly one succeeds and the other is refused. The instance
@@ -270,7 +271,9 @@ When onboarding ends, it is disabled for good.
   the empty one and the backend refuses the request. They are saved with the
   other OIDC settings (AO-24) and pre-filled when the user comes back (AO-26).
   Submitting both empty clears a saved required claim. The hint gives the Slack
-  example: the claim `https://slack.com/team_id` and the workspace ID.
+  example: the claim `https://slack.com/team_id` and the workspace ID. When the
+  environment variables of AO-41 are set, the form shows a note that they set
+  the required claim instead of these fields, and saves no claim.
 - **AO-41** The operator can also set the required claim with two optional
   environment variables:
 
@@ -283,8 +286,11 @@ They are separate from the AO-30 variables: they apply whether OIDC comes from
 the environment or from the onboarding page, and they win over a saved required
 claim. If only one of them is set, the backend refuses to start and logs which
 one is missing. They are also the way to change the required claim after
-onboarding, since the MVP has no system settings page. They cannot remove a
-saved required claim: without them, the saved one applies.
+onboarding, since the MVP has no system settings page. Setting
+`FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME` to `none`, without a value, turns the
+required claim off, including one saved on the onboarding page; a value next to
+`none` is refused at start-up. Without either variable, a saved required claim
+applies.
 
 - **AO-42** While the state is `oidc-pending`, the first administrator's login
   must also match the required claim, checked before AO-27. If it does not, the
@@ -341,6 +347,11 @@ saved required claim: without them, the saved one applies.
 - **AC-AUTH-001.17** _(Temporary, MVP.)_ While OIDC onboarding is pending with a
   required claim, a login with the administrator email whose ID token lacks the
   required value is refused with `claim-mismatch`, and no account is created.
+- **AC-AUTH-001.18** _(Temporary, MVP.)_ With
+  `FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME=none`, a required claim saved on the
+  onboarding page no longer applies. While either required claim variable is
+  set, the onboarding OIDC form shows that the environment sets the required
+  claim instead of offering its fields.
 
 ## Out of scope
 

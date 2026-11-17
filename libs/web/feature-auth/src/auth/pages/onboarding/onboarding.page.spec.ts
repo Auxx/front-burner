@@ -19,7 +19,13 @@ class BlankComponent {}
 
 const status = (overrides: Partial<OnboardingStatus> = {}): OnboardingView => ({
   kind: 'status',
-  status: { state: 'required', oidcFromEnvironment: false, setupTokenConfigured: true, ...overrides }
+  status: {
+    state: 'required',
+    oidcFromEnvironment: false,
+    requiredClaimFromEnvironment: false,
+    setupTokenConfigured: true,
+    ...overrides
+  }
 });
 
 describe('OnboardingPage', () => {

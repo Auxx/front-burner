@@ -56,9 +56,10 @@ export interface Config {
   oidc: OidcEnvironment | undefined;
   /**
    * `FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME` and `_VALUE` (AO-41, temporary
-   * MVP measure); undefined when neither is set. Wins over a saved one.
+   * MVP measure), which win over a saved one: `null` when the name is `none`,
+   * which turns the required claim off; undefined when neither is set.
    */
-  oidcRequiredClaim: RequiredClaim | undefined;
+  oidcRequiredClaim: RequiredClaim | null | undefined;
 }
 
 /** A claim the OIDC ID token must carry, trimmed (AO-40, LG-69; temporary MVP measure). */

@@ -8,7 +8,12 @@ import { provideCore } from '@front-burner/web-core';
 import en from '../../public/i18n/en.json';
 import { appRoutes } from './app.routes';
 
-const required: OnboardingStatus = { state: 'required', oidcFromEnvironment: false, setupTokenConfigured: true };
+const required: OnboardingStatus = {
+  state: 'required',
+  oidcFromEnvironment: false,
+  requiredClaimFromEnvironment: false,
+  setupTokenConfigured: true
+};
 const ada: CurrentUser = {
   id: 1,
   email: 'ada@example.com',

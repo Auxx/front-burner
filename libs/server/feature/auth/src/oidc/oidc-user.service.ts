@@ -54,11 +54,12 @@ export class OidcUserService {
     }
 
     // LG-69, AO-42: for every login, the pending administrator's included.
-    const claimMatched = settings.requiredClaim !== undefined
-      && matchesRequiredClaim(identity.claims, settings.requiredClaim);
-    if (settings.requiredClaim !== undefined && !claimMatched) {
+    const required = settings.requiredClaim;
+    if (required !== undefined && !matchesRequiredClaim(identity.claims, required)) {
       return { ok: false, reason: 'claim-mismatch' };
     }
+    // Past the check, a set claim has matched (LG-70).
+    const claimMatched = required !== undefined;
 
     if (this.onboardingState.current() === 'oidc-pending') {
       const pending = this.onboardingState.pendingAdminEmail();

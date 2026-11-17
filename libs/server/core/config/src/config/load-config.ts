@@ -27,6 +27,8 @@ const ADMIN_EMAIL = 'FRONT_BURNER_ADMIN_EMAIL';
 const OIDC_REQUIRED_CLAIM_NAME = 'FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME';
 const OIDC_REQUIRED_CLAIM_VALUE = 'FRONT_BURNER_OIDC_REQUIRED_CLAIM_VALUE';
 const MAX_REQUIRED_CLAIM_LENGTH = 256;
+/** The required claim name that turns it off, also over a saved one (AO-41). */
+const REQUIRED_CLAIM_OFF = 'none';
 const OIDC_VARIABLES = [
   OIDC_ISSUER,
   OIDC_CLIENT_ID,
@@ -331,11 +333,19 @@ export function loadConfig(
     }
   }
 
-  // AO-41: both or neither (temporary MVP measure).
-  let oidcRequiredClaim: RequiredClaim | undefined;
+  // AO-41: both or neither, or the name `none` alone (temporary MVP measure).
+  let oidcRequiredClaim: RequiredClaim | null | undefined;
   const claimName = input[OIDC_REQUIRED_CLAIM_NAME];
   const claimValue = input[OIDC_REQUIRED_CLAIM_VALUE];
-  if (claimName !== undefined && claimValue === undefined) {
+  const claimOff = parsed.data?.[OIDC_REQUIRED_CLAIM_NAME] === REQUIRED_CLAIM_OFF;
+  if (claimOff && claimValue !== undefined) {
+    issues.push({
+      variable: OIDC_REQUIRED_CLAIM_VALUE,
+      message: `cannot be set when ${OIDC_REQUIRED_CLAIM_NAME} is ${REQUIRED_CLAIM_OFF}`
+    });
+  } else if (claimOff) {
+    oidcRequiredClaim = null;
+  } else if (claimName !== undefined && claimValue === undefined) {
     issues.push({
       variable: OIDC_REQUIRED_CLAIM_VALUE,
       message: `is required when ${OIDC_REQUIRED_CLAIM_NAME} is set`

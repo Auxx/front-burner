@@ -6,7 +6,12 @@ import type { OnboardingStatus } from '@front-burner/shared-contracts';
 import { OnboardingStateService } from './onboarding-state.service';
 
 const URL = '/api/v1/onboarding';
-const required: OnboardingStatus = { state: 'required', oidcFromEnvironment: false, setupTokenConfigured: true };
+const required: OnboardingStatus = {
+  state: 'required',
+  oidcFromEnvironment: false,
+  requiredClaimFromEnvironment: false,
+  setupTokenConfigured: true
+};
 
 describe('OnboardingStateService', () => {
   let service: OnboardingStateService;
@@ -47,7 +52,12 @@ describe('OnboardingStateService', () => {
 
     expect(await view).toEqual({
       kind: 'status',
-      status: { state: 'completed', oidcFromEnvironment: false, setupTokenConfigured: false }
+      status: {
+        state: 'completed',
+        oidcFromEnvironment: false,
+        requiredClaimFromEnvironment: false,
+        setupTokenConfigured: false
+      }
     });
   });
 
@@ -82,7 +92,12 @@ describe('OnboardingStateService', () => {
     service.markCompleted();
     expect(await service.load()).toEqual({
       kind: 'status',
-      status: { state: 'completed', oidcFromEnvironment: false, setupTokenConfigured: false }
+      status: {
+        state: 'completed',
+        oidcFromEnvironment: false,
+        requiredClaimFromEnvironment: false,
+        setupTokenConfigured: false
+      }
     });
   });
 });

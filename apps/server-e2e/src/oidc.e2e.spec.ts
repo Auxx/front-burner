@@ -106,7 +106,12 @@ describe('OIDC from the environment', () => {
   it('AC-AUTH-001.11: the first OIDC login with the admin email creates the administrator', async () => {
     await start();
     const state = await (await fetch(`${server?.url}/api/v1/onboarding`)).json();
-    expect(state).toEqual({ state: 'oidc-pending', oidcFromEnvironment: true, setupTokenConfigured: true });
+    expect(state).toEqual({
+      state: 'oidc-pending',
+      oidcFromEnvironment: true,
+      requiredClaimFromEnvironment: false,
+      setupTokenConfigured: true
+    });
 
     const setup = await postJson(server as ServerProcess, '/api/v1/onboarding/password-setup', {
       setupToken: E2E_SETUP_TOKEN,
@@ -181,6 +186,9 @@ describe('OIDC from the environment', () => {
 
     it('AC-AUTH-001.17: refuses the administrator without the required claim while pending', async () => {
       await withClaim();
+      expect(await (await fetch(`${server?.url}/api/v1/onboarding`)).json()).toMatchObject({
+        requiredClaimFromEnvironment: true
+      });
       expect((await throughProvider()).location).toBe('/login?oidcError=claim-mismatch');
       expect(userRows()).toEqual([]);
       expect(audit().map(row => row.reason)).toEqual([ 'claim-mismatch' ]);

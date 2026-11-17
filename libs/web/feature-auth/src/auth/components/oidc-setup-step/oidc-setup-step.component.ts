@@ -137,6 +137,8 @@ export class OidcSetupStepComponent {
   readonly saved = input<OidcSetupView | undefined>(undefined);
   /** Why the last OIDC login failed, shown until the next submit (AO-26). */
   readonly failure = input<OidcFailureReason | undefined>(undefined);
+  /** Environment variables set or turn off the required claim, so its fields are not offered (AO-41). */
+  readonly requiredClaimFromEnvironment = input(false);
   readonly back = output<void>();
   /** The backend answered 404: the token changed, or onboarding is closed. */
   readonly refused = output<void>();
@@ -199,6 +201,8 @@ export class OidcSetupStepComponent {
     this.loginFailure.set(undefined);
     await submit(this.model, async () => {
       const setup = this.model().value();
+      // The environment's claim wins anyway; nothing is saved next to it (AO-41).
+      const claimOnPage = !this.requiredClaimFromEnvironment();
       this.busy.set(true);
       this.requestFailure.set(null);
       try {
@@ -211,8 +215,8 @@ export class OidcSetupStepComponent {
             scopes: setup.scopes.trim() || DEFAULT_OIDC_SCOPES,
             requireVerifiedEmail: setup.requireVerifiedEmail,
             adminEmail: setup.adminEmail,
-            requiredClaimName: setup.requiredClaimName.trim(),
-            requiredClaimValue: setup.requiredClaimValue.trim()
+            requiredClaimName: claimOnPage ? setup.requiredClaimName.trim() : '',
+            requiredClaimValue: claimOnPage ? setup.requiredClaimValue.trim() : ''
           }),
           { defaultValue: undefined }
         );

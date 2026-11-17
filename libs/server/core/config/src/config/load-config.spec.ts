@@ -511,6 +511,17 @@ describe('loadConfig', () => {
       ]);
     });
 
+    it('turns the required claim off with the name none', () => {
+      const { config } = loadConfig({ ...BASE, [NAME]: ' none ' });
+      expect(config.oidcRequiredClaim).toBeNull();
+    });
+
+    it('refuses a value with the name none', () => {
+      expect(issuesOf({ [NAME]: 'none', [VALUE]: 'T123' })).toEqual([
+        { variable: VALUE, message: `cannot be set when ${NAME} is none` }
+      ]);
+    });
+
     it('refuses a value that is empty after trimming', () => {
       expect(issuesOf({ [NAME]: 'hd', [VALUE]: '  ' })).toEqual([
         { variable: VALUE, message: 'must not be empty' }

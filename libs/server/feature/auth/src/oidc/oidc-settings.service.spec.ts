@@ -17,7 +17,7 @@ const ENVIRONMENT: OidcEnvironment = {
 describe('OidcSettingsService', () => {
   let database: Database;
   const box = new SecretBox(KEY);
-  const service = (oidc?: OidcEnvironment, oidcRequiredClaim?: RequiredClaim) =>
+  const service = (oidc?: OidcEnvironment, oidcRequiredClaim?: RequiredClaim | null) =>
     new OidcSettingsService({ oidc, oidcRequiredClaim } as Config, database, box);
   const saveSettings = () =>
     database.db.insert(systemSettings).values({
@@ -96,6 +96,20 @@ describe('OidcSettingsService', () => {
 
     it('applies the environment\'s required claim to OIDC from the environment', () => {
       expect(service(ENVIRONMENT, SLACK).current()?.requiredClaim).toEqual(SLACK);
+    });
+
+    it('AC-AUTH-001.18: the environment\'s none turns a saved required claim off', () => {
+      saveSettings();
+      saveClaim();
+      expect(service(undefined, null).current()).toMatchObject({ source: 'onboarding', requiredClaim: undefined });
+      expect(service(ENVIRONMENT, null).current()?.requiredClaim).toBeUndefined();
+    });
+
+    it('does not read the database when the environment gives both OIDC and the required claim', () => {
+      database.sqlite.close();
+      expect(service(ENVIRONMENT, SLACK).current()?.requiredClaim).toEqual(SLACK);
+      expect(service(ENVIRONMENT, null).current()?.requiredClaim).toBeUndefined();
+      database = createTestDatabase();
     });
   });
 });
