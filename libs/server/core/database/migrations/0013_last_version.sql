@@ -1,0 +1,1 @@
+ALTER TABLE `instance_state` ADD `last_version` text;

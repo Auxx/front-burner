@@ -34,7 +34,7 @@ describe('OnboardingStateService', () => {
   it('is required on an empty database', () => {
     expect(service().current()).toBe('required');
     expect(database.db.select().from(instanceState).all()).toEqual([
-      { id: 1, onboardingState: 'required', encryptionCheck: null, pendingAdminEmail: null }
+      { id: 1, onboardingState: 'required', encryptionCheck: null, pendingAdminEmail: null, lastVersion: null }
     ]);
   });
 

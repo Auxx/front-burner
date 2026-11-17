@@ -66,7 +66,7 @@ describe('schema', () => {
       { id: 1, ...alice, disabled: false, oidcIssuer: null, oidcSubject: null, allowedGitLevels: [ 'advanced' ] }
     ]);
     expect(database.db.select().from(instanceState).all()).toEqual([
-      { id: 1, onboardingState: 'completed', encryptionCheck: null, pendingAdminEmail: null }
+      { id: 1, onboardingState: 'completed', encryptionCheck: null, pendingAdminEmail: null, lastVersion: null }
     ]);
   });
 

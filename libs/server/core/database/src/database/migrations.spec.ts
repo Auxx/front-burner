@@ -1,11 +1,19 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyMigrations, assertNoNewerMigrations, NewerSchemaError } from './migrations';
+import {
+  applyMigrations,
+  assertNoNewerMigrations,
+  migrationState,
+  NewerSchemaError,
+  readLastVersion,
+  recordVersion
+} from './migrations';
 import { Database, openDatabase } from './open-database';
 
 const fixture = (name: string) => join(__dirname, '..', 'test-fixtures', name);
+const MIGRATIONS = join(__dirname, '..', '..', 'migrations');
 
 describe('migrations', () => {
   let dir: string;
@@ -92,6 +100,103 @@ describe('migrations', () => {
 
     expect(error).toBeInstanceOf(NewerSchemaError);
     expect((error as NewerSchemaError).unknown).toEqual([ 1000, 2000 ]);
+  });
+
+  it('a failed migration changes nothing', () => {
+    applyMigrations(database, fixture('migrations-one'));
+    database.sqlite.exec('INSERT INTO a (id) VALUES (7)');
+
+    expect(() => applyMigrations(database, fixture('migrations-broken'))).toThrow(/missing/);
+
+    expect(tables().sort()).toEqual([ '__drizzle_migrations', 'a' ]);
+    expect(database.sqlite.prepare('SELECT id FROM a').pluck().all()).toEqual([ 7 ]);
+    expect(migrationState(database, fixture('migrations-broken'))).toEqual({ applied: 1, pending: 2 });
+  });
+
+  it('counts the applied and pending migrations', () => {
+    expect(migrationState(database, fixture('migrations-two'))).toEqual({ applied: 0, pending: 2 });
+    expect(migrationState(database, join(dir, 'missing'))).toEqual({ applied: 0, pending: 0 });
+
+    applyMigrations(database, fixture('migrations-one'));
+
+    expect(migrationState(database, fixture('migrations-two'))).toEqual({ applied: 1, pending: 1 });
+    expect(migrationState(database, fixture('migrations-one'))).toEqual({ applied: 1, pending: 0 });
+  });
+});
+
+describe('the last version', () => {
+  let dir: string;
+  let database: Database;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'fb-db-'));
+    database = openDatabase(join(dir, 'test.db'));
+  });
+
+  afterEach(() => {
+    database.sqlite.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** A migrations folder with the real migrations, plus one this version does not know. */
+  function newerFolder(): string {
+    const folder = join(dir, 'newer');
+    cpSync(MIGRATIONS, folder, { recursive: true });
+    const journalFile = join(folder, 'meta', '_journal.json');
+    const journal = JSON.parse(readFileSync(journalFile, 'utf8')) as { entries: Record<string, unknown>[]; };
+    const last = journal.entries[journal.entries.length - 1];
+    journal.entries.push({ ...last, idx: Number(last['idx']) + 1, when: Number(last['when']) + 1, tag: '9999_future' });
+    writeFileSync(journalFile, JSON.stringify(journal));
+    writeFileSync(join(folder, '9999_future.sql'), 'CREATE TABLE `future` (`id` integer PRIMARY KEY NOT NULL);');
+    return folder;
+  }
+
+  it('records the version after migrating', () => {
+    applyMigrations(database, MIGRATIONS);
+    expect(readLastVersion(database)).toBeNull();
+
+    recordVersion(database, '0.1.0');
+    expect(readLastVersion(database)).toBe('0.1.0');
+    expect(database.sqlite.prepare('SELECT onboarding_state FROM instance_state').pluck().get()).toBe('required');
+
+    database.sqlite.exec('UPDATE instance_state SET onboarding_state = \'completed\'');
+    recordVersion(database, '0.2.0');
+    expect(readLastVersion(database)).toBe('0.2.0');
+    expect(database.sqlite.prepare('SELECT onboarding_state FROM instance_state').pluck().get()).toBe('completed');
+  });
+
+  it('reads no version from a new database or one without the column', () => {
+    expect(readLastVersion(database)).toBeNull();
+
+    database.sqlite.exec('CREATE TABLE instance_state (id integer PRIMARY KEY, onboarding_state text NOT NULL)');
+    database.sqlite.exec('INSERT INTO instance_state VALUES (1, \'completed\')');
+
+    expect(readLastVersion(database)).toBeNull();
+  });
+
+  it('refuses a newer database naming its version', () => {
+    applyMigrations(database, newerFolder());
+    recordVersion(database, '0.2.0');
+
+    const error = catchError(() => assertNoNewerMigrations(database, MIGRATIONS));
+
+    expect(error).toBeInstanceOf(NewerSchemaError);
+    expect((error as NewerSchemaError).lastVersion).toBe('0.2.0');
+    expect((error as Error).message).toBe(
+      'Database is from version 0.2.0; restore the pre-upgrade snapshot to go back'
+    );
+  });
+
+  it('refuses a newer database without a recorded version', () => {
+    applyMigrations(database, newerFolder());
+
+    const error = catchError(() => assertNoNewerMigrations(database, MIGRATIONS));
+
+    expect(error).toBeInstanceOf(NewerSchemaError);
+    expect((error as NewerSchemaError).lastVersion).toBeNull();
+    expect((error as Error).message).toBe(
+      'Database is from a newer version; restore the pre-upgrade snapshot to go back'
+    );
   });
 });
 

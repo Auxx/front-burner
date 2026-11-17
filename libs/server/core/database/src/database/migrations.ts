@@ -1,20 +1,48 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { instanceState } from '../schema/instance-state';
 import { Database } from './open-database';
 
 /**
  * The database was migrated by a newer version of Front Burner than this one
  * (NF-7.3, A-4.7). `unknown` holds the `created_at` values of the applied
- * migrations that this version does not have.
+ * migrations that this version does not have; `lastVersion` the version that
+ * last started on the database, null when it recorded none.
  */
 export class NewerSchemaError extends Error {
-  constructor(readonly unknown: number[]) {
+  constructor(readonly unknown: number[], readonly lastVersion: string | null = null) {
     super(
-      `The database was migrated by a newer version of Front Burner (${unknown.length} unknown migration(s))`
+      `Database is from ${
+        lastVersion === null ? 'a newer version' : `version ${lastVersion}`
+      }; restore the pre-upgrade snapshot to go back`
     );
     this.name = 'NewerSchemaError';
   }
+}
+
+/** How many of the folder's migrations the database has and lacks. */
+export interface MigrationState {
+  /** Applied migrations; 0 for a new database. */
+  applied: number;
+  /** The folder's migrations that the database does not have yet. */
+  pending: number;
+}
+
+function hasTable(database: Database, name: string): boolean {
+  return database.sqlite
+    .prepare('SELECT 1 FROM sqlite_master WHERE type = \'table\' AND name = ?')
+    .get(name) !== undefined;
+}
+
+function appliedMigrations(database: Database): number[] {
+  if (!hasTable(database, '__drizzle_migrations')) {
+    return [];
+  }
+  return database.sqlite
+    .prepare('SELECT created_at FROM __drizzle_migrations ORDER BY created_at')
+    .all()
+    .map(row => Number((row as { created_at: unknown; }).created_at));
 }
 
 // Drizzle's journal is written by `drizzle-kit generate` together with the
@@ -41,24 +69,65 @@ function knownMigrations(migrationsFolder: string): Set<number> {
   return new Set(journal.entries.map(entry => entry.when));
 }
 
+/**
+ * The version that last started on the database (`instance_state.last_version`);
+ * null for a new database, or one from before the column existed.
+ */
+export function readLastVersion(database: Database): string | null {
+  if (!hasTable(database, 'instance_state')) {
+    return null;
+  }
+  const columns = database.sqlite.prepare('PRAGMA table_info(instance_state)').all() as { name: string; }[];
+  if (!columns.some(column => column.name === 'last_version')) {
+    return null;
+  }
+  const row = database.sqlite.prepare('SELECT last_version FROM instance_state WHERE id = 1').get() as
+    | { last_version: string | null; }
+    | undefined;
+  return row?.last_version ?? null;
+}
+
+/**
+ * Records the version that started on the database, after its migrations
+ * (NF-7.1). Creates the instance's row when it has none yet.
+ */
+export function recordVersion(database: Database, version: string): void {
+  // The onboarding state is worked out later (OnboardingStateService); `required` only fills a new row.
+  database.db.insert(instanceState)
+    .values({ id: 1, onboardingState: 'required', lastVersion: version })
+    .onConflictDoUpdate({ target: instanceState.id, set: { lastVersion: version } })
+    .run();
+}
+
+/**
+ * Refuses a database that has a migration this version does not know (NF-7.3),
+ * naming the version that last started on it.
+ *
+ * @throws NewerSchemaError
+ */
 export function assertNoNewerMigrations(database: Database, migrationsFolder: string): void {
-  const table = database.sqlite
-    .prepare('SELECT name FROM sqlite_master WHERE type = \'table\' AND name = \'__drizzle_migrations\'')
-    .get();
-  if (!table) {
+  if (!hasTable(database, '__drizzle_migrations')) {
     return;
   }
   const known = knownMigrations(migrationsFolder);
-  const applied = database.sqlite
-    .prepare('SELECT created_at FROM __drizzle_migrations ORDER BY created_at')
-    .all()
-    .map(row => Number((row as { created_at: unknown; }).created_at));
-  const unknown = applied.filter(createdAt => !known.has(createdAt));
+  const unknown = appliedMigrations(database).filter(createdAt => !known.has(createdAt));
   if (unknown.length > 0) {
-    throw new NewerSchemaError(unknown);
+    throw new NewerSchemaError(unknown, readLastVersion(database));
   }
 }
 
+/** How many of the folder's migrations the database has and lacks. */
+export function migrationState(database: Database, migrationsFolder: string): MigrationState {
+  const applied = appliedMigrations(database);
+  const done = new Set(applied);
+  const known = journalPath(migrationsFolder) ? knownMigrations(migrationsFolder) : new Set<number>();
+  return { applied: applied.length, pending: [ ...known ].filter(when => !done.has(when)).length };
+}
+
+/**
+ * Applies the pending migrations. Drizzle's migrator runs them all in one
+ * transaction, so a migration that fails leaves the database as it was (NF-7.1).
+ */
 export function applyMigrations(database: Database, migrationsFolder: string): void {
   if (!journalPath(migrationsFolder)) {
     return;
