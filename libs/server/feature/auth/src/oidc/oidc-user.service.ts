@@ -12,6 +12,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
 import { OnboardingStateService } from '../onboarding/onboarding-state.service';
 import type { OidcSettings } from './oidc-settings.service';
+import { matchesRequiredClaim } from './required-claim';
 
 /** Who the provider says logged in, from the validated ID token. */
 export interface OidcIdentity {
@@ -21,6 +22,8 @@ export interface OidcIdentity {
   emailVerified: boolean | undefined;
   name: string | undefined;
   preferredUsername?: string | undefined;
+  /** Every claim of the ID token, for the required claim (LG-69). */
+  claims: Readonly<Record<string, unknown>>;
 }
 
 export type OidcUserResult =
@@ -31,7 +34,11 @@ type Failure = { ok: false; reason: LoginAuditReason; userId?: number; };
 
 const sameEmail = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
-/** Finds, links or creates the user of an OIDC login (LG-18 to LG-20, LG-24, AO-27, AO-28). */
+/**
+ * Finds, links or creates the user of an OIDC login (LG-18 to LG-20, LG-24,
+ * AO-27, AO-28), and checks the required claim (LG-69 to LG-71, AO-42;
+ * temporary MVP measure).
+ */
 @Injectable()
 export class OidcUserService {
   private readonly logger = new Logger(OidcUserService.name);
@@ -44,6 +51,13 @@ export class OidcUserService {
   resolve(identity: OidcIdentity, settings: OidcSettings): OidcUserResult {
     if (settings.requireVerifiedEmail && identity.emailVerified !== true) {
       return { ok: false, reason: 'email-not-verified' };
+    }
+
+    // LG-69, AO-42: for every login, the pending administrator's included.
+    const claimMatched = settings.requiredClaim !== undefined
+      && matchesRequiredClaim(identity.claims, settings.requiredClaim);
+    if (settings.requiredClaim !== undefined && !claimMatched) {
+      return { ok: false, reason: 'claim-mismatch' };
     }
 
     if (this.onboardingState.current() === 'oidc-pending') {
@@ -59,7 +73,7 @@ export class OidcUserService {
       // Onboarding was completed meanwhile: this is an ordinary login now.
     }
 
-    const user = this.findOrCreate(identity);
+    const user = this.findOrCreate(identity, claimMatched);
     if (user.ok === false) {
       return user;
     }
@@ -86,7 +100,8 @@ export class OidcUserService {
     });
   }
 
-  private findOrCreate(identity: OidcIdentity): { ok: true; user: User; } | Failure {
+  /** `claimMatched` creates a new user as automatic registration would (LG-70). */
+  private findOrCreate(identity: OidcIdentity, claimMatched: boolean): { ok: true; user: User; } | Failure {
     const { db } = this.database;
     return db.transaction(tx => {
       const linked = tx.select().from(users)
@@ -115,7 +130,7 @@ export class OidcUserService {
       const automaticRegistration = tx.select().from(systemSettings).where(eq(systemSettings.id, 1)).get()
         ?.automaticRegistration ?? false;
       // An OIDC user linked to another identity keeps its email: no second account is created.
-      if (byEmail || !automaticRegistration) {
+      if (byEmail || !(automaticRegistration || claimMatched)) {
         return { ok: false, reason: 'registration-disabled' };
       }
       const user = tx.insert(users).values(this.newUser(identity, identity.email, 'user')).returning().get();

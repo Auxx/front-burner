@@ -19,6 +19,8 @@ export const LOGIN_AUDIT_REASONS = [
   'registration-disabled',
   'password-user',
   'admin-email-mismatch',
+  // LG-71; temporary MVP measure.
+  'claim-mismatch',
   'refresh-token-reused'
 ] as const;
 

@@ -152,6 +152,47 @@ describe('OIDC from the environment', () => {
     expect((await throughProvider()).location).toMatch(/^\/login\/oidc\?code=/);
   });
 
+  describe('required claim (temporary, MVP)', () => {
+    const TEAM = 'https://slack.com/team_id';
+    const withClaim = () =>
+      start({ FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME: TEAM, FRONT_BURNER_OIDC_REQUIRED_CLAIM_VALUE: 'T123' });
+
+    it('AC-AUTH-003.27: with a required claim, a matching new email gets an ordinary user and others are refused', async () => {
+      await withClaim();
+      provider?.setClaims({ [TEAM]: 'T123' });
+      expect((await logIn()).tokens.status).toBe(200);
+
+      provider?.setClaims({ sub: 'subject-2', email: 'tester@example.com', [TEAM]: 'T123' });
+      expect((await logIn()).tokens.status).toBe(200);
+
+      provider?.setClaims({ sub: 'subject-3', email: 'other@example.com', [TEAM]: 'T999' });
+      expect((await throughProvider()).location).toBe('/login?oidcError=failed');
+
+      expect(userRows()).toEqual([
+        { email: ADMIN_EMAIL, role: 'administrator', login_method: 'oidc', oidc_subject: 'subject-1' },
+        { email: 'tester@example.com', role: 'user', login_method: 'oidc', oidc_subject: 'subject-2' }
+      ]);
+      expect(audit().at(-1)).toMatchObject({
+        reason: 'claim-mismatch',
+        outcome: 'failure',
+        email: 'other@example.com'
+      });
+    });
+
+    it('AC-AUTH-001.17: refuses the administrator without the required claim while pending', async () => {
+      await withClaim();
+      expect((await throughProvider()).location).toBe('/login?oidcError=claim-mismatch');
+      expect(userRows()).toEqual([]);
+      expect(audit().map(row => row.reason)).toEqual([ 'claim-mismatch' ]);
+    });
+
+    it('AC-AUTH-001.16: refuses to start with only a required claim name', async () => {
+      const { code, output } = await runServerToExit({ FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME: TEAM });
+      expect(code).not.toBe(0);
+      expect(output).toContain('FRONT_BURNER_OIDC_REQUIRED_CLAIM_VALUE');
+    });
+  });
+
   it('AC-AUTH-003.2: offers OIDC while the provider answers', async () => {
     await start();
     expect(await (await fetch(`${server?.url}/api/v1/auth/methods`)).json()).toEqual({

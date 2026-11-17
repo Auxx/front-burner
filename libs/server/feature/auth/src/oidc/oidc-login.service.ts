@@ -119,7 +119,8 @@ export class OidcLoginService {
         name: typeof claims['name'] === 'string' ? claims['name'] : undefined,
         preferredUsername: typeof claims['preferred_username'] === 'string'
           ? claims['preferred_username']
-          : undefined
+          : undefined,
+        claims
       };
     } catch (error) {
       return fail(providerFailureOf(error));

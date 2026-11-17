@@ -26,6 +26,8 @@ export const OIDC_FAILURE_REASONS = [
   'registration-disabled',
   'password-user',
   'admin-email-mismatch',
+  // LG-71, AO-42; temporary MVP measure.
+  'claim-mismatch',
   'failed'
 ] as const;
 
