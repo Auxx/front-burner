@@ -52,10 +52,38 @@ describe('loadConfig', () => {
       cloneConcurrency: 2,
       gitTimeoutMs: 300_000,
       keyUnlockIdleMs: 3_600_000,
+      dbSnapshotIntervalMs: 86_400_000,
+      dbSnapshotKeep: 7,
       knownHostsFile: undefined,
       oidc: undefined
     });
     expect(warnings).toEqual([]);
+  });
+
+  it('reads the snapshot interval and count', () => {
+    const { config } = loadConfig({
+      ...BASE,
+      FRONT_BURNER_DB_SNAPSHOT_INTERVAL: '12h',
+      FRONT_BURNER_DB_SNAPSHOT_KEEP: '30'
+    });
+    expect(config.dbSnapshotIntervalMs).toBe(43_200_000);
+    expect(config.dbSnapshotKeep).toBe(30);
+  });
+
+  it('refuses a count of 0', () => {
+    for (const value of [ '0', '-1', '2.5', 'seven' ]) {
+      expect(issuesOf({ FRONT_BURNER_DB_SNAPSHOT_KEEP: value })).toEqual([
+        { variable: 'FRONT_BURNER_DB_SNAPSHOT_KEEP', message: 'must be a whole number of at least 1' }
+      ]);
+    }
+  });
+
+  it('refuses an interval under an hour', () => {
+    expect(loadConfig({ ...BASE, FRONT_BURNER_DB_SNAPSHOT_INTERVAL: '1h' }).config.dbSnapshotIntervalMs)
+      .toBe(3_600_000);
+    expect(issuesOf({ FRONT_BURNER_DB_SNAPSHOT_INTERVAL: '59m' })).toEqual([
+      { variable: 'FRONT_BURNER_DB_SNAPSHOT_INTERVAL', message: 'must be at least 1h' }
+    ]);
   });
 
   it('takes the version from the build', () => {

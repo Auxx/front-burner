@@ -40,6 +40,10 @@ export interface Config {
   gitTimeoutMs: number;
   /** A key unlock ends when no git operation of its session used it for this long (AR-31). */
   keyUnlockIdleMs: number;
+  /** A daily database snapshot is written once the newest is this old (NF-6.2). At least an hour. */
+  dbSnapshotIntervalMs: number;
+  /** How many daily database snapshots are kept (NF-6.2). At least 1. */
+  dbSnapshotKeep: number;
   /** `FRONT_BURNER_KNOWN_HOSTS_FILE`: replaces the built-in host keys (AR-32). Always absolute. */
   knownHostsFile: string | undefined;
   /** OIDC and the first administrator from the environment (AO-30); undefined when none of the variables is set. */

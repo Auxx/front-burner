@@ -35,6 +35,7 @@ export function prepareDataDir(
   const name = separate ? 'repositories directory' : 'data directory';
   const folders: [ string, string ][] = [
     [ databaseDir, 'data directory' ],
+    [ layout.backupsDir, 'data directory' ],
     [ layout.reposDir, name ],
     [ layout.tmpDir, name ],
     [ layout.orphansDir, name ]

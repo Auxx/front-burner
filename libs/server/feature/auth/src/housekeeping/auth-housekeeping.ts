@@ -1,11 +1,9 @@
 import { CONFIG, Config } from '@front-burner/server-core-config';
 import { DATABASE, Database, loginAudit, sessions } from '@front-burner/server-core-database';
 import { JobRunner } from '@front-burner/server-core-jobs';
+import { DAY_MS, HOUR_MS } from '@front-burner/shared-util';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { lt, or } from 'drizzle-orm';
-
-const HOUR_MS = 3_600_000;
-const DAY_MS = 24 * HOUR_MS;
 
 /** Housekeeping of authentication: expired sessions (LG-38) and old login audit entries (LG-45). */
 @Injectable()

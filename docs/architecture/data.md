@@ -132,3 +132,25 @@ numbering conventions.
   to `/data/backups/`, named with the time and version, then pruned to
   `FRONT_BURNER_DB_SNAPSHOT_KEEP`. Pre-upgrade snapshots are not pruned with the
   daily ones.
+
+  - Names are `<prefix>-<UTC time>-v<version>.sqlite`, the time to the second
+    with `:` written as `-`, so that names sort by time: the daily ones
+    `front-burner-2026-11-17T09-30-15Z-v1.4.2.sqlite`. Each prefix is its own
+    series; pruning one never touches another prefix's files, nor any other file
+    in `backups/`, such as the operator's own copies. _(Plan 129's call.)_
+  - `DatabaseSnapshots` (`server/core/database`) writes to a `.partial` file and
+    renames it into place, so that a half-written snapshot never looks like a
+    good one, and fsyncs the file and then the folder, so that the rename
+    survives a power cut. A failure (a full disk) removes the partial file and
+    changes no other snapshot; a partial file a crash left is removed by the
+    next prune. A `backups/` folder removed while the instance runs is created
+    again.
+  - The age of a series is read from the newest name, never the file's time,
+    which a restore changes. A snapshot named with a time after now was written
+    while the clock was ahead: it is older than any written since, so it never
+    counts as the newest and is the first to be pruned. The `database.snapshot`
+    housekeeping job (A-6) writes one when the newest daily snapshot is
+    `FRONT_BURNER_DB_SNAPSHOT_INTERVAL` old, or there is none.
+  - `backups/` is in the data directory (`DataLayout.backupsDir`), created and
+    checked for writing on start with the other folders (NF-5.1, NF-5.6), never
+    in the repositories directory.

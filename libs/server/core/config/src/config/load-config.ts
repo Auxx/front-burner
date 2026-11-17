@@ -1,4 +1,4 @@
-import { parseDuration } from '@front-burner/shared-util';
+import { HOUR_MS, parseDuration } from '@front-burner/shared-util';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { compile } from 'proxy-addr';
@@ -131,6 +131,15 @@ const schema = z.object({
     .transform(Number),
   FRONT_BURNER_GIT_TIMEOUT: duration('5m'),
   FRONT_BURNER_KEY_UNLOCK_IDLE: duration('1h'),
+  // More often than hourly only wears the disk (plan 129).
+  FRONT_BURNER_DB_SNAPSHOT_INTERVAL: duration('1d').refine(ms => ms >= HOUR_MS, { message: 'must be at least 1h' }),
+  FRONT_BURNER_DB_SNAPSHOT_KEEP: z
+    .string()
+    .default('7')
+    .refine(v => /^\d+$/.test(v) && Number(v) >= 1 && Number.isSafeInteger(Number(v)), {
+      message: 'must be a whole number of at least 1'
+    })
+    .transform(Number),
   FRONT_BURNER_KNOWN_HOSTS_FILE: z.string().optional(),
   [OIDC_ISSUER]: z.string().refine(isHttpsIssuer, { message: 'must be an https: URL without query or fragment' })
     .optional(),
@@ -335,6 +344,8 @@ export function loadConfig(
       cloneConcurrency: values.FRONT_BURNER_CLONE_CONCURRENCY,
       gitTimeoutMs: values.FRONT_BURNER_GIT_TIMEOUT,
       keyUnlockIdleMs: values.FRONT_BURNER_KEY_UNLOCK_IDLE,
+      dbSnapshotIntervalMs: values.FRONT_BURNER_DB_SNAPSHOT_INTERVAL,
+      dbSnapshotKeep: values.FRONT_BURNER_DB_SNAPSHOT_KEEP,
       knownHostsFile: values.FRONT_BURNER_KNOWN_HOSTS_FILE === undefined
         ? undefined
         : resolve(cwd, values.FRONT_BURNER_KNOWN_HOSTS_FILE),

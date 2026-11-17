@@ -1,3 +1,4 @@
+export * from './housekeeping/database-snapshot.job';
 export * from './housekeeping/finished-jobs-cleanup';
 export * from './jobs.module';
 export * from './runner/job-runner';

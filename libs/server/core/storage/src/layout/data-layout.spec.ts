@@ -23,6 +23,11 @@ describe('DataLayout', () => {
     expect(separate.workingCopy(4, 17)).toBe(join('/slow', 'repos', '4', '17'));
   });
 
+  it('keeps the backups in the data directory, even with a repositories root', () => {
+    expect(layout.backupsDir).toBe(join('/data', 'backups'));
+    expect(new DataLayout('/data', '/slow').backupsDir).toBe(join('/data', 'backups'));
+  });
+
   it('the data directory as the repositories directory is the default layout', () => {
     expect(new DataLayout('/data', '/data')).toEqual(layout);
   });
