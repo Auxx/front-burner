@@ -99,6 +99,9 @@ function configure(
   app.flushLogs();
   const log = new NestLogger('Startup');
   log.log(`Data directory: ${config.dataDir}`);
+  if (config.reposRoot !== config.dataDir) {
+    log.log(`Repositories directory: ${config.reposRoot}`);
+  }
 
   app.set('trust proxy', config.trustedProxies);
   // First, so that every response has an ID and is logged (NF-10.6, A-1.12).
@@ -134,7 +137,7 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
   for (const warning of warnings) {
     bootstrapLogger.warn(warning);
   }
-  const { databaseFile } = step('data-dir', () => prepareDataDir(config.dataDir));
+  const { databaseFile } = step('data-dir', () => prepareDataDir(config.dataDir, config.reposRoot));
   const database: Database = step('database', () => openDatabase(databaseFile));
 
   try {

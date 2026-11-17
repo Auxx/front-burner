@@ -11,7 +11,7 @@ async function createApp(migrationsApplied: boolean): Promise<INestApplication> 
   const moduleRef = await Test.createTestingModule({ imports: [ HealthModule.forRoot({ migrationsApplied }) ] })
     .useMocker(token => {
       if (token === CONFIG) {
-        return { dataDir: tmpdir() };
+        return { dataDir: tmpdir(), reposRoot: tmpdir() };
       }
       if (token === DATABASE) {
         return { sqlite: { prepare: () => ({ get: () => ({}) }) } };

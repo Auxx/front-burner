@@ -13,6 +13,11 @@ export interface Config {
   logFormat: 'json' | 'pretty';
   /** Always absolute. */
   dataDir: string;
+  /**
+   * `FRONT_BURNER_REPOS_DIR`: the directory that holds `repos/`, `tmp/` and
+   * `orphans/` (NF-5.4). Always absolute; the data directory when not set.
+   */
+  reposRoot: string;
   /** Undefined when not set or too short (administrator onboarding is then unavailable). */
   setupToken: string | undefined;
   /** Signs the auth tokens (LG-28). At least 32 characters. */

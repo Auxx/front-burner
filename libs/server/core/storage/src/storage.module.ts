@@ -7,7 +7,7 @@ import { DATA_LAYOUT, DataLayout } from './layout/data-layout';
 @Module({
   providers: [ {
     provide: DATA_LAYOUT,
-    useFactory: (config: Config) => new DataLayout(config.dataDir),
+    useFactory: (config: Config) => new DataLayout(config.dataDir, config.reposRoot),
     inject: [ CONFIG ]
   } ],
   exports: [ DATA_LAYOUT ]

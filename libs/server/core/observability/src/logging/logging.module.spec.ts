@@ -35,6 +35,7 @@ const config: Config = {
   logLevel: 'info',
   logFormat: 'json',
   dataDir: '/tmp',
+  reposRoot: '/tmp',
   setupToken: undefined,
   jwtSecret: 'spec-jwt-secret-0123456789abcdefghijklmnopqrstu',
   encryptionKey: 'spec-encryption-key-0123456789abcdefghijklmnop',

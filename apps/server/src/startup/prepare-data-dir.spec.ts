@@ -25,13 +25,54 @@ describe('prepareDataDir', () => {
     expect(existsSync(join(dataDir, 'db', '.write-test'))).toBe(false);
   });
 
-  it('creates repos and tmp', () => {
+  it('creates repos, tmp and orphans', () => {
     const dataDir = join(root, 'data');
 
     prepareDataDir(dataDir);
 
-    expect(existsSync(join(dataDir, 'repos'))).toBe(true);
-    expect(existsSync(join(dataDir, 'tmp'))).toBe(true);
+    expect(readdirSync(dataDir).sort()).toEqual([ 'db', 'orphans', 'repos', 'tmp' ]);
+  });
+
+  it('creates orphans', () => {
+    const dataDir = join(root, 'data');
+    const reposRoot = join(root, 'slow');
+
+    prepareDataDir(dataDir, reposRoot);
+
+    expect(existsSync(join(reposRoot, 'orphans'))).toBe(true);
+    expect(existsSync(join(reposRoot, 'orphans', '.write-test'))).toBe(false);
+  });
+
+  it('puts repos, tmp and orphans under the repositories directory', () => {
+    const dataDir = join(root, 'data');
+    const reposRoot = join(root, 'slow');
+
+    const { databaseFile } = prepareDataDir(dataDir, reposRoot);
+
+    expect(databaseFile).toBe(join(dataDir, 'db', 'front-burner.sqlite'));
+    expect(readdirSync(dataDir)).toEqual([ 'db' ]);
+    expect(readdirSync(reposRoot).sort()).toEqual([ 'orphans', 'repos', 'tmp' ]);
+  });
+
+  it('empties tmp under the repositories root on start', () => {
+    const dataDir = join(root, 'data');
+    const reposRoot = join(root, 'slow');
+    mkdirSync(join(reposRoot, 'tmp', 'clone-1', '.git'), { recursive: true });
+    mkdirSync(join(reposRoot, 'repos', '1', '2'), { recursive: true });
+    writeFileSync(join(reposRoot, 'repos', '1', '2', 'README.md'), '# Hi');
+
+    prepareDataDir(dataDir, reposRoot);
+
+    expect(readdirSync(join(reposRoot, 'tmp'))).toEqual([]);
+    expect(readdirSync(join(reposRoot, 'repos', '1', '2'))).toEqual([ 'README.md' ]);
+  });
+
+  it('the data directory as the repositories directory is the default layout', () => {
+    const dataDir = join(root, 'data');
+
+    prepareDataDir(dataDir, dataDir);
+
+    expect(readdirSync(dataDir).sort()).toEqual([ 'db', 'orphans', 'repos', 'tmp' ]);
   });
 
   it('empties tmp on start', () => {
@@ -67,6 +108,24 @@ describe('prepareDataDir', () => {
       const dataDir = join(root, 'data');
 
       expect(() => prepareDataDir(dataDir)).toThrow(dataDir);
+    }
+  );
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'throws naming the repositories directory when it is not writable',
+    () => {
+      const dataDir = join(root, 'data');
+      const reposRoot = join(root, 'slow');
+      mkdirSync(reposRoot);
+      chmodSync(reposRoot, 0o500);
+
+      try {
+        expect(() => prepareDataDir(dataDir, reposRoot)).toThrow(
+          `The repositories directory ${join(reposRoot, 'repos')} is not writable`
+        );
+      } finally {
+        chmodSync(reposRoot, 0o700);
+      }
     }
   );
 });

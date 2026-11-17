@@ -20,6 +20,7 @@ describe('ReadinessService', () => {
       logLevel: 'info',
       logFormat: 'json',
       dataDir: dir,
+      reposRoot: dir,
       setupToken: undefined,
       jwtSecret: 'spec-jwt-secret-0123456789abcdefghijklmnopqrstu',
       encryptionKey: 'spec-encryption-key-0123456789abcdefghijklmnop',
@@ -64,6 +65,15 @@ describe('ReadinessService', () => {
       const readOnly = join(dir, 'ro');
       mkdirSync(readOnly, { mode: 0o500 });
       expect(new ReadinessService({ ...config, dataDir: readOnly }, database, true).check()).toBe('fail');
+    }
+  );
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'fails when the repositories directory is not writable',
+    () => {
+      const readOnly = join(dir, 'ro');
+      mkdirSync(readOnly, { mode: 0o500 });
+      expect(new ReadinessService({ ...config, reposRoot: readOnly }, database, true).check()).toBe('fail');
     }
   );
 });

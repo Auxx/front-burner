@@ -39,6 +39,7 @@ describe('loadConfig', () => {
       logLevel: 'info',
       logFormat: 'json',
       dataDir: resolve('/data'),
+      reposRoot: resolve('/data'),
       setupToken: undefined,
       jwtSecret: SECRET,
       encryptionKey: KEY,
@@ -206,6 +207,17 @@ describe('loadConfig', () => {
   it('resolves a relative data directory against the working directory', () => {
     const { config } = loadConfig({ ...BASE, FRONT_BURNER_DATA_DIR: 'tmp/data' }, { cwd: '/work' });
     expect(config.dataDir).toBe(resolve('/work', 'tmp/data'));
+  });
+
+  it('reads FRONT_BURNER_REPOS_DIR as an absolute path', () => {
+    const { config } = loadConfig({ ...BASE, FRONT_BURNER_REPOS_DIR: 'slow/repos' }, { cwd: '/work' });
+    expect(config.reposRoot).toBe(resolve('/work', 'slow/repos'));
+    expect(config.dataDir).toBe(resolve('/data'));
+  });
+
+  it('the repositories root is the data directory by default', () => {
+    const { config } = loadConfig({ ...BASE, FRONT_BURNER_DATA_DIR: 'tmp/data' }, { cwd: '/work' });
+    expect(config.reposRoot).toBe(resolve('/work', 'tmp/data'));
   });
 
   it('resolves the known hosts file against the working directory', () => {

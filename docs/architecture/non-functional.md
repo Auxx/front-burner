@@ -112,7 +112,11 @@ sees the result.
   never appears as a working copy (AR-53, AR-54).
 - **NF-5.4** `FRONT_BURNER_REPOS_DIR` optionally puts working copies on another
   volume, for example a larger, slower disk while the database stays on an SSD.
-  `tmp/` and `orphans/` then move with them.
+  `tmp/` and `orphans/` then move with them: the variable names a directory that
+  holds `repos/`, `tmp/` and `orphans/`, the same three folders as in `/data`,
+  while `db/` and `backups/` stay in `/data`. Moving existing working copies
+  between the two layouts is the operator's job, with the container stopped; the
+  backend never moves them.
 - **NF-5.5** No secrets are stored on the volume. The encryption key (NF-8) and
   `FRONT_BURNER_JWT_SECRET` come from the environment, so a stolen volume or
   backup contains encrypted credentials but not the key to them.

@@ -100,6 +100,7 @@ const schema = z.object({
     error: () => 'must be one of json, pretty'
   }).default('json'),
   FRONT_BURNER_DATA_DIR: z.string().default('/data'),
+  FRONT_BURNER_REPOS_DIR: z.string().optional(),
   [SETUP_TOKEN]: z.string().optional(),
   [SETUP_TOKEN_FILE]: z.string().optional(),
   [JWT_SECRET]: z.string().optional(),
@@ -294,6 +295,7 @@ export function loadConfig(
   }
 
   const values = parsed.data;
+  const dataDir = resolve(cwd, values.FRONT_BURNER_DATA_DIR);
   return {
     config: {
       version: options.version ?? UNKNOWN_VERSION,
@@ -301,7 +303,8 @@ export function loadConfig(
       trustedProxies: values.FRONT_BURNER_TRUSTED_PROXIES,
       logLevel: values.FRONT_BURNER_LOG_LEVEL,
       logFormat: values.FRONT_BURNER_LOG_FORMAT,
-      dataDir: resolve(cwd, values.FRONT_BURNER_DATA_DIR),
+      dataDir,
+      reposRoot: values.FRONT_BURNER_REPOS_DIR === undefined ? dataDir : resolve(cwd, values.FRONT_BURNER_REPOS_DIR),
       setupToken,
       jwtSecret: jwtSecret.value,
       encryptionKey: encryptionKey.value,

@@ -23,6 +23,7 @@ export class ReadinessService {
     try {
       this.database.sqlite.prepare('select 1').get();
       accessSync(this.config.dataDir, constants.W_OK);
+      accessSync(this.config.reposRoot, constants.W_OK);
     } catch {
       return 'fail';
     }
