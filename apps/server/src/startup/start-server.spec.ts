@@ -1,8 +1,8 @@
 import { ConfigError } from '@front-burner/server-core-config';
-import { DATABASE, Database } from '@front-burner/server-core-database';
+import { applyMigrations, DATABASE, Database, openDatabase, readLastVersion } from '@front-burner/server-core-database';
 import type { INestApplication } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
@@ -213,7 +213,41 @@ describe('startServer', () => {
 
     expect(failure).toBeInstanceOf(StartupError);
     expect((failure as StartupError).step).toBe('migrations');
+    expect((failure as StartupError).message).toContain(
+      'Database is from a newer version; restore the pre-upgrade snapshot to go back'
+    );
+    expect(readdirSync(join(dataDir, 'backups'))).toEqual([]);
   });
+
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'writes a pre-upgrade snapshot and records the version on an upgrade',
+    async () => {
+      // A database of the previous version: every migration but the last.
+      const previous = join(root, 'previous');
+      cpSync(MIGRATIONS, previous, { recursive: true });
+      const journalFile = join(previous, 'meta', '_journal.json');
+      const journal = JSON.parse(readFileSync(journalFile, 'utf8')) as { entries: unknown[]; };
+      writeFileSync(journalFile, JSON.stringify({ ...journal, entries: journal.entries.slice(0, -1) }));
+      mkdirSync(join(dataDir, 'db'), { recursive: true });
+      const old = openDatabase(join(dataDir, 'db', 'front-burner.sqlite'));
+      applyMigrations(old, previous);
+      old.sqlite.close();
+
+      app = await start();
+
+      const snapshots = readdirSync(join(dataDir, 'backups')).filter(name => name.startsWith('pre-upgrade-'));
+      expect(snapshots).toEqual([ expect.stringMatching(/^pre-upgrade-vunknown-.*\.sqlite$/) ]);
+      const upgrading = logEntries().filter(e => String(e['message']).startsWith('Upgrading the database'));
+      expect(upgrading).toEqual([
+        expect.objectContaining({
+          level: 'info',
+          message: `Upgrading the database from unknown to unknown; snapshot backups/${snapshots[0]}`
+        })
+      ]);
+      expect(readLastVersion(app.get<Database>(DATABASE))).toBe('unknown');
+    }
+  );
 
   it('fails at the data-dir step when the data directory is a file', async () => {
     writeFileSync(dataDir, 'not a directory');
