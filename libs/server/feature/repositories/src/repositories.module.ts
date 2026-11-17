@@ -10,6 +10,7 @@ import { RepositoryCredentialsController } from './credentials/repository-creden
 import { RepositoryCredentialsService } from './credentials/repository-credentials.service';
 import { WorkingCopyDamage } from './damage/working-copy-damage';
 import { WorkingCopyDamageInterceptor } from './damage/working-copy-damage.interceptor';
+import { OrphanedWorkingCopies } from './orphans/orphaned-working-copies';
 import { WorkingCopyCheck } from './recovery/working-copy-check';
 import { RemovalCheck } from './remove/removal-check';
 import { RemoveRepositoryService } from './remove/remove-repository.service';
@@ -34,6 +35,7 @@ import { DeleteWorkingCopyJob } from './working-copy/delete-working-copy.job';
     AddRepositoryService,
     CloneJob,
     CloneAgainService,
+    OrphanedWorkingCopies,
     WorkingCopyCheck,
     RemoteProblemsSource,
     RepositoryWarnings,

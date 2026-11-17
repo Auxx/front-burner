@@ -31,6 +31,18 @@ describe('InstanceRepositories', () => {
     expect(instance.ready()).toEqual([ { id: handbook, userId: alice }, { id: notes, userId: bob } ]);
   });
 
+  it('lists every repository of every user, whatever its status', () => {
+    const handbook = insertRepository(database, alice, { name: 'handbook' });
+    const cloning = insertRepository(database, alice, { name: 'cloning', status: 'cloning' });
+    const failed = insertRepository(database, bob, { name: 'failed', status: 'error', errorCode: 'clone-failed' });
+
+    expect(instance.all()).toEqual([
+      { id: handbook, userId: alice },
+      { id: cloning, userId: alice },
+      { id: failed, userId: bob }
+    ]);
+  });
+
   it('marks a repository damaged, which lists it as that and not as ready', () => {
     const handbook = insertRepository(database, alice, { name: 'handbook' });
     insertRepository(database, bob, { name: 'failed', status: 'error', errorCode: 'clone-failed' });
