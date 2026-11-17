@@ -33,25 +33,73 @@ describe('prepareDataDir', () => {
     expect(readdirSync(dataDir).sort()).toEqual([ 'db', 'orphans', 'repos', 'tmp' ]);
   });
 
-  it('creates orphans', () => {
-    const dataDir = join(root, 'data');
-    const reposRoot = join(root, 'slow');
-
-    prepareDataDir(dataDir, reposRoot);
-
-    expect(existsSync(join(reposRoot, 'orphans'))).toBe(true);
-    expect(existsSync(join(reposRoot, 'orphans', '.write-test'))).toBe(false);
-  });
-
   it('puts repos, tmp and orphans under the repositories directory', () => {
     const dataDir = join(root, 'data');
     const reposRoot = join(root, 'slow');
+    mkdirSync(reposRoot);
 
-    const { databaseFile } = prepareDataDir(dataDir, reposRoot);
+    const { databaseFile, warnings } = prepareDataDir(dataDir, reposRoot);
 
     expect(databaseFile).toBe(join(dataDir, 'db', 'front-burner.sqlite'));
     expect(readdirSync(dataDir)).toEqual([ 'db' ]);
     expect(readdirSync(reposRoot).sort()).toEqual([ 'orphans', 'repos', 'tmp' ]);
+    expect(readdirSync(join(reposRoot, 'orphans'))).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  it('throws when the repositories directory does not exist', () => {
+    const dataDir = join(root, 'data');
+    const reposRoot = join(root, 'unmounted');
+
+    expect(() => prepareDataDir(dataDir, reposRoot)).toThrow(
+      `The repositories directory ${reposRoot} does not exist`
+    );
+    expect(existsSync(reposRoot)).toBe(false);
+  });
+
+  it('throws when the repositories directory holds anything else, and empties nothing', () => {
+    const dataDir = join(root, 'data');
+    const reposRoot = join(root, 'shared');
+    mkdirSync(join(reposRoot, 'tmp'), { recursive: true });
+    writeFileSync(join(reposRoot, 'tmp', 'keep-me'), '');
+    mkdirSync(join(reposRoot, 'photos'));
+
+    expect(() => prepareDataDir(dataDir, reposRoot)).toThrow(
+      `The repositories directory ${reposRoot} holds photos; it may hold only repos, tmp and orphans`
+    );
+    expect(readdirSync(join(reposRoot, 'tmp'))).toEqual([ 'keep-me' ]);
+  });
+
+  it('accepts the lost+found of a fresh volume', () => {
+    const dataDir = join(root, 'data');
+    const reposRoot = join(root, 'slow');
+    mkdirSync(join(reposRoot, 'lost+found'), { recursive: true });
+
+    expect(() => prepareDataDir(dataDir, reposRoot)).not.toThrow();
+  });
+
+  it('warns when the data directory still holds working copies', () => {
+    const dataDir = join(root, 'data');
+    const reposRoot = join(root, 'slow');
+    mkdirSync(reposRoot);
+    mkdirSync(join(dataDir, 'repos', '1', '2'), { recursive: true });
+
+    const { warnings } = prepareDataDir(dataDir, reposRoot);
+
+    expect(warnings).toEqual([
+      `${join(dataDir, 'repos')} still holds working copies, but FRONT_BURNER_REPOS_DIR keeps them in `
+      + `${join(reposRoot, 'repos')}, so their repositories show as missing. Stop the instance and move them there.`
+    ]);
+    expect(readdirSync(join(dataDir, 'repos'))).toEqual([ '1' ]);
+  });
+
+  it('does not warn about an empty repos folder left in the data directory', () => {
+    const dataDir = join(root, 'data');
+    const reposRoot = join(root, 'slow');
+    mkdirSync(reposRoot);
+    mkdirSync(join(dataDir, 'repos'), { recursive: true });
+
+    expect(prepareDataDir(dataDir, reposRoot).warnings).toEqual([]);
   });
 
   it('empties tmp under the repositories root on start', () => {

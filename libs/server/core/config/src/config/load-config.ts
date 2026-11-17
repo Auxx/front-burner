@@ -1,6 +1,6 @@
 import { parseDuration } from '@front-burner/shared-util';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { compile } from 'proxy-addr';
 import { z } from 'zod';
 import { Config, OidcEnvironment } from './config.model';
@@ -32,6 +32,13 @@ const OIDC_VARIABLES = [
   ADMIN_EMAIL
 ];
 const DEFAULT_TRUSTED_PROXIES = 'loopback, linklocal, uniquelocal';
+const REPOS_DIR = 'FRONT_BURNER_REPOS_DIR';
+
+/** Whether the absolute path `inner` lies inside the absolute path `outer`. */
+function isInside(inner: string, outer: string): boolean {
+  const path = relative(outer, inner);
+  return path !== '' && path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path);
+}
 
 function duration(defaultValue: string) {
   return z.string().default(defaultValue).transform((value, context) => {
@@ -100,7 +107,7 @@ const schema = z.object({
     error: () => 'must be one of json, pretty'
   }).default('json'),
   FRONT_BURNER_DATA_DIR: z.string().default('/data'),
-  FRONT_BURNER_REPOS_DIR: z.string().optional(),
+  [REPOS_DIR]: z.string().optional(),
   [SETUP_TOKEN]: z.string().optional(),
   [SETUP_TOKEN_FILE]: z.string().optional(),
   [JWT_SECRET]: z.string().optional(),
@@ -285,6 +292,18 @@ export function loadConfig(
     }
   }
 
+  // NF-5.4: the data directory itself, or a directory that neither contains it nor lies inside it.
+  const dataDir = resolve(cwd, parsed.data?.FRONT_BURNER_DATA_DIR ?? '/data');
+  const reposRoot = parsed.data?.FRONT_BURNER_REPOS_DIR === undefined
+    ? dataDir
+    : resolve(cwd, parsed.data.FRONT_BURNER_REPOS_DIR);
+  if (reposRoot !== dataDir && (isInside(reposRoot, dataDir) || isInside(dataDir, reposRoot))) {
+    issues.push({
+      variable: REPOS_DIR,
+      message: 'must be the data directory or a directory that neither contains it nor lies inside it'
+    });
+  }
+
   if (
     !parsed.success
     || issues.length > 0
@@ -295,7 +314,6 @@ export function loadConfig(
   }
 
   const values = parsed.data;
-  const dataDir = resolve(cwd, values.FRONT_BURNER_DATA_DIR);
   return {
     config: {
       version: options.version ?? UNKNOWN_VERSION,
@@ -304,7 +322,7 @@ export function loadConfig(
       logLevel: values.FRONT_BURNER_LOG_LEVEL,
       logFormat: values.FRONT_BURNER_LOG_FORMAT,
       dataDir,
-      reposRoot: values.FRONT_BURNER_REPOS_DIR === undefined ? dataDir : resolve(cwd, values.FRONT_BURNER_REPOS_DIR),
+      reposRoot,
       setupToken,
       jwtSecret: jwtSecret.value,
       encryptionKey: encryptionKey.value,

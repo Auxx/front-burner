@@ -137,7 +137,13 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
   for (const warning of warnings) {
     bootstrapLogger.warn(warning);
   }
-  const { databaseFile } = step('data-dir', () => prepareDataDir(config.dataDir, config.reposRoot));
+  const { databaseFile, warnings: dataDirWarnings } = step(
+    'data-dir',
+    () => prepareDataDir(config.dataDir, config.reposRoot)
+  );
+  for (const warning of dataDirWarnings) {
+    bootstrapLogger.warn(warning);
+  }
   const database: Database = step('database', () => openDatabase(databaseFile));
 
   try {

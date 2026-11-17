@@ -116,7 +116,14 @@ sees the result.
   holds `repos/`, `tmp/` and `orphans/`, the same three folders as in `/data`,
   while `db/` and `backups/` stay in `/data`. Moving existing working copies
   between the two layouts is the operator's job, with the container stopped; the
-  backend never moves them.
+  backend never moves them, but on start it warns when `/data/repos` still holds
+  working copies. _(My call:)_ the directory must be `/data` itself or must
+  neither contain `/data` nor lie inside it, or the configuration is refused.
+  Unless it is `/data`, it must already exist, so that a volume that failed to
+  mount stops the start rather than becoming a folder of the container, and it
+  may hold nothing but `repos/`, `tmp/`, `orphans/` and a fresh file system's
+  `lost+found/`, so that emptying `tmp/` on start never deletes someone else's
+  files.
 - **NF-5.5** No secrets are stored on the volume. The encryption key (NF-8) and
   `FRONT_BURNER_JWT_SECRET` come from the environment, so a stolen volume or
   backup contains encrypted credentials but not the key to them.

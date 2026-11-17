@@ -215,6 +215,27 @@ describe('loadConfig', () => {
     expect(config.dataDir).toBe(resolve('/data'));
   });
 
+  it('accepts the data directory itself as the repositories directory', () => {
+    const { config } = loadConfig({ ...BASE, FRONT_BURNER_DATA_DIR: '/data', FRONT_BURNER_REPOS_DIR: '/data/' });
+    expect(config.reposRoot).toBe(resolve('/data'));
+  });
+
+  it('accepts a sibling of the data directory whose name starts with it', () => {
+    const { config } = loadConfig({ ...BASE, FRONT_BURNER_DATA_DIR: '/data', FRONT_BURNER_REPOS_DIR: '/data-slow' });
+    expect(config.reposRoot).toBe(resolve('/data-slow'));
+  });
+
+  it.each([
+    [ '/data', '/data/repos' ],
+    [ '/data', '/data/db' ],
+    [ '/srv/data', '/srv' ],
+    [ '/srv/data', '/' ]
+  ])('refuses a repositories directory that overlaps the data directory %s: %s', (dataDir, reposDir) => {
+    expect(() => loadConfig({ ...BASE, FRONT_BURNER_DATA_DIR: dataDir, FRONT_BURNER_REPOS_DIR: reposDir })).toThrow(
+      /FRONT_BURNER_REPOS_DIR: must be the data directory or a directory that neither contains it/
+    );
+  });
+
   it('the repositories root is the data directory by default', () => {
     const { config } = loadConfig({ ...BASE, FRONT_BURNER_DATA_DIR: 'tmp/data' }, { cwd: '/work' });
     expect(config.reposRoot).toBe(resolve('/work', 'tmp/data'));

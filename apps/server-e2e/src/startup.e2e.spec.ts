@@ -111,7 +111,9 @@ describe('server startup', () => {
     const remotes = createRemotes(join(root, 'remotes'));
     const git = await startGitHttpServer({ repositories: { 'handbook.git': remotes.handbook } });
     cleanups.push(() => git.close());
+    // An operator mounts the volume: the directory exists, empty.
     const reposDir = join(root, 'slow');
+    mkdirSync(reposDir);
     const server = await startServerProcess({ FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN }, { reposDir });
     cleanups.push(() => server.stop());
     const userId = await onboard(server);
