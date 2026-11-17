@@ -420,3 +420,34 @@ test.describe('Add repository over SSH, with the API stubbed', () => {
     drainFailedRequests(monitor, '/api/v1/repositories');
   });
 });
+
+test.describe('Add repository on low space', () => {
+  // A threshold above any runner's free space.
+  test.use({
+    instanceOptions: {
+      onboarded: true,
+      gitCaFile: TEST_CERTIFICATE_FILE,
+      env: { FRONT_BURNER_LOW_DISK_THRESHOLD: '1000000GB' }
+    }
+  });
+
+  test('NF-9.7: adding a repository on low space shows the message and the banner', async ({ page, monitor }) => {
+    await openAddRepository(page);
+    // The banners are part of the app header; the live announcer has the same text.
+    await expect(
+      page.getByRole('banner').getByText(
+        'The server is running low on storage. New repositories can\'t be added until space is freed.'
+      )
+    ).toBeVisible();
+    await enterUrl(page, publicUrl());
+    await choose(page, 'No credentials (public repository)');
+
+    await submit(page).click();
+
+    await expect(
+      page.getByRole('main').getByText('The server is running low on storage. Contact your administrator.')
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/repositories\/new$/);
+    drainFailedRequests(monitor, '/api/v1/repositories');
+  });
+});

@@ -16,6 +16,7 @@ import { OneTimeCodes } from './oidc/one-time-codes';
 import { PendingLogins } from './oidc/pending-logins';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { PasswordHasher } from './passwords/password-hasher';
+import { AdminOnlyGuard } from './sessions/admin-only.guard';
 import { AuthTokenService } from './sessions/auth-token.service';
 import { AuthGuard } from './sessions/auth.guard';
 import { AuthMiddleware } from './sessions/auth.middleware';
@@ -57,7 +58,9 @@ import { MeController } from './users/me.controller';
           sessionId: session.id
         })
     },
-    { provide: APP_GUARD, useClass: AuthGuard }
+    { provide: APP_GUARD, useClass: AuthGuard },
+    // After AuthGuard: a request without a valid auth token gets 401 before its role is checked (A-7.4).
+    { provide: APP_GUARD, useClass: AdminOnlyGuard }
   ],
   exports: [ SessionService ]
 })

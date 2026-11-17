@@ -17,4 +17,9 @@
                       status="warning"
                       announce>{{ t('offline') }}</ui-inline-banner>
   }
+  @if (lowStorage()) {
+    <ui-inline-banner class="low-storage"
+                      status="warning"
+                      announce>{{ t('lowStorage') }}</ui-inline-banner>
+  }
 </ng-container>

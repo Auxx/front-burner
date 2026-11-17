@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ButtonComponent, InlineBannerComponent } from '@front-burner/ui';
-import { OnlineStatusService, VersionCheckService } from '@front-burner/web-core';
+import { OnlineStatusService, StorageStatusService, VersionCheckService } from '@front-burner/web-core';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
@@ -15,6 +15,9 @@ import { TranslocoDirective } from '@jsverse/transloco';
  *   stays on the page.
  * - The offline banner while the browser is offline (NF-3.2); it goes away on
  *   its own.
+ * - The low-space banner, for administrators only, while the server is low on
+ *   storage (NF-9.7). It cannot be dismissed; it goes when a later read of
+ *   the storage status finds the space back.
  */
 @Component({
   selector: 'shell-app-banners',
@@ -29,6 +32,7 @@ export class AppBannersComponent {
   protected readonly newVersion = this.versions.newVersion;
   protected readonly reloading = this.versions.reloading;
   protected readonly online = inject(OnlineStatusService).online;
+  protected readonly lowStorage = inject(StorageStatusService).low;
 
   protected reload(): void {
     void this.versions.reload();

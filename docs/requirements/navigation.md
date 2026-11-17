@@ -156,6 +156,10 @@ rules that every page shares.
   - "You're offline. Changes are kept and saved when you're back online." while
     the browser is offline (NF-3.2). It goes away on its own when the connection
     returns. _(My call.)_
+  - "The server is running low on storage. New repositories can't be added until
+    space is freed.", shown to administrators only, while the server is low on
+    storage (NF-9.7). It cannot be dismissed, and goes away on its own when
+    space is freed. _(Plan 132's call: NF-9.7 gives no text.)_
 - **NV-16** Page-specific notices, such as the locked-key banner (RC-15) or the
   remote-change notice (GA-34), are shown by their pages below these banners,
   never in place of them.

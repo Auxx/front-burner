@@ -1,5 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { BUILD_VERSION, type ServerProcess, startServerProcess } from './support/server-process';
+import {
+  BUILD_VERSION,
+  E2E_ADMIN,
+  E2E_SETUP_TOKEN,
+  login,
+  onboard,
+  seed,
+  type ServerProcess,
+  startServerProcess
+} from './support/server-process';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -84,5 +93,46 @@ describe('server API', () => {
     });
     expect(response.status).toBe(400);
     expect(((await response.json()) as { code: string; }).code).toBe('malformed-request');
+  });
+});
+
+describe('instance storage', () => {
+  let server: ServerProcess;
+
+  beforeAll(async () => {
+    // A threshold above any runner's free space, so that storage is low.
+    server = await startServerProcess({
+      FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN,
+      FRONT_BURNER_LOW_DISK_THRESHOLD: '1000000GB'
+    });
+    await onboard(server);
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+  });
+
+  const storage = (authToken?: string) =>
+    fetch(`${server.url}/api/v1/instance/storage`, {
+      headers: authToken === undefined ? {} : { authorization: `Bearer ${authToken}` }
+    });
+
+  it('NF-9.7: tells an administrator that storage is low', async () => {
+    const response = await storage((await login(server, 'body')).authToken);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ low: true });
+  });
+
+  it('A-7.5: the endpoint is for administrators only', async () => {
+    seed(server.dataDir, { users: [ { email: 'bob@example.com' } ] });
+    const bob = await login(server, 'body', { email: 'bob@example.com', password: E2E_ADMIN.password });
+
+    const refused = await storage(bob.authToken);
+    expect(refused.status).toBe(403);
+    expect(((await refused.json()) as { code: string; }).code).toBe('forbidden');
+
+    const anonymous = await storage();
+    expect(anonymous.status).toBe(401);
+    expect(((await anonymous.json()) as { code: string; }).code).toBe('unauthenticated');
   });
 });

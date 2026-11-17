@@ -148,6 +148,13 @@ numbering conventions.
   English fallback is NF-9.7's text. A `507 low-storage` is not logged as an
   unhandled exception: the disk monitor logs the state once. _(Plan 131's call:
   `507 Insufficient Storage`.)_
+- **A-3.2h** `GET /instance/storage` answers `{ low }`, `DiskMonitor.isLow()` as
+  of its last check, for the administrators' low-space banner (NF-9.7). It is
+  `@AdminOnly()` (A-7.4), so anyone else gets `403 forbidden`. Storage belongs
+  to the instance, not to a user, so it is neither part of `/me` nor under
+  `/admin/`, which is for administering users and their repositories. The disk
+  monitor publishes no event, so the web client reads it again from time to time
+  (A-8.7). _(Plan 132's call.)_
 
 ## A-3: Contracts
 

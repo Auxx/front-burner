@@ -1,7 +1,7 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
 import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { OnlineStatusService, VersionCheckService } from '@front-burner/web-core';
+import { OnlineStatusService, StorageStatusService, VersionCheckService } from '@front-burner/web-core';
 
 import { settle } from '../../../testing/settle';
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -13,6 +13,7 @@ describe('AppBannersComponent', () => {
   let fixture: ComponentFixture<AppBannersComponent>;
   let newVersion: ReturnType<typeof signal<boolean>>;
   let online: ReturnType<typeof signal<boolean>>;
+  let lowStorage: ReturnType<typeof signal<boolean>>;
   let reload: ReturnType<typeof vi.fn>;
   let reloading: ReturnType<typeof signal<boolean>>;
   let announce: ReturnType<typeof vi.fn>;
@@ -25,6 +26,7 @@ describe('AppBannersComponent', () => {
   beforeEach(async () => {
     newVersion = signal(false);
     online = signal(true);
+    lowStorage = signal(false);
     reloading = signal(false);
     reload = vi.fn(() => {
       reloading.set(true);
@@ -36,6 +38,7 @@ describe('AppBannersComponent', () => {
       providers: [
         { provide: VersionCheckService, useValue: { newVersion, reloading, reload } },
         { provide: OnlineStatusService, useValue: { online } },
+        { provide: StorageStatusService, useValue: { low: lowStorage } },
         { provide: LiveAnnouncer, useValue: { announce } }
       ]
     });
@@ -89,11 +92,37 @@ describe('AppBannersComponent', () => {
     expect(banners()).toEqual([]);
   });
 
-  it('shows both banners one above the other', async () => {
+  it('shows every banner one above the other', async () => {
     newVersion.set(true);
     online.set(false);
+    lowStorage.set(true);
     await settle(fixture);
 
-    expect(banners()).toEqual([ expect.stringContaining(`${KEY}.newVersion`), `${KEY}.offline` ]);
+    expect(banners()).toEqual([
+      expect.stringContaining(`${KEY}.newVersion`),
+      `${KEY}.offline`,
+      `${KEY}.lowStorage`
+    ]);
+  });
+
+  it('shows the low-space banner to an administrator, announced once and not dismissable', async () => {
+    // StorageStatusService is low for administrators only.
+    lowStorage.set(true);
+    await settle(fixture);
+
+    expect(banners()).toEqual([ `${KEY}.lowStorage` ]);
+    expect(element().querySelector('.low-storage')?.getAttribute('data-status')).toBe('warning');
+    expect(element().querySelectorAll('button')).toHaveLength(0);
+    expect(announce).toHaveBeenCalledOnce();
+  });
+
+  it('hides the banner when the next read says storage is no longer low', async () => {
+    lowStorage.set(true);
+    await settle(fixture);
+
+    lowStorage.set(false);
+    await settle(fixture);
+
+    expect(banners()).toEqual([]);
   });
 });

@@ -45,6 +45,19 @@ top of the security rules in the requirements and NF-11. See
   through an admin variant of the ownership guard. They never reach another
   user's files, working copies or credentials. Adding a repository on a user's
   behalf creates a pending repository owned by that user.
+
+  As built _(plan 132)_: `@AdminOnly()` is in `server/core/security`; the
+  `AdminOnlyGuard`, a second global guard of `server/feature/auth` registered
+  after the auth guard, so that a request without a valid auth token gets `401`
+  first, answers `403 forbidden` to a user who is not an administrator. It reads
+  the role from the user's row on admin routes only: the auth middleware reads
+  no row, so ordinary requests get no query, and a role taken away applies at
+  once. It does not answer `401` itself: a request without `req.auth` means the
+  guards are in the wrong order, which `authOf` reports as a bug. The guard
+  lives beside the auth guard rather than in the security library, which cannot
+  import `ApiErrorException` from the observability library without a cycle. The
+  first admin route is the instance's storage (A-3.2h), which is not under
+  `/admin/`: it is about the instance, not about users.
 - **A-7.5** An API test goes through every non-admin route that takes an ID and
   checks that another user's IDs get `404`, and through every admin route to
   check that a non-administrator gets `403`.
