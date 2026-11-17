@@ -99,6 +99,13 @@
       "when": 1794918763560,
       "tag": "0013_last_version",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1794926325228,
+      "tag": "0014_oidc_required_claim",
+      "breakpoints": true
     }
   ]
 }

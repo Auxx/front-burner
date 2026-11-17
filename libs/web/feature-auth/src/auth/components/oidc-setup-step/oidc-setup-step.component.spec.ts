@@ -20,6 +20,8 @@ const SAVED: OidcSetupView = {
   scopes: 'openid email',
   requireVerifiedEmail: false,
   adminEmail: 'admin@example.com',
+  requiredClaimName: '',
+  requiredClaimValue: '',
   hasClientSecret: true
 };
 
@@ -132,7 +134,9 @@ describe('OidcSetupStepComponent', () => {
       clientSecret: 'a-client-secret',
       scopes: 'openid email profile',
       requireVerifiedEmail: true,
-      adminEmail: 'admin@example.com'
+      adminEmail: 'admin@example.com',
+      requiredClaimName: '',
+      requiredClaimValue: ''
     });
     request.flush(null, { status: 204, statusText: 'No Content' });
     await settle(fixture);

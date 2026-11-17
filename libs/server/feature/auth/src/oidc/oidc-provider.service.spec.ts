@@ -10,7 +10,8 @@ const settingsFor = (issuer: string): OidcSettings => ({
   clientId: 'front-burner',
   clientSecret: 'client-secret',
   scopes: 'openid email profile',
-  requireVerifiedEmail: true
+  requireVerifiedEmail: true,
+  requiredClaim: undefined
 });
 
 describe('OidcProviderService', () => {

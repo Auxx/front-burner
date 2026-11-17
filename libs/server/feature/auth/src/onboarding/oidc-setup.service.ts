@@ -81,6 +81,9 @@ export class OidcSetupService {
         oidcClientSecret: clientSecret,
         oidcScopes: request.scopes,
         oidcRequireVerifiedEmail: request.requireVerifiedEmail,
+        // Both columns are always written, so that empty fields clear a saved claim (AO-40).
+        oidcRequiredClaimName: request.requiredClaimName || null,
+        oidcRequiredClaimValue: request.requiredClaimValue || null,
         automaticRegistration: false
       };
       tx.insert(systemSettings).values({ id: ROW, ...values }).onConflictDoUpdate({
@@ -105,6 +108,8 @@ export class OidcSetupService {
       scopes: settings.oidcScopes ?? '',
       requireVerifiedEmail: settings.oidcRequireVerifiedEmail ?? true,
       adminEmail: state.pendingAdminEmail ?? '',
+      requiredClaimName: settings.oidcRequiredClaimName ?? '',
+      requiredClaimValue: settings.oidcRequiredClaimValue ?? '',
       hasClientSecret: settings.oidcClientSecret != null
     };
   }

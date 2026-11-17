@@ -221,6 +221,8 @@ describe('OnboardingPage', () => {
       scopes: 'openid email',
       requireVerifiedEmail: true,
       adminEmail: 'admin@example.com',
+      requiredClaimName: '',
+      requiredClaimValue: '',
       hasClientSecret: true
     };
     const oidcField = (name: string) =>

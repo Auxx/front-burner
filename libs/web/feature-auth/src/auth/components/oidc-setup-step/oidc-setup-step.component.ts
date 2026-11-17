@@ -200,7 +200,9 @@ export class OidcSetupStepComponent {
             clientSecret: setup.clientSecret,
             scopes: setup.scopes.trim() || DEFAULT_OIDC_SCOPES,
             requireVerifiedEmail: setup.requireVerifiedEmail,
-            adminEmail: setup.adminEmail
+            adminEmail: setup.adminEmail,
+            requiredClaimName: '',
+            requiredClaimValue: ''
           }),
           { defaultValue: undefined }
         );

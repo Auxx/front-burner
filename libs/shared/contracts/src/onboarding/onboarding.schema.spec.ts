@@ -130,6 +130,45 @@ describe('OidcSetupRequestSchema', () => {
     expect(OidcSetupRequestSchema.parse({ ...oidc, clientId: ' fb ' }).clientId).toBe('fb');
     expect(OidcSetupRequestSchema.safeParse({ ...oidc, clientId: '  ' }).success).toBe(false);
   });
+
+  describe('required claim (temporary, MVP)', () => {
+    it('defaults to no required claim', () => {
+      const parsed = OidcSetupRequestSchema.parse(oidc);
+      expect(parsed.requiredClaimName).toBe('');
+      expect(parsed.requiredClaimValue).toBe('');
+    });
+
+    it('accepts and trims a name and a value', () => {
+      const parsed = OidcSetupRequestSchema.parse({
+        ...oidc,
+        requiredClaimName: ' https://slack.com/team_id ',
+        requiredClaimValue: ' T123 '
+      });
+      expect(parsed.requiredClaimName).toBe('https://slack.com/team_id');
+      expect(parsed.requiredClaimValue).toBe('T123');
+    });
+
+    it('AC-AUTH-001.16: refuses a required claim name without a value', () => {
+      const result = OidcSetupRequestSchema.safeParse({ ...oidc, requiredClaimName: 'hd', requiredClaimValue: ' ' });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.path).toEqual([ 'requiredClaimValue' ]);
+      expect(codeOf(result.error?.issues[0])).toBe('required-claim-pair');
+    });
+
+    it('AC-AUTH-001.16: refuses a required claim value without a name', () => {
+      const result = OidcSetupRequestSchema.safeParse({ ...oidc, requiredClaimValue: 'T123' });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.path).toEqual([ 'requiredClaimName' ]);
+      expect(codeOf(result.error?.issues[0])).toBe('required-claim-pair');
+    });
+
+    it('refuses a value longer than 256 characters', () => {
+      expect(
+        OidcSetupRequestSchema.safeParse({ ...oidc, requiredClaimName: 'hd', requiredClaimValue: 'x'.repeat(257) })
+          .success
+      ).toBe(false);
+    });
+  });
 });
 
 describe('OidcSetupViewSchema', () => {
@@ -140,6 +179,8 @@ describe('OidcSetupViewSchema', () => {
       scopes: DEFAULT_OIDC_SCOPES,
       requireVerifiedEmail: true,
       adminEmail: 'alice@example.com',
+      requiredClaimName: '',
+      requiredClaimValue: '',
       hasClientSecret: true
     };
     expect(OidcSetupViewSchema.parse({ ...view, clientSecret: 'x' })).toEqual(view);

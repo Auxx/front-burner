@@ -21,7 +21,8 @@ const settings: OidcSettings = {
   clientId: 'front-burner',
   clientSecret: 'client-secret',
   scopes: 'openid email profile',
-  requireVerifiedEmail: true
+  requireVerifiedEmail: true,
+  requiredClaim: undefined
 };
 const identity: OidcIdentity = {
   issuer: ISSUER,

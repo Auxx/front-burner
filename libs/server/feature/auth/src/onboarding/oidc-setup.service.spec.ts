@@ -45,7 +45,9 @@ describe('OidcSetupService', () => {
       clientSecret: 'client-secret',
       scopes: 'openid email profile',
       requireVerifiedEmail: true,
-      adminEmail: 'admin@example.com'
+      adminEmail: 'admin@example.com',
+      requiredClaimName: '',
+      requiredClaimValue: ''
     };
   });
 
@@ -136,7 +138,29 @@ describe('OidcSetupService', () => {
       scopes: 'openid email profile',
       requireVerifiedEmail: true,
       adminEmail: 'admin@example.com',
+      requiredClaimName: '',
+      requiredClaimValue: '',
       hasClientSecret: true
+    });
+  });
+
+  describe('required claim (temporary, MVP)', () => {
+    const slack = { requiredClaimName: 'https://slack.com/team_id', requiredClaimValue: 'T123' };
+
+    it('AC-AUTH-001.15: saves the required claim and returns it for the pre-filled form', async () => {
+      await service.save({ ...request, ...slack });
+      expect(settingsRow()).toMatchObject({
+        oidcRequiredClaimName: 'https://slack.com/team_id',
+        oidcRequiredClaimValue: 'T123'
+      });
+      expect(service.current()).toMatchObject(slack);
+    });
+
+    it('clears a saved required claim when both fields are empty', async () => {
+      await service.save({ ...request, ...slack });
+      await service.save(request);
+      expect(settingsRow()).toMatchObject({ oidcRequiredClaimName: null, oidcRequiredClaimValue: null });
+      expect(service.current()).toMatchObject({ requiredClaimName: '', requiredClaimValue: '' });
     });
   });
 });

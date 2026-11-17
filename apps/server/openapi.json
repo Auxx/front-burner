@@ -4454,6 +4454,16 @@
           },
           "adminEmail": {
             "type": "string"
+          },
+          "requiredClaimName": {
+            "default": "",
+            "type": "string",
+            "maxLength": 256
+          },
+          "requiredClaimValue": {
+            "default": "",
+            "type": "string",
+            "maxLength": 256
           }
         },
         "required": [
@@ -4481,6 +4491,12 @@
           "adminEmail": {
             "type": "string"
           },
+          "requiredClaimName": {
+            "type": "string"
+          },
+          "requiredClaimValue": {
+            "type": "string"
+          },
           "hasClientSecret": {
             "type": "boolean"
           }
@@ -4491,6 +4507,8 @@
           "scopes",
           "requireVerifiedEmail",
           "adminEmail",
+          "requiredClaimName",
+          "requiredClaimValue",
           "hasClientSecret"
         ]
       }

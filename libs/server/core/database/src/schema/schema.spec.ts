@@ -117,7 +117,9 @@ describe('schema', () => {
       oidcClientId: null,
       oidcClientSecret: null,
       oidcScopes: null,
-      oidcRequireVerifiedEmail: null
+      oidcRequireVerifiedEmail: null,
+      oidcRequiredClaimName: null,
+      oidcRequiredClaimValue: null
     } ]);
     expect(() => database.db.insert(systemSettings).values({ id: 2 }).run()).toThrow(
       expect.objectContaining({ code: 'SQLITE_CONSTRAINT_CHECK' })

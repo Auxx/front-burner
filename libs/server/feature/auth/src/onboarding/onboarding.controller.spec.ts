@@ -225,6 +225,18 @@ describe('OnboardingController', () => {
     );
   });
 
+  it('AC-AUTH-001.16: refuses a required claim name without a value', async () => {
+    await start();
+    const response = await http()
+      .post('/api/v1/onboarding/oidc-setup')
+      .send({ ...oidcSetup(), requiredClaimName: 'https://slack.com/team_id' });
+    expect(response.status).toBe(400);
+    expect(response.body.fields).toEqual([
+      expect.objectContaining({ path: 'requiredClaimValue', code: 'required-claim-pair' })
+    ]);
+    expect((await http().get('/api/v1/onboarding')).body.state).toBe('required');
+  });
+
   it('saves an OIDC setup and returns it without the secret', async () => {
     await start();
     const current = () => http().post('/api/v1/onboarding/oidc-setup/current').send({ setupToken: TOKEN });
@@ -239,6 +251,8 @@ describe('OnboardingController', () => {
       scopes: 'openid email profile',
       requireVerifiedEmail: true,
       adminEmail: 'admin@example.com',
+      requiredClaimName: '',
+      requiredClaimValue: '',
       hasClientSecret: true
     });
     expect((await http().get('/api/v1/onboarding')).body.state).toBe('oidc-pending');
