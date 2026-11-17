@@ -56,9 +56,11 @@ describe('prepareDataDir', () => {
     const reposRoot = join(root, 'slow');
     mkdirSync(reposRoot);
 
-    const { databaseFile, warnings } = prepareDataDir(dataDir, reposRoot);
+    const { databaseFile, backupsDir, warnings } = prepareDataDir(dataDir, reposRoot);
 
     expect(databaseFile).toBe(join(dataDir, 'db', 'front-burner.sqlite'));
+    // In the data directory, never the repositories directory (A-4.12).
+    expect(backupsDir).toBe(join(dataDir, 'backups'));
     expect(readdirSync(dataDir).sort()).toEqual([ 'backups', 'db' ]);
     expect(readdirSync(reposRoot).sort()).toEqual([ 'orphans', 'repos', 'tmp' ]);
     expect(readdirSync(join(reposRoot, 'orphans'))).toEqual([]);

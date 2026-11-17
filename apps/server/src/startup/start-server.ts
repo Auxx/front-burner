@@ -1,6 +1,6 @@
 import { Config, ConfigError, loadConfig } from '@front-burner/server-core-config';
 import { checkEncryptionKey, SecretBox } from '@front-burner/server-core-crypto';
-import { applyMigrations, assertNoNewerMigrations, Database, openDatabase } from '@front-burner/server-core-database';
+import { Database, openDatabase } from '@front-burner/server-core-database';
 import { assertHelpersExecutable, assertSupportedGit, GitRunner } from '@front-burner/server-core-git';
 import { createBootstrapLogger, createRequestLogger, HEALTH_ROUTES } from '@front-burner/server-core-observability';
 import { securityHeaders, serveWebClient, versionHeader } from '@front-burner/server-core-security';
@@ -13,6 +13,7 @@ import type { DestinationStream, Logger as PinoLogger } from 'pino';
 import type { HttpLogger } from 'pino-http';
 import { AppModule } from '../app/app.module';
 import { prepareDataDir } from './prepare-data-dir';
+import { upgradeDatabase } from './upgrade-database';
 
 export type StartupStep = 'config' | 'data-dir' | 'database' | 'migrations' | 'encryption-key' | 'git' | 'http';
 
@@ -123,7 +124,7 @@ function configure(
 
 /**
  * Runs the startup sequence of A-1.11: configuration, data directory,
- * database, migrations, the encryption key check, git and its helpers, then the HTTP server. With `listen: false` the
+ * database, the pre-upgrade snapshot and migrations, the encryption key check, git and its helpers, then the HTTP server. With `listen: false` the
  * application is built but not bound to a port.
  *
  * @throws StartupError naming the step that failed.
@@ -137,7 +138,7 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
   for (const warning of warnings) {
     bootstrapLogger.warn(warning);
   }
-  const { databaseFile, warnings: dataDirWarnings } = step(
+  const { databaseFile, backupsDir, warnings: dataDirWarnings } = step(
     'data-dir',
     () => prepareDataDir(config.dataDir, config.reposRoot)
   );
@@ -147,10 +148,13 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
   const database: Database = step('database', () => openDatabase(databaseFile));
 
   try {
-    step('migrations', () => {
-      assertNoNewerMigrations(database, options.migrationsFolder);
-      applyMigrations(database, options.migrationsFolder);
-    });
+    step('migrations', () =>
+      upgradeDatabase(database, {
+        migrationsFolder: options.migrationsFolder,
+        backupsDir,
+        version: config.version,
+        log: message => bootstrapLogger.info(message)
+      }));
     const keyCheck = step(
       'encryption-key',
       () => checkEncryptionKey(database, new SecretBox(config.encryptionKey), { reset: config.encryptionKeyReset })

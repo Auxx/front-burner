@@ -30,6 +30,9 @@
       "@front-burner/server-core-database": [
         "./libs/server/core/database/src/index.ts"
       ],
+      "@front-burner/server-core-database/testing": [
+        "./libs/server/core/database/src/testing/index.ts"
+      ],
       "@front-burner/server-core-observability": [
         "./libs/server/core/observability/src/index.ts"
       ],

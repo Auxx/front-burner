@@ -1,3 +1,10 @@
+import {
+  applyMigrations,
+  assertNoNewerMigrations,
+  migrationState,
+  openDatabase
+} from '@front-burner/server-core-database';
+import { previousMigrations } from '@front-burner/server-core-database/testing';
 import { startGitHttpServer } from '@front-burner/server-core-git/testing';
 import BetterSqlite3 from 'better-sqlite3';
 import {
@@ -20,6 +27,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { waitFor } from './support/git-api';
 import { createRemotes } from './support/git-remotes';
 import {
+  BUILD_VERSION,
   E2E_SETUP_TOKEN,
   login,
   onboard,
@@ -86,7 +94,52 @@ describe('server startup', () => {
     });
     expect(code).toBe(1);
     expect(output).toContain('"step":"migrations"');
-    expect(output).toContain('newer version of Front Burner');
+    expect(output).toContain('Database is from a newer version; restore the pre-upgrade snapshot to go back');
+  });
+
+  it('an upgrade from the previous migrations writes a snapshot that opens with the previous schema', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'front-burner-e2e-upgrade-'));
+    cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+    const dataDir = join(root, 'data');
+    // The previous version's migrations: every one but the last.
+    const previous = previousMigrations(root);
+    mkdirSync(join(dataDir, 'db'), { recursive: true });
+    const old = openDatabase(join(dataDir, 'db', 'front-burner.sqlite'));
+    applyMigrations(old, previous);
+    const previousCount = migrationState(old, previous).applied;
+    old.sqlite.close();
+
+    const server = await startServerProcess({ FRONT_BURNER_DATA_DIR: dataDir });
+    cleanups.push(() => server.stop());
+
+    const [ snapshot ] = readdirSync(join(dataDir, 'backups')).filter(name => name.startsWith('pre-upgrade-'));
+    expect(snapshot).toMatch(/^pre-upgrade-vunknown-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\dZ-vunknown\.sqlite$/);
+    expect(server.output()).toContain(
+      `Upgrading the database from unknown to ${BUILD_VERSION}; snapshot backups/${snapshot}`
+    );
+    const copy = new BetterSqlite3(join(dataDir, 'backups', snapshot), { readonly: true });
+    try {
+      expect(copy.pragma('integrity_check', { simple: true })).toBe('ok');
+      expect(copy.prepare('SELECT count(*) FROM __drizzle_migrations').pluck().get()).toBe(previousCount);
+    } finally {
+      copy.close();
+    }
+    // The snapshot opens with the previous version's migrations: nothing is newer than they know.
+    const restored = openDatabase(join(dataDir, 'backups', snapshot));
+    try {
+      expect(() => assertNoNewerMigrations(restored, previous)).not.toThrow();
+      expect(migrationState(restored, previous)).toEqual({ applied: previousCount, pending: 0, unknown: [] });
+    } finally {
+      restored.sqlite.close();
+    }
+    await server.stop();
+    const live = new BetterSqlite3(join(dataDir, 'db', 'front-burner.sqlite'), { readonly: true });
+    try {
+      expect(live.prepare('SELECT count(*) FROM __drizzle_migrations').pluck().get()).toBe(previousCount + 1);
+      expect(live.prepare('SELECT last_version FROM instance_state').pluck().get()).toBe(BUILD_VERSION);
+    } finally {
+      live.close();
+    }
   });
 
   it('refuses to start when the port is in use', async () => {

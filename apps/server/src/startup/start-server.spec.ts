@@ -1,15 +1,16 @@
 import { ConfigError } from '@front-burner/server-core-config';
-import { DATABASE, Database } from '@front-burner/server-core-database';
+import { applyMigrations, DATABASE, Database, openDatabase, readLastVersion } from '@front-burner/server-core-database';
+import { MIGRATIONS_FOLDER, previousMigrations } from '@front-burner/server-core-database/testing';
 import type { INestApplication } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
 import { bootstrapLoggerFor, logStartupFailure, startServer, StartupError } from './start-server';
 
 // The real migrations: the application needs its tables.
-const MIGRATIONS = join(__dirname, '..', '..', '..', '..', 'libs', 'server', 'core', 'database', 'migrations');
+const MIGRATIONS = MIGRATIONS_FOLDER;
 const GIT_HELPERS = join(__dirname, '..', '..', '..', '..', 'libs', 'server', 'core', 'git', 'helpers');
 
 describe('startServer', () => {
@@ -21,8 +22,9 @@ describe('startServer', () => {
   let logs: string[];
   let app: INestApplication | undefined;
 
-  const start = (env: Record<string, string | undefined> = {}) =>
+  const start = (env: Record<string, string | undefined> = {}, version?: string) =>
     startServer({
+      version,
       env: {
         FRONT_BURNER_DATA_DIR: dataDir,
         FRONT_BURNER_LOG_FORMAT: 'json',
@@ -213,7 +215,36 @@ describe('startServer', () => {
 
     expect(failure).toBeInstanceOf(StartupError);
     expect((failure as StartupError).step).toBe('migrations');
+    expect((failure as StartupError).message).toContain(
+      'Database is from a newer version; restore the pre-upgrade snapshot to go back'
+    );
+    expect(readdirSync(join(dataDir, 'backups'))).toEqual([]);
   });
+
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'writes a pre-upgrade snapshot and records the version on an upgrade',
+    async () => {
+      // A database of the previous version: every migration but the last.
+      mkdirSync(join(dataDir, 'db'), { recursive: true });
+      const old = openDatabase(join(dataDir, 'db', 'front-burner.sqlite'));
+      applyMigrations(old, previousMigrations(root));
+      old.sqlite.close();
+
+      app = await start({}, '0.2.0');
+
+      const snapshots = readdirSync(join(dataDir, 'backups')).filter(name => name.startsWith('pre-upgrade-'));
+      expect(snapshots).toEqual([ expect.stringMatching(/^pre-upgrade-vunknown-.*\.sqlite$/) ]);
+      const upgrading = logEntries().filter(e => String(e['message']).startsWith('Upgrading the database'));
+      expect(upgrading).toEqual([
+        expect.objectContaining({
+          level: 'info',
+          message: `Upgrading the database from unknown to 0.2.0; snapshot backups/${snapshots[0]}`
+        })
+      ]);
+      expect(readLastVersion(app.get<Database>(DATABASE))).toBe('0.2.0');
+    }
+  );
 
   it('fails at the data-dir step when the data directory is a file', async () => {
     writeFileSync(dataDir, 'not a directory');

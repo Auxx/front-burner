@@ -101,8 +101,11 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
   1. read and validate the configuration, including `…_FILE` variables (NF-8.1,
      NF-8.2);
   2. check that the data directories are writable (NF-5.6);
-  3. open the database; refuse a schema newer than this version (NF-7.3);
-  4. take the pre-upgrade snapshot and apply pending migrations (NF-7.1);
+  3. open the database; refuse a schema newer than this version, naming the
+     version that last started on it (NF-7.3);
+  4. when migrations are pending and the database is not new, take the
+     pre-upgrade snapshot; apply pending migrations; record this version as the
+     last version (NF-7.1, A-4.7);
   5. check the encryption key against the check value, or perform a requested
      reset (NF-8.5, NF-8.6); start background re-encryption when a previous key
      is set (NF-8.4);

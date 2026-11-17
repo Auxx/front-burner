@@ -8,6 +8,11 @@ export const SNAPSHOT_PREFIX = 'front-burner';
 const PARTIAL = '.partial';
 const STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z`;
 
+/** A version as snapshot names carry it: characters other than letters, digits, `_`, `.`, `+` and `-` become `_`. */
+export function safeVersion(version: string): string {
+  return version.replace(/[^\w.+-]/g, '_');
+}
+
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -71,8 +76,7 @@ export class DatabaseSnapshots {
    * @returns the snapshot's path.
    */
   write(prefix: string, now = new Date()): string {
-    const version = this.version.replace(/[^\w.+-]/g, '_');
-    const file = join(this.dir, `${prefix}-${stampOf(now)}-v${version}.sqlite`);
+    const file = join(this.dir, `${prefix}-${stampOf(now)}-v${safeVersion(this.version)}.sqlite`);
     const partial = `${file}${PARTIAL}`;
     mkdirSync(this.dir, { recursive: true });
     // VACUUM INTO refuses a file that is not empty, such as one a crash left.

@@ -18,7 +18,9 @@ export const instanceState = sqliteTable(
     /** A known plaintext encrypted with the current key (A-4.10); set at the first start. */
     encryptionCheck: text('encryption_check'),
     /** The email of the administrator the first OIDC login creates, while `oidc-pending` (AO-27). */
-    pendingAdminEmail: text('pending_admin_email')
+    pendingAdminEmail: text('pending_admin_email'),
+    /** The version of Front Burner that last started on this database (NF-7.1, NF-7.3); null before plan 130. */
+    lastVersion: text('last_version')
   },
   table => [ check('instance_state_single_row', sql`${table.id} = 1`) ]
 );

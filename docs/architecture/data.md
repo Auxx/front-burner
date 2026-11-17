@@ -97,6 +97,26 @@ numbering conventions.
   refuses to start (NF-7.3). A migrations folder without a journal means there
   are no migrations yet.
 
+  - `instance_state.last_version` holds the version that last started on the
+    database, written after the migrations at every start, except by a build
+    without a version (`unknown`), which keeps the recorded one. A newer
+    database is refused with "Database is from version X; restore the
+    pre-upgrade snapshot to go back", X being that version, or "a newer version"
+    when it has none.
+  - The pre-upgrade snapshot is written only when migrations are pending and the
+    database is not new (it has applied migrations). Pending means what
+    Drizzle's migrator will apply: the migrations after the newest applied one,
+    as it compares with that alone; a migration merged out of order, older than
+    one already applied, is never applied and writes no snapshot. A database
+    from before `last_version` existed is named `unknown`. The log at `info`
+    names both versions and the snapshot: `Upgrading the database from 0.1.0 to
+    0.2.0; snapshot backups/pre-upgrade-v0.1.0-….sqlite`. A snapshot that fails
+    stops the start before any migration, so that an upgrade never runs without
+    its way back.
+  - Drizzle's migrator runs all pending migrations in one transaction: a
+    migration that fails leaves the database as it was, so the previous image
+    still starts (NF-7.1). _(Plan 130's calls.)_
+
 ## A-4: Encryption of stored secrets
 
 - **A-4.8** `server/core/crypto` (its `SecretBox`) is the only code that
@@ -151,6 +171,14 @@ numbering conventions.
     counts as the newest and is the first to be pruned. The `database.snapshot`
     housekeeping job (A-6) writes one when the newest daily snapshot is
     `FRONT_BURNER_DB_SNAPSHOT_INTERVAL` old, or there is none.
+  - A pre-upgrade snapshot's prefix is `pre-upgrade-v<old version>`, and its
+    name ends with the old version too, as it holds that version's schema:
+    `pre-upgrade-v0.1.0-2026-11-17T09-30-15Z-v0.1.0.sqlite`. A new one replaces
+    the older ones of the same old version, such as those of earlier starts
+    whose migration failed, so that a container restarting after a failed
+    migration does not fill the disk; the newest is the way back to that
+    version. Those of other old versions are never pruned; the operator removes
+    them. _(Plan 130's call.)_
   - `backups/` is in the data directory (`DataLayout.backupsDir`), created and
     checked for writing on start with the other folders (NF-5.1, NF-5.6), never
     in the repositories directory.
