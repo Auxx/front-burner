@@ -256,6 +256,40 @@ When onboarding ends, it is disabled for good.
   OIDC login failed while pending, completed) are written to the backend log,
   with no secrets.
 
+### Required claim (temporary, MVP)
+
+> **Temporary (MVP).** This lets an operator test the MVP with a limited group,
+> such as the members of one Slack workspace, while user management, the OIDC
+> allow-list and the automatic registration toggle are deferred. Those replace
+> it after the MVP, and this section is removed then. How the claim is checked
+> at login is in [REQ-AUTH-003](auth-login.md) (LG-69 to LG-71).
+
+- **AO-40** The OIDC form (AO-21) also has two optional fields, **Required claim
+  name** and **Required claim value**, each at most 256 characters and trimmed.
+  Either both are filled or both are empty; otherwise the form shows an error on
+  the empty one and the backend refuses the request. They are saved with the
+  other OIDC settings (AO-24) and pre-filled when the user comes back (AO-26).
+  Submitting both empty clears a saved required claim. The hint gives the Slack
+  example: the claim `https://slack.com/team_id` and the workspace ID.
+- **AO-41** The operator can also set the required claim with two optional
+  environment variables:
+
+| Variable                                 | Meaning                                     |
+| ---------------------------------------- | ------------------------------------------- |
+| `FRONT_BURNER_OIDC_REQUIRED_CLAIM_NAME`  | Name of the claim the ID token must carry.  |
+| `FRONT_BURNER_OIDC_REQUIRED_CLAIM_VALUE` | Value that claim must have. Case-sensitive. |
+
+They are separate from the AO-30 variables: they apply whether OIDC comes from
+the environment or from the onboarding page, and they win over a saved required
+claim. If only one of them is set, the backend refuses to start and logs which
+one is missing. They are also the way to change the required claim after
+onboarding, since the MVP has no system settings page.
+
+- **AO-42** While the state is `oidc-pending`, the first administrator's login
+  must also match the required claim, checked before AO-27. If it does not, the
+  login is refused, no account is created, and AO-26 or AO-34 applies with a
+  message saying the required claim did not match.
+
 ## Acceptance criteria
 
 - **AC-AUTH-001.1** On a fresh instance with an empty database and no OIDC
@@ -296,6 +330,16 @@ When onboarding ends, it is disabled for good.
 - **AC-AUTH-001.14** With onboarding `completed`, calling any onboarding
   endpoint directly returns `404 Not Found`, the same response as an unknown
   route, and changes nothing.
+- **AC-AUTH-001.15** _(Temporary, MVP.)_ Completing the OIDC path with a
+  required claim name and value saves them, and the form is pre-filled with them
+  when the user comes back.
+- **AC-AUTH-001.16** _(Temporary, MVP.)_ A required claim name without a value,
+  or a value without a name, is refused by the form and by the API. With only
+  one of the two required claim environment variables set, the backend refuses
+  to start and names the missing one.
+- **AC-AUTH-001.17** _(Temporary, MVP.)_ While OIDC onboarding is pending with a
+  required claim, a login with the administrator email whose ID token lacks the
+  required value is refused with `claim-mismatch`, and no account is created.
 
 ## Out of scope
 

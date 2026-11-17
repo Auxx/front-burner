@@ -170,7 +170,8 @@ Onboarding of invited users is covered by a separate requirement.
   - the email is not verified (LG-19);
   - no user is found and automatic registration is disabled;
   - the email belongs to a password user;
-  - the user is disabled (LG-24).
+  - the user is disabled (LG-24);
+  - a required claim is set and does not match (LG-71; temporary, MVP).
 - **LG-21** When the OIDC login fails, for any of the reasons in LG-20, the web
   client shows the login page with the same generic error, "OIDC login failed".
   The detailed reason, including any error code and description returned by the
@@ -181,6 +182,30 @@ Onboarding of invited users is covered by a separate requirement.
   web client exchanges that code for the tokens through the API.
 - **LG-23** After an OIDC login, the tokens are handled exactly as after a
   username + password login.
+
+### Required claim (temporary, MVP)
+
+> **Temporary (MVP).** This lets an operator test the MVP with a limited group,
+> such as the members of one Slack workspace, while user management, the OIDC
+> allow-list and the automatic registration toggle are deferred. Those replace
+> it after the MVP, and this section is removed then.
+
+The required claim is set on the Administrator onboarding page (AO-40) or
+through environment variables (AO-41).
+
+- **LG-69** When a required claim is set, every OIDC login, for new and existing
+  users alike, is checked after LG-19. The backend reads the ID token claim with
+  exactly the required claim's name. It matches when it is a string equal to the
+  required value, or an array that contains such a string; the comparison is
+  case-sensitive. Any other type, or a missing claim, does not match.
+- **LG-70** When the claim matches and no user is found (LG-18), the backend
+  creates a new OIDC user with the user role, as if automatic registration were
+  enabled. The automatic registration setting itself is not changed. The other
+  rules still apply: an email that belongs to a password user, or a disabled
+  user, is still refused (LG-20).
+- **LG-71** When the claim does not match, the login fails with the reason
+  `claim-mismatch` (LG-43), shown to the user as in LG-21. No account is created
+  or linked.
 
 ### Disabled users
 
@@ -319,6 +344,7 @@ Onboarding of invited users is covered by a separate requirement.
 | `registration-disabled`   | oidc     | No user found and automatic registration is disabled.       |
 | `password-user`           | oidc     | The email belongs to a password user.                       |
 | `admin-email-mismatch`    | oidc     | Onboarding is pending and the email does not match (AO-27). |
+| `claim-mismatch`          | oidc     | The required claim does not match (LG-71; temporary, MVP).  |
 | `refresh-token-reused`    | both     | A rotated refresh token was used again (LG-36).             |
 
 - **LG-44** The login audit log never contains passwords, tokens, codes or
@@ -502,6 +528,13 @@ Onboarding of invited users is covered by a separate requirement.
 - **AC-AUTH-003.26** Opening the login page over plain HTTP from an address
   other than `localhost` shows the HTTPS warning. Opening it over HTTPS or on
   `localhost` does not.
+- **AC-AUTH-003.27** _(Temporary, MVP.)_ With a required claim set and automatic
+  registration disabled, an OIDC login with a new email whose ID token carries
+  the required value creates an ordinary user and logs them in. A login whose
+  claim is missing or different is refused with the generic "OIDC login failed",
+  the login audit log records `claim-mismatch`, and no account is created.
+- **AC-AUTH-003.28** _(Temporary, MVP.)_ Without a required claim, an OIDC login
+  with a new email is still refused while automatic registration is disabled.
 
 ## Out of scope
 
