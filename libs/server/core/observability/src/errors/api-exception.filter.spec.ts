@@ -22,6 +22,16 @@ class TestController {
     throw new ApiErrorException(409, 'some-code', { a: 1 });
   }
 
+  @Get('low-storage')
+  lowStorage() {
+    throw new ApiErrorException(507, 'low-storage');
+  }
+
+  @Get('remote-failed')
+  remoteFailed() {
+    throw new ApiErrorException(502, 'remote-failed');
+  }
+
   @Get('fields')
   fields() {
     throw ApiErrorException.forFields([ { path: 'issuer', code: 'oidc-issuer-unreachable', params: { host: 'x' } } ]);
@@ -70,15 +80,27 @@ const config: Config = {
   keyUnlockIdleMs: 3_600_000,
   dbSnapshotIntervalMs: 86_400_000,
   dbSnapshotKeep: 7,
+  lowDiskThresholdBytes: 2_147_483_648,
   knownHostsFile: undefined,
   oidc: undefined
 };
 
 describe('ApiExceptionFilter', () => {
   let app: NestExpressApplication;
+  /** The log's JSON lines, at `error` and above (the config's level). */
+  const logLines: string[] = [];
+  const unhandledLogged = () => logLines.some(line => line.includes('Unhandled exception'));
 
   beforeAll(async () => {
-    const requestLogger = createRequestLogger(config, new Writable({ write: (_c, _e, done) => done() }));
+    const requestLogger = createRequestLogger(
+      config,
+      new Writable({
+        write: (chunk: Buffer, _e, done) => {
+          logLines.push(chunk.toString());
+          done();
+        }
+      })
+    );
     const moduleRef = await Test.createTestingModule({
       imports: [ LoggingModule.forRoot(requestLogger) ],
       controllers: [ TestController ],
@@ -157,6 +179,31 @@ describe('ApiExceptionFilter', () => {
     expect(JSON.stringify(res.body)).not.toContain('secret internal detail');
     expect(res.body.requestId).toBe(res.headers['x-request-id']);
     expect(ApiErrorSchema.safeParse(res.body).success).toBe(true);
+  });
+
+  it('logs a thrown Error at error as unhandled', async () => {
+    logLines.length = 0;
+    await request(app.getHttpServer()).get('/test/boom');
+    expect(unhandledLogged()).toBe(true);
+  });
+
+  it('logs another 5xx ApiErrorException as unhandled', async () => {
+    logLines.length = 0;
+    const res = await request(app.getHttpServer()).get('/test/remote-failed');
+    expect(res.status).toBe(502);
+    expect(unhandledLogged()).toBe(true);
+  });
+
+  it('answers 507 low-storage without logging an unhandled exception, as the disk monitor logs the state', async () => {
+    logLines.length = 0;
+    const res = await request(app.getHttpServer()).get('/test/low-storage');
+
+    expect(res.status).toBe(507);
+    expect(res.body).toMatchObject({
+      code: 'low-storage',
+      message: 'The server is running low on storage. Contact your administrator.'
+    });
+    expect(unhandledLogged()).toBe(false);
   });
 
   it('answers ThrottlerException with 429 rate-limited', async () => {

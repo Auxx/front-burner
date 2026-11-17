@@ -57,6 +57,20 @@ See [overview.md](overview.md) for the numbering conventions.
   the hour. A failed snapshot or prune is logged at `error`, each with its own
   message, and the next run tries again; only a failed snapshot fails the run.
   _(Plan 129's call.)_
+- The **disk space check** (`storage.disk-check`, NF-9.7) runs every minute, its
+  first run at once. It calls `DiskMonitor.check()` in `server/core/storage`,
+  which also checks once on start, before the instance listens. The monitor
+  reads `statfs` of the data directory and of the repositories root, once when
+  both are one file system (reported as `data`), and is **low** while either has
+  less free space than `FRONT_BURNER_LOW_DISK_THRESHOLD` (`0` turns it off). It
+  logs a `warn` on becoming low and an `info` on leaving it, with the free bytes
+  per volume and no paths. A volume that cannot be read keeps its last reading,
+  so that a passing failure neither ends nor starts low space; one never read
+  counts as not low, so that a broken check never blocks clones. A failure is
+  logged once until the volume can be read again. It publishes no event: the
+  storage library knows neither users nor sessions. While low, readiness is
+  `degraded` (still `200`) and new clones are refused (A-3.2g). _(Plan 131's
+  call.)_
 
 ## A-6: Restart
 

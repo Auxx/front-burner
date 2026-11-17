@@ -13,6 +13,8 @@ export const ERROR_CODES = [
   'cross-site-refused',
   'oidc-code-invalid',
   'too-many-jobs',
+  /** 507; the server is low on storage, so no new clone starts (NF-9.7, A-3.2g). */
+  'low-storage',
   'key-locked',
   /** 429; five wrong passphrases for this key within a minute (RC-18). */
   'unlock-too-many-attempts',

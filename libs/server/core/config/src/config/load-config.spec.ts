@@ -54,10 +54,33 @@ describe('loadConfig', () => {
       keyUnlockIdleMs: 3_600_000,
       dbSnapshotIntervalMs: 86_400_000,
       dbSnapshotKeep: 7,
+      lowDiskThresholdBytes: 2 * 1024 ** 3,
       knownHostsFile: undefined,
       oidc: undefined
     });
     expect(warnings).toEqual([]);
+  });
+
+  it('reads the threshold as a size', () => {
+    const threshold = (value: string) =>
+      loadConfig({ ...BASE, FRONT_BURNER_LOW_DISK_THRESHOLD: value }).config.lowDiskThresholdBytes;
+    expect(threshold('512KB')).toBe(512 * 1024);
+    expect(threshold('500MB')).toBe(500 * 1024 ** 2);
+    expect(threshold('10GB')).toBe(10 * 1024 ** 3);
+    expect(threshold('1.5GB')).toBe(1.5 * 1024 ** 3);
+    expect(threshold('4096')).toBe(4096);
+    for (const value of [ 'lots', '2 TB', '-1GB', 'GB', '1.5', '0.0001KB' ]) {
+      expect(issuesOf({ FRONT_BURNER_LOW_DISK_THRESHOLD: value })).toEqual([
+        {
+          variable: 'FRONT_BURNER_LOW_DISK_THRESHOLD',
+          message: 'must be a whole number of bytes, or a number followed by KB, MB or GB'
+        }
+      ]);
+    }
+  });
+
+  it('0 turns the check off', () => {
+    expect(loadConfig({ ...BASE, FRONT_BURNER_LOW_DISK_THRESHOLD: '0' }).config.lowDiskThresholdBytes).toBe(0);
   });
 
   it('reads the snapshot interval and count', () => {

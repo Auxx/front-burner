@@ -10,7 +10,9 @@ import {
   startGitHttpServer
 } from '@front-burner/server-core-git/testing';
 import { JobRunner } from '@front-burner/server-core-jobs';
+import { ApiErrorException } from '@front-burner/server-core-observability';
 import { SessionLifecycle } from '@front-burner/server-core-security';
+import type { DiskMonitor } from '@front-burner/server-core-storage';
 import {
   JobKeys,
   KeyUnlockStore,
@@ -57,6 +59,8 @@ describe('AddRepositoryService', () => {
   let jobKeys: JobKeys;
   let service: AddRepositoryService;
   let alice: { id: number; sessionId: string; };
+  /** Whether the disk monitor reports low space (NF-9.7). */
+  let low: boolean;
 
   const handbookUrl = () => `${server.url}/handbook.git`;
   const request = (overrides: Partial<AddRepositoryRequest> = {}): AddRepositoryRequest => ({
@@ -119,8 +123,10 @@ describe('AddRepositoryService', () => {
         unlocks
       ),
       runner,
-      jobKeys
+      jobKeys,
+      { isLow: () => low } as DiskMonitor
     );
+    low = false;
     alice = { id: insertUser(database, 'alice@x.io'), sessionId: SESSION };
   });
 
@@ -147,6 +153,58 @@ describe('AddRepositoryService', () => {
       service.accessCheck(alice, { remoteUrl: `${server.url}/missing.git`, credentials: { mode: 'none' } })
     );
     expect(error).toEqual(fieldError('remoteUrl', 'repository-not-found'));
+  });
+
+  it('adding a repository on low space is refused with low-storage', async () => {
+    low = true;
+    const accessCheck = vi.spyOn(CredentialsCheck.prototype, 'check');
+
+    const error = await rejectionOf(service.add(
+      alice,
+      request({
+        credentials: { mode: 'new-https', name: 'Work', username: 'alice', password: TOKEN }
+      })
+    ));
+
+    expect(error).toBeInstanceOf(ApiErrorException);
+    expect(error).toMatchObject({ code: 'low-storage' });
+    expect((error as ApiErrorException).getStatus()).toBe(507);
+    // Nothing saved or queued, and the remote not contacted.
+    expect(all()).toEqual({ repositories: [], credentials: [], jobs: [] });
+    expect(accessCheck).not.toHaveBeenCalled();
+    accessCheck.mockRestore();
+  });
+
+  it('low space that starts during the access check refuses the clone', async () => {
+    vi.spyOn(CredentialsCheck.prototype, 'check').mockImplementation(() => {
+      low = true;
+      return Promise.resolve({ branches: [ 'main' ], defaultBranch: 'main' });
+    });
+
+    const error = await rejectionOf(service.add(alice, request()));
+
+    expect(error).toMatchObject({ code: 'low-storage' });
+    expect(all()).toEqual({ repositories: [], credentials: [], jobs: [] });
+    vi.restoreAllMocks();
+  });
+
+  it('a form error comes before low-storage', async () => {
+    low = true;
+    insertRepository(database, alice.id, { name: 'Handbook' });
+
+    expect(await rejectionOf(service.add(alice, request()))).toEqual(fieldError('name', 'name-taken', {
+      name: 'Handbook'
+    }));
+  });
+
+  // The broker listens on a Unix socket in a POSIX path: not on Windows.
+  it.skipIf(process.platform === 'win32')('leaving low space allows clones again', async () => {
+    low = true;
+    await rejectionOf(service.add(alice, request()));
+
+    low = false;
+    await expect(service.add(alice, request())).resolves.toMatchObject({ status: 'cloning' });
+    expect(all().jobs).toHaveLength(1);
   });
 
   // The broker listens on a Unix socket in a POSIX path: not on Windows.
@@ -335,6 +393,28 @@ describe('AddRepositoryService', () => {
 
     afterEach(() => {
       vi.restoreAllMocks();
+    });
+
+    it('on low space, answers low-storage before asking for the passphrase of a locked key', async () => {
+      const id = database.db.transaction(tx =>
+        saved.createPastedKey(tx, alice.id, {
+          name: 'Laptop',
+          privateKey: sshKeyFixture('ed25519-passphrase'),
+          passphrase: FIXTURE_PASSPHRASE
+        })
+      );
+      const addLocked = () =>
+        rejectionOf(service.add(
+          alice,
+          request({
+            remoteUrl: 'git@git.example.com:acme/handbook.git',
+            credentials: { mode: 'saved', credentialId: id }
+          })
+        ));
+      expect(await addLocked()).toEqual(fieldError('credentials.passphrase', 'passphrase-required'));
+
+      low = true;
+      expect(await addLocked()).toMatchObject({ code: 'low-storage' });
     });
 
     it('holds the unlocked key for the clone job', async () => {

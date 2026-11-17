@@ -1,5 +1,6 @@
 import { DATABASE, Database, repositories, Tx, users } from '@front-burner/server-core-database';
 import { JobRunner } from '@front-burner/server-core-jobs';
+import { DiskMonitor } from '@front-burner/server-core-storage';
 import { JobKeys } from '@front-burner/server-feature-credentials';
 import {
   type AccessCheckRequest,
@@ -12,7 +13,7 @@ import {
 import { sameRepositoryName } from '@front-burner/shared-util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { queueClone } from '../clone/clone-queue';
+import { assertSpaceForClone, queueClone } from '../clone/clone-queue';
 import { queuedClone, toSummary } from '../repositories/repository-queries';
 import { CredentialsCheck } from './credentials-check';
 import { RequestCredentials } from './request-credentials';
@@ -42,7 +43,8 @@ export class AddRepositoryService {
     private readonly requestCredentials: RequestCredentials,
     private readonly credentialsCheck: CredentialsCheck,
     private readonly runner: JobRunner,
-    private readonly jobKeys: JobKeys
+    private readonly jobKeys: JobKeys,
+    private readonly disks: DiskMonitor
   ) {}
 
   /** The branch list of the form (AR-35). */
@@ -52,12 +54,17 @@ export class AddRepositoryService {
     return this.credentialsCheck.check(user, request.remoteUrl, remote, request.credentials.mode, credentials);
   }
 
-  /** @throws ApiErrorException field errors and the codes of {@link toAddRepositoryError}. */
+  /**
+   * @throws ApiErrorException field errors, the codes of {@link toAddRepositoryError}, and
+   *   `507 low-storage` while the server is low on storage (NF-9.7).
+   */
   async add(user: RequestUser, request: AddRepositoryRequest): Promise<RepositorySummary> {
     const gitLevel = this.levelFor(user.id, request.gitLevel);
     this.assertNameFree(this.database.db, user.id, request.name);
     this.credentialsCheck.assertNameFree(user.id, request.credentials);
     const remote = remoteOf(request.remoteUrl);
+    // After the form's own errors; before a locked key is asked for and the remote contacted for nothing (A-3.2g).
+    assertSpaceForClone(this.disks);
     const credentials = this.requestCredentials.resolve(user, remote.protocol, request.credentials);
     const result = await this.credentialsCheck.check(
       user,
@@ -78,6 +85,8 @@ export class AddRepositoryService {
     const { row, jobId } = this.database.db.transaction(tx => {
       // Checked again inside the transaction: another submit may have taken the name meanwhile (AC-REPO-001.2).
       this.assertNameFree(tx, user.id, request.name);
+      // And space: the disk may have run low while the access check waited for the remote.
+      assertSpaceForClone(this.disks);
       const credentialId = this.credentialsCheck.saveNew(tx, user.id, request.credentials) ?? credentials.savedId
         ?? null;
       let inserted;

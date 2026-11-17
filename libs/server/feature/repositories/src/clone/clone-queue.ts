@@ -1,10 +1,24 @@
 import { Database, jobs, Tx } from '@front-burner/server-core-database';
 import { JobRunner } from '@front-burner/server-core-jobs';
+import { ApiErrorException } from '@front-burner/server-core-observability';
+import type { DiskMonitor } from '@front-burner/server-core-storage';
 import type { CloneProgress } from '@front-burner/shared-contracts';
 import { and, eq, inArray } from 'drizzle-orm';
 
 /** The job type of the background clone (AR-49). */
 export const CLONE_JOB_TYPE = 'repositories.clone';
+
+/**
+ * Refuses a new clone while the server is low on storage (NF-9.7, A-3.2g).
+ * Called before anything changes; a clone already queued or running goes on.
+ *
+ * @throws ApiErrorException `507 low-storage`.
+ */
+export function assertSpaceForClone(disks: Pick<DiskMonitor, 'isLow'>): void {
+  if (disks.isLow()) {
+    throw new ApiErrorException(507, 'low-storage');
+  }
+}
 
 export interface CloneJobPayload {
   repositoryId: number;

@@ -22,6 +22,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'cross-site-refused': 'The request came from another site.',
   'oidc-code-invalid': 'OIDC login failed',
   'too-many-jobs': 'Too many tasks are waiting. Wait for one to finish and try again.',
+  'low-storage': 'The server is running low on storage. Contact your administrator.',
   'key-locked': 'Enter the passphrase of this key to unlock it for this session.',
   'unlock-too-many-attempts': 'Too many attempts. Try again in a minute.',
   'credentials-missing': 'These saved credentials are no longer available. Add them again.',
@@ -89,6 +90,17 @@ const MESSAGES: Record<ErrorCode, string> = {
   interrupted: 'This was interrupted by a restart. Try again.'
 };
 
+/**
+ * 5xx answers that describe the instance's state rather than a failure of the
+ * request, so not logged as unhandled: whatever watches the state logs it once
+ * (`low-storage`: the disk monitor, NF-9.7).
+ */
+const EXPECTED_SERVER_CODES: ReadonlySet<string> = new Set<ErrorCode>([ 'low-storage' ]);
+
+function isExpectedServerAnswer(exception: unknown): boolean {
+  return exception instanceof ApiErrorException && EXPECTED_SERVER_CODES.has(exception.code);
+}
+
 interface ZodIssueLike {
   path: PropertyKey[];
   code: string;
@@ -125,7 +137,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     }
 
     const answer = this.answer(exception);
-    if (answer.status >= 500) {
+    if (answer.status >= 500 && !isExpectedServerAnswer(exception)) {
       const error = exception instanceof Error ? exception : new Error(String(exception));
       if (req.log) {
         req.log.error({ err: error }, 'Unhandled exception');
