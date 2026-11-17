@@ -158,7 +158,8 @@ When a required claim is set, Front Burner accepts an OIDC login only if the
 provider's ID token has that claim with that value. Everyone who passes gets an
 ordinary user account on their first login; everyone else sees "OIDC login
 failed", and the login audit log records `claim-mismatch`. This also applies to
-the first administrator, and to people who already have an account.
+people who already have an account, and to the first administrator, who sees
+that the required claim did not match.
 
 Set it either in the **Required claim name** and **Required claim value** fields
 of the onboarding page, or with these variables, which work with either way of
@@ -170,6 +171,9 @@ setting up OIDC and win over the fields:
 | `FRONT_BURNER_OIDC_REQUIRED_CLAIM_VALUE` | Value the claim must have. Case-sensitive.     |
 
 The variables are the only way to change the required claim after onboarding.
+They cannot remove one saved on the onboarding page: without them, the saved
+claim applies again. Plan to keep the filter for as long as the instance runs
+with this version.
 
 For Slack, create a Slack app with **Sign in with Slack** (OpenID Connect) and
 use:

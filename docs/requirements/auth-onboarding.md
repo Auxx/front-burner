@@ -283,7 +283,8 @@ They are separate from the AO-30 variables: they apply whether OIDC comes from
 the environment or from the onboarding page, and they win over a saved required
 claim. If only one of them is set, the backend refuses to start and logs which
 one is missing. They are also the way to change the required claim after
-onboarding, since the MVP has no system settings page.
+onboarding, since the MVP has no system settings page. They cannot remove a
+saved required claim: without them, the saved one applies.
 
 - **AO-42** While the state is `oidc-pending`, the first administrator's login
   must also match the required claim, checked before AO-27. If it does not, the
