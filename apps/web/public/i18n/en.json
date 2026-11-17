@@ -8,7 +8,7 @@
   "errors.internal": "Something went wrong on our side.",
   "errors.unauthenticated": "Log in to continue.",
   "errors.auth-token-expired": "Your session has expired. Please log in again",
-  "errors.forbidden": "Only administrators can do this.",
+  "errors.forbidden": "You don't have access to this.",
   "errors.wrong-credentials": "Wrong username or password",
   "errors.refresh-refused": "Your session has expired. Please log in again",
   "errors.cross-site-refused": "This request came from another site and was refused.",

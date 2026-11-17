@@ -52,8 +52,10 @@ top of the security rules in the requirements and NF-11. See
   first, answers `403 forbidden` to a user who is not an administrator. It reads
   the role from the user's row on admin routes only: the auth middleware reads
   no row, so ordinary requests get no query, and a role taken away applies at
-  once. The guard lives beside the auth guard rather than in the security
-  library, which cannot depend on the database's errors without a cycle. The
+  once. It does not answer `401` itself: a request without `req.auth` means the
+  guards are in the wrong order, which `authOf` reports as a bug. The guard
+  lives beside the auth guard rather than in the security library, which cannot
+  import `ApiErrorException` from the observability library without a cycle. The
   first admin route is the instance's storage (A-3.2h), which is not under
   `/admin/`: it is about the instance, not about users.
 - **A-7.5** An API test goes through every non-admin route that takes an ID and

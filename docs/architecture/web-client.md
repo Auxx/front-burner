@@ -63,15 +63,18 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   /instance/storage` (A-3.2h): on start, every 5 minutes while the tab is
   visible, after a push channel reconnect, and at once after a `low-storage`
   error, which an HTTP interceptor reports, so that a refused clone shows the
-  banner without waiting. A read that fails keeps the last state; a logout turns
-  it off. _(Plan 132's call: the disk monitor publishes no event, and a disk
-  fills slowly.)_ The banners are `shell-app-banners`, below the app header and,
-  on the repository screen, below its bar, above the page's own notices (NV-16);
-  each is announced once when it appears. Its icon comes from the sprite, which
-  the backend lets the browser cache for good (A-7.9), so that it is drawn while
-  offline. _(Plan 124's call: the banners show whenever the user is logged in,
-  also before the user has loaded and while the repository screen opens, as the
-  offline banner then says why nothing comes.)_
+  banner without waiting. A tab that comes back into view reads at once only
+  when the last read is older than 5 minutes. A read that fails keeps the last
+  state; a `403`, for a user who is no longer an administrator, and a logout
+  turn it off, and the `403` stops the reads until the next login. _(Plan 132's
+  call: the disk monitor publishes no event, and a disk fills slowly.)_ The
+  banners are `shell-app-banners`, below the app header and, on the repository
+  screen, below its bar, above the page's own notices (NV-16); each is announced
+  once when it appears. Its icon comes from the sprite, which the backend lets
+  the browser cache for good (A-7.9), so that it is drawn while offline. _(Plan
+  124's call: the banners show whenever the user is logged in, also before the
+  user has loaded and while the repository screen opens, as the offline banner
+  then says why nothing comes.)_
 - **A-8.8** **Transloco:** English at launch, translation files loaded on
   demand, language switched without reloading, ICU messages through our own
   Transloco transpiler on `intl-messageformat` (FormatJS, no `eval`), because

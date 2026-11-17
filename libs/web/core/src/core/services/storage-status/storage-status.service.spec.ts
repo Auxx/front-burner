@@ -1,4 +1,5 @@
 import { DOCUMENT } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { CurrentUser, InstanceStorage } from '@front-burner/shared-contracts';
@@ -100,6 +101,48 @@ describe('StorageStatusService', () => {
     expect(storage).toHaveBeenCalledTimes(4);
     await vi.advanceTimersByTimeAsync(STORAGE_STATUS_INTERVAL_MS);
     expect(storage).toHaveBeenCalledTimes(5);
+  });
+
+  it('does not read again on a tab switch when the last read is recent', async () => {
+    start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage).toHaveBeenCalledOnce();
+
+    setVisibility('hidden');
+    await vi.advanceTimersByTimeAsync(60_000);
+    setVisibility('visible');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage).toHaveBeenCalledOnce();
+
+    // Read when the interval since the last read is up, not a full interval after the switch.
+    await vi.advanceTimersByTimeAsync(STORAGE_STATUS_INTERVAL_MS - 60_000);
+    expect(storage).toHaveBeenCalledTimes(2);
+  });
+
+  it('turns the banner off and stops reading when the user is no longer an administrator', async () => {
+    const service = start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(service.low()).toBe(true);
+
+    storage.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 403, error: { code: 'forbidden' } })));
+    await vi.advanceTimersByTimeAsync(STORAGE_STATUS_INTERVAL_MS);
+    TestBed.tick();
+    expect(service.low()).toBe(false);
+
+    service.refresh();
+    reconnected.next();
+    await vi.advanceTimersByTimeAsync(3 * STORAGE_STATUS_INTERVAL_MS);
+    expect(storage).toHaveBeenCalledTimes(2);
+
+    // A new login starts over.
+    storage.mockImplementation(() => of({ low } satisfies InstanceStorage));
+    loggedIn.set(false);
+    TestBed.tick();
+    loggedIn.set(true);
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage).toHaveBeenCalledTimes(3);
+    expect(service.low()).toBe(true);
   });
 
   it('reads the state again after a reconnect', async () => {

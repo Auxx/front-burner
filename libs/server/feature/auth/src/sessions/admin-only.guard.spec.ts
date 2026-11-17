@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
+import { SignJWT } from 'jose';
 import request from 'supertest';
 import { createTestDatabase } from '../testing/test-database';
 import { AdminOnlyGuard } from './admin-only.guard';
@@ -130,6 +131,20 @@ describe('AdminOnlyGuard', () => {
 
     expect((await get('/things', token)).status).toBe(200);
     expect((await get('/things')).status).toBe(401);
+  });
+
+  it('an expired auth token still gets auth-token-expired, so that the client refreshes', async () => {
+    const { sessionId } = await sessions.start({ id: addUser('admin@x.io', 'administrator') }, 'password', 'cookie');
+    const expired = await new SignJWT({ sid: sessionId })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject('1')
+      .setIssuedAt(Math.floor(Date.now() / 1000) - 120)
+      .setExpirationTime(Math.floor(Date.now() / 1000) - 60)
+      .sign(new TextEncoder().encode(config.jwtSecret));
+
+    const response = await get('/admin', expired);
+    expect(response.status).toBe(401);
+    expect(response.body.code).toBe('auth-token-expired');
   });
 
   it('an unauthenticated request gets 401 before the role is checked', async () => {

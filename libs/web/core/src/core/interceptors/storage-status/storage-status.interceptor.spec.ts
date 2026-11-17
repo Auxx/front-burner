@@ -41,6 +41,27 @@ describe('storageStatusInterceptor', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  it('reads the code of a raw-bytes request\'s error too', async () => {
+    const answer = firstValueFrom(http.get('/api/v1/raw', { responseType: 'blob' })).catch(() => undefined);
+    backend.expectOne('/api/v1/raw').flush(
+      new Blob([ JSON.stringify({ code: 'low-storage', params: {}, requestId: 'r', message: '' }) ]),
+      { status: 507, statusText: 'Insufficient Storage' }
+    );
+    await answer;
+
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  });
+
+  it('passes the error on unchanged', async () => {
+    const answer = firstValueFrom(http.post('/api/v1/repositories', {}));
+    backend.expectOne('/api/v1/repositories').flush({ code: 'low-storage' }, {
+      status: 507,
+      statusText: 'Insufficient Storage'
+    });
+
+    await expect(answer).rejects.toMatchObject({ status: 507, error: { code: 'low-storage' } });
+  });
+
   it('ignores other errors and answers', async () => {
     await fail(409, 'git-busy');
     const answer = firstValueFrom(http.get('/api/v1/me'));
