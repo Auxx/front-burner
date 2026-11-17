@@ -8,6 +8,8 @@ export const ERROR_CODES = [
   'internal',
   'unauthenticated',
   'auth-token-expired',
+  /** 403; the route is for administrators only (A-7.4). */
+  'forbidden',
   'wrong-credentials',
   'refresh-refused',
   'cross-site-refused',

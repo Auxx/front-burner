@@ -17,6 +17,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   internal: 'Something went wrong.',
   unauthenticated: 'Log in to continue.',
   'auth-token-expired': 'The auth token has expired.',
+  forbidden: 'Only administrators can do this.',
   'wrong-credentials': 'Wrong username or password',
   'refresh-refused': 'Your session has expired. Please log in again',
   'cross-site-refused': 'The request came from another site.',
