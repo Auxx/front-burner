@@ -1,3 +1,4 @@
+export * from './disk/disk-monitor';
 export * from './layout/data-layout';
 export * from './layout/trash';
 export * from './paths/in-batches';

@@ -1,5 +1,6 @@
 import { CONFIG, Config } from '@front-burner/server-core-config';
 import { DATABASE, Database } from '@front-burner/server-core-database';
+import { DiskMonitor } from '@front-burner/server-core-storage';
 import type { HealthStatus } from '@front-burner/shared-contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { accessSync, constants } from 'node:fs';
@@ -13,9 +14,11 @@ export class ReadinessService {
   constructor(
     @Inject(CONFIG) private readonly config: Config,
     @Inject(DATABASE) private readonly database: Database,
-    @Inject(MIGRATIONS_APPLIED) private readonly migrationsApplied: boolean
+    @Inject(MIGRATIONS_APPLIED) private readonly migrationsApplied: boolean,
+    @Inject(DiskMonitor) private readonly disks: Pick<DiskMonitor, 'isLow'>
   ) {}
 
+  /** `fail` when it cannot serve; `degraded` while low on storage, which refuses only new clones (NF-9.7, NF-10.8). */
   check(): HealthStatus['status'] {
     if (!this.migrationsApplied) {
       return 'fail';
@@ -27,6 +30,6 @@ export class ReadinessService {
     } catch {
       return 'fail';
     }
-    return 'ok';
+    return this.disks.isLow() ? 'degraded' : 'ok';
   }
 }

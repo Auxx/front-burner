@@ -9,8 +9,11 @@ describe('ReadinessService', () => {
   let dir: string;
   let database: Database;
   let config: Config;
+  let low: boolean;
+  const disks = { isLow: () => low };
 
   beforeEach(() => {
+    low = false;
     dir = mkdtempSync(join(tmpdir(), 'fb-ready-'));
     database = openDatabase(join(dir, 'db.sqlite'));
     config = {
@@ -35,6 +38,7 @@ describe('ReadinessService', () => {
       keyUnlockIdleMs: 3_600_000,
       dbSnapshotIntervalMs: 86_400_000,
       dbSnapshotKeep: 7,
+      lowDiskThresholdBytes: 2_147_483_648,
       knownHostsFile: undefined,
       oidc: undefined
     };
@@ -48,16 +52,26 @@ describe('ReadinessService', () => {
   });
 
   it('is ok with a working database, applied migrations and a writable directory', () => {
-    expect(new ReadinessService(config, database, true).check()).toBe('ok');
+    expect(new ReadinessService(config, database, true, disks).check()).toBe('ok');
   });
 
   it('fails when the database is closed', () => {
     database.sqlite.close();
-    expect(new ReadinessService(config, database, true).check()).toBe('fail');
+    expect(new ReadinessService(config, database, true, disks).check()).toBe('fail');
   });
 
   it('fails when migrations were not applied', () => {
-    expect(new ReadinessService(config, database, false).check()).toBe('fail');
+    expect(new ReadinessService(config, database, false, disks).check()).toBe('fail');
+  });
+
+  it('is degraded while low on storage', () => {
+    low = true;
+    expect(new ReadinessService(config, database, true, disks).check()).toBe('degraded');
+  });
+
+  it('fails rather than degraded when both apply', () => {
+    low = true;
+    expect(new ReadinessService(config, database, false, disks).check()).toBe('fail');
   });
 
   // Mode bits do not make a folder unwritable on Windows, nor for root.
@@ -66,7 +80,7 @@ describe('ReadinessService', () => {
     () => {
       const readOnly = join(dir, 'ro');
       mkdirSync(readOnly, { mode: 0o500 });
-      expect(new ReadinessService({ ...config, dataDir: readOnly }, database, true).check()).toBe('fail');
+      expect(new ReadinessService({ ...config, dataDir: readOnly }, database, true, disks).check()).toBe('fail');
     }
   );
 
@@ -75,7 +89,7 @@ describe('ReadinessService', () => {
     () => {
       const readOnly = join(dir, 'ro');
       mkdirSync(readOnly, { mode: 0o500 });
-      expect(new ReadinessService({ ...config, reposRoot: readOnly }, database, true).check()).toBe('fail');
+      expect(new ReadinessService({ ...config, reposRoot: readOnly }, database, true, disks).check()).toBe('fail');
     }
   );
 });

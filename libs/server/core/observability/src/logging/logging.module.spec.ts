@@ -50,6 +50,7 @@ const config: Config = {
   keyUnlockIdleMs: 3_600_000,
   dbSnapshotIntervalMs: 86_400_000,
   dbSnapshotKeep: 7,
+  lowDiskThresholdBytes: 2_147_483_648,
   knownHostsFile: undefined,
   oidc: undefined
 };

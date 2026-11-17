@@ -44,6 +44,12 @@ export interface Config {
   dbSnapshotIntervalMs: number;
   /** How many daily database snapshots are kept (NF-6.2). At least 1. */
   dbSnapshotKeep: number;
+  /**
+   * `FRONT_BURNER_LOW_DISK_THRESHOLD` in bytes: below it, on the data directory
+   * or the repositories root, new clones are refused and readiness is
+   * `degraded` (NF-9.7). 0 turns the check off.
+   */
+  lowDiskThresholdBytes: number;
   /** `FRONT_BURNER_KNOWN_HOSTS_FILE`: replaces the built-in host keys (AR-32). Always absolute. */
   knownHostsFile: string | undefined;
   /** OIDC and the first administrator from the environment (AO-30); undefined when none of the variables is set. */

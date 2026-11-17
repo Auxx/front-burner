@@ -4,6 +4,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { compile } from 'proxy-addr';
 import { z } from 'zod';
 import { Config, OidcEnvironment } from './config.model';
+import { parseSize } from './parse-size';
 
 const PREFIX = 'FRONT_BURNER_';
 const SETUP_TOKEN = 'FRONT_BURNER_SETUP_TOKEN';
@@ -38,6 +39,20 @@ const REPOS_DIR = 'FRONT_BURNER_REPOS_DIR';
 function isInside(inner: string, outer: string): boolean {
   const path = relative(outer, inner);
   return path !== '' && path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path);
+}
+
+function size(defaultValue: string) {
+  return z.string().default(defaultValue).transform((value, context) => {
+    const bytes = parseSize(value);
+    if (bytes === undefined || !Number.isSafeInteger(bytes)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'must be a whole number of bytes, or a number followed by KB, MB or GB'
+      });
+      return z.NEVER;
+    }
+    return bytes;
+  });
 }
 
 function duration(defaultValue: string) {
@@ -140,6 +155,8 @@ const schema = z.object({
       message: 'must be a whole number of at least 1'
     })
     .transform(Number),
+  // 0 turns the check off (plan 131).
+  FRONT_BURNER_LOW_DISK_THRESHOLD: size('2GB'),
   FRONT_BURNER_KNOWN_HOSTS_FILE: z.string().optional(),
   [OIDC_ISSUER]: z.string().refine(isHttpsIssuer, { message: 'must be an https: URL without query or fragment' })
     .optional(),
@@ -346,6 +363,7 @@ export function loadConfig(
       keyUnlockIdleMs: values.FRONT_BURNER_KEY_UNLOCK_IDLE,
       dbSnapshotIntervalMs: values.FRONT_BURNER_DB_SNAPSHOT_INTERVAL,
       dbSnapshotKeep: values.FRONT_BURNER_DB_SNAPSHOT_KEEP,
+      lowDiskThresholdBytes: values.FRONT_BURNER_LOW_DISK_THRESHOLD,
       knownHostsFile: values.FRONT_BURNER_KNOWN_HOSTS_FILE === undefined
         ? undefined
         : resolve(cwd, values.FRONT_BURNER_KNOWN_HOSTS_FILE),

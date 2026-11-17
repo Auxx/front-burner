@@ -1,12 +1,13 @@
 import { Global, Module } from '@nestjs/common';
 import { DatabaseSnapshotJob } from './housekeeping/database-snapshot.job';
+import { DiskCheckJob } from './housekeeping/disk-check.job';
 import { FinishedJobsCleanup } from './housekeeping/finished-jobs-cleanup';
 import { JobRunner } from './runner/job-runner';
 
 /** The job runner (A-6). Global, so that any feature can register and enqueue jobs. */
 @Global()
 @Module({
-  providers: [ JobRunner, FinishedJobsCleanup, DatabaseSnapshotJob ],
+  providers: [ JobRunner, FinishedJobsCleanup, DatabaseSnapshotJob, DiskCheckJob ],
   exports: [ JobRunner ]
 })
 export class JobsModule {}
