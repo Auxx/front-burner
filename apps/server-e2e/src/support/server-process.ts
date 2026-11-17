@@ -44,6 +44,8 @@ export interface ServerOptions {
   cwd?: string;
   /** A PEM file the server trusts besides the system's authorities (`NODE_EXTRA_CA_CERTS`). */
   extraCaFile?: string;
+  /** `FRONT_BURNER_REPOS_DIR`: the working copies, `tmp/` and `orphans/` go there instead of the data directory (NF-5.4). */
+  reposDir?: string;
 }
 
 export async function freePort(): Promise<number> {
@@ -91,6 +93,7 @@ async function spawnServer(env: Record<string, string>, options: ServerOptions):
       // git trusts the certificate of the git test servers (AR-43: through the container's authorities).
       GIT_SSL_CAINFO: TEST_CERTIFICATE,
       ...(options.extraCaFile === undefined ? {} : { NODE_EXTRA_CA_CERTS: options.extraCaFile }),
+      ...(options.reposDir === undefined ? {} : { FRONT_BURNER_REPOS_DIR: options.reposDir }),
       ...env
     },
     stdio: [ 'ignore', 'pipe', 'pipe' ]
