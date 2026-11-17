@@ -19,6 +19,7 @@ export * from './git/git-paths.schema';
 export * from './git/git-push.schema';
 export * from './git/git-status.schema';
 export * from './health/health-status.schema';
+export * from './instance/instance-storage.schema';
 export * from './onboarding/onboarding.schema';
 export * from './preferences/commit-author.schema';
 export * from './repositories/add-repository.schema';

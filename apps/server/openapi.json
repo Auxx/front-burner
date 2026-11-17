@@ -53,6 +53,27 @@
         ]
       }
     },
+    "/api/v1/instance/storage": {
+      "get": {
+        "operationId": "storage",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceStorage"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "instance"
+        ]
+      }
+    },
     "/api/v1/auth/methods": {
       "get": {
         "operationId": "methods",
@@ -2384,6 +2405,17 @@
         },
         "required": [
           "status"
+        ]
+      },
+      "InstanceStorage": {
+        "type": "object",
+        "properties": {
+          "low": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "low"
         ]
       },
       "LoginMethods": {

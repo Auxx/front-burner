@@ -3,6 +3,7 @@ export * from './Credentials';
 export * from './Files';
 export * from './Git';
 export * from './Health';
+export * from './Instance';
 export * from './KnownHosts';
 export * from './Me';
 export * from './Oidc';
