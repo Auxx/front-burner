@@ -2,7 +2,16 @@ import { Database } from '@front-burner/server-core-database';
 import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
 import { Injectable, Logger, Module, OnModuleInit } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InstanceRepositories } from '../repositories/instance-repositories';
@@ -141,6 +150,68 @@ describe('OrphanedWorkingCopies', () => {
 
     expect(existsSync(join(layout.reposDir, String(alice)))).toBe(false);
     expect(readdirSync(join(layout.reposDir, String(bob)))).toEqual([ String(notes) ]);
+  });
+
+  it('keeps a user folder that was empty before', () => {
+    const alice = insertUser(database, 'alice@x.io');
+    mkdirSync(join(layout.reposDir, String(alice)));
+
+    expect(orphans.moveAll()).toEqual([]);
+
+    expect(existsSync(join(layout.reposDir, String(alice)))).toBe(true);
+  });
+
+  it('a file where a user folder should be is left and logged', () => {
+    const alice = insertUser(database, 'alice@x.io');
+    const bob = insertUser(database, 'bob@x.io');
+    writeFileSync(join(layout.reposDir, String(alice)), '');
+    workingCopy(bob, 13);
+
+    orphans.onModuleInit();
+
+    expect(existsSync(join(layout.reposDir, String(alice)))).toBe(true);
+    expect(orphaned()).toEqual([ `${bob}-13-2026-11-16T10-00-00Z` ]);
+    expect(logged(warn)).toContain('repos/ holds an entry that the backend did not make; it is left where it is');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it.skipIf(process.getuid?.() === 0)('a user folder that can\'t be read is logged and the start goes on', () => {
+    const alice = insertUser(database, 'alice@x.io');
+    const bob = insertUser(database, 'bob@x.io');
+    workingCopy(alice, 12);
+    workingCopy(bob, 13);
+    const aliceDir = join(layout.reposDir, String(alice));
+    chmodSync(aliceDir, 0o000);
+    try {
+      orphans.onModuleInit();
+    } finally {
+      chmodSync(aliceDir, 0o700);
+    }
+
+    expect(existsSync(layout.workingCopy(alice, 12))).toBe(true);
+    expect(orphaned()).toEqual([ `${bob}-13-2026-11-16T10-00-00Z` ]);
+    expect(logged(error)).toEqual([ `Could not read the folder of user ${alice} in repos/` ]);
+  });
+
+  it.skipIf(process.getuid?.() === 0)('a repos folder that can\'t be read is logged and the start goes on', () => {
+    chmodSync(layout.reposDir, 0o000);
+    try {
+      expect(() => orphans.onModuleInit()).not.toThrow();
+    } finally {
+      chmodSync(layout.reposDir, 0o700);
+    }
+
+    expect(logged(error)).toEqual([ 'Could not look for orphaned working copies in repos/; the start goes on' ]);
+  });
+
+  it('a dangling link in orphans takes its name', () => {
+    const alice = insertUser(database, 'alice@x.io');
+    workingCopy(alice, 12);
+    symlinkSync(join(root, 'gone'), join(layout.orphansDir, `${alice}-12-2026-11-16T10-00-00Z`));
+
+    expect(orphans.moveAll()).toEqual([ `${alice}-12-2026-11-16T10-00-00Z-2` ]);
+
+    expect(existsSync(join(layout.orphansDir, `${alice}-12-2026-11-16T10-00-00Z-2`, 'README.md'))).toBe(true);
   });
 
   it('a failed move is logged and the start goes on', () => {

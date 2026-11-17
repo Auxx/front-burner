@@ -1,6 +1,6 @@
 import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { existsSync, readdirSync, renameSync, rmdirSync } from 'node:fs';
+import { lstatSync, readdirSync, renameSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { InstanceRepositories } from '../repositories/instance-repositories';
 
@@ -22,6 +22,20 @@ function entriesOf(path: string): string[] {
   }
 }
 
+/**
+ * Whether anything has this path, a dangling symbolic link included, which a
+ * rename can't replace. One that can't be checked is free: the rename then
+ * fails and is logged, where a loop over taken names would never end.
+ */
+function taken(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** `2026-11-16T10-00-00Z`: UTC to the second, without the colons that some file systems refuse. */
 const stamp = (now: Date): string => now.toISOString().replace(/\.\d{3}Z$/, 'Z').replaceAll(':', '-');
 
@@ -33,8 +47,9 @@ const stamp = (now: Date): string => now.toISOString().replace(/\.\d{3}Z$/, 'Z')
  * `repos/<user-id>/<repo-id>` is where the backend puts it (NF-5.2).
  *
  * Only names the backend makes are looked at; anything else is left where it
- * is and logged. Nothing is deleted except a user folder left empty. A move
- * that fails is logged, and stops neither the other moves nor the start.
+ * is and logged. Nothing is deleted except a user folder that a move left
+ * empty. Nothing here stops the start: a move or a folder that fails is
+ * logged, and the other moves go on.
  *
  * Runs in `onModuleInit`, so before the sync feature's `WorkingCopyRecovery`,
  * whose module imports this one, and before `WorkingCopyCheck` (A-5.15).
@@ -50,10 +65,14 @@ export class OrphanedWorkingCopies implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.moveAll();
+    try {
+      this.moveAll();
+    } catch (error) {
+      this.logger.error({ err: error }, 'Could not look for orphaned working copies in repos/; the start goes on');
+    }
   }
 
-  /** Moves every orphan; gives the names of their new folders in `orphans/`. */
+  /** Moves every orphan; gives the names of their new folders in `orphans/`. Throws when `repos/` can't be read. */
   moveAll(): string[] {
     const owned = new Set(this.instance.all().map(({ id, userId }) => `${userId}/${id}`));
     const time = stamp(new Date());
@@ -62,21 +81,40 @@ export class OrphanedWorkingCopies implements OnModuleInit {
       const userId = idOf(userName);
       if (userId === undefined) {
         this.leftAlone('repos/');
-        continue;
+      } else {
+        moved.push(...this.moveOrphansOf(userId, owned, time));
       }
-      const userDir = join(this.layout.reposDir, userName);
-      for (const repositoryName of entriesOf(userDir)) {
-        const repositoryId = idOf(repositoryName);
-        if (repositoryId === undefined) {
-          this.leftAlone(`repos/${userId}/`);
-        } else if (!owned.has(`${userId}/${repositoryId}`)) {
-          const name = this.move(userId, repositoryId, time);
-          if (name !== undefined) {
-            moved.push(name);
-          }
+    }
+    return moved;
+  }
+
+  private moveOrphansOf(userId: number, owned: Set<string>, time: string): string[] {
+    const userDir = join(this.layout.reposDir, String(userId));
+    let entries: string[];
+    try {
+      entries = entriesOf(userDir);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOTDIR') {
+        this.leftAlone('repos/');
+      } else {
+        this.logger.error({ err: error }, `Could not read the folder of user ${userId} in repos/`);
+      }
+      return [];
+    }
+    const moved: string[] = [];
+    for (const repositoryName of entries) {
+      const repositoryId = idOf(repositoryName);
+      if (repositoryId === undefined) {
+        this.leftAlone(`repos/${userId}/`);
+      } else if (!owned.has(`${userId}/${repositoryId}`)) {
+        const name = this.move(userId, repositoryId, time);
+        if (name !== undefined) {
+          moved.push(name);
         }
       }
-      this.removeIfEmpty(userDir);
+    }
+    if (moved.length > 0 && moved.length === entries.length) {
+      this.removeEmpty(userDir);
     }
     return moved;
   }
@@ -85,7 +123,7 @@ export class OrphanedWorkingCopies implements OnModuleInit {
     const base = `${userId}-${repositoryId}-${time}`;
     let name = base;
     // A rename onto an empty folder would replace it: never reuse a name.
-    for (let n = 2; existsSync(join(this.layout.orphansDir, name)); n++) {
+    for (let n = 2; taken(join(this.layout.orphansDir, name)); n++) {
       name = `${base}-${n}`;
     }
     try {
@@ -108,14 +146,12 @@ export class OrphanedWorkingCopies implements OnModuleInit {
     this.logger.warn(`${folder} holds an entry that the backend did not make; it is left where it is`);
   }
 
-  /** Only an empty folder: `rmdir` refuses anything else. */
-  private removeIfEmpty(userDir: string): void {
+  /** `rmdir` refuses a folder that is not empty, such as one that something wrote to meanwhile. */
+  private removeEmpty(userDir: string): void {
     try {
-      if (readdirSync(userDir).length === 0) {
-        rmdirSync(userDir);
-      }
+      rmdirSync(userDir);
     } catch {
-      // A file where a user folder should be, or a folder that can't be read: left as it is.
+      // Left as it is: an empty folder costs nothing.
     }
   }
 }

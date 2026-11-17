@@ -158,9 +158,9 @@ sees the result.
     time>`, for example `orphans/3-12-2026-11-16T10-00-00Z`, with `-2`, `-3`, …
     added when that name is taken; a user folder it leaves empty is removed.
     Anything in `repos/` whose name is not an ID the backend makes is left where
-    it is and logged at `warn`, without its name. A move that fails is logged
-    and stops neither the other moves nor the start. This runs before working
-    copy recovery (A-5.15). _(Plan 128's call.)_
+    it is and logged at `warn`, without its name. A move that fails, or a folder
+    that can't be read, is logged and stops neither the other moves nor the
+    start. This runs before working copy recovery (A-5.15). _(Plan 128's call.)_
   - leftover jobs are handled as in NF-9.
 - **NF-6.5** Restore: stop the container, restore the volume(s), optionally
   replace the database with a snapshot from `backups/`, start the container.
