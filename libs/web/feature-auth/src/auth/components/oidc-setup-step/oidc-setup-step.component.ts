@@ -23,7 +23,8 @@ import {
   DEFAULT_OIDC_SCOPES,
   type OidcFailureReason,
   oidcSetupFields,
-  type OidcSetupView
+  type OidcSetupView,
+  refineRequiredClaimPair
 } from '@front-burner/shared-contracts';
 import {
   ButtonComponent,
@@ -55,7 +56,7 @@ const SETUP_SCHEMA = z.object({
     scopes => scopes === '' || scopes.split(/\s+/).includes('openid'),
     { params: { code: 'missing-openid' } }
   )
-});
+}).superRefine(refineRequiredClaimPair);
 
 interface Setup {
   issuer: string;
@@ -64,6 +65,9 @@ interface Setup {
   scopes: string;
   requireVerifiedEmail: boolean;
   adminEmail: string;
+  /** Both or neither (AO-40; temporary MVP measure). */
+  requiredClaimName: string;
+  requiredClaimValue: string;
 }
 
 type TextField = Exclude<keyof Setup, 'requireVerifiedEmail'>;
@@ -87,7 +91,9 @@ const KNOWN_CODES: Record<TextField, readonly string[]> = {
   clientId: [ 'too-small', 'too-big' ],
   clientSecret: [ 'required', 'too-big' ],
   scopes: [ 'missing-openid', 'too-big' ],
-  adminEmail: [ 'invalid-format', 'too-big' ]
+  adminEmail: [ 'invalid-format', 'too-big' ],
+  requiredClaimName: [ 'too-big', 'required-claim-pair' ],
+  requiredClaimValue: [ 'too-big', 'required-claim-pair' ]
 };
 
 const initialSetup = (saved: OidcSetupView | undefined): Setup => ({
@@ -96,7 +102,9 @@ const initialSetup = (saved: OidcSetupView | undefined): Setup => ({
   clientSecret: '',
   scopes: saved?.scopes ?? DEFAULT_OIDC_SCOPES,
   requireVerifiedEmail: saved?.requireVerifiedEmail ?? true,
-  adminEmail: saved?.adminEmail ?? ''
+  adminEmail: saved?.adminEmail ?? '',
+  requiredClaimName: saved?.requiredClaimName ?? '',
+  requiredClaimValue: saved?.requiredClaimValue ?? ''
 });
 
 /**
@@ -163,7 +171,9 @@ export class OidcSetupStepComponent {
       clientId: this.fieldError('clientId'),
       clientSecret: this.fieldError('clientSecret'),
       scopes: this.fieldError('scopes'),
-      adminEmail: this.fieldError('adminEmail')
+      adminEmail: this.fieldError('adminEmail'),
+      requiredClaimName: this.fieldError('requiredClaimName'),
+      requiredClaimValue: this.fieldError('requiredClaimValue')
     })
   );
 
@@ -201,8 +211,8 @@ export class OidcSetupStepComponent {
             scopes: setup.scopes.trim() || DEFAULT_OIDC_SCOPES,
             requireVerifiedEmail: setup.requireVerifiedEmail,
             adminEmail: setup.adminEmail,
-            requiredClaimName: '',
-            requiredClaimValue: ''
+            requiredClaimName: setup.requiredClaimName.trim(),
+            requiredClaimValue: setup.requiredClaimValue.trim()
           }),
           { defaultValue: undefined }
         );

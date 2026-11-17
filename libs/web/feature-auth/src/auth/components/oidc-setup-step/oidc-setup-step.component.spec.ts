@@ -277,4 +277,38 @@ describe('OidcSetupStepComponent', () => {
     button('back').click();
     expect(fixture.componentInstance.events).toEqual([ 'back' ]);
   });
+
+  describe('required claim (temporary, MVP)', () => {
+    const slack = { requiredClaimName: 'https://slack.com/team_id', requiredClaimValue: 'T123' };
+
+    it('AC-AUTH-001.15: sends the required claim with the setup', async () => {
+      await start();
+      await fill({ ...valid, ...slack });
+      await submit();
+      const request = http.expectOne(SETUP);
+      expect(request.request.body).toMatchObject(slack);
+      request.flush(null, { status: 204, statusText: 'No Content' });
+    });
+
+    it('AC-AUTH-001.15: pre-fills the required claim from a saved setup', async () => {
+      await start({ ...SAVED, ...slack });
+      expect(field('requiredClaimName').value).toBe(slack.requiredClaimName);
+      expect(field('requiredClaimValue').value).toBe('T123');
+      expect(fieldText('requiredClaimName')).toContain(`${KEY}.requiredClaimHint`);
+    });
+
+    it('AC-AUTH-001.16: shows an error and blocks submit when only the claim name is filled', async () => {
+      await start();
+      await fill({ ...valid, requiredClaimName: slack.requiredClaimName });
+      expect(submitButton().getAttribute('aria-disabled')).toBe('true');
+      await submit();
+      http.expectNone(SETUP);
+      expect(fieldText('requiredClaimValue')).toContain(`${KEY}.fieldErrors.requiredClaimValue.required-claim-pair`);
+    });
+
+    it('AC-AUTH-001.17: shows the claim mismatch after a failed login', async () => {
+      await start(SAVED, 'claim-mismatch');
+      expect(element().textContent).toContain('web-feature-auth.oidcErrors.claim-mismatch');
+    });
+  });
 });

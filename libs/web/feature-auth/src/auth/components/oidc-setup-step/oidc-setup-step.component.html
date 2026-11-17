@@ -82,6 +82,20 @@
              autocomplete="email"
              [formField]="model.adminEmail" />
     </ui-field>
+    <ui-field [label]="t('requiredClaimName')"
+              [hint]="t('requiredClaimHint')"
+              [error]="errors.requiredClaimName ? t(errors.requiredClaimName.key, errors.requiredClaimName.params) : undefined">
+      <input uiInput
+             code
+             autocomplete="off"
+             [formField]="model.requiredClaimName" />
+    </ui-field>
+    <ui-field [label]="t('requiredClaimValue')"
+              [error]="errors.requiredClaimValue ? t(errors.requiredClaimValue.key, errors.requiredClaimValue.params) : undefined">
+      <input uiInput
+             autocomplete="off"
+             [formField]="model.requiredClaimValue" />
+    </ui-field>
     <div class="actions">
       <button uiButton
               (click)="back.emit()">{{ t('back') }}</button>
