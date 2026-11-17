@@ -5,7 +5,8 @@ const UNIT_BYTES = { KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3 } as const;
  * followed by `KB`, `MB` or `GB`, 1024-based and in any case, such as `2GB` or
  * `1.5MB` (A-1.15). A fraction of a byte is dropped.
  *
- * @returns undefined for anything else, such as a space, a sign or another unit.
+ * @returns undefined for anything else, such as a space, a sign or another unit,
+ *   and for a size above 0 that is less than a byte: a size of 0 can mean "off".
  */
 export function parseSize(value: string): number | undefined {
   const match = /^(\d+(?:\.\d+)?)(KB|MB|GB)?$/i.exec(value);
@@ -16,5 +17,6 @@ export function parseSize(value: string): number | undefined {
   if (unit === undefined) {
     return /^\d+$/.test(amount) ? Number(amount) : undefined;
   }
-  return Math.floor(Number(amount) * UNIT_BYTES[unit.toUpperCase() as keyof typeof UNIT_BYTES]);
+  const bytes = Math.floor(Number(amount) * UNIT_BYTES[unit.toUpperCase() as keyof typeof UNIT_BYTES]);
+  return bytes === 0 && Number(amount) !== 0 ? undefined : bytes;
 }

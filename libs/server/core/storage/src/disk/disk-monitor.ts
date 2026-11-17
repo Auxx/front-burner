@@ -21,7 +21,10 @@ const NODE_PROBE: DiskProbe = {
 /** The volumes the monitor watches: the data directory, and the repositories root when it is another file system. */
 export type Volume = 'data' | 'repos';
 
-/** Free bytes per volume; `NaN` when not known: before the first check, or after a check that failed. */
+/**
+ * Free bytes per volume at the last reading that worked; `NaN` when there is
+ * none yet: before the first check, or while the volume has never been read.
+ */
 export interface FreeBytes {
   data: number;
   /** Absent when the repositories root is on the data directory's file system. */
@@ -35,8 +38,9 @@ export interface FreeBytes {
  * synchronisation go on. Checked once on start and then by the
  * `storage.disk-check` housekeeping job. It publishes no event: storage knows
  * neither users nor sessions, so the banner reads an endpoint _(plan 131's
- * call)_. A check that cannot read a volume counts it as not low, so that a
- * broken check never blocks clones.
+ * call)_. A volume that cannot be read keeps its last reading, so that a
+ * passing failure neither ends nor starts low space; one never read counts as
+ * not low, so that a broken check never blocks clones.
  */
 @Injectable()
 export class DiskMonitor implements OnModuleInit {
@@ -72,7 +76,7 @@ export class DiskMonitor implements OnModuleInit {
     const data = await this.read('data', dataDir);
     this.free = await this.oneFileSystem() ? { data } : { data, repos: await this.read('repos', reposRoot) };
 
-    // NaN, a volume that could not be read, is never below the threshold.
+    // NaN, a volume never read, is never below the threshold.
     const low = threshold > 0 && Object.values(this.free).some(bytes => bytes < threshold);
     if (low !== this.low) {
       this.low = low;
@@ -114,7 +118,8 @@ export class DiskMonitor implements OnModuleInit {
         this.logger.warn({ volume, errorCode: codeOf(error) }, 'Could not read the free disk space');
         this.logger.debug({ volume, path, err: error }, 'Free disk space failure');
       }
-      return Number.NaN;
+      // The last reading stands, so that a passing failure neither ends nor starts low space.
+      return this.free[volume] ?? Number.NaN;
     }
   }
 }

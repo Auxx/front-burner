@@ -93,16 +93,35 @@ describe('DiskMonitor', () => {
   });
 
   it('a failed statfs is not low', async () => {
-    const probe = fakeProbe({ [DATA]: GB, [REPOS]: GB });
+    const disks = monitor(fakeProbe({ [DATA]: Object.assign(new Error('EIO'), { code: 'EIO' }), [REPOS]: 10 * GB }));
+    await disks.check();
+    expect(disks.isLow()).toBe(false);
+    expect(disks.freeBytes().data).toBeNaN();
+    expect(warn).toHaveBeenCalledWith({ volume: 'data', errorCode: 'EIO' }, 'Could not read the free disk space');
+  });
+
+  it('a failed statfs keeps the volume\'s last reading, so low space stays low', async () => {
+    const probe = fakeProbe({ [DATA]: GB, [REPOS]: 10 * GB });
     const disks = monitor(probe);
     await disks.check();
     expect(disks.isLow()).toBe(true);
 
     probe.free = { [DATA]: Object.assign(new Error('EIO'), { code: 'EIO' }), [REPOS]: 10 * GB };
     await disks.check();
+    expect(disks.isLow()).toBe(true);
+    expect(disks.freeBytes()).toEqual({ data: GB, repos: 10 * GB });
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('a failed statfs keeps enough space as enough', async () => {
+    const probe = fakeProbe({ [DATA]: 10 * GB, [REPOS]: 10 * GB });
+    const disks = monitor(probe);
+    await disks.check();
+
+    probe.free = { [DATA]: new Error('EIO'), [REPOS]: 10 * GB };
+    await disks.check();
     expect(disks.isLow()).toBe(false);
-    expect(disks.freeBytes().data).toBeNaN();
-    expect(warn).toHaveBeenCalledWith({ volume: 'data', errorCode: 'EIO' }, 'Could not read the free disk space');
+    expect(disks.freeBytes().data).toBe(10 * GB);
   });
 
   it('logs a failed statfs once until it works again', async () => {

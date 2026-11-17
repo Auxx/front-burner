@@ -69,7 +69,7 @@ describe('loadConfig', () => {
     expect(threshold('10GB')).toBe(10 * 1024 ** 3);
     expect(threshold('1.5GB')).toBe(1.5 * 1024 ** 3);
     expect(threshold('4096')).toBe(4096);
-    for (const value of [ 'lots', '2 TB', '-1GB', 'GB', '1.5' ]) {
+    for (const value of [ 'lots', '2 TB', '-1GB', 'GB', '1.5', '0.0001KB' ]) {
       expect(issuesOf({ FRONT_BURNER_LOW_DISK_THRESHOLD: value })).toEqual([
         {
           variable: 'FRONT_BURNER_LOW_DISK_THRESHOLD',

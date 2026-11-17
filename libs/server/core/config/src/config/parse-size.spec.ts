@@ -15,7 +15,16 @@ describe('parseSize', () => {
   });
 
   it('rounds a fraction of a byte down', () => {
-    expect(parseSize('0.0001KB')).toBe(0);
+    expect(parseSize('1.0001KB')).toBe(1024);
+  });
+
+  it('reads 0 in any unit as 0', () => {
+    expect(parseSize('0KB')).toBe(0);
+    expect(parseSize('0.0GB')).toBe(0);
+  });
+
+  it('refuses a size above 0 that is less than a byte, as 0 would turn the check off', () => {
+    expect(parseSize('0.0001KB')).toBeUndefined();
   });
 
   it.each([ '', ' ', 'GB', '1.5', '-1KB', '1 GB', '2TB', '1e3', 'x' ])('refuses %j', value => {

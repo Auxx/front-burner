@@ -175,6 +175,19 @@ describe('AddRepositoryService', () => {
     accessCheck.mockRestore();
   });
 
+  it('low space that starts during the access check refuses the clone', async () => {
+    vi.spyOn(CredentialsCheck.prototype, 'check').mockImplementation(() => {
+      low = true;
+      return Promise.resolve({ branches: [ 'main' ], defaultBranch: 'main' });
+    });
+
+    const error = await rejectionOf(service.add(alice, request()));
+
+    expect(error).toMatchObject({ code: 'low-storage' });
+    expect(all()).toEqual({ repositories: [], credentials: [], jobs: [] });
+    vi.restoreAllMocks();
+  });
+
   it('a form error comes before low-storage', async () => {
     low = true;
     insertRepository(database, alice.id, { name: 'Handbook' });
@@ -380,6 +393,28 @@ describe('AddRepositoryService', () => {
 
     afterEach(() => {
       vi.restoreAllMocks();
+    });
+
+    it('on low space, answers low-storage before asking for the passphrase of a locked key', async () => {
+      const id = database.db.transaction(tx =>
+        saved.createPastedKey(tx, alice.id, {
+          name: 'Laptop',
+          privateKey: sshKeyFixture('ed25519-passphrase'),
+          passphrase: FIXTURE_PASSPHRASE
+        })
+      );
+      const addLocked = () =>
+        rejectionOf(service.add(
+          alice,
+          request({
+            remoteUrl: 'git@git.example.com:acme/handbook.git',
+            credentials: { mode: 'saved', credentialId: id }
+          })
+        ));
+      expect(await addLocked()).toEqual(fieldError('credentials.passphrase', 'passphrase-required'));
+
+      low = true;
+      expect(await addLocked()).toMatchObject({ code: 'low-storage' });
     });
 
     it('holds the unlocked key for the clone job', async () => {

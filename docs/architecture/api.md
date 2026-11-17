@@ -137,13 +137,17 @@ numbering conventions.
 - **A-3.2g** While the server is low on storage (`DiskMonitor.isLow()`, NF-9.7),
   the requests that start a new clone answer `507 low-storage` and change
   nothing: adding a repository (`POST /repositories`), and **Retry clone** and
-  **Clone again** (A-3.2e). Adding checks it after the request's own fields and
-  before the access check, so a form error still comes first and the remote is
-  not contacted for nothing; cloning again checks it after its `404` and `409`
-  answers and before the working copy is moved. A clone already queued or
+  **Clone again** (A-3.2e). Both check it before a locked key's passphrase is
+  asked for, so that the user does not unlock a key for nothing. Adding checks
+  it after the request's own fields and before the access check, so a form error
+  still comes first and the remote is not contacted for nothing, and again in
+  the transaction that queues the clone, as the disk may run low while the
+  access check waits for the remote; cloning again checks it after its `404` and
+  `409` answers and before the working copy is moved. A clone already queued or
   running goes on. Saves, commits and synchronisation are not refused. The
-  English fallback is NF-9.7's text. _(Plan 131's call: `507 Insufficient
-  Storage`.)_
+  English fallback is NF-9.7's text. A `507 low-storage` is not logged as an
+  unhandled exception: the disk monitor logs the state once. _(Plan 131's call:
+  `507 Insufficient Storage`.)_
 
 ## A-3: Contracts
 

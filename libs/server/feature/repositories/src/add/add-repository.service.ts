@@ -63,9 +63,9 @@ export class AddRepositoryService {
     this.assertNameFree(this.database.db, user.id, request.name);
     this.credentialsCheck.assertNameFree(user.id, request.credentials);
     const remote = remoteOf(request.remoteUrl);
-    const credentials = this.requestCredentials.resolve(user, remote.protocol, request.credentials);
-    // After the form's own errors, before the remote is contacted for nothing (A-3.2g).
+    // After the form's own errors; before a locked key is asked for and the remote contacted for nothing (A-3.2g).
     assertSpaceForClone(this.disks);
+    const credentials = this.requestCredentials.resolve(user, remote.protocol, request.credentials);
     const result = await this.credentialsCheck.check(
       user,
       request.remoteUrl,
@@ -85,6 +85,8 @@ export class AddRepositoryService {
     const { row, jobId } = this.database.db.transaction(tx => {
       // Checked again inside the transaction: another submit may have taken the name meanwhile (AC-REPO-001.2).
       this.assertNameFree(tx, user.id, request.name);
+      // And space: the disk may have run low while the access check waited for the remote.
+      assertSpaceForClone(this.disks);
       const credentialId = this.credentialsCheck.saveNew(tx, user.id, request.credentials) ?? credentials.savedId
         ?? null;
       let inserted;
