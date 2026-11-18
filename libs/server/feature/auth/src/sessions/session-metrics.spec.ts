@@ -59,4 +59,14 @@ describe('SessionMetrics', () => {
     expect(metrics).toContain(`${ACTIVE_SESSIONS} 2`);
     expect(metrics).not.toContain('alice');
   });
+
+  it('keeps the last count when the database cannot be read, so that the scrape still answers', async () => {
+    database.db.insert(sessions).values([ session('a') ]).run();
+    expect(await active()).toBe(1);
+
+    database.sqlite.close();
+
+    await expect(registry.metrics()).resolves.toContain(`${ACTIVE_SESSIONS} 1`);
+    database = createTestDatabase();
+  });
 });

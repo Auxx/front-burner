@@ -313,6 +313,9 @@ export function loadConfig(
       variable: metricsToken.variable,
       message: `must be at least ${MIN_METRICS_TOKEN_LENGTH} characters`
     });
+  } else if (metricsToken.value !== undefined && /^\s|\s$/.test(metricsToken.value)) {
+    // Node trims a header's value, so no scrape could ever send it.
+    issues.push({ variable: metricsToken.variable, message: 'must not start or end with whitespace' });
   }
 
   // AO-31: all required OIDC variables or none of them.

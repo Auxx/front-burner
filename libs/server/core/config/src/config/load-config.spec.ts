@@ -89,6 +89,22 @@ describe('loadConfig', () => {
         { readFile: () => short }
       )).toEqual([ { variable: 'FRONT_BURNER_METRICS_TOKEN_FILE', message: 'must be at least 16 characters' } ]);
     });
+
+    it('refuses a token with whitespace at an end, which no Authorization header can carry', () => {
+      const message = 'must not start or end with whitespace';
+      for (const token of [ ` ${TOKEN}`, `${TOKEN} `, `${TOKEN}\t` ]) {
+        expect(issuesOf({ FRONT_BURNER_METRICS_TOKEN: token })).toEqual([
+          { variable: 'FRONT_BURNER_METRICS_TOKEN', message }
+        ]);
+      }
+      // A file with a blank line after the token: only one line break is stripped.
+      const issues = issuesOf(
+        { FRONT_BURNER_METRICS_TOKEN_FILE: '/run/secrets/metrics' },
+        { readFile: () => `${TOKEN}\n\n` }
+      );
+      expect(issues).toEqual([ { variable: 'FRONT_BURNER_METRICS_TOKEN_FILE', message } ]);
+      expect(JSON.stringify(issues)).not.toContain(TOKEN);
+    });
   });
 
   it('reads the threshold as a size', () => {

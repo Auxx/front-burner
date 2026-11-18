@@ -181,20 +181,26 @@ numbering conventions.
   in constant time; a missing, malformed or wrong one gets the same `401
   unauthenticated` with `WWW-Authenticate: Bearer`. It needs no login
   (`@Public()`), so the unauthenticated rate limit of NF-11.4 applies, which a
-  scrape every 15 s stays far below. The token is at least 16 characters; a
-  shorter one stops the startup. `MetricsModule` in `server/core/observability`
-  owns one `prom-client` registry, `METRICS_REGISTRY`, where every library
-  registers its own metrics, all named `front_burner_…`, with no label that
-  names a user, a repository or a path (NF-10.11). Besides Node's process
-  metrics, they include:
+  scrape every 15 s stays far below. The token is at least 16 characters and
+  neither starts nor ends with whitespace, which a header's value loses; any
+  other stops the startup. `MetricsModule` in `server/core/observability` owns
+  one `prom-client` registry, `METRICS_REGISTRY`, where every library registers
+  its own metrics, all named `front_burner_…`, with no label that names a user,
+  a repository or a path (NF-10.11). Besides Node's process metrics, they
+  include:
   - `front_burner_http_request_duration_seconds{method, route, status}`, a
-    histogram of every request under `/api/`, timed by an Express middleware
-    attached right after the request logger, so that requests refused by a guard
-    (`401`, `429`) or the body parser count too. `route` is the pattern of the
-    controller route that answered (`/api/v1/repositories/:id`), never the path,
-    or `unmatched` when none did, such as for an unknown path;
+    histogram of every request under `/api/` (in any case, as Express routes
+    them), timed by an Express middleware attached right after the request
+    logger, so that requests refused by a guard (`401`, `429`) or the body
+    parser count too. `route` is the pattern of the controller route that
+    answered (`/api/v1/repositories/:id`), never the path, or `unmatched` when
+    none did, such as for an unknown path. A request is recorded when its
+    connection is done with it, so one whose client gave up counts too, with the
+    status `aborted`. Event streams (the push channel, A-3.10) are left out:
+    they stay open as long as a tab;
   - `front_burner_active_sessions`, the sessions neither revoked nor expired,
-    counted in the database on each scrape.
+    counted in the database on each scrape. When the count fails, it keeps its
+    last value, so that the scrape still answers.
 
   _(Plan 134's call.)_
 

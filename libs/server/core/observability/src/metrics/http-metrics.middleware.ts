@@ -22,6 +22,12 @@ function routeOf(req: Request): string {
   return typeof route?.path === 'string' && methods === 1 ? route.path : UNMATCHED_ROUTE;
 }
 
+/** The `status` of a request whose client went away before the response was sent in full. */
+export const ABORTED_STATUS = 'aborted';
+
+/** Whether the path is the API's, in any case: Express routing ignores case. */
+const isApiPath = (path: string) => path.toLowerCase().startsWith('/api/');
+
 /**
  * Times every API request into `front_burner_http_request_duration_seconds`
  * by method, route pattern and status (NF-10.11). An Express middleware rather
@@ -29,6 +35,11 @@ function routeOf(req: Request): string {
  * `429`), what the body parser refuses and unknown routes. Requests outside
  * `/api/`, the web client's, are left out. Attached at startup before the
  * routes, when metrics are on.
+ *
+ * A request is recorded when its connection is done with it (`close`), so
+ * that one whose client gave up, often the slowest, counts too, with the
+ * status `aborted`. Event streams (`text/event-stream`, the push channel) are
+ * left out: they stay open as long as a tab, which is no latency.
  */
 export function httpMetrics(registry: Registry): RequestHandler {
   const histogram = new Histogram({
@@ -38,10 +49,14 @@ export function httpMetrics(registry: Registry): RequestHandler {
     registers: [ registry ]
   });
   return (req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith('/api/')) {
+    if (isApiPath(req.path)) {
       const end = histogram.startTimer();
-      res.once('finish', () => {
-        end({ method: req.method, route: routeOf(req), status: String(res.statusCode) });
+      res.once('close', () => {
+        if (String(res.getHeader('Content-Type') ?? '').startsWith('text/event-stream')) {
+          return;
+        }
+        const status = res.writableFinished ? String(res.statusCode) : ABORTED_STATUS;
+        end({ method: req.method, route: routeOf(req), status });
       });
     }
     next();

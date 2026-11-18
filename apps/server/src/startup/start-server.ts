@@ -5,10 +5,9 @@ import { assertHelpersExecutable, assertSupportedGit, GitRunner } from '@front-b
 import {
   createBootstrapLogger,
   createRequestLogger,
-  HEALTH_ROUTES,
   httpMetrics,
   METRICS_REGISTRY,
-  METRICS_ROUTE
+  UNVERSIONED_ROUTES
 } from '@front-burner/server-core-observability';
 import { securityHeaders, serveWebClient, versionHeader } from '@front-burner/server-core-security';
 import { INestApplication, Logger as NestLogger } from '@nestjs/common';
@@ -120,13 +119,13 @@ function configure(
   }
   app.use(securityHeaders());
   // The health probes reveal no version (NF-10.9), nor do the metrics, which are not part of the API.
-  app.use(versionHeader(config.version, { except: [ ...HEALTH_ROUTES, METRICS_ROUTE ] }));
+  app.use(versionHeader(config.version, { except: UNVERSIONED_ROUTES }));
   // The refresh token's cookie (LG-32).
   app.use(cookieParser());
   // Nest's own parser is off so that the limit of NF-11.5 applies.
   app.useBodyParser('json', { limit: '2mb' });
   // The health probes and the metrics keep their path outside the API version (NF-10.7, NF-10.10).
-  app.setGlobalPrefix('api/v1', { exclude: [ ...HEALTH_ROUTES, METRICS_ROUTE ] });
+  app.setGlobalPrefix('api/v1', { exclude: [ ...UNVERSIONED_ROUTES ] });
   if (!serveWebClient(app.getHttpAdapter().getInstance(), webRoot, { version: config.version })) {
     log.log(`Web client not found at ${webRoot}; serving the API only.`);
   }
