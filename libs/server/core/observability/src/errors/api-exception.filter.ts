@@ -1,3 +1,4 @@
+import { isStorageFull } from '@front-burner/server-core-storage';
 import type { ApiError, ErrorCode, FieldError } from '@front-burner/shared-contracts';
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger, NotFoundException } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
@@ -24,6 +25,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   'oidc-code-invalid': 'OIDC login failed',
   'too-many-jobs': 'Too many tasks are waiting. Wait for one to finish and try again.',
   'low-storage': 'The server is running low on storage. Contact your administrator.',
+  'storage-full': 'Server storage is full. Contact your administrator.',
   'key-locked': 'Enter the passphrase of this key to unlock it for this session.',
   'unlock-too-many-attempts': 'Too many attempts. Try again in a minute.',
   'credentials-missing': 'These saved credentials are no longer available. Add them again.',
@@ -94,12 +96,13 @@ const MESSAGES: Record<ErrorCode, string> = {
 /**
  * 5xx answers that describe the instance's state rather than a failure of the
  * request, so not logged as unhandled: whatever watches the state logs it once
- * (`low-storage`: the disk monitor, NF-9.7).
+ * (`low-storage` and `storage-full`: the disk monitor, NF-9.7, NF-9.8).
  */
-const EXPECTED_SERVER_CODES: ReadonlySet<string> = new Set<ErrorCode>([ 'low-storage' ]);
+const EXPECTED_SERVER_CODES: ReadonlySet<string> = new Set<ErrorCode>([ 'low-storage', 'storage-full' ]);
 
 function isExpectedServerAnswer(exception: unknown): boolean {
-  return exception instanceof ApiErrorException && EXPECTED_SERVER_CODES.has(exception.code);
+  return (exception instanceof ApiErrorException && EXPECTED_SERVER_CODES.has(exception.code))
+    || isStorageFull(exception);
 }
 
 interface ZodIssueLike {
@@ -190,6 +193,11 @@ export class ApiExceptionFilter implements ExceptionFilter {
     }
     if (type === 'entity.too.large') {
       return { status: 413, code: 'payload-too-large', params: {} };
+    }
+    // Any write that the full disk stopped and nothing mapped, such as SQLite's
+    // (SQLITE_FULL), which rolled its transaction back (NF-9.8).
+    if (isStorageFull(exception)) {
+      return { status: 507, code: 'storage-full', params: {} };
     }
     return { status: 500, code: 'internal', params: {} };
   }

@@ -25,7 +25,8 @@ describe('toGitApiError', () => {
       [ 'switch-blocked', 409, 'switch-blocked' ],
       [ 'git-busy', 409, 'git-busy' ],
       [ 'no-commits', 409, 'no-commits' ],
-      [ 'timeout', 504, 'git-timeout' ]
+      [ 'timeout', 504, 'git-timeout' ],
+      [ 'storage-full', 507, 'storage-full' ]
     ] as const
   )('answers %s with %i %s', (code, status, apiCode) => {
     const answer = answerTo(new GitOperationError(code, ''));
@@ -33,6 +34,13 @@ describe('toGitApiError', () => {
     expect(answer).toBeInstanceOf(ApiErrorException);
     expect((answer as ApiErrorException).getStatus()).toBe(status);
     expect((answer as ApiErrorException).code).toBe(apiCode);
+  });
+
+  it('answers a file-system error for a full disk with 507 storage-full', () => {
+    const answer = answerTo(Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' }));
+
+    expect((answer as ApiErrorException).getStatus()).toBe(507);
+    expect((answer as ApiErrorException).code).toBe('storage-full');
   });
 
   it('rethrows anything else', () => {

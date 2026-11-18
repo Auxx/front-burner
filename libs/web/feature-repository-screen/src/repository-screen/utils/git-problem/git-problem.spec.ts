@@ -38,7 +38,16 @@ describe('gitProblem', () => {
     }
   );
 
-  it.each([ 'remote-timeout', 'remote-failed', 'host-unreachable', 'interrupted', 'network', 'internal', 'git-busy' ])(
+  it.each([
+    'remote-timeout',
+    'remote-failed',
+    'host-unreachable',
+    'interrupted',
+    'network',
+    'internal',
+    'git-busy',
+    'storage-full'
+  ])(
     'offers Try again when the network or the server failed: %s',
     code => {
       expect(gitProblem(code)).toEqual({ messageKey: `errors.${code}`, fix: 'retry' });

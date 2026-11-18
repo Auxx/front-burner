@@ -18,7 +18,7 @@ import {
 import { AddressInfo, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { GitCredentials } from '../broker/broker';
+import { type GitCredentials, openBroker } from '../broker/broker';
 import type { GitOptions } from '../git.options';
 import { GitRunner } from '../runner/git-runner';
 import { probeHostKey } from '../ssh/host-key-probe';
@@ -32,6 +32,12 @@ import { GitOperationError } from './git-errors';
 vi.mock('../ssh/host-key-probe', async importOriginal => {
   const actual = await importOriginal<typeof import('../ssh/host-key-probe')>();
   return { ...actual, probeHostKey: vi.fn(actual.probeHostKey) };
+});
+
+// Opens the real broker unless a test says otherwise.
+vi.mock('../broker/broker', async importOriginal => {
+  const actual = await importOriginal<typeof import('../broker/broker')>();
+  return { ...actual, openBroker: vi.fn(actual.openBroker) };
 });
 
 const TOKEN = 'ghp_sup3r-s3cret-token-value';
@@ -210,6 +216,17 @@ describe('GitEngine', () => {
       const error = await failureOf(engine().accessCheck(`${server.url}/missing.git`, NONE));
 
       expect(error.code).toBe('repository-not-found');
+    });
+
+    it('reports a broker that could not write its files on a full disk as storage-full (NF-9.8)', async () => {
+      vi.mocked(openBroker).mockRejectedValueOnce(
+        Object.assign(new Error('ENOSPC: no space left on device, mkdtemp'), { code: 'ENOSPC' })
+      );
+
+      const error = await failureOf(engine().accessCheck(`${server.url}/fixture.git`, NONE));
+
+      expect(error).toBeInstanceOf(GitOperationError);
+      expect(error.code).toBe('storage-full');
     });
 
     // The broker listens on a Unix socket in a POSIX path: not on Windows.
@@ -1998,6 +2015,33 @@ describe('GitEngine', () => {
       const error = await failureOf(clone({ remoteUrl: `${server.url}/missing.git` }));
 
       expect(error.code).toBe('repository-not-found');
+      expect(readdirSync(tmpRoot)).toEqual([]);
+      expect(existsSync(join(root, 'repos', 'one'))).toBe(false);
+    });
+
+    it('a clone that runs out of space removes its partial copy', async () => {
+      // As git writing objects until the disk is full: the copy is there, and git fails (NF-9.8).
+      const filling = new GitRunner();
+      const run = filling.run.bind(filling);
+      vi.spyOn(filling, 'run').mockImplementation(async (args, runOptions) => {
+        const result = await run(args, runOptions);
+        if (args.includes('clone')) {
+          expect(readdirSync(tmpRoot)).not.toEqual([]);
+          throw new GitOperationError('storage-full', 'fatal: write error: No space left on device');
+        }
+        return result;
+      });
+
+      await expect(
+        new GitEngine(options, filling).clone({
+          remoteUrl: `${server.url}/fixture.git`,
+          credentials: NONE,
+          mode: 'full',
+          tmpRoot,
+          destination: join(root, 'repos', 'one')
+        })
+      ).rejects.toMatchObject({ code: 'storage-full' });
+
       expect(readdirSync(tmpRoot)).toEqual([]);
       expect(existsSync(join(root, 'repos', 'one'))).toBe(false);
     });

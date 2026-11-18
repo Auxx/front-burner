@@ -276,6 +276,30 @@ describe('FileSaver', () => {
     expect(sent).toHaveLength(2);
   });
 
+  it('retries a storage-full save with its own status until it goes through (NF-9.8)', async () => {
+    type('a');
+    await vi.advanceTimersByTimeAsync(1500);
+    sent[0].reject(httpError(507, 'storage-full'));
+    await settle();
+    expect(saver.status()).toMatchObject({ kind: 'storage-full', error: { code: 'storage-full' } });
+    expect(saver.unsaved()).toBe(true);
+
+    // Typing goes on: the retry sends the newest content, after the backoff.
+    type('ab');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sent.map(item => item.content)).toEqual([ 'a', 'ab' ]);
+    sent[1].reject(httpError(507, 'storage-full'));
+    await settle();
+    expect(saver.status().kind).toBe('storage-full');
+
+    await vi.advanceTimersByTimeAsync(2000);
+    sent[2].resolve({ hash: 'h1' });
+    await settle();
+    expect(sent[2].content).toBe('ab');
+    expect(saver.status()).toEqual({ kind: 'saved' });
+    expect(saver.unsaved()).toBe(false);
+  });
+
   it('sends nothing while held, and the waiting save once released', async () => {
     type('a');
     await vi.advanceTimersByTimeAsync(1500);

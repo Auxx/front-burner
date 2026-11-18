@@ -212,6 +212,37 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
     expect(result.stderr).toContain('https://***@example.com/x');
   });
 
+  describe('a full disk (NF-9.8)', () => {
+    const fail = (stderr: string) => [ '-c', `alias.full=!echo "${stderr}" >&2; exit 128`, 'full' ];
+
+    it('git\'s "No space left on device" is storage-full', async () => {
+      await runner.run([ 'init', '-q', dir ], { timeoutMs: 10_000 });
+
+      const error = await runner.run(fail('fatal: unable to write new index file: No space left on device'), {
+        cwd: dir,
+        timeoutMs: 10_000
+      }).catch((caught: unknown) => caught as GitOperationError);
+
+      expect(error).toBeInstanceOf(GitOperationError);
+      expect((error as GitOperationError).code).toBe('storage-full');
+      expect((error as GitOperationError).detail).toContain('No space left on device');
+    });
+
+    it('a used-up quota is storage-full too, also without a working copy', async () => {
+      await expect(runner.run(fail('error: unable to create temporary file: Disk quota exceeded'), {
+        timeoutMs: 10_000
+      })).rejects.toMatchObject({ code: 'storage-full' });
+    });
+
+    it('the remote\'s full disk is not ours', async () => {
+      const result = await runner.run(fail('remote: fatal: write error: No space left on device'), {
+        timeoutMs: 10_000
+      });
+
+      expect(result.exitCode).toBe(128);
+    });
+  });
+
   describe('a working copy that is gone (RM-6)', () => {
     const failure = (run: Promise<unknown>) =>
       run.then(() => {

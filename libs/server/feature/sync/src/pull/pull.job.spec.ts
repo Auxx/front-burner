@@ -275,6 +275,29 @@ describe.skipIf(process.platform === 'win32')('PullJob', () => {
     expect(record()).toEqual({ recordedCommit: null, mergeCommit: null, applying: false });
   });
 
+  it('a pull that runs out of space is reset to its recorded commit', async () => {
+    harness.confirmAuthor();
+    const workingCopy = harness.workingCopy;
+    harness.commitFile('notes.md', 'mine\n');
+    harness.pushFileFromElsewhere('notes.md', 'theirs\n');
+    const before = head();
+    vi.spyOn(harness.merge, 'merge').mockImplementationOnce(async () => {
+      // As a merge that ran out of space while it wrote the files (NF-9.8).
+      writeFileSync(join(workingCopy, 'notes.md'), 'ha');
+      writeFileSync(join(workingCopy, 'stray.md'), 'stray\n');
+      throw new GitOperationError('storage-full', 'error: unable to write file notes.md: No space left on device');
+    });
+    harness.runner.start();
+
+    expect(await pulled()).toEqual({ kind: 'failed', code: 'storage-full', params: {} });
+
+    expect(head()).toBe(before);
+    expect(readFileSync(join(workingCopy, 'notes.md'), 'utf8')).toBe('mine\n');
+    expect(existsSync(join(workingCopy, 'stray.md'))).toBe(false);
+    expect(merging()).toBe(false);
+    expect(record()).toEqual({ recordedCommit: null, mergeCommit: null, applying: false });
+  });
+
   it('a merge whose undo fails blocks the repository, so that nothing is done on top of it', async () => {
     harness.confirmAuthor();
     harness.commitFile('notes.md', 'mine\n');

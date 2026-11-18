@@ -1,4 +1,4 @@
-import { isFolder } from '@front-burner/server-core-storage';
+import { isFolder, isStorageFull } from '@front-burner/server-core-storage';
 import type { EgressRefusal } from '../egress/egress-proxy';
 import type { GitResult } from '../runner/git-runner';
 import { redactCredentials } from '../runner/redact';
@@ -59,6 +59,12 @@ export const GIT_ERROR_CODES = [
    * for it only when the command failed.
    */
   'working-copy-missing',
+  /**
+   * The disk is full: git said so, or a file it needed could not be written
+   * (NF-9.8). `GitRunner` checks for it after any failure, like
+   * `working-copy-missing`.
+   */
+  'storage-full',
   'failed'
 ] as const;
 
@@ -158,6 +164,28 @@ export async function assertWorkingCopyFound(
     throw new GitOperationError('working-copy-missing', WORKING_COPY_FOLDER_GONE);
   }
 }
+
+/**
+ * Whether `error` says that the disk is full (NF-9.8): git said so
+ * (`storage-full`), or a file-system or SQLite error did (`isStorageFull`).
+ * The one test for it outside `server/core/storage`.
+ */
+export const isDiskFull = (error: unknown): boolean =>
+  (error instanceof GitOperationError && error.code === 'storage-full') || isStorageFull(error);
+
+/**
+ * The C library's text for `ENOSPC` and `EDQUOT`, which git and the programs
+ * it runs print as they are (NF-9.8).
+ */
+const NO_SPACE = /No space left on device|Disk quota exceeded/;
+
+/**
+ * Whether a failed git said that the disk is full (NF-9.8). Only in git's own
+ * lines: a `remote: ` line is about the remote's disk, not ours. Progress ends
+ * its lines with `\r`, so a remote's line can follow one without a `\n`.
+ */
+export const isOutOfSpace = (stderr: string): boolean =>
+  stderr.split(/[\r\n]/).some(line => !line.startsWith('remote:') && NO_SPACE.test(line));
 
 /** What git says when another git holds a lock that it needs; nothing changed. */
 const LOCK_HELD =

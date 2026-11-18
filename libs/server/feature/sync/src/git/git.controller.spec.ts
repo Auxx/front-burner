@@ -569,6 +569,19 @@ describe('GitController', () => {
       ]);
     });
 
+    it('tells clients after a switch that ran out of space, as files may have changed (NF-9.8)', async () => {
+      vi.spyOn(app.get(GitBranches), 'switchTo').mockRejectedValue(
+        new GitOperationError('storage-full', 'error: unable to write file a.md: No space left on device')
+      );
+
+      expect((await switchTo({ name: 'other', remote: false }).expect(507)).body.code).toBe('storage-full');
+
+      expect(published).toEqual([
+        { type: 'files.changed', repositoryId: READY, folders: 'all' },
+        { type: 'git.changed', repositoryId: READY }
+      ]);
+    });
+
     it('tells clients after a tracking switch that ran out of time', async () => {
       vi.spyOn(app.get(GitBranches), 'trackRemote').mockRejectedValue(new GitOperationError('timeout', ''));
 
