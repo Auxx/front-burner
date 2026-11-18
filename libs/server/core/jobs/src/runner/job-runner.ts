@@ -1,9 +1,11 @@
 import { CONFIG, Config } from '@front-burner/server-core-config';
 import { DATABASE, Database, Job, jobs, Tx } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
-import { ApiErrorException } from '@front-burner/server-core-observability';
+import { ApiErrorException, METRICS_REGISTRY } from '@front-burner/server-core-observability';
 import { BeforeApplicationShutdown, Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { and, asc, count, eq, inArray, lte, SQL, sql } from 'drizzle-orm';
+import type { Registry } from 'prom-client';
+import { JobMetrics } from './job-metrics';
 import { CancelFilter, EnqueueRequest, JobPool, jobPoolSizes, JobTypeDefinition, RunningJob } from './job-types';
 
 /** How often the loop looks for scheduled jobs when nothing woke it (A-6.4). */
@@ -30,6 +32,8 @@ interface ActiveJob {
   controller: AbortController;
   cancelled: boolean;
   settled: Promise<void>;
+  /** `Date.now()` when its handler was called. */
+  startedAt: number;
 }
 
 /**
@@ -43,6 +47,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
   private readonly types = new Map<string, JobTypeDefinition>();
   private readonly active = new Map<number, ActiveJob>();
   private readonly poolSizes: Record<JobPool, number>;
+  private readonly metrics: JobMetrics;
   private tick: ReturnType<typeof setInterval> | undefined;
   private wakePending = false;
   private running = false;
@@ -50,9 +55,15 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
   constructor(
     @Inject(DATABASE) private readonly database: Database,
     @Inject(CONFIG) config: Pick<Config, 'cloneConcurrency'>,
-    private readonly events: EventsHub
+    private readonly events: EventsHub,
+    @Inject(METRICS_REGISTRY) registry: Registry
   ) {
     this.poolSizes = jobPoolSizes(config);
+    this.metrics = new JobMetrics(registry, {
+      types: () => [ ...this.types.keys() ],
+      queuedByType: () => this.queuedByType(),
+      clones: () => ({ running: this.activeIn('clone'), waiting: this.queuedIn('clone') })
+    });
   }
 
   register<P, R>(definition: JobTypeDefinition<P, R>): void {
@@ -60,6 +71,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
       throw new Error(`Job type ${definition.type} is already registered`);
     }
     this.types.set(definition.type, definition as JobTypeDefinition);
+    this.metrics.registered(definition.type);
   }
 
   onApplicationBootstrap(): void {
@@ -283,6 +295,27 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     return active;
   }
 
+  /** Queued jobs of the registered types, by type; a type no feature registers any more is left out. */
+  private queuedByType(): Map<string, number> {
+    const rows = this.database.db.select({ type: jobs.type, queued: count() }).from(jobs)
+      .where(eq(jobs.status, 'queued'))
+      .groupBy(jobs.type)
+      .all();
+    return new Map(rows.filter(({ type }) => this.types.has(type)).map(({ type, queued }) => [ type, queued ]));
+  }
+
+  /** Queued jobs of the pool's registered types, due or not. */
+  private queuedIn(pool: JobPool): number {
+    const types = [ ...this.types.values() ].filter(definition => definition.pool === pool).map(({ type }) => type);
+    if (types.length === 0) {
+      return 0;
+    }
+    const [ { queued } ] = this.database.db.select({ queued: count() }).from(jobs)
+      .where(and(eq(jobs.status, 'queued'), inArray(jobs.type, types)))
+      .all();
+    return queued;
+  }
+
   /** The next due job of the types, now `running` (A-6.4). */
   private claim(types: string[]): Job | undefined {
     const next = this.database.db.select({ id: jobs.id }).from(jobs)
@@ -320,7 +353,14 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
         }
       }
     };
-    const active: ActiveJob = { job, pool, controller, cancelled: false, settled: Promise.resolve() };
+    const active: ActiveJob = {
+      job,
+      pool,
+      controller,
+      cancelled: false,
+      settled: Promise.resolve(),
+      startedAt: Date.now()
+    };
     this.active.set(job.id, active);
     active.settled = Promise.resolve()
       .then(() => definition.handler(running))
@@ -406,6 +446,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
 
   /** Every end of a job comes here, once its outcome is stored. */
   private ended(job: Job, outcome: 'done' | 'failed' | 'cancelled', errorCode: string | null): void {
+    this.recordEnd(job, outcome);
     if (job.userId !== null) {
       this.events.publish(job.userId, { type: 'job.finished', jobId: job.id, outcome });
     }
@@ -414,6 +455,24 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     } catch (error) {
       // The outcome is stored; the type's own follow-up failed.
       this.logger.error({ err: error, jobId: job.id, type: job.type }, 'A job type could not handle a job\'s end');
+    }
+  }
+
+  /**
+   * NF-10.11: a job that ran is timed by how it ended; a failure counts
+   * whether it ran or not. Only registered types, so that every label value
+   * comes from a fixed set.
+   */
+  private recordEnd(job: Job, outcome: 'done' | 'failed' | 'cancelled'): void {
+    if (!this.types.has(job.type)) {
+      return;
+    }
+    const active = this.active.get(job.id);
+    if (active !== undefined) {
+      this.metrics.ran(job.type, outcome, (Date.now() - active.startedAt) / 1000);
+    }
+    if (outcome === 'failed') {
+      this.metrics.failed(job.type);
     }
   }
 

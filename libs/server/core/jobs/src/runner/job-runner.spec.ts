@@ -3,7 +3,9 @@ import { Database, jobs, JobStatus, repositories, users } from '@front-burner/se
 import type { EventsHub } from '@front-burner/server-core-events';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
+import { Registry } from 'prom-client';
 import { createTestDatabase } from '../testing/test-database';
+import { CLONES, JOB_DURATION, JOB_FAILURES, JOBS_QUEUED } from './job-metrics';
 import { INTERRUPTED_ATTEMPT_LIMIT, JobRunner, SHUTDOWN_GRACE_MS, START_SPREAD_MS } from './job-runner';
 import type { JobTypeDefinition, RunningJob } from './job-types';
 
@@ -24,7 +26,18 @@ describe('JobRunner', () => {
   let database: Database;
   let publish: ReturnType<typeof vi.fn<(userId: number, event: PushEvent) => void>>;
   let runner: JobRunner;
+  let registry: Registry;
   let userId: number;
+
+  /** One sample of a metric (`sample` names a histogram's `_count` or `_sum`), by its exact labels. */
+  const sampleOf = async (name: string, labels: Record<string, string>, sample = name) => {
+    const keyOf = (of: object) => JSON.stringify(Object.entries(of).sort(([ a ], [ b ]) => a.localeCompare(b)));
+    const metric = await registry.getSingleMetric(name)?.get();
+    // A histogram's samples carry their own name.
+    const values = (metric?.values ?? []) as { labels: object; value: number; metricName?: string; }[];
+    return values.find(value => (value.metricName ?? name) === sample && keyOf(value.labels) === keyOf(labels))
+      ?.value;
+  };
 
   const rowOf = (id: number) => database.db.select().from(jobs).where(eq(jobs.id, id)).get();
   /** Lets the loop and the handlers run. */
@@ -64,7 +77,13 @@ describe('JobRunner', () => {
       createdAt: NOW
     }).returning().get().id;
     publish = vi.fn();
-    runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, { publish } as unknown as EventsHub);
+    registry = new Registry();
+    runner = new JobRunner(
+      database,
+      { cloneConcurrency: 2 } as Config,
+      { publish } as unknown as EventsHub,
+      registry
+    );
   });
 
   afterEach(async () => {
@@ -712,6 +731,133 @@ describe('JobRunner', () => {
 
       expect(handler).toHaveBeenCalledOnce();
       expect(database.db.select().from(jobs).all().map(({ status }) => status)).toEqual([ 'done', 'queued' ]);
+    });
+  });
+
+  describe('metrics', () => {
+    it('times a job by type and result', async () => {
+      const started = controlledType();
+      runner.start();
+
+      const done = runner.enqueue({ type: 'test.controlled', payload: { n: 1 } });
+      const cancelled = runner.enqueue({ type: 'test.controlled', payload: { n: 2 } });
+      await settle();
+      await vi.advanceTimersByTimeAsync(3000);
+      started[0]?.done.resolve(undefined);
+      void runner.cancel({ id: cancelled });
+      await settle();
+
+      expect(rowOf(done)?.status).toBe('done');
+      expect(rowOf(cancelled)?.status).toBe('cancelled');
+      const done1 = { type: 'test.controlled', result: 'done' };
+      expect(await sampleOf(JOB_DURATION, done1, `${JOB_DURATION}_count`)).toBe(1);
+      expect(await sampleOf(JOB_DURATION, done1, `${JOB_DURATION}_sum`)).toBe(3);
+      const cancelled1 = { type: 'test.controlled', result: 'cancelled' };
+      expect(await sampleOf(JOB_DURATION, cancelled1, `${JOB_DURATION}_count`)).toBe(1);
+      expect(await sampleOf(JOB_FAILURES, { type: 'test.controlled' })).toBe(0);
+    });
+
+    it('a failed job is counted and timed', async () => {
+      runner.register({
+        type: 'test.fails',
+        pool: 'fetch',
+        onInterrupted: 'fail',
+        maxAttempts: 2,
+        handler: async () => {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          throw Object.assign(new Error('nope'), { code: 'remote-unreachable' });
+        }
+      });
+      runner.start();
+
+      const id = runner.enqueue({ type: 'test.fails', payload: {} });
+      await vi.advanceTimersByTimeAsync(2000);
+      // The first attempt is retried: the job has not ended.
+      expect(await sampleOf(JOB_FAILURES, { type: 'test.fails' })).toBe(0);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(rowOf(id)?.status).toBe('failed');
+      expect(await sampleOf(JOB_FAILURES, { type: 'test.fails' })).toBe(1);
+      const failed = { type: 'test.fails', result: 'failed' };
+      expect(await sampleOf(JOB_DURATION, failed, `${JOB_DURATION}_count`)).toBe(1);
+      expect(await sampleOf(JOB_DURATION, failed, `${JOB_DURATION}_sum`)).toBe(2);
+    });
+
+    it('counts an interrupted job as failed without a duration', async () => {
+      runner.register({
+        type: 'test.interrupted',
+        pool: 'housekeeping',
+        onInterrupted: 'fail',
+        handler: () => Promise.resolve()
+      });
+      database.db.insert(jobs).values({ type: 'test.interrupted', status: 'running', runAt: NOW, createdAt: NOW })
+        .run();
+      // A type no feature registers any more is in no metric.
+      database.db.insert(jobs).values({ type: 'test.gone', status: 'running', runAt: NOW, createdAt: NOW }).run();
+
+      runner.start();
+
+      expect(await sampleOf(JOB_FAILURES, { type: 'test.interrupted' })).toBe(1);
+      expect(await sampleOf(JOB_FAILURES, { type: 'test.gone' })).toBeUndefined();
+      const metric = await registry.getSingleMetric(JOB_DURATION)?.get();
+      expect(metric?.values).toEqual([]);
+    });
+
+    it('reports queued jobs by type', async () => {
+      controlledType({ pool: 'fetch' });
+      runner.register({ type: 'test.other', pool: 'email', onInterrupted: 'fail', handler: () => Promise.resolve() });
+      const later = new Date(NOW.getTime() + 60_000);
+      runner.enqueue({ type: 'test.controlled', payload: {}, runAt: later });
+      runner.enqueue({ type: 'test.controlled', payload: {}, runAt: later });
+      runner.enqueue({ type: 'test.other', payload: {}, runAt: later });
+      database.db.insert(jobs).values({ type: 'test.gone', status: 'queued', runAt: later, createdAt: NOW }).run();
+
+      expect(await sampleOf(JOBS_QUEUED, { type: 'test.controlled' })).toBe(2);
+      expect(await sampleOf(JOBS_QUEUED, { type: 'test.other' })).toBe(1);
+      expect(await sampleOf(JOBS_QUEUED, { type: 'test.gone' })).toBeUndefined();
+    });
+
+    it('every registered job type appears with zero', async () => {
+      controlledType();
+      runner.register({
+        type: 'test.housekeeping',
+        pool: 'housekeeping',
+        onInterrupted: 'requeue',
+        handler: () => Promise.resolve()
+      });
+
+      for (const type of [ 'test.controlled', 'test.housekeeping' ]) {
+        expect(await sampleOf(JOBS_QUEUED, { type })).toBe(0);
+        expect(await sampleOf(JOB_FAILURES, { type })).toBe(0);
+      }
+    });
+
+    it('reports clones running and waiting', async () => {
+      const started = controlledType();
+      runner.register({ type: 'test.fetch', pool: 'fetch', onInterrupted: 'fail', handler: () => Promise.resolve() });
+      runner.start();
+      expect(await sampleOf(CLONES, { state: 'running' })).toBe(0);
+      expect(await sampleOf(CLONES, { state: 'waiting' })).toBe(0);
+
+      for (let n = 0; n < 3; n++) {
+        runner.enqueue({ type: 'test.controlled', payload: { n } });
+      }
+      runner.enqueue({ type: 'test.fetch', payload: {}, runAt: new Date(NOW.getTime() + 60_000) });
+      await settle();
+
+      expect(started).toHaveLength(2);
+      expect(await sampleOf(CLONES, { state: 'running' })).toBe(2);
+      expect(await sampleOf(CLONES, { state: 'waiting' })).toBe(1);
+    });
+
+    it('keeps the last queue counts when the database cannot be read, so that the scrape still answers', async () => {
+      controlledType();
+      expect(await sampleOf(JOBS_QUEUED, { type: 'test.controlled' })).toBe(0);
+
+      database.sqlite.close();
+
+      await expect(registry.metrics()).resolves.toContain(`${JOBS_QUEUED}{type="test.controlled"} 0`);
+      database = createTestDatabase();
     });
   });
 });

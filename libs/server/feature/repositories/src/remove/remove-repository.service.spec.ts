@@ -10,6 +10,7 @@ import { eq } from 'drizzle-orm';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { Registry } from 'prom-client';
 import { CLONE_JOB_TYPE } from '../clone/clone-queue';
 import { RepositoryQueries } from '../repositories/repository-queries';
 import { insertRepository, insertUser } from '../testing/fixtures';
@@ -97,7 +98,7 @@ describe('RemoveRepositoryService', () => {
     mkdirSync(layout.tmpDir, { recursive: true });
     publish = vi.fn();
     const events = { publish } as unknown as EventsHub;
-    runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, events);
+    runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, events, new Registry());
     const queries = new RepositoryQueries(database);
     check = new RemovalCheck(queries, new GitEngine(testGitOptions(), new GitRunner()), layout);
     lock = new WorkingTreeLock();

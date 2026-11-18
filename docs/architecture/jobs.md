@@ -28,7 +28,18 @@ See [overview.md](overview.md) for the numbering conventions.
   (A-5.3) still serialises work on each working copy. _(My call: the sizes of
   the last three pools.)_
 - **A-6.6** Progress and results are published on the push channel (A-3.11).
-  Metrics cover queue depth, durations and failures per type (NF-10.11).
+  Metrics cover queue depth, durations and failures per type (NF-10.11): the
+  runner registers them on `METRICS_REGISTRY` (A-3.2j), labelled only by
+  registered job types, so that a row of a type no feature registers any more
+  counts nowhere. A job that ran is timed from its handler's call to the end of
+  the attempt that ended it, by how it ended (`done`, `failed` or `cancelled`);
+  an attempt that is retried is not timed, and neither is a job cancelled while
+  queued or failed as interrupted on start, which never ran in this process.
+  Every job that ends failed counts as a failure, an interrupted one too. Queued
+  jobs, and the clone pool's running and waiting jobs, are counted on each
+  scrape; when the database cannot be read, the counts keep their last values.
+  Every registered type appears with zero failures and zero queued jobs before
+  its first. _(Plan 135's call.)_
 
 ## A-6: Job types
 

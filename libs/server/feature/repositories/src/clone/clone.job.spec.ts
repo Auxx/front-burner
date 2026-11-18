@@ -34,6 +34,7 @@ import { eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Registry } from 'prom-client';
 import { AddRepositoryService } from '../add/add-repository.service';
 import { CredentialsCheck } from '../add/credentials-check';
 import { RequestCredentials } from '../add/request-credentials';
@@ -80,7 +81,7 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
   function build(gitOptions: GitOptions = testGitOptions()): void {
     publish = vi.fn();
     const events = { publish } as unknown as EventsHub;
-    runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, events);
+    runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, events, new Registry());
     engine = new GitEngine(gitOptions, new GitRunner());
     const knownHosts = new KnownHostsService(database, gitOptions);
     jobKeys = new JobKeys();

@@ -25,6 +25,7 @@ import { eq } from 'drizzle-orm';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Registry } from 'prom-client';
 import { insertRepository, insertUser } from '../testing/fixtures';
 import { createRemotes, testGitOptions, trustTestCertificate } from '../testing/git-fixtures';
 import { createTestDatabase } from '../testing/test-database';
@@ -103,7 +104,12 @@ describe('AddRepositoryService', () => {
     } as unknown as EventsHub);
     saved = new SavedCredentialsService(database, box, unlocks, new UnlockAttempts());
     const gitOptions = testGitOptions();
-    runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, { publish: vi.fn() } as unknown as EventsHub);
+    runner = new JobRunner(
+      database,
+      { cloneConcurrency: 2 } as Config,
+      { publish: vi.fn() } as unknown as EventsHub,
+      new Registry()
+    );
     // Not started: the clone job stays queued (the clone itself is covered by its own spec).
     runner.register({
       type: 'repositories.clone',

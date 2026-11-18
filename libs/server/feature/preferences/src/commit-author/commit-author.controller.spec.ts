@@ -11,7 +11,7 @@ import {
 import { EventsHub, EventsModule } from '@front-burner/server-core-events';
 import { GitModule } from '@front-burner/server-core-git';
 import { JobsModule } from '@front-burner/server-core-jobs';
-import { ApiExceptionFilter } from '@front-burner/server-core-observability';
+import { ApiExceptionFilter, MetricsModule } from '@front-burner/server-core-observability';
 import { RateLimitModule, SessionLifecycleModule } from '@front-burner/server-core-security';
 import { StorageModule } from '@front-burner/server-core-storage';
 import { RepositoriesModule } from '@front-burner/server-feature-repositories';
@@ -69,6 +69,7 @@ describe('CommitAuthorController', () => {
         EventsModule,
         SessionLifecycleModule,
         JobsModule,
+        MetricsModule.forRoot(config),
         RepositoriesModule,
         PreferencesModule
       ],

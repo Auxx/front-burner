@@ -10,7 +10,7 @@ import {
   startGitHttpServer
 } from '@front-burner/server-core-git/testing';
 import { JobsModule } from '@front-burner/server-core-jobs';
-import { ApiErrorException, ApiExceptionFilter } from '@front-burner/server-core-observability';
+import { ApiErrorException, ApiExceptionFilter, MetricsModule } from '@front-burner/server-core-observability';
 import { RateLimitModule, SessionLifecycleModule } from '@front-burner/server-core-security';
 import { StorageModule } from '@front-burner/server-core-storage';
 import { SavedCredentialsService } from '@front-burner/server-feature-credentials';
@@ -84,6 +84,7 @@ describe('RepositoriesController', () => {
         EventsModule,
         SessionLifecycleModule,
         JobsModule,
+        MetricsModule.forRoot(config),
         RepositoriesModule
       ],
       providers: [

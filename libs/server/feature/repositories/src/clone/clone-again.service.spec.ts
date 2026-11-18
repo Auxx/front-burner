@@ -20,6 +20,7 @@ import { eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Registry } from 'prom-client';
 import type { RequestUser } from '../add/add-repository.service';
 import { RepositoryQueries } from '../repositories/repository-queries';
 import { insertRepository, insertUser } from '../testing/fixtures';
@@ -93,7 +94,7 @@ describe('CloneAgainService', () => {
     const events = { publish, publishToSession: vi.fn() } as unknown as EventsHub;
     unlocks = new KeyUnlockStore({ keyUnlockIdleMs: 3_600_000 } as Config, new SessionLifecycle(), events);
     saved = new SavedCredentialsService(database, box, unlocks, new UnlockAttempts());
-    runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, events);
+    runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, events, new Registry());
     jobKeys = new JobKeys();
     clone = vi.fn(() => Promise.resolve());
     lock = new WorkingTreeLock();

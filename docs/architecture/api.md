@@ -200,9 +200,14 @@ numbering conventions.
     they stay open as long as a tab;
   - `front_burner_active_sessions`, the sessions neither revoked nor expired,
     counted in the database on each scrape. When the count fails, it keeps its
-    last value, so that the scrape still answers.
+    last value, so that the scrape still answers;
+  - `front_burner_job_duration_seconds{type, result}`, a histogram of jobs that
+    ran, `result` being `done`, `failed` or `cancelled`;
+    `front_burner_job_failures_total{type}`; `front_burner_jobs_queued{type}`;
+    and `front_burner_clones{state}`, the clone pool's jobs `running` and
+    `waiting`. `type` is a registered job type. A-6.6 says what each counts.
 
-  _(Plan 134's call.)_
+  _(Plan 134's and plan 135's calls.)_
 
 ## A-3: Contracts
 
