@@ -93,7 +93,9 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   - saves for one file are sent one at a time; when a save is in flight, only
     the newest content waits behind it;
   - a failed save is kept and retried with backoff; the status shows "Saved",
-    "Saving…" or "Not saved — offline, retrying" (NF-3.1, NF-3.2).
+    "Saving…" or "Not saved — offline, retrying" (NF-3.1, NF-3.2). A save
+    answered `507 storage-full` (A-3.2i) is retried the same way, and the status
+    shows "Server storage is full — not saved" (NF-9.8). _(Plan 133's call.)_
 - **A-8.10** **Drafts:** unsaved content is written to IndexedDB, keyed by user,
   repository and file, and deleted when the save is confirmed; drafts are
   offered back, never applied automatically, and deleted on logout (NF-3.3 to

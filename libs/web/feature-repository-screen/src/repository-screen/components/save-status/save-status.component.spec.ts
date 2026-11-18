@@ -49,6 +49,24 @@ describe('SaveStatusComponent', () => {
     expect(host().textContent?.trim()).toBe(text);
   });
 
+  it('shows "Server storage is full — not saved" on storage-full', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [
+        SaveStatusComponent,
+        translocoTesting({ [`${K}.storageFull`]: 'Server storage is full — not saved' })
+      ]
+    });
+    fixture = TestBed.createComponent(SaveStatusComponent);
+
+    await show({
+      kind: 'storage-full',
+      error: { code: 'storage-full', params: {}, requestId: 'r1', message: 'storage-full' }
+    });
+
+    expect(host().textContent?.trim()).toBe('Server storage is full — not saved');
+  });
+
   it('shows "Not saved" with the error\'s text for any other refusal', async () => {
     await show(refused('entry-not-found'));
 

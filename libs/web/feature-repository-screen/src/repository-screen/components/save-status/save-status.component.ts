@@ -40,6 +40,8 @@ export class SaveStatusComponent {
           key: REFUSALS[status.code] ?? 'refused',
           reason: this.errorText.describe(status.error).text
         };
+      case 'storage-full':
+        return { key: 'storageFull', reason: '' };
       default:
         return { key: status.kind, reason: '' };
     }

@@ -170,6 +170,9 @@ images ([REQ-EDIT-003](preview-images.md)).
   - "Saving…";
   - "Not saved — offline, retrying" when the save could not reach the backend,
     which is retried with backoff (NF-3.2);
+  - "Server storage is full — not saved" when the server's disk is full
+    (NF-9.8). The save is retried with backoff as when offline, and the content
+    stays in the editor and in the browser draft until a save goes through;
   - "Not saved" with the reason, when the backend refused the save (ED-19). Such
     a save is not retried; the content stays in the editor and in the browser
     draft.

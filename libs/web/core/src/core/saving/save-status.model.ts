@@ -2,13 +2,15 @@ import type { ApiError } from '@front-burner/shared-contracts';
 
 /**
  * The save status of a file (ED-18): saved, a save waiting or in flight,
- * saves failing to reach the backend and retried, or a save the backend
+ * saves failing to reach the backend and retried, saves failing because the
+ * server's disk is full and retried as well (NF-9.8), or a save the backend
  * refused with its error code (ED-19).
  */
 export type SaveStatus =
   | { kind: 'saved'; }
   | { kind: 'saving'; }
   | { kind: 'offline'; }
+  | { kind: 'storage-full'; error: ApiError; }
   | { kind: 'refused'; code: string; error: ApiError; };
 
 /** What the backend answers to a save: the content hash of the file on disk (ED-6). */

@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { type Signal, signal } from '@angular/core';
 import { type Observable, Subject } from 'rxjs';
 
@@ -28,7 +29,8 @@ export interface FileSaverOptions {
  * while one is in flight, only the newest content waits behind it. Nothing is
  * sent when the content equals the last saved content. A save that does not
  * reach the backend, or that it answers with a `5xx`, `408` or `429`, is
- * retried with backoff, with the newest content; one it refuses with another
+ * retried with backoff, with the newest content, and so is one it answers with
+ * `507 storage-full`, which has its own status (NF-9.8); one it refuses with another
  * `4xx` is not retried until the next edit (ED-19). Nothing is sent while the
  * saver is held, such as while its file is renamed.
  */
@@ -251,7 +253,11 @@ export class FileSaver {
     }
     // Typed meanwhile: the newest content is retried instead, after the backoff.
     this.pending ??= () => content;
-    this.currentStatus.set({ kind: 'offline' });
+    // A full disk is retried as a lost connection is, until space is back (NF-9.8).
+    const apiError = error instanceof HttpErrorResponse ? toApiError(error) : null;
+    this.currentStatus.set(
+      apiError?.code === 'storage-full' ? { kind: 'storage-full', error: apiError } : { kind: 'offline' }
+    );
     clearTimeout(this.timer);
     this.timer = undefined;
     this.due = false;

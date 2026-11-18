@@ -420,6 +420,46 @@ describe('OpenFilesService', () => {
       expect(drafts.at('README.md')).toBeUndefined();
     });
 
+    describe('on a full disk (NF-9.8)', () => {
+      const storageFull = () => apiError(507, 'storage-full');
+
+      it('keeps the draft on storage-full', async () => {
+        const file = await service.open('README.md');
+        file.saver.edit(() => '# Typed on a full disk');
+        await vi.advanceTimersByTimeAsync(1500);
+
+        saves[0].answer.error(storageFull());
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(drafts.at('README.md')?.content).toBe('# Typed on a full disk');
+        expect(file.saver.unsaved()).toBe(true);
+        expect(service.statusOf(file)).toMatchObject({ kind: 'storage-full' });
+        expect(service.notSaved(12, [ 'README.md' ])).toMatchObject({
+          error: { code: 'storage-full' },
+          retry: true
+        });
+      });
+
+      it('retries a storage-full save and clears the draft when it goes through', async () => {
+        const file = await service.open('README.md');
+        file.saver.edit(() => '# First');
+        await vi.advanceTimersByTimeAsync(1500);
+        saves[0].answer.error(storageFull());
+        await vi.advanceTimersByTimeAsync(0);
+        // Typing goes on while saves fail.
+        file.saver.edit(() => '# First and more');
+
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(saves.map(save => save.request.content)).toEqual([ '# First', '# First and more' ]);
+        expect(drafts.at('README.md')?.content).toBe('# First and more');
+        await answer(1, { hash: 'b'.repeat(64), size: 16 });
+
+        expect(drafts.at('README.md')).toBeUndefined();
+        expect(file.saver.unsaved()).toBe(false);
+        expect(service.statusOf(file)).toEqual({ kind: 'saved' });
+      });
+    });
+
     it('drops a waiting save when the repository was removed elsewhere', async () => {
       const file = await service.open('README.md');
       const other = await service.open('docs/guide.md');

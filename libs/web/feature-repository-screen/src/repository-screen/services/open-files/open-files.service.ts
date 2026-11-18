@@ -389,6 +389,10 @@ export class OpenFilesService {
       if (status.kind === 'offline') {
         return { error: toApiError(new HttpErrorResponse({ status: 0 })), retry: true };
       }
+      // Retried until the server has space again (NF-9.8).
+      if (status.kind === 'storage-full') {
+        return { error: status.error, retry: true };
+      }
     }
     return null;
   }
