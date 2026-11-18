@@ -38,6 +38,9 @@ const OIDC_VARIABLES = [
   OIDC_REQUIRE_VERIFIED_EMAIL,
   ADMIN_EMAIL
 ];
+const METRICS_TOKEN = 'FRONT_BURNER_METRICS_TOKEN';
+const METRICS_TOKEN_FILE = 'FRONT_BURNER_METRICS_TOKEN_FILE';
+const MIN_METRICS_TOKEN_LENGTH = 16;
 const DEFAULT_TRUSTED_PROXIES = 'loopback, linklocal, uniquelocal';
 const REPOS_DIR = 'FRONT_BURNER_REPOS_DIR';
 
@@ -186,7 +189,9 @@ const schema = z.object({
     })
   ).optional(),
   [OIDC_REQUIRED_CLAIM_NAME]: requiredClaimPart(),
-  [OIDC_REQUIRED_CLAIM_VALUE]: requiredClaimPart()
+  [OIDC_REQUIRED_CLAIM_VALUE]: requiredClaimPart(),
+  [METRICS_TOKEN]: z.string().optional(),
+  [METRICS_TOKEN_FILE]: z.string().optional()
 }).refine(v => v[SETUP_TOKEN] === undefined || v[SETUP_TOKEN_FILE] === undefined, {
   path: [ SETUP_TOKEN ],
   message: `cannot be set together with ${SETUP_TOKEN_FILE}`
@@ -199,6 +204,9 @@ const schema = z.object({
 }).refine(v => v[OIDC_CLIENT_SECRET] === undefined || v[OIDC_CLIENT_SECRET_FILE] === undefined, {
   path: [ OIDC_CLIENT_SECRET ],
   message: `cannot be set together with ${OIDC_CLIENT_SECRET_FILE}`
+}).refine(v => v[METRICS_TOKEN] === undefined || v[METRICS_TOKEN_FILE] === undefined, {
+  path: [ METRICS_TOKEN ],
+  message: `cannot be set together with ${METRICS_TOKEN_FILE}`
 });
 
 const KNOWN_VARIABLES = new Set(Object.keys(schema.shape));
@@ -296,6 +304,18 @@ export function loadConfig(
     warnings.push(
       `${tokenVariable} gives a setup token that starts or ends with whitespace; it must be typed exactly, and the onboarding page cannot send a line break.`
     );
+  }
+
+  // NF-10.10: unlike the setup token, a short one stops the start; metrics are off when it is not set.
+  const metricsToken = readSecret(METRICS_TOKEN, METRICS_TOKEN_FILE);
+  if (metricsToken.value !== undefined && metricsToken.value.length < MIN_METRICS_TOKEN_LENGTH) {
+    issues.push({
+      variable: metricsToken.variable,
+      message: `must be at least ${MIN_METRICS_TOKEN_LENGTH} characters`
+    });
+  } else if (metricsToken.value !== undefined && /^\s|\s$/.test(metricsToken.value)) {
+    // Node trims a header's value, so no scrape could ever send it.
+    issues.push({ variable: metricsToken.variable, message: 'must not start or end with whitespace' });
   }
 
   // AO-31: all required OIDC variables or none of them.
@@ -413,7 +433,8 @@ export function loadConfig(
         ? undefined
         : resolve(cwd, values.FRONT_BURNER_KNOWN_HOSTS_FILE),
       oidc,
-      oidcRequiredClaim
+      oidcRequiredClaim,
+      metricsToken: metricsToken.value
     },
     warnings
   };

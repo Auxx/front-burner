@@ -2,7 +2,13 @@ import { Config, ConfigError, loadConfig } from '@front-burner/server-core-confi
 import { checkEncryptionKey, SecretBox } from '@front-burner/server-core-crypto';
 import { Database, openDatabase } from '@front-burner/server-core-database';
 import { assertHelpersExecutable, assertSupportedGit, GitRunner } from '@front-burner/server-core-git';
-import { createBootstrapLogger, createRequestLogger, HEALTH_ROUTES } from '@front-burner/server-core-observability';
+import {
+  createBootstrapLogger,
+  createRequestLogger,
+  httpMetrics,
+  METRICS_REGISTRY,
+  UNVERSIONED_ROUTES
+} from '@front-burner/server-core-observability';
 import { securityHeaders, serveWebClient, versionHeader } from '@front-burner/server-core-security';
 import { INestApplication, Logger as NestLogger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -107,15 +113,19 @@ function configure(
   app.set('trust proxy', config.trustedProxies);
   // First, so that every response has an ID and is logged (NF-10.6, A-1.12).
   app.use(requestLogger);
+  // Next, so that every API request is timed, also those refused before a route (NF-10.11).
+  if (config.metricsToken !== undefined) {
+    app.use(httpMetrics(app.get(METRICS_REGISTRY)));
+  }
   app.use(securityHeaders());
-  // The health probes reveal no version (NF-10.9).
-  app.use(versionHeader(config.version, { except: HEALTH_ROUTES }));
+  // The health probes reveal no version (NF-10.9), nor do the metrics, which are not part of the API.
+  app.use(versionHeader(config.version, { except: UNVERSIONED_ROUTES }));
   // The refresh token's cookie (LG-32).
   app.use(cookieParser());
   // Nest's own parser is off so that the limit of NF-11.5 applies.
   app.useBodyParser('json', { limit: '2mb' });
-  // The health probes keep their path outside the API version (NF-10.7).
-  app.setGlobalPrefix('api/v1', { exclude: [ ...HEALTH_ROUTES ] });
+  // The health probes and the metrics keep their path outside the API version (NF-10.7, NF-10.10).
+  app.setGlobalPrefix('api/v1', { exclude: [ ...UNVERSIONED_ROUTES ] });
   if (!serveWebClient(app.getHttpAdapter().getInstance(), webRoot, { version: config.version })) {
     log.log(`Web client not found at ${webRoot}; serving the API only.`);
   }

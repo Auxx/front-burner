@@ -136,3 +136,69 @@ describe('instance storage', () => {
     expect(((await anonymous.json()) as { code: string; }).code).toBe('unauthenticated');
   });
 });
+
+describe('metrics', () => {
+  const METRICS_TOKEN = 'e2e-metrics-token-0123456789';
+  let server: ServerProcess;
+
+  beforeAll(async () => {
+    server = await startServerProcess({
+      FRONT_BURNER_SETUP_TOKEN: E2E_SETUP_TOKEN,
+      FRONT_BURNER_METRICS_TOKEN: METRICS_TOKEN
+    });
+    await onboard(server);
+  });
+
+  afterAll(async () => {
+    await server?.stop();
+  });
+
+  const scrape = async () => {
+    const response = await fetch(`${server.url}/api/metrics`, {
+      headers: { authorization: `Bearer ${METRICS_TOKEN}` }
+    });
+    expect(response.status).toBe(200);
+    return response.text();
+  };
+
+  it('NF-10.10: refuses a scrape without the token', async () => {
+    const response = await fetch(`${server.url}/api/metrics`, { headers: { authorization: 'Bearer wrong' } });
+    expect(response.status).toBe(401);
+    expect(response.headers.get('x-front-burner-version')).toBeNull();
+  });
+
+  it('NF-10.11: metrics show a request after it is made', async () => {
+    const { authToken } = await login(server, 'body');
+    const me = await fetch(`${server.url}/api/v1/me`, { headers: { authorization: `Bearer ${authToken}` } });
+    expect(me.status).toBe(200);
+
+    const metrics = await scrape();
+    expect(metrics).toMatch(
+      /^front_burner_http_request_duration_seconds_count\{method="GET",route="\/api\/v1\/me",status="200"\} [1-9]/m
+    );
+    expect(metrics).toMatch(/^front_burner_active_sessions [1-9]/m);
+    expect(metrics).toMatch(/^front_burner_process_resident_memory_bytes /m);
+  });
+
+  it('NF-10.11: no metric label holds a user, repository or path', async () => {
+    const { authToken } = await login(server, 'body');
+    const headers = { authorization: `Bearer ${authToken}` };
+    await fetch(`${server.url}/api/v1/repositories/987654`, { headers });
+    await fetch(`${server.url}/api/v1/repositories/987654/files/notes/secret-plan.md`, { headers });
+    await fetch(`${server.url}/api/v1/no-such-route/secret-plan.md`, { headers });
+
+    const metrics = await scrape();
+    const labelValues = [ ...metrics.matchAll(/="([^"]*)"/g) ].map(match => match[1]);
+    expect(labelValues).toContain('/api/v1/repositories/:id');
+    expect(labelValues).toContain('unmatched');
+    for (const value of labelValues) {
+      for (const secret of [ E2E_ADMIN.email, 'admin', '987654', 'secret-plan', 'no-such-route', authToken ]) {
+        expect(value).not.toContain(secret);
+      }
+    }
+    const routes = new Set([ ...metrics.matchAll(/route="([^"]*)"/g) ].map(match => match[1]));
+    for (const route of routes) {
+      expect(route === 'unmatched' || /^\/api\/[\w/:-]+$/.test(route), route).toBe(true);
+    }
+  });
+});

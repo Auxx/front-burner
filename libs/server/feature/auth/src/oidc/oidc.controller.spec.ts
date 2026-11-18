@@ -10,7 +10,7 @@ import {
 } from '@front-burner/server-core-database';
 import { EventsModule } from '@front-burner/server-core-events';
 import { JobsModule } from '@front-burner/server-core-jobs';
-import { ApiExceptionFilter } from '@front-burner/server-core-observability';
+import { ApiExceptionFilter, MetricsModule } from '@front-burner/server-core-observability';
 import {
   EgressHttpClient,
   EgressModule,
@@ -70,6 +70,7 @@ describe('OidcController', () => {
         EventsModule,
         SessionLifecycleModule,
         JobsModule,
+        MetricsModule.forRoot(config),
         AuthModule
       ],
       providers: [

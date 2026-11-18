@@ -41,7 +41,8 @@ describe('ReadinessService', () => {
       lowDiskThresholdBytes: 2_147_483_648,
       knownHostsFile: undefined,
       oidc: undefined,
-      oidcRequiredClaim: undefined
+      oidcRequiredClaim: undefined,
+      metricsToken: undefined
     };
   });
 

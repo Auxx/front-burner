@@ -89,6 +89,42 @@ describe('startServer', () => {
   });
 
   // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'serves metrics outside /api/v1, without a version header (NF-10.9, NF-10.10)',
+    async () => {
+      const token = 'metrics-token-0123456789';
+      app = await start({ FRONT_BURNER_METRICS_TOKEN: token }, '1.4.2');
+
+      const response = await request(app.getHttpServer()).get('/api/metrics').set('Authorization', `Bearer ${token}`);
+      const refused = await request(app.getHttpServer()).get('/api/metrics');
+
+      expect(response.status).toBe(200);
+      expect(response.text).toContain('front_burner_');
+      expect(response.headers['x-front-burner-version']).toBeUndefined();
+      expect(refused.status).toBe(401);
+      expect(refused.body.code).toBe('unauthenticated');
+      expect(refused.headers['x-front-burner-version']).toBeUndefined();
+      expect((await request(app.getHttpServer()).get('/api/v1/metrics')).status).toBe(404);
+    }
+  );
+
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'answers /api/metrics like an unknown route when metrics are off',
+    async () => {
+      writeFileSync(join(webRoot, 'index.html'), '<html><script nonce="__CSP_NONCE__"></script></html>');
+      app = await start();
+
+      const metrics = await request(app.getHttpServer()).get('/api/metrics');
+      const unknown = await request(app.getHttpServer()).get('/api/nothing-here');
+
+      expect(metrics.status).toBe(unknown.status);
+      expect(metrics.headers['content-type']).toBe(unknown.headers['content-type']);
+      expect({ ...metrics.body, requestId: undefined }).toEqual({ ...unknown.body, requestId: undefined });
+    }
+  );
+
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
   it.skipIf(process.platform === 'win32')('rate-limits requests that the auth guard refuses (A-1.12)', async () => {
     app = await start();
 

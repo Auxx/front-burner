@@ -57,9 +57,54 @@ describe('loadConfig', () => {
       lowDiskThresholdBytes: 2 * 1024 ** 3,
       knownHostsFile: undefined,
       oidc: undefined,
-      oidcRequiredClaim: undefined
+      oidcRequiredClaim: undefined,
+      metricsToken: undefined
     });
     expect(warnings).toEqual([]);
+  });
+
+  describe('metrics token', () => {
+    it('reads FRONT_BURNER_METRICS_TOKEN and its _FILE', () => {
+      expect(loadConfig({ ...BASE, FRONT_BURNER_METRICS_TOKEN: TOKEN }).config.metricsToken).toBe(TOKEN);
+
+      const readFile = vi.fn().mockReturnValue(`${TOKEN}\n`);
+      const { config } = loadConfig({ ...BASE, FRONT_BURNER_METRICS_TOKEN_FILE: '/run/secrets/metrics' }, { readFile });
+      expect(config.metricsToken).toBe(TOKEN);
+      expect(readFile).toHaveBeenCalledWith('/run/secrets/metrics');
+
+      const both = issuesOf(
+        { FRONT_BURNER_METRICS_TOKEN: TOKEN, FRONT_BURNER_METRICS_TOKEN_FILE: '/run/secrets/metrics' },
+        { readFile }
+      );
+      expect(both.map(issue => issue.variable)).toEqual([ 'FRONT_BURNER_METRICS_TOKEN' ]);
+    });
+
+    it('refuses a short token', () => {
+      const short = TOKEN.slice(1);
+      expect(issuesOf({ FRONT_BURNER_METRICS_TOKEN: short })).toEqual([
+        { variable: 'FRONT_BURNER_METRICS_TOKEN', message: 'must be at least 16 characters' }
+      ]);
+      expect(issuesOf(
+        { FRONT_BURNER_METRICS_TOKEN_FILE: '/run/secrets/metrics' },
+        { readFile: () => short }
+      )).toEqual([ { variable: 'FRONT_BURNER_METRICS_TOKEN_FILE', message: 'must be at least 16 characters' } ]);
+    });
+
+    it('refuses a token with whitespace at an end, which no Authorization header can carry', () => {
+      const message = 'must not start or end with whitespace';
+      for (const token of [ ` ${TOKEN}`, `${TOKEN} `, `${TOKEN}\t` ]) {
+        expect(issuesOf({ FRONT_BURNER_METRICS_TOKEN: token })).toEqual([
+          { variable: 'FRONT_BURNER_METRICS_TOKEN', message }
+        ]);
+      }
+      // A file with a blank line after the token: only one line break is stripped.
+      const issues = issuesOf(
+        { FRONT_BURNER_METRICS_TOKEN_FILE: '/run/secrets/metrics' },
+        { readFile: () => `${TOKEN}\n\n` }
+      );
+      expect(issues).toEqual([ { variable: 'FRONT_BURNER_METRICS_TOKEN_FILE', message } ]);
+      expect(JSON.stringify(issues)).not.toContain(TOKEN);
+    });
   });
 
   it('reads the threshold as a size', () => {

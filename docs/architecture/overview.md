@@ -170,7 +170,9 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
   The same schema parses LG-61's variables (`FRONT_BURNER_JWT_SECRET`, also read
   from `FRONT_BURNER_JWT_SECRET_FILE` as NF-8.2 describes, and the three
   durations), so a missing or short JWT secret stops the startup with every
-  other invalid variable (LG-63).
+  other invalid variable (LG-63). It also parses NF-10.10's
+  `FRONT_BURNER_METRICS_TOKEN` and its `…_FILE` (NF-8.2): unset, metrics are
+  off; shorter than 16 characters, the startup stops (A-3.2j).
 
 ## Consequences for the requirements
 
