@@ -1,0 +1,121 @@
+import {
+  Controller,
+  Get,
+  INestApplication,
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  NotFoundException,
+  Param,
+  RequestMethod
+} from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { type MetricValue, type MetricValueWithName, Registry } from 'prom-client';
+import request from 'supertest';
+import { HTTP_REQUEST_DURATION, httpMetrics, UNMATCHED_ROUTE } from './http-metrics.middleware';
+
+@Controller('repositories')
+class RepositoriesController {
+  @Get(':id')
+  one(@Param('id') id: string): { id: string; } {
+    if (id === 'missing') {
+      throw new NotFoundException();
+    }
+    return { id };
+  }
+
+  @Get(':id/files/*path')
+  file(): string {
+    return 'text';
+  }
+}
+
+/** A Nest middleware for every route, as the auth middleware: Nest registers it as an Express `all()` route. */
+@Module({ controllers: [ RepositoriesController ] })
+class TestModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply((_req: unknown, _res: unknown, next: () => void) => next())
+      .forRoutes({ path: '*path', method: RequestMethod.ALL });
+  }
+}
+
+describe('httpMetrics', () => {
+  let app: INestApplication;
+  let registry: Registry;
+
+  beforeEach(async () => {
+    registry = new Registry();
+    const moduleRef = await Test.createTestingModule({ imports: [ TestModule ] }).compile();
+    app = moduleRef.createNestApplication();
+    app.use(httpMetrics(registry));
+    app.setGlobalPrefix('api/v1');
+    await app.init();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  /** The `_count` samples of the histogram, one per label set. */
+  const counts = async (): Promise<MetricValue<string>[]> => {
+    const metric = await registry.getSingleMetric(HTTP_REQUEST_DURATION)?.get();
+    // A histogram's values are its buckets, `_sum` and `_count`, each with its name.
+    return (metric?.values ?? []).filter(sample =>
+      (sample as MetricValueWithName<string>).metricName === `${HTTP_REQUEST_DURATION}_count`
+    );
+  };
+
+  it('times a request by method, route and status', async () => {
+    await request(app.getHttpServer()).get('/api/v1/repositories/7').expect(200);
+    await request(app.getHttpServer()).get('/api/v1/repositories/missing').expect(404);
+
+    expect(await counts()).toEqual([
+      {
+        metricName: `${HTTP_REQUEST_DURATION}_count`,
+        labels: { method: 'GET', route: '/api/v1/repositories/:id', status: '200' },
+        value: 1
+      },
+      {
+        metricName: `${HTTP_REQUEST_DURATION}_count`,
+        labels: { method: 'GET', route: '/api/v1/repositories/:id', status: '404' },
+        value: 1
+      }
+    ]);
+    const metrics = await registry.metrics();
+    expect(metrics).toContain(
+      `${HTTP_REQUEST_DURATION}_bucket{le="0.005",method="GET",route="/api/v1/repositories/:id",status="200"}`
+    );
+  });
+
+  it('labels requests by route pattern, not path', async () => {
+    await request(app.getHttpServer()).get('/api/v1/repositories/123/files/secret.md').expect(200);
+    await request(app.getHttpServer()).get('/api/v1/repositories/456/files/notes/private.md').expect(200);
+
+    expect((await counts()).map(sample => [ sample.labels['route'], sample.value ])).toEqual([
+      [ '/api/v1/repositories/:id/files/*path', 2 ]
+    ]);
+    const metrics = await registry.metrics();
+    for (const part of [ '123', '456', 'secret.md', 'private.md' ]) {
+      expect(metrics).not.toContain(part);
+    }
+  });
+
+  it('an unmatched route is labelled as such', async () => {
+    await request(app.getHttpServer()).get('/api/v1/nothing/here').expect(404);
+    await request(app.getHttpServer()).post('/api/v1/repositories/1').expect(404);
+    await request(app.getHttpServer()).get('/api/other').expect(404);
+
+    expect((await counts()).map(sample => [ sample.labels, sample.value ])).toEqual([
+      [ { method: 'GET', route: UNMATCHED_ROUTE, status: '404' }, 2 ],
+      [ { method: 'POST', route: UNMATCHED_ROUTE, status: '404' }, 1 ]
+    ]);
+    expect(await registry.metrics()).not.toContain('nothing');
+  });
+
+  it('leaves out requests outside the API, such as the web client\'s', async () => {
+    await request(app.getHttpServer()).get('/login').expect(404);
+    await request(app.getHttpServer()).get('/main.js').expect(404);
+
+    expect(await counts()).toEqual([]);
+  });
+});

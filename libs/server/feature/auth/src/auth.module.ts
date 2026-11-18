@@ -20,6 +20,7 @@ import { AdminOnlyGuard } from './sessions/admin-only.guard';
 import { AuthTokenService } from './sessions/auth-token.service';
 import { AuthGuard } from './sessions/auth.guard';
 import { AuthMiddleware } from './sessions/auth.middleware';
+import { SessionMetrics } from './sessions/session-metrics';
 import { SESSION_REUSE_HANDLER, SessionReuseHandler, SessionService } from './sessions/session.service';
 import { MeController } from './users/me.controller';
 
@@ -46,6 +47,7 @@ import { MeController } from './users/me.controller';
     OneTimeCodes,
     OidcRateLimitFilter,
     AuthHousekeeping,
+    SessionMetrics,
     {
       provide: SESSION_REUSE_HANDLER,
       inject: [ LoginAuditService ],

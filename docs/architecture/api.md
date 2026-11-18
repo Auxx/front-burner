@@ -185,7 +185,18 @@ numbering conventions.
   shorter one stops the startup. `MetricsModule` in `server/core/observability`
   owns one `prom-client` registry, `METRICS_REGISTRY`, where every library
   registers its own metrics, all named `front_burner_…`, with no label that
-  names a user, a repository or a path (NF-10.11). _(Plan 134's call.)_
+  names a user, a repository or a path (NF-10.11). Besides Node's process
+  metrics, they include:
+  - `front_burner_http_request_duration_seconds{method, route, status}`, a
+    histogram of every request under `/api/`, timed by an Express middleware
+    attached right after the request logger, so that requests refused by a guard
+    (`401`, `429`) or the body parser count too. `route` is the pattern of the
+    controller route that answered (`/api/v1/repositories/:id`), never the path,
+    or `unmatched` when none did, such as for an unknown path;
+  - `front_burner_active_sessions`, the sessions neither revoked nor expired,
+    counted in the database on each scrape.
+
+  _(Plan 134's call.)_
 
 ## A-3: Contracts
 

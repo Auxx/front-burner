@@ -3,7 +3,7 @@ import { CryptoModule } from '@front-burner/server-core-crypto';
 import { Database, DatabaseModule, loginAudit, NewUser, users } from '@front-burner/server-core-database';
 import { EventsModule } from '@front-burner/server-core-events';
 import { JobsModule } from '@front-burner/server-core-jobs';
-import { ApiExceptionFilter } from '@front-burner/server-core-observability';
+import { ApiExceptionFilter, MetricsModule } from '@front-burner/server-core-observability';
 import {
   EgressHttpClient,
   EgressModule,
@@ -74,6 +74,7 @@ describe('AuthController', () => {
         EventsModule,
         SessionLifecycleModule,
         JobsModule,
+        MetricsModule.forRoot(withConfig),
         AuthModule
       ],
       providers: [
