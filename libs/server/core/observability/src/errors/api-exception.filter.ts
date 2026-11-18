@@ -1,3 +1,4 @@
+import { isStorageFull } from '@front-burner/server-core-storage';
 import type { ApiError, ErrorCode, FieldError } from '@front-burner/shared-contracts';
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger, NotFoundException } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
@@ -100,7 +101,8 @@ const MESSAGES: Record<ErrorCode, string> = {
 const EXPECTED_SERVER_CODES: ReadonlySet<string> = new Set<ErrorCode>([ 'low-storage', 'storage-full' ]);
 
 function isExpectedServerAnswer(exception: unknown): boolean {
-  return exception instanceof ApiErrorException && EXPECTED_SERVER_CODES.has(exception.code);
+  return (exception instanceof ApiErrorException && EXPECTED_SERVER_CODES.has(exception.code))
+    || isStorageFull(exception);
 }
 
 interface ZodIssueLike {
@@ -191,6 +193,11 @@ export class ApiExceptionFilter implements ExceptionFilter {
     }
     if (type === 'entity.too.large') {
       return { status: 413, code: 'payload-too-large', params: {} };
+    }
+    // Any write that the full disk stopped and nothing mapped, such as SQLite's
+    // (SQLITE_FULL), which rolled its transaction back (NF-9.8).
+    if (isStorageFull(exception)) {
+      return { status: 507, code: 'storage-full', params: {} };
     }
     return { status: 500, code: 'internal', params: {} };
   }

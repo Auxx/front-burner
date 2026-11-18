@@ -54,7 +54,9 @@ const FIXES: Readonly<Record<string, GitFix>> = {
   'git-timeout': 'retry',
   'git-busy': 'retry',
   'rate-limited': 'retry',
-  'too-many-jobs': 'retry'
+  'too-many-jobs': 'retry',
+  // The server's disk is full; nothing changed, and it works again once space is freed (NF-9.8).
+  'storage-full': 'retry'
 };
 
 /** The codes that have a message; the last three are the web client's own, of a save that stopped a pull. */

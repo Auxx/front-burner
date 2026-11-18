@@ -32,6 +32,10 @@ describe('toAddRepositoryError', () => {
     });
   });
 
+  it('answers the server\'s full disk as storage-full, not as the remote\'s failure (NF-9.8)', () => {
+    expect(fail('storage-full')).toEqual({ status: 507, code: 'storage-full', params: {}, fields: undefined });
+  });
+
   it('reports an untrusted certificate on the URL', () => {
     expect(fail('tls-untrusted')).toEqual(onField('remoteUrl', 'tls-untrusted'));
   });

@@ -1,4 +1,3 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { type Signal, signal } from '@angular/core';
 import { type Observable, Subject } from 'rxjs';
 
@@ -254,9 +253,9 @@ export class FileSaver {
     // Typed meanwhile: the newest content is retried instead, after the backoff.
     this.pending ??= () => content;
     // A full disk is retried as a lost connection is, until space is back (NF-9.8).
-    const apiError = error instanceof HttpErrorResponse ? toApiError(error) : null;
+    const apiError = toApiError(error);
     this.currentStatus.set(
-      apiError?.code === 'storage-full' ? { kind: 'storage-full', error: apiError } : { kind: 'offline' }
+      apiError.code === 'storage-full' ? { kind: 'storage-full', error: apiError } : { kind: 'offline' }
     );
     clearTimeout(this.timer);
     this.timer = undefined;

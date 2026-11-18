@@ -8,6 +8,10 @@ describe('isStorageFull', () => {
     expect(isStorageFull(errno('EDQUOT'))).toBe(true);
   });
 
+  it('SQLite\'s SQLITE_FULL is storage full', () => {
+    expect(isStorageFull(errno('SQLITE_FULL'))).toBe(true);
+  });
+
   it('any other error is not', () => {
     expect(isStorageFull(errno('EACCES'))).toBe(false);
     expect(isStorageFull(new Error('No space left on device'))).toBe(false);

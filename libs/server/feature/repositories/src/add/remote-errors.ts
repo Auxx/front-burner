@@ -24,6 +24,9 @@ export function toAddRepositoryError(error: GitOperationError, context: RemoteEr
       return onField('remoteUrl', 'host-unreachable', { host });
     case 'timeout':
       return new ApiErrorException(504, 'remote-timeout', { host }, `${host} didn't answer in time.`);
+    // The server's disk, not the remote (NF-9.8).
+    case 'storage-full':
+      return new ApiErrorException(507, 'storage-full');
     case 'tls-untrusted':
     case 'repository-not-found':
       return onField('remoteUrl', error.code);

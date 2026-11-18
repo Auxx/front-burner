@@ -1,14 +1,13 @@
-import { GitOperationError } from '@front-burner/server-core-git';
+import { GitOperationError, isDiskFull } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { isStorageFull } from '@front-burner/server-core-storage';
 
 /**
  * The only mapping from a local git operation's failure to an API answer
- * (GA-43), with a file-system error for a full disk (NF-9.8). Anything else
- * is rethrown.
+ * (GA-43), with a full disk, said by git or by the file system (NF-9.8).
+ * Anything else is rethrown.
  */
 export function toGitApiError(error: unknown): never {
-  if (isStorageFull(error)) {
+  if (isDiskFull(error)) {
     throw new ApiErrorException(507, 'storage-full');
   }
   if (error instanceof GitOperationError) {
@@ -37,8 +36,6 @@ export function toGitApiError(error: unknown): never {
         throw new ApiErrorException(409, 'no-commits');
       case 'timeout':
         throw new ApiErrorException(504, 'git-timeout');
-      case 'storage-full':
-        throw new ApiErrorException(507, 'storage-full');
     }
   }
   throw error;

@@ -1,4 +1,10 @@
-import { inBatches, lstatOrMissing, PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
+import {
+  inBatches,
+  isStorageFull,
+  lstatOrMissing,
+  PathRefusedError,
+  resolveInWorkingCopy
+} from '@front-burner/server-core-storage';
 import type { CloneMode } from '@front-burner/shared-contracts';
 import { ParsedRemote, parseRemoteUrl } from '@front-burner/shared-util';
 import { BeforeApplicationShutdown, Inject, Injectable, Logger } from '@nestjs/common';
@@ -1311,7 +1317,12 @@ export class GitEngine implements BeforeApplicationShutdown {
     let broker: Broker | undefined;
     let failure: GitOperationError;
     try {
-      broker = await openBroker({ remote, credentials, gitOptions: this.options, knownHosts });
+      // It writes git's SSH config and keys to a temporary folder, which a full disk refuses (NF-9.8).
+      broker = await openBroker({ remote, credentials, gitOptions: this.options, knownHosts }).catch(
+        (error: unknown) => {
+          throw isStorageFull(error) ? new GitOperationError('storage-full', String(error)) : error;
+        }
+      );
       const run = await this.runner.run(args(remoteUrl), { env: broker.env, timeoutMs, cwd, signal, onStderr });
       const result = onStderr === undefined ? run : { ...run, stderr: withoutProgress(run.stderr) };
       if (result.exitCode === 0) {

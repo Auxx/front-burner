@@ -91,10 +91,11 @@ function checkDiscardPaths(root: string, paths: string[]): Promise<void> {
 
 /**
  * Answers a failed branch action. Git refuses before it changes anything, except
- * when it was killed at its timeout: then `onChange` runs, as it may have.
+ * when it was killed at its timeout or ran out of space partway (NF-9.8): then
+ * `onChange` runs, as it may have.
  */
 const mayHaveChanged = (onChange: () => void) => (error: unknown): never => {
-  if (error instanceof GitOperationError && error.code === 'timeout') {
+  if (error instanceof GitOperationError && (error.code === 'timeout' || error.code === 'storage-full')) {
     onChange();
   }
   return toGitApiError(error);

@@ -59,14 +59,15 @@ where git may connect. Lives in `server/git` (A-2). See
     remote problem, so leaves no warning (RM-8). _(Plan 109's call.)_
   - a run that fails because the disk is full throws the error code
     `storage-full` (NF-9.8): git said "No space left on device" or "Disk quota
-    exceeded" in its own lines (a `remote: ` line is about the remote's disk),
-    or the runner could not make git's home. It is checked before
-    `working-copy-missing`, and not after a timeout or a cancel. It is then
-    handled as an interrupted operation is (NF-9.5): a clone removes its partial
-    copy (AR-54), a pull's merge is undone to its recorded commit (A-4.5a,
-    GA-43) and the job ends as `failed` with `storage-full`, a fetch or push
-    ends the same way, and a local request answers `507 storage-full` (A-3.2i).
-    _(Plan 133's call.)_
+    exceeded" in its own lines (a `remote: ` line is about the remote's disk,
+    also after a progress line that ends in `\r`), or the runner could not make
+    git's home, or the broker could not write its files for a network operation.
+    It is checked before `working-copy-missing`, and not after a timeout or a
+    cancel. It is then handled as an interrupted operation is (NF-9.5): a clone
+    removes its partial copy (AR-54), a pull's merge is undone to its recorded
+    commit (A-4.5a, GA-43) and the job ends as `failed` with `storage-full`, a
+    fetch or push ends the same way, and a local request answers `507
+    storage-full` (A-3.2i). _(Plan 133's call.)_
 - **A-5.2** Submodules and Git LFS objects are not fetched (AR-50).
 
 ## A-5: One operation at a time per working copy

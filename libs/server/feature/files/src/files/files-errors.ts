@@ -1,6 +1,6 @@
-import { GitOperationError } from '@front-burner/server-core-git';
+import { isDiskFull } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { isStorageFull, PathRefusedError } from '@front-burner/server-core-storage';
+import { PathRefusedError } from '@front-burner/server-core-storage';
 
 /**
  * The only mapping from a refused client path to an API answer: a missing
@@ -9,7 +9,7 @@ import { isStorageFull, PathRefusedError } from '@front-burner/server-core-stora
  * Anything else is rethrown.
  */
 export function toFilesError(error: unknown): never {
-  if (isStorageFull(error) || (error instanceof GitOperationError && error.code === 'storage-full')) {
+  if (isDiskFull(error)) {
     throw new ApiErrorException(507, 'storage-full');
   }
   if (error instanceof PathRefusedError) {

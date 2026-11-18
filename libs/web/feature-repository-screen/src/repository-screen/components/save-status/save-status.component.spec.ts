@@ -54,7 +54,7 @@ describe('SaveStatusComponent', () => {
     TestBed.configureTestingModule({
       imports: [
         SaveStatusComponent,
-        translocoTesting({ [`${K}.storageFull`]: 'Server storage is full — not saved' })
+        translocoTesting({ [`${K}.storage-full`]: 'Server storage is full — not saved' })
       ]
     });
     fixture = TestBed.createComponent(SaveStatusComponent);

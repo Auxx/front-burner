@@ -27,6 +27,11 @@ class TestController {
     throw new ApiErrorException(507, 'low-storage');
   }
 
+  @Get('sqlite-full')
+  sqliteFull() {
+    throw Object.assign(new Error('database or disk is full'), { code: 'SQLITE_FULL' });
+  }
+
   @Get('remote-failed')
   remoteFailed() {
     throw new ApiErrorException(502, 'remote-failed');
@@ -204,6 +209,16 @@ describe('ApiExceptionFilter', () => {
       code: 'low-storage',
       message: 'The server is running low on storage. Contact your administrator.'
     });
+    expect(unhandledLogged()).toBe(false);
+  });
+
+  it('answers a write the full disk stopped, such as SQLite\'s, with 507 storage-full and logs no unhandled exception (NF-9.8)', async () => {
+    logLines.length = 0;
+    const res = await request(app.getHttpServer()).get('/test/sqlite-full');
+
+    expect(res.status).toBe(507);
+    expect(res.body).toMatchObject({ code: 'storage-full' });
+    expect(JSON.stringify(res.body)).not.toContain('database or disk is full');
     expect(unhandledLogged()).toBe(false);
   });
 

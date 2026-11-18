@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import type { EgressRefusal } from '../egress/egress-proxy';
 import type { GitResult } from '../runner/git-runner';
-import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
+import { classifyGitFailure, classifyPushFailure, GitOperationError, isOutOfSpace } from './git-errors';
 
 const failed = (stderr: string, timedOut = false): GitResult => ({
   exitCode: timedOut ? null : 128,
@@ -93,6 +93,18 @@ describe('GitOperationError', () => {
     expect(error.detail).toBe('fatal: x');
     expect(error.params).toEqual({ host: 'h' });
     expect(error.message).toContain('host-unreachable');
+  });
+});
+
+describe('isOutOfSpace (NF-9.8)', () => {
+  it('reads git\'s own lines', () => {
+    expect(isOutOfSpace('error: unable to write file a.md: No space left on device\nfatal: x')).toBe(true);
+    expect(isOutOfSpace('Receiving objects:  45%\rfatal: write error: Disk quota exceeded')).toBe(true);
+  });
+
+  it('leaves the remote\'s disk to the remote, also after a progress line', () => {
+    expect(isOutOfSpace('remote: fatal: write error: No space left on device\n')).toBe(false);
+    expect(isOutOfSpace('Receiving objects:  45% (9/20)\rremote: fatal: No space left on device\r\n')).toBe(false);
   });
 });
 
