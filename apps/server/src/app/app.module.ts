@@ -8,7 +8,8 @@ import {
   ApiExceptionFilter,
   HealthModule,
   InstanceModule,
-  LoggingModule
+  LoggingModule,
+  MetricsModule
 } from '@front-burner/server-core-observability';
 import { EgressModule, RateLimitModule, SessionLifecycleModule } from '@front-burner/server-core-security';
 import { StorageModule } from '@front-burner/server-core-storage';
@@ -54,6 +55,7 @@ export class AppModule {
         LoggingModule.forRoot(deps.requestLogger),
         RateLimitModule,
         HealthModule.forRoot({ migrationsApplied: deps.migrationsApplied }),
+        MetricsModule.forRoot(deps.config),
         InstanceModule,
         EventsModule,
         SessionLifecycleModule,

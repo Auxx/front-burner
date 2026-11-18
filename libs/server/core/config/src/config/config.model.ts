@@ -60,6 +60,11 @@ export interface Config {
    * which turns the required claim off; undefined when neither is set.
    */
   oidcRequiredClaim: RequiredClaim | null | undefined;
+  /**
+   * `FRONT_BURNER_METRICS_TOKEN`: the bearer token of `/api/metrics`, at least
+   * 16 characters; undefined when not set, which turns metrics off (NF-10.10).
+   */
+  metricsToken: string | undefined;
 }
 
 /** A claim the OIDC ID token must carry, trimmed (AO-40, LG-69; temporary MVP measure). */

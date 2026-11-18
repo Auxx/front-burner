@@ -11,12 +11,12 @@ numbering conventions.
   file uploads and raw file downloads. It must not assume the web client is its
   only consumer (vision goal 12). Every response, errors and `304` included,
   carries the instance's version in `X-Front-Burner-Version`, for example
-  `X-Front-Burner-Version: 1.4.2`; the health endpoints do not (NF-10.9). The
-  version is fixed when the backend is built, from the root `package.json`'s
-  `version`, which a release image's build sets from its tag; the web client's
-  build reads the same field, so a client compares the two for equality only,
-  never orders them (A-8.7). It is not an environment variable, so that it
-  cannot differ from the web client's.
+  `X-Front-Burner-Version: 1.4.2`; the health endpoints and the metrics (A-3.2j)
+  do not (NF-10.9). The version is fixed when the backend is built, from the
+  root `package.json`'s `version`, which a release image's build sets from its
+  tag; the web client's build reads the same field, so a client compares the two
+  for equality only, never orders them (A-8.7). It is not an environment
+  variable, so that it cannot differ from the web client's.
 - **A-3.2** Long operations return `202 Accepted` with a job ID (A-1.13). A git
   job's state is read with `GET /repositories/:id/git/jobs/:jobId`: its status
   and, once it has ended, its outcome, such as a push's commits and upstream, a
@@ -172,6 +172,20 @@ numbering conventions.
   client offers **Try again**. Like `low-storage`, it is not logged as an
   unhandled exception. The web client keeps the draft and retries the save
   (A-8). _(Plan 133's call.)_
+- **A-3.2j** `GET /api/metrics` serves Prometheus metrics in the text format
+  (NF-10.10), outside `/api/v1` like the health endpoints, with no version
+  header, and left out of the OpenAPI document: it is for the operator's
+  scraper, not part of the API. It exists only when `FRONT_BURNER_METRICS_TOKEN`
+  (or `…_FILE`, NF-8.2) is set; otherwise it is answered like any unknown route.
+  The request must send the token as `Authorization: Bearer <token>`, compared
+  in constant time; a missing, malformed or wrong one gets the same `401
+  unauthenticated` with `WWW-Authenticate: Bearer`. It needs no login
+  (`@Public()`), so the unauthenticated rate limit of NF-11.4 applies, which a
+  scrape every 15 s stays far below. The token is at least 16 characters; a
+  shorter one stops the startup. `MetricsModule` in `server/core/observability`
+  owns one `prom-client` registry, `METRICS_REGISTRY`, where every library
+  registers its own metrics, all named `front_burner_…`, with no label that
+  names a user, a repository or a path (NF-10.11). _(Plan 134's call.)_
 
 ## A-3: Contracts
 
@@ -203,7 +217,8 @@ numbering conventions.
   - a route whose only responses are redirects (`3xx`), such as `GET
     /api/v1/auth/oidc/start`, is a browser navigation: it is in the OpenAPI
     document but gets no client method;
-  - the health endpoints are under `/api/health`, outside `/api/v1`.
+  - the health endpoints are under `/api/health`, outside `/api/v1`; the metrics
+    (A-3.2j) are outside it too, and not in the document.
 - **A-3.7** CI regenerates the OpenAPI document and the client and fails if
   either differs from what is committed.
 
