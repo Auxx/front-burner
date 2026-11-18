@@ -24,7 +24,8 @@ describe('networkFailure', () => {
       'tls-untrusted',
       'repository-not-found',
       'host-key-changed',
-      'host-key-unknown'
+      'host-key-unknown',
+      'storage-full'
     ] as const
   )('keeps the code %s', code => {
     expect(codeOf(new GitOperationError(code, ''))).toBe(code);

@@ -21,6 +21,7 @@ function failureCode(error: GitOperationError, hasCredentials: boolean): string 
     case 'repository-not-found':
     case 'host-key-changed':
     case 'host-key-unknown':
+    case 'storage-full': // Our disk, not the remote's (NF-9.8).
       return error.code;
     default:
       return 'remote-failed';

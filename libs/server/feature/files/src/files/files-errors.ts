@@ -1,12 +1,17 @@
+import { GitOperationError } from '@front-burner/server-core-git';
 import { ApiErrorException } from '@front-burner/server-core-observability';
-import { PathRefusedError } from '@front-burner/server-core-storage';
+import { isStorageFull, PathRefusedError } from '@front-burner/server-core-storage';
 
 /**
  * The only mapping from a refused client path to an API answer: a missing
  * entry is `404 entry-not-found`, any other refusal `400 path-refused` with
- * its reason (FB-5, A-7.6). Anything else is rethrown.
+ * its reason (FB-5, A-7.6). A full disk is `507 storage-full` (NF-9.8).
+ * Anything else is rethrown.
  */
 export function toFilesError(error: unknown): never {
+  if (isStorageFull(error) || (error instanceof GitOperationError && error.code === 'storage-full')) {
+    throw new ApiErrorException(507, 'storage-full');
+  }
   if (error instanceof PathRefusedError) {
     if (error.reason === 'not-found') {
       throw new ApiErrorException(404, 'entry-not-found');

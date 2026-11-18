@@ -155,6 +155,17 @@ numbering conventions.
   `/admin/`, which is for administering users and their repositories. The disk
   monitor publishes no event, so the web client reads it again from time to time
   (A-8.7). _(Plan 132's call.)_
+- **A-3.2i** When the disk is full (NF-9.8), a request that writes to a working
+  copy answers `507 storage-full` and leaves it as it was: a save, **Recreate
+  it**, creating, renaming and deleting files and folders, resolving a conflict,
+  and the git requests that write, such as a commit. A full disk is a
+  file-system error `ENOSPC`, or `EDQUOT` for a quota that is used up
+  (`isStorageFull` in `server/core/storage`), or git saying "No space left on
+  device" (A-5.1). A save writes a temporary file in `tmp/` and renames it over
+  the old one, so a failed save never leaves part of a file. The git jobs end as
+  `failed` with `storage-full` (A-5.1). Like `low-storage`, it is not logged as
+  an unhandled exception. The web client keeps the draft and retries the save
+  (A-8). _(Plan 133's call.)_
 
 ## A-3: Contracts
 

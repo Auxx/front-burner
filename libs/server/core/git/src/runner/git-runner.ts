@@ -1,3 +1,4 @@
+import { isStorageFull } from '@front-burner/server-core-storage';
 import { Injectable } from '@nestjs/common';
 import { ChildProcess, spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -5,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type { Readable } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
-import { assertWorkingCopyFound } from '../engine/git-errors';
+import { assertWorkingCopyFound, GitOperationError, isOutOfSpace } from '../engine/git-errors';
 import { redactCredentials } from './redact';
 
 /** Passed as `-c` on every call (A-5.1, NF-11.6, NF-11.7). */
@@ -101,18 +102,25 @@ export class GitRunner {
   private readonly running = new Map<ChildProcess, Promise<unknown>>();
 
   /**
-   * A failed git gives its result, except in a `cwd` that is gone or holds no
-   * repository: that is checked only after a failure, so a command that works
-   * pays nothing.
+   * A failed git gives its result, except one that ran out of space, or one in
+   * a `cwd` that is gone or holds no repository: that is checked only after a
+   * failure, so a command that works pays nothing.
    *
-   * @throws GitOperationError `working-copy-missing` (RM-6).
+   * @throws GitOperationError `storage-full` when git said the disk is full,
+   *   or its home could not be made for that reason (NF-9.8), and
+   *   `working-copy-missing` (RM-6).
    */
   async run(args: string[], options: GitRunOptions): Promise<GitResult> {
-    const home = await mkdtemp(join(tmpdir(), 'fb-home-'));
+    const home = await mkdtemp(join(tmpdir(), 'fb-home-')).catch((error: unknown) => {
+      throw isStorageFull(error) ? new GitOperationError('storage-full', String(error)) : error;
+    });
     try {
       const result = await this.spawn(args, options, home);
       const { cwd } = options;
-      // A killed git says nothing about the working copy.
+      // A killed git says nothing about the disk or the working copy.
+      if (result.exitCode !== 0 && !result.aborted && !result.timedOut && isOutOfSpace(result.stderr)) {
+        throw new GitOperationError('storage-full', result.stderr);
+      }
       if (cwd !== undefined && result.exitCode !== 0 && !result.aborted) {
         await assertWorkingCopyFound(
           cwd,

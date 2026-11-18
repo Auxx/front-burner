@@ -2002,6 +2002,33 @@ describe('GitEngine', () => {
       expect(existsSync(join(root, 'repos', 'one'))).toBe(false);
     });
 
+    it('a clone that runs out of space removes its partial copy', async () => {
+      // As git writing objects until the disk is full: the copy is there, and git fails (NF-9.8).
+      const filling = new GitRunner();
+      const run = filling.run.bind(filling);
+      vi.spyOn(filling, 'run').mockImplementation(async (args, runOptions) => {
+        const result = await run(args, runOptions);
+        if (args.includes('clone')) {
+          expect(readdirSync(tmpRoot)).not.toEqual([]);
+          throw new GitOperationError('storage-full', 'fatal: write error: No space left on device');
+        }
+        return result;
+      });
+
+      await expect(
+        new GitEngine(options, filling).clone({
+          remoteUrl: `${server.url}/fixture.git`,
+          credentials: NONE,
+          mode: 'full',
+          tmpRoot,
+          destination: join(root, 'repos', 'one')
+        })
+      ).rejects.toMatchObject({ code: 'storage-full' });
+
+      expect(readdirSync(tmpRoot)).toEqual([]);
+      expect(existsSync(join(root, 'repos', 'one'))).toBe(false);
+    });
+
     it('stops a clone at the timeout', async () => {
       const stalling = await startHttpsTestServer(() => undefined);
       try {

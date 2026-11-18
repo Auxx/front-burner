@@ -59,6 +59,12 @@ export const GIT_ERROR_CODES = [
    * for it only when the command failed.
    */
   'working-copy-missing',
+  /**
+   * The disk is full: git said so, or a file it needed could not be written
+   * (NF-9.8). `GitRunner` checks for it after any failure, like
+   * `working-copy-missing`.
+   */
+  'storage-full',
   'failed'
 ] as const;
 
@@ -158,6 +164,16 @@ export async function assertWorkingCopyFound(
     throw new GitOperationError('working-copy-missing', WORKING_COPY_FOLDER_GONE);
   }
 }
+
+/**
+ * The C library's text for `ENOSPC` and `EDQUOT`, which git and the programs
+ * it runs print as they are (NF-9.8). Only in git's own lines: a `remote: `
+ * line is about the remote's disk, not ours.
+ */
+const NO_SPACE = /^(?!remote:).*(No space left on device|Disk quota exceeded)/m;
+
+/** Whether a failed git said that the disk is full (NF-9.8). */
+export const isOutOfSpace = (stderr: string): boolean => NO_SPACE.test(stderr);
 
 /** What git says when another git holds a lock that it needs; nothing changed. */
 const LOCK_HELD =

@@ -3,6 +3,7 @@ import { EventsHub } from '@front-burner/server-core-events';
 import { GitEngine, GitMerge, GitOperationError, MergeRequest, MergeResult } from '@front-burner/server-core-git';
 import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
 import { ApiErrorException } from '@front-burner/server-core-observability';
+import { isStorageFull } from '@front-burner/server-core-storage';
 import { JobKeys } from '@front-burner/server-feature-credentials';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
@@ -245,6 +246,10 @@ export class PullJob implements OnModuleInit {
     await this.mergeRecord.restoreEarlier(repositoryId, root);
     if (error instanceof GitOperationError && error.code === 'timeout') {
       return failed('git-timeout');
+    }
+    // Undone as an interrupted merge is (NF-9.5, NF-9.8).
+    if ((error instanceof GitOperationError && error.code === 'storage-full') || isStorageFull(error)) {
+      return failed('storage-full');
     }
     throw error;
   }

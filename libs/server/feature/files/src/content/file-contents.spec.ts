@@ -26,13 +26,25 @@ import { FileContents } from './file-contents';
 import { hashBytes } from './markdown-codec';
 
 const failRename = vi.hoisted(() => ({ on: false }));
+/** Makes a new file's write stop halfway with `ENOSPC`, as on a full disk (NF-9.8). */
+const diskFull = vi.hoisted(() => ({ on: false }));
 
 vi.mock('node:fs/promises', async importOriginal => {
   const original = await importOriginal<typeof import('node:fs/promises')>();
   return {
     ...original,
     rename: (from: string, to: string) =>
-      failRename.on ? Promise.reject(Object.assign(new Error('EIO'), { code: 'EIO' })) : original.rename(from, to)
+      failRename.on ? Promise.reject(Object.assign(new Error('EIO'), { code: 'EIO' })) : original.rename(from, to),
+    open: async (...args: Parameters<typeof original.open>) => {
+      const handle = await original.open(...args);
+      if (diskFull.on) {
+        handle.writeFile = async (data: unknown) => {
+          await original.writeFile(handle, (data as Buffer).subarray(0, 2));
+          throw Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' });
+        };
+      }
+      return handle;
+    }
   };
 });
 
@@ -96,6 +108,7 @@ describe('FileContents', () => {
 
   beforeEach(() => {
     failRename.on = false;
+    diskFull.on = false;
     dataDir = mkdtempSync(join(tmpdir(), 'fb-contents-spec-'));
     layout = new DataLayout(dataDir);
     mkdirSync(layout.tmpDir, { recursive: true });
@@ -249,6 +262,40 @@ describe('FileContents', () => {
       .toMatchObject({ code: 'EIO' });
     expect(bytesOf('docs/readme.md').toString()).toBe('# Docs\n');
     expect(readdirSync(layout.tmpDir)).toEqual([]);
+  });
+
+  describe('on a full disk (NF-9.8)', () => {
+    const storageFull = { status: 507, code: 'storage-full', params: {} };
+
+    // Runs git and reads /proc/self/fd, which only Linux has.
+    it.skipIf(process.platform !== 'linux')('a save on a full disk answers storage-full', async () => {
+      diskFull.on = true;
+
+      expect(await refusal(save({ path: 'docs/readme.md', content: 'new\n', lineEnding: 'lf', bom: false })))
+        .toEqual(storageFull);
+      expect(publish).not.toHaveBeenCalled();
+    });
+
+    // Runs git and reads /proc/self/fd, which only Linux has.
+    it.skipIf(process.platform !== 'linux')('a save on a full disk leaves the file as it was', async () => {
+      diskFull.on = true;
+
+      await refusal(save({ path: 'docs/readme.md', content: 'a longer new text\n', lineEnding: 'lf', bom: false }));
+
+      expect(bytesOf('docs/readme.md').toString()).toBe('# Docs\n');
+      expect(readdirSync(layout.tmpDir)).toEqual([]);
+    });
+
+    // Runs git and reads /proc/self/fd, which only Linux has.
+    it.skipIf(process.platform !== 'linux')('recreating a file on a full disk creates nothing', async () => {
+      unlinkSync(join(root, 'docs', 'readme.md'));
+      diskFull.on = true;
+
+      expect(await refusal(recreate({ path: 'docs/readme.md', content: 'new\n', lineEnding: 'lf', bom: false })))
+        .toEqual(storageFull);
+      expect(existsSync(join(root, 'docs', 'readme.md'))).toBe(false);
+      expect(readdirSync(layout.tmpDir)).toEqual([]);
+    });
   });
 
   // Runs git and reads /proc/self/fd, which only Linux has.

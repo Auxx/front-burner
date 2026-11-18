@@ -17,6 +17,12 @@ export const ERROR_CODES = [
   'too-many-jobs',
   /** 507; the server is low on storage, so no new clone starts (NF-9.7, A-3.2g). */
   'low-storage',
+  /**
+   * 507, and how a git job ended; the disk is full (`ENOSPC`, `EDQUOT`), so
+   * nothing was written: a save leaves the file as it was, a git operation is
+   * undone as an interrupted one is (NF-9.8).
+   */
+  'storage-full',
   'key-locked',
   /** 429; five wrong passphrases for this key within a minute (RC-18). */
   'unlock-too-many-attempts',
