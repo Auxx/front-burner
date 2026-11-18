@@ -205,7 +205,14 @@ numbering conventions.
     ran, `result` being `done`, `failed` or `cancelled`;
     `front_burner_job_failures_total{type}`; `front_burner_jobs_queued{type}`;
     and `front_burner_clones{state}`, the clone pool's jobs `running` and
-    `waiting`. `type` is a registered job type. A-6.6 says what each counts.
+    `waiting`. `type` is a registered job type. A-6.6 says what each counts;
+  - `front_burner_git_operation_duration_seconds{operation}`, a histogram of the
+    git engine's operations (A-5.10);
+  - `front_burner_disk_free_bytes{volume}`, the free bytes of `data` and, when
+    the repositories root is another file system, `repos`, at the disk monitor's
+    last check (A-6, NF-9.7). A volume never read has no sample. It is
+    registered by `InstanceModule`, as the storage library cannot depend on this
+    one.
 
   _(Plan 134's and plan 135's calls.)_
 

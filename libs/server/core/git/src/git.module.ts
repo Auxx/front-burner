@@ -2,6 +2,7 @@ import { DynamicModule, Module } from '@nestjs/common';
 import { GitBranches } from './engine/git-branches';
 import { GitEngine } from './engine/git-engine';
 import { GitMerge } from './engine/git-merge';
+import { GitMetrics } from './engine/git-metrics';
 import { LocalGit } from './engine/local-git';
 import { GIT_OPTIONS, GitOptions } from './git.options';
 import { NetworkLock } from './lock/network-lock';
@@ -18,6 +19,7 @@ export class GitModule {
       providers: [
         { provide: GIT_OPTIONS, useValue: options },
         GitRunner,
+        GitMetrics,
         LocalGit,
         GitEngine,
         GitMerge,

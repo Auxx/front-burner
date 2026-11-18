@@ -20,6 +20,7 @@ import { hasHostEntry, HostKey, trustedKeysFor } from '../ssh/known-hosts';
 import { CloneProgressParser, withoutProgress } from './clone-progress';
 import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
+import { GitMetrics, timeOperations } from './git-metrics';
 import { FIRST_BRANCH, parseStatus, WorkingCopyStatus } from './git-status';
 import { authorEnv, LOCAL_TIMEOUT_MS, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
@@ -215,7 +216,8 @@ export class GitEngine implements BeforeApplicationShutdown {
   constructor(
     @Inject(GIT_OPTIONS) private readonly options: GitOptions,
     private readonly runner: GitRunner,
-    private readonly local: LocalGit = new LocalGit(runner)
+    private readonly local: LocalGit = new LocalGit(runner),
+    private readonly metrics: GitMetrics = GitMetrics.NONE
   ) {}
 
   /**
@@ -520,7 +522,7 @@ export class GitEngine implements BeforeApplicationShutdown {
   async commit(workingCopy: string, request: CommitRequest): Promise<{ oid: string; }> {
     const amend = request.amend === true;
     const [ status, last ] = await Promise.all([
-      this.status(workingCopy),
+      this.statusUnder(workingCopy, [], LOCAL_TIMEOUT_MS),
       amend ? this.lastCommit(workingCopy) : null
     ]);
     if (status.branch === null) {
@@ -597,7 +599,7 @@ export class GitEngine implements BeforeApplicationShutdown {
    *   name that is not valid UTF-8: status cannot say it, so git cannot be told it.
    */
   async discard(workingCopy: string, paths: string[], changing?: () => void): Promise<void> {
-    const { changes } = await this.status(workingCopy);
+    const { changes } = await this.statusUnder(workingCopy, [], LOCAL_TIMEOUT_MS);
     const listed = new Set(paths);
     const chosen = changes.filter(change => listed.has(change.path));
     if (chosen.length === 0) {
@@ -1397,3 +1399,16 @@ export class GitEngine implements BeforeApplicationShutdown {
     });
   }
 }
+
+timeOperations(GitEngine, {
+  accessCheck: 'access-check',
+  clone: 'clone',
+  fetch: 'fetch',
+  push: 'push',
+  status: 'status',
+  diff: 'diff',
+  commit: 'commit',
+  discard: 'discard',
+  incoming: 'incoming',
+  unsavedWork: 'unsaved-work'
+});

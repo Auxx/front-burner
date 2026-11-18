@@ -1,4 +1,11 @@
+import { GIT_OPERATIONS } from '@front-burner/server-core-git';
+import { type GitHttpServer, startGitHttpServer } from '@front-burner/server-core-git/testing';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { GitApi, waitFor } from './support/git-api';
+import { createRemotes } from './support/git-remotes';
 import {
   BUILD_VERSION,
   E2E_ADMIN,
@@ -200,5 +207,63 @@ describe('metrics', () => {
     for (const route of routes) {
       expect(route === 'unmatched' || /^\/api\/[\w/:-]+$/.test(route), route).toBe(true);
     }
+  });
+
+  describe('after a clone', () => {
+    let root: string;
+    let remotes: GitHttpServer;
+    let metrics: string;
+
+    beforeAll(async () => {
+      root = mkdtempSync(join(tmpdir(), 'front-burner-e2e-metrics-'));
+      const { handbook } = createRemotes(root);
+      remotes = await startGitHttpServer({ repositories: { 'secret-handbook.git': handbook } });
+      const { authToken } = await login(server, 'body');
+      await new GitApi(server, authToken).add('Secret handbook', `${remotes.url}/secret-handbook.git`);
+      // The working copy is ready a moment before the runner records the job's end.
+      const cloneTimed = /^front_burner_job_duration_seconds_count\{type="repositories\.clone",result="done"\}/m;
+      await waitFor(async () => cloneTimed.test(metrics = await scrape()));
+    });
+
+    afterAll(async () => {
+      await remotes?.close();
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    it('NF-10.11: its job, its git operation and free space are in the metrics', () => {
+      expect(metrics).toMatch(
+        /^front_burner_job_duration_seconds_count\{type="repositories\.clone",result="done"\} 1$/m
+      );
+      expect(metrics).toMatch(/^front_burner_job_failures_total\{type="repositories\.clone"\} 0$/m);
+      expect(metrics).toMatch(/^front_burner_jobs_queued\{type="repositories\.clone"\} 0$/m);
+      expect(metrics).toMatch(/^front_burner_clones\{state="running"\} 0$/m);
+      expect(metrics).toMatch(/^front_burner_clones\{state="waiting"\} 0$/m);
+      expect(metrics).toMatch(/^front_burner_git_operation_duration_seconds_count\{operation="clone"\} 1$/m);
+      expect(metrics).toMatch(/^front_burner_disk_free_bytes\{volume="data"\} [1-9]/m);
+      // Every registered job type, housekeeping too, appears before its first failure.
+      expect(metrics).toMatch(/^front_burner_job_failures_total\{type="storage\.disk-check"\} 0$/m);
+    });
+
+    it('NF-10.11: every label value of the job, git and disk metrics comes from a fixed set', () => {
+      const ours = metrics.split('\n').filter(line => /^front_burner_(jobs?|clones|git|disk)[_{]/.test(line)).join(
+        '\n'
+      );
+      const valuesOf = (label: string) =>
+        new Set([ ...ours.matchAll(new RegExp(`[{,]${label}="([^"]*)"`, 'g')) ].map(match => match[1]));
+
+      for (const type of valuesOf('type')) {
+        expect(type, type).toMatch(/^[a-z]+\.[a-z-]+$/);
+      }
+      expect(valuesOf('type')).toContain('repositories.clone');
+      for (const operation of valuesOf('operation')) {
+        expect(GIT_OPERATIONS as readonly (string | undefined)[], operation).toContain(operation);
+      }
+      expect([ ...valuesOf('result') ].every(result => [ 'done', 'failed', 'cancelled' ].includes(result ?? '')))
+        .toBe(true);
+      expect([ ...valuesOf('state') ].sort()).toEqual([ 'running', 'waiting' ]);
+      expect([ ...valuesOf('volume') ].every(volume => volume === 'data' || volume === 'repos')).toBe(true);
+      expect(metrics).not.toMatch(/secret|handbook|127\.0\.0\.1/i);
+      expect(metrics).not.toContain(server.dataDir);
+    });
   });
 });

@@ -2,7 +2,9 @@ import { DiskMonitor } from '@front-burner/server-core-storage';
 import { InstanceStorageSchema } from '@front-burner/shared-contracts';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Registry } from 'prom-client';
 import request from 'supertest';
+import { METRICS_REGISTRY } from '../metrics/metrics-registry';
 import { InstanceModule } from './instance.module';
 
 describe('InstanceStorageController', () => {
@@ -12,7 +14,12 @@ describe('InstanceStorageController', () => {
   beforeEach(async () => {
     low = false;
     const moduleRef = await Test.createTestingModule({ imports: [ InstanceModule ] })
-      .useMocker(token => (token === DiskMonitor ? { isLow: () => low } : undefined))
+      .useMocker(token => {
+        if (token === DiskMonitor) {
+          return { isLow: () => low, freeBytes: () => ({ data: Number.NaN }) };
+        }
+        return token === METRICS_REGISTRY ? new Registry() : undefined;
+      })
       .compile();
     app = moduleRef.createNestApplication();
     await app.init();

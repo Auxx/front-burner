@@ -3,6 +3,7 @@ export * from './errors/api-exception.filter';
 export * from './health/health.controller';
 export * from './health/health.module';
 export * from './health/readiness.service';
+export * from './instance/disk-metrics';
 export * from './instance/instance-storage.controller';
 export * from './instance/instance.module';
 export * from './logging/logger-options';
