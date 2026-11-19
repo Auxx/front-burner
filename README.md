@@ -74,19 +74,20 @@ npx nx serve server
 npx nx serve web
 ```
 
-## Docker image for testing
+## Docker image
 
 `tools/docker` holds a `Dockerfile` and a `compose.yaml` that run Front Burner
-in a container, built from the working tree. They are for local testing only,
-not production: the image is not scanned or signed, and the compose file uses
-public, development-only secrets. Run the commands below from the workspace
-root.
+in a container, built from the working tree. The `Dockerfile` is the release
+image's: CI builds it and scans it with Trivy (see [CI](#ci)). The compose file
+is for local testing only, not production: it uses public, development-only
+secrets. Run the commands below from the workspace root.
 
 The image builds the backend and the web client inside the container, so it
 needs no local build or `node_modules`. The runtime image is based on Debian
-trixie (for git 2.47 or later), has git and `openssh-client`, and runs as UID
-1000. The compose file runs it with a read-only root file system, `/tmp` as a
-tmpfs, `cap_drop: ALL` and `no-new-privileges`, as NF-11.13 asks.
+trixie (for git 2.47 or later), with its packages upgraded at build time, has
+git and `openssh-client` but no npm, corepack or yarn, and runs as UID 1000. The
+compose file runs it with a read-only root file system, `/tmp` as a tmpfs,
+`cap_drop: ALL` and `no-new-privileges`, as NF-11.13 asks.
 
 ### Build and rebuild the image
 
@@ -134,11 +135,19 @@ push to `master`: `dprint check`, the project tag check, and `nx affected` for
 type checking, lint, test, build, the Storybook browser tests and the e2e suites
 (API and web), then regenerates the OpenAPI document and the API client and
 fails if they differ from the committed files, plus a Trivy scan of the
-production dependencies in `package-lock.json`. Run the same checks locally with
-`npm run format:check`, `npm run check:tags` and `npx nx affected -t typecheck
-lint test build test-storybook e2e`. Node.js is pinned to 24.22.1 in `.nvmrc`,
-and `.npmrc` sets `engine-strict`, so `npm ci` refuses an older Node.js.
-Accepted Trivy findings go in `.trivyignore`, with a reason and a review date.
+production dependencies in `package-lock.json`. The `image` job builds
+`tools/docker/Dockerfile` and scans the image with Trivy, failing on a high or
+critical vulnerability that has a fix. It runs on every push to `master`, and on
+a pull request unless every changed file is one the image does not contain
+(docs, Markdown, tests, stories, the e2e suites apart from server-e2e's
+container suites, `tools/ai-tools`, `tools/lint-rules` and `.github` apart from
+`ci.yml` and `.github/actions`). Its runtime stage is rebuilt every time, so the
+scan sees current OS packages. Nothing scans the image on a schedule. The image
+is scanned in CI only. Run the same checks locally with `npm run format:check`,
+`npm run check:tags` and `npx nx affected -t typecheck lint test build
+test-storybook e2e`. Node.js is pinned to 24.22.1 in `.nvmrc`, and `.npmrc` sets
+`engine-strict`, so `npm ci` refuses an older Node.js. Accepted Trivy findings
+go in `.trivyignore`, with a reason and a review date.
 
 CI runs the web e2e suite in Chromium only. A nightly workflow
 (`.github/workflows/nightly.yml`) runs it in Chromium, Firefox and WebKit, on

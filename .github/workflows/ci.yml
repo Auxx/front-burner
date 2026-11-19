@@ -209,3 +209,96 @@ jobs:
           ignore-unfixed: true
           exit-code: 1
           trivyignores: .trivyignore
+
+  # The release image (tools/docker/Dockerfile), built and scanned with Trivy
+  # (NF-11.10, NF-11.11). It runs on every push to master, so that a base image
+  # or OS package update that brings a vulnerability fails the next push to
+  # master. Nothing scans the image on a schedule. A pull request skips it when
+  # every changed file is one the image does not contain.
+  image:
+    name: Image build and scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # On a pull request HEAD is the merge commit; its first parent is
+          # the base, so the skip decision needs one commit of history.
+          fetch-depth: 2
+
+      # A list of what to skip, not of what to run: a new folder is built and
+      # scanned until it is added here. Container suites in server-e2e are not
+      # skipped, as plan 138 will run them in this job.
+      - name: Changed files
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          image_file() {
+            case "$1" in
+              apps/server-e2e/*/container*.e2e.spec.ts | apps/server-e2e/*/support/container*) return 0 ;;
+              .github/workflows/ci.yml | .github/actions/*) return 0 ;;
+              docs/* | *.md) return 1 ;;
+              *.spec.ts | *.stories.ts | .storybook/* | */.storybook/*) return 1 ;;
+              apps/web-e2e/* | apps/server-e2e/*) return 1 ;;
+              tools/ai-tools/* | tools/lint-rules/*) return 1 ;;
+              .github/*) return 1 ;;
+            esac
+            return 0
+          }
+
+          needed=false
+          if [ "$EVENT" != pull_request ]; then
+            needed=true
+          else
+            # Exactly what the pull request changes. A failed diff fails the
+            # step instead of skipping the scan. Without rename detection, a
+            # file moved out of the image is listed under its old path too.
+            files=$(git diff --name-only --no-renames HEAD^1 HEAD)
+            while IFS= read -r file; do
+              if [ -n "$file" ] && image_file "$file"; then
+                echo "Changes the image: $file"
+                needed=true
+                break
+              fi
+            done <<< "$files"
+          fi
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+          if [ "$needed" = false ]; then
+            echo "No changed file goes into the image; skipping the build and the scan."
+          fi
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.changes.outputs.needed == 'true'
+
+      - name: Build
+        if: steps.changes.outputs.needed == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: tools/docker/Dockerfile
+          tags: front-burner:ci
+          load: true
+          push: false
+          # The base image's newest digest, and the runtime stage (its OS
+          # packages) built afresh, so the scan sees what a release build
+          # would ship; the build stages still come from the cache.
+          pull: true
+          no-cache-filters: runtime
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image,mode=max
+
+      # Only vulnerabilities with a fix fail the job; one that can't be fixed
+      # yet goes into .trivyignore with a reason, never a lower threshold.
+      - name: Scan the image
+        if: steps.changes.outputs.needed == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: front-burner:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+          trivyignores: .trivyignore
