@@ -6,19 +6,246 @@ up a Front Burner instance.
 Front Burner runs as a single rootless Docker container. The container serves
 both the web client and the API from the same address.
 
+Installing takes these steps, each a section below:
+
+1. [Check what you need](#before-you-start).
+2. [Get the image](#the-image) and [verify it](#verifying-the-image).
+3. [Prepare the volumes](#volumes-and-the-uid) and [the secrets](#secrets).
+4. [Write the compose file](#compose-example) and
+   [put HTTPS in front of it](#https-is-required).
+5. [Start the instance and create the first administrator](#first-start).
+
 ## Before you start
 
 You need:
 
-- a host that can run Docker containers;
+- a Linux host for `linux/amd64` with Docker Engine and Docker Compose v2;
 - a domain name for the instance, for example `notes.example.com`;
-- an **HTTPS** certificate for that domain (see
-  [HTTPS is required](#https-is-required));
+- an **HTTPS** certificate for that domain, or a reverse proxy that gets one for
+  you, such as Caddy (see [HTTPS is required](#https-is-required));
+- `openssl`, to generate the secrets;
 - optionally, an OpenID Connect (OIDC) provider, if your users will sign in with
   it;
-- optionally, an outgoing mail (SMTP) server. Without it, Front Burner cannot
-  send invitations or password reset codes. You configure it later, in the
-  system settings.
+- optionally,
+  [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) and the
+  [GitHub CLI](https://cli.github.com/), to verify the image.
+
+You do not need a mail server: this release of Front Burner sends no email (see
+[What this release does not have](#what-this-release-does-not-have)).
+
+## The image
+
+Front Burner is published as one image on the GitHub Container Registry:
+
+```text
+ghcr.io/<owner>/front-burner:<version>
+```
+
+`<owner>` is the GitHub account that publishes Front Burner, in lower case, and
+`<version>` is a release, such as `1.0.0`; the
+[releases](https://github.com/<owner>/front-burner/releases) list them. Each
+release is also tagged with its `<major>.<minor>` line, such as `1.0`, and the
+newest stable release with `latest`. Those tags move when a newer release comes
+out, so use the exact version: the instance is then upgraded only when you
+change it.
+
+The image is for `linux/amd64` only. It runs as the non-root user with UID and
+GID **1000**, keeps all its data in `/data`, listens on port `8080`, and has a
+health check that Docker runs every 10 seconds.
+
+## Verifying the image
+
+Every release image is signed with [cosign](https://docs.sigstore.dev/) by Front
+Burner's release workflow on GitHub Actions, with no long-lived key, and comes
+with build provenance and an SBOM (a CycloneDX list of everything in the image,
+also attached to the GitHub release). Before you run a new version, check that
+the image is the one the release workflow built:
+
+```sh
+cosign verify ghcr.io/<owner>/front-burner:<version> \
+  --certificate-identity-regexp '(?i)^https://github\.com/<owner>/front-burner/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+gh attestation verify oci://ghcr.io/<owner>/front-burner:<version> \
+  --repo <owner>/front-burner
+```
+
+The first command checks the signature, the second the build provenance. Each
+ends with an error if the check fails; do not run the image then.
+
+`cosign verify` prints the image's digest (`sha256:…`). To be sure that the
+image you run is the one you verified, add it to the image in the compose file:
+`ghcr.io/<owner>/front-burner:<version>@sha256:<digest>`.
+
+## Volumes and the UID
+
+Front Burner keeps everything in the `/data` volume: the database, the working
+copies, database snapshots and its temporary files. The rest of the container is
+read-only (see [Compose example](#compose-example)), so nothing else survives
+when the container is re-created.
+
+The container runs as UID and GID **1000**, which you cannot change. Front
+Burner must be able to write to `/data`:
+
+- **A named volume**, as in the compose example, needs nothing: Docker gives a
+  new named volume to UID 1000 on first use.
+- **A folder of the host** (a bind mount) must belong to UID 1000 before the
+  first start:
+
+  ```sh
+  sudo mkdir -p <host-folder>
+  sudo chown 1000:1000 <host-folder>
+  ```
+
+  and in the compose file, `<host-folder>:/data` replaces `data:/data`.
+
+A folder that belongs to another user, often `root`, is the most common reason
+for a first start to fail. Front Burner then stops at once, and the container
+log names the folder and the UID it needs, for example:
+
+```text
+The data directory /data/db is not writable by UID 1000
+```
+
+Fix the owner with `sudo chown -R 1000:1000 <host-folder>` and start again.
+
+### A separate volume for the repositories
+
+The working copies can live on another volume, for example a larger, slower disk
+while the database stays on an SSD. Set `FRONT_BURNER_REPOS_DIR` to the folder
+in the container where you mount it, for example `/repositories`. Front Burner
+then keeps the working copies, and the temporary and orphaned ones, in that
+folder, in `repos/`, `tmp/` and `orphans/`; the database and its snapshots stay
+in `/data`.
+
+The folder:
+
+- must exist before the start and belong to UID 1000, as above, so that a volume
+  that failed to mount stops the start instead of filling the container;
+- must be empty or hold only `repos/`, `tmp/` and `orphans/` (and `lost+found/`
+  on a new file system), since Front Burner empties `tmp/` on every start;
+- must not be inside `/data`, nor contain it.
+
+The compose example has the lines to uncomment. Front Burner never moves working
+copies between the two places: to move existing ones, stop the instance and move
+`repos/` yourself. Until you do, Front Burner warns on every start that `/data`
+still holds working copies.
+
+## Secrets
+
+Front Burner needs two secrets of its own, and one more for the first start:
+
+- the **JWT secret**, which signs login tokens;
+- the **encryption key**, which encrypts the passwords, tokens and keys that
+  Front Burner stores;
+- the **setup token**, which only the person creating the first administrator
+  knows (see [First start](#first-start)).
+
+The compose example reads them from files, as Docker secrets, so that they do
+not appear in the compose file or in `docker inspect`. Create them next to the
+compose file:
+
+```sh
+mkdir -p secrets
+openssl rand -hex 32 > secrets/jwt-secret
+openssl rand -hex 32 > secrets/encryption-key
+openssl rand -hex 16 > secrets/setup-token
+sudo chown 1000:1000 secrets/*
+sudo chmod 400 secrets/*
+```
+
+Docker mounts each file into the container as it is, so it must be readable by
+UID 1000, which the last two commands make sure of.
+
+**Back up `secrets/encryption-key` now, and keep the copy apart from your
+backups of the data.** Without it, Front Burner cannot read the secrets it
+stored. See [Required](#required) for what happens when it is lost.
+
+## Compose example
+
+Save this file as `compose.yaml`, in the folder that holds `secrets/`. It is
+[`compose.example.yaml`](compose.example.yaml) in Front Burner's repository,
+which Front Burner's tests start on every change.
+
+```yaml
+# Front Burner: the compose example of the deployment guide
+# (docs/wiki/deployment.md, "Compose example").
+#
+# Replace <owner> and <version> in `image` below, create the three secret files
+# in ./secrets as the guide's "Secrets" describes, then:
+#
+#   docker compose up -d
+#
+# The instance listens on 127.0.0.1:8080 only, for a reverse proxy on the same
+# host that serves it over HTTPS (the guide's "How to set up HTTPS").
+#
+# CI starts this file, with a test image and test secrets, in the container
+# suite of server-e2e (container.e2e.spec.ts).
+
+services:
+  front-burner:
+    image: ghcr.io/<owner>/front-burner:<version>
+    restart: unless-stopped
+    # Time for running git operations to finish on a stop (Docker's default is 10s).
+    stop_grace_period: 30s
+    ports:
+      - 127.0.0.1:8080:8080
+    environment:
+      FRONT_BURNER_JWT_SECRET_FILE: /run/secrets/front-burner-jwt-secret
+      FRONT_BURNER_ENCRYPTION_KEY_FILE: /run/secrets/front-burner-encryption-key
+      # Only for creating the first administrator; ignored once one exists.
+      FRONT_BURNER_SETUP_TOKEN_FILE: /run/secrets/front-burner-setup-token
+      # With a separate repositories volume (below):
+      # FRONT_BURNER_REPOS_DIR: /repositories
+    secrets:
+      - front-burner-jwt-secret
+      - front-burner-encryption-key
+      - front-burner-setup-token
+    volumes:
+      - data:/data
+      # Optional: working copies on another disk. The folder must exist and
+      # belong to UID 1000 (the guide's "Volumes and the UID").
+      # - /srv/front-burner-repositories:/repositories
+    # Hardening: Front Burner writes only to /data, the repositories
+    # directory and /tmp, and needs no privileges.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  front-burner-jwt-secret:
+    file: ./secrets/jwt-secret
+  front-burner-encryption-key:
+    file: ./secrets/encryption-key
+  front-burner-setup-token:
+    file: ./secrets/setup-token
+
+volumes:
+  data:
+```
+
+What its settings do:
+
+- **`restart: unless-stopped`** starts the instance again after a crash or a
+  reboot of the host, but not after you stop it yourself.
+- **`stop_grace_period: 30s`**: on a stop, Front Burner stops starting new git
+  operations and gives the running ones up to 25 seconds to finish. Docker's
+  default of 10 seconds would cut them short.
+- **`ports`** publishes the instance on the host's `127.0.0.1` only, where a
+  reverse proxy on the same host reaches it. Do not publish it on all addresses:
+  users must reach it over HTTPS.
+- **`read_only`, `tmpfs`, `cap_drop` and `no-new-privileges`** harden the
+  container: nothing can change the image's files, and processes in it cannot
+  gain privileges. Front Burner needs nothing more. Keep them.
+
+Other settings, such as OIDC, are environment variables, which you add under
+`environment` (see [Environment variables](#environment-variables)). A secret
+among them, such as `FRONT_BURNER_OIDC_CLIENT_SECRET`, can also be a Docker
+secret, through its `…_FILE` variable.
 
 ## HTTPS is required
 
@@ -65,6 +292,86 @@ When you configure the reverse proxy:
 If you only use Front Burner on your home network and cannot get a public
 certificate, you can use a certificate from your own certificate authority, as
 long as every device that opens Front Burner trusts it.
+
+### Caddy next to the compose example
+
+Caddy gets and renews a Let's Encrypt certificate by itself, redirects plain
+HTTP to HTTPS and forwards the headers above, so it needs only a few lines.
+Before you start it, point your domain's DNS record at the host and open ports
+80 and 443 to the internet: Let's Encrypt checks them before it issues the
+certificate.
+
+Next to `compose.yaml`, create a file named `Caddyfile`, with your domain in
+place of `<your-domain>`:
+
+```text
+<your-domain> {
+	reverse_proxy front-burner:8080
+}
+```
+
+and a file named `compose.override.yaml`, which Docker Compose reads together
+with `compose.yaml`:
+
+```yaml
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:
+```
+
+`docker compose up -d` then starts both. Caddy reaches Front Burner by its
+service name, on the network that Docker Compose creates for them. Front Burner
+trusts the forwarded headers of proxies on private networks, such as that one,
+without any setting.
+
+## First start
+
+Start the instance from the folder that holds `compose.yaml`:
+
+```sh
+docker compose up -d
+docker compose ps
+```
+
+The first start takes a few seconds. `docker compose ps` shows the instance as
+`healthy` once it is ready; until then the port refuses connections. If it shows
+`restarting` or `unhealthy`, read the log, which says what is wrong:
+
+```sh
+docker compose logs front-burner
+```
+
+Then create the first administrator. Open `https://<your-domain>` in a browser:
+Front Burner shows the **Administrator onboarding** page. Enter the setup token,
+which you can print with:
+
+```sh
+sudo cat secrets/setup-token
+```
+
+and the administrator's email address and password. You are then logged in. Once
+the administrator exists, the setup token is ignored: you can delete
+`secrets/setup-token` and remove its lines from `compose.yaml`.
+
+To sign in through OIDC instead, set it up before the first start, either on the
+onboarding page or with environment variables (see
+[First administrator](#first-administrator)).
+
+To try Front Burner on the host itself, without HTTPS, open
+`http://localhost:8080` there instead.
 
 ## Environment variables
 
@@ -186,7 +493,45 @@ use:
 - claim value: the workspace ID, which starts with `T`. It is in the workspace's
   URL when you open Slack in a browser (`https://app.slack.com/client/T…/…`).
 
+## What this release does not have
+
+This first release of Front Burner is for one operator, who is also the
+instance's only administrator and its main user. These come in later releases:
+
+- **Email.** Front Burner sends none and has no SMTP settings, so there are no
+  invitations and no password reset by email; the login page has no **Forgot
+  password?** link.
+- **User management.** Administrators cannot create, invite or disable users.
+  The only way for other people to get an account is OIDC with a
+  [required claim](#limiting-oidc-to-a-slack-workspace).
+- **The Simple and Guided git control levels.** Every repository uses the
+  Advanced level.
+- **Pull requests**, and adding repositories on a user's behalf.
+- **Uploading files.**
+- **Changing a password while logged in.**
+- **Rotating the encryption key.** It can only be replaced by deleting every
+  stored secret (see [Required](#required)).
+- **An image for `arm64`.**
+
+If you forget the administrator's password, set a new one with the
+`reset-password` command, with the instance stopped. It asks for the new
+password twice and logs out every session of that user:
+
+```sh
+docker compose stop front-burner
+docker compose run --rm front-burner node main.js reset-password <email>
+docker compose start front-burner
+```
+
 ## Troubleshooting
+
+**The container stops at once, and the log says "is not writable by UID 1000".**
+The data volume, or the repositories volume, belongs to another user. See
+[Volumes and the UID](#volumes-and-the-uid).
+
+**The log says that `FRONT_BURNER_JWT_SECRET_FILE` or another `…_FILE`
+variable's file could not be read.** The secret file does not exist, or UID 1000
+cannot read it. See [Secrets](#secrets).
 
 **The instance takes a long time to start, or a health check restarts it.** On
 start, Front Burner checks every working copy before it opens its port, so the

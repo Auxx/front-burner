@@ -92,11 +92,12 @@ Deployment guide (`docs/wiki/deployment.md`), postponed until the MVP runs
 locally in a development environment, so that it describes what was actually
 built:
 
-- Operator-facing parts of `docs/architecture/non-functional.md`: the data
-  volume and optional repositories directory, the container UID, disk sizing,
+- Operator-facing parts of `docs/architecture/non-functional.md`: disk sizing,
   backup and restore, upgrades, the encryption key (including rotation and
-  recovery from a lost key), `…_FILE` variables, log, metrics and low-space
-  settings, and the hardened compose example.
+  recovery from a lost key), every variable with its `…_FILE` variant, log,
+  metrics and low-space settings. Installing (the image and its verification,
+  the volumes and the UID, secrets, the hardened compose example, the first
+  start) is written.
 
 Spikes (`docs/architecture/spikes.md`), each on its own `spike/<name>` branch,
 never merged, time-boxed to 1–2 days; findings go back into the architecture

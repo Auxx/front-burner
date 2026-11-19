@@ -1,7 +1,7 @@
 import { type GitHttpServer, startGitHttpServer } from '@front-burner/server-core-git/testing';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Container, E2E_IMAGE, startContainer } from './support/container';
 import { waitFor } from './support/git-api';
@@ -10,7 +10,8 @@ import { BUILD_VERSION, E2E_ADMIN, E2E_SETUP_TOKEN } from './support/server-proc
 
 /**
  * The release image under NF-11.13's hardening (exit criterion 2): it becomes
- * healthy, works, survives a restart and stops cleanly. Runs only when
+ * healthy, works, survives a restart and stops cleanly, and the deployment
+ * guide's compose example starts it. Runs only when
  * `E2E_IMAGE` names an image, as the `image` job of CI does after its scan.
  * Needs Docker on Linux, for host networking (`support/container-compose.yaml`):
  *
@@ -198,6 +199,43 @@ describe.skipIf(E2E_IMAGE === undefined)('the release image (NF-11.13)', { timeo
 
       // NF-9.5: the stop left the clone running; the next start fails it (AR-54).
       expect(await statusOf(heldId)).toMatchObject({ status: 'error', error: 'clone-failed' });
+    });
+  });
+
+  describe('the deployment guide', () => {
+    let container: Container | undefined;
+
+    afterAll(async () => {
+      await container?.remove();
+    }, SLOW_MS);
+
+    it('the guide\'s compose example becomes healthy', async () => {
+      // docs/wiki/compose.example.yaml with only the image, the port and the secret files replaced.
+      container = await startContainer({ example: true });
+
+      const { State, Config, HostConfig } = await container.inspect();
+      expect(State.Health?.Status).toBe('healthy');
+      expect(Config.User).toBe('1000:1000');
+      expect(HostConfig.ReadonlyRootfs).toBe(true);
+      expect(HostConfig.CapDrop).toEqual([ 'ALL' ]);
+      expect(HostConfig.SecurityOpt).toContain('no-new-privileges:true');
+      // NF-9.1.
+      expect(HostConfig.RestartPolicy.Name).toBe('unless-stopped');
+      expect(Config.StopTimeout).toBe(30);
+      // The secrets came from their files: the setup token from one is accepted.
+      const onboarded = await call(container, 'POST', '/api/v1/onboarding/password-setup', undefined, {
+        setupToken: E2E_SETUP_TOKEN,
+        ...E2E_ADMIN
+      });
+      expect(onboarded.status).toBe(204);
+    });
+
+    it('the guide quotes the example as it is', () => {
+      const wiki = resolve(import.meta.dirname, '../../../docs/wiki');
+      const example = readFileSync(join(wiki, 'compose.example.yaml'), 'utf8');
+      const guide = readFileSync(join(wiki, 'deployment.md'), 'utf8');
+
+      expect(guide).toContain('```yaml\n' + example + '```\n');
     });
   });
 
