@@ -47,7 +47,7 @@ export function prepareDataDir(
       writeFileSync(probe, '');
       rmSync(probe);
     } catch (cause) {
-      throw new Error(`The ${folderOf} ${dir} is not writable`, { cause });
+      throw new Error(`The ${folderOf} ${dir} is not writable${byUid()}`, { cause });
     }
   }
   for (const entry of readdirSync(layout.tmpDir)) {
@@ -58,6 +58,16 @@ export function prepareDataDir(
     backupsDir: layout.backupsDir,
     warnings: separate ? leftBehind(new DataLayout(dataDir).reposDir, layout.reposDir) : []
   };
+}
+
+/**
+ * The UID that needs to write, which is the one the backend runs as: the
+ * operator fixes a volume by giving it to that UID (NF-5.6). Empty where
+ * processes have no UID (Windows).
+ */
+function byUid(): string {
+  const uid = process.getuid?.();
+  return uid === undefined ? '' : ` by UID ${uid}`;
 }
 
 /** @throws Error when the directory is missing or holds anything but its own folders. */
