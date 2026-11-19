@@ -215,11 +215,16 @@ jobs:
   # or OS package update that brings a vulnerability fails the next push to
   # master. Nothing scans the image on a schedule. A pull request skips it when
   # every changed file is one the image does not contain.
+  #
+  # After the scan, the container suite of server-e2e runs the image under
+  # NF-11.13's hardening: healthy, working, restarted and stopped (plan 138).
   image:
-    name: Image build and scan
+    name: Image build, scan and smoke test
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # nx-set-shas, in the setup for the smoke test.
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -229,7 +234,7 @@ jobs:
 
       # A list of what to skip, not of what to run: a new folder is built and
       # scanned until it is added here. Container suites in server-e2e are not
-      # skipped, as plan 138 will run them in this job.
+      # skipped, as this job runs them.
       - name: Changed files
         id: changes
         env:
@@ -237,7 +242,9 @@ jobs:
         run: |
           image_file() {
             case "$1" in
-              apps/server-e2e/*/container*.e2e.spec.ts | apps/server-e2e/*/support/container*) return 0 ;;
+              # The container suite, with the helpers and the config it runs with.
+              apps/server-e2e/*/container*.e2e.spec.ts | apps/server-e2e/src/support/*) return 0 ;;
+              apps/server-e2e/project.json | apps/server-e2e/vitest.config.mts) return 0 ;;
               .github/workflows/ci.yml | .github/actions/*) return 0 ;;
               docs/* | *.md) return 1 ;;
               *.spec.ts | *.stories.ts | .storybook/* | */.storybook/*) return 1 ;;
@@ -302,3 +309,15 @@ jobs:
           ignore-unfixed: true
           exit-code: 1
           trivyignores: .trivyignore
+
+      - uses: ./.github/actions/setup
+        if: steps.changes.outputs.needed == 'true'
+        with:
+          nx-cache: image
+
+      # The image that was just scanned, not a build of its own.
+      - name: Container smoke test
+        if: steps.changes.outputs.needed == 'true'
+        run: npx nx run server-e2e:e2e-container
+        env:
+          E2E_IMAGE: front-burner:ci

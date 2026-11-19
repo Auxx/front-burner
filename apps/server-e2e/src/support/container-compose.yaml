@@ -1,0 +1,45 @@
+# The image under test (E2E_IMAGE), run by container.e2e.spec.ts with the
+# hardening that NF-11.13 asks Front Burner to work under and the restart
+# policy and grace period that the deployment guide recommends (NF-9.1). The
+# secrets are public, test-only values, as in tools/docker/compose.yaml.
+#
+# The container shares the host's network: the suite's git test servers listen
+# on 127.0.0.1, which their certificate names, and the suite reaches the
+# instance on 127.0.0.1:E2E_PORT, with no HTTPS terminator in front. So the
+# suite needs Docker on Linux: Docker Desktop (macOS, Windows) has no host
+# networking by default.
+
+services:
+  front-burner:
+    image: ${E2E_IMAGE:?the image to test}
+    network_mode: host
+    # The guide's policy; a test of a start that must fail turns it off.
+    restart: ${E2E_RESTART:-unless-stopped}
+    stop_grace_period: 30s
+    env_file:
+      - ${E2E_ENV_FILE:?the suite's environment file}
+    environment:
+      FRONT_BURNER_PORT: ${E2E_PORT:?a free port}
+      FRONT_BURNER_LOG_FORMAT: json
+      FRONT_BURNER_SETUP_TOKEN: e2e-setup-token-0123456789abcdef
+      FRONT_BURNER_JWT_SECRET: server-e2e-jwt-secret-0123456789abcdefghijklmnop
+      FRONT_BURNER_ENCRYPTION_KEY: server-e2e-encryption-key-0123456789abcdefghijk
+      # The git test servers are on 127.0.0.1 (A-7.8 blocks it by default).
+      FRONT_BURNER_BLOCK_PRIVATE_NETWORKS: 'false'
+      # Their certificate, for git (passed through by GitRunner) and the backend.
+      GIT_SSL_CAINFO: /certs/test.crt
+      NODE_EXTRA_CA_CERTS: /certs/test.crt
+    volumes:
+      - data:/data
+      - ${E2E_CERTIFICATE:?the git test servers' certificate}:/certs/test.crt:ro
+    # The hardening of NF-11.13.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  data:

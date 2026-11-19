@@ -179,6 +179,17 @@ describe('prepareDataDir', () => {
     }
   );
 
+  // NF-5.6: the operator gives the volume to the UID the backend runs as.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'names the UID that needs to write',
+    () => {
+      chmodSync(root, 0o500);
+      const dataDir = join(root, 'data');
+
+      expect(() => prepareDataDir(dataDir)).toThrow(`is not writable by UID ${process.getuid?.()}`);
+    }
+  );
+
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'throws naming the repositories directory when it is not writable',
     () => {

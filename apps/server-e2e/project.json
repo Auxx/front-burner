@@ -29,7 +29,15 @@
         "server:build"
       ],
       "options": {
-        "command": "vitest run",
+        "command": "vitest run --exclude src/container.e2e.spec.ts",
+        "cwd": "apps/server-e2e"
+      }
+    },
+    "e2e-container": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "vitest run src/container.e2e.spec.ts",
         "cwd": "apps/server-e2e"
       }
     },

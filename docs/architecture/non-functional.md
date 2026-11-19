@@ -410,7 +410,13 @@ These rules add to the security rules already in the requirements.
   **cosign**, and comes with build provenance.
 - **NF-11.13** The compose example in the deployment guide runs the container
   with a read-only root file system, `/tmp` as a tmpfs, `cap_drop: ALL` and
-  `no-new-privileges`. Front Burner must work in that setup.
+  `no-new-privileges`. Front Burner must work in that setup. CI's `image` job
+  proves it on the image it has just scanned: the container suite of
+  `server-e2e` (`container.e2e.spec.ts`) runs it with that hardening, the
+  restart policy and the grace period of NF-9.1, and checks that it becomes
+  healthy, that onboarding, login, a clone and a save work, that a session
+  survives a restart, that a stop during a clone ends within the grace period
+  (NF-9.2, NF-9.5), and that a `/data` of another UID stops the start (NF-5.6).
 
 ## NF-12: Browser and device support
 
