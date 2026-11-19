@@ -5,13 +5,16 @@
 #
 # The container shares the host's network: the suite's git test servers listen
 # on 127.0.0.1, which their certificate names, and the suite reaches the
-# instance on 127.0.0.1:E2E_PORT, with no HTTPS terminator in front.
+# instance on 127.0.0.1:E2E_PORT, with no HTTPS terminator in front. So the
+# suite needs Docker on Linux: Docker Desktop (macOS, Windows) has no host
+# networking by default.
 
 services:
   front-burner:
     image: ${E2E_IMAGE:?the image to test}
     network_mode: host
-    restart: unless-stopped
+    # The guide's policy; a test of a start that must fail turns it off.
+    restart: ${E2E_RESTART:-unless-stopped}
     stop_grace_period: 30s
     env_file:
       - ${E2E_ENV_FILE:?the suite's environment file}

@@ -11,7 +11,8 @@ import { BUILD_VERSION, E2E_ADMIN, E2E_SETUP_TOKEN } from './support/server-proc
 /**
  * The release image under NF-11.13's hardening (exit criterion 2): it becomes
  * healthy, works, survives a restart and stops cleanly. Runs only when
- * `E2E_IMAGE` names an image, as the `image` job of CI does after its scan:
+ * `E2E_IMAGE` names an image, as the `image` job of CI does after its scan.
+ * Needs Docker on Linux, for host networking (`support/container-compose.yaml`):
  *
  *   docker build -f tools/docker/Dockerfile -t front-burner:test .
  *   E2E_IMAGE=front-burner:test npx nx run server-e2e:e2e-container
@@ -81,10 +82,17 @@ describe.skipIf(E2E_IMAGE === undefined)('the release image (NF-11.13)', { timeo
     }, SLOW_MS);
 
     afterAll(async () => {
-      await container?.remove();
-      await proxy?.close();
-      await git?.close();
+      // Every step runs even when an earlier one fails.
+      const results = await Promise.allSettled([
+        container?.remove(),
+        proxy?.close(),
+        git?.close()
+      ]);
       rmSync(root, { recursive: true, force: true });
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed !== undefined) {
+        throw failed.reason;
+      }
     }, SLOW_MS);
 
     it('the hardened container becomes healthy', async () => {
@@ -201,14 +209,18 @@ describe.skipIf(E2E_IMAGE === undefined)('the release image (NF-11.13)', { timeo
     }, SLOW_MS);
 
     it('an unwritable /data stops the start and names the UID', async () => {
-      container = await startContainer({ dataOwner: 2000, waitUntilHealthy: false });
+      container = await startContainer({ dataOwner: 2000, expectFailedStart: true });
 
+      // The backend exits by itself; without a restart policy, the container stays stopped.
+      await waitFor(async () => (await container?.inspect())?.State.Status === 'exited');
+      const { State } = await container.inspect();
+      expect(State.ExitCode).toBe(1);
+      expect(State.Health?.Status).not.toBe('healthy');
       // NF-5.6: the log names the path and the UID that the volume must belong to.
-      const logs = await container.waitForLogs('is not writable by UID 1000');
+      const logs = await container.logs();
+      expect(logs).toContain('is not writable by UID 1000');
       expect(logs).toContain('"step":"data-dir"');
       expect(logs).toContain('/data/db');
-      await waitFor(async () => (await container?.inspect())?.State.ExitCode === 1);
-      expect((await container.inspect()).State.Health?.Status).not.toBe('healthy');
     });
   });
 });

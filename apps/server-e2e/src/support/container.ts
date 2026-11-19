@@ -25,8 +25,12 @@ export interface ContainerOptions {
   env?: Record<string, string>;
   /** Gives the empty `/data` volume to this UID before the first start, as a volume prepared by hand might be. */
   dataOwner?: number;
-  /** Waits for Docker's health check to report healthy (the default), or only starts the container. */
-  waitUntilHealthy?: boolean;
+  /**
+   * For a start that must fail: the container is not restarted, and
+   * `startContainer` does not wait for it to become healthy. By default it has
+   * the guide's `restart: unless-stopped` (NF-9.1) and must become healthy.
+   */
+  expectFailedStart?: boolean;
 }
 
 export interface Container {
@@ -35,8 +39,6 @@ export interface Container {
   /** The container's `docker inspect` document. */
   inspect(): Promise<ContainerState>;
   logs(): Promise<string>;
-  /** Waits until the logs contain `text`. */
-  waitForLogs(text: string, ms?: number): Promise<string>;
   /** Waits for Docker's own health check (the image's `HEALTHCHECK`) to report healthy. */
   healthy(): Promise<void>;
   /** `docker compose restart`, then healthy again. */
@@ -77,7 +79,8 @@ export async function startContainer(options: ContainerOptions = {}): Promise<Co
     E2E_IMAGE: image,
     E2E_PORT: String(port),
     E2E_ENV_FILE: envFile,
-    E2E_CERTIFICATE: TEST_CERTIFICATE
+    E2E_CERTIFICATE: TEST_CERTIFICATE,
+    E2E_RESTART: options.expectFailedStart === true ? 'no' : 'unless-stopped'
   };
   const compose = async (...args: string[]): Promise<string> => {
     const { stdout } = await run('docker', [ 'compose', '-p', project, '-f', COMPOSE_FILE, ...args ], {
@@ -92,19 +95,6 @@ export async function startContainer(options: ContainerOptions = {}): Promise<Co
     return (JSON.parse(stdout) as ContainerState[])[0] as ContainerState;
   };
   const logs = () => compose('logs', '--no-color', '--no-log-prefix', SERVICE);
-  const waitForLogs = async (text: string, ms = HEALTHY_WITHIN_MS): Promise<string> => {
-    const deadline = Date.now() + ms;
-    for (;;) {
-      const output = await logs();
-      if (output.includes(text)) {
-        return output;
-      }
-      if (Date.now() > deadline) {
-        throw new Error(`Waiting for ${JSON.stringify(text)} in the logs timed out. Logs:\n${output}`);
-      }
-      await new Promise(r => setTimeout(r, 250));
-    }
-  };
   const healthy = async (): Promise<void> => {
     const deadline = Date.now() + HEALTHY_WITHIN_MS;
     for (;;) {
@@ -145,11 +135,12 @@ export async function startContainer(options: ContainerOptions = {}): Promise<Co
       ]);
     }
     await compose('start');
-    if (options.waitUntilHealthy !== false) {
+    if (options.expectFailedStart !== true) {
       await healthy();
     }
   } catch (error) {
-    await remove();
+    // The start's error, with the logs that explain it, matters more than a failed cleanup.
+    await remove().catch(() => undefined);
     throw error;
   }
 
@@ -157,7 +148,6 @@ export async function startContainer(options: ContainerOptions = {}): Promise<Co
     url: `http://127.0.0.1:${port}`,
     inspect,
     logs,
-    waitForLogs,
     healthy,
     restart: async () => {
       await compose('restart', SERVICE);

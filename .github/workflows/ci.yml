@@ -242,7 +242,9 @@ jobs:
         run: |
           image_file() {
             case "$1" in
-              apps/server-e2e/*/container*.e2e.spec.ts | apps/server-e2e/*/support/container*) return 0 ;;
+              # The container suite, with the helpers and the config it runs with.
+              apps/server-e2e/*/container*.e2e.spec.ts | apps/server-e2e/src/support/*) return 0 ;;
+              apps/server-e2e/project.json | apps/server-e2e/vitest.config.mts) return 0 ;;
               .github/workflows/ci.yml | .github/actions/*) return 0 ;;
               docs/* | *.md) return 1 ;;
               *.spec.ts | *.stories.ts | .storybook/* | */.storybook/*) return 1 ;;
