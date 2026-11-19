@@ -217,16 +217,22 @@ export const CONFIG_VARIABLES: readonly string[] = Object.keys(schema.shape);
 
 const KNOWN_VARIABLES = new Set(CONFIG_VARIABLES);
 
-/** A variable's default as an operator writes it, such as `15m`, before any transform. */
+/**
+ * A variable's default as an operator writes it, such as `15m`, before any
+ * transform. Looks through pipes (both ends, for `z.preprocess`) and through
+ * every wrapper with an inner type, such as `optional` or `catch`.
+ */
 function defaultOf(type: z.core.$ZodType): string | undefined {
   const def = type._zod.def;
-  if (def.type === 'pipe') {
-    return defaultOf((def as z.core.$ZodPipeDef).in);
-  }
-  if (def.type === 'default') {
+  if (def.type === 'default' || def.type === 'prefault') {
     return String((def as z.core.$ZodDefaultDef).defaultValue);
   }
-  return undefined;
+  if (def.type === 'pipe') {
+    const pipe = def as z.core.$ZodPipeDef;
+    return defaultOf(pipe.in) ?? defaultOf(pipe.out);
+  }
+  const inner = (def as { innerType?: z.core.$ZodType; }).innerType;
+  return inner === undefined ? undefined : defaultOf(inner);
 }
 
 /** The default of every variable that has one, as {@link defaultOf} gives it. */

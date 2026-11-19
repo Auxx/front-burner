@@ -393,8 +393,9 @@ To try Front Burner on the host itself, without HTTPS, open
 You configure the container with environment variables. All of them start with
 `FRONT_BURNER_`, and only the two in [Required](#required) must be set.
 
-- **Durations** are a number followed by a unit: `s` (seconds), `m` (minutes),
-  `h` (hours) or `d` (days). For example `15m`, `12h` or `30d`.
+- **Durations** are a whole number of at least 1 followed by a unit: `s`
+  (seconds), `m` (minutes), `h` (hours) or `d` (days). For example `15m`, `12h`
+  or `30d`; write `90m` rather than `1.5h`.
 - **Sizes** are a whole number of bytes, or a number followed by `KB`, `MB` or
   `GB`, where 1 KB is 1024 bytes. For example `500MB` or `1.5GB`.
 - **An empty value** counts as not set, so the default applies.
@@ -403,8 +404,12 @@ You configure the container with environment variables. All of them start with
 - **An unknown variable** that starts with `FRONT_BURNER_`, such as a misspelt
   one, is ignored, and the log warns about it.
 
-Front Burner reads the variables only when it starts. To change one, change the
-compose file and run `docker compose up -d` again.
+Front Burner reads the variables, and the files that `…_FILE` variables name,
+only when it starts. To change a variable, change the compose file and run
+`docker compose up -d` again. To change only the contents of a secret file,
+restart the container with `docker compose restart front-burner`: the compose
+file has not changed, so `docker compose up -d` would keep the running container
+and the old value.
 
 ### Required
 
