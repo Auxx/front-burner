@@ -118,10 +118,11 @@ Limited in MVP:
 
 Operator tool, with no requirement points (new MVP scope, A-7.2a):
 
-- **`node main.js reset-password <email>`**, run in the container while the
-  instance is stopped, sets a new password for a password user and revokes every
-  session of theirs, so that an operator who forgot their password gets back in
-  without email. Built in reset-password-cli.
+- **`node main.js reset-password <email>`**, run in a new container on the
+  stopped instance's volumes (never with `docker exec` in the running one), sets
+  a new password for a password user and revokes every session of theirs, so
+  that an operator who forgot their password gets back in without email. Built
+  in reset-password-cli.
 
 ### 2. Dashboard and adding repositories
 

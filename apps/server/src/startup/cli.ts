@@ -13,9 +13,12 @@ export type Command =
 export const USAGE = `Usage:
   node main.js                          Start the instance.
   node main.js reset-password <email>   Set a new password for a password user and revoke
-                                        every session of theirs. Stop the instance first: the
-                                        command must not run while it is running. The new
-                                        password is read from standard input, twice.
+                                        every session of theirs. The new password is read
+                                        from standard input, twice.
+                                        Stop the instance first and run this in a new
+                                        container on its volumes (docker compose run --rm),
+                                        never with docker exec in the running one: a running
+                                        instance keeps accepting the revoked sessions.
   node main.js --write-openapi <file>   Write the API's OpenAPI document and exit.
   node main.js --help                   Show this help.
 `;
