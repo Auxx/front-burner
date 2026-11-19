@@ -35,6 +35,7 @@ import { eq } from 'drizzle-orm';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { Registry } from 'prom-client';
 import { FetchStep } from '../fetch/fetch-step';
 import { FetchJob } from '../fetch/fetch.job';
 import { FetchService } from '../fetch/fetch.service';
@@ -160,7 +161,7 @@ export class PushHarness {
 
   /** A new runner and engine over the same database, as after a restart. */
   build(gitOptions: GitOptions = testGitOptions()): void {
-    this.runner = new JobRunner(this.database, { cloneConcurrency: 2 } as Config, this.events);
+    this.runner = new JobRunner(this.database, { cloneConcurrency: 2 } as Config, this.events, new Registry());
     this.engine = new GitEngine(gitOptions, new GitRunner());
     this.merge = new GitMerge(new LocalGit(new GitRunner()), gitOptions);
     this.workingTreeLock = new WorkingTreeLock();

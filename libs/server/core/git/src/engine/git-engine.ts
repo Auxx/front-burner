@@ -20,6 +20,7 @@ import { hasHostEntry, HostKey, trustedKeysFor } from '../ssh/known-hosts';
 import { CloneProgressParser, withoutProgress } from './clone-progress';
 import { FileDiff, onlyLineEndingsDiffer, parseUnifiedDiff } from './git-diff';
 import { classifyGitFailure, classifyPushFailure, GitOperationError } from './git-errors';
+import { GitMetrics, timeOperations } from './git-metrics';
 import { FIRST_BRANCH, parseStatus, WorkingCopyStatus } from './git-status';
 import { authorEnv, LOCAL_TIMEOUT_MS, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
@@ -215,7 +216,8 @@ export class GitEngine implements BeforeApplicationShutdown {
   constructor(
     @Inject(GIT_OPTIONS) private readonly options: GitOptions,
     private readonly runner: GitRunner,
-    private readonly local: LocalGit = new LocalGit(runner)
+    private readonly local: LocalGit = new LocalGit(runner),
+    private readonly metrics: GitMetrics = GitMetrics.NONE
   ) {}
 
   /**
@@ -1397,3 +1399,16 @@ export class GitEngine implements BeforeApplicationShutdown {
     });
   }
 }
+
+timeOperations(GitEngine, {
+  accessCheck: 'access-check',
+  clone: 'clone',
+  fetch: 'fetch',
+  push: 'push',
+  status: 'status',
+  diff: 'diff',
+  commit: 'commit',
+  discard: 'discard',
+  incoming: 'incoming',
+  unsavedWork: 'unsaved-work'
+});

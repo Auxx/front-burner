@@ -1,6 +1,7 @@
 import type { Config } from '@front-burner/server-core-config';
 import { Database, jobs, JobStatus } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
+import { Registry } from 'prom-client';
 import { JobRunner } from '../runner/job-runner';
 import { createTestDatabase } from '../testing/test-database';
 import { FinishedJobsCleanup } from './finished-jobs-cleanup';
@@ -24,7 +25,8 @@ describe('FinishedJobsCleanup', () => {
     const runner = new JobRunner(
       database,
       { cloneConcurrency: 2 } as Config,
-      { publish: vi.fn() } as unknown as EventsHub
+      { publish: vi.fn() } as unknown as EventsHub,
+      new Registry()
     );
     cleanup = new FinishedJobsCleanup(database, runner);
   });

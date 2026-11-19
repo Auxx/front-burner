@@ -1,4 +1,5 @@
 import { Database, NewSession, sessions, users } from '@front-burner/server-core-database';
+import { metricSample } from '@front-burner/server-core-observability/testing';
 import { Registry } from 'prom-client';
 import { createTestDatabase } from '../testing/test-database';
 import { ACTIVE_SESSIONS, SessionMetrics } from './session-metrics';
@@ -23,8 +24,7 @@ describe('SessionMetrics', () => {
     ...values
   });
 
-  const active = async (): Promise<number | undefined> =>
-    (await registry.getSingleMetric(ACTIVE_SESSIONS)?.get())?.values[0]?.value;
+  const active = () => metricSample(registry, ACTIVE_SESSIONS);
 
   beforeEach(() => {
     database = createTestDatabase();

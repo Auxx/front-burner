@@ -5,6 +5,7 @@ import { Logger } from '@nestjs/common';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Registry } from 'prom-client';
 import { JobRunner } from '../runner/job-runner';
 import { JobTypeDefinition, RunningJob } from '../runner/job-types';
 import { createTestDatabase } from '../testing/test-database';
@@ -25,7 +26,12 @@ describe('DatabaseSnapshotJob', () => {
 
   /** A fresh job, as after a start, and its registered definition. */
   const start = () => {
-    runner = new JobRunner(database, { cloneConcurrency: 2 } as Config, { publish: vi.fn() } as unknown as EventsHub);
+    runner = new JobRunner(
+      database,
+      { cloneConcurrency: 2 } as Config,
+      { publish: vi.fn() } as unknown as EventsHub,
+      new Registry()
+    );
     const register = vi.spyOn(runner, 'register');
     new DatabaseSnapshotJob(database, config as Config, runner).onModuleInit();
     return register.mock.calls[0][0] as JobTypeDefinition<unknown, { written: boolean; pruned: number; }>;

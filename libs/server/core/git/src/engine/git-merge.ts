@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult } from '../runner/git-runner';
 import { GitOperationError, isLockHeld } from './git-errors';
+import { GitMetrics, timeOperations } from './git-metrics';
 import { authorEnv, LOCAL_MAX_OUTPUT_BYTES, LocalGit, NO_LFS, nulTerminated, UNDECODABLE } from './local-git';
 
 /** Where the commit before a merge is kept, so that git's garbage collection keeps it (A-5.12). */
@@ -101,7 +102,8 @@ export class GitMerge {
 
   constructor(
     private readonly local: LocalGit,
-    @Inject(GIT_OPTIONS) private readonly options: GitOptions
+    @Inject(GIT_OPTIONS) private readonly options: GitOptions,
+    private readonly metrics: GitMetrics = GitMetrics.NONE
   ) {}
 
   /** The current commit. */
@@ -1112,6 +1114,8 @@ export class GitMerge {
     return exitAsBoolean(result, 'merge-base');
   }
 }
+
+timeOperations(GitMerge, { merge: 'merge', abort: 'merge-abort', commit: 'merge-commit', resolve: 'resolve' });
 
 /** The kind that the stages a path has say; `null` for one with only a base, which both sides deleted. */
 function kindOf(stages: Stages): ConflictKind | null {

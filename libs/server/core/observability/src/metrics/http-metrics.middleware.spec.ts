@@ -12,8 +12,9 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { Response } from 'express';
-import { type MetricValue, type MetricValueWithName, Registry } from 'prom-client';
+import { Registry } from 'prom-client';
 import request from 'supertest';
+import { metricSamples } from '../testing';
 import { HTTP_REQUEST_DURATION, httpMetrics, UNMATCHED_ROUTE } from './http-metrics.middleware';
 
 @Controller('repositories')
@@ -74,29 +75,15 @@ describe('httpMetrics', () => {
   });
 
   /** The `_count` samples of the histogram, one per label set. */
-  const counts = async (): Promise<MetricValue<string>[]> => {
-    const metric = await registry.getSingleMetric(HTTP_REQUEST_DURATION)?.get();
-    // A histogram's values are its buckets, `_sum` and `_count`, each with its name.
-    return (metric?.values ?? []).filter(sample =>
-      (sample as MetricValueWithName<string>).metricName === `${HTTP_REQUEST_DURATION}_count`
-    );
-  };
+  const counts = () => metricSamples(registry, HTTP_REQUEST_DURATION, `${HTTP_REQUEST_DURATION}_count`);
 
   it('times a request by method, route and status', async () => {
     await request(app.getHttpServer()).get('/api/v1/repositories/7').expect(200);
     await request(app.getHttpServer()).get('/api/v1/repositories/missing').expect(404);
 
     expect(await counts()).toEqual([
-      {
-        metricName: `${HTTP_REQUEST_DURATION}_count`,
-        labels: { method: 'GET', route: '/api/v1/repositories/:id', status: '200' },
-        value: 1
-      },
-      {
-        metricName: `${HTTP_REQUEST_DURATION}_count`,
-        labels: { method: 'GET', route: '/api/v1/repositories/:id', status: '404' },
-        value: 1
-      }
+      { labels: { method: 'GET', route: '/api/v1/repositories/:id', status: '200' }, value: 1 },
+      { labels: { method: 'GET', route: '/api/v1/repositories/:id', status: '404' }, value: 1 }
     ]);
     const metrics = await registry.metrics();
     expect(metrics).toContain(

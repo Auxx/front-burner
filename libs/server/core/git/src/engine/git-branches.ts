@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { classifyBranchFailure, GitOperationError } from './git-errors';
 import { GitMerge } from './git-merge';
+import { GitMetrics, timeOperations } from './git-metrics';
 import { FIRST_BRANCH } from './git-status';
 import { LocalGit, NO_LFS, UNDECODABLE } from './local-git';
 
@@ -68,7 +69,8 @@ export class GitBranches {
   constructor(
     private readonly local: LocalGit,
     private readonly merge: GitMerge,
-    @Inject(GIT_OPTIONS) private readonly options: GitOptions
+    @Inject(GIT_OPTIONS) private readonly options: GitOptions,
+    private readonly metrics: GitMetrics = GitMetrics.NONE
   ) {}
 
   /**
@@ -277,3 +279,5 @@ export class GitBranches {
     return head.exitCode === 1;
   }
 }
+
+timeOperations(GitBranches, { switchTo: 'switch-branch', create: 'create-branch', list: 'list-branches' });

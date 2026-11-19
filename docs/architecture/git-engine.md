@@ -374,6 +374,20 @@ Confirmed by spike 2 (spikes.md).
     (deleted by both sides of a rename) has nothing to choose from, and is
     removed from the index, and from its resolve-undo record, which would
     otherwise list it as resolved.
+  - Every call of an operation is timed in
+    `front_burner_git_operation_duration_seconds{operation}` (NF-10.11, A-3.2j),
+    whether it works, fails or runs out of time (NF-11.8). `operation` is one of
+    `GIT_OPERATIONS`, named after the engine's methods: `access-check`, `clone`,
+    `fetch`, `push`, `status`, `diff`, `commit`, `discard`, `incoming`,
+    `unsaved-work`, `merge`, `merge-abort`, `merge-commit`, `resolve`,
+    `switch-branch`, `create-branch` and `list-branches`; a pull is a `fetch`
+    and a `merge`. `timeOperations` wraps those methods of `GitEngine`,
+    `GitMerge` and `GitBranches` once, after each class, so that no method has
+    to remember. An operation that another one runs, such as the status a commit
+    reads, is part of it and is not timed on its own: `GitMetrics.time` marks
+    the call chain it runs with `AsyncLocalStorage`, so each call of the engine
+    counts once, whichever methods it calls. An engine built by hand, as in a
+    test, records into a registry nobody reads. _(Plan 135's call.)_
 - **A-5.11** Conflicts are read from the index: base, ours and theirs are stages
   1, 2 and 3 (`git show :1:<path>` and so on), giving the one conflict model of
   vision goal 5.

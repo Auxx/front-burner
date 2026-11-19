@@ -1,5 +1,5 @@
 import { DATABASE, Database, sessions } from '@front-burner/server-core-database';
-import { METRICS_PREFIX, METRICS_REGISTRY } from '@front-burner/server-core-observability';
+import { keepingLastValue, METRICS_PREFIX, METRICS_REGISTRY } from '@front-burner/server-core-observability';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { and, count, gt, isNull } from 'drizzle-orm';
 import { Gauge, Registry } from 'prom-client';
@@ -21,20 +21,11 @@ export class SessionMetrics implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    const countActive = () => this.countActive();
-    const logger = this.logger;
     new Gauge({
       name: ACTIVE_SESSIONS,
       help: 'Sessions that are neither revoked nor expired.',
       registers: [ this.registry ],
-      // A throw would fail the whole scrape, every other metric with it: the last count stays instead.
-      collect() {
-        try {
-          this.set(countActive());
-        } catch (error) {
-          logger.warn({ err: error }, 'Could not count the active sessions; the metric keeps its last value.');
-        }
-      }
+      collect: keepingLastValue<Gauge>(this.logger, 'the active sessions', gauge => gauge.set(this.countActive()))
     });
   }
 
