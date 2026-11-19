@@ -13,7 +13,8 @@
       "cache": true,
       "inputs": [
         "default",
-        "^production"
+        "^production",
+        "{workspaceRoot}/docs/wiki/deployment.md"
       ],
       "outputs": [
         "{workspaceRoot}/coverage/libs/server/core/config"

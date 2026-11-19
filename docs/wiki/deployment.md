@@ -390,7 +390,26 @@ To try Front Burner on the host itself, without HTTPS, open
 
 ## Environment variables
 
-You configure the container with environment variables.
+You configure the container with environment variables. All of them start with
+`FRONT_BURNER_`, and only the two in [Required](#required) must be set.
+
+- **Durations** are a whole number of at least 1 followed by a unit: `s`
+  (seconds), `m` (minutes), `h` (hours) or `d` (days). For example `15m`, `12h`
+  or `30d`; write `90m` rather than `1.5h`.
+- **Sizes** are a whole number of bytes, or a number followed by `KB`, `MB` or
+  `GB`, where 1 KB is 1024 bytes. For example `500MB` or `1.5GB`.
+- **An empty value** counts as not set, so the default applies.
+- **A wrong value** stops the start: the container log lists every variable that
+  is wrong and why, without showing secret values.
+- **An unknown variable** that starts with `FRONT_BURNER_`, such as a misspelt
+  one, is ignored, and the log warns about it.
+
+Front Burner reads the variables, and the files that `…_FILE` variables name,
+only when it starts. To change a variable, change the compose file and run
+`docker compose up -d` again. To change only the contents of a secret file,
+restart the container with `docker compose restart front-burner`: the compose
+file has not changed, so `docker compose up -d` would keep the running container
+and the old value.
 
 ### Required
 
@@ -399,8 +418,8 @@ You configure the container with environment variables.
 | `FRONT_BURNER_JWT_SECRET`     | Secret used to sign login tokens. At least 32 characters. Generate a long random value and keep it private.                  |
 | `FRONT_BURNER_ENCRYPTION_KEY` | Key that encrypts the passwords, tokens and keys Front Burner stores. At least 32 characters, different from the JWT secret. |
 
-Each of them can also be read from a file: set `FRONT_BURNER_JWT_SECRET_FILE` or
-`FRONT_BURNER_ENCRYPTION_KEY_FILE` to its path, for Docker and Podman secrets.
+Each of them can also be read from a file (see
+[Secrets in files](#secrets-in-files)).
 
 Front Burner does not start if either of them is missing or too short, or if
 they are equal. The container log says which variable is wrong.
@@ -414,6 +433,124 @@ secrets it stored. If the key is lost, start once with
 `FRONT_BURNER_ENCRYPTION_KEY_RESET=confirm` and the new key: Front Burner
 deletes every stored secret, and users and administrators enter them again. Then
 remove `FRONT_BURNER_ENCRYPTION_KEY_RESET`.
+
+| Variable                            | Meaning                                                                                                     |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_ENCRYPTION_KEY_RESET` | `confirm` deletes every stored secret on start, so that a new encryption key can be used. Unset by default. |
+
+### Secrets in files
+
+Every secret can also be read from a file, for Docker and Podman secrets: set
+the variable ending in `_FILE` to the file's path, as the
+[compose example](#compose-example) does. Front Burner reads the whole file,
+without a final line break. Set either the variable or its `_FILE` variable, not
+both; if the file cannot be read, Front Burner does not start.
+
+| Variable                               | Holds                                                                               |
+| -------------------------------------- | ----------------------------------------------------------------------------------- |
+| `FRONT_BURNER_JWT_SECRET_FILE`         | `FRONT_BURNER_JWT_SECRET`                                                           |
+| `FRONT_BURNER_ENCRYPTION_KEY_FILE`     | `FRONT_BURNER_ENCRYPTION_KEY`                                                       |
+| `FRONT_BURNER_SETUP_TOKEN_FILE`        | `FRONT_BURNER_SETUP_TOKEN` (see [First administrator](#first-administrator))        |
+| `FRONT_BURNER_OIDC_CLIENT_SECRET_FILE` | `FRONT_BURNER_OIDC_CLIENT_SECRET` (see [First administrator](#first-administrator)) |
+| `FRONT_BURNER_METRICS_TOKEN_FILE`      | `FRONT_BURNER_METRICS_TOKEN` (see [Metrics](#metrics))                              |
+
+### Server
+
+| Variable                       | Default                            | Meaning                                                                                                                                                         |
+| ------------------------------ | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_PORT`            | `8080`                             | The HTTP port inside the container, from 1 to 65535. If you change it, change the container's side of `ports` in the compose file too.                          |
+| `FRONT_BURNER_TRUSTED_PROXIES` | `loopback, linklocal, uniquelocal` | The reverse proxies whose `X-Forwarded-For` and `X-Forwarded-Proto` headers Front Burner trusts: a comma-separated list of IP addresses, CIDR ranges and names. |
+
+Front Burner needs the forwarded headers to know each user's address, for the
+login audit log and the limits on login attempts, and to know that a request
+came in over HTTPS. The names in the default stand for the addresses of the
+container's own host and of private networks (`127.0.0.0/8`, `::1`,
+`169.254.0.0/16`, `fe80::/10`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
+and `fc00::/7`), which is where a reverse proxy on the same host or in the same
+Compose project connects from. If your reverse proxy connects from another
+address, add it. If anything else on those networks can reach the container's
+port, list only your reverse proxy's address, since a client that the instance
+trusts can claim any address and pass for HTTPS.
+
+### Storage
+
+| Variable                 | Default            | Meaning                                                                                                                                         |
+| ------------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_DATA_DIR`  | `/data`            | The directory for all stored data. Keep the default in the container: the image, the compose example and this guide assume it.                  |
+| `FRONT_BURNER_REPOS_DIR` | the data directory | The directory for the working copies, on another volume. See [A separate volume for the repositories](#a-separate-volume-for-the-repositories). |
+
+### Low disk space
+
+| Variable                          | Default | Meaning                                                                                                                         |
+| --------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_LOW_DISK_THRESHOLD` | `2GB`   | A size. When less space than this is free on the data volume or the repositories volume, space is low. `0` turns the check off. |
+
+Front Burner checks free space when it starts and then every minute. While space
+is low:
+
+- adding a repository is refused, with "The server is running low on storage.
+  Contact your administrator.";
+- administrators see a banner, and the log has a warning;
+- `/api/health/ready` reports `degraded`;
+- saves, commits and synchronisation keep working, since they protect the users'
+  work.
+
+### Database snapshots
+
+| Variable                            | Default | Meaning                                                                             |
+| ----------------------------------- | ------- | ----------------------------------------------------------------------------------- |
+| `FRONT_BURNER_DB_SNAPSHOT_INTERVAL` | `1d`    | A duration of at least `1h`. A new snapshot is written once the newest is this old. |
+| `FRONT_BURNER_DB_SNAPSHOT_KEEP`     | `7`     | How many snapshots are kept, at least 1. Older ones are deleted.                    |
+
+Front Burner writes a consistent copy of its database to `/data/backups/` while
+it runs, so that a backup of the data volume always holds one, even if it
+catches the live database mid-write. It checks every hour whether a snapshot is
+due.
+
+### Git
+
+| Variable                         | Default | Meaning                                                                                                                                                                       |
+| -------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_CLONE_TIMEOUT`     | `30m`   | A clone that has not finished in this time is stopped, and the repository shows "Clone timed out".                                                                            |
+| `FRONT_BURNER_CLONE_CONCURRENCY` | `2`     | How many clones run at the same time, from 1 to 16. Other clones wait their turn.                                                                                             |
+| `FRONT_BURNER_GIT_TIMEOUT`       | `5m`    | Any other git operation, such as a fetch, pull, push or commit, that has not finished in this time is stopped and fails.                                                      |
+| `FRONT_BURNER_KEY_UNLOCK_IDLE`   | `1h`    | How long an SSH key unlocked with its passphrase stays unlocked when no git operation uses it. It is also locked again when the user logs out and when Front Burner restarts. |
+
+### SSH host keys
+
+Before Front Burner connects to a remote over SSH, it checks the server's host
+key. It knows the host keys of GitHub and Bitbucket Cloud; for any other server,
+the user accepts its key when they add the repository.
+
+| Variable                        | Meaning                                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_KNOWN_HOSTS_FILE` | A file in OpenSSH `known_hosts` format whose host keys Front Burner knows instead of the built-in ones. Unset by default. |
+
+Use it, for example, to add the host keys of your own git server, so that users
+don't have to accept them. The file **replaces** the built-in host keys, so copy
+them into it if you still want them:
+
+```text
+github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
+github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk=
+bitbucket.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIazEu89wgQZ4bqs3d63QSMzYVa0MuJ2e2gKTKqu+UUO
+bitbucket.org ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBPIQmuzMBuKdWeF4+a2sjSSpBK0iqitSQ+5BM9KhpexuGt20JpTVM7u5BDZngncgrqDMbWdxMWWOGtZ9UgbqgZE=
+bitbucket.org ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDQeJzhupRu0u0cdegZIa8e86EG2qOCsIsD1Xw0xSeiPDlCr7kq97NLmMbpKTX6Esc30NuoqEEHCuc7yWtwp8dI76EEEB1VqY9QJq6vk+aySyboD5QF61I/1WeTwu+deCbgKMGbUijeXhtfbxSxm6JwGrXrhBdofTsbKRUsrN1WoNgUa8uqN1Vx6WAJw1JHPhglEGGHea6QICwJOAr/6mrui/oB7pkaWKHj3z7d1IC4KWLtY47elvjbaTlkN04Kc/5LFEirorGYVbt15kAUlqGM65pk6ZBxtaO3+30LVlORZkxOh+LKL/BvbZ/iRNhItLqNyieoQj/uh/7Iv4uyH/cV/0b4WDSd3DptigWq84lJubb9t/DnZlrJazxyDCulTmKdOR7vs9gMTo+uoIrPSb8ScTtvw65+odKAlBj59dhnVp9zd7QUojOpXlL62Aw56U4oO+FALuevvMjiWeavKhJqlR7i5n9srYcrNV7ttmDw7kf/97P5zauIhxcjX+xHv4M=
+```
+
+These are the keys that GitHub and Bitbucket publish, at
+`https://api.github.com/meta` and `https://bitbucket.org/site/ssh`. Write one
+host key per line as `host key-type key`, with `[host]:port` for a port other
+than 22. Lines starting with `#` are comments. Hashed host names, as
+`ssh-keyscan -H` writes them, are refused: write the host name in plain text.
+Mount the file into the container read-only, for example as a Docker secret or a
+`volumes` entry, and set the variable to its path inside the container. If the
+file cannot be read or has a wrong line, Front Burner does not start, and the
+log names the line.
+
+Host keys that users accepted are kept per user, and the file does not change
+them.
 
 ### Outbound connections
 
@@ -431,9 +568,6 @@ service, or to reserved ones.
 | `FRONT_BURNER_AUTH_TOKEN_TTL`        | `15m`   | How long a login token is valid before the client renews it.   |
 | `FRONT_BURNER_REFRESH_TOKEN_TTL`     | `30d`   | How long a user stays logged in before they must log in again. |
 | `FRONT_BURNER_LOGIN_AUDIT_RETENTION` | `90d`   | How long records of login attempts are kept.                   |
-
-Durations are a number followed by a unit: `s` (seconds), `m` (minutes), `h`
-(hours) or `d` (days). For example `15m`, `12h` or `30d`.
 
 ### First administrator
 
@@ -458,7 +592,7 @@ OIDC with the email in `FRONT_BURNER_ADMIN_EMAIL` becomes the administrator.
 | ------------------------------------------ | -------- | ------------------------------------------------------------------------------------- |
 | `FRONT_BURNER_OIDC_ISSUER`                 | Yes      | Issuer URL of the OIDC provider (HTTPS).                                              |
 | `FRONT_BURNER_OIDC_CLIENT_ID`              | Yes      | Client ID.                                                                            |
-| `FRONT_BURNER_OIDC_CLIENT_SECRET`          | Yes      | Client secret.                                                                        |
+| `FRONT_BURNER_OIDC_CLIENT_SECRET`          | Yes      | Client secret, or `FRONT_BURNER_OIDC_CLIENT_SECRET_FILE` with its path.               |
 | `FRONT_BURNER_OIDC_SCOPES`                 | No       | Scopes. Default `openid email profile`.                                               |
 | `FRONT_BURNER_OIDC_REQUIRE_VERIFIED_EMAIL` | No       | `true` or `false`. Accept only emails the provider says are verified. Default `true`. |
 | `FRONT_BURNER_ADMIN_EMAIL`                 | Yes      | Email of the first administrator.                                                     |
@@ -507,6 +641,31 @@ use:
 - claim name `https://slack.com/team_id`;
 - claim value: the workspace ID, which starts with `T`. It is in the workspace's
   URL when you open Slack in a browser (`https://app.slack.com/client/T…/…`).
+
+### Logging
+
+| Variable                  | Default | Meaning                                                                                                 |
+| ------------------------- | ------- | ------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_LOG_LEVEL`  | `info`  | `error`, `warn`, `info` or `debug`. Each level also logs the levels before it.                          |
+| `FRONT_BURNER_LOG_FORMAT` | `json`  | `json` writes one JSON object per line, for log collectors; `pretty` is readable text, for development. |
+
+Front Burner logs to the container's output only, which `docker compose logs
+front-burner` shows. At `info` and above, the log names users, repositories and
+requests by their internal IDs only. Email addresses, repository names and file
+paths appear only at `debug`, so turn it on only while you look into a problem.
+
+### Metrics
+
+| Variable                     | Meaning                                                                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_METRICS_TOKEN` | Turns on Prometheus metrics at `/api/metrics`, for scrapers that send this token. At least 16 characters. Unset by default. |
+
+While it is not set, `/api/metrics` does not exist. When it is set, a scraper
+must send `Authorization: Bearer <token>`; other requests get `401`. In
+Prometheus, that is the scrape job's `authorization` setting, with the token in
+`credentials_file`. Generate the token as the other secrets, for example with
+`openssl rand -hex 16`, and give it through `FRONT_BURNER_METRICS_TOKEN_FILE`
+(see [Secrets in files](#secrets-in-files)).
 
 ## What this release does not have
 

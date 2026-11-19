@@ -165,7 +165,9 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
   | `FRONT_BURNER_DB_SNAPSHOT_INTERVAL`   | `1d`                         | NF-6.2: a snapshot is written once the newest is this old. At least `1h`.                                                                                                        |
   | `FRONT_BURNER_DB_SNAPSHOT_KEEP`       | `7`                          | NF-6.2: how many daily snapshots are kept. A whole number of at least 1.                                                                                                         |
 
-  The deployment guide documents them (see `docs/wiki/todo.md`).
+  The deployment guide's "Environment variables" documents every variable the
+  schema reads, with its default; `CONFIG_VARIABLES` and `CONFIG_DEFAULTS` in
+  `server/core/config` are the list a test checks the guide against.
 
   The same schema parses LG-61's variables (`FRONT_BURNER_JWT_SECRET`, also read
   from `FRONT_BURNER_JWT_SECRET_FILE` as NF-8.2 describes, and the three

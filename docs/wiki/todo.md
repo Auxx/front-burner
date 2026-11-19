@@ -94,10 +94,10 @@ built:
 
 - Operator-facing parts of `docs/architecture/non-functional.md`: disk sizing,
   backup and restore, upgrades, the encryption key (including rotation and
-  recovery from a lost key), every variable with its `…_FILE` variant, log,
-  metrics and low-space settings. Installing (the image and its verification,
-  the volumes and the UID, secrets, the hardened compose example, the first
-  start) is written.
+  recovery from a lost key), and monitoring (reading the log, the metrics, low
+  and full disk, orphaned working copies). Installing (the image and its
+  verification, the volumes and the UID, secrets, the hardened compose example,
+  the first start) and every environment variable are written.
 
 Spikes (`docs/architecture/spikes.md`), each on its own `spike/<name>` branch,
 never merged, time-boxed to 1–2 days; findings go back into the architecture
