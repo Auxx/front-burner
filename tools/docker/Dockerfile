@@ -1,5 +1,6 @@
-# Front Burner image for local testing. Not the production image: it is not
-# scanned, signed or published, and it is built from the working tree as it is.
+# Front Burner's image: the one that is tested is the one that ships. CI builds
+# it and scans it with Trivy (the `image` job of .github/workflows/ci.yml,
+# NF-11.10); a local build uses the working tree as it is.
 #
 # Build from the workspace root (see README.md):
 #   docker build -f tools/docker/Dockerfile -t front-burner:test .

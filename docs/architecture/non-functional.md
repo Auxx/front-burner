@@ -399,7 +399,10 @@ These rules add to the security rules already in the requirements.
 - **NF-11.10** **Trivy** runs in the CI/CD pipeline:
   - on the dependencies (lockfiles), failing the build on a high or critical
     vulnerability in a production dependency;
-  - on the built container image.
+  - on the built container image, failing on a high or critical vulnerability
+    that has a fix. CI's `image` job builds `tools/docker/Dockerfile` and scans
+    it on every push to `master` and on every pull request that changes what
+    goes into the image; the release workflow scans the image it publishes.
 - **NF-11.11** The image is built on a slim base with only Node.js, git and
   `openssh-client`, and runs as a fixed non-root UID (NF-5.6).
 - **NF-11.12** Every release publishes an SBOM (CycloneDX), is signed with

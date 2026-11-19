@@ -209,3 +209,86 @@ jobs:
           ignore-unfixed: true
           exit-code: 1
           trivyignores: .trivyignore
+
+  # The release image (tools/docker/Dockerfile), built and scanned with Trivy
+  # (NF-11.10, NF-11.11). It runs on every push to master, so that a base image
+  # update that brings a vulnerability fails the next run. A pull request skips
+  # it when every changed file is one the image does not contain.
+  image:
+    name: Image build and scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The skip decision compares the pull request with its base.
+          fetch-depth: 0
+
+      # A list of what to skip, not of what to run: a new folder is built and
+      # scanned until it is added here. Container suites in server-e2e run in
+      # this job, so they are not skipped.
+      - name: Changed files
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          image_file() {
+            case "$1" in
+              apps/server-e2e/*/container*.e2e.spec.ts | apps/server-e2e/*/support/container*) return 0 ;;
+              .github/workflows/ci.yml | .github/actions/*) return 0 ;;
+              docs/* | *.md) return 1 ;;
+              *.spec.ts | *.stories.ts | .storybook/* | */.storybook/*) return 1 ;;
+              apps/web-e2e/* | apps/server-e2e/*) return 1 ;;
+              tools/ai-tools/* | tools/lint-rules/*) return 1 ;;
+              .github/*) return 1 ;;
+            esac
+            return 0
+          }
+
+          needed=false
+          if [ "$EVENT" != pull_request ]; then
+            needed=true
+          else
+            while IFS= read -r file; do
+              if image_file "$file"; then
+                echo "Changes the image: $file"
+                needed=true
+                break
+              fi
+            done < <(git diff --name-only "$BASE_SHA" HEAD)
+          fi
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+          if [ "$needed" = false ]; then
+            echo "No changed file goes into the image; skipping the build and the scan."
+          fi
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.changes.outputs.needed == 'true'
+
+      - name: Build
+        if: steps.changes.outputs.needed == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: tools/docker/Dockerfile
+          tags: front-burner:ci
+          load: true
+          push: false
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image,mode=max
+
+      # Only vulnerabilities with a fix fail the job; one that can't be fixed
+      # yet goes into .trivyignore with a reason, never a lower threshold.
+      - name: Scan the image
+        if: steps.changes.outputs.needed == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: front-burner:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+          trivyignores: .trivyignore
