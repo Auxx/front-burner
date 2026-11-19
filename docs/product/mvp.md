@@ -34,8 +34,9 @@ Consequences:
   level allowed, the level dropdown on the Add repository page is hidden
   (AR-40).
 - No outgoing mail is needed. Without SMTP the **Forgot password?** link is
-  hidden (LG-48). If the operator loses their password, they recover the
-  instance by hand (see [Risks](#risks)).
+  hidden (LG-48). If the operator loses their password, they set a new one with
+  the `reset-password` command (see
+  [section 1](#1-authentication-and-onboarding) and [Risks](#risks)).
 - The multi-user rules are still built in from day one: every repository,
   working copy, credential and preference belongs to one user, and the API
   enforces it. Adding users later must not need a data migration.
@@ -114,6 +115,13 @@ Limited in MVP:
 - **LG-65**: rate limits on login, refresh and the OIDC callback. The forgot
   password and confirm password reset endpoints do not exist.
 - **LG-67**: every event except the three password reset events.
+
+Operator tool, with no requirement points (new MVP scope, A-7.2a):
+
+- **`node main.js reset-password <email>`**, run in the container while the
+  instance is stopped, sets a new password for a password user and revokes every
+  session of theirs, so that an operator who forgot their password gets back in
+  without email. Built in reset-password-cli.
 
 ### 2. Dashboard and adding repositories
 

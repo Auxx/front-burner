@@ -11,6 +11,7 @@ import {
   onboard,
   postJson,
   refreshCookieOf,
+  runServerCommand,
   runServerToExit,
   type ServerProcess,
   startServerProcess
@@ -331,5 +332,34 @@ describe('password login and sessions', () => {
     expect(refreshed.status).toBe(200);
     const fresh = (await refreshed.json()) as { authToken: string; };
     expect((await me(second, fresh.authToken)).status).toBe(200);
+  });
+
+  it('after reset-password the old password fails and the new one works', async () => {
+    const dataDir = ownDataDir();
+    const first = await onboarded({ FRONT_BURNER_DATA_DIR: dataDir });
+    const { refreshToken } = await login(first, 'body');
+    await first.stop();
+
+    const newPassword = 'a brand new password 7';
+    const reset = await runServerCommand(
+      [ 'reset-password', E2E_ADMIN.email ],
+      `${newPassword}\n${newPassword}\n`,
+      { FRONT_BURNER_DATA_DIR: dataDir }
+    );
+    expect(reset).toMatchObject({ code: 0, stderr: '' });
+    expect(reset.stdout).toContain('reset from the command line; every session revoked');
+    expect(reset.stdout).not.toContain(newPassword);
+
+    const second = await start({ FRONT_BURNER_DATA_DIR: dataDir });
+    const old = await postJson(second, LOGIN, {
+      email: E2E_ADMIN.email,
+      password: E2E_ADMIN.password,
+      refreshTokenDelivery: 'body'
+    });
+    expect(old.status).toBe(401);
+    expect((await postJson(second, REFRESH, { refreshToken })).status).toBe(401);
+    expect((await login(second, 'cookie', { email: E2E_ADMIN.email, password: newPassword })).response.status).toBe(
+      200
+    );
   });
 });

@@ -292,6 +292,44 @@ export async function runServerToExit(
   }
 }
 
+/**
+ * Runs a command of the built server, such as `reset-password <email>`, on a
+ * data directory with no server running, feeding `input` to its standard input.
+ */
+export async function runServerCommand(
+  args: string[],
+  input: string,
+  env: Record<string, string> & { FRONT_BURNER_DATA_DIR: string; }
+): Promise<{ code: number | null; stdout: string; stderr: string; }> {
+  const child = spawn('node', [ MAIN, ...args ], {
+    env: {
+      PATH: process.env['PATH'] ?? '',
+      FRONT_BURNER_LOG_FORMAT: 'json',
+      FRONT_BURNER_JWT_SECRET: TEST_JWT_SECRET,
+      FRONT_BURNER_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,
+      ...env
+    },
+    stdio: [ 'pipe', 'pipe', 'pipe' ]
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', chunk => (stdout += chunk));
+  child.stderr.on('data', chunk => (stderr += chunk));
+  const exited = new Promise<number | null>(resolveExit => {
+    child.on('exit', code => resolveExit(code));
+    child.on('error', () => resolveExit(null));
+  });
+  child.stdin.end(input);
+  try {
+    const code = await within(exited, `Running ${args.join(' ')}`, () => stdout + stderr);
+    return { code, stdout, stderr };
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL');
+    }
+  }
+}
+
 export interface SeedUser {
   email: string;
   displayName?: string;
