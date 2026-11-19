@@ -1,0 +1,376 @@
+name: Release
+
+# A tag v<major>.<minor>.<patch> (with an optional pre-release part, such as
+# v1.0.0-rc.1) on a commit of master builds the release image, scans it, pushes
+# it to the GitHub Container Registry, signs it with cosign, attests its build
+# provenance and its CycloneDX SBOM, and creates a draft GitHub release
+# (NF-11.12, NF-7.2). The release stays a draft until the operator publishes
+# it. A tag that does not match v*.*.* does not start this workflow.
+#
+# Run from the Actions tab (workflow_dispatch), it is a dry run: it builds,
+# scans, checks the version and makes the SBOM, but pushes, signs and releases
+# nothing. Only a tag publishes, so no branch, fork or pull request can.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to build the dry run with (semantic versioning, without the v)
+        required: true
+        default: 0.0.0-dry-run
+
+permissions:
+  contents: read
+
+# One release at a time, whatever its tag, so that two releases never move
+# <major>.<minor> or latest at once. Dry runs do not wait for releases.
+concurrency:
+  group: ${{ github.event_name == 'push' && 'release' || format('release-dry-run-{0}', github.ref) }}
+  cancel-in-progress: false
+
+# Actions are pinned to commit SHAs (tags can be moved); Dependabot updates them.
+jobs:
+  release:
+    name: Build, scan, publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # The least the job needs (NF-11.12): the draft release, the image, the
+    # OIDC token for keyless signing and attesting, and the attestations.
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      PUBLISH: ${{ github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every branch and tag: the tag must be on master, and the newest
+          # stable tags decide whether <major>.<minor> and latest move.
+          fetch-depth: 0
+          # No step pushes with git; the write token stays out of .git/config.
+          persist-credentials: false
+
+      # NF-7.2: the version is semantic versioning, checked before anything is
+      # built. Build metadata (+…) is refused, as an image tag cannot hold a +.
+      - name: Version
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$PUBLISH" = true ]; then
+            candidate="$TAG"
+          else
+            candidate="v$INPUT_VERSION"
+          fi
+
+          num='(0|[1-9][0-9]*)'
+          id='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+          re="^v${num}\.${num}\.${num}(-${id}(\.${id})*)?$"
+          stable="^v${num}\.${num}\.${num}$"
+          if ! [[ "$candidate" =~ $re ]]; then
+            echo "::error::$candidate is not v<major>.<minor>.<patch>[-<pre-release>] (semantic versioning, NF-7.2)."
+            exit 1
+          fi
+
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          version="${candidate#v}"
+          prerelease=false
+          if [ -n "${BASH_REMATCH[4]}" ]; then
+            prerelease=true
+          fi
+
+          # A release is made from master only: a tag on any other commit
+          # publishes nothing.
+          if [ "$PUBLISH" = true ]; then
+            commit=$(git rev-parse "refs/tags/$TAG^{commit}")
+            if ! git merge-base --is-ancestor "$commit" origin/master; then
+              echo "::error::$TAG points to $commit, which is not on master. Tag a commit of master."
+              exit 1
+            fi
+          fi
+
+          # <major>.<minor> and latest move only to the newest stable version
+          # of their line, so that a fix on an older line (1.0.5 after 1.1.0)
+          # never takes them backwards. Tags off master, which never publish,
+          # are not counted.
+          newest() {
+            git tag --list "$1" --merged origin/master --sort=-v:refname | while IFS= read -r tag; do
+              if [[ "$tag" =~ $stable ]]; then
+                echo "$tag"
+                break
+              fi
+            done
+          }
+          move_minor=false
+          move_latest=false
+          if [ "$PUBLISH" = true ] && [ "$prerelease" = false ]; then
+            if [ "$(newest "v$major.$minor.*")" = "$candidate" ]; then
+              move_minor=true
+            fi
+            if [ "$(newest 'v*.*.*')" = "$candidate" ]; then
+              move_latest=true
+            fi
+          fi
+
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/front-burner"
+          {
+            echo "version=$version"
+            echo "minor=$major.$minor"
+            echo "prerelease=$prerelease"
+            echo "move-minor=$move_minor"
+            echo "move-latest=$move_latest"
+            echo "image=$image"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version $version (pre-release: $prerelease), image $image, publish: $PUBLISH"
+          echo "Moves $major.$minor: $move_minor; moves latest: $move_latest"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to the GitHub Container Registry
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A version is pushed once. A run that failed after its push left an
+      # unsigned image under <version>; see README.md, "If a release fails".
+      - name: Check that the version is new
+        if: env.PUBLISH == 'true'
+        env:
+          IMAGE: ${{ steps.version.outputs.image }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if output=$(docker buildx imagetools inspect "$IMAGE:$VERSION" 2>&1); then
+            echo "::error::$IMAGE:$VERSION already exists. Delete that package version and its draft release and re-run, or release the next version (README.md, \"If a release fails\")."
+            exit 1
+          fi
+          # A 404, for a new version or, at the first release, a new package.
+          if ! grep -qiE 'not found|manifest unknown|name unknown' <<< "$output"; then
+            echo "::error::Could not tell whether $IMAGE:$VERSION exists:"
+            echo "$output"
+            exit 1
+          fi
+          echo "$IMAGE:$VERSION is new."
+
+      # linux/amd64 only; an arm64 image is left until after the MVP
+      # (docs/wiki/todo.md). Loaded into the runner's Docker, so that the image
+      # that is scanned and checked is the one that is pushed. No build cache:
+      # a release is built from scratch on the newest base image. The source
+      # label links the package to this repository on GitHub.
+      - name: Build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: tools/docker/Dockerfile
+          platforms: linux/amd64
+          build-args: FRONT_BURNER_VERSION=${{ steps.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+          tags: front-burner:release
+          load: true
+          push: false
+          pull: true
+          no-cache: true
+
+      # Before pushing, so that a vulnerability stops the release (NF-11.10).
+      # The same rules as CI's image job: only vulnerabilities with a fix fail
+      # it, and accepted ones go into .trivyignore with a reason.
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: front-burner:release
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+          trivyignores: .trivyignore
+
+      # The image carries the tag's version (NF-7.6): every /api/v1 response
+      # has it in X-Front-Burner-Version. The secrets are throwaway values for
+      # this check only.
+      - name: Check the version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker run -d --name version-check -p 127.0.0.1:8080:8080 \
+            -e FRONT_BURNER_SETUP_TOKEN="$(openssl rand -hex 16)" \
+            -e FRONT_BURNER_JWT_SECRET="$(openssl rand -hex 32)" \
+            -e FRONT_BURNER_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+            front-burner:release
+
+          ready=false
+          for _ in $(seq 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8080/api/health/ready; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != true ]; then
+            echo "::error::The image did not become ready within two minutes."
+            docker logs version-check
+            exit 1
+          fi
+
+          actual=$(curl -sS -D - -o /dev/null http://127.0.0.1:8080/api/v1/auth/methods \
+            | tr -d '\r' | sed -n 's/^[Xx]-[Ff]ront-[Bb]urner-[Vv]ersion: *//p')
+          docker rm -f version-check > /dev/null
+          if [ "$actual" != "$VERSION" ]; then
+            echo "::error::The image reports version '$actual', not $VERSION."
+            exit 1
+          fi
+          echo "The image reports version $actual."
+
+      # The SBOM of the image as built, in CycloneDX (NF-11.12).
+      - name: SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: front-burner:release
+          format: cyclonedx
+          output: front-burner-${{ steps.version.outputs.version }}.cdx.json
+          skip-setup-trivy: true
+
+      - name: Keep the SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: front-burner-${{ steps.version.outputs.version }}.cdx.json
+          if-no-files-found: error
+
+      # ---- Publishing: a tag only ----------------------------------------------
+
+      # The scanned image itself, under <version> only. <major>.<minor> and
+      # latest move after it is signed, attested and verified.
+      - name: Push
+        id: push
+        if: env.PUBLISH == 'true'
+        env:
+          IMAGE: ${{ steps.version.outputs.image }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker tag front-burner:release "$IMAGE:$VERSION"
+          docker push "$IMAGE:$VERSION"
+
+          ref=$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE:$VERSION" \
+            | grep "^$IMAGE@sha256:" | head -n 1)
+          digest="${ref#*@}"
+          if [ -z "$digest" ]; then
+            echo "::error::No digest for $IMAGE:$VERSION after the push."
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Pushed $IMAGE@$digest as $VERSION."
+
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        if: env.PUBLISH == 'true'
+
+      # Keyless: the certificate names this workflow at this tag.
+      - name: Sign
+        if: env.PUBLISH == 'true'
+        env:
+          IMAGE: ${{ steps.version.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "$IMAGE@$DIGEST"
+
+      - name: Attest the build provenance
+        if: env.PUBLISH == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.version.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest the SBOM
+        if: env.PUBLISH == 'true'
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ steps.version.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: front-burner-${{ steps.version.outputs.version }}.cdx.json
+          push-to-registry: true
+
+      # As the deployment guide tells operators to verify it (plan 140): any
+      # tag of this repository's release workflow.
+      - name: Verify the signature
+        if: env.PUBLISH == 'true'
+        env:
+          IMAGE: ${{ steps.version.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          cosign verify "$IMAGE@$DIGEST" \
+            --certificate-identity-regexp "^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@refs/tags/v" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            > /dev/null
+          echo "The signature of $IMAGE@$DIGEST verifies."
+
+      # Only now, signed and attested, does the image become <major>.<minor>
+      # and latest, as a copy of the same manifest (the same digest, so the
+      # signature and attestations hold for these tags too).
+      - name: Move the shared tags
+        if: env.PUBLISH == 'true' && (steps.version.outputs.move-minor == 'true' || steps.version.outputs.move-latest == 'true')
+        env:
+          IMAGE: ${{ steps.version.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+          MINOR: ${{ steps.version.outputs.minor }}
+          MOVE_MINOR: ${{ steps.version.outputs.move-minor }}
+          MOVE_LATEST: ${{ steps.version.outputs.move-latest }}
+        run: |
+          tags=()
+          if [ "$MOVE_MINOR" = true ]; then tags+=("$MINOR"); fi
+          if [ "$MOVE_LATEST" = true ]; then tags+=(latest); fi
+          for tag in "${tags[@]}"; do
+            docker buildx imagetools create --prefer-index=false --tag "$IMAGE:$tag" "$IMAGE@$DIGEST"
+            moved=$(docker buildx imagetools inspect "$IMAGE:$tag" --format '{{.Manifest.Digest}}')
+            if [ "$moved" != "$DIGEST" ]; then
+              echo "::error::$IMAGE:$tag is $moved, not $DIGEST."
+              exit 1
+            fi
+            echo "$IMAGE:$tag is now $DIGEST."
+          done
+
+      # A draft, with the SBOM attached and the notes from
+      # .github/release-notes.md, which the operator completes before
+      # publishing. A draft left by an earlier, failed run is replaced; a
+      # published release is never touched.
+      - name: Draft the release
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          IMAGE: ${{ steps.version.outputs.image }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$draft" != true ]; then
+              echo "::error::The release $TAG is already published."
+              exit 1
+            fi
+            echo "Replacing the draft release $TAG left by an earlier run."
+            gh release delete "$TAG" --yes
+          fi
+
+          notes=$(< .github/release-notes.md)
+          notes="${notes//'{{VERSION}}'/$VERSION}"
+          notes="${notes//'{{IMAGE}}'/$IMAGE}"
+          notes="${notes//'{{DIGEST}}'/$DIGEST}"
+          notes="${notes//'{{REPOSITORY}}'/$GITHUB_REPOSITORY}"
+          printf '%s\n' "$notes" > "$RUNNER_TEMP/release-notes.md"
+
+          flags=(--draft --verify-tag --title "Front Burner $VERSION" --notes-file "$RUNNER_TEMP/release-notes.md")
+          if [ "$PRERELEASE" = true ]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$TAG" "${flags[@]}" "front-burner-$VERSION.cdx.json"

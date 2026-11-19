@@ -80,6 +80,14 @@ Known gaps, left until someone meets them:
   restore the earlier record when there is no merge, no merge commit, and the
   record is `HEAD`; plan 93's end of a merge needs the same thought.
 
+Release image, after the MVP:
+
+- An `arm64` image next to the `linux/amd64` one, as one multi-platform image.
+  The release workflow (`.github/workflows/release.yml`) builds `amd64` only: an
+  `arm64` build needs a native ARM runner or a long emulated build, and the deps
+  stage must build `better-sqlite3` for ARM. The scan, the version check, the
+  signature and the attestations then cover both platforms.
+
 Deployment guide (`docs/wiki/deployment.md`), postponed until the MVP runs
 locally in a development environment, so that it describes what was actually
 built:

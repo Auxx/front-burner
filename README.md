@@ -157,6 +157,57 @@ engines, e.g. `E2E_BROWSERS=chromium,firefox,webkit`) to choose the browsers
 yourself. Dependabot opens weekly update pull requests for npm packages and
 GitHub Actions.
 
+## Releases
+
+The release workflow (`.github/workflows/release.yml`) runs when a tag matching
+`v*.*.*` is pushed. Other tags, such as `v1.0`, do not start it. A matching tag
+that is not semantic versioning (`v<major>.<minor>.<patch>`, optionally with a
+pre-release part such as `v1.0.0-rc.1`, and no build metadata), or that is not
+on a commit of `master`, fails before the build. A version already in the
+registry fails too.
+
+The workflow builds `tools/docker/Dockerfile` for `linux/amd64` with the tag's
+version, scans it with Trivy (a vulnerability stops the release), checks that it
+reports the version, and pushes it to `ghcr.io/<owner>/front-burner` as
+`<version>`. It signs the pushed image with keyless cosign, attests its build
+provenance and its CycloneDX SBOM, and verifies the signature. Only then does it
+move `<major>.<minor>` and `latest` to the image: for a stable version (no
+pre-release part), and only when it is the newest stable version of its line and
+of all, so a fix on an older line (1.0.5 after 1.1.0) leaves `latest` on 1.1.0.
+Last, it creates a draft GitHub release with the SBOM attached and the notes
+from `.github/release-notes.md`. Releases run one at a time; push one release
+tag at a time, since GitHub keeps only one waiting run and cancels the others.
+
+To make a release:
+
+1. Push the tag: `git tag v1.0.0 && git push origin v1.0.0`.
+2. When the workflow has finished, open the draft release, complete its
+   "Changes" and "Upgrading" sections, and publish it.
+3. After the first release only: GitHub creates the `front-burner` package as
+   private. Open it (the repository's **Packages**, then **Package settings**)
+   and change its visibility to public, so that operators can pull the image
+   without logging in. The image's `org.opencontainers.image.source` label links
+   the package to this repository.
+
+Run the workflow from the Actions tab (Run workflow) for a dry run: it builds,
+scans, checks the version and makes the SBOM, kept as the run's `sbom` artifact,
+but pushes, signs and releases nothing.
+
+Only maintainers should be able to push release tags: add a tag ruleset for `v*`
+(Settings → Rules → Rulesets) that restricts creating, updating and deleting
+matching tags.
+
+### If a release fails
+
+A run that fails before **Push** published nothing: fix the cause and re-run it.
+A run that fails after **Push** has left the image under `<version>` without its
+signature or attestations, but `<major>.<minor>` and `latest` have not moved. A
+re-run stops at **Check that the version is new**, as a version is pushed only
+once. Either delete that version from the package (the package's **Package
+settings** → **Manage versions**) and re-run the workflow, or tag the next patch
+version. A draft release left by a failed run is replaced by the next run for
+the same tag; a published release is never changed.
+
 ## Install Nx Console
 
 Nx Console is an editor extension that enriches your developer experience. It
