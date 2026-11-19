@@ -209,7 +209,33 @@ const schema = z.object({
   message: `cannot be set together with ${METRICS_TOKEN_FILE}`
 });
 
-const KNOWN_VARIABLES = new Set(Object.keys(schema.shape));
+/**
+ * Every variable the backend reads, `…_FILE` variants included (A-1.15). The
+ * deployment guide documents each of them (`deployment-guide.spec.ts`).
+ */
+export const CONFIG_VARIABLES: readonly string[] = Object.keys(schema.shape);
+
+const KNOWN_VARIABLES = new Set(CONFIG_VARIABLES);
+
+/** A variable's default as an operator writes it, such as `15m`, before any transform. */
+function defaultOf(type: z.core.$ZodType): string | undefined {
+  const def = type._zod.def;
+  if (def.type === 'pipe') {
+    return defaultOf((def as z.core.$ZodPipeDef).in);
+  }
+  if (def.type === 'default') {
+    return String((def as z.core.$ZodDefaultDef).defaultValue);
+  }
+  return undefined;
+}
+
+/** The default of every variable that has one, as {@link defaultOf} gives it. */
+export const CONFIG_DEFAULTS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(schema.shape).flatMap(([ name, type ]) => {
+    const value = defaultOf(type);
+    return value === undefined ? [] : [ [ name, value ] ];
+  })
+);
 
 /** The version of a backend whose build did not give one, such as in unit tests. */
 export const UNKNOWN_VERSION = 'unknown';
