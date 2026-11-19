@@ -409,15 +409,17 @@ These rules add to the security rules already in the requirements.
 - **NF-11.12** Every release publishes an SBOM (CycloneDX), is signed with
   **cosign**, and comes with build provenance. The release workflow
   (`.github/workflows/release.yml`) runs on GitHub Actions for a tag
-  `v<major>.<minor>.<patch>`, optionally with a pre-release part (NF-7.2). It
-  builds `tools/docker/Dockerfile` for `linux/amd64` with the tag's version,
-  scans it (NF-11.10), checks that it reports that version (NF-7.6), and pushes
-  it to `ghcr.io/<owner>/front-burner` as `<version>` and, for a version without
-  a pre-release part, `<major>.<minor>` and `latest`. It then signs the pushed
-  digest with keyless cosign, attests its build provenance and its SBOM (made by
-  Trivy) to the registry, verifies the signature as operators will, and creates
-  a draft GitHub release with the SBOM attached. Run by hand, it is a dry run
-  that pushes, signs and releases nothing.
+  `v<major>.<minor>.<patch>`, optionally with a pre-release part (NF-7.2), on a
+  commit of `master`, one release at a time. It builds `tools/docker/Dockerfile`
+  for `linux/amd64` with the tag's version, scans it (NF-11.10), checks that it
+  reports that version (NF-7.6), and pushes it to `ghcr.io/<owner>/front-burner`
+  as `<version>`, which must be new. It then signs the pushed digest with
+  keyless cosign, attests its build provenance and its SBOM (made by Trivy) to
+  the registry, and verifies the signature as operators will. Only a signed
+  image moves `<major>.<minor>` and `latest`, and only for a stable version that
+  is the newest of its line and of all, so that they never move backwards. Last,
+  it creates a draft GitHub release with the SBOM attached. Run by hand, it is a
+  dry run that pushes, signs and releases nothing.
 - **NF-11.13** The compose example in the deployment guide runs the container
   with a read-only root file system, `/tmp` as a tmpfs, `cap_drop: ALL` and
   `no-new-privileges`. Front Burner must work in that setup. CI's `image` job

@@ -1,10 +1,11 @@
 name: Release
 
 # A tag v<major>.<minor>.<patch> (with an optional pre-release part, such as
-# v1.0.0-rc.1) builds the release image, scans it, pushes it to the GitHub
-# Container Registry, signs it with cosign, attests its build provenance and
-# its CycloneDX SBOM, and creates a draft GitHub release (NF-11.12, NF-7.2).
-# The release stays a draft until the operator publishes it.
+# v1.0.0-rc.1) on a commit of master builds the release image, scans it, pushes
+# it to the GitHub Container Registry, signs it with cosign, attests its build
+# provenance and its CycloneDX SBOM, and creates a draft GitHub release
+# (NF-11.12, NF-7.2). The release stays a draft until the operator publishes
+# it. A tag that does not match v*.*.* does not start this workflow.
 #
 # Run from the Actions tab (workflow_dispatch), it is a dry run: it builds,
 # scans, checks the version and makes the SBOM, but pushes, signs and releases
@@ -23,8 +24,10 @@ on:
 permissions:
   contents: read
 
+# One release at a time, whatever its tag, so that two releases never move
+# <major>.<minor> or latest at once. Dry runs do not wait for releases.
 concurrency:
-  group: release-${{ github.ref }}
+  group: ${{ github.event_name == 'push' && 'release' || format('release-dry-run-{0}', github.ref) }}
   cancel-in-progress: false
 
 # Actions are pinned to commit SHAs (tags can be moved); Dependabot updates them.
@@ -44,6 +47,12 @@ jobs:
       PUBLISH: ${{ github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every branch and tag: the tag must be on master, and the newest
+          # stable tags decide whether <major>.<minor> and latest move.
+          fetch-depth: 0
+          # No step pushes with git; the write token stays out of .git/config.
+          persist-credentials: false
 
       # NF-7.2: the version is semantic versioning, checked before anything is
       # built. Build metadata (+…) is refused, as an image tag cannot hold a +.
@@ -62,6 +71,7 @@ jobs:
           num='(0|[1-9][0-9]*)'
           id='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
           re="^v${num}\.${num}\.${num}(-${id}(\.${id})*)?$"
+          stable="^v${num}\.${num}\.${num}$"
           if ! [[ "$candidate" =~ $re ]]; then
             echo "::error::$candidate is not v<major>.<minor>.<patch>[-<pre-release>] (semantic versioning, NF-7.2)."
             exit 1
@@ -75,21 +85,86 @@ jobs:
             prerelease=true
           fi
 
+          # A release is made from master only: a tag on any other commit
+          # publishes nothing.
+          if [ "$PUBLISH" = true ]; then
+            commit=$(git rev-parse "refs/tags/$TAG^{commit}")
+            if ! git merge-base --is-ancestor "$commit" origin/master; then
+              echo "::error::$TAG points to $commit, which is not on master. Tag a commit of master."
+              exit 1
+            fi
+          fi
+
+          # <major>.<minor> and latest move only to the newest stable version
+          # of their line, so that a fix on an older line (1.0.5 after 1.1.0)
+          # never takes them backwards. Tags off master, which never publish,
+          # are not counted.
+          newest() {
+            git tag --list "$1" --merged origin/master --sort=-v:refname | while IFS= read -r tag; do
+              if [[ "$tag" =~ $stable ]]; then
+                echo "$tag"
+                break
+              fi
+            done
+          }
+          move_minor=false
+          move_latest=false
+          if [ "$PUBLISH" = true ] && [ "$prerelease" = false ]; then
+            if [ "$(newest "v$major.$minor.*")" = "$candidate" ]; then
+              move_minor=true
+            fi
+            if [ "$(newest 'v*.*.*')" = "$candidate" ]; then
+              move_latest=true
+            fi
+          fi
+
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/front-burner"
           {
             echo "version=$version"
             echo "minor=$major.$minor"
             echo "prerelease=$prerelease"
+            echo "move-minor=$move_minor"
+            echo "move-latest=$move_latest"
             echo "image=$image"
           } >> "$GITHUB_OUTPUT"
           echo "Version $version (pre-release: $prerelease), image $image, publish: $PUBLISH"
+          echo "Moves $major.$minor: $move_minor; moves latest: $move_latest"
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to the GitHub Container Registry
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A version is pushed once. A run that failed after its push left an
+      # unsigned image under <version>; see README.md, "If a release fails".
+      - name: Check that the version is new
+        if: env.PUBLISH == 'true'
+        env:
+          IMAGE: ${{ steps.version.outputs.image }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if output=$(docker buildx imagetools inspect "$IMAGE:$VERSION" 2>&1); then
+            echo "::error::$IMAGE:$VERSION already exists. Delete that package version and its draft release and re-run, or release the next version (README.md, \"If a release fails\")."
+            exit 1
+          fi
+          # A 404, for a new version or, at the first release, a new package.
+          if ! grep -qiE 'not found|manifest unknown|name unknown' <<< "$output"; then
+            echo "::error::Could not tell whether $IMAGE:$VERSION exists:"
+            echo "$output"
+            exit 1
+          fi
+          echo "$IMAGE:$VERSION is new."
 
       # linux/amd64 only; an arm64 image is left until after the MVP
       # (docs/wiki/todo.md). Loaded into the runner's Docker, so that the image
       # that is scanned and checked is the one that is pushed. No build cache:
-      # a release is built from scratch on the newest base image.
+      # a release is built from scratch on the newest base image. The source
+      # label links the package to this repository on GitHub.
       - name: Build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -97,6 +172,9 @@ jobs:
           file: tools/docker/Dockerfile
           platforms: linux/amd64
           build-args: FRONT_BURNER_VERSION=${{ steps.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
           tags: front-burner:release
           load: true
           push: false
@@ -172,34 +250,17 @@ jobs:
 
       # ---- Publishing: a tag only ----------------------------------------------
 
-      - name: Log in to the GitHub Container Registry
-        if: env.PUBLISH == 'true'
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # The scanned image itself, tagged <version>; a version without a
-      # pre-release part also moves <major>.<minor> and latest, so that a
-      # release candidate never replaces a stable image.
+      # The scanned image itself, under <version> only. <major>.<minor> and
+      # latest move after it is signed, attested and verified.
       - name: Push
         id: push
         if: env.PUBLISH == 'true'
         env:
           IMAGE: ${{ steps.version.outputs.image }}
           VERSION: ${{ steps.version.outputs.version }}
-          MINOR: ${{ steps.version.outputs.minor }}
-          PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
-          tags=("$VERSION")
-          if [ "$PRERELEASE" = false ]; then
-            tags+=("$MINOR" latest)
-          fi
-          for tag in "${tags[@]}"; do
-            docker tag front-burner:release "$IMAGE:$tag"
-            docker push "$IMAGE:$tag"
-          done
+          docker tag front-burner:release "$IMAGE:$VERSION"
+          docker push "$IMAGE:$VERSION"
 
           ref=$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE:$VERSION" \
             | grep "^$IMAGE@sha256:" | head -n 1)
@@ -209,7 +270,7 @@ jobs:
             exit 1
           fi
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          echo "Pushed $IMAGE@$digest as ${tags[*]}."
+          echo "Pushed $IMAGE@$digest as $VERSION."
 
       - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         if: env.PUBLISH == 'true'
@@ -253,8 +314,35 @@ jobs:
             > /dev/null
           echo "The signature of $IMAGE@$DIGEST verifies."
 
+      # Only now, signed and attested, does the image become <major>.<minor>
+      # and latest, as a copy of the same manifest (the same digest, so the
+      # signature and attestations hold for these tags too).
+      - name: Move the shared tags
+        if: env.PUBLISH == 'true' && (steps.version.outputs.move-minor == 'true' || steps.version.outputs.move-latest == 'true')
+        env:
+          IMAGE: ${{ steps.version.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+          MINOR: ${{ steps.version.outputs.minor }}
+          MOVE_MINOR: ${{ steps.version.outputs.move-minor }}
+          MOVE_LATEST: ${{ steps.version.outputs.move-latest }}
+        run: |
+          tags=()
+          if [ "$MOVE_MINOR" = true ]; then tags+=("$MINOR"); fi
+          if [ "$MOVE_LATEST" = true ]; then tags+=(latest); fi
+          for tag in "${tags[@]}"; do
+            docker buildx imagetools create --prefer-index=false --tag "$IMAGE:$tag" "$IMAGE@$DIGEST"
+            moved=$(docker buildx imagetools inspect "$IMAGE:$tag" --format '{{.Manifest.Digest}}')
+            if [ "$moved" != "$DIGEST" ]; then
+              echo "::error::$IMAGE:$tag is $moved, not $DIGEST."
+              exit 1
+            fi
+            echo "$IMAGE:$tag is now $DIGEST."
+          done
+
       # A draft, with the SBOM attached and the notes from
-      # .github/release-notes.md, which the operator completes before publishing.
+      # .github/release-notes.md, which the operator completes before
+      # publishing. A draft left by an earlier, failed run is replaced; a
+      # published release is never touched.
       - name: Draft the release
         if: env.PUBLISH == 'true'
         env:
@@ -265,6 +353,15 @@ jobs:
           DIGEST: ${{ steps.push.outputs.digest }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
+          if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$draft" != true ]; then
+              echo "::error::The release $TAG is already published."
+              exit 1
+            fi
+            echo "Replacing the draft release $TAG left by an earlier run."
+            gh release delete "$TAG" --yes
+          fi
+
           notes=$(< .github/release-notes.md)
           notes="${notes//'{{VERSION}}'/$VERSION}"
           notes="${notes//'{{IMAGE}}'/$IMAGE}"
