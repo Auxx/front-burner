@@ -47,9 +47,16 @@ RUN npm ci --omit=dev
 # Trixie ships git 2.47, the oldest version the backend accepts (A-5.7).
 FROM node:${NODE_VERSION}-trixie-slim AS runtime
 
+# The base image lags behind Debian's security updates, so its packages are
+# upgraded too. The server needs Node.js alone at runtime (NF-11.11): the
+# package managers that the Node.js image bundles (npm, corepack, yarn) are
+# removed, as their own dependencies bring vulnerabilities into the image.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends git openssh-client ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
 ENV NODE_ENV=production \
     FRONT_BURNER_DATA_DIR=/data \

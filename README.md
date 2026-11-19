@@ -84,9 +84,10 @@ secrets. Run the commands below from the workspace root.
 
 The image builds the backend and the web client inside the container, so it
 needs no local build or `node_modules`. The runtime image is based on Debian
-trixie (for git 2.47 or later), has git and `openssh-client`, and runs as UID
-1000. The compose file runs it with a read-only root file system, `/tmp` as a
-tmpfs, `cap_drop: ALL` and `no-new-privileges`, as NF-11.13 asks.
+trixie (for git 2.47 or later), with its packages upgraded at build time, has
+git and `openssh-client` but no npm, corepack or yarn, and runs as UID 1000. The
+compose file runs it with a read-only root file system, `/tmp` as a tmpfs,
+`cap_drop: ALL` and `no-new-privileges`, as NF-11.13 asks.
 
 ### Build and rebuild the image
 
