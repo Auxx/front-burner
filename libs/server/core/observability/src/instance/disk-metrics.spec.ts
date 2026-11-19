@@ -1,5 +1,6 @@
 import type { FreeBytes } from '@front-burner/server-core-storage';
 import { Registry } from 'prom-client';
+import { metricSamples } from '../testing';
 import { DISK_FREE_BYTES, DiskMetrics } from './disk-metrics';
 
 describe('DiskMetrics', () => {
@@ -8,9 +9,7 @@ describe('DiskMetrics', () => {
 
   const samples = async () =>
     Object.fromEntries(
-      ((await registry.getSingleMetric(DISK_FREE_BYTES)?.get())?.values ?? []).map((
-        { labels, value }
-      ) => [ String(labels['volume']), value ])
+      (await metricSamples(registry, DISK_FREE_BYTES)).map(({ labels, value }) => [ String(labels['volume']), value ])
     );
 
   beforeEach(() => {

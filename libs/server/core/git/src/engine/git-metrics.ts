@@ -1,8 +1,12 @@
 import { METRICS_PREFIX, METRICS_REGISTRY } from '@front-burner/server-core-observability';
 import { Inject, Injectable } from '@nestjs/common';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Histogram, Registry } from 'prom-client';
 
 export const GIT_OPERATION_DURATION = `${METRICS_PREFIX}git_operation_duration_seconds`;
+
+/** Set while a timed operation runs, in everything it calls. */
+const timing = new AsyncLocalStorage<true>();
 
 /**
  * The git operations that are timed, by the name of the engine's method: the
@@ -52,11 +56,18 @@ export class GitMetrics {
     });
   }
 
-  /** Runs the operation and records how long it took, also when it throws. */
+  /**
+   * Runs the operation and records how long it took, also when it throws. An
+   * operation that another one runs, such as the status a commit reads, is part
+   * of it and is not timed on its own: each call of the engine counts once.
+   */
   async time<T>(operation: GitOperation, run: () => Promise<T>): Promise<T> {
+    if (timing.getStore() === true) {
+      return run();
+    }
     const end = this.duration.startTimer({ operation });
     try {
-      return await run();
+      return await timing.run(true, run);
     } finally {
       end();
     }

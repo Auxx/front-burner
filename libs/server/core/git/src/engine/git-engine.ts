@@ -522,7 +522,7 @@ export class GitEngine implements BeforeApplicationShutdown {
   async commit(workingCopy: string, request: CommitRequest): Promise<{ oid: string; }> {
     const amend = request.amend === true;
     const [ status, last ] = await Promise.all([
-      this.statusUnder(workingCopy, [], LOCAL_TIMEOUT_MS),
+      this.status(workingCopy),
       amend ? this.lastCommit(workingCopy) : null
     ]);
     if (status.branch === null) {
@@ -599,7 +599,7 @@ export class GitEngine implements BeforeApplicationShutdown {
    *   name that is not valid UTF-8: status cannot say it, so git cannot be told it.
    */
   async discard(workingCopy: string, paths: string[], changing?: () => void): Promise<void> {
-    const { changes } = await this.statusUnder(workingCopy, [], LOCAL_TIMEOUT_MS);
+    const { changes } = await this.status(workingCopy);
     const listed = new Set(paths);
     const chosen = changes.filter(change => listed.has(change.path));
     if (chosen.length === 0) {

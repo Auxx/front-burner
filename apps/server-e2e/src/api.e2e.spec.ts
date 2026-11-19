@@ -258,7 +258,8 @@ describe('metrics', () => {
       for (const operation of valuesOf('operation')) {
         expect(GIT_OPERATIONS as readonly (string | undefined)[], operation).toContain(operation);
       }
-      expect([ ...valuesOf('result') ].every(result => [ 'done', 'failed', 'cancelled' ].includes(result ?? '')))
+      const results = [ 'done', 'failed', 'cancelled', 'retried' ];
+      expect([ ...valuesOf('result') ].every(result => results.includes(result ?? '')))
         .toBe(true);
       expect([ ...valuesOf('state') ].sort()).toEqual([ 'running', 'waiting' ]);
       expect([ ...valuesOf('volume') ].every(volume => volume === 'data' || volume === 'repos')).toBe(true);

@@ -1,3 +1,4 @@
+import { metricSample, metricSamples } from '@front-burner/server-core-observability/testing';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,13 +28,8 @@ describe('GitMetrics', () => {
   let options: GitOptions;
 
   /** How many times the operation was timed. */
-  const countOf = async (operation: string): Promise<number | undefined> => {
-    const metric = await registry.getSingleMetric(GIT_OPERATION_DURATION)?.get();
-    const values = (metric?.values ?? []) as { labels: { operation?: string; }; value: number; metricName?: string; }[];
-    return values.find(value =>
-      value.metricName === `${GIT_OPERATION_DURATION}_count` && value.labels.operation === operation
-    )?.value;
-  };
+  const countOf = (operation: string) =>
+    metricSample(registry, GIT_OPERATION_DURATION, { operation }, `${GIT_OPERATION_DURATION}_count`);
   const engine = (overrides: Partial<GitOptions> = {}) => {
     const runner = new GitRunner();
     return new GitEngine({ ...options, ...overrides }, runner, undefined, new GitMetrics(registry));
@@ -72,10 +68,19 @@ describe('GitMetrics', () => {
     });
 
     expect(await countOf('status')).toBe(2);
-    // A commit reads the status itself: that is not a status operation.
+    // A commit reads the status itself: that is part of the commit, not a status operation.
     expect(await countOf('commit')).toBe(1);
     const text = await registry.metrics();
     expect(text).not.toContain(root);
+  });
+
+  it('operations run side by side are each timed', async () => {
+    const timed = engine();
+
+    await Promise.all([ timed.status(root), timed.status(root), timed.unsavedWork(root) ]);
+
+    expect(await countOf('status')).toBe(2);
+    expect(await countOf('unsaved-work')).toBe(1);
   });
 
   it('a timed-out command is timed', async () => {
@@ -93,8 +98,8 @@ describe('GitMetrics', () => {
     await timed.status(root);
     await timed.unsavedWork(root);
 
-    const metric = await registry.getSingleMetric(GIT_OPERATION_DURATION)?.get();
-    const operations = new Set(metric?.values.map(({ labels }) => labels['operation']));
+    const samples = await metricSamples(registry, GIT_OPERATION_DURATION);
+    const operations = new Set(samples.map(({ labels }) => labels['operation']));
     expect([ ...operations ].every(operation => (GIT_OPERATIONS as readonly unknown[]).includes(operation))).toBe(
       true
     );

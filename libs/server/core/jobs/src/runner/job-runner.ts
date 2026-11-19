@@ -5,7 +5,7 @@ import { ApiErrorException, METRICS_REGISTRY } from '@front-burner/server-core-o
 import { BeforeApplicationShutdown, Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { and, asc, count, eq, inArray, lte, SQL, sql } from 'drizzle-orm';
 import type { Registry } from 'prom-client';
-import { JobMetrics } from './job-metrics';
+import { JobMetrics, JobQueue } from './job-metrics';
 import { CancelFilter, EnqueueRequest, JobPool, jobPoolSizes, JobTypeDefinition, RunningJob } from './job-types';
 
 /** How often the loop looks for scheduled jobs when nothing woke it (A-6.4). */
@@ -61,8 +61,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     this.poolSizes = jobPoolSizes(config);
     this.metrics = new JobMetrics(registry, {
       types: () => [ ...this.types.keys() ],
-      queuedByType: () => this.queuedByType(),
-      clones: () => ({ running: this.activeIn('clone'), waiting: this.queuedIn('clone') })
+      queue: () => this.queue()
     });
   }
 
@@ -295,25 +294,26 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
     return active;
   }
 
-  /** Queued jobs of the registered types, by type; a type no feature registers any more is left out. */
-  private queuedByType(): Map<string, number> {
-    const rows = this.database.db.select({ type: jobs.type, queued: count() }).from(jobs)
+  /**
+   * The queue in one query, for the metrics: queued jobs by type, a type no
+   * feature registers any more left out, and the clones running and due.
+   */
+  private queue(): JobQueue {
+    const rows = this.database.db.select({
+      type: jobs.type,
+      queued: count(),
+      due: count(sql`case when ${lte(jobs.runAt, new Date())} then 1 end`)
+    }).from(jobs)
       .where(eq(jobs.status, 'queued'))
       .groupBy(jobs.type)
-      .all();
-    return new Map(rows.filter(({ type }) => this.types.has(type)).map(({ type, queued }) => [ type, queued ]));
-  }
-
-  /** Queued jobs of the pool's registered types, due or not. */
-  private queuedIn(pool: JobPool): number {
-    const types = [ ...this.types.values() ].filter(definition => definition.pool === pool).map(({ type }) => type);
-    if (types.length === 0) {
-      return 0;
-    }
-    const [ { queued } ] = this.database.db.select({ queued: count() }).from(jobs)
-      .where(and(eq(jobs.status, 'queued'), inArray(jobs.type, types)))
-      .all();
-    return queued;
+      .all()
+      .filter(({ type }) => this.types.has(type));
+    const waiting = rows.filter(({ type }) => this.definitionOf(type).pool === 'clone')
+      .reduce((sum, { due }) => sum + due, 0);
+    return {
+      queuedByType: new Map(rows.map(({ type, queued }) => [ type, queued ])),
+      clones: { running: this.activeIn('clone'), waiting }
+    };
   }
 
   /** The next due job of the types, now `running` (A-6.4). */
@@ -395,6 +395,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
         .set({ status: 'queued', runAt: new Date(Date.now() + delay), errorCode })
         .where(eq(jobs.id, job.id))
         .run();
+      this.metrics.ran(job.type, 'retried', (Date.now() - active.startedAt) / 1000);
       this.logger.warn({ jobId: job.id, type: job.type, errorCode, attempt: job.attempts }, 'A job failed; retrying');
       return;
     }

@@ -383,9 +383,11 @@ Confirmed by spike 2 (spikes.md).
     `switch-branch`, `create-branch` and `list-branches`; a pull is a `fetch`
     and a `merge`. `timeOperations` wraps those methods of `GitEngine`,
     `GitMerge` and `GitBranches` once, after each class, so that no method has
-    to remember; an operation that calls another reads it without the wrapper,
-    so that it is not counted twice. An engine built by hand, as in a test,
-    records into a registry nobody reads. _(Plan 135's call.)_
+    to remember. An operation that another one runs, such as the status a commit
+    reads, is part of it and is not timed on its own: `GitMetrics.time` marks
+    the call chain it runs with `AsyncLocalStorage`, so each call of the engine
+    counts once, whichever methods it calls. An engine built by hand, as in a
+    test, records into a registry nobody reads. _(Plan 135's call.)_
 - **A-5.11** Conflicts are read from the index: base, ours and theirs are stages
   1, 2 and 3 (`git show :1:<path>` and so on), giving the one conflict model of
   vision goal 5.

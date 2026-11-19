@@ -1,6 +1,7 @@
 import type { Config } from '@front-burner/server-core-config';
 import { Database, jobs, JobStatus, repositories, users } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
+import { metricSample, metricSamples } from '@front-burner/server-core-observability/testing';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
 import { Registry } from 'prom-client';
@@ -29,15 +30,8 @@ describe('JobRunner', () => {
   let registry: Registry;
   let userId: number;
 
-  /** One sample of a metric (`sample` names a histogram's `_count` or `_sum`), by its exact labels. */
-  const sampleOf = async (name: string, labels: Record<string, string>, sample = name) => {
-    const keyOf = (of: object) => JSON.stringify(Object.entries(of).sort(([ a ], [ b ]) => a.localeCompare(b)));
-    const metric = await registry.getSingleMetric(name)?.get();
-    // A histogram's samples carry their own name.
-    const values = (metric?.values ?? []) as { labels: object; value: number; metricName?: string; }[];
-    return values.find(value => (value.metricName ?? name) === sample && keyOf(value.labels) === keyOf(labels))
-      ?.value;
-  };
+  const sampleOf = (name: string, labels: Record<string, string>, sample = name) =>
+    metricSample(registry, name, labels, sample);
 
   const rowOf = (id: number) => database.db.select().from(jobs).where(eq(jobs.id, id)).get();
   /** Lets the loop and the handlers run. */
@@ -757,7 +751,7 @@ describe('JobRunner', () => {
       expect(await sampleOf(JOB_FAILURES, { type: 'test.controlled' })).toBe(0);
     });
 
-    it('a failed job is counted and timed', async () => {
+    it('a failed job is counted once, and each of its attempts is timed', async () => {
       runner.register({
         type: 'test.fails',
         pool: 'fetch',
@@ -772,8 +766,11 @@ describe('JobRunner', () => {
 
       const id = runner.enqueue({ type: 'test.fails', payload: {} });
       await vi.advanceTimersByTimeAsync(2000);
-      // The first attempt is retried: the job has not ended.
+      // The first attempt is retried: timed, but the job has not ended.
       expect(await sampleOf(JOB_FAILURES, { type: 'test.fails' })).toBe(0);
+      const retried = { type: 'test.fails', result: 'retried' };
+      expect(await sampleOf(JOB_DURATION, retried, `${JOB_DURATION}_count`)).toBe(1);
+      expect(await sampleOf(JOB_DURATION, retried, `${JOB_DURATION}_sum`)).toBe(2);
       await vi.advanceTimersByTimeAsync(2000);
 
       expect(rowOf(id)?.status).toBe('failed');
@@ -781,6 +778,7 @@ describe('JobRunner', () => {
       const failed = { type: 'test.fails', result: 'failed' };
       expect(await sampleOf(JOB_DURATION, failed, `${JOB_DURATION}_count`)).toBe(1);
       expect(await sampleOf(JOB_DURATION, failed, `${JOB_DURATION}_sum`)).toBe(2);
+      expect(await sampleOf(JOB_DURATION, retried, `${JOB_DURATION}_count`)).toBe(1);
     });
 
     it('counts an interrupted job as failed without a duration', async () => {
@@ -799,8 +797,7 @@ describe('JobRunner', () => {
 
       expect(await sampleOf(JOB_FAILURES, { type: 'test.interrupted' })).toBe(1);
       expect(await sampleOf(JOB_FAILURES, { type: 'test.gone' })).toBeUndefined();
-      const metric = await registry.getSingleMetric(JOB_DURATION)?.get();
-      expect(metric?.values).toEqual([]);
+      expect(await metricSamples(registry, JOB_DURATION)).toEqual([]);
     });
 
     it('reports queued jobs by type', async () => {
@@ -848,6 +845,31 @@ describe('JobRunner', () => {
       expect(started).toHaveLength(2);
       expect(await sampleOf(CLONES, { state: 'running' })).toBe(2);
       expect(await sampleOf(CLONES, { state: 'waiting' })).toBe(1);
+    });
+
+    it('a clone that is not due yet is queued, but does not wait for a slot', async () => {
+      controlledType();
+      runner.start();
+      runner.enqueue({ type: 'test.controlled', payload: {}, runAt: new Date(NOW.getTime() + 60_000) });
+      await settle();
+
+      expect(await sampleOf(JOBS_QUEUED, { type: 'test.controlled' })).toBe(1);
+      expect(await sampleOf(CLONES, { state: 'running' })).toBe(0);
+      expect(await sampleOf(CLONES, { state: 'waiting' })).toBe(0);
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(await sampleOf(JOBS_QUEUED, { type: 'test.controlled' })).toBe(0);
+      expect(await sampleOf(CLONES, { state: 'running' })).toBe(1);
+    });
+
+    it('one scrape reads the queue once, so that the counts agree', async () => {
+      controlledType();
+      const select = vi.spyOn(database.db, 'select');
+
+      await registry.metrics();
+      expect(select).toHaveBeenCalledTimes(1);
+      await registry.metrics();
+      expect(select).toHaveBeenCalledTimes(2);
     });
 
     it('keeps the last queue counts when the database cannot be read, so that the scrape still answers', async () => {

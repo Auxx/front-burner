@@ -1,4 +1,4 @@
-import { METRICS_PREFIX } from '@front-burner/server-core-observability';
+import { keepingLastValue, METRICS_PREFIX } from '@front-burner/server-core-observability';
 import { Logger } from '@nestjs/common';
 import { Counter, Gauge, Histogram, Registry } from 'prom-client';
 
@@ -7,17 +7,23 @@ export const JOB_FAILURES = `${METRICS_PREFIX}job_failures_total`;
 export const JOBS_QUEUED = `${METRICS_PREFIX}jobs_queued`;
 export const CLONES = `${METRICS_PREFIX}clones`;
 
-/** How a job that ran ended. */
-export type JobResult = 'done' | 'failed' | 'cancelled';
+/** How an attempt of a job that ran ended: `retried` when it failed and the job was queued again. */
+export type JobResult = 'done' | 'failed' | 'cancelled' | 'retried';
+
+/** The job queue as one read sees it. */
+export interface JobQueue {
+  /** Queued jobs by type, registered types only. */
+  queuedByType: ReadonlyMap<string, number>;
+  /** Clone-pool jobs running now, and due ones waiting for a free slot. */
+  clones: { running: number; waiting: number; };
+}
 
 /** What the job metrics read on each scrape. */
 export interface JobQueueReader {
   /** The registered job types. */
   types(): readonly string[];
-  /** Queued jobs by type, registered types only. */
-  queuedByType(): ReadonlyMap<string, number>;
-  /** Clone-pool jobs running now and waiting. */
-  clones(): { running: number; waiting: number; };
+  /** Reads the queue. */
+  queue(): JobQueue;
 }
 
 /**
@@ -32,7 +38,8 @@ export class JobMetrics {
     const logger = new Logger(JobMetrics.name);
     this.duration = new Histogram({
       name: JOB_DURATION,
-      help: 'Duration in seconds of jobs that ran, by job type and result (done, failed or cancelled).',
+      help: 'Duration in seconds of job attempts that ran, by job type and result (done, failed, cancelled or '
+        + 'retried).',
       labelNames: [ 'type', 'result' ] as const,
       buckets: [ 0.01, 0.05, 0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 300, 900 ],
       registers: [ registry ]
@@ -43,37 +50,38 @@ export class JobMetrics {
       labelNames: [ 'type' ] as const,
       registers: [ registry ]
     });
+    // One read per scrape, shared by both gauges so that they agree: a scrape
+    // collects every metric before it awaits anything.
+    let read: JobQueue | undefined;
+    const queue = (): JobQueue => {
+      if (read === undefined) {
+        read = reader.queue();
+        void Promise.resolve().then(() => read = undefined);
+      }
+      return read;
+    };
     new Gauge({
       name: JOBS_QUEUED,
-      help: 'Jobs waiting to run, by job type.',
+      help: 'Jobs waiting to run, by job type, due or not.',
       labelNames: [ 'type' ] as const,
       registers: [ registry ],
-      // A throw would fail the whole scrape, every other metric with it: the last count stays instead.
-      collect() {
-        try {
-          const queued = reader.queuedByType();
-          for (const type of reader.types()) {
-            this.set({ type }, queued.get(type) ?? 0);
-          }
-        } catch (error) {
-          logger.warn({ err: error }, 'Could not count the queued jobs; the metric keeps its last value.');
+      collect: keepingLastValue<Gauge<'type'>>(logger, 'the queued jobs', gauge => {
+        const { queuedByType } = queue();
+        for (const type of reader.types()) {
+          gauge.set({ type }, queuedByType.get(type) ?? 0);
         }
-      }
+      })
     });
     new Gauge({
       name: CLONES,
-      help: 'Clones running and waiting for a free slot.',
+      help: 'Clones running, and clones due to run that wait for a free slot.',
       labelNames: [ 'state' ] as const,
       registers: [ registry ],
-      collect() {
-        try {
-          const { running, waiting } = reader.clones();
-          this.set({ state: 'running' }, running);
-          this.set({ state: 'waiting' }, waiting);
-        } catch (error) {
-          logger.warn({ err: error }, 'Could not count the clones; the metric keeps its last value.');
-        }
-      }
+      collect: keepingLastValue<Gauge<'state'>>(logger, 'the clones', gauge => {
+        const { running, waiting } = queue().clones;
+        gauge.set({ state: 'running' }, running);
+        gauge.set({ state: 'waiting' }, waiting);
+      })
     });
   }
 
@@ -82,7 +90,7 @@ export class JobMetrics {
     this.failures.inc({ type }, 0);
   }
 
-  /** A job that ran ended: by its result, after `seconds`. */
+  /** An attempt of a job that ran ended: by its result, after `seconds`. */
   ran(type: string, result: JobResult, seconds: number): void {
     this.duration.observe({ type, result }, seconds);
   }

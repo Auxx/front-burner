@@ -31,15 +31,18 @@ See [overview.md](overview.md) for the numbering conventions.
   Metrics cover queue depth, durations and failures per type (NF-10.11): the
   runner registers them on `METRICS_REGISTRY` (A-3.2j), labelled only by
   registered job types, so that a row of a type no feature registers any more
-  counts nowhere. A job that ran is timed from its handler's call to the end of
-  the attempt that ended it, by how it ended (`done`, `failed` or `cancelled`);
-  an attempt that is retried is not timed, and neither is a job cancelled while
-  queued or failed as interrupted on start, which never ran in this process.
-  Every job that ends failed counts as a failure, an interrupted one too. Queued
-  jobs, and the clone pool's running and waiting jobs, are counted on each
-  scrape; when the database cannot be read, the counts keep their last values.
-  Every registered type appears with zero failures and zero queued jobs before
-  its first. _(Plan 135's call.)_
+  counts nowhere. Every attempt that ran is timed from its handler's call to its
+  end, by how it ended: `done`, `failed` or `cancelled` when it ended the job,
+  `retried` when it failed and the job was queued again, so that a remote that
+  times out before it answers shows. A job cancelled while queued, or failed as
+  interrupted on start, never ran in this process and is not timed. Every job
+  that ends failed counts as one failure, an interrupted one too; a retried
+  attempt does not. On each scrape, one query counts the queued jobs by type,
+  due or not, and the clones that are due and wait for a free slot of the clone
+  pool, so that the two agree; the running clones are the runner's own count.
+  When the database cannot be read, the counts keep their last values. Every
+  registered type appears with zero failures and zero queued jobs before its
+  first. _(Plan 135's call.)_
 
 ## A-6: Job types
 
