@@ -15,6 +15,10 @@ Installing takes these steps, each a section below:
    [put HTTPS in front of it](#https-is-required).
 5. [Start the instance and create the first administrator](#first-start).
 
+Once it runs, [size its disk](#sizing-the-disk),
+[back it up](#backup-and-restore) and [upgrade it](#upgrading) as the later
+sections describe.
+
 ## Before you start
 
 You need:
@@ -666,6 +670,337 @@ Prometheus, that is the scrape job's `authorization` setting, with the token in
 `credentials_file`. Generate the token as the other secrets, for example with
 `openssl rand -hex 16`, and give it through `FRONT_BURNER_METRICS_TOKEN_FILE`
 (see [Secrets in files](#secrets-in-files)).
+
+## Sizing the disk
+
+Every user has their own working copy of each repository they add, even when
+other users added the same remote. Disk use therefore grows with users, not with
+remotes: ten users who add the same 2 GB remote use 20 GB.
+
+Give the instance at least:
+
+> **the sum, over every user, of the sizes of their repositories**
+>
+> \+ **10%** of that, for clones in progress in `tmp/`
+>
+> \+ **the low-space threshold** (`FRONT_BURNER_LOW_DISK_THRESHOLD`, 2 GB by
+> default)
+>
+> \+ **1 GB** for the database and its snapshots in `backups/`
+
+A repository's size is the size of a full clone, `.git` included; for a
+single-branch clone it is smaller. The database itself stays small: it holds
+accounts, settings and the login audit log, not the content of files. Each
+snapshot is a copy of it, and `backups/` keeps eight or so (seven daily ones and
+a pre-upgrade snapshot per version you upgraded from).
+
+For example, five users who each add ten repositories of about 200 MB need 5 ×
+10 × 200 MB = 10 GB, plus 1 GB for `tmp/`, 2 GB for the threshold and 1 GB for
+the database: 14 GB. Give such an instance a 20 GB volume, so that it can grow.
+
+With a
+[separate volume for the repositories](#a-separate-volume-for-the-repositories),
+the working copies and `tmp/` go on that volume and the database and snapshots
+on `/data`. Front Burner checks the threshold on each volume, so each of them
+needs its own share plus the threshold.
+
+When less than the threshold is free, Front Burner refuses new repositories but
+keeps saving, committing and synchronising (see
+[Low disk space](#low-disk-space)). Add space before it runs out.
+
+## Backup and restore
+
+A full backup has two parts:
+
+- **the volumes**: `/data`, and the repositories volume if you use one;
+- **the secrets**, which are outside the volumes: at least
+  `secrets/encryption-key`. Without it, Front Burner cannot read the passwords,
+  tokens and SSH keys that users saved, and a restored instance does not start
+  (see [Required](#required)). Keep it apart from the backups of the volumes, so
+  that one stolen backup does not hold both.
+
+### What is in `/data`
+
+```text
+/data/
+  db/front-burner.sqlite   the database (with -wal and -shm files beside it)
+  repos/                   the working copies
+  backups/                 database snapshots
+  orphans/                 working copies without a repository
+  tmp/                     clones in progress; emptied on every start
+```
+
+With a separate repositories volume, `repos/`, `orphans/` and `tmp/` are on that
+volume instead.
+
+`backups/` holds consistent copies of the database, which Front Burner writes
+while it runs (see [Database snapshots](#database-snapshots)):
+
+- a **daily snapshot**, such as
+  `front-burner-2026-11-17T09-30-15Z-v1.4.2.sqlite`: the time it was written, in
+  UTC, and the version that wrote it. The last seven are kept.
+- a **pre-upgrade snapshot**, such as
+  `pre-upgrade-v1.4.2-2026-11-17T09-30-15Z-v1.4.2.sqlite`, written before an
+  upgrade changes the database (see [Upgrading](#upgrading)). The newest one for
+  each version stays until you delete it.
+
+They are on the same disk as the database, so they protect against a mistake or
+a failed upgrade, not against losing the disk. Back up the volume as well.
+
+### What a backup protects
+
+- **The database** holds the accounts, the list of repositories and their
+  settings, user preferences, saved credentials (encrypted) and the login audit
+  log.
+- **The working copies** can always be cloned again from their remotes. What a
+  backup of them protects is the work that is not on a remote yet: commits that
+  were not pushed and changes that were not committed. Front Burner saves edits
+  to the working copy within seconds, so these include the latest edits.
+
+### Backing up
+
+The commands below are for the [compose example](#compose-example), whose
+`/data` is a named volume. They run `tar` in a one-off container of the Front
+Burner image, as UID 1000, and write the archive to a folder next to
+`compose.yaml`. Run them from the folder that holds `compose.yaml`. If `/data`
+is a folder of the host, you can archive that folder with the host's tools
+instead.
+
+1. Create the folder for the archives, once:
+
+   ```sh
+   mkdir -p volume-backups
+   sudo chown 1000:1000 volume-backups
+   ```
+
+2. For a fully consistent backup, stop the instance first. Users cannot work
+   until step 4:
+
+   ```sh
+   docker compose stop front-burner
+   ```
+
+   You can also skip this step and back up while the instance runs. The copy of
+   the live database may then be inconsistent, if Front Burner wrote to it
+   during the copy, but the copy always holds the day's snapshot in `backups/`,
+   which is consistent. A working copy copied while a git operation changed it
+   may be damaged too.
+
+3. Archive the volume:
+
+   ```sh
+   docker compose run --rm -v "$PWD/volume-backups:/volume-backups" front-burner \
+     tar -czf "/volume-backups/front-burner-data-$(date -u +%Y-%m-%dT%H-%M-%SZ).tar.gz" -C /data .
+   ```
+
+   With a separate repositories volume, archive it too, with `-C /repositories`
+   (the path you mounted it at) and another file name.
+
+   While the instance runs, `tar` may warn that a file changed as it read it,
+   and end with status 1. The archive is still written; such a file is one of
+   those step 2 describes.
+
+4. If you stopped the instance, start it again:
+
+   ```sh
+   docker compose start front-burner
+   ```
+
+5. Copy the archives in `volume-backups/` to another disk or host, and keep a
+   copy of `secrets/` in a separate, safe place.
+
+### Restoring
+
+Restore into the same version of Front Burner that the backup was taken with, or
+a newer one. An older version refuses a database from a newer one (see
+[Going back after an upgrade](#going-back-after-an-upgrade)).
+
+1. Stop the instance:
+
+   ```sh
+   docker compose stop front-burner
+   ```
+
+2. **Restore the secrets first**, at least `secrets/encryption-key`, with the
+   owner and mode of [Secrets](#secrets). With another key, Front Burner does
+   not start, and the log says:
+
+   ```text
+   FRONT_BURNER_ENCRYPTION_KEY does not match the key this instance's secrets were encrypted with.
+   ```
+
+3. Empty the volume and unpack the archive into it:
+
+   ```sh
+   docker compose run --rm -v "$PWD/volume-backups:/volume-backups:ro" front-burner \
+     sh -c 'find /data -mindepth 1 -delete && tar -xzf /volume-backups/<archive> -C /data'
+   ```
+
+   `<archive>` is the archive's file name. With a separate repositories volume,
+   restore it the same way, with `/repositories` in place of `/data`.
+
+4. **Optionally, replace the database with a snapshot.** Do this when the backup
+   was taken while the instance ran, or to go back to an earlier day. List the
+   snapshots:
+
+   ```sh
+   docker compose run --rm front-burner ls -l /data/backups
+   ```
+
+   and put the one you choose in place of the database, removing the database's
+   `-wal` and `-shm` files, which belong to the old database:
+
+   ```sh
+   docker compose run --rm front-burner sh -c \
+     'rm -f /data/db/front-burner.sqlite-wal /data/db/front-burner.sqlite-shm \
+      && cp /data/backups/<snapshot> /data/db/front-burner.sqlite'
+   ```
+
+   Every change to the database since that snapshot is lost: accounts,
+   repositories added or removed, preferences, saved credentials.
+
+5. Start the instance:
+
+   ```sh
+   docker compose start front-burner
+   docker compose ps
+   ```
+
+   The first start after a restore can take minutes with large repositories,
+   since git reads every file again before the port opens (see
+   [Troubleshooting](#troubleshooting)).
+
+On start, Front Burner compares the database with the working copies:
+
+- **A repository whose working copy is missing or damaged** shows "Working copy
+  is missing or damaged" on the repository management page. Its user chooses
+  **Clone again** there. This happens to repositories removed after the snapshot
+  you restored, and to working copies a running backup caught mid-change.
+- **A working copy without a repository** is moved to `orphans/`, never deleted,
+  since it may hold unpushed work. This happens when the database is older than
+  the working copies, for example after restoring a snapshot: repositories added
+  after the snapshot are not in it. The log says, for each one:
+
+  ```text
+  Working copy of repository 12 (user 3) has no repository; moved to orphans/3-12-2026-11-16T10-00-00Z
+  ```
+
+  The folder is a whole git repository, named after the user and repository IDs
+  and the time it was moved.
+
+To recover the work in an orphaned working copy, copy it out of the volume:
+
+```sh
+docker compose cp front-burner:/data/orphans/<folder> ./<folder>
+```
+
+There, `git status` and `git log` show what was not pushed. The user adds the
+repository again in Front Burner; you push the commits from the copy, or give
+the user the files to put back. Then delete the folder from `orphans/`, which
+Front Burner never empties:
+
+```sh
+docker compose exec front-burner rm -rf /data/orphans/<folder>
+```
+
+## Upgrading
+
+Front Burner follows semantic versioning. Any 1.x release upgrades directly to
+any later 1.x release. A new major version may need the last release of the
+previous major version first; its release notes say so.
+
+On start, a new version updates the database if it needs to. Before the first
+change, it writes a **pre-upgrade snapshot** of the database, named after the
+old version, to `backups/`. If an update fails, it is undone, the instance
+stops, and the log says why: the database is as it was, and the old version
+still starts.
+
+There is no upgrade without downtime: the instance is unavailable while it
+restarts, usually for seconds. Running git operations get time to finish (see
+`stop_grace_period` in the [compose example](#compose-example)), and edits that
+were not saved yet stay in the users' browsers until it is back. A browser tab
+left open across the upgrade asks its user to reload.
+
+To upgrade:
+
+1. Read the release notes of every version between yours and the new one, on the
+   [releases](https://github.com/<owner>/front-burner/releases) page.
+2. [Verify the new image](#verifying-the-image).
+3. Optionally, [back up](#backing-up). The pre-upgrade snapshot covers the
+   database, but it is on the same disk.
+4. In `compose.yaml`, change `<version>` in `image` to the new version, then
+   pull the image and restart the instance with it:
+
+   ```sh
+   docker compose pull front-burner
+   docker compose up -d
+   ```
+
+5. Check that it is `healthy`, and see in the log whether the database was
+   updated:
+
+   ```sh
+   docker compose ps
+   docker compose logs front-burner | grep 'Upgrading the database'
+   ```
+
+   If it was, the log names the pre-upgrade snapshot:
+
+   ```text
+   Upgrading the database from 1.4.2 to 1.5.0; snapshot backups/pre-upgrade-v1.4.2-2026-11-17T09-30-15Z-v1.4.2.sqlite
+   ```
+
+   If the instance does not become `healthy`, read the log. If an update of the
+   database failed, put the old version back in `compose.yaml` and run `docker
+   compose up -d` again.
+
+Delete pre-upgrade snapshots of versions you will not go back to; Front Burner
+keeps them until you do.
+
+### Going back after an upgrade
+
+Front Burner cannot run on a database that a newer version has updated. An older
+version refuses to start, and the log says:
+
+```text
+Database is from version 1.5.0; restore the pre-upgrade snapshot to go back
+```
+
+To go back to the version you upgraded from:
+
+1. Stop the instance:
+
+   ```sh
+   docker compose stop front-burner
+   ```
+
+2. If the upgrade wrote no pre-upgrade snapshot, the database was not changed:
+   skip to step 4. Otherwise find it, `pre-upgrade-v<old version>-….sqlite`:
+
+   ```sh
+   docker compose run --rm front-burner ls -l /data/backups
+   ```
+
+3. Put it in place of the database:
+
+   ```sh
+   docker compose run --rm front-burner sh -c \
+     'rm -f /data/db/front-burner.sqlite-wal /data/db/front-burner.sqlite-shm \
+      && cp /data/backups/<snapshot> /data/db/front-burner.sqlite'
+   ```
+
+   Every change to the database since the upgrade is lost, as in a restore.
+
+4. In `compose.yaml`, put back the old version, and start it:
+
+   ```sh
+   docker compose up -d
+   ```
+
+Working copies do not depend on the version, so they stay as they are. Those of
+repositories added since the upgrade move to `orphans/`, and repositories
+removed since then show "Working copy is missing or damaged", as after a
+[restore](#restoring).
 
 ## What this release does not have
 
