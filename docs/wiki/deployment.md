@@ -19,7 +19,10 @@ Installing takes these steps, each a section below:
 
 You need:
 
-- a Linux host for `linux/amd64` with Docker Engine and Docker Compose v2;
+- a Linux host for `linux/amd64` with Docker Engine and Docker Compose v2. The
+  guide assumes Docker's usual daemon, which runs as root; under a rootless
+  daemon or Podman, UID 1000 in the container is another UID on the host, and
+  the `chown 1000:1000` commands below must use that UID instead;
 - a domain name for the instance, for example `notes.example.com`;
 - an **HTTPS** certificate for that domain, or a reverse proxy that gets one for
   you, such as Caddy (see [HTTPS is required](#https-is-required));
@@ -100,14 +103,17 @@ Burner must be able to write to `/data`:
   and in the compose file, `<host-folder>:/data` replaces `data:/data`.
 
 A folder that belongs to another user, often `root`, is the most common reason
-for a first start to fail. Front Burner then stops at once, and the container
-log names the folder and the UID it needs, for example:
+for a first start to fail. Front Burner then exits at once, and Docker starts it
+again and again: `docker compose ps` shows it as `restarting`. The container log
+(`docker compose logs front-burner`) names the folder and the UID it needs, for
+example:
 
 ```text
 The data directory /data/db is not writable by UID 1000
 ```
 
-Fix the owner with `sudo chown -R 1000:1000 <host-folder>` and start again.
+Fix the owner with `sudo chown -R 1000:1000 <host-folder>`; the next restart
+then succeeds.
 
 ### A separate volume for the repositories
 
@@ -237,7 +243,11 @@ What its settings do:
   default of 10 seconds would cut them short.
 - **`ports`** publishes the instance on the host's `127.0.0.1` only, where a
   reverse proxy on the same host reaches it. Do not publish it on all addresses:
-  users must reach it over HTTPS.
+  users must reach it over HTTPS. Every program on the host can use this port,
+  and Front Burner trusts the forwarded headers it sends there, so on a host
+  that other people can log in to, run the reverse proxy in Compose instead and
+  delete these lines (see
+  [Caddy next to the compose example](#caddy-next-to-the-compose-example)).
 - **`read_only`, `tmpfs`, `cap_drop` and `no-new-privileges`** harden the
   container: nothing can change the image's files, and processes in it cannot
   gain privileges. Front Burner needs nothing more. Keep them.
@@ -332,10 +342,15 @@ volumes:
   caddy-config:
 ```
 
-`docker compose up -d` then starts both. Caddy reaches Front Burner by its
-service name, on the network that Docker Compose creates for them. Front Burner
-trusts the forwarded headers of proxies on private networks, such as that one,
-without any setting.
+Caddy reaches Front Burner by its service name, on the network that Docker
+Compose creates for them, so **delete the two `ports` lines of the
+`front-burner` service** in `compose.yaml`. Front Burner trusts the forwarded
+headers of every address on a private network, such as that one, without any
+setting; a published port would let any program on the host connect through
+Docker's own private address and set those headers itself, for example to get
+around the limit on login attempts.
+
+`docker compose up -d` then starts both.
 
 ## First start
 
@@ -525,9 +540,9 @@ docker compose start front-burner
 
 ## Troubleshooting
 
-**The container stops at once, and the log says "is not writable by UID 1000".**
-The data volume, or the repositories volume, belongs to another user. See
-[Volumes and the UID](#volumes-and-the-uid).
+**The container keeps restarting, and the log says "is not writable by UID
+1000".** The data volume, or the repositories volume, belongs to another user.
+See [Volumes and the UID](#volumes-and-the-uid).
 
 **The log says that `FRONT_BURNER_JWT_SECRET_FILE` or another `…_FILE`
 variable's file could not be read.** The secret file does not exist, or UID 1000

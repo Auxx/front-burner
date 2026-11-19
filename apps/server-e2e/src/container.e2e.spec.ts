@@ -1,7 +1,7 @@
 import { type GitHttpServer, startGitHttpServer } from '@front-burner/server-core-git/testing';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Container, E2E_IMAGE, startContainer } from './support/container';
 import { waitFor } from './support/git-api';
@@ -13,7 +13,9 @@ import { BUILD_VERSION, E2E_ADMIN, E2E_SETUP_TOKEN } from './support/server-proc
  * healthy, works, survives a restart and stops cleanly, and the deployment
  * guide's compose example starts it. Runs only when
  * `E2E_IMAGE` names an image, as the `image` job of CI does after its scan.
- * Needs Docker on Linux, for host networking (`support/container-compose.yaml`):
+ * Needs Docker on Linux, for host networking (`support/container-compose.yaml`),
+ * and Docker Compose 2.24.4 or later, for the `!override` tag of
+ * `support/example-override.yaml`:
  *
  *   docker build -f tools/docker/Dockerfile -t front-burner:test .
  *   E2E_IMAGE=front-burner:test npx nx run server-e2e:e2e-container
@@ -228,14 +230,6 @@ describe.skipIf(E2E_IMAGE === undefined)('the release image (NF-11.13)', { timeo
         ...E2E_ADMIN
       });
       expect(onboarded.status).toBe(204);
-    });
-
-    it('the guide quotes the example as it is', () => {
-      const wiki = resolve(import.meta.dirname, '../../../docs/wiki');
-      const example = readFileSync(join(wiki, 'compose.example.yaml'), 'utf8');
-      const guide = readFileSync(join(wiki, 'deployment.md'), 'utf8');
-
-      expect(guide).toContain('```yaml\n' + example + '```\n');
     });
   });
 

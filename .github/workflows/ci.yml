@@ -53,6 +53,11 @@ jobs:
       - name: Shared Vitest settings
         run: npm run check:vitest
 
+      # The guide's copy of its compose example; on every change, as a change
+      # to the guide alone skips the image job.
+      - name: Deployment guide
+        run: npm run check:guide
+
       - name: Type check, lint
         run: npx nx affected -t typecheck lint --parallel=3
 
