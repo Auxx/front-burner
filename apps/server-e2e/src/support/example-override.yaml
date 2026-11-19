@@ -1,0 +1,17 @@
+# Laid over the deployment guide's compose example (docs/wiki/compose.example.yaml)
+# by container.e2e.spec.ts: the image under test, a free port and test-only
+# secrets. Everything else, the hardening included, is the example's own.
+
+services:
+  front-burner:
+    image: ${E2E_IMAGE:?the image to test}
+    ports: !override
+      - 127.0.0.1:${E2E_PORT:?a free port}:8080
+
+secrets:
+  front-burner-jwt-secret:
+    file: ${E2E_SECRETS:?the test secrets' folder}/jwt-secret
+  front-burner-encryption-key:
+    file: ${E2E_SECRETS:?the test secrets' folder}/encryption-key
+  front-burner-setup-token:
+    file: ${E2E_SECRETS:?the test secrets' folder}/setup-token

@@ -53,6 +53,11 @@ jobs:
       - name: Shared Vitest settings
         run: npm run check:vitest
 
+      # The guide's copy of its compose example; on every change, as a change
+      # to the guide alone skips the image job.
+      - name: Deployment guide
+        run: npm run check:guide
+
       - name: Type check, lint
         run: npx nx affected -t typecheck lint --parallel=3
 
@@ -245,6 +250,8 @@ jobs:
               # The container suite, with the helpers and the config it runs with.
               apps/server-e2e/*/container*.e2e.spec.ts | apps/server-e2e/src/support/*) return 0 ;;
               apps/server-e2e/project.json | apps/server-e2e/vitest.config.mts) return 0 ;;
+              # The deployment guide's compose example, which the suite starts.
+              docs/wiki/compose.example.yaml) return 0 ;;
               .github/workflows/ci.yml | .github/actions/*) return 0 ;;
               docs/* | *.md) return 1 ;;
               *.spec.ts | *.stories.ts | .storybook/* | */.storybook/*) return 1 ;;

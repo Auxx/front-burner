@@ -10,9 +10,12 @@ import { BUILD_VERSION, E2E_ADMIN, E2E_SETUP_TOKEN } from './support/server-proc
 
 /**
  * The release image under NF-11.13's hardening (exit criterion 2): it becomes
- * healthy, works, survives a restart and stops cleanly. Runs only when
+ * healthy, works, survives a restart and stops cleanly, and the deployment
+ * guide's compose example starts it. Runs only when
  * `E2E_IMAGE` names an image, as the `image` job of CI does after its scan.
- * Needs Docker on Linux, for host networking (`support/container-compose.yaml`):
+ * Needs Docker on Linux, for host networking (`support/container-compose.yaml`),
+ * and Docker Compose 2.24.4 or later, for the `!override` tag of
+ * `support/example-override.yaml`:
  *
  *   docker build -f tools/docker/Dockerfile -t front-burner:test .
  *   E2E_IMAGE=front-burner:test npx nx run server-e2e:e2e-container
@@ -198,6 +201,35 @@ describe.skipIf(E2E_IMAGE === undefined)('the release image (NF-11.13)', { timeo
 
       // NF-9.5: the stop left the clone running; the next start fails it (AR-54).
       expect(await statusOf(heldId)).toMatchObject({ status: 'error', error: 'clone-failed' });
+    });
+  });
+
+  describe('the deployment guide', () => {
+    let container: Container | undefined;
+
+    afterAll(async () => {
+      await container?.remove();
+    }, SLOW_MS);
+
+    it('the guide\'s compose example becomes healthy', async () => {
+      // docs/wiki/compose.example.yaml with only the image, the port and the secret files replaced.
+      container = await startContainer({ example: true });
+
+      const { State, Config, HostConfig } = await container.inspect();
+      expect(State.Health?.Status).toBe('healthy');
+      expect(Config.User).toBe('1000:1000');
+      expect(HostConfig.ReadonlyRootfs).toBe(true);
+      expect(HostConfig.CapDrop).toEqual([ 'ALL' ]);
+      expect(HostConfig.SecurityOpt).toContain('no-new-privileges:true');
+      // NF-9.1.
+      expect(HostConfig.RestartPolicy.Name).toBe('unless-stopped');
+      expect(Config.StopTimeout).toBe(30);
+      // The secrets came from their files: the setup token from one is accepted.
+      const onboarded = await call(container, 'POST', '/api/v1/onboarding/password-setup', undefined, {
+        setupToken: E2E_SETUP_TOKEN,
+        ...E2E_ADMIN
+      });
+      expect(onboarded.status).toBe(204);
     });
   });
 

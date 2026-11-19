@@ -429,6 +429,9 @@ These rules add to the security rules already in the requirements.
   healthy, that onboarding, login, a clone and a save work, that a session
   survives a restart, that a stop during a clone ends within the grace period
   (NF-9.2, NF-9.5), and that a `/data` of another UID stops the start (NF-5.6).
+  The suite also starts the guide's example itself
+  (`docs/wiki/compose.example.yaml`), with only the image, the port and the
+  secret files replaced, and checks that it becomes healthy with that hardening.
 
 ## NF-12: Browser and device support
 

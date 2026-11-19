@@ -1,0 +1,58 @@
+# Front Burner: the compose example of the deployment guide
+# (docs/wiki/deployment.md, "Compose example").
+#
+# Replace <owner> and <version> in `image` below, create the three secret files
+# in ./secrets as the guide's "Secrets" describes, then:
+#
+#   docker compose up -d
+#
+# The instance listens on 127.0.0.1:8080 only, for a reverse proxy on the same
+# host that serves it over HTTPS (the guide's "How to set up HTTPS").
+#
+# CI starts this file, with a test image and test secrets, in the container
+# suite of server-e2e (container.e2e.spec.ts).
+
+services:
+  front-burner:
+    image: ghcr.io/<owner>/front-burner:<version>
+    restart: unless-stopped
+    # Time for running git operations to finish on a stop (Docker's default is 10s).
+    stop_grace_period: 30s
+    ports:
+      - 127.0.0.1:8080:8080
+    environment:
+      FRONT_BURNER_JWT_SECRET_FILE: /run/secrets/front-burner-jwt-secret
+      FRONT_BURNER_ENCRYPTION_KEY_FILE: /run/secrets/front-burner-encryption-key
+      # Only for creating the first administrator; ignored once one exists.
+      FRONT_BURNER_SETUP_TOKEN_FILE: /run/secrets/front-burner-setup-token
+      # With a separate repositories volume (below):
+      # FRONT_BURNER_REPOS_DIR: /repositories
+    secrets:
+      - front-burner-jwt-secret
+      - front-burner-encryption-key
+      - front-burner-setup-token
+    volumes:
+      - data:/data
+      # Optional: working copies on another disk. The folder must exist and
+      # belong to UID 1000 (the guide's "Volumes and the UID").
+      # - /srv/front-burner-repositories:/repositories
+    # Hardening: Front Burner writes only to /data, the repositories
+    # directory and /tmp, and needs no privileges.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  front-burner-jwt-secret:
+    file: ./secrets/jwt-secret
+  front-burner-encryption-key:
+    file: ./secrets/encryption-key
+  front-burner-setup-token:
+    file: ./secrets/setup-token
+
+volumes:
+  data:

@@ -1,13 +1,24 @@
 import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { freePort } from './server-process';
+import { E2E_SETUP_TOKEN, freePort } from './server-process';
 
 const run = promisify(execFile);
 
 const COMPOSE_FILE = resolve(import.meta.dirname, 'container-compose.yaml');
+/** The deployment guide's compose example, and what the suite lays over it. */
+const EXAMPLE_FILES = [
+  resolve(import.meta.dirname, '../../../../docs/wiki/compose.example.yaml'),
+  resolve(import.meta.dirname, 'example-override.yaml')
+];
+/** Test-only values for the example's secret files. */
+const EXAMPLE_SECRETS: Record<string, string> = {
+  'jwt-secret': 'server-e2e-example-jwt-secret-0123456789abcdefghijk',
+  'encryption-key': 'server-e2e-example-encryption-key-0123456789abcdefg',
+  'setup-token': E2E_SETUP_TOKEN
+};
 /** The certificate of the git test servers, mounted read-only into the container. */
 const TEST_CERTIFICATE = resolve(
   import.meta.dirname,
@@ -31,6 +42,12 @@ export interface ContainerOptions {
    * the guide's `restart: unless-stopped` (NF-9.1) and must become healthy.
    */
   expectFailedStart?: boolean;
+  /**
+   * Starts the deployment guide's compose example (`docs/wiki/compose.example.yaml`)
+   * instead of `container-compose.yaml`, with only the image, the port and the
+   * secret files replaced. `env` and `dataOwner` do not apply to it.
+   */
+  example?: boolean;
 }
 
 export interface Container {
@@ -53,8 +70,13 @@ export interface Container {
 
 export interface ContainerState {
   State: { Status: string; ExitCode: number; OOMKilled: boolean; Health?: { Status: string; }; };
-  Config: { User: string; };
-  HostConfig: { ReadonlyRootfs: boolean; CapDrop: string[] | null; SecurityOpt: string[] | null; };
+  Config: { User: string; StopTimeout?: number; };
+  HostConfig: {
+    ReadonlyRootfs: boolean;
+    CapDrop: string[] | null;
+    SecurityOpt: string[] | null;
+    RestartPolicy: { Name: string; };
+  };
 }
 
 /**
@@ -73,6 +95,12 @@ export async function startContainer(options: ContainerOptions = {}): Promise<Co
     envFile,
     Object.entries(options.env ?? {}).map(([ name, value ]) => `${name}=${value}\n`).join('')
   );
+  const secrets = join(work, 'secrets');
+  mkdirSync(secrets);
+  for (const [ name, value ] of Object.entries(EXAMPLE_SECRETS)) {
+    // Readable by the container's UID 1000 whoever runs the suite; the guide gives them to UID 1000 instead.
+    writeFileSync(join(secrets, name), `${value}\n`, { mode: 0o444 });
+  }
   const project = `front-burner-e2e-${port}`;
   const composeEnv = {
     ...process.env,
@@ -80,10 +108,12 @@ export async function startContainer(options: ContainerOptions = {}): Promise<Co
     E2E_PORT: String(port),
     E2E_ENV_FILE: envFile,
     E2E_CERTIFICATE: TEST_CERTIFICATE,
+    E2E_SECRETS: secrets,
     E2E_RESTART: options.expectFailedStart === true ? 'no' : 'unless-stopped'
   };
+  const files = (options.example === true ? EXAMPLE_FILES : [ COMPOSE_FILE ]).flatMap(file => [ '-f', file ]);
   const compose = async (...args: string[]): Promise<string> => {
-    const { stdout } = await run('docker', [ 'compose', '-p', project, '-f', COMPOSE_FILE, ...args ], {
+    const { stdout } = await run('docker', [ 'compose', '-p', project, ...files, ...args ], {
       env: composeEnv,
       maxBuffer: 64 * 1024 * 1024
     });
