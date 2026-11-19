@@ -157,6 +157,30 @@ engines, e.g. `E2E_BROWSERS=chromium,firefox,webkit`) to choose the browsers
 yourself. Dependabot opens weekly update pull requests for npm packages and
 GitHub Actions.
 
+## Releases
+
+The release workflow (`.github/workflows/release.yml`) runs when a tag
+`v<major>.<minor>.<patch>` is pushed, optionally with a pre-release part such as
+`v1.0.0-rc.1`; any other tag fails before the build. It builds
+`tools/docker/Dockerfile` for `linux/amd64` with the tag's version, scans it
+with Trivy (a vulnerability stops the release), checks that it reports the
+version, and pushes it to `ghcr.io/<owner>/front-burner` as `<version>` and, for
+a version without a pre-release part, as `<major>.<minor>` and `latest`. It
+signs the pushed image with keyless cosign, attests its build provenance and its
+CycloneDX SBOM, verifies the signature, and creates a draft GitHub release with
+the SBOM attached and the notes from `.github/release-notes.md`.
+
+To make a release:
+
+1. Push the tag: `git tag v1.0.0 && git push origin v1.0.0`.
+2. When the workflow has finished, open the draft release, complete its
+   "Changes" and "Upgrading" sections, and publish it.
+
+Tag the newest version last: `latest` moves to whichever stable version was
+tagged most recently. Run the workflow from the Actions tab (Run workflow) for a
+dry run: it builds, scans, checks the version and makes the SBOM, kept as the
+run's `sbom` artifact, but pushes, signs and releases nothing.
+
 ## Install Nx Console
 
 Nx Console is an editor extension that enriches your developer experience. It
