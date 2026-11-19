@@ -691,8 +691,10 @@ Give the instance at least:
 A repository's size is the size of a full clone, `.git` included; for a
 single-branch clone it is smaller. The database itself stays small: it holds
 accounts, settings and the login audit log, not the content of files. Each
-snapshot is a copy of it, and `backups/` keeps eight or so (seven daily ones and
-a pre-upgrade snapshot per version you upgraded from).
+snapshot is a copy of it, and `backups/` keeps `FRONT_BURNER_DB_SNAPSHOT_KEEP`
+daily ones (7 by default) and a pre-upgrade snapshot per version you upgraded
+from. 1 GB is plenty with the defaults; if you keep many more snapshots, allow
+the database's size for each of them.
 
 For example, five users who each add ten repositories of about 200 MB need 5 ×
 10 × 200 MB = 10 GB, plus 1 GB for `tmp/`, 2 GB for the threshold and 1 GB for
@@ -738,7 +740,9 @@ while it runs (see [Database snapshots](#database-snapshots)):
 
 - a **daily snapshot**, such as
   `front-burner-2026-11-17T09-30-15Z-v1.4.2.sqlite`: the time it was written, in
-  UTC, and the version that wrote it. The last seven are kept.
+  UTC, and the version that wrote it. By default one is written a day and the
+  last seven are kept; `FRONT_BURNER_DB_SNAPSHOT_INTERVAL` and
+  `FRONT_BURNER_DB_SNAPSHOT_KEEP` change both.
 - a **pre-upgrade snapshot**, such as
   `pre-upgrade-v1.4.2-2026-11-17T09-30-15Z-v1.4.2.sqlite`, written before an
   upgrade changes the database (see [Upgrading](#upgrading)). The newest one for
@@ -782,9 +786,10 @@ instead.
 
    You can also skip this step and back up while the instance runs. The copy of
    the live database may then be inconsistent, if Front Burner wrote to it
-   during the copy, but the copy always holds the day's snapshot in `backups/`,
-   which is consistent. A working copy copied while a git operation changed it
-   may be damaged too.
+   during the copy, but the copy always holds the newest snapshot in `backups/`,
+   which is consistent: at most a day old with the default
+   `FRONT_BURNER_DB_SNAPSHOT_INTERVAL`. A working copy copied while a git
+   operation changed it may be damaged too.
 
 3. Archive the volume:
 
@@ -794,11 +799,17 @@ instead.
    ```
 
    With a separate repositories volume, archive it too, with `-C /repositories`
-   (the path you mounted it at) and another file name.
+   (the path you mounted it at), another file name, and `--exclude=./lost+found`
+   before `-C`: a new file system's `lost+found/` belongs to `root`, and UID
+   1000 cannot read it.
 
-   While the instance runs, `tar` may warn that a file changed as it read it,
-   and end with status 1. The archive is still written; such a file is one of
-   those step 2 describes.
+   While the instance runs, `tar` may warn that a file changed as it read it
+   ("file changed as we read it", status 1), or that one vanished before it read
+   it ("No such file or directory" or "File removed before we read it", status
+   2), as git and the database remove their lock and journal files. The archive
+   is still written; such a file is one of those step 2 describes. Any other
+   message, such as "Permission denied" or "No space left on device", means the
+   archive is not complete.
 
 4. If you stopped the instance, start it again:
 
@@ -826,18 +837,23 @@ a newer one. An older version refuses a database from a newer one (see
    not start, and the log says:
 
    ```text
-   FRONT_BURNER_ENCRYPTION_KEY does not match the key this instance's secrets were encrypted with.
+   Startup failed at step "encryption-key": FRONT_BURNER_ENCRYPTION_KEY does not match the key this instance's secrets were encrypted with. Use the right key, or start once with FRONT_BURNER_ENCRYPTION_KEY_RESET=confirm to delete every stored secret (NF-8.6).
    ```
+
+   During a restore, do not reset: it deletes every password, token and SSH key
+   that users saved. Find the key that belongs to the backup and restore it.
 
 3. Empty the volume and unpack the archive into it:
 
    ```sh
    docker compose run --rm -v "$PWD/volume-backups:/volume-backups:ro" front-burner \
-     sh -c 'find /data -mindepth 1 -delete && tar -xzf /volume-backups/<archive> -C /data'
+     sh -c 'find /data -mindepth 1 -maxdepth 1 ! -name lost+found -exec rm -rf {} + \
+       && tar -xzf /volume-backups/<archive> -C /data'
    ```
 
    `<archive>` is the archive's file name. With a separate repositories volume,
-   restore it the same way, with `/repositories` in place of `/data`.
+   restore it the same way, with `/repositories` in place of `/data`; the
+   command leaves its `lost+found/` alone.
 
 4. **Optionally, replace the database with a snapshot.** Do this when the backup
    was taken while the instance ran, or to go back to an earlier day. List the
@@ -928,7 +944,10 @@ To upgrade:
 2. [Verify the new image](#verifying-the-image).
 3. Optionally, [back up](#backing-up). The pre-upgrade snapshot covers the
    database, but it is on the same disk.
-4. In `compose.yaml`, change `<version>` in `image` to the new version, then
+4. In `compose.yaml`, change `<version>` in `image` to the new version. If the
+   image ends with `@sha256:<digest>`, replace the digest with the one `cosign
+   verify` printed for the new image, or remove it: Docker uses the digest and
+   ignores the tag, so the old digest would start the old version again. Then
    pull the image and restart the instance with it:
 
    ```sh
@@ -936,15 +955,16 @@ To upgrade:
    docker compose up -d
    ```
 
-5. Check that it is `healthy`, and see in the log whether the database was
-   updated:
+5. Check that it is `healthy` and runs the new version, and see whether the
+   database was updated:
 
    ```sh
    docker compose ps
-   docker compose logs front-burner | grep 'Upgrading the database'
+   docker compose exec front-burner ls -l /data/backups
    ```
 
-   If it was, the log names the pre-upgrade snapshot:
+   If it was, `backups/` holds a new `pre-upgrade-v<old version>-….sqlite`
+   snapshot, and at the default log level the log names it:
 
    ```text
    Upgrading the database from 1.4.2 to 1.5.0; snapshot backups/pre-upgrade-v1.4.2-2026-11-17T09-30-15Z-v1.4.2.sqlite
@@ -974,8 +994,10 @@ To go back to the version you upgraded from:
    docker compose stop front-burner
    ```
 
-2. If the upgrade wrote no pre-upgrade snapshot, the database was not changed:
-   skip to step 4. Otherwise find it, `pre-upgrade-v<old version>-….sqlite`:
+2. If the upgrade wrote no pre-upgrade snapshot, the database's schema was not
+   changed and the old version starts on it: skip to step 4. Otherwise find the
+   snapshot, `pre-upgrade-v<old version>-….sqlite`, written at the time of the
+   upgrade:
 
    ```sh
    docker compose run --rm front-burner ls -l /data/backups
@@ -991,7 +1013,8 @@ To go back to the version you upgraded from:
 
    Every change to the database since the upgrade is lost, as in a restore.
 
-4. In `compose.yaml`, put back the old version, and start it:
+4. In `compose.yaml`, put back the old version, with its digest if you pin one,
+   and start it:
 
    ```sh
    docker compose up -d
