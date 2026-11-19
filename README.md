@@ -138,13 +138,15 @@ production dependencies in `package-lock.json`. The `image` job builds
 `tools/docker/Dockerfile` and scans the image with Trivy, failing on a high or
 critical vulnerability that has a fix. It runs on every push to `master`, and on
 a pull request unless every changed file is one the image does not contain
-(docs, Markdown, tests, stories, the e2e suites, `tools/ai-tools`,
-`tools/lint-rules` and `.github`, apart from `ci.yml` and `.github/actions`).
-The image is scanned in CI only. Run the same checks locally with `npm run
-format:check`, `npm run check:tags` and `npx nx affected -t typecheck lint test
-build test-storybook e2e`. Node.js is pinned to 24.22.1 in `.nvmrc`, and
-`.npmrc` sets `engine-strict`, so `npm ci` refuses an older Node.js. Accepted
-Trivy findings go in `.trivyignore`, with a reason and a review date.
+(docs, Markdown, tests, stories, the e2e suites apart from server-e2e's
+container suites, `tools/ai-tools`, `tools/lint-rules` and `.github` apart from
+`ci.yml` and `.github/actions`). Its runtime stage is rebuilt every time, so the
+scan sees current OS packages. Nothing scans the image on a schedule. The image
+is scanned in CI only. Run the same checks locally with `npm run format:check`,
+`npm run check:tags` and `npx nx affected -t typecheck lint test build
+test-storybook e2e`. Node.js is pinned to 24.22.1 in `.nvmrc`, and `.npmrc` sets
+`engine-strict`, so `npm ci` refuses an older Node.js. Accepted Trivy findings
+go in `.trivyignore`, with a reason and a review date.
 
 CI runs the web e2e suite in Chromium only. A nightly workflow
 (`.github/workflows/nightly.yml`) runs it in Chromium, Firefox and WebKit, on

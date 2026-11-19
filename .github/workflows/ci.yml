@@ -212,8 +212,9 @@ jobs:
 
   # The release image (tools/docker/Dockerfile), built and scanned with Trivy
   # (NF-11.10, NF-11.11). It runs on every push to master, so that a base image
-  # update that brings a vulnerability fails the next run. A pull request skips
-  # it when every changed file is one the image does not contain.
+  # or OS package update that brings a vulnerability fails the next push to
+  # master. Nothing scans the image on a schedule. A pull request skips it when
+  # every changed file is one the image does not contain.
   image:
     name: Image build and scan
     runs-on: ubuntu-latest
@@ -222,17 +223,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The skip decision compares the pull request with its base.
-          fetch-depth: 0
+          # On a pull request HEAD is the merge commit; its first parent is
+          # the base, so the skip decision needs one commit of history.
+          fetch-depth: 2
 
       # A list of what to skip, not of what to run: a new folder is built and
-      # scanned until it is added here. Container suites in server-e2e run in
-      # this job, so they are not skipped.
+      # scanned until it is added here. Container suites in server-e2e are not
+      # skipped, as plan 138 will run them in this job.
       - name: Changed files
         id: changes
         env:
           EVENT: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           image_file() {
             case "$1" in
@@ -251,13 +252,17 @@ jobs:
           if [ "$EVENT" != pull_request ]; then
             needed=true
           else
+            # Exactly what the pull request changes. A failed diff fails the
+            # step instead of skipping the scan. Without rename detection, a
+            # file moved out of the image is listed under its old path too.
+            files=$(git diff --name-only --no-renames HEAD^1 HEAD)
             while IFS= read -r file; do
-              if image_file "$file"; then
+              if [ -n "$file" ] && image_file "$file"; then
                 echo "Changes the image: $file"
                 needed=true
                 break
               fi
-            done < <(git diff --name-only "$BASE_SHA" HEAD)
+            done <<< "$files"
           fi
           echo "needed=$needed" >> "$GITHUB_OUTPUT"
           if [ "$needed" = false ]; then
@@ -276,6 +281,11 @@ jobs:
           tags: front-burner:ci
           load: true
           push: false
+          # The base image's newest digest, and the runtime stage (its OS
+          # packages) built afresh, so the scan sees what a release build
+          # would ship; the build stages still come from the cache.
+          pull: true
+          no-cache-filters: runtime
           cache-from: type=gha,scope=image
           cache-to: type=gha,scope=image,mode=max
 
