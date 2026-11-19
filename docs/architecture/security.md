@@ -39,12 +39,12 @@ top of the security rules in the requirements and NF-11. See
   new password twice from standard input (without echo on a terminal, or as two
   lines from a pipe), never from the arguments, checks it against the password
   policy (REQ-AUTH-002) and, in one transaction, stores its hash and revokes
-  every session of the user. Only a password user can be reset. It logs one line
-  at `warn` with the user's ID and writes nothing to the login audit log, as a
-  reset is not a login attempt. It does not detect a running instance, whose
-  session cache would still accept the revoked sessions; the command's `--help`
-  and the deployment guide say to stop the instance first (NF-4.2). Any refusal
-  is one line on standard error and exit code 1.
+  every session of the user. Only a password user who is not disabled can be
+  reset. It logs one line at `warn` with the user's ID and writes nothing to the
+  login audit log, as a reset is not a login attempt. It does not detect a
+  running instance, whose session cache would still accept the revoked sessions;
+  the command's `--help` and the deployment guide say to stop the instance first
+  (NF-4.2). Any refusal is one line on standard error and exit code 1.
 
 ## A-7: Authorisation
 

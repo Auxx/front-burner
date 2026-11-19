@@ -70,7 +70,12 @@ export async function resetPassword(options: ResetPasswordOptions): Promise<numb
     }
 
     const email = options.email.trim();
-    const user = database.db.select({ id: users.id, email: users.email, loginMethod: users.loginMethod })
+    const user = database.db.select({
+      id: users.id,
+      email: users.email,
+      loginMethod: users.loginMethod,
+      disabled: users.disabled
+    })
       .from(users)
       .where(sql`lower(${users.email}) = lower(${email})`)
       .get();
@@ -79,6 +84,10 @@ export async function resetPassword(options: ResetPasswordOptions): Promise<numb
     }
     if (user.loginMethod !== 'password') {
       throw new Refusal('This user signs in with OIDC');
+    }
+    // A disabled user cannot log in or reset their password (LG-13).
+    if (user.disabled) {
+      throw new Refusal('This user is disabled');
     }
 
     const entries = await readPasswordTwice(options.input, options.output);

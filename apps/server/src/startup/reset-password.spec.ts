@@ -190,6 +190,15 @@ describe('resetPassword', () => {
     await expectUnchanged();
   });
 
+  it('refuses a disabled user', async () => {
+    withDatabase(database => database.db.update(users).set({ disabled: true }).where(eq(users.id, adminId)).run());
+
+    expect(await run(ADMIN_EMAIL, `${NEW_PASSWORD}\n${NEW_PASSWORD}\n`)).toBe(1);
+
+    expect(output).toBe('This user is disabled\n');
+    await expectUnchanged();
+  });
+
   it('refuses an OIDC user', async () => {
     expect(await run('oidc@example.com', `${NEW_PASSWORD}\n${NEW_PASSWORD}\n`)).toBe(1);
 

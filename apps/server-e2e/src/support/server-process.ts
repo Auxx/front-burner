@@ -315,10 +315,13 @@ export async function runServerCommand(
   let stderr = '';
   child.stdout.on('data', chunk => (stdout += chunk));
   child.stderr.on('data', chunk => (stderr += chunk));
+  // 'close', not 'exit': it comes after stdout and stderr are read to the end.
   const exited = new Promise<number | null>(resolveExit => {
-    child.on('exit', code => resolveExit(code));
+    child.on('close', code => resolveExit(code));
     child.on('error', () => resolveExit(null));
   });
+  // A command that refuses before reading its input closes the pipe (EPIPE).
+  child.stdin.on('error', () => undefined);
   child.stdin.end(input);
   try {
     const code = await within(exited, `Running ${args.join(' ')}`, () => stdout + stderr);
