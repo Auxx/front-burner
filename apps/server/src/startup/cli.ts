@@ -1,18 +1,58 @@
 const OPENAPI_FLAG = '--write-openapi';
+const HELP_FLAG = '--help';
+const RESET_PASSWORD = 'reset-password';
+
+/** What `node main.js` was asked to do. */
+export type Command =
+  | { kind: 'serve'; }
+  | { kind: 'write-openapi'; file: string; }
+  | { kind: 'reset-password'; email: string; }
+  | { kind: 'help'; };
+
+/** The text of `--help`. */
+export const USAGE = `Usage:
+  node main.js                          Start the instance.
+  node main.js reset-password <email>   Set a new password for a password user and revoke
+                                        every session of theirs. The new password is read
+                                        from standard input, twice.
+                                        Stop the instance first and run this in a new
+                                        container on its volumes (docker compose run --rm),
+                                        never with docker exec in the running one: a running
+                                        instance keeps accepting the revoked sessions.
+  node main.js --write-openapi <file>   Write the API's OpenAPI document and exit.
+  node main.js --help                   Show this help.
+`;
 
 /**
- * The file named by `--write-openapi <file>`, or `undefined` without the flag.
+ * Parses the process arguments (`process.argv`).
  *
- * @throws Error when the flag has no file after it.
+ * @throws Error with a one-line reason for arguments that make no command.
  */
-export function parseOpenApiFile(argv: string[]): string | undefined {
-  const flag = argv.indexOf(OPENAPI_FLAG);
-  if (flag < 0) {
-    return undefined;
+export function parseCommand(argv: string[]): Command {
+  const args = argv.slice(2);
+  if (args.includes(HELP_FLAG)) {
+    return { kind: 'help' };
   }
-  const file = argv[flag + 1];
-  if (file === undefined || file.startsWith('--')) {
-    throw new Error(`${OPENAPI_FLAG} needs a file to write the document to`);
+  if (args[0] === RESET_PASSWORD) {
+    const email = args[1];
+    if (email === undefined || email.startsWith('--')) {
+      throw new Error(`${RESET_PASSWORD} needs the user's email`);
+    }
+    if (args.length > 2) {
+      throw new Error(`${RESET_PASSWORD} takes only the user's email; the password is read from standard input`);
+    }
+    return { kind: 'reset-password', email };
   }
-  return file;
+  const flag = args.indexOf(OPENAPI_FLAG);
+  if (flag >= 0) {
+    const file = args[flag + 1];
+    if (file === undefined || file.startsWith('--')) {
+      throw new Error(`${OPENAPI_FLAG} needs a file to write the document to`);
+    }
+    return { kind: 'write-openapi', file };
+  }
+  if (args.length > 0) {
+    throw new Error(`Unknown argument ${args[0]}; see --help`);
+  }
+  return { kind: 'serve' };
 }

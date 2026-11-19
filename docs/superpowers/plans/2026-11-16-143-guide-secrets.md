@@ -22,7 +22,10 @@ has two procedures:
   logged if it stays.
 - **A lost password** (plan 136): stop the instance, `docker compose run --rm
   front-burner node main.js reset-password <email>`, start it; every session of
-  that user ends. An OIDC administrator recovers through their provider instead.
+  that user ends. The guide warns, as A-7.2a does, never to use `docker exec` in
+  the running container: the command does not detect a running instance, which
+  would keep accepting the revoked sessions. An OIDC administrator recovers
+  through their provider instead.
 
 **Tech Stack:** Markdown.
 
@@ -40,8 +43,9 @@ NF-8.5, NF-8.6; `docs/product/mvp.md` ("Risks"); plan 136.
 
 ## Review Focus
 
-- **Running `reset-password` while the instance runs** is refused (plan 136):
-  the procedure stops it first.
+- **Running `reset-password` while the instance runs** is not detected (plan
+  136, A-7.2a): the procedure stops the instance first, uses `docker compose run
+  --rm`, and warns against `docker exec`.
 - **Leaving `FRONT_BURNER_ENCRYPTION_KEY_RESET` set** after a reset deletes
   nothing but logs a warning: the procedure says so, so that nobody panics.
 

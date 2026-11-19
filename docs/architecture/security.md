@@ -31,6 +31,26 @@ top of the security rules in the requirements and NF-11. See
   sessions are cached in memory, which one process allows (NF-4.2). Revoking a
   session (LG-37) removes it from the cache, closes its push channel streams
   (A-3.10) and drops its key unlocks (AR-31).
+- **A-7.2a** **A lost password.** Without SMTP there is no password reset by
+  email (LG-48), so the operator gets back in with a command run in the
+  container while the instance is stopped: `node main.js reset-password
+  <email>`. It loads the configuration and opens the database, refuses one that
+  needs migrations or is newer (NF-7.3), and touches nothing else. It reads the
+  new password twice from standard input (without echo on a terminal, or as two
+  lines from a pipe), never from the arguments, checks it against the password
+  policy (REQ-AUTH-002) and, in one transaction, stores its hash and revokes
+  every session of the user. Only a password user who is not disabled can be
+  reset. It logs one line at `warn` with the user's ID and writes nothing to the
+  login audit log, as a reset is not a login attempt. Any refusal is one line on
+  standard error and exit code 1.
+
+  The command does not detect a running instance _(accepted limit)_. A running
+  instance caches active sessions in memory (A-7.2, NF-4.2) and would go on
+  accepting the sessions the command revoked until it restarts, which defeats
+  the reset when a session was stolen. So the command runs only in a new
+  container on the stopped instance's volumes (`docker compose run --rm`), never
+  with `docker exec` in the running container, whose main process is the
+  instance itself. The command's `--help` and the deployment guide say so.
 
 ## A-7: Authorisation
 
