@@ -1,3 +1,4 @@
+export * from './auth/access-extension';
 export * from './auth/admin-only.decorator';
 export * from './auth/auth-of';
 export * from './auth/public.decorator';
