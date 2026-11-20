@@ -51,6 +51,7 @@ export class AuthController {
   /** Exchanges a refresh token for new tokens and rotates it (LG-35, LG-36). */
   @Post('session/refresh')
   @HttpCode(200)
+  @RateLimitGroup('refresh')
   @ApiOkResponse({ type: SessionTokensDto })
   @ZodSerializerDto(SessionTokensDto)
   async refresh(

@@ -18,6 +18,8 @@ export const RATE_LIMIT_GROUPS: Record<string, { limit: number; per: 'ip' | 'use
   'setup-token': { limit: 10, per: 'ip' },
   login: { limit: 10, per: 'ip' },
   oidc: { limit: 10, per: 'ip' },
+  // NF-11.4's unauthenticated limit, also for a refresh that carries a valid auth token (plan 145).
+  refresh: { limit: 60, per: 'ip' },
   // Each attempt runs the key's KDF (AR-31).
   'ssh-key-unlock': { limit: 10, per: 'ip' },
   'access-check': { limit: 30, per: 'user' }
