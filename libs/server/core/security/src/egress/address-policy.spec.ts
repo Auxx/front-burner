@@ -37,6 +37,18 @@ describe('checkAddress', () => {
     }
   });
 
+  it('refuses the IPv4-compatible, IPv4-translated and local-use NAT64 forms too', () => {
+    // 169.254.169.254 in each: `::a.b.c.d`, `::ffff:0:a.b.c.d`, and RFC 6052's /48 layout in 64:ff9b:1::/48.
+    for (const address of [ '::169.254.169.254', '::ffff:0:169.254.169.254', '64:ff9b:1:a9fe:a9:fe00::' ]) {
+      expect(checkAddress(address, OPEN)).toBe('reserved');
+    }
+    // 127.0.0.1 in each.
+    for (const address of [ '::127.0.0.1', '::ffff:0:127.0.0.1', '64:ff9b:1:7f00:0:100::' ]) {
+      expect(checkAddress(address, OPEN)).toBe('allowed');
+      expect(checkAddress(address, CLOSED)).toBe('private');
+    }
+  });
+
   it('allows private and loopback addresses by default', () => {
     for (const address of [ '10.0.0.1', '192.168.1.1', '127.0.0.1', '::1', 'fd00::1', '100.64.0.1' ]) {
       expect(checkAddress(address, OPEN)).toBe('allowed');

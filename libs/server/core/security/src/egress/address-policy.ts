@@ -74,15 +74,29 @@ function words(address: string): number[] {
   return [ ...first, ...fill, ...last ].map(word => parseInt(word, 16));
 }
 
-/** The IPv4 address that an IPv6 address reaches: IPv4-mapped, NAT64 or 6to4. */
+/**
+ * The IPv4 address that an IPv6 address reaches: IPv4-mapped, IPv4-compatible,
+ * IPv4-translated, NAT64 (the well-known prefix and RFC 8215's local-use
+ * `64:ff9b:1::/48`) or 6to4.
+ */
 function embeddedIPv4(address: string): string | undefined {
   if (!isIPv6(address)) {
     return undefined;
   }
   const w = words(address);
   const ipv4 = (high: number, low: number) => `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
-  if (w.slice(0, 5).every(word => word === 0) && w[5] === 0xffff) {
+  const zeroUpTo = (end: number) => w.slice(0, end).every(word => word === 0);
+  // `::ffff:a.b.c.d`, and `::ffff:0:a.b.c.d` (SIIT).
+  if ((zeroUpTo(5) && w[5] === 0xffff) || (zeroUpTo(4) && w[4] === 0xffff && w[5] === 0)) {
     return ipv4(w[6] ?? 0, w[7] ?? 0);
+  }
+  // `::a.b.c.d`, but not `::` or `::1`, which are addresses of their own.
+  if (zeroUpTo(6) && (w[6] ?? 0) !== 0) {
+    return ipv4(w[6] ?? 0, w[7] ?? 0);
+  }
+  if (w[0] === 0x64 && w[1] === 0xff9b && w[2] === 1) {
+    // RFC 6052's /48 layout: bytes 6 and 7, then 9 and 10, around the reserved byte 8.
+    return ipv4(w[3] ?? 0, (((w[4] ?? 0) & 255) << 8) | ((w[5] ?? 0) >> 8));
   }
   if (w[0] === 0x64 && w[1] === 0xff9b) {
     return ipv4(w[6] ?? 0, w[7] ?? 0);

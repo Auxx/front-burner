@@ -155,6 +155,29 @@ describe.skipIf(process.platform === 'win32')('openEgressProxy', () => {
     expect(running.refusals).toEqual([ { host: 'rebind.example.test', reason: 'blocked' } ]);
   });
 
+  it('connects only to what it checked, when a name turns into 127.0.0.1 after being public', async () => {
+    // DNS rebinding: public at the first lookup, loopback from then on.
+    let lookups = 0;
+    proxy = await openEgressProxy({
+      socketPath,
+      token: TOKEN,
+      egress: { blockPrivateNetworks: true },
+      connectTimeoutMs: 200,
+      lookup: async () => [ { address: lookups++ === 0 ? '192.0.2.1' : '127.0.0.1', family: 4 } ]
+    });
+
+    const first = await connectThrough(socketPath, `rebind.example.test:${echoPort}`, 'x');
+    const second = await connectThrough(socketPath, `rebind.example.test:${echoPort}`, 'x');
+
+    expect(first.code).not.toBe(0);
+    expect(second.code).not.toBe(0);
+    expect(connections).toBe(0);
+    expect(proxy.refusals).toEqual([
+      { host: 'rebind.example.test', reason: 'unreachable' },
+      { host: 'rebind.example.test', reason: 'blocked' }
+    ]);
+  });
+
   it('refuses an invalid host name and records a name that is not found', async () => {
     const running = await open(false, async () => {
       throw new Error('ENOTFOUND');
