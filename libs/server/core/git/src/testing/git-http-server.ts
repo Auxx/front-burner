@@ -20,6 +20,16 @@ export interface GitHttpServerOptions {
   delayMs?: number;
   /** Answers every push request with this status, as a host does for credentials that may only read. */
   refusePush?: 403;
+  /**
+   * Answers every fetch's first request with this message in git's `ERR`
+   * packet, which git prints as `fatal: remote error: <message>`.
+   */
+  remoteError?: string;
+}
+
+/** `text` as one packet of git's protocol: its length in 4 hex digits, then the text. */
+function packetLine(text: string): string {
+  return (Buffer.byteLength(text) + 4).toString(16).padStart(4, '0') + text;
 }
 
 function authorised(request: IncomingMessage, users: Record<string, string> | undefined): boolean {
@@ -122,6 +132,11 @@ export async function startGitHttpServer(options: GitHttpServerOptions): Promise
       ) {
         response.writeHead(options.refusePush);
         response.end();
+        return;
+      }
+      if (options.remoteError !== undefined && url.searchParams.get('service') === 'git-upload-pack') {
+        response.writeHead(200, { 'Content-Type': 'application/x-git-upload-pack-advertisement' });
+        response.end(packetLine(`ERR ${options.remoteError}\n`));
         return;
       }
       const name = Object.keys(options.repositories).find(repository => path.startsWith(`/${repository}/`));

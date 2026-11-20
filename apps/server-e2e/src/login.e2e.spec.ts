@@ -249,6 +249,30 @@ describe('password login and sessions', () => {
     expect(refreshCookieOf(sameSite)).not.toBe(refreshToken);
   });
 
+  it('A-7.11: a form post, which another site can send without CORS, is not read as a login', async () => {
+    const server = await onboarded();
+    const credentials = JSON.stringify({ ...E2E_ADMIN, refreshTokenDelivery: 'cookie' });
+
+    for (
+      const [ type, body ] of [
+        [ 'text/plain', credentials ],
+        [ 'application/x-www-form-urlencoded', new URLSearchParams(E2E_ADMIN).toString() ],
+        [
+          'multipart/form-data; boundary=x',
+          `--x\r\nContent-Disposition: form-data; name="email"\r\n\r\n${E2E_ADMIN.email}\r\n--x--\r\n`
+        ]
+      ]
+    ) {
+      const response = await fetch(`${server.url}${LOGIN}`, {
+        method: 'POST',
+        headers: { 'content-type': type ?? '', origin: 'https://evil.example' },
+        body
+      });
+      expect(response.status, type).toBe(400);
+      expect(response.headers.getSetCookie(), type).toEqual([]);
+    }
+  });
+
   it('AC-AUTH-003.15: after logout both tokens are refused and the cookie is cleared, even with an expired auth token', async () => {
     const server = await onboarded({ FRONT_BURNER_AUTH_TOKEN_TTL: '1s' });
     const { authToken, refreshToken } = await login(server);
