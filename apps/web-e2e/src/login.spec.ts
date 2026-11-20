@@ -90,21 +90,38 @@ test.describe('login page', () => {
     expect(results.violations).toEqual([]);
   });
 
-  test('is served with a nonce-based CSP', async ({ page }) => {
+  test('NF-11.1: index.html, a deep link and an error page carry the exact CSP', async ({ page }) => {
+    // NF-11.1's text, word for word; only the nonce differs per response.
+    const policy = new RegExp(
+      '^' + [
+        `default-src 'none'`,
+        `script-src 'self'`,
+        `style-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)'`,
+        `img-src 'self' blob: data: https:`,
+        `connect-src 'self'`,
+        `font-src 'self'`,
+        `manifest-src 'self'`,
+        `worker-src 'self'`,
+        `base-uri 'self'`,
+        `form-action 'self'`,
+        `frame-ancestors 'none'`,
+        `object-src 'none'`,
+        `require-trusted-types-for 'script'`
+      ].join('; ') + '$'
+    );
     const nonces: string[] = [];
-    for (let load = 0; load < 2; load++) {
-      const response = await page.goto('/login');
-      const csp = response?.headers()['content-security-policy'] ?? '';
-      expect(csp).toContain(`'nonce-`);
-      expect(csp).toContain(`require-trusted-types-for 'script'`);
-      const headerNonce = /'nonce-([^']+)'/.exec(csp)?.[1] ?? '';
-      const htmlNonce = /ngcspnonce=["']([^"']+)["']/i.exec(await response!.text())?.[1] ?? '';
-      expect(htmlNonce, 'nonce in the served HTML').not.toBe('');
-      expect(htmlNonce, 'nonce in the HTML equals the one in the header').toBe(headerNonce);
-      nonces.push(headerNonce);
+    // The root, a deep link into a repository, and a route that shows the "page not found" page; the root twice.
+    for (const path of [ '/', '/', '/repositories/1/files/docs/guide.md', '/no-such-page' ]) {
+      // As the browser asks for a page; the client's routing after it is not what is checked.
+      const response = await page.request.get(path, { headers: { accept: 'text/html' } });
+      const csp = response.headers()['content-security-policy'] ?? '';
+      const headerNonce = policy.exec(csp)?.[1];
+      expect(headerNonce, `${path}: the header is NF-11.1's policy: ${csp}`).toBeDefined();
+      const htmlNonce = /ngcspnonce=["']([^"']+)["']/i.exec(await response.text())?.[1];
+      expect(htmlNonce, `${path}: the nonce in the HTML equals the one in the header`).toBe(headerNonce);
+      nonces.push(headerNonce!);
     }
-    expect(nonces[0]).not.toBe('');
-    expect(nonces[0]).not.toBe(nonces[1]);
+    expect(new Set(nonces).size, 'a fresh nonce per response').toBe(nonces.length);
   });
 
   test('runs without CSP or Trusted Types violations', async ({ page }) => {

@@ -55,7 +55,7 @@ describe('serveWebClient', () => {
     expect((await request(app).head('/some/deep/route')).status).toBe(200);
   });
 
-  it('uses a new nonce per request', async () => {
+  it('NF-11.1: uses a new nonce per request', async () => {
     const app = createApp();
     const first = await request(app).get('/login');
     const second = await request(app).get('/login');
@@ -100,7 +100,7 @@ describe('serveWebClient', () => {
   });
 
   it.each([ '/index.html', '/%69ndex.html', '/./index.html', '/INDEX.HTML' ])(
-    'templates %s like any route',
+    'NF-11.1: templates %s like any route',
     async path => {
       const res = await request(createApp()).get(path);
       expect(res.status).toBe(200);

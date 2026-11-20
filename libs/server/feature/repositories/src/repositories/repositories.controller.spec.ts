@@ -551,6 +551,34 @@ describe('RepositoriesController', () => {
 
       expect(response.body.code).toBe('rate-limited');
     });
+
+    it('NF-11.4: refuses a fourth clone with 429 too-many-jobs and Retry-After', async () => {
+      const alice = insertUser(database, 'alice@example.com');
+      // Three clones wait; scheduled far ahead, so that the runner leaves them waiting.
+      for (const name of [ 'one', 'two', 'three' ]) {
+        const repositoryId = insertRepository(database, alice, { name, status: 'cloning' });
+        database.db.insert(jobs).values({
+          type: CLONE_JOB_TYPE,
+          userId: alice,
+          repositoryId,
+          payload: JSON.stringify({ repositoryId }),
+          status: 'queued',
+          runAt: new Date(Date.now() + 86_400_000),
+          createdAt: new Date()
+        }).run();
+      }
+      const id = insertRepository(database, alice, {
+        name: 'handbook',
+        remoteUrl: `${server.url}/handbook.git`,
+        status: 'error',
+        errorCode: 'clone-failed'
+      });
+
+      const response = await cloneAgain(alice, id).expect(429);
+
+      expect(response.body.code).toBe('too-many-jobs');
+      expect(response.headers['retry-after']).toBe('30');
+    });
   });
 
   describe('warnings (RM-8)', () => {

@@ -183,7 +183,7 @@ describe('administrator onboarding', () => {
     expect(countUsers(dataDir)).toBe(1);
   });
 
-  it('the setup-token group is limited to 10 per minute', async () => {
+  it('NF-11.4: the setup-token group is limited to 10 per minute', async () => {
     const server = await start();
     for (let i = 0; i < 10; i++) {
       const response = i % 2 === 0
@@ -196,7 +196,7 @@ describe('administrator onboarding', () => {
     expect(limited.headers.get('retry-after')).toMatch(/^[1-9]\d*$/);
   });
 
-  it('the limit stays on after onboarding is completed', async () => {
+  it('NF-11.4: the limit stays on after onboarding is completed', async () => {
     const server = await start();
     expect((await post(server, SETUP, { setupToken: TOKEN, ...details })).status).toBe(204);
     for (let i = 0; i < 9; i++) {

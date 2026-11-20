@@ -44,6 +44,20 @@ describe('UnlockAttempts', () => {
     expect(() => attempts.assertAllowed(1, 7)).toThrow(tooMany);
   });
 
+  it('NF-11.4: says to retry when the oldest counted wrong attempt leaves the window', () => {
+    attempts.recordWrong(1, 7);
+    vi.advanceTimersByTime(20_000);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      attempts.recordWrong(1, 7);
+    }
+    vi.advanceTimersByTime(10_500);
+
+    // 60 s after the first attempt, 30.5 s from now: rounded up.
+    expect(() => attempts.assertAllowed(1, 7)).toThrow(
+      expect.objectContaining({ code: 'unlock-too-many-attempts', retryAfterSeconds: 30 })
+    );
+  });
+
   it('ignores changes to the system clock', () => {
     for (let attempt = 0; attempt < 5; attempt++) {
       attempts.recordWrong(1, 7);
