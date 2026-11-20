@@ -1109,16 +1109,22 @@ Each line is one JSON object, for example:
 | `err`       | For an error: its type, message and stack.                                                                            |
 | others      | Details of the event, such as `jobId`, `userId`, `type` (of a job) or `errorCode`. Users and jobs appear by their ID. |
 
-Every request to the instance gets one `info` line, `"message":"request
-completed"`, or `"request errored"` when its status is 500 or more, with the
-request's method and address under `req` and its status under `res.statusCode`.
+Every request to the instance gets one `info` line when it ends:
+`"message":"request completed"`, or `"request errored"` when the request failed,
+as with a status of 500 or more. It has the request's method and address under
+`req`, its status under `res.statusCode` and, for most API requests, its whole
+path under `path`.
 
 The log never contains passwords, tokens, keys or the content of files. At the
 default level, `info`, it names users, repositories and jobs only by their
-internal IDs: the address of a request is cut down to the part that holds no
-file names. Email addresses, repository names and file paths appear only at
-`debug` (see [Logging](#logging)); turn it on while you look into a problem, and
-off again afterwards.
+internal IDs. Addresses lose their query, which can hold a file's path or a
+one-time code, and are cut down to the part that holds no file names, such as
+`/api/v1/repositories/…` or `/repositories/…`: `path` is the whole path only for
+API requests that reached one of Front Burner's routes (not, for example, those
+refused for a missing login), since those hold only fixed words and IDs, such as
+`/api/v1/repositories/12/files/file`. Email addresses, repository names and file
+paths appear only at `debug` (see [Logging](#logging)); turn it on while you
+look into a problem, and off again afterwards.
 
 `FRONT_BURNER_LOG_FORMAT=pretty` prints each entry as readable text instead,
 with the time, level and message on the first line and the other fields below

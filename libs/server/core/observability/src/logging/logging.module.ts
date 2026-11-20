@@ -1,9 +1,12 @@
 import { Config } from '@front-burner/server-core-config';
 import { DynamicModule, Module } from '@nestjs/common';
+import type { Request } from 'express';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
 import type { DestinationStream } from 'pino';
 import { HttpLogger, Options, pinoHttp } from 'pino-http';
+import { routeOf, UNMATCHED_ROUTE } from '../metrics/http-metrics.middleware';
 import { createLoggerOptions } from './logger-options';
 import { urlForLog } from './request-url';
 
@@ -17,10 +20,45 @@ interface SerializedRequest {
   [field: string]: unknown;
 }
 
-/** The serialized request with its URL cut down and its query left out (`urlForLog`). */
-function withoutPaths(req: SerializedRequest): SerializedRequest {
-  const { query: _query, ...rest } = req;
+/** A response as pino-http's own serializer gives it. */
+interface SerializedResponse {
+  headers?: Record<string, unknown>;
+  [field: string]: unknown;
+}
+
+/**
+ * The serialized request with its URL cut down and its query left out
+ * (`urlForLog`). pino-http serializes it when the request arrives, before a
+ * route answers, so an API path is cut as if none did; `pathOnCompletion`
+ * gives the whole path once one has.
+ */
+function requestWithoutPaths(req: SerializedRequest): SerializedRequest {
+  const rest: SerializedRequest = { ...req };
+  delete rest.query;
   return typeof rest.url === 'string' ? { ...rest, url: urlForLog(rest.url) } : rest;
+}
+
+/**
+ * `path` for the request's last line: its whole path, without the query, when
+ * a route answered it, since routes hold only fixed words and IDs.
+ */
+function pathOnCompletion(req: IncomingMessage): { path?: string; } {
+  const express = req as Request;
+  if (routeOf(express) === UNMATCHED_ROUTE) {
+    return {};
+  }
+  return { path: urlForLog(express.originalUrl ?? req.url ?? '', true) };
+}
+
+/**
+ * The serialized response with its redirect's `Location` cut down, which may
+ * hold a one-time OIDC code or the provider's `state` (`urlForLog`).
+ */
+function responseWithoutPaths(res: SerializedResponse): SerializedResponse {
+  const location = res.headers?.['location'];
+  return typeof location === 'string'
+    ? { ...res, headers: { ...res.headers, location: urlForLog(location) } }
+    : res;
 }
 
 /**
@@ -43,8 +81,14 @@ export function createRequestLogger(
       return id;
     },
     customProps: req => ({ requestId: req.id }),
-    // File paths only at debug (NF-10.5): above it, the URL without its query.
-    ...(config.logLevel === 'debug' ? {} : { serializers: { req: withoutPaths } })
+    // File paths and one-time codes only at debug (NF-10.5): above it, URLs without their query.
+    ...(config.logLevel === 'debug'
+      ? {}
+      : {
+        serializers: { req: requestWithoutPaths, res: responseWithoutPaths },
+        customSuccessObject: (req, _res, value) => ({ ...value, ...pathOnCompletion(req) }),
+        customErrorObject: (req, _res, _error, value) => ({ ...value, ...pathOnCompletion(req) })
+      })
   };
   return destination ? pinoHttp(options, destination) : pinoHttp(options);
 }

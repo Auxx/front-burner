@@ -16,7 +16,7 @@ export const UNMATCHED_ROUTE = 'unmatched';
  * controller uses `@All()`): a request whose last route has more than one
  * method reached no handler.
  */
-function routeOf(req: Request): string {
+export function routeOf(req: Request): string {
   const route = req.route as { path?: unknown; methods?: Record<string, boolean>; } | undefined;
   const methods = Object.values(route?.methods ?? {}).filter(Boolean).length;
   return typeof route?.path === 'string' && methods === 1 ? route.path : UNMATCHED_ROUTE;
