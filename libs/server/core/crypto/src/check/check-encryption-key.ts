@@ -9,6 +9,7 @@ const CHECK_BINDING: SecretBinding = { table: 'instance_state', recordId: ROW };
 /** The encryption key cannot decrypt the check value, so it is not the key the secrets were stored with (NF-8.5). */
 export class EncryptionKeyMismatchError extends Error {
   constructor() {
+    // Quoted in the deployment guide (docs/wiki/deployment.md): change both together.
     super(
       'FRONT_BURNER_ENCRYPTION_KEY does not match the key this instance\'s secrets were encrypted with. Use the right key, or start once with FRONT_BURNER_ENCRYPTION_KEY_RESET=confirm to delete every stored secret (NF-8.6).'
     );

@@ -115,6 +115,7 @@ export async function resetPassword(options: ResetPasswordOptions): Promise<numb
         .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
         .run();
     });
+    // Quoted in the deployment guide (docs/wiki/deployment.md): change both together.
     createBootstrapLogger(config, options.logDestination).warn(
       { userId },
       `Password of user ${userId} reset from the command line; every session revoked`

@@ -135,6 +135,7 @@ export class OrphanedWorkingCopies implements OnModuleInit {
       );
       return undefined;
     }
+    // Quoted in the deployment guide (docs/wiki/deployment.md): change both together.
     this.logger.warn(
       `Working copy of repository ${repositoryId} (user ${userId}) has no repository; moved to orphans/${name}`
     );

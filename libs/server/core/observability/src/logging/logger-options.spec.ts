@@ -48,6 +48,7 @@ describe('createLoggerOptions', () => {
 
   it('uses the pino-pretty transport for the pretty format', () => {
     const options = createLoggerOptions({ logLevel: 'info', logFormat: 'pretty' });
-    expect(options.transport).toMatchObject({ target: 'pino-pretty' });
+    // pino-pretty prints the text as the message only when it knows the key.
+    expect(options.transport).toMatchObject({ target: 'pino-pretty', options: { messageKey: 'message' } });
   });
 });

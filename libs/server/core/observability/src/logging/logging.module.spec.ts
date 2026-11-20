@@ -28,6 +28,19 @@ class LogController {
   }
 }
 
+@Controller('api/v1/t')
+class ApiLogController {
+  @Get('items/:id')
+  item() {
+    return { ok: true };
+  }
+
+  @Get('redirect')
+  redirect(@Res() res: { redirect(status: number, url: string): void; }) {
+    res.redirect(302, '/login/oidc?code=secret-one-time-code');
+  }
+}
+
 const config: Config = {
   version: '0.0.0',
   port: 3000,
@@ -72,7 +85,7 @@ describe('LoggingModule', () => {
     const requestLogger = createRequestLogger(config, destination);
     const moduleRef = await Test.createTestingModule({
       imports: [ LoggingModule.forRoot(requestLogger) ],
-      controllers: [ LogController ],
+      controllers: [ LogController, ApiLogController ],
       providers: [ { provide: APP_FILTER, useClass: ApiExceptionFilter } ]
     }).compile();
     app = moduleRef.createNestApplication({ bufferLogs: true });
@@ -93,7 +106,7 @@ describe('LoggingModule', () => {
       .set('Authorization', 'Bearer secret-token-value')
       .set('Cookie', 'refresh=secret-refresh-value');
 
-    expect(output).toContain('"/t/cookie"');
+    expect(output).toContain('"url":"/t/…"');
     expect(output).toContain('"headers"'); // the real req and res were serialised
     expect(output).not.toContain('secret-token-value');
     expect(output).not.toContain('secret-refresh-value');
@@ -110,6 +123,58 @@ describe('LoggingModule', () => {
     const inside = entries().find(e => e['message'] === 'inside request');
     expect(inside?.['module']).toBe('Feature');
     expect(inside?.['requestId']).toBe(id);
+  });
+
+  it('logs the request without its query, which may name a file (NF-10.5)', async () => {
+    output = '';
+    await request(app.getHttpServer()).get('/t/log?path=private/diary.md');
+
+    const completed = entries().find(e => e['message'] === 'request completed');
+    expect(completed?.['req'].url).toBe('/t/…');
+    expect(completed?.['req'].method).toBe('GET');
+    expect(output).not.toContain('diary');
+  });
+
+  it('logs three segments of an API path, and the whole path once a route answered it (NF-10.5)', async () => {
+    output = '';
+    await request(app.getHttpServer()).get('/api/v1/t/items/7?path=private/diary.md');
+    await request(app.getHttpServer()).get('/api/v1/t/private/diary.md');
+
+    const lines = entries().filter(e => e['message'] === 'request completed').map(e => [ e['req'].url, e['path'] ]);
+    expect(lines).toEqual([ [ '/api/v1/t/…', '/api/v1/t/items/7' ], [ '/api/v1/t/…', undefined ] ]);
+    expect(output).not.toContain('diary');
+  });
+
+  it('logs a redirect\'s Location without its query, which may hold a one-time code (NF-10.5)', async () => {
+    output = '';
+    await request(app.getHttpServer()).get('/api/v1/t/redirect');
+
+    const completed = entries().find(e => e['message'] === 'request completed');
+    expect(completed?.['res'].statusCode).toBe(302);
+    expect(completed?.['res'].headers.location).toBe('/login/…');
+    expect(output).not.toContain('secret-one-time-code');
+  });
+
+  it('logs the whole URL at debug', async () => {
+    let debugOutput = '';
+    const destination = new Writable({
+      write(chunk, _encoding, callback) {
+        debugOutput += chunk.toString();
+        callback();
+      }
+    });
+    const debugLogger = createRequestLogger({ ...config, logLevel: 'debug' }, destination);
+    const debugApp = (await Test.createTestingModule({ controllers: [ LogController ] }).compile())
+      .createNestApplication();
+    debugApp.use(debugLogger);
+    await debugApp.init();
+    try {
+      await request(debugApp.getHttpServer()).get('/t/log?path=private/diary.md');
+    } finally {
+      await debugApp.close();
+    }
+
+    expect(debugOutput).toContain('"url":"/t/log?path=private/diary.md"');
   });
 
   it('logs a thrown Error at error level with its stack but does not leak it', async () => {

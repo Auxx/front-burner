@@ -12,6 +12,7 @@ import { Database } from './open-database';
  */
 export class NewerSchemaError extends Error {
   constructor(readonly unknown: number[], readonly lastVersion: string | null = null) {
+    // Quoted in the deployment guide (docs/wiki/deployment.md): change both together.
     super(
       `Database is from ${
         lastVersion === null ? 'a newer version' : `version ${lastVersion}`

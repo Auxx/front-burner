@@ -17,8 +17,10 @@ Installing takes these steps, each a section below:
 
 Once it runs, [size its disk](#sizing-the-disk),
 [back it up](#backup-and-restore) and [upgrade it](#upgrading) as the later
-sections describe. [Recovery](#recovery) says what to do when the encryption key
-or the administrator's password is lost.
+sections describe, and [watch it](#monitoring) through its log, health checks
+and metrics. [Recovery](#recovery) says what to do when the encryption key or
+the administrator's password is lost, and [Troubleshooting](#troubleshooting)
+lists the usual problems.
 
 ## Before you start
 
@@ -693,6 +695,7 @@ Front Burner logs to the container's output only, which `docker compose logs
 front-burner` shows. At `info` and above, the log names users, repositories and
 requests by their internal IDs only. Email addresses, repository names and file
 paths appear only at `debug`, so turn it on only while you look into a problem.
+[The log](#the-log) describes what each line holds.
 
 ### Metrics
 
@@ -706,6 +709,8 @@ Prometheus, that is the scrape job's `authorization` setting, with the token in
 `credentials_file`. Generate the token as the other secrets, for example with
 `openssl rand -hex 16`, and give it through `FRONT_BURNER_METRICS_TOKEN_FILE`
 (see [Secrets in files](#secrets-in-files)).
+[Prometheus metrics](#prometheus-metrics) has a scrape job and lists the
+metrics.
 
 ## Sizing the disk
 
@@ -1061,6 +1066,227 @@ repositories added since the upgrade move to `orphans/`, and repositories
 removed since then show "Working copy is missing or damaged", as after a
 [restore](#restoring).
 
+## Monitoring
+
+Front Burner tells you how it is doing in three ways: its log, two health
+endpoints and, if you turn them on, Prometheus metrics.
+
+### The log
+
+Front Burner writes its log to the container's output only; there are no log
+files on the volumes. Read it with:
+
+```sh
+docker compose logs front-burner
+docker compose logs -f --since 10m front-burner
+```
+
+The second command shows the last ten minutes and then follows new lines. Docker
+keeps the log until the container is re-created, and by default lets it grow
+without limit. To cap it, add these lines to the `front-burner` service in
+`compose.yaml`:
+
+```yaml
+logging:
+  options:
+    max-size: 10m
+    max-file: '5'
+```
+
+Each line is one JSON object, for example:
+
+```json
+{"level":"warn","time":"2026-11-20T00:32:29.302Z","pid":1,"hostname":"3f2c9a7d1b04","module":"DiskMonitor","freeBytes":{"data":1610612736},"thresholdBytes":2147483648,"message":"The server is running low on storage: new clones are refused"}
+```
+
+| Field       | What it holds                                                                                                         |
+| ----------- | --------------------------------------------------------------------------------------------------------------------- |
+| `time`      | When, in UTC.                                                                                                         |
+| `level`     | `error`, `warn`, `info` or `debug`; `fatal` when the start fails, just before the container stops.                    |
+| `message`   | What happened.                                                                                                        |
+| `module`    | The part of Front Burner that wrote the line, such as `DiskMonitor`.                                                  |
+| `requestId` | The request the line belongs to (see [Finding a user's error](#finding-a-users-error)).                               |
+| `err`       | For an error: its type, message and stack.                                                                            |
+| others      | Details of the event, such as `jobId`, `userId`, `type` (of a job) or `errorCode`. Users and jobs appear by their ID. |
+
+Every request to the instance gets one `info` line when it ends:
+`"message":"request completed"`, or `"request errored"` when the request failed,
+as with a status of 500 or more. It has the request's method and address under
+`req`, its status under `res.statusCode` and, for most API requests, its whole
+path under `path`.
+
+The log never contains passwords, tokens, keys or the content of files. At the
+default level, `info`, it names users, repositories and jobs only by their
+internal IDs. Addresses lose their query, which can hold a file's path or a
+one-time code, and are cut down to the part that holds no file names, such as
+`/api/v1/repositories/…` or `/repositories/…`: `path` is the whole path only for
+API requests that reached one of Front Burner's routes (not, for example, those
+refused for a missing login), since those hold only fixed words and IDs, such as
+`/api/v1/repositories/12/files/file`. Email addresses, repository names and file
+paths appear only at `debug` (see [Logging](#logging)); turn it on while you
+look into a problem, and off again afterwards.
+
+`FRONT_BURNER_LOG_FORMAT=pretty` prints each entry as readable text instead,
+with the time, level and message on the first line and the other fields below
+it. Use it when you read the log yourself, not for a log collector.
+
+### Finding a user's error
+
+When something fails, the web client shows the error with a **Reference**, the
+first eight characters of the request's ID, for example `Reference: 9d806ef7`.
+The repository management page shows the whole ID of a failed clone, as
+**Request ID**. The same ID is in the `X-Request-Id` header of every response.
+
+To find the log lines of that request, search for it:
+
+```sh
+docker compose logs --no-log-prefix front-burner | grep '"requestId":"9d806ef7'
+```
+
+This prints every line of the request: the `request completed` or `request
+errored` line with its status, and any error or warning logged while it ran.
+Look for a line with `"level":"error"` and its `err`, or a `warn` with an
+`errorCode`.
+
+A clone or a pull that failed in the background is a job: its lines carry a
+`jobId` instead, and the line `A job failed` gives the job's `type` and
+`errorCode`.
+
+### Health checks
+
+| Endpoint            | Answers                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| `/api/health/live`  | `{"status":"ok"}` while the process runs.                                                         |
+| `/api/health/ready` | `{"status":"ok"}`, `{"status":"degraded"}` or, with status `503`, `{"status":"fail"}`. See below. |
+
+Both need no login and reveal nothing about the instance, so a load balancer or
+uptime monitor can call them. The image's health check calls `/api/health/ready`
+every 10 seconds, and `docker compose ps` shows its result.
+
+`/api/health/ready` answers only once the start is complete: the database
+updated, the working copies checked and interrupted jobs handled. Then it
+reports:
+
+- **`ok`**: everything works.
+- **`degraded`**: the instance works, but [space is low](#low-disk-space) on the
+  data volume or the repositories volume, so new repositories are refused. The
+  answer is still `200`, so Docker shows the container as `healthy`; watch for
+  `degraded` yourself, or use the `front_burner_disk_free_bytes` metric (see
+  [Prometheus metrics](#prometheus-metrics)).
+- **`fail`**, with status `503`: the database cannot be read, or `/data` or the
+  repositories directory cannot be written to. Docker shows the container as
+  `unhealthy` after three failed checks in a row. The log usually says why.
+
+### Prometheus metrics
+
+Once you set `FRONT_BURNER_METRICS_TOKEN` (see [Metrics](#metrics) under
+Environment variables), Front Burner serves Prometheus metrics at
+`/api/metrics`. A Prometheus scrape job for it, with the token in a file next to
+Prometheus's configuration:
+
+```yaml
+scrape_configs:
+  - job_name: front-burner
+    scheme: https
+    metrics_path: /api/metrics
+    authorization:
+      credentials_file: /etc/prometheus/front-burner-metrics-token
+    static_configs:
+      - targets: ['<your-domain>']
+```
+
+Every metric's name starts with `front_burner_`. None of them has a label that
+names a user, a repository or a file.
+
+| Metric                                        | Type      | Labels                      | What it measures                                                                                             |
+| --------------------------------------------- | --------- | --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `front_burner_http_request_duration_seconds`  | histogram | `method`, `route`, `status` | API requests, by route pattern such as `/api/v1/repositories/:id`. `status` is `aborted` if the client left. |
+| `front_burner_jobs_queued`                    | gauge     | `type`                      | Jobs waiting to run, by job type.                                                                            |
+| `front_burner_job_duration_seconds`           | histogram | `type`, `result`            | Jobs that ran, by type and result: `done`, `failed`, `cancelled` or `retried`.                               |
+| `front_burner_job_failures_total`             | counter   | `type`                      | Jobs that ended failed, by type, including jobs a restart interrupted.                                       |
+| `front_burner_clones`                         | gauge     | `state`                     | Clones `running`, and clones `waiting` for a free slot (see `FRONT_BURNER_CLONE_CONCURRENCY`).               |
+| `front_burner_git_operation_duration_seconds` | histogram | `operation`                 | Git operations, such as `clone`, `fetch`, `push`, `status`, `commit` or `merge`, whether they worked or not. |
+| `front_burner_disk_free_bytes`                | gauge     | `volume`                    | Free bytes on the data volume (`data`) and, if it is another file system, the repositories volume (`repos`). |
+| `front_burner_active_sessions`                | gauge     | —                           | Logins that have not expired or ended, of every user together.                                               |
+
+The usual Node.js and process metrics follow, with the same prefix, such as
+`front_burner_process_resident_memory_bytes` and
+`front_burner_nodejs_eventloop_lag_seconds`.
+
+Job types include `repositories.clone`, `sync.fetch`, `sync.pull` and
+`sync.push`, which users start, and housekeeping jobs such as
+`database.snapshot` and `storage.disk-check`.
+
+Worth an alert:
+
+- `front_burner_disk_free_bytes` below your `FRONT_BURNER_LOW_DISK_THRESHOLD`,
+  or better, approaching it;
+- `front_burner_job_failures_total` rising for `database.snapshot`: daily
+  snapshots are not being written;
+- `front_burner_clones{state="waiting"}` staying above zero for long: clones
+  queue behind each other.
+
+### Low and full disk
+
+Front Burner checks free space when it starts and then every minute. When less
+than `FRONT_BURNER_LOW_DISK_THRESHOLD` (2 GB by default) is free on either
+volume, it logs a warning once:
+
+```text
+The server is running low on storage: new clones are refused
+```
+
+with the free bytes of each volume and the threshold. From then on, until space
+is freed, adding a repository is refused, administrators see a banner, and
+`/api/health/ready` reports `degraded` (see [Low disk space](#low-disk-space)).
+Saves, commits and synchronisation go on. Once enough is free again, it logs:
+
+```text
+The server has enough storage again
+```
+
+If the disk fills up entirely:
+
+- **A save fails**, and the user's editor shows "Server storage is full — not
+  saved". The edits stay in the user's browser, which tries the save again on
+  its own, so nothing is lost once space is freed. The file on disk keeps its
+  last saved content. The log has a `request errored` line with status `507`.
+- **A git operation fails**, such as a clone, pull or commit, and the user sees
+  "Server storage is full. Contact your administrator." It is undone as if a
+  restart had interrupted it: a clone's partial copy is removed, and a pull that
+  was merging goes back to the commit it started from. A background job's `A job
+  failed` line has `"errorCode":"storage-full"`.
+- **The database** rolls back the change it was writing, so it stays consistent.
+
+To free space, add space to the volume, or delete what you no longer need:
+pre-upgrade snapshots of versions you will not go back to, and folders in
+`orphans/` (see [Orphaned working copies](#orphaned-working-copies)). Do not
+delete anything in `repos/`: those are the users' working copies. Users can also
+remove repositories they no longer use.
+
+### Orphaned working copies
+
+A working copy without a repository in the database is moved to `orphans/` when
+Front Burner starts, never deleted, since it may hold work that was not pushed.
+This happens when the database is older than the working copies, such as after
+[restoring](#restoring) a snapshot or
+[going back after an upgrade](#going-back-after-an-upgrade). The log has one
+warning for each:
+
+```text
+Working copy of repository 12 (user 3) has no repository; moved to orphans/3-12-2026-11-16T10-00-00Z
+```
+
+Front Burner never empties `orphans/`. List it now and then:
+
+```sh
+docker compose exec front-burner ls -l /data/orphans
+```
+
+(`/repositories/orphans`, or the path you chose, with a separate repositories
+volume.) [Restoring](#restoring) says how to get the work out of a folder and
+then delete it.
+
 ## Recovery
 
 ### A lost encryption key
@@ -1247,6 +1473,41 @@ Front Burner could not undo a merge that failed, and has blocked the repository
 to protect it. The container log gives the reason, such as a full disk. Fix the
 cause and restart the instance: it tries again on every start, and the
 repository comes back by itself when that works.
+
+**The container stops at once and keeps restarting, and the log names a
+migration or a newer database.** The last line of each start, at level `fatal`,
+starts with `Startup failed at step "migrations"`.
+
+- If it goes on with `Database is from version 1.5.0; restore the pre-upgrade
+  snapshot to go back` (or `from a newer version`), the image is older than the
+  version that last updated the database, as when you put an older version back
+  in `compose.yaml`. Start the newer version again, or follow
+  [Going back after an upgrade](#going-back-after-an-upgrade).
+- Otherwise an update of the database failed. It was undone, so the database is
+  as it was, and the version you upgraded from still starts on it: put it back
+  in `compose.yaml` and run `docker compose up -d`, then report the message with
+  the version numbers. If the update failed while writing the pre-upgrade
+  snapshot, the reason is often a full disk.
+
+**Adding a repository fails with "The server is running low on storage. Contact
+your administrator."** Less than `FRONT_BURNER_LOW_DISK_THRESHOLD` is free on
+the data volume or the repositories volume. Free space or add it (see
+[Low and full disk](#low-and-full-disk)); within a minute of that, adding
+repositories works again, and the log says "The server has enough storage
+again". The threshold keeps space for the work users already have, so lower it
+only if you know the volume will not fill up.
+
+**Saves fail with "Server storage is full — not saved".** The disk is full.
+Users' edits are kept in their browsers and saved on their own once there is
+space. Free space at once (see [Low and full disk](#low-and-full-disk)); git
+operations fail meanwhile too.
+
+**A folder appeared in `orphans/`.** Front Burner found a working copy whose
+repository is not in the database and moved it there on start, which happens
+after restoring a backup or a snapshot, or going back after an upgrade. It may
+hold work that was not pushed. See
+[Orphaned working copies](#orphaned-working-copies) and [Restoring](#restoring)
+for how to recover it.
 
 **Users are logged out every 15 minutes.** The instance is probably opened over
 plain HTTP. See [HTTPS is required](#https-is-required).

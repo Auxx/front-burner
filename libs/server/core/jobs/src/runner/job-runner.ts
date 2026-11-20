@@ -399,6 +399,7 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
       this.logger.warn({ jobId: job.id, type: job.type, errorCode, attempt: job.attempts }, 'A job failed; retrying');
       return;
     }
+    // Quoted in the deployment guide (docs/wiki/deployment.md): change both together.
     this.logger.warn({ jobId: job.id, type: job.type, errorCode }, 'A job failed');
     this.finish(job, { status: 'failed', errorCode });
   }
