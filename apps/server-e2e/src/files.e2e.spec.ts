@@ -418,6 +418,59 @@ describe('folder listing (REQ-FILE-001)', () => {
     }, 60_000);
   });
 
+  describe('A-7.6: a symbolic link to /etc/passwd, as a clone checks one out', () => {
+    const rootDir = () => join(server.dataDir, 'repos', String(alice.userId), String(handbook));
+    const symlinkRefused = {
+      status: 400,
+      body: expect.objectContaining({ code: 'path-refused', params: { reason: 'symlink' } })
+    };
+    const passwd = readFileSync('/etc/passwd', 'utf8');
+
+    beforeAll(() => {
+      symlinkSync('/etc/passwd', join(rootDir(), 'passwd.md'));
+      symlinkSync('/etc/passwd', join(rootDir(), 'docs', 'passwd.png'));
+    });
+
+    it('is not opened, saved or recreated', async () => {
+      const save = { content: 'owned\n', lineEnding: 'lf', bom: false };
+
+      expect(await readFile('passwd.md')).toEqual(symlinkRefused);
+      expect(await readFile('etc/passwd.md')).toEqual(symlinkRefused);
+      expect(await saveFile({ path: 'passwd.md', ...save })).toEqual(symlinkRefused);
+      expect(await saveFile({ path: 'etc/passwd.md', ...save })).toEqual(symlinkRefused);
+      expect((await recreateFile({ path: 'passwd.md', ...save })).status).toBe(409);
+      expect(readFileSync('/etc/passwd', 'utf8')).toBe(passwd);
+    });
+
+    it('is not served as an image', async () => {
+      for (const path of [ 'docs/passwd.png', 'etc/passwd' ]) {
+        const response = await fetch(
+          `${server.url}/api/v1/repositories/${handbook}/image?path=${encodeURIComponent(path)}`,
+          { headers: { authorization: `Bearer ${alice.token}` } }
+        );
+        const text = await response.text();
+
+        expect(response.status, path).toBe(400);
+        expect(JSON.parse(text), path).toMatchObject({ code: 'path-refused', params: { reason: 'symlink' } });
+        expect(text).not.toContain('root:');
+      }
+    });
+
+    it('is not renamed, nor renamed onto', async () => {
+      writeFileSync(join(rootDir(), 'notes.md'), '# Notes\n');
+
+      expect(await renameEntry({ path: 'passwd.md', name: 'other.md' }))
+        .toMatchObject({ status: 400, body: { code: 'entry-not-renamable' } });
+      expect(await renameEntry({ path: 'notes.md', name: 'passwd.md' }))
+        .toMatchObject({
+          status: 400,
+          body: { code: 'validation-failed', fields: [ { path: 'name', code: 'name-taken' } ] }
+        });
+      expect(readFileSync(join(rootDir(), 'notes.md'), 'utf8')).toBe('# Notes\n');
+      expect(readFileSync(join(rootDir(), 'passwd.md'), 'utf8')).toBe(passwd);
+    });
+  });
+
   describe('reading and saving (REQ-EDIT-001)', () => {
     /** 1 MB as stored (ED-2, ED-19). */
     const LIMIT = 1_048_576;

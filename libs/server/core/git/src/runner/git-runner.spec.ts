@@ -65,6 +65,19 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
     expect(new Set(files)).toEqual(new Set([ 'file:.git/config' ]));
   });
 
+  it('lets git itself refuse file://, ext:: and plain http, behind the URL checks (NF-11.6)', async () => {
+    execFileSync('git', [ 'init', '-q', '--bare', join(dir, 'local.git') ]);
+    const marker = join(dir, 'ext-ran');
+
+    for (const url of [ `file://${dir}/local.git`, `ext::touch ${marker}`, 'http://127.0.0.1:9/x.git' ]) {
+      const result = await runner.run([ 'ls-remote', '--', url ], { timeoutMs: 10_000 });
+
+      expect(result.exitCode, url).not.toBe(0);
+      expect(result.stderr, url).toMatch(/transport '(file|ext|http)' not allowed/);
+    }
+    expect(existsSync(marker)).toBe(false);
+  });
+
   it('never runs a program that the repository\'s own config names as its fsmonitor', async () => {
     execFileSync('git', [ 'init', '-q', '-b', 'main', dir ]);
     writeFileSync(join(dir, 'a.md'), 'a\n');
