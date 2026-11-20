@@ -17,7 +17,8 @@ Installing takes these steps, each a section below:
 
 Once it runs, [size its disk](#sizing-the-disk),
 [back it up](#backup-and-restore) and [upgrade it](#upgrading) as the later
-sections describe.
+sections describe. [Recovery](#recovery) says what to do when the encryption key
+or the administrator's password is lost.
 
 ## Before you start
 
@@ -145,15 +146,22 @@ still holds working copies.
 
 Front Burner needs two secrets of its own, and one more for the first start:
 
-- the **JWT secret**, which signs login tokens;
-- the **encryption key**, which encrypts the passwords, tokens and keys that
-  Front Burner stores;
-- the **setup token**, which only the person creating the first administrator
-  knows (see [First start](#first-start)).
+- the **JWT secret** (`FRONT_BURNER_JWT_SECRET`), which signs the short-lived
+  login tokens that clients send with every request;
+- the **encryption key** (`FRONT_BURNER_ENCRYPTION_KEY`), which encrypts the
+  passwords, tokens and SSH keys that users save for their remotes, and the OIDC
+  client secret when it is set on the onboarding page;
+- the **setup token** (`FRONT_BURNER_SETUP_TOKEN`), which only the person
+  creating the first administrator knows (see [First start](#first-start)).
+
+Two more are optional: the **metrics token** (see [Metrics](#metrics)) and the
+**OIDC client secret**, when OIDC is set up with environment variables (see
+[First administrator](#first-administrator)).
 
 The compose example reads them from files, as Docker secrets, so that they do
-not appear in the compose file or in `docker inspect`. Create them next to the
-compose file:
+not appear in the compose file or in `docker inspect`. Every secret can be given
+this way, through its `…_FILE` variable (see
+[Secrets in files](#secrets-in-files)). Create them next to the compose file:
 
 ```sh
 mkdir -p secrets
@@ -164,12 +172,47 @@ sudo chown 1000:1000 secrets/*
 sudo chmod 400 secrets/*
 ```
 
-Docker mounts each file into the container as it is, so it must be readable by
-UID 1000, which the last two commands make sure of.
+Each value is random: 64 characters for the JWT secret and the encryption key,
+which must be at least 32 characters long and differ from each other, and 32 for
+the setup token, which must be at least 16. Docker mounts each file into the
+container as it is, so it must be readable by UID 1000, which the last two
+commands make sure of.
+
+### Keeping the encryption key
 
 **Back up `secrets/encryption-key` now, and keep the copy apart from your
-backups of the data.** Without it, Front Burner cannot read the secrets it
-stored. See [Required](#required) for what happens when it is lost.
+backups of the data.**
+
+Front Burner never writes its secrets to the volumes: they come only from the
+environment and the secret files. A stolen volume, or a stolen backup of it,
+therefore holds the users' saved credentials only in encrypted form. Keep it
+that way: store the copy of the key somewhere a thief of your backups would not
+also find it, such as a password manager.
+
+The key is also needed to restore a backup (see [Restoring](#restoring)). The
+database holds a value encrypted with it, and Front Burner checks that value on
+every start: with any other key it does not start. A lost key cannot be
+recovered; the only way to start again is to
+[delete every stored secret](#a-lost-encryption-key).
+
+### Changing a secret
+
+After you change a secret file, restart the container with `docker compose
+restart front-burner`, since Front Burner reads the files only when it starts.
+
+- **The JWT secret** can be changed at any time. Users stay logged in: login
+  tokens signed with the old secret are refused, and clients get new ones
+  automatically.
+- **The encryption key cannot be changed in this release.** Front Burner cannot
+  re-encrypt the stored secrets with a new key yet, so a new key means
+  [deleting every stored secret](#a-lost-encryption-key). Change it only when
+  the old one is lost.
+- **The setup token** is ignored once the first administrator exists. You can
+  delete `secrets/setup-token` then, together with its lines in `compose.yaml`
+  (see [First start](#first-start)); Compose refuses to start a service whose
+  secret file is missing.
+- **The metrics token** can be changed at any time; give your scraper the new
+  one.
 
 ## Compose example
 
@@ -428,19 +471,12 @@ Each of them can also be read from a file (see
 Front Burner does not start if either of them is missing or too short, or if
 they are equal. The container log says which variable is wrong.
 
-If you change `FRONT_BURNER_JWT_SECRET`, users stay logged in: their clients get
-new tokens automatically.
+See [Secrets](#secrets) for how to generate them, why the encryption key is
+backed up apart from the data, and what changing each of them does.
 
-Back up `FRONT_BURNER_ENCRYPTION_KEY` separately from the data volume. Front
-Burner does not start with a different key, because it could not read the
-secrets it stored. If the key is lost, start once with
-`FRONT_BURNER_ENCRYPTION_KEY_RESET=confirm` and the new key: Front Burner
-deletes every stored secret, and users and administrators enter them again. Then
-remove `FRONT_BURNER_ENCRYPTION_KEY_RESET`.
-
-| Variable                            | Meaning                                                                                                     |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `FRONT_BURNER_ENCRYPTION_KEY_RESET` | `confirm` deletes every stored secret on start, so that a new encryption key can be used. Unset by default. |
+| Variable                            | Meaning                                                                                                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `FRONT_BURNER_ENCRYPTION_KEY_RESET` | `confirm` deletes every stored secret on start if the encryption key does not match, so that a new key can be used. Unset by default. See [A lost encryption key](#a-lost-encryption-key). |
 
 ### Secrets in files
 
@@ -718,8 +754,8 @@ A full backup has two parts:
 - **the secrets**, which are outside the volumes: at least
   `secrets/encryption-key`. Without it, Front Burner cannot read the passwords,
   tokens and SSH keys that users saved, and a restored instance does not start
-  (see [Required](#required)). Keep it apart from the backups of the volumes, so
-  that one stolen backup does not hold both.
+  (see [Keeping the encryption key](#keeping-the-encryption-key)). Keep it apart
+  from the backups of the volumes, so that one stolen backup does not hold both.
 
 ### What is in `/data`
 
@@ -1025,6 +1061,146 @@ repositories added since the upgrade move to `orphans/`, and repositories
 removed since then show "Working copy is missing or damaged", as after a
 [restore](#restoring).
 
+## Recovery
+
+### A lost encryption key
+
+If the encryption key is lost, or Front Burner is started with another one, it
+does not start, and the log says:
+
+```text
+Startup failed at step "encryption-key": FRONT_BURNER_ENCRYPTION_KEY does not match the key this instance's secrets were encrypted with. Use the right key, or start once with FRONT_BURNER_ENCRYPTION_KEY_RESET=confirm to delete every stored secret (NF-8.6).
+```
+
+First look for the right key: in your copy of `secrets/`, and, if you have just
+restored a backup, the key that was in use when that backup was taken. The reset
+below cannot be undone.
+
+If the key is really lost, start with a new key and delete every secret that the
+old one encrypted:
+
+1. Stop the instance, and replace the key file with a new key:
+
+   ```sh
+   docker compose stop front-burner
+   sudo rm secrets/encryption-key
+   openssl rand -hex 32 | sudo tee secrets/encryption-key > /dev/null
+   sudo chown 1000:1000 secrets/encryption-key
+   sudo chmod 400 secrets/encryption-key
+   ```
+
+2. In `compose.yaml`, add this line under `environment`:
+
+   ```yaml
+   FRONT_BURNER_ENCRYPTION_KEY_RESET: confirm
+   ```
+
+3. Start the instance:
+
+   ```sh
+   docker compose up -d
+   docker compose logs front-burner
+   ```
+
+   On this start, Front Burner deletes every stored secret and stores a new
+   check value for the new key. The log says:
+
+   ```text
+   FRONT_BURNER_ENCRYPTION_KEY_RESET: every stored secret was deleted and a new check value stored. Remove the variable.
+   ```
+
+4. Remove the line from `compose.yaml` and run `docker compose up -d` again.
+
+5. [Back up the new key](#keeping-the-encryption-key), and
+   [back up the data](#backing-up) now. Every backup taken before the reset
+   needs the lost key: restoring one later means another reset, which deletes
+   the credentials users have entered since.
+
+If you forget step 4, nothing more is deleted: the reset acts only when the key
+does not match, and the new key matches. Front Burner instead logs a warning on
+every start until you remove the variable:
+
+```text
+FRONT_BURNER_ENCRYPTION_KEY_RESET is set but the key matches; nothing was deleted. Remove the variable.
+```
+
+What the reset deletes and what it keeps:
+
+- **Kept:** users and their logins, sessions, repositories, working copies with
+  their files, unpushed commits and uncommitted changes, user preferences and
+  accepted host keys. Nobody is logged out.
+- **Deleted:** every password, token and SSH key that users saved for their
+  remotes. Each user gives their repositories new credentials: a fetch, pull or
+  push says "These saved credentials are no longer available. Add them again.",
+  with an **Add credentials** button, and the repository management page offers
+  **Change credentials**. A user who used an SSH key adds a new one; for a key
+  that Front Burner generates, they add its public key on the git hosting
+  provider again. Public repositories need nothing.
+- **Deleted:** the OIDC client secret, if OIDC was set up on the onboarding
+  page. OIDC login then stops working, and the onboarding page is not shown
+  again. Give the OIDC settings as environment variables instead (see
+  [First administrator](#first-administrator)), with the same issuer, client ID
+  and client secret, and the administrator's email in
+  `FRONT_BURNER_ADMIN_EMAIL`. The variables then replace every OIDC setting of
+  the onboarding page, so if you changed the scopes or turned off **Require
+  verified email** there, set `FRONT_BURNER_OIDC_SCOPES` and
+  `FRONT_BURNER_OIDC_REQUIRE_VERIFIED_EMAIL` to match; otherwise their defaults
+  apply. A required claim saved there still applies. OIDC settings given as
+  environment variables were never stored, so they are not affected.
+
+### A lost password
+
+Front Burner sends no email in this release, so there is no **Forgot password?**
+link. If the administrator forgets their password, the operator sets a new one
+with the `reset-password` command:
+
+1. Stop the instance:
+
+   ```sh
+   docker compose stop front-burner
+   ```
+
+2. Run the command in a new container on the same volumes, with the user's
+   email:
+
+   ```sh
+   docker compose run --rm front-burner node main.js reset-password <email>
+   ```
+
+   It asks for the new password twice, without showing it. The password must
+   meet the same rules as on the onboarding page; if it doesn't, or the two
+   entries differ, the command says why and changes nothing. On success it logs
+   one warning, whose message is "Password of user <ID> reset from the command
+   line; every session revoked".
+
+3. Start the instance:
+
+   ```sh
+   docker compose start front-burner
+   ```
+
+The user then logs in with the new password. Every session of that user has
+ended, on every device, so a stolen session is no use either.
+
+**Never run the command with `docker exec` or `docker compose exec` in the
+running container.** The command cannot tell whether the instance is running. A
+running instance remembers the sessions that are in use, and would go on
+accepting the ones the command revoked until it restarts.
+
+The command refuses, with one line and no change, when:
+
+- there is no password user with that email: an **OIDC user**, such as an
+  administrator who signs in through OIDC, has no password in Front Burner and
+  gets back in by resetting their password with the OIDC provider;
+- the user is disabled;
+- there is no database yet: the instance has never been started;
+- the database needs an upgrade: start the new version once, stop it, and run
+  the command again;
+- the database is from a newer version than the image, as after
+  [going back after an upgrade](#going-back-after-an-upgrade) without restoring
+  the snapshot: run the command with the image of the version that wrote the
+  database.
+
 ## What this release does not have
 
 This first release of Front Burner is for one operator, who is also the
@@ -1042,18 +1218,11 @@ instance's only administrator and its main user. These come in later releases:
 - **Uploading files.**
 - **Changing a password while logged in.**
 - **Rotating the encryption key.** It can only be replaced by deleting every
-  stored secret (see [Required](#required)).
+  stored secret (see [A lost encryption key](#a-lost-encryption-key)).
 - **An image for `arm64`.**
 
-If you forget the administrator's password, set a new one with the
-`reset-password` command, with the instance stopped. It asks for the new
-password twice and logs out every session of that user:
-
-```sh
-docker compose stop front-burner
-docker compose run --rm front-burner node main.js reset-password <email>
-docker compose start front-burner
-```
+If you forget the administrator's password, see
+[A lost password](#a-lost-password).
 
 ## Troubleshooting
 
