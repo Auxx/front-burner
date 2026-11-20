@@ -10,26 +10,37 @@ rows of the release checklist that a test can prove and none does yet get one.
 Plan 148's checklist is the list. Much is already tested, so this plan adds
 little and rewrites nothing.
 
-Already tested on `master` (found in the review of these plans; plan 148
-confirms each by reading the test):
+Already tested on `master` (found in the review of these plans, and confirmed by
+plan 148 by reading each test; the checklist names them):
 
-- `429` and `Retry-After`: the login, onboarding, files and add-repository
-  suites of `apps/server-e2e`;
-- `413` for a large body: `files.e2e.spec.ts`;
-- the CSP header: `api.e2e.spec.ts`, though whether it compares the whole value
-  is to be read;
-- 320 CSS pixels: about ten specs of `apps/web-e2e`, including the dashboard,
-  Preferences, login and onboarding;
-- axe: the onboarding, Preferences, Add repository, repository management,
-  editor, app header, commit and push, conflicts and repository screen specs.
+- `429` and `Retry-After`: `throttler.guard.spec.ts` and the onboarding suite of
+  `apps/server-e2e`; `429` alone in the login, files and add-repository suites;
+- `413` for a large body: `api.e2e.spec.ts`;
+- the CSP: `csp.spec.ts` compares the policy with NF-11.1's text, and
+  `serve-web-client.spec.ts` checks that `index.html` gets exactly that policy
+  with its nonce; end to end, `login.spec.ts` checks only the nonce and Trusted
+  Types;
+- 320 CSS pixels: the login, onboarding, dashboard, Add repository and
+  Preferences pages, the app header, the repository screen's diff and the git
+  dialogs;
+- axe: every page, the dashboard and the login page included ("has no
+  accessibility violations…").
 
-The likely gaps, to be confirmed by the checklist:
+The gaps the checklist found:
 
-- axe on the dashboard and the login page (NF-13.8);
-- the CSP compared as a whole with NF-11.1's text, on `index.html`, a deep link
-  and an error page, if the existing test checks less (NF-11.1);
+- the CSP compared as a whole with NF-11.1's text, end to end, on `index.html`,
+  a deep link and an error page (NF-11.1);
+- a clone refused at the per-user limit (`429 too-many-jobs`, from the job
+  runner) has no `Retry-After`, which NF-11.4 asks of every refused request;
+- 320 CSS pixels on the routes no spec checks yet, the repository management
+  page first (NF-12.4);
 - landscape on a phone viewport, on every page (NF-12.6);
-- `prefers-reduced-motion` turning animations off (NF-13.7).
+- `prefers-reduced-motion` turning animations off (NF-13.7);
+- nothing checks that a template shows no text outside Transloco (NF-14.2): a
+  lint rule in `tools/lint-rules` or a test over the templates, whichever is
+  simpler _(plan 148's finding; the choice is this plan's)_;
+- `editor.spec.ts`'s "NF-13.5: resizes the editor and the preview with the arrow
+  keys…" proves NF-13.6, not NF-13.5: renamed.
 
 **Architecture:** Tests only, each in the spec that already owns its page or
 area. A new spec, `apps/web-e2e/src/baseline.spec.ts`, holds only the checks

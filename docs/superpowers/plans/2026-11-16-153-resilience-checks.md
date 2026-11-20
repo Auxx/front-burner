@@ -76,7 +76,9 @@ the procedures this follows).
       `NF-9.5: a merge waiting for resolution survives a kill`; `NF-9.4: a stale
       index.lock is removed on start`; `NF-9.8: a full repositories volume
       refuses a save with storage-full and the file is unchanged`; `NF-9.8:
-      space freed, the save goes through`.
+      space freed, the save goes through`; `NF-10.1: the data volume holds no
+      log file after the runs` _(plan 148's addition: the container suite proves
+      the read-only root, not what lands in `/data`)_.
 - [ ] **Step 2: Run them** as plan 138 says; fix what fails, or plan it (index,
       Part F).
 - [ ] **Step 3: Commit** — `test(server-e2e): kills and a full disk`
@@ -107,7 +109,9 @@ the procedures this follows).
       image refuses the upgraded database and starts from the pre-upgrade
       snapshot`.
 - [ ] **Step 2: Run them**; fix what fails.
-- [ ] **Step 3: Fill the checklist rows.**
+- [ ] **Step 3: Fill the checklist rows**, including NF-9.1, NF-9.2 and NF-11.13
+      from the CI `image` job's run of the whole container suite, which plan 148
+      could not run locally.
 - [ ] **Step 4: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `test(server-e2e): backup, restore and
       upgrade`.
