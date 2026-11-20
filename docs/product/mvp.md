@@ -311,15 +311,17 @@ this section in the same change, without being asked:
 | [REQ-GIT-002](../requirements/git-advanced.md)          | 3, 4 | Done        | #85, #88, #89, #91, #93, #94, #95, #96, #97, #99, #100, #102, #103, #112, #116, #120, #121, #123, #124, #125, #126, #130, #131, #132, #133, #136, #137, #138, #155, #164 | —                                                       | —                           |
 | [REQ-GIT-003](../requirements/git-conflicts.md)         | 4    | Done        | #122, #126, #127, #128, #129, #135, #150, #151, #152, #153, #154, #155, #156, #157, #158, #159, #161, #162, #163, #164                                                   | —                                                       | —                           |
 | [REQ-REPO-003](../requirements/repo-manage.md)          | 5    | Done        | #30, #35, #126, #167, #169, #170, #171, #172, #173, #174, #175, #176, #178, #179, #180, #181, #182, #183, #184, #185, #186, #189, #190                                   | —                                                       | —                           |
-| [Deployment guide](../wiki/deployment.md)               | 6    | In progress | #216, #217, #218                                                                                                                                                         | The operator-facing parts listed in `docs/wiki/todo.md` | —                           |
+| [Deployment guide](../wiki/deployment.md)               | 6    | In progress | #216, #217, #218, #219                                                                                                                                                   | The operator-facing parts listed in `docs/wiki/todo.md` | —                           |
 
 ## Risks
 
-- **Locked out without SMTP.** With one administrator and no password reset, a
-  forgotten password locks the operator out. REQ-AUTH-001 leaves recovering an
-  instance where every administrator is lost to a separate requirement, as an
-  operator task. The MVP needs at least a documented recovery procedure in the
-  deployment guide.
+- **Locked out without SMTP.** _Resolved._ With one administrator and no
+  password reset, a forgotten password would lock the operator out. REQ-AUTH-001
+  leaves recovering an instance where every administrator is lost to a separate
+  requirement, as an operator task. The `reset-password` command (section 1)
+  sets a new password on the stopped instance, and the deployment guide's
+  [A lost password](../wiki/deployment.md#a-lost-password) describes the
+  procedure.
 - **Typing speed on phones.** _Resolved._ The check on a real phone (spike 3,
   `docs/wiki/typing-test.md`) found typing in large files too slow for NF-2.4,
   because of syntax highlighting. Files over 100 KB therefore open without
