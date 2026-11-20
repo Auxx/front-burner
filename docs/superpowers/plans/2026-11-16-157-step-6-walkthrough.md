@@ -18,6 +18,11 @@ Anything the guide gets wrong is fixed in it; anything the product gets wrong
 stops the release and gets a plan (index, Part F). Then the documents are
 closed.
 
+The checklist's NF-11.12 row is filled here, since only a pushed tag proves it:
+the operator pushes a release candidate tag (a pre-release, NF-7.2), and the
+walk verifies the published image's signature, provenance and SBOM as the
+guide's "Verifying the image" says, and uses that image _(plan 148's addition)_.
+
 **Tech Stack:** none new.
 
 **Spec:** `docs/product/mvp.md` (exit criteria, "Implementation status",

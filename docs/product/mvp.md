@@ -280,7 +280,9 @@ tools/ai-tools/src/bin/doc-ids.mjs criteria` lists the MVP criteria that no test
 names, in the form of the last column.
 
 The non-functional requirements are not tracked here. They are checked with the
-release checks (order of work, step 6).
+release checks (order of work, step 6), and
+[release-checks.md](../wiki/release-checks.md) records, for every MVP rule, what
+proves it and the result.
 
 **Keeping it up to date.** An agent that implements any part of the MVP updates
 this section in the same change, without being asked:
