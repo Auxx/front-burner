@@ -95,7 +95,7 @@ test.describe('administrator onboarding', () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
-  test('has no accessibility violations on any step', async ({ page }) => {
+  test('NF-13.8: has no accessibility violations on any step', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByLabel('Setup token', { exact: true })).toBeVisible();
     await expectNoAxeViolations(page);
@@ -110,7 +110,7 @@ test.describe('administrator onboarding', () => {
     await expectNoAxeViolations(page);
   });
 
-  test('does not scroll sideways at 320 px', async ({ page }) => {
+  test('NF-12.4: does not scroll sideways at 320 px', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await reachPasswordStep(page);
     await page.getByLabel('Password', { exact: true }).fill('abc');

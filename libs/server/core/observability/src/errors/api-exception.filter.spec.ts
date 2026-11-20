@@ -48,6 +48,16 @@ class TestController {
     throw new ThrottlerException();
   }
 
+  @Get('too-many')
+  tooMany() {
+    throw ApiErrorException.tooMany('too-many-jobs', 12.2);
+  }
+
+  @Get('too-many-plain')
+  tooManyPlain() {
+    throw new ApiErrorException(429, 'too-many-jobs');
+  }
+
   @Get('bad')
   bad() {
     throw new BadRequestException('nope');
@@ -247,6 +257,17 @@ describe('ApiExceptionFilter', () => {
     expect(res.status).toBe(429);
     expect(res.body.code).toBe('rate-limited');
     expect(ApiErrorSchema.safeParse(res.body).success).toBe(true);
+  });
+
+  it('NF-11.4: sends Retry-After on every 429: the exception\'s own, rounded up, or the one-minute window', async () => {
+    const own = await request(app.getHttpServer()).get('/test/too-many');
+    const plain = await request(app.getHttpServer()).get('/test/too-many-plain');
+
+    expect(own.status).toBe(429);
+    expect(own.body.code).toBe('too-many-jobs');
+    expect(own.headers['retry-after']).toBe('13');
+    expect(plain.status).toBe(429);
+    expect(plain.headers['retry-after']).toBe('60');
   });
 
   it('answers another client HttpException with 400 malformed-request', async () => {

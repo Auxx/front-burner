@@ -380,7 +380,7 @@ describe('CloneAgainService', () => {
     });
   });
 
-  it('counts towards the clone limit', async () => {
+  it('NF-11.4: counts towards the clone limit', async () => {
     // Three clones of other repositories are waiting (NF-11.4).
     for (const name of [ 'One', 'Two', 'Three' ]) {
       const id = insertRepository(database, alice.id, { name, status: 'cloning' });

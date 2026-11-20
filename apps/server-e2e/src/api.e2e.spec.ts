@@ -39,7 +39,7 @@ describe('server API', () => {
     }
   });
 
-  it('API responses carry NF-11.2 headers, no HSTS over HTTP, no X-RateLimit headers', async () => {
+  it('NF-11.2: API responses carry the security headers, no HSTS over HTTP, no X-RateLimit headers', async () => {
     const response = await fetch(`${server.url}/api/health/live`);
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     expect(response.headers.get('referrer-policy')).toBe('no-referrer');
@@ -82,7 +82,7 @@ describe('server API', () => {
     expect(((await response.json()) as { code: string; }).code).toBe('not-found');
   });
 
-  it('refuses a JSON body over 2 MB with 413 payload-too-large', async () => {
+  it('NF-11.5: refuses a JSON body over 2 MB with 413 payload-too-large', async () => {
     const response = await fetch(`${server.url}/api/nope`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

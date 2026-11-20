@@ -171,7 +171,7 @@ test.describe('repository management page', () => {
     await expect(page).toHaveURL(new RegExp(`/repositories/${long}$`));
   });
 
-  test('has no accessibility violations, empty or with repositories', async ({ page, instance }) => {
+  test('NF-13.8: has no accessibility violations, empty or with repositories', async ({ page, instance }) => {
     await openRepositories(page);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
@@ -341,7 +341,7 @@ test.describe('repository management page', () => {
       await expect(statusSection(page).getByRole('progressbar', { name: 'Cloning cloning-one' })).toBeVisible();
     });
 
-    test('fits a phone with a long error, and has no accessibility violations', async ({ page, instance, isMobile }) => {
+    test('NF-13.8: fits a phone with a long error, and has no accessibility violations', async ({ page, instance, isMobile }) => {
       const [ failed ] = seedRepositories(instance.dataDir, [
         {
           name: 'failed-one',
@@ -364,7 +364,7 @@ test.describe('repository management page', () => {
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     });
 
-    test('fits a phone and has no accessibility violations', async ({ page, instance, isMobile }) => {
+    test('NF-13.8: fits a phone and has no accessibility violations', async ({ page, instance, isMobile }) => {
       const [ long ] = seedRepositories(instance.dataDir, [
         {
           name: 'a-repository-with-a-rather-long-name-that-goes-on',
@@ -526,7 +526,7 @@ test.describe('the Credentials section', () => {
     expect(await page.content()).not.toContain(WRITER.password);
   });
 
-  test('Cancel in the dialog changes nothing, and the section has no accessibility violations', async ({ page, instance }) => {
+  test('NF-13.8: Cancel in the dialog changes nothing, and the section has no accessibility violations', async ({ page, instance }) => {
     const [ id ] = seed(instance.dataDir, { repositories: [ { userId: ADMIN_ID, name: 'public' } ] }).repositoryIds;
     await openSettings(page, id);
 
@@ -668,7 +668,7 @@ test.describe('Retry clone and Clone again', () => {
     expect(author.body).toMatchObject({ author: override, source: 'override' });
   });
 
-  test('cancelling the warning changes nothing, and the section has no accessibility violations', async ({ page, instance }) => {
+  test('NF-13.8: cancelling the warning changes nothing, and the section has no accessibility violations', async ({ page, instance }) => {
     const [ id ] = seed(instance.dataDir, {
       repositories: [ { userId: ADMIN_ID, name: 'damaged', status: 'error', errorCode: 'working-copy-missing' } ]
     }).repositoryIds;
@@ -783,7 +783,7 @@ test.describe('the Commit author section', () => {
     expect(await commitIn(page, alpha, 'Second in alpha')).toBe(ADMIN_AUTHOR);
   });
 
-  test('cancelling the dialog changes nothing, and the section has no accessibility violations', async ({ page, instance }) => {
+  test('NF-13.8: cancelling the dialog changes nothing, and the section has no accessibility violations', async ({ page, instance }) => {
     const [ alpha ] = handbooks(instance);
     await openSettings(page, alpha.id, false);
     await expect(section(page)).toContainText(`Commits use ${ADMIN_AUTHOR}`);

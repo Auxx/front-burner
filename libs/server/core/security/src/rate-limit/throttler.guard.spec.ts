@@ -79,14 +79,14 @@ describe('AppThrottlerGuard', () => {
     await app.close();
   });
 
-  it('allows 60 requests per minute', async () => {
+  it('NF-11.4: allows 60 requests per minute', async () => {
     for (let i = 0; i < 60; i++) {
       expect((await request(app.getHttpServer()).get('/ping')).status).toBe(200);
     }
     expect((await request(app.getHttpServer()).get('/ping')).status).toBe(429);
   });
 
-  it('sets Retry-After on 429', async () => {
+  it('NF-11.4: sets Retry-After on 429', async () => {
     for (let i = 0; i < 60; i++) {
       await request(app.getHttpServer()).get('/ping');
     }
@@ -106,7 +106,7 @@ describe('AppThrottlerGuard', () => {
     expect(Object.keys(limited.headers).filter(h => h.startsWith('x-ratelimit'))).toEqual([]);
   });
 
-  it('routes of a group share 10 requests per minute', async () => {
+  it('NF-11.4: routes of a group share 10 requests per minute', async () => {
     for (let i = 0; i < 5; i++) {
       expect((await request(app.getHttpServer()).get('/first/grouped')).status).toBe(200);
       expect((await request(app.getHttpServer()).get('/second/grouped')).status).toBe(200);
@@ -116,7 +116,7 @@ describe('AppThrottlerGuard', () => {
     expect(limited.headers['retry-after']).toMatch(/^[1-9]\d*$/);
   });
 
-  it('allows an authenticated user 600 requests per minute', async () => {
+  it('NF-11.4: allows an authenticated user 600 requests per minute', async () => {
     for (let i = 0; i < 600; i++) {
       expect((await request(app.getHttpServer()).get('/ping').set('x-test-user', '1')).status).toBe(200);
     }

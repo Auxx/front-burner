@@ -15,7 +15,7 @@ function createApp(trustProxy = false): express.Application {
 }
 
 describe('securityHeaders', () => {
-  it('sets NF-11.2\'s headers', async () => {
+  it('NF-11.2: sets the headers', async () => {
     const res = await request(createApp()).get('/');
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect(res.headers['referrer-policy']).toBe('no-referrer');
@@ -24,7 +24,7 @@ describe('securityHeaders', () => {
     expect(res.headers['cross-origin-resource-policy']).toBe('same-origin');
   });
 
-  it('sends HSTS only over HTTPS', async () => {
+  it('NF-11.2: sends HSTS only over HTTPS', async () => {
     const plain = await request(createApp(true)).get('/');
     expect(plain.headers['strict-transport-security']).toBeUndefined();
     const secure = await request(createApp(true)).get('/').set('X-Forwarded-Proto', 'https');
@@ -36,7 +36,7 @@ describe('securityHeaders', () => {
     expect(res.headers['strict-transport-security']).toBeUndefined();
   });
 
-  it('allows clipboard-write for the page itself only', () => {
+  it('NF-11.2: allows clipboard-write for the page itself only', () => {
     expect(PERMISSIONS_POLICY).toContain('clipboard-write=(self)');
     expect(PERMISSIONS_POLICY).toContain('camera=()');
     expect(PERMISSIONS_POLICY).not.toContain('clipboard-read');

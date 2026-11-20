@@ -260,6 +260,12 @@ numbering conventions.
   client does it with Transloco.
 - **A-3.9** Validation errors list each failing field with its own code, so that
   forms can show errors next to fields.
+- **A-3.9a** Every `429` carries `Retry-After` in whole seconds (NF-11.4). The
+  rate limits set the time until their window frees a request; a key's unlock
+  limit, until its oldest counted wrong passphrase leaves the minute (RC-18); a
+  job type's per-user limit, such as the clone limit, 30 seconds, since no job's
+  end can be foreseen; any other `429` falls back to the one-minute window
+  (`ApiErrorException.tooMany`, `ApiExceptionFilter`). _(Plan 149's call.)_
 
 ## A-3: Push channel
 

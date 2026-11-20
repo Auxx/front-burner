@@ -390,7 +390,7 @@ describe('folder listing (REQ-FILE-001)', () => {
       expect(other).toEqual(missing);
     });
 
-    it('counts image requests in the per-user rate limit', async () => {
+    it('NF-11.4: counts image requests in the per-user rate limit', async () => {
       // A user of their own, so that the other tests keep their budget.
       const { userIds: [ carolId ] } = seed(server.dataDir, { users: [ { email: 'carol@example.com' } ] });
       const carol = (await login(server, 'body', { email: 'carol@example.com', password: E2E_ADMIN.password }))
@@ -414,6 +414,7 @@ describe('folder listing (REQ-FILE-001)', () => {
 
       const limited = await image('logo.png', carol, repository);
       expect(limited.status).toBe(429);
+      expect(limited.headers.get('retry-after')).toMatch(/^[1-9]\d*$/);
       expect(await limited.json()).toMatchObject({ code: 'rate-limited' });
     }, 60_000);
   });

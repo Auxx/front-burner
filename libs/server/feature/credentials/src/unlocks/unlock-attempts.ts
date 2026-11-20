@@ -20,11 +20,17 @@ export class UnlockAttempts {
    */
   readonly #wrong = new Map<string, number[]>();
 
-  /** @throws ApiErrorException 429 `unlock-too-many-attempts` once the key's limit is reached. */
+  /**
+   * @throws ApiErrorException 429 `unlock-too-many-attempts` once the key's
+   * limit is reached, with `Retry-After` set to when the oldest wrong attempt
+   * leaves the window (NF-11.4).
+   */
   assertAllowed(userId: number, keyId: number): void {
     this.forgetExpired();
-    if ((this.#wrong.get(keyOf(userId, keyId))?.length ?? 0) >= UNLOCK_ATTEMPT_LIMIT) {
-      throw new ApiErrorException(429, 'unlock-too-many-attempts');
+    const times = this.#wrong.get(keyOf(userId, keyId)) ?? [];
+    if (times.length >= UNLOCK_ATTEMPT_LIMIT) {
+      const waitMs = times[times.length - UNLOCK_ATTEMPT_LIMIT] + UNLOCK_ATTEMPT_WINDOW_MS - performance.now();
+      throw ApiErrorException.tooMany('unlock-too-many-attempts', waitMs / 1000);
     }
   }
 

@@ -2383,7 +2383,7 @@ test.describe('a changed host key', () => {
     );
   });
 
-  test('a long fingerprint wraps within the dialog at 320 px; Cancel changes nothing, and the push stays failed', async ({ page, instance }) => {
+  test('NF-12.4: a long fingerprint wraps within the dialog at 320 px; Cancel changes nothing, and the push stays failed', async ({ page, instance }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     const { bare } = await reviewChangedKey(page, instance);
     const before = gitIn(bare, 'rev-parse', 'main').trim();
@@ -2565,7 +2565,7 @@ test.describe('the commit author', () => {
     drainFailedRequests(monitor, `/api/v1/repositories/${id}/commit-author`);
   });
 
-  test('a very long name and email wrap and stay readable at 320 px', async ({ page, instance }) => {
+  test('NF-12.4: a very long name and email wrap and stay readable at 320 px', async ({ page, instance }) => {
     const { id, dir } = unconfirmedHandbook(instance);
     const name = 'Ada'.repeat(60);
     const email = `${'a'.repeat(120)}@${'b'.repeat(120)}`;

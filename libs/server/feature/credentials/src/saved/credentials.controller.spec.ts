@@ -198,6 +198,9 @@ describe('credentials endpoints', () => {
     const response = await unlock(FIXTURE_PASSPHRASE).expect(429);
 
     expect(response.body).toMatchObject({ code: 'unlock-too-many-attempts' });
+    // NF-11.4: when the first wrong attempt leaves the minute's window.
+    expect(Number(response.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+    expect(Number(response.headers['retry-after'])).toBeLessThanOrEqual(60);
   });
 
   it('answers 404 for another user\'s credential', async () => {

@@ -82,7 +82,8 @@ async function waitUntilReady(url: string, child: ChildProcess, output: () => st
   throw new Error(`The server was not ready after ${READY_TIMEOUT_MS} ms:\n${output()}`);
 }
 
-async function onboard(url: string): Promise<void> {
+/** Completes onboarding through the API as `TEST_ADMIN`, as `onboarded` does before a test. */
+export async function onboard(url: string): Promise<void> {
   const response = await fetch(`${url}/api/v1/onboarding/password-setup`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

@@ -7,7 +7,13 @@ import { eq } from 'drizzle-orm';
 import { Registry } from 'prom-client';
 import { createTestDatabase } from '../testing/test-database';
 import { CLONES, JOB_DURATION, JOB_FAILURES, JOBS_QUEUED } from './job-metrics';
-import { INTERRUPTED_ATTEMPT_LIMIT, JobRunner, SHUTDOWN_GRACE_MS, START_SPREAD_MS } from './job-runner';
+import {
+  INTERRUPTED_ATTEMPT_LIMIT,
+  JOB_LIMIT_RETRY_AFTER_SECONDS,
+  JobRunner,
+  SHUTDOWN_GRACE_MS,
+  START_SPREAD_MS
+} from './job-runner';
 import type { JobTypeDefinition, RunningJob } from './job-types';
 
 const NOW = new Date('2026-10-27T12:00:00Z');
@@ -156,7 +162,7 @@ describe('JobRunner', () => {
     }
 
     expect(() => runner.enqueue({ type: 'test.controlled', userId, payload: {} })).toThrow(
-      expect.objectContaining({ code: 'too-many-jobs' })
+      expect.objectContaining({ code: 'too-many-jobs', retryAfterSeconds: JOB_LIMIT_RETRY_AFTER_SECONDS })
     );
     // Jobs without a user have no limit.
     expect(() => runner.enqueue({ type: 'test.controlled', payload: {} })).not.toThrow();

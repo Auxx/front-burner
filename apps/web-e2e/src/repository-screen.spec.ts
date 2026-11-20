@@ -291,7 +291,7 @@ test.describe('repository screen', () => {
     drainFailedRequests(monitor, `/api/v1/repositories/${theirs}/open`);
   });
 
-  test('has no axe violations', async ({ page, instance }) => {
+  test('NF-13.8: has no axe violations', async ({ page, instance }) => {
     const [ handbook, cloning ] = seedRepositories(instance.dataDir, [
       { name: 'handbook' },
       { name: 'cloning-one', status: 'cloning' }
@@ -542,7 +542,7 @@ test.describe('repository screen', () => {
     await expect(tree(page)).toBeHidden();
   });
 
-  test('has no axe violations with folders expanded and an ignored message open', async ({ page, instance, isMobile }) => {
+  test('NF-13.8: has no axe violations with folders expanded and an ignored message open', async ({ page, instance, isMobile }) => {
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
     await openScreen(page, `/repositories/${handbook}/files/docs/guide.md`);
     await showTree(page);
@@ -722,7 +722,7 @@ test.describe('repository screen', () => {
     await expect(page).toHaveURL(new RegExp(`/repositories/${handbook}/files/docs/overview.md$`));
   });
 
-  test('has no axe violations with each dialog open', async ({ page, instance, isMobile }) => {
+  test('NF-13.8: has no axe violations with each dialog open', async ({ page, instance, isMobile }) => {
     // Without the dialogs' opening animation, which axe would see half-transparent.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
@@ -893,7 +893,7 @@ test.describe('repository screen', () => {
     await expect(entry(page, 'logo.png')).toHaveCount(0);
   });
 
-  test('has no axe violations with the delete dialog open', async ({ page, instance, isMobile }) => {
+  test('NF-13.8: has no axe violations with the delete dialog open', async ({ page, instance, isMobile }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
     await openScreen(page, `/repositories/${handbook}/files/README.md`);
@@ -987,7 +987,7 @@ test.describe('repository screen, kept up to date', () => {
     await expect(rows.filter({ hasText: 'site.html' })).toHaveCount(0);
   });
 
-  test('says No changes since the last commit, and has no axe violations with changes', async ({ page, instance, isMobile }) => {
+  test('NF-13.8: says No changes since the last commit, and has no axe violations with changes', async ({ page, instance, isMobile }) => {
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
     await openScreen(page, `/repositories/${handbook}`);
     await showChanges(page);
@@ -1125,7 +1125,7 @@ test.describe('repository screen, kept up to date', () => {
     await expect(page.getByRole('button', { name: /more rows/ })).toHaveCount(0);
   });
 
-  test('opens a fold in place, and keeps a long line inside the diff at 320 px', async ({ page, instance }) => {
+  test('NF-12.4: opens a fold in place, and keeps a long line inside the diff at 320 px', async ({ page, instance }) => {
     const [ handbook ] = seedRepositories(instance.dataDir, [ { name: 'handbook', workingCopy: 'handbook' } ]);
     const lines = Array.from({ length: 48 }, (_, index) => `line ${index + 1}`);
     const dir = workingCopyOf(instance.dataDir, handbook);
@@ -1673,7 +1673,7 @@ test.describe('repository screen, kept up to date', () => {
     drainFailedRequests(monitor, `/api/v1/repositories/${handbook}/git/merge`);
   });
 
-  test('has no axe violations with the switcher open', async ({ page, instance, isMobile }) => {
+  test('NF-13.8: has no axe violations with the switcher open', async ({ page, instance, isMobile }) => {
     const [ handbook ] = seedRepositories(instance.dataDir, [
       { name: 'handbook', lastAccessedAt: minutesAgo(60) },
       { name: 'guides', lastAccessedAt: minutesAgo(5) },

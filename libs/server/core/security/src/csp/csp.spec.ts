@@ -1,7 +1,7 @@
 import { contentSecurityPolicy, createNonce } from './csp';
 
 describe('contentSecurityPolicy', () => {
-  it('builds NF-11.1\'s policy', () => {
+  it('NF-11.1: builds the policy', () => {
     expect(contentSecurityPolicy('abc')).toBe(
       'default-src \'none\'; script-src \'self\'; style-src \'self\' \'nonce-abc\'; '
         + 'img-src \'self\' blob: data: https:; connect-src \'self\'; font-src \'self\'; '

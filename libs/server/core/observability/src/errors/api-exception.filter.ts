@@ -94,6 +94,9 @@ const MESSAGES: Record<ErrorCode, string> = {
   interrupted: 'This was interrupted by a restart. Try again.'
 };
 
+/** `Retry-After` of a `429` that names no time of its own: the rate limits' one-minute window (NF-11.4). */
+const DEFAULT_RETRY_AFTER_SECONDS = 60;
+
 /**
  * 5xx answers that describe the instance's state rather than a failure of the
  * request, so not logged as unhandled: whatever watches the state logs it once
@@ -150,6 +153,13 @@ export class ApiExceptionFilter implements ExceptionFilter {
       } else {
         this.logger.error('Unhandled exception', error.stack);
       }
+    }
+
+    // NF-11.4: every refused request says when to try again. The throttler
+    // guard sets its own; a 429 thrown without one gets the rate-limit window.
+    if (answer.status === 429 && !res.hasHeader('Retry-After')) {
+      const seconds = exception instanceof ApiErrorException ? exception.retryAfterSeconds : undefined;
+      res.setHeader('Retry-After', String(seconds ?? DEFAULT_RETRY_AFTER_SECONDS));
     }
 
     const body: ApiError = {

@@ -8,6 +8,8 @@ import plugin from './index.mjs';
 const templateRules = {
   'front-burner/attribute-layout': 'error',
   'front-burner/no-template-calls': [ 'error', { allowedFunctions: [ 't', 'e', 'root' ] } ],
+  // NF-14.2: every UI string goes through Transloco.
+  'front-burner/no-raw-text': 'error',
   '@angular-eslint/template/no-any': 'error',
   '@angular-eslint/template/prefer-control-flow': 'error',
   '@angular-eslint/template/banana-in-box': 'error',
@@ -49,6 +51,13 @@ export default [
         .filter(rule => !specHostRules.includes(rule))
         .map(rule => [ rule, 'off' ])
     )
+  },
+  {
+    // Not shown in the product: the web client's index.html, whose <title> the
+    // router replaces with a translated one, and the design token overview,
+    // which only Storybook shows to developers.
+    files: [ '**/src/index.html', '**/design-tokens/**/*.html' ],
+    rules: { 'front-burner/no-raw-text': 'off' }
   },
   {
     // Storybook stories are out of scope (see the design spec's non-goals).
