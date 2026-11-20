@@ -19,7 +19,8 @@
         },
         "tags": [
           "health"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/health/ready": {
@@ -50,7 +51,8 @@
         },
         "tags": [
           "health"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/instance/storage": {
@@ -71,7 +73,8 @@
         },
         "tags": [
           "instance"
-        ]
+        ],
+        "x-front-burner-access": "admin"
       }
     },
     "/api/v1/auth/methods": {
@@ -92,7 +95,8 @@
         },
         "tags": [
           "auth"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/auth/login": {
@@ -123,7 +127,8 @@
         },
         "tags": [
           "auth"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/auth/session/refresh": {
@@ -154,7 +159,8 @@
         },
         "tags": [
           "auth"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/auth/session/logout": {
@@ -178,7 +184,8 @@
         },
         "tags": [
           "auth"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/auth/oidc/start": {
@@ -192,7 +199,8 @@
         },
         "tags": [
           "oidc"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/auth/oidc/callback": {
@@ -206,7 +214,8 @@
         },
         "tags": [
           "oidc"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/auth/oidc/exchange": {
@@ -237,7 +246,8 @@
         },
         "tags": [
           "oidc"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/me": {
@@ -2274,7 +2284,8 @@
         },
         "tags": [
           "onboarding"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/onboarding/setup-token/check": {
@@ -2298,7 +2309,8 @@
         },
         "tags": [
           "onboarding"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/onboarding/password-setup": {
@@ -2322,7 +2334,8 @@
         },
         "tags": [
           "onboarding"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/onboarding/oidc-setup": {
@@ -2346,7 +2359,8 @@
         },
         "tags": [
           "onboarding"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     },
     "/api/v1/onboarding/oidc-setup/current": {
@@ -2377,7 +2391,8 @@
         },
         "tags": [
           "onboarding"
-        ]
+        ],
+        "x-front-burner-access": "public"
       }
     }
   },

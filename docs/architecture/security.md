@@ -58,6 +58,13 @@ top of the security rules in the requirements and NF-11. See
   gets it from a guard that looks it up by **ID and current user**; anything
   else gets `404`, as if it did not exist (AR-56). Services receive the resolved
   object, never a bare ID.
+
+  As built _(security review, plan 145)_: there is no ownership guard. Each
+  service looks the repository, saved credential or job up by ID and the current
+  user before using it (for example `SavedCredentialsService.findOwned` and
+  `GitJobsService.state`), with the same `404 not-found` for another user's ID
+  and a missing one. A-7.5's test proves this for every route, so a new route
+  cannot skip the lookup unnoticed.
 - **A-7.4** **Role.** Administrator routes are marked `@AdminOnly()` and live
   under `/api/v1/admin/`. Administrators reach other users' repositories through
   administration pages (REQ-DASH-001), so admin routes may read and manage
@@ -81,6 +88,16 @@ top of the security rules in the requirements and NF-11. See
 - **A-7.5** An API test goes through every non-admin route that takes an ID and
   checks that another user's IDs get `404`, and through every admin route to
   check that a non-administrator gets `403`.
+
+  As built _(plan 145)_: `apps/server-e2e/src/access.e2e.spec.ts` finds the
+  routes itself in the OpenAPI document, which CI keeps equal to the code.
+  `@Public()` and `@AdminOnly()` mark their routes there with the extension
+  `x-front-burner-access` (`public` or `admin`), which clients ignore. The test
+  also checks that the public routes are exactly A-7.2's. A route that needs a
+  query or a body to pass validation, which runs before the lookup, gets one in
+  the test; without it, the test fails and names the route. Routes left out of
+  the OpenAPI document (the push channel and the metrics) take no ID in their
+  path, and the security review covers them by reading.
 
 ## A-7: File system
 

@@ -158,6 +158,18 @@ describe('OidcLoginService', () => {
     expect(await service.complete(callbackUrl, state, info)).toEqual({ ok: false, reason: 'invalid-id-token' });
   });
 
+  // Security review (plan 145): an ID token counts only from the configured issuer, for this client.
+  it('reports an ID token from another issuer or for another client as invalid-id-token', async () => {
+    // setClaims adds to earlier claims, so the second case puts the right issuer back.
+    for (const claims of [ { iss: 'https://id.example.com' }, { iss: provider.issuer, aud: 'another-client' } ]) {
+      provider.setClaims(claims);
+      const { callbackUrl, state } = await authorize();
+      expect(await service.complete(callbackUrl, state, info), JSON.stringify(claims))
+        .toEqual({ ok: false, reason: 'invalid-id-token' });
+    }
+    expect(database.db.select().from(users).all()).toEqual([]);
+  });
+
   it('takes preferred_username from the ID token when it has no name', async () => {
     provider.setClaims({ name: undefined, preferred_username: 'ada' });
     const { callbackUrl, state } = await authorize();

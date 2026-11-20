@@ -301,6 +301,23 @@ describe('password login and sessions', () => {
     expect(auditReasons(server).slice(-2)).toEqual([ 'rate-limited', 'rate-limited' ]);
   });
 
+  it('LG-65: refreshes are limited per address, even with a valid auth token', async () => {
+    // Security review (plan 145): an auth token must not move refreshes to the per-user limit.
+    const server = await onboarded();
+    const session = await login(server, 'body');
+    const headers = { authorization: `Bearer ${session.authToken}` };
+    let refreshToken = session.refreshToken;
+    for (let i = 0; i < 60; i++) {
+      const refreshed = await postJson(server, REFRESH, { refreshToken }, headers);
+      expect(refreshed.status, `refresh ${i + 1}`).toBe(200);
+      refreshToken = ((await refreshed.json()) as { refreshToken: string; }).refreshToken;
+    }
+
+    const limited = await postJson(server, REFRESH, { refreshToken }, headers);
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('retry-after')).toMatch(/^[1-9]\d*$/);
+  });
+
   it('a restart keeps the session', async () => {
     const dataDir = ownDataDir();
     const first = await onboarded({ FRONT_BURNER_DATA_DIR: dataDir });
