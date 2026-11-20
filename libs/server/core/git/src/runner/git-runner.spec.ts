@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GitOperationError, WORKING_COPY_FOLDER_GONE } from '../engine/git-errors';
@@ -52,6 +52,7 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
         'protocol.https.allow=always',
         'protocol.ssh.allow=always',
         'core.hookspath=/dev/null',
+        'core.fsmonitor=false',
         'core.autocrlf=false',
         'submodule.recurse=false',
         'credential.helper='
@@ -62,6 +63,25 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
     // Nothing from a system or global file: only the repository's own config.
     const files = lines.filter(line => line.startsWith('file:')).map(line => line.split('\t')[0]);
     expect(new Set(files)).toEqual(new Set([ 'file:.git/config' ]));
+  });
+
+  it('never runs a program that the repository\'s own config names as its fsmonitor', async () => {
+    execFileSync('git', [ 'init', '-q', '-b', 'main', dir ]);
+    writeFileSync(join(dir, 'a.md'), 'a\n');
+    execFileSync('git', [ '-C', dir, 'add', 'a.md' ]);
+    const marker = join(dir, '..', `${dir.split('/').pop() ?? ''}-fsmonitor-ran`);
+    const hook = join(dir, 'fsmonitor.sh');
+    writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+    execFileSync('git', [ '-C', dir, 'config', 'core.fsmonitor', hook ]);
+
+    try {
+      const result = await runner.run([ 'status', '--porcelain' ], { cwd: dir, timeoutMs: 10_000 });
+
+      expect(result.exitCode).toBe(0);
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      rmSync(marker, { force: true });
+    }
   });
 
   it('passes stderr on as git writes it, and still collects it', async () => {

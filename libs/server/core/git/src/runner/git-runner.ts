@@ -20,6 +20,9 @@ const HARDENING = [
   '-c',
   'core.hooksPath=/dev/null',
   '-c',
+  // Runs a program on every status, like a hook; the repository's config must not choose one.
+  'core.fsmonitor=false',
+  '-c',
   'core.autocrlf=false',
   '-c',
   'submodule.recurse=false',

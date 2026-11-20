@@ -19,8 +19,9 @@ where git may connect. Lives in `server/git` (A-2). See
     authority can point git at it (AR-43); _(my call)_
   - hardening is passed as `-c` options on every call: `protocol.allow=never`,
     `protocol.https.allow=always`, `protocol.ssh.allow=always` (NF-11.6),
-    `core.hooksPath=/dev/null`, `core.autocrlf=false`,
-    `submodule.recurse=false`;
+    `core.hooksPath=/dev/null`, `core.fsmonitor=false` (which, like a hook,
+    names a program to run, on every status), `core.autocrlf=false`,
+    `submodule.recurse=false`, `credential.helper=`;
   - every run has a timeout (`FRONT_BURNER_CLONE_TIMEOUT` for clones,
     `FRONT_BURNER_GIT_TIMEOUT` otherwise, NF-11.8) and a cap on the output it
     reads; on timeout or shutdown the whole process group is killed, and so it
