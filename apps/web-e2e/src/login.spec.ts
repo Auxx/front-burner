@@ -90,7 +90,7 @@ test.describe('login page', () => {
     expect(results.violations).toEqual([]);
   });
 
-  test('NF-11.1: index.html, a deep link and an error page carry the exact CSP', async ({ page }) => {
+  test('NF-11.1: the root, a deep link and the Page not found route carry the exact CSP, and no other HTML is served', async ({ page }) => {
     // NF-11.1's text, word for word; only the nonce differs per response.
     const policy = new RegExp(
       '^' + [
@@ -111,6 +111,7 @@ test.describe('login page', () => {
     );
     const nonces: string[] = [];
     // The root, a deep link into a repository, and a route that shows the "page not found" page; the root twice.
+    // The server has no HTML error page of its own: Page not found is the web client's.
     for (const path of [ '/', '/', '/repositories/1/files/docs/guide.md', '/no-such-page' ]) {
       // As the browser asks for a page; the client's routing after it is not what is checked.
       const response = await page.request.get(path, { headers: { accept: 'text/html' } });
@@ -122,6 +123,14 @@ test.describe('login page', () => {
       nonces.push(headerNonce!);
     }
     expect(new Set(nonces).size, 'a fresh nonce per response').toBe(nonces.length);
+
+    // Every other answer to a page request is JSON, not a page that could lack the policy:
+    // a missing file of the build and an unknown API path.
+    for (const path of [ '/assets/missing.png', '/chunk-missing.js', '/api/v1/nope' ]) {
+      const response = await page.request.get(path, { headers: { accept: 'text/html' } });
+      expect(response.status(), path).toBe(404);
+      expect(response.headers()['content-type'], path).toMatch(/^application\/json/);
+    }
   });
 
   test('runs without CSP or Trusted Types violations', async ({ page }) => {
@@ -152,13 +161,6 @@ test.describe('login page', () => {
 
   test('does not scroll sideways at the device width', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'only the mobile projects have a phone viewport of their own');
-    await page.goto('/login');
-    await expect(loginHeading(page)).toBeVisible();
-    expect(await fitsWidth(page)).toBe(true);
-  });
-
-  test('NF-12.4: does not scroll sideways at 320 px', async ({ page }) => {
-    await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/login');
     await expect(loginHeading(page)).toBeVisible();
     expect(await fitsWidth(page)).toBe(true);

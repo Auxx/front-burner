@@ -52,7 +52,7 @@ describe('UnlockAttempts', () => {
     }
     vi.advanceTimersByTime(10_500);
 
-    // 60 s after the first attempt, 30.5 s from now: rounded up.
+    // The first attempt, at 0 s, leaves the window at 60 s: 29.5 s after now (30.5 s), rounded up.
     expect(() => attempts.assertAllowed(1, 7)).toThrow(
       expect.objectContaining({ code: 'unlock-too-many-attempts', retryAfterSeconds: 30 })
     );

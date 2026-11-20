@@ -143,11 +143,15 @@ reported as a call.
 ## No text outside Transloco (lint)
 
 Every word a person reads or hears goes through Transloco (NF-14.2). Lint
-(`front-burner/no-raw-text`) reports text with a letter between tags or around
-an interpolation, and a static `aria-label`, `title`, `placeholder`, `alt`,
-`label` or other read-out attribute with a letter. Punctuation and symbols alone
-(`·`, `/`) pass, and so does the text of `<code>`, `<kbd>` and `<samp>`, such as
-an example URL or a variable's name.
+(`front-burner/no-raw-text`) reports text with a letter between tags, around an
+interpolation or as a string an interpolation shows (`{{ x ? 'Open' : … }}`, `{{
+name() ?? 'None' }}`), and the same in an `aria-label`, `title`, `placeholder`,
+`alt`, `label` or other read-out attribute, static or bound (`title="Delete {{
+name() }}"`, `[attr.aria-label]="'Close'"`). Punctuation and symbols alone (`·`,
+`/`) pass, and so does the text of `<code>`, `<kbd>` and `<samp>`, such as an
+example URL or a variable's name. Strings a call receives, such as translation
+keys, and strings of other bindings, such as `[variant]="'primary'"`, are not
+shown as they are and pass.
 
 ```html
 <!-- Bad -->

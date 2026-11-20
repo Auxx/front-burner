@@ -1,19 +1,14 @@
 import type { Config } from '@front-burner/server-core-config';
 import { Database, jobs, JobStatus, repositories, users } from '@front-burner/server-core-database';
 import type { EventsHub } from '@front-burner/server-core-events';
+import { DEFAULT_RETRY_AFTER_SECONDS } from '@front-burner/server-core-observability';
 import { metricSample, metricSamples } from '@front-burner/server-core-observability/testing';
 import type { PushEvent } from '@front-burner/shared-contracts';
 import { eq } from 'drizzle-orm';
 import { Registry } from 'prom-client';
 import { createTestDatabase } from '../testing/test-database';
 import { CLONES, JOB_DURATION, JOB_FAILURES, JOBS_QUEUED } from './job-metrics';
-import {
-  INTERRUPTED_ATTEMPT_LIMIT,
-  JOB_LIMIT_RETRY_AFTER_SECONDS,
-  JobRunner,
-  SHUTDOWN_GRACE_MS,
-  START_SPREAD_MS
-} from './job-runner';
+import { INTERRUPTED_ATTEMPT_LIMIT, JobRunner, SHUTDOWN_GRACE_MS, START_SPREAD_MS } from './job-runner';
 import type { JobTypeDefinition, RunningJob } from './job-types';
 
 const NOW = new Date('2026-10-27T12:00:00Z');
@@ -155,17 +150,26 @@ describe('JobRunner', () => {
     expect(database.db.select().from(jobs).all()).toHaveLength(1);
   });
 
-  it('refuses more than the per-user limit', () => {
-    controlledType({ perUserLimit: 3 });
+  it('refuses more than the per-user limit, with the type\'s Retry-After (NF-11.4)', () => {
+    controlledType({ perUserLimit: 3, perUserLimitRetryAfterSeconds: 45 });
     for (let i = 0; i < 3; i++) {
       runner.enqueue({ type: 'test.controlled', userId, payload: {} });
     }
 
     expect(() => runner.enqueue({ type: 'test.controlled', userId, payload: {} })).toThrow(
-      expect.objectContaining({ code: 'too-many-jobs', retryAfterSeconds: JOB_LIMIT_RETRY_AFTER_SECONDS })
+      expect.objectContaining({ code: 'too-many-jobs', retryAfterSeconds: 45 })
     );
     // Jobs without a user have no limit.
     expect(() => runner.enqueue({ type: 'test.controlled', payload: {} })).not.toThrow();
+  });
+
+  it('NF-11.4: a type without its own Retry-After refuses with the one-minute default', () => {
+    controlledType({ perUserLimit: 1 });
+    runner.enqueue({ type: 'test.controlled', userId, payload: {} });
+
+    expect(() => runner.enqueue({ type: 'test.controlled', userId, payload: {} })).toThrow(
+      expect.objectContaining({ code: 'too-many-jobs', retryAfterSeconds: DEFAULT_RETRY_AFTER_SECONDS })
+    );
   });
 
   it('records the error code of a failed job', async () => {

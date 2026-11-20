@@ -1,7 +1,11 @@
 import { CONFIG, Config } from '@front-burner/server-core-config';
 import { DATABASE, Database, Job, jobs, Tx } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
-import { ApiErrorException, METRICS_REGISTRY } from '@front-burner/server-core-observability';
+import {
+  ApiErrorException,
+  DEFAULT_RETRY_AFTER_SECONDS,
+  METRICS_REGISTRY
+} from '@front-burner/server-core-observability';
 import { BeforeApplicationShutdown, Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { and, asc, count, eq, inArray, lte, SQL, sql } from 'drizzle-orm';
 import type { Registry } from 'prom-client';
@@ -14,11 +18,6 @@ export const TICK_MS = 1000;
 export const SHUTDOWN_GRACE_MS = 25_000;
 /** Overdue jobs of `spreadOnStart` types run within this time after a start (A-6.8). */
 export const START_SPREAD_MS = 120_000;
-/**
- * `Retry-After` of a job refused at its per-user limit (NF-11.4). No job's end
- * can be foreseen, so this is a guess: about the time a small clone takes.
- */
-export const JOB_LIMIT_RETRY_AFTER_SECONDS = 30;
 const PROGRESS_INTERVAL_MS = 1000;
 const UNFINISHED = [ 'queued', 'running' ] as const;
 
@@ -132,7 +131,10 @@ export class JobRunner implements OnApplicationBootstrap, BeforeApplicationShutd
         inArray(jobs.status, UNFINISHED)
       )).all();
       if (waiting >= definition.perUserLimit) {
-        throw ApiErrorException.tooMany('too-many-jobs', JOB_LIMIT_RETRY_AFTER_SECONDS);
+        throw ApiErrorException.tooMany(
+          'too-many-jobs',
+          definition.perUserLimitRetryAfterSeconds ?? DEFAULT_RETRY_AFTER_SECONDS
+        );
       }
     }
     const now = new Date();

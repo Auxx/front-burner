@@ -1,5 +1,6 @@
 import { ErrorCode, FieldError } from '@front-burner/shared-contracts';
 import { HttpException } from '@nestjs/common';
+import { retryAfterSeconds } from './retry-after';
 
 /**
  * What features throw to answer with an `ApiError` (A-3.3). `code` is an
@@ -14,19 +15,19 @@ export class ApiErrorException extends HttpException {
     readonly code: ErrorCode | string,
     readonly params: Record<string, unknown> = {},
     /** English fallback; the filter uses its own text for the shared codes when omitted. */
-    readonly fallbackMessage?: string
+    readonly fallbackMessage?: string,
+    /**
+     * Seconds a client should wait before trying again, sent as `Retry-After`
+     * on a `429` (NF-11.4); see {@link ApiErrorException.tooMany}.
+     */
+    readonly retryAfterSeconds?: number
   ) {
     super(fallbackMessage ?? code, status);
   }
 
-  /** Seconds a client should wait before trying again; sent as `Retry-After` on a `429` (NF-11.4). */
-  readonly retryAfterSeconds?: number;
-
-  /** A `429` with the `Retry-After` it is sent with, in whole seconds of at least 1 (NF-11.4). */
-  static tooMany(code: ErrorCode, retryAfterSeconds: number): ApiErrorException {
-    const exception = new ApiErrorException(429, code);
-    Object.assign(exception, { retryAfterSeconds: Math.max(1, Math.ceil(retryAfterSeconds)) });
-    return exception;
+  /** A `429` sent with `Retry-After`, the wait normalised by {@link retryAfterSeconds} (NF-11.4, A-3.9a). */
+  static tooMany(code: ErrorCode, waitSeconds: number): ApiErrorException {
+    return new ApiErrorException(429, code, {}, undefined, retryAfterSeconds(waitSeconds));
   }
 
   /** A `400 validation-failed` naming the fields, as a refused form submission. */

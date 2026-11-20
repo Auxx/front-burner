@@ -38,6 +38,12 @@ export interface JobTypeDefinition<P = unknown, R = unknown> {
   /** At most this many queued or running jobs of this type per user (NF-11.4). */
   perUserLimit?: number;
   /**
+   * The `Retry-After` of a job refused at `perUserLimit`, in seconds: about
+   * how long a job of this type takes, since no job's end can be foreseen.
+   * Without it, the one-minute default (NF-11.4, A-3.9a).
+   */
+  perUserLimitRetryAfterSeconds?: number;
+  /**
    * A repeating type: the runner keeps one unfinished job of it, with the
    * dedupe key `repeat:<type>`, and queues the next one this long after each
    * finishes.

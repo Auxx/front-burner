@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { Logger as PinoLogger } from 'pino';
 import { withoutPaths } from '../logging/error-for-log';
 import { ApiErrorException } from './api-error.exception';
+import { DEFAULT_RETRY_AFTER_SECONDS } from './retry-after';
 
 /** English fallback text per code (A-3.3); clients translate by `code`. */
 const MESSAGES: Record<ErrorCode, string> = {
@@ -93,9 +94,6 @@ const MESSAGES: Record<ErrorCode, string> = {
   'repository-not-found': 'The remote repository wasn\'t found.',
   interrupted: 'This was interrupted by a restart. Try again.'
 };
-
-/** `Retry-After` of a `429` that names no time of its own: the rate limits' one-minute window (NF-11.4). */
-const DEFAULT_RETRY_AFTER_SECONDS = 60;
 
 /**
  * 5xx answers that describe the instance's state rather than a failure of the

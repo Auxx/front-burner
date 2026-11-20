@@ -41,9 +41,13 @@ plugin from `src/index.mjs`, registers it under the name `front-burner` and
 turns the rule on in its own config.
 
 `no-raw-text` reports template text and read-out attributes (`aria-label`,
-`title`, `placeholder`, `alt`, …) that do not go through Transloco (NF-14.2). It
-is off for the web client's `index.html` and the design token overview, which
-the product does not show.
+`title`, `placeholder`, `alt`, …), static or bound, that do not go through
+Transloco (NF-14.2): text between tags, around an interpolation, and the string
+literals an expression shows as they are (both branches of a conditional, either
+side of `??`, `||` and `+`, a piped value, a template literal's text). Strings a
+call receives, such as translation keys, are not checked. It is off for the web
+client's `index.html` and the design token overview, which the product does not
+show.
 
 `attribute-layout` reports, but does not fix, a tag that starts on the first
 line of an inline template (`` template: `<a b c>` ``): the columns of that line

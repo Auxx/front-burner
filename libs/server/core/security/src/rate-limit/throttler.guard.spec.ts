@@ -1,10 +1,12 @@
-import { Controller, Get, INestApplication } from '@nestjs/common';
+import { Controller, ExecutionContext, Get, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ThrottlerException, ThrottlerLimitDetail } from '@nestjs/throttler';
 import type { Request } from 'express';
 import request from 'supertest';
 import '../auth/request-auth';
 import { RateLimitGroup } from './rate-limit-group.decorator';
 import { RateLimitModule } from './rate-limit.module';
+import { AppThrottlerGuard } from './throttler.guard';
 
 @Controller('ping')
 class PingController {
@@ -163,5 +165,31 @@ describe('AppThrottlerGuard', () => {
     for (let i = 0; i < 11; i++) {
       expect((await request(app.getHttpServer()).get('/first/plain')).status).toBe(200);
     }
+  });
+});
+
+describe('AppThrottlerGuard\'s Retry-After', () => {
+  /** The `Retry-After` the guard sets when the block ends in `timeToBlockExpire` seconds. */
+  async function retryAfterFor(timeToBlockExpire: number): Promise<string | undefined> {
+    const headers = new Map<string, string>();
+    const context = {
+      switchToHttp: () => ({
+        getResponse: () => ({ setHeader: (name: string, value: string) => headers.set(name, value) })
+      })
+    } as unknown as ExecutionContext;
+    const guard = new AppThrottlerGuard({ throttlers: [] }, {} as never, {} as never) as unknown as {
+      throwThrottlingException(context: ExecutionContext, detail: Partial<ThrottlerLimitDetail>): Promise<void>;
+    };
+
+    await expect(guard.throwThrottlingException(context, { timeToBlockExpire })).rejects.toBeInstanceOf(
+      ThrottlerException
+    );
+    return headers.get('Retry-After');
+  }
+
+  it('NF-11.4: sends whole seconds, rounded up, and never 0 at the end of the window', async () => {
+    expect(await retryAfterFor(12.2)).toBe('13');
+    expect(await retryAfterFor(0)).toBe('1');
+    expect(await retryAfterFor(-0.4)).toBe('1');
   });
 });

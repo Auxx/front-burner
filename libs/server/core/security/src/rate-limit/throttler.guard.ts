@@ -15,7 +15,9 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     context: ExecutionContext,
     detail: ThrottlerLimitDetail
   ): Promise<void> {
-    context.switchToHttp().getResponse().setHeader('Retry-After', String(Math.ceil(detail.timeToBlockExpire)));
+    // Whole seconds, at least 1: a window about to end must not answer 0 (A-3.9a).
+    const seconds = Math.max(1, Math.ceil(detail.timeToBlockExpire));
+    context.switchToHttp().getResponse().setHeader('Retry-After', String(seconds));
     await super.throwThrottlingException(context, detail);
   }
 }

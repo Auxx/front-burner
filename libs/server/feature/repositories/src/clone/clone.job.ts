@@ -13,6 +13,8 @@ import { CLONE_JOB_TYPE, CloneJobPayload } from './clone-queue';
 
 /** How many clones of one user may wait or run at once (NF-11.4). */
 const CLONE_PER_USER_LIMIT = 3;
+/** `Retry-After` of a clone refused at that limit: about the time a small clone takes (A-3.9a). */
+export const CLONE_LIMIT_RETRY_AFTER_SECONDS = 30;
 
 /** The longest error detail kept on a repository (RM-10). */
 const ERROR_DETAIL_MAX_LENGTH = 4_000;
@@ -62,6 +64,7 @@ export class CloneJob implements OnModuleInit {
       type: CLONE_JOB_TYPE,
       pool: 'clone',
       perUserLimit: CLONE_PER_USER_LIMIT,
+      perUserLimitRetryAfterSeconds: CLONE_LIMIT_RETRY_AFTER_SECONDS,
       // A half-finished clone is not resumed: the user retries it (AR-54).
       onInterrupted: 'fail',
       maxAttempts: 1,

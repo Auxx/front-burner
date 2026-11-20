@@ -204,8 +204,11 @@ async function insideViewport(page: Page, locator: Locator): Promise<boolean> {
  */
 function moving(page: Page): Promise<string[]> {
   return page.evaluate(() => {
-    const label = (element: Element | null | undefined) =>
-      element ? `${element.tagName.toLowerCase()}${element.className ? `.${String(element.className)}` : ''}` : '?';
+    // The attribute, not `className`, which is an SVGAnimatedString on SVG elements.
+    const label = (element: Element | null | undefined) => {
+      const classes = element?.getAttribute('class');
+      return element ? `${element.tagName.toLowerCase()}${classes ? `.${classes}` : ''}` : '?';
+    };
     const found: string[] = [];
     for (const animation of document.getAnimations()) {
       const effect = animation.effect as KeyframeEffect | null;
@@ -220,12 +223,13 @@ function moving(page: Page): Promise<string[]> {
     }
     for (const element of document.querySelectorAll('*')) {
       const style = getComputedStyle(element);
-      const durations = style.transitionDuration.split(',').map(duration => parseFloat(duration));
-      // The lists repeat when one is shorter than the other, as CSS does.
+      // One transition per property; the durations repeat to match the
+      // properties when there are fewer of them, as CSS repeats them.
       const properties = style.transitionProperty.split(',').map(property => property.trim());
-      const moved = durations
-        .map((duration, index) => ({ duration, property: properties[index % properties.length] }))
-        .filter(({ duration, property }) => duration > 0 && property !== 'opacity');
+      const durations = style.transitionDuration.split(',').map(duration => parseFloat(duration));
+      const moved = properties
+        .map((property, index) => ({ property, duration: durations[index % durations.length] ?? 0 }))
+        .filter(({ duration, property }) => duration > 0 && property !== 'opacity' && property !== 'none');
       if (moved.length > 0) {
         found.push(`${label(element)}: transition of ${style.transitionProperty} for ${style.transitionDuration}`);
       }
@@ -235,16 +239,37 @@ function moving(page: Page): Promise<string[]> {
 }
 
 test.describe('every page', () => {
-  test('NF-12.4: no page or dialog scrolls sideways at 320 px', async ({ page, instance }) => {
+  // One walk for both rules, which need the same pages and no other setting.
+  test('NF-12.4, NF-13.7: at 320 px no page or dialog scrolls sideways, and reduced motion turns animations off', async ({ page, instance }) => {
     await page.setViewportSize({ width: 320, height: 640 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
 
-    const problems = await visitEveryPage(
-      page,
-      instance,
-      async () => (await scrollsSideways(page)) ? [ 'scrolls sideways' ] : []
-    );
+    const problems = await visitEveryPage(page, instance, async () => [
+      ...(await scrollsSideways(page)) ? [ 'scrolls sideways (NF-12.4)' ] : [],
+      ...(await moving(page)).map(moved => `moves (NF-13.7): ${moved}`)
+    ]);
 
     expect(problems).toEqual([]);
+
+    // An element moved with the motion tokens, as the components are: still under
+    // reduced motion, and found by the same check once motion is welcome, so
+    // that the empty list above means something. A transition of opacity and
+    // `transform` with a single duration moves `transform` too.
+    await page.evaluate(() => {
+      const probe = document.createElement('div');
+      probe.className = 'motion-probe';
+      probe.style.transition = 'rotate var(--ui-duration-fast)';
+      const pair = document.createElement('div');
+      pair.className = 'motion-pair';
+      pair.style.transitionProperty = 'opacity, transform';
+      pair.style.transitionDuration = 'var(--ui-duration-fast)';
+      document.body.append(probe, pair);
+    });
+    expect(await moving(page)).toEqual([]);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    const moved = await moving(page);
+    expect(moved).toContainEqual(expect.stringMatching(/^div\.motion-probe: transition of rotate/));
+    expect(moved).toContainEqual(expect.stringMatching(/^div\.motion-pair: transition of opacity, transform/));
   });
 
   test('NF-12.6: every page works in landscape on a phone', async ({ page, instance, isMobile }) => {
@@ -262,26 +287,5 @@ test.describe('every page', () => {
     });
 
     expect(problems).toEqual([]);
-  });
-
-  test('NF-13.7: reduced motion turns animations off', async ({ page, instance }) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-
-    const problems = await visitEveryPage(page, instance, () => moving(page));
-
-    expect(problems).toEqual([]);
-
-    // An element moved with the motion tokens, as the components are: still under
-    // reduced motion, and found by the same check once motion is welcome, so
-    // that the empty list above means something.
-    await page.evaluate(() => {
-      const probe = document.createElement('div');
-      probe.className = 'motion-probe';
-      probe.style.transition = 'rotate var(--ui-duration-fast)';
-      document.body.append(probe);
-    });
-    expect(await moving(page)).toEqual([]);
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
-    expect(await moving(page)).toContainEqual(expect.stringMatching(/^div\.motion-probe: transition of rotate/));
   });
 });
