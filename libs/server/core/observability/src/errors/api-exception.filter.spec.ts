@@ -6,6 +6,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { ThrottlerException } from '@nestjs/throttler';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
+import { readFile } from 'node:fs/promises';
 import { Writable } from 'node:stream';
 import request from 'supertest';
 import { z } from 'zod';
@@ -55,6 +56,12 @@ class TestController {
   @Get('boom')
   boom() {
     throw new Error('secret internal detail');
+  }
+
+  @Get('file-error')
+  async fileError() {
+    // A file system error's message and stack name the file, as Node writes them.
+    await readFile('/data/repos/1/2/docs/private-plan.md');
   }
 
   @Post('signup')
@@ -192,6 +199,17 @@ describe('ApiExceptionFilter', () => {
     logLines.length = 0;
     await request(app.getHttpServer()).get('/test/boom');
     expect(unhandledLogged()).toBe(true);
+  });
+
+  it('NF-10.5: logs an unhandled file system error without the file\'s path', async () => {
+    logLines.length = 0;
+    const res = await request(app.getHttpServer()).get('/test/file-error');
+
+    expect(res.status).toBe(500);
+    expect(unhandledLogged()).toBe(true);
+    const log = logLines.join('');
+    expect(log).toContain('ENOENT');
+    expect(log).not.toContain('private-plan.md');
   });
 
   it('logs another 5xx ApiErrorException as unhandled', async () => {

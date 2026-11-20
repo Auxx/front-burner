@@ -1,6 +1,7 @@
 import { EventsHub } from '@front-burner/server-core-events';
 import type { UnlockedKey } from '@front-burner/server-core-git';
 import { JobRunner } from '@front-burner/server-core-jobs';
+import { errorForLog } from '@front-burner/server-core-observability';
 import { JobKeys, SavedCredentialsService } from '@front-burner/server-feature-credentials';
 import { RepositoryQueries } from '@front-burner/server-feature-repositories';
 import { BeforeApplicationShutdown, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
@@ -117,7 +118,7 @@ export class FetchScheduler implements OnApplicationBootstrap, BeforeApplication
         this.lastFileOpened.set(repositoryId, now);
       }
     } catch (error) {
-      this.logger.warn(`Fetch of repository ${repositoryId} for an opened file not queued: ${String(error)}`);
+      this.logger.warn(`Fetch of repository ${repositoryId} for an opened file not queued: ${errorForLog(error)}`);
     }
   }
 
@@ -151,7 +152,7 @@ export class FetchScheduler implements OnApplicationBootstrap, BeforeApplication
         }
       } catch (error) {
         // One repository's problem must not stop the others' fetches.
-        this.logger.warn(`Background fetch of repository ${repositoryId} not queued: ${String(error)}`);
+        this.logger.warn(`Background fetch of repository ${repositoryId} not queued: ${errorForLog(error)}`);
       }
     }
   }

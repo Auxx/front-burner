@@ -1,4 +1,5 @@
 import { GitEngine } from '@front-burner/server-core-git';
+import { errorForLog } from '@front-burner/server-core-observability';
 import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
 import type { RemovalCheckResult } from '@front-burner/shared-contracts';
 import { Inject, Injectable, Logger } from '@nestjs/common';
@@ -50,7 +51,7 @@ export class RemovalCheck {
     try {
       return { ...await this.engine.unsavedWork(this.layout.workingCopy(userId, repositoryId)), unreadable: false };
     } catch (error) {
-      this.logger.warn(`Could not read the working copy of repository ${repositoryId}: ${String(error)}`);
+      this.logger.warn(`Could not read the working copy of repository ${repositoryId}: ${errorForLog(error)}`);
       return UNREADABLE;
     }
   }

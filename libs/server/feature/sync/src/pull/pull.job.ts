@@ -9,7 +9,7 @@ import {
   MergeResult
 } from '@front-burner/server-core-git';
 import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
-import { ApiErrorException } from '@front-burner/server-core-observability';
+import { ApiErrorException, errorForLog } from '@front-burner/server-core-observability';
 import { JobKeys } from '@front-burner/server-feature-credentials';
 import { OpenableRepository, WorkingTreeGuard } from '@front-burner/server-feature-files';
 import { CommitAuthors } from '@front-burner/server-feature-preferences';
@@ -247,7 +247,7 @@ export class PullJob implements OnModuleInit {
     if (isWorkingCopyMissing(error)) {
       throw error;
     }
-    this.logger.warn(`Merge of repository ${repositoryId} failed; undoing it: ${String(error)}`);
+    this.logger.warn(`Merge of repository ${repositoryId} failed; undoing it: ${errorForLog(error)}`);
     await this.merges.undoCutShort(root, recorded);
     await this.mergeRecord.restoreEarlier(repositoryId, root);
     if (error instanceof GitOperationError && error.code === 'timeout') {
