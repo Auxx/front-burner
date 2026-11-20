@@ -1,4 +1,5 @@
 import { GitMerge } from '@front-burner/server-core-git';
+import { errorForLog } from '@front-burner/server-core-observability';
 import { DATA_LAYOUT, DataLayout } from '@front-burner/server-core-storage';
 import { InstanceRepositories, isWorkingCopyMissing } from '@front-burner/server-feature-repositories';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
@@ -48,7 +49,7 @@ export class WorkingCopyRecovery implements OnModuleInit {
       try {
         await this.recover(id, workingCopy);
       } catch (error) {
-        this.logger.warn(`Recovery of repository ${id} failed: ${String(error)}`);
+        this.logger.warn(`Recovery of repository ${id} failed: ${errorForLog(error)}`);
         // A `.git` that git can't read, such as one without `HEAD`, is damage too, as at work (RM-6).
         if (isWorkingCopyMissing(error)) {
           this.instance.markDamaged(id, error.detail);

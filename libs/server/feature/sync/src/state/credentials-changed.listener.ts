@@ -1,4 +1,5 @@
 import { EventsHub } from '@front-burner/server-core-events';
+import { errorForLog } from '@front-burner/server-core-observability';
 import { RepositoryCredentialsChanges } from '@front-burner/server-feature-repositories';
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import type { Subscription } from 'rxjs';
@@ -22,12 +23,12 @@ export class CredentialsChangedListener implements OnModuleDestroy {
       try {
         syncState.credentialsChanged(repositoryId);
       } catch (error) {
-        this.logger.error(`Could not forget the push problem of repository ${repositoryId}: ${String(error)}`);
+        this.logger.error(`Could not forget the push problem of repository ${repositoryId}: ${errorForLog(error)}`);
       }
       try {
         events.publish(userId, { type: 'repository.warning', repositoryId });
       } catch (error) {
-        this.logger.error(`Could not tell of the warnings of repository ${repositoryId}: ${String(error)}`);
+        this.logger.error(`Could not tell of the warnings of repository ${repositoryId}: ${errorForLog(error)}`);
       }
     });
   }

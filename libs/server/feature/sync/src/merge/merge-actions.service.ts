@@ -7,7 +7,7 @@ import {
   GitOperationError,
   NetworkLock
 } from '@front-burner/server-core-git';
-import { ApiErrorException } from '@front-burner/server-core-observability';
+import { ApiErrorException, errorForLog } from '@front-burner/server-core-observability';
 import { PathRefusedError, resolveInWorkingCopy } from '@front-burner/server-core-storage';
 import {
   FileContents,
@@ -349,7 +349,7 @@ export class MergeActions {
     if (failure instanceof GitOperationError) {
       toGitApiError(failure);
     }
-    this.logger.error(`Could not abort the merge of repository ${repositoryId}: ${String(failure)}`);
+    this.logger.error(`Could not abort the merge of repository ${repositoryId}: ${errorForLog(failure)}`);
     throw new ApiErrorException(500, 'merge-abort-failed');
   }
 }

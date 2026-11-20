@@ -1,7 +1,8 @@
 # Security review
 
-> Status: **In progress**. Authentication (plan 145) and git and files (plan
-> 146) are reviewed. The browser and secrets (plan 147) follow.
+> Status: **Done** for the MVP. Authentication (plan 145), git and files (plan
+> 146) and the browser and secrets (plan 147) are reviewed; the
+> [summary](#summary) closes the page.
 
 The MVP's security review (`docs/product/mvp.md`, "Order of work", step 6). It
 records a check of the code at one commit, not a rule: the rules are in
@@ -252,3 +253,161 @@ Accepted limit: **git runs as the backend's UID (A-7.12),** so the command's
 one-time token in git's environment and the broker's sockets can be reached by
 any process of that UID. The only such processes are the backend and the git and
 `ssh` processes it starts.
+
+## Browser and secrets
+
+Reviewed on 2026-11-20 at commit `69571a4e`, in branch `review-browser` (plan
+147): what the browser runs and shows, and where secrets live, travel and could
+leak (A-7.9 to A-7.13, A-8.12, A-8.13, A-4.8 to A-4.11, A-3.5, NF-3.5, NF-5.5,
+NF-8, NF-10.5, NF-11.1 to NF-11.3, REQ-EDIT-002, REQ-EDIT-003).
+
+### Findings
+
+One finding, fixed in this branch. Nothing needed a plan of Part F.
+
+1. **A file system error put its file's path in the log above `debug`.** Node
+   writes the path of a failed file system call into the error's message, its
+   stack and its `path` (for example `EACCES: permission denied, open
+   '/data/repos/1/2/docs/plan.md'`). The unhandled-exception log at `error`
+   printed the whole error, and the `warn` and `error` entries of the sync and
+   repository features printed `String(error)`. NF-10.5 allows file paths only
+   at `debug`. Nothing in normal use reaches these entries: they log failures
+   that the code does not expect, such as a permission problem on the volume.
+   **Fixed:** `withoutPaths` and `errorForLog` (`core/observability`) replace
+   the paths of such an error with `<path>` and keep its code and system call.
+   The exception filter logs unhandled errors through `withoutPaths`, and every
+   `warn` or `error` entry that printed `String(error)` uses `errorForLog`.
+   Tests: `api-exception.filter.spec.ts`, "NF-10.5: logs an unhandled file
+   system error without the file's path"; `error-for-log.spec.ts`. Paths that
+   the backend builds from IDs, such as a working copy's folder, are not file
+   paths in NF-10.5's sense and stay (NF-10.4).
+
+### A-7.9, NF-11.1 to NF-11.3: what the browser is served
+
+| Rule                                                                       | Enforced by                                                                                                                                                                                                                                                                                          | Test                                                                                                                                                                                                   | Outcome |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
+| The policy is NF-11.1's, letter by letter                                  | `contentSecurityPolicy` (`core/security/src/csp`): the same thirteen directives, no `'unsafe-inline'` or `'unsafe-eval'`; only `style-src` carries the nonce, as no script is inline                                                                                                                 | `csp.spec.ts`, "builds NF-11.1's policy"                                                                                                                                                               | Holds   |
+| A fresh nonce on every `index.html`, deep links included                   | `serveWebClient`: every GET or HEAD outside `/api` that is not a file of the build gets the template with a new 128-bit nonce and `no-store`; `/index.html` in any spelling (encoded, `./`, other case) takes the same branch, so the template never leaves with its placeholder                     | `serve-web-client.spec.ts`, "serves index.html for a route", "uses a new nonce per request", "sends the CSP header for HEAD /index.html", "serves index.html for a deep link that ends in a file name" | Holds   |
+| Nothing inline that the policy would have to allow                         | The built `index.html` has only `<script src>` and `<link>` elements, each with the nonce; critical CSS inlining is off (`inlineCritical: false`); Angular and CodeMirror take the nonce for their styles                                                                                            | `preview.spec.ts` and every other end-to-end test: the fixture fails a test on any `securitypolicyviolation`                                                                                           | Holds   |
+| The 404 page and errors                                                    | A missing file of the build gets the JSON `ApiError` with `nosniff`, as every API error does; an error before a route (a malformed URL) is answered by Express's final handler, which sends `default-src 'none'` itself                                                                              | `serve-web-client.spec.ts`, "answers a missing build file with the JSON ApiError body and the request ID"                                                                                              | Holds   |
+| NF-11.2's headers on every response                                        | `securityHeaders()`, right after the request log, before any route                                                                                                                                                                                                                                   | `security-headers.spec.ts`                                                                                                                                                                             | Holds   |
+| Repository images cannot run script on the origin (NF-11.3, IM-26, A-7.10) | `ImagesController` sends `default-src 'none'; sandbox` and `nosniff` on every answer, refusals and `304` included, and a `Content-Type` from its own list of image types. Non-image files are never served as they are in the MVP (uploads are not in it), so no `Content-Disposition` is needed yet | `files.e2e.spec.ts`, AC-EDIT-003.13, "serves an SVG with a script sandboxed"                                                                                                                           | Holds   |
+| Trusted Types: what each policy lets through (A-8.13)                      | The web client creates one policy, `fb-worker`, whose `createScriptURL` allows only same-origin `worker-*.js` files; DOMPurify's own policy returns only its output; no `default` policy                                                                                                             | `create-preview-worker.spec.ts`, "refuses a worker URL from another origin", "refuses any other script of this origin"                                                                                 | Holds   |
+
+Accepted limit: **the build's own files carry no policy of their own.** Only
+`index.html` is a document; scripts, styles and `assets/icons.svg` are the
+build's own files, served with `nosniff`, and the sprite has no script.
+
+### A-7.10, A-7.11a and REQ-EDIT-002: the preview
+
+| Rule                                                                | Enforced by                                                                                                                                                                                                                                                                                                                                                                                                                              | Test                                                                                                                                                                                                                  | Outcome |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| One place writes HTML into the page (D-7.6)                         | `patchBlocks` (`web/markdown`) assigns DOMPurify's `TrustedHTML` to a new block's `innerHTML`. Lint forbids `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `setHTMLUnsafe` and `bypassSecurityTrust…` everywhere else (`eslint.config.mjs`); a search of the web client found no other use                                                                                                                                              | lint                                                                                                                                                                                                                  | Holds   |
+| Both sanitising steps come from one whitelist                       | `SAFE_HTML` → `sanitizeSchema` (`rehype-sanitize`, in the worker) and `purifyConfig` with `purifyHtml`'s hooks (DOMPurify, on the main thread); every key of the schema is set, so nothing falls back to the plugin's defaults                                                                                                                                                                                                           | `derive.spec.ts`; `xss-corpus.spec.ts`, "AC-EDIT-002.16: removes every XSS payload in both steps", "removes every XSS payload in the second step alone"                                                               | Holds   |
+| The known bypasses                                                  | `svg` and `math` are removed with their content, so namespace confusion has nothing to work with; `form`, `base`, `iframe`, `object` and `embed` are not allowed; `srcset` only on a `source` inside `picture`, with every address checked; no `xlink:href`, `style`, `on…` or `data-` attribute from the file; addresses read as the URL parser reads them (`jav&#x09;ascript:` is `javascript:`) and only `http`, `https` and `mailto` | `xss-corpus.spec.ts`, whose corpus has each of these (`<svg><script>`, `<img src=x onerror=…>`, `<math><mglyph><svg>…`, `<svg><a xlink:href>`, `data:image/svg+xml`, `<base>`, `<form>`, `<STYLE>`); `derive.spec.ts` | Holds   |
+| No address from a file loads on its own (A-7.11a, IM-24)            | `moveImageAddress` moves `src` and `srcset` into `data-md-src` and `data-md-srcset` after every check, so a block's HTML loads nothing when it is parsed; `ImageLoader` is the only code that sets an image's address: a `blob:` URL for a repository image, the `https:` address after **Show remote images**                                                                                                                           | `xss-corpus.spec.ts`, "checks for what it is meant to find"; `preview.spec.ts`, AC-EDIT-002.16, which now also checks that no request leaves for another host (added by this review; run in Chromium and Firefox)     | Holds   |
+| A file with `<svg><script>` or `<img src=x onerror=…>` runs nothing | The two steps above, then the policy                                                                                                                                                                                                                                                                                                                                                                                                     | `preview.spec.ts`, AC-EDIT-001.15, "runs no script or handler from the file", and AC-EDIT-002.16, "renders the XSS corpus with no CSP violation"                                                                      | Holds   |
+| A link leaves the instance only in a new tab, without a referrer    | `patchBlocks` gives external links `target="_blank"` and `rel="noopener noreferrer"`; any other link is read by `resolvePreviewLink` and opened in the web client; `Referrer-Policy: no-referrer` on the page                                                                                                                                                                                                                            | `preview-links.spec.ts`; `patch-blocks.spec.ts`                                                                                                                                                                       | Holds   |
+
+Accepted limit: **an SVG image opened on its own from the preview.** A
+repository SVG is shown through a `blob:` URL that keeps its type. Opened in its
+own tab, a `blob:` document takes the policy of the page that made it, as CSP 3
+requires for local schemes, so `script-src 'self'` and Trusted Types still stop
+its scripts. Read, not tested; plan 154 runs the browsers.
+
+### A-7.11: cross-site requests
+
+| Rule                                                   | Enforced by                                                                                                                                                                                     | Test                                                                                                                                | Outcome |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Every change of state needs the bearer token           | `AuthMiddleware` reads only `Authorization: Bearer`; no cookie, query or form field authenticates a request; the backend sends no CORS headers, so another site's script cannot send the header | `access.e2e.spec.ts`, A-7.2 (only the intended routes are public); every feature's end-to-end "needs a login" tests                 | Holds   |
+| The public routes cannot be driven by a form           | The only body parser is JSON, which reads only `application/json`, a type that a form or a `no-cors` request cannot send; the body of anything else is empty and fails validation               | `login.e2e.spec.ts`, "A-7.11: a form post, which another site can send without CORS, is not read as a login" (added by this review) | Holds   |
+| The refresh token's cookie needs its own proof (LG-33) | `readRefreshToken`: the custom header and no foreign `Origin`; the cookie is `SameSite=Strict` too (see [Authentication](#authentication))                                                      | `login.e2e.spec.ts`, AC-AUTH-003.13                                                                                                 | Holds   |
+
+### NF-8 and A-4.8 to A-4.11: secrets at rest
+
+| Rule                                                                        | Enforced by                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Test                                                                                                                                                                                                           | Outcome |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Every stored secret is encrypted; nothing secret is in a plain column       | The MVP stores two secrets: a saved credential's `secret` and the OIDC client secret saved during onboarding, both in `ENCRYPTED_COLUMNS`. Every other column of every table was read: password and refresh token are stored as hashes (Argon2id, SHA-256); job payloads hold IDs, branch names and request IDs; a remote URL cannot carry credentials (`parseRemoteUrl` refuses them); a clone's error detail has them removed; the login audit log holds none | `add-repository.e2e.spec.ts`, AC-REPO-001.21, which searches the database file and its WAL for every secret; `git.e2e.spec.ts`, AC-REPO-002.14 (job rows); `oidc-setup.service.spec.ts`, "saves the settings…" | Holds   |
+| AES-256-GCM, a random nonce per value, a key from HKDF                      | `SecretBox` (`core/crypto`), the only code that encrypts or decrypts                                                                                                                                                                                                                                                                                                                                                                                            | `secret-box.spec.ts`, "uses a fresh nonce every time", "refuses another key", "refuses a tampered value"                                                                                                       | Holds   |
+| Each value is bound to its row and its owner                                | The associated data is `<table>\0<record ID>\0<user ID>`: `bindingOf` for saved credentials, whose row is inserted first so that its ID is known, and `OIDC_CLIENT_SECRET_BINDING`                                                                                                                                                                                                                                                                              | `secret-box.spec.ts`, "refuses a value bound to another record"                                                                                                                                                | Holds   |
+| The check value; a wrong key stops the start; a reset only with a wrong key | `checkEncryptionKey`, a step of the startup sequence                                                                                                                                                                                                                                                                                                                                                                                                            | `check-encryption-key.spec.ts`                                                                                                                                                                                 | Holds   |
+| The key is never on the volume; 32 characters at least, not the JWT secret  | Both come from the environment or a `…_FILE` (NF-8.1, NF-8.2, NF-5.5); the configuration schema refuses a short key and a key equal to the JWT secret                                                                                                                                                                                                                                                                                                           | `load-config.spec.ts`, "refuses a key equal to the JWT secret", the `_FILE` tests                                                                                                                              | Holds   |
+| A decrypted secret lives for one use (A-4.11)                               | `SavedCredentialsService.secretOf` returns it to the caller that hands it to git's broker; unlocked SSH keys live in `KeyUnlockStore`'s memory only (AR-31)                                                                                                                                                                                                                                                                                                     | `broker.spec.ts`; `key-unlock-store.spec.ts`                                                                                                                                                                   | Holds   |
+
+Accepted limit: **`ENCRYPTED_COLUMNS` is a list kept by hand.** A future table
+with a secret must add its column, or a key reset (NF-8.6) would leave its value
+behind, undecryptable. Its spec names both columns, and the end-to-end search of
+the database file finds a secret stored in plain text, but only the secrets
+those tests use.
+
+### NF-10.5 and A-3.5: secrets in transit and in the log
+
+| Rule                                                                                | Enforced by                                                                                                                                                                                                                            | Test                                                                                                                                                                                                                              | Outcome                          |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| No response has a secret field, apart from `SessionTokens` (A-3.5)                  | The response schemas; saved credentials answer with their public parts only                                                                                                                                                            | `repositories.controller.spec.ts`, "returns no secret"; `git.e2e.spec.ts`, AC-REPO-002.14, which searches every response body                                                                                                     | Holds                            |
+| Push channel events hold no secret                                                  | The events of `push-event.schema.ts` carry IDs, statuses, error codes, a job's result and changed paths, to their owner only                                                                                                           | `push-event.schema.spec.ts`; `events-hub.spec.ts`, "delivers only to the user's streams"                                                                                                                                          | Holds                            |
+| A git message that echoes a URL with a token keeps it out of the record and the log | `GitRunner` removes the user info of every URL in git's stderr, the one place git's messages come from; a push's stdout is cleaned too. A failed clone's record (`repositories.error_detail`) and its `warn` entry both take that text | `clone.job.spec.ts`, "NF-10.5: keeps a token that git's error echoes out of the error record and the log" (added by this review; it fails with the cleaning turned off); `redact.spec.ts`; `git-engine.spec.ts` (remote messages) | Holds                            |
+| At `debug`, a clone, save, read, commit and push log no secret and no file content  | The request log never logs bodies and redacts `Authorization`, `Cookie` and `Set-Cookie`; no log entry prints a file's content                                                                                                         | `git.e2e.spec.ts`, AC-REPO-002.14, run at `debug`; it now saves and reads its files through the API and checks that the log has none of their content (added by this review)                                                      | Holds                            |
+| File paths only at `debug`                                                          | Entries above `debug` name repositories and jobs by ID; `errorForLog` and `withoutPaths` for unexpected errors                                                                                                                         | `api-exception.filter.spec.ts`, "NF-10.5: logs an unhandled file system error without the file's path"; `error-for-log.spec.ts`                                                                                                   | Fixed in this branch (finding 1) |
+
+Accepted limit: **a remote's own words.** git's messages about the remote, such
+as a refused push's `remote:` lines, are logged at `warn` and shown to the user
+(GA-31), with the user info of any URL removed. A remote that writes a secret in
+another form, such as a bare token, has it logged; only that remote's owner
+could make it do so.
+
+### NF-3.5 and LG-40: what the browser keeps
+
+| Rule                                                          | Enforced by                                                                                                                                                                                                                                         | Test                                                                                                                                                           | Outcome |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Drafts are deleted on logout and when the session is refused  | `DraftStore` clears IndexedDB when the session ends, unless the backend could not be reached (NF-3.3); `provideCore` creates it at start-up, so a tab that never opened the editor deletes them too; no draft is written once the session has ended | `draft-store.spec.ts`, "AC-EDIT-001.7: deletes every draft on logout", "deletes drafts when the session expires", "stops writing drafts once the session ends" | Holds   |
+| The refresh token never reaches script                        | The web client asks for cookie delivery; the cookie is `HttpOnly`, `Secure`, `SameSite=Strict`, on `/api/v1/auth/session` only                                                                                                                      | `login.e2e.spec.ts`, AC-AUTH-003.3; `auth-session.service.spec.ts`                                                                                             | Holds   |
+| `localStorage` holds nothing secret apart from the auth token | The auth token and the two expiry times (LG-40); the rest are per-user view choices: view mode, pane sizes, expanded folders, ticked files in Changes, the last file opened and a dashboard hint                                                    | read                                                                                                                                                           | Holds   |
+
+Accepted limits:
+
+- **The auth token is in `localStorage` (LG-40)**, where any script of the
+  origin can read it. It lasts 15 minutes by default and cannot be refreshed
+  without the cookie. Reading it needs script on the origin, which the policy,
+  Trusted Types and the two sanitising steps stand against.
+- **Folder and file names stay in `localStorage` after logout:** the expanded
+  folders, the ticked files and the last file, keyed by user ID, so that they
+  come back at the next login. They are names, never content, and NF-3.5 is
+  about drafts. On a borrowed computer, the next user of the browser profile can
+  read them.
+
+## Summary
+
+The MVP's security review read authentication, git and files, and the browser
+and secrets against their rules. It found five problems, all fixed with a test
+that failed before the fix; none needed a plan of Part F.
+
+| Finding                                                                                | Section                                     | Outcome           |
+| -------------------------------------------------------------------------------------- | ------------------------------------------- | ----------------- |
+| A-7.5's test listed its routes; nothing checked that only the intended ones are public | [Authentication](#authentication)           | Fixed in plan 145 |
+| The refresh endpoint was limited per user, not per address (LG-65)                     | [Authentication](#authentication)           | Fixed in plan 145 |
+| git did not turn off `core.fsmonitor`                                                  | [Git and files](#git-and-files)             | Fixed in plan 146 |
+| Three IPv6 forms that embed an IPv4 address were checked as IPv6 only (A-5.8)          | [Git and files](#git-and-files)             | Fixed in plan 146 |
+| A file system error put its file's path in the log above `debug` (NF-10.5)             | [Browser and secrets](#browser-and-secrets) | Fixed in plan 147 |
+
+The limits the review accepts are in each section. Two of them are the product's
+own, from security.md, and an operator should know them:
+
+- **git runs as the backend's user (A-7.12).** A rootless container cannot
+  switch users, so nothing but NF-11.6 to NF-11.8 and A-5.1 stands between git
+  and the backend's files. A repository cannot make git run a program of its
+  choosing (see [Git and files](#git-and-files)), but a flaw in git itself would
+  reach everything the backend can reach. Keep the image up to date: each
+  release is scanned (NF-11.10).
+- **The preview may load images from any `https:` host (A-7.13),** so that
+  remote images can be shown when the user asks. If both sanitising steps were
+  ever bypassed, a file could make the browser load an image from a host it
+  chose, for example to learn that the file was opened. It still could not run
+  script. Remote images load only after **Show remote images**, without a
+  referrer.
+
+The rest are smaller and listed where they apply: the private networks trusted
+by default ([NF-11.4](#nf-114-nf-115-and-trust-proxy)), names that reach `.git`
+on file systems other than Linux's ([A-7.6](#a-76-paths-from-a-client)), a
+network's own DNS64 prefix, the auth token in `localStorage` and the names left
+there after logout ([NF-3.5](#nf-35-and-lg-40-what-the-browser-keeps)).

@@ -6,6 +6,7 @@ export * from './health/readiness.service';
 export * from './instance/disk-metrics';
 export * from './instance/instance-storage.controller';
 export * from './instance/instance.module';
+export * from './logging/error-for-log';
 export * from './logging/logger-options';
 export * from './logging/logging.module';
 export * from './metrics/http-metrics.middleware';

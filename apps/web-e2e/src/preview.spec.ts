@@ -526,7 +526,16 @@ test.describe('preview', () => {
       dialogs.push(dialog.message());
       void dialog.dismiss();
     });
-    await answerImages(page, new URL(instance.url).origin);
+    const origin = new URL(instance.url).origin;
+    // A-7.11a: nothing in the file loads from another host, as remote images wait for **Show remote images**.
+    const elsewhere: string[] = [];
+    page.on('request', request => {
+      const url = new URL(request.url());
+      if (/^https?:$/.test(url.protocol) && url.origin !== origin) {
+        elsewhere.push(request.url());
+      }
+    });
+    await answerImages(page, origin);
     await openScreen(page, `/repositories/${id}/files/xss.md`);
     const view = preview(page, 'xss.md');
 
@@ -546,6 +555,7 @@ test.describe('preview', () => {
         document.querySelectorAll('md-preview .blocks script, md-preview .blocks [style]').length
       )
     ).toBe(0);
+    expect(elsewhere).toEqual([]);
     // The fixture fails the test on any `securitypolicyviolation` or console error.
   });
 

@@ -2,6 +2,7 @@ import type { Job } from '@front-burner/server-core-database';
 import { EventsHub } from '@front-burner/server-core-events';
 import { GitEngine, GitOperationError, NetworkLock, WorkingTreeLock } from '@front-burner/server-core-git';
 import { JobRunner, RunningJob } from '@front-burner/server-core-jobs';
+import { errorForLog } from '@front-burner/server-core-observability';
 import { JobKeys, KnownHostsService } from '@front-burner/server-feature-credentials';
 import { OpenableRepository } from '@front-burner/server-feature-files';
 import { WorkingCopyDamage } from '@front-burner/server-feature-repositories';
@@ -170,7 +171,7 @@ export class PushJob implements OnModuleInit {
         }
       });
     } catch (error) {
-      this.logger.warn(`Could not forget the pushed merge of repository ${repositoryId}: ${String(error)}`);
+      this.logger.warn(`Could not forget the pushed merge of repository ${repositoryId}: ${errorForLog(error)}`);
     }
   }
 
@@ -189,7 +190,7 @@ export class PushJob implements OnModuleInit {
         );
       }
     } catch (error) {
-      this.logger.warn(`Fetch after a rejected push of repository ${job.repositoryId} failed: ${String(error)}`);
+      this.logger.warn(`Fetch after a rejected push of repository ${job.repositoryId} failed: ${errorForLog(error)}`);
     }
   }
 

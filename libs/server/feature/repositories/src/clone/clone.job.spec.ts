@@ -14,6 +14,7 @@ import {
 import {
   FIXTURE_PASSPHRASE,
   GitHttpServer,
+  GitHttpServerOptions,
   GitSshServer,
   sshKeyFixture,
   startGitHttpServer,
@@ -30,6 +31,7 @@ import {
   UnlockAttempts
 } from '@front-burner/server-feature-credentials';
 import type { AddRepositoryRequest, PushEvent } from '@front-burner/shared-contracts';
+import { Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -66,6 +68,8 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
   let root: string;
   let remotes: { handbook: string; empty: string; };
   let server: GitHttpServer;
+  /** The running server's options, which a test may change. */
+  let serverOptions: GitHttpServerOptions;
   let database: Database;
   let layout: DataLayout;
   let lifecycle: SessionLifecycle;
@@ -118,7 +122,8 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'fb-clone-job-'));
     remotes = createRemotes(root);
-    server = await startGitHttpServer({ repositories: { 'handbook.git': remotes.handbook } });
+    serverOptions = { repositories: { 'handbook.git': remotes.handbook } };
+    server = await startGitHttpServer(serverOptions);
     layout = new DataLayout(join(root, 'data'));
     mkdirSync(layout.tmpDir, { recursive: true });
     mkdirSync(layout.reposDir, { recursive: true });
@@ -133,6 +138,7 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await runner.beforeApplicationShutdown();
     await engine.beforeApplicationShutdown();
     unlocks.onModuleDestroy();
@@ -262,6 +268,28 @@ describe.skipIf(process.platform === 'win32')('CloneJob', () => {
     expect(row?.errorCode).toBe('clone-failed');
     expect(row?.errorDetail).toBeTruthy();
     expect(row?.errorDetail).not.toContain('secret-token');
+  });
+
+  it('NF-10.5: keeps a token that git\'s error echoes out of the error record and the log', async () => {
+    const token = 'ghp_echoed-secret-token';
+    const logged: unknown[] = [];
+    for (const level of [ 'log', 'warn', 'error', 'debug' ] as const) {
+      vi.spyOn(Logger.prototype, level).mockImplementation((...args: unknown[]) => {
+        logged.push(...args);
+      });
+    }
+    const { id } = await add();
+    serverOptions.remoteError = `no access for https://alice:${token}@example.com/handbook.git`;
+
+    runner.start();
+    await settled(id);
+
+    const detail = rowOf(id)?.errorDetail ?? '';
+    expect(detail).toContain('remote error: no access for https://***@example.com/handbook.git');
+    const log = JSON.stringify(logged);
+    expect(log).toContain('https://***@example.com');
+    expect(log).not.toContain(token);
+    expect(detail).not.toContain(token);
   });
 
   it('keeps the end of a long error', async () => {

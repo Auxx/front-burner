@@ -6,6 +6,7 @@ import type { Request, Response } from 'express';
 import { ZodValidationException } from 'nestjs-zod';
 import { randomUUID } from 'node:crypto';
 import type { Logger as PinoLogger } from 'pino';
+import { withoutPaths } from '../logging/error-for-log';
 import { ApiErrorException } from './api-error.exception';
 
 /** English fallback text per code (A-3.3); clients translate by `code`. */
@@ -142,7 +143,8 @@ export class ApiExceptionFilter implements ExceptionFilter {
 
     const answer = this.answer(exception);
     if (answer.status >= 500 && !isExpectedServerAnswer(exception)) {
-      const error = exception instanceof Error ? exception : new Error(String(exception));
+      // A file system error names its file, which only `debug` may show (NF-10.5).
+      const error = exception instanceof Error ? withoutPaths(exception) : new Error(String(exception));
       if (req.log) {
         req.log.error({ err: error }, 'Unhandled exception');
       } else {

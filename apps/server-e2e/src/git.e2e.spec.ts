@@ -1352,6 +1352,8 @@ describe('secrets in a push (REQ-REPO-002)', () => {
   const TOKEN = 'ghp_e2e-leak-first-token';
   const REPLACED = 'ghp_e2e-leak-replaced-token';
   const ROTATED = 'ghp_e2e-leak-rotated-token';
+  /** A line of every saved file, which the log must never show (NF-10.5). */
+  const FILE_CONTENT = 'Private notes that only the file holds';
   let root: string;
   let server: ServerProcess;
   let https: GitHttpServer;
@@ -1367,8 +1369,22 @@ describe('secrets in a push (REQ-REPO-002)', () => {
     return new GitApi(server, session.authToken, bodies);
   }
 
+  /**
+   * Creates the file, then saves its content through the API and reads it
+   * back, so that the log has a save and a read of file content.
+   */
   async function commitFile(client: GitApi, id: number, workingCopy: string, file: string): Promise<void> {
     writeFileSync(join(workingCopy, file), `# ${file}\n`);
+    const content = `# ${file}\n\n${FILE_CONTENT}\n`;
+    const saved = await client.send('PUT', `/repositories/${id}/file`, {
+      path: file,
+      content,
+      lineEnding: 'lf',
+      bom: false
+    });
+    expect(saved.status).toBe(200);
+    expect(readFileSync(join(workingCopy, file), 'utf8')).toBe(content);
+    expect((await client.call(`/repositories/${id}/file?path=${encodeURIComponent(file)}`)).status).toBe(200);
     const committed = await client.send('POST', `/repositories/${id}/git/commits`, { message: file, paths: [ file ] });
     expect(committed.status).toBe(201);
   }
@@ -1476,6 +1492,9 @@ describe('secrets in a push (REQ-REPO-002)', () => {
     }
     const log = server.output();
     expect(log).toContain('"level":"debug"');
+    // NF-10.5: no file content either, at debug too, after saves, reads, commits and pushes.
+    expect(bodies.some(body => body.includes(FILE_CONTENT))).toBe(true);
+    expect(log.includes(FILE_CONTENT), 'the log contains file content').toBe(false);
     for (const [ what, secret ] of Object.entries(secrets)) {
       expect(log.includes(secret), `the log contains the ${what}`).toBe(false);
       expect(bodies.filter(body => body.includes(secret)), `a response contains the ${what}`).toEqual([]);

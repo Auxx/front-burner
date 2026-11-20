@@ -1,5 +1,5 @@
 import { ConflictEntry, GitMerge, REGULAR_FILE } from '@front-burner/server-core-git';
-import { ApiErrorException } from '@front-burner/server-core-observability';
+import { ApiErrorException, errorForLog } from '@front-burner/server-core-observability';
 import { inBatches, PathRefusedError } from '@front-burner/server-core-storage';
 import { decodeMarkdown, FileContents } from '@front-burner/server-feature-files';
 import { EDITABLE_FILE_LIMIT } from '@front-burner/shared-contracts';
@@ -128,7 +128,7 @@ export class MergeStateService {
       return await this.isEditableText(root, entry, await this.contents.readTracked(root, entry.path));
     } catch (error) {
       if (!(error instanceof PathRefusedError || error instanceof ApiErrorException)) {
-        this.logger.warn(`Could not check a conflicting file: ${String(error)}`);
+        this.logger.warn(`Could not check a conflicting file: ${errorForLog(error)}`);
       }
       return false;
     }
