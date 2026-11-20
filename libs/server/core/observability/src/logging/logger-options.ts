@@ -17,7 +17,7 @@ export function createLoggerOptions(config: Pick<Config, 'logLevel' | 'logFormat
     formatters: { level: label => ({ level: label }) },
     redact: [ 'req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]' ],
     ...(config.logFormat === 'pretty'
-      ? { transport: { target: 'pino-pretty', options: {} satisfies PrettyOptions } }
+      ? { transport: { target: 'pino-pretty', options: { messageKey: 'message' } satisfies PrettyOptions } }
       : {})
   };
 }

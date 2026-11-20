@@ -26,6 +26,7 @@ export type StartupStep = 'config' | 'data-dir' | 'database' | 'migrations' | 'e
 /** A startup step failed (A-1.11); `cause` holds the reason. */
 export class StartupError extends Error {
   constructor(readonly step: StartupStep, override readonly cause: unknown) {
+    // Quoted in the deployment guide (docs/wiki/deployment.md): change both together.
     super(`Startup failed at step "${step}": ${cause instanceof Error ? cause.message : String(cause)}`);
     this.name = 'StartupError';
   }
@@ -169,6 +170,7 @@ export async function startServer(options: StartServerOptions): Promise<INestApp
       'encryption-key',
       () => checkEncryptionKey(database, new SecretBox(config.encryptionKey), { reset: config.encryptionKeyReset })
     );
+    // Both warnings are quoted in the deployment guide (docs/wiki/deployment.md): change both together.
     if (keyCheck === 'reset') {
       bootstrapLogger.warn(
         'FRONT_BURNER_ENCRYPTION_KEY_RESET: every stored secret was deleted and a new check value stored. Remove the variable.'

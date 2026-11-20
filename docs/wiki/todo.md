@@ -88,16 +88,8 @@ Release image, after the MVP:
   stage must build `better-sqlite3` for ARM. The scan, the version check, the
   signature and the attestations then cover both platforms.
 
-Deployment guide (`docs/wiki/deployment.md`), postponed until the MVP runs
-locally in a development environment, so that it describes what was actually
-built:
+Deployment guide (`docs/wiki/deployment.md`), after the MVP:
 
-- Operator-facing parts of `docs/architecture/non-functional.md`: monitoring
-  (reading the log, the metrics, low and full disk, orphaned working copies).
-  Installing (the image and its verification, the volumes and the UID, secrets,
-  the hardened compose example, the first start), every environment variable,
-  disk sizing, backup and restore, upgrades, and recovery from a lost encryption
-  key or password are written.
 - Encryption key rotation (NF-8.4), once it is built: the guide's "Changing a
   secret" and "A lost encryption key" say the key cannot be changed in place.
 - Changing the OIDC client secret after onboarding, and entering it again after

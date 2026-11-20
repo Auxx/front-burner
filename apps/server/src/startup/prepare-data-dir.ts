@@ -47,6 +47,7 @@ export function prepareDataDir(
       writeFileSync(probe, '');
       rmSync(probe);
     } catch (cause) {
+      // Quoted in the deployment guide (docs/wiki/deployment.md): change both together.
       throw new Error(`The ${folderOf} ${dir} is not writable${byUid()}`, { cause });
     }
   }

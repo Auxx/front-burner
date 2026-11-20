@@ -5,9 +5,23 @@ import { randomUUID } from 'node:crypto';
 import type { DestinationStream } from 'pino';
 import { HttpLogger, Options, pinoHttp } from 'pino-http';
 import { createLoggerOptions } from './logger-options';
+import { urlForLog } from './request-url';
 
 /** Header that carries the request ID back to the client (NF-10.6). */
 export const REQUEST_ID_HEADER = 'X-Request-Id';
+
+/** A request as pino-http's own serializer gives it; only the fields that can hold a path are named. */
+interface SerializedRequest {
+  url?: string;
+  query?: unknown;
+  [field: string]: unknown;
+}
+
+/** The serialized request with its URL cut down and its query left out (`urlForLog`). */
+function withoutPaths(req: SerializedRequest): SerializedRequest {
+  const { query: _query, ...rest } = req;
+  return typeof rest.url === 'string' ? { ...rest, url: urlForLog(rest.url) } : rest;
+}
 
 /**
  * The request logger: gives every request its ID (`req.id`, the `X-Request-Id`
@@ -28,7 +42,9 @@ export function createRequestLogger(
       res.setHeader(REQUEST_ID_HEADER, id);
       return id;
     },
-    customProps: req => ({ requestId: req.id })
+    customProps: req => ({ requestId: req.id }),
+    // File paths only at debug (NF-10.5): above it, the URL without its query.
+    ...(config.logLevel === 'debug' ? {} : { serializers: { req: withoutPaths } })
   };
   return destination ? pinoHttp(options, destination) : pinoHttp(options);
 }

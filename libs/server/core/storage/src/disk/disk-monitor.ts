@@ -81,6 +81,7 @@ export class DiskMonitor implements OnModuleInit {
     if (low !== this.low) {
       this.low = low;
       const details = { freeBytes: this.freeBytes(), thresholdBytes: threshold };
+      // Both messages are quoted in the deployment guide (docs/wiki/deployment.md): change both together.
       if (low) {
         this.logger.warn(details, 'The server is running low on storage: new clones are refused');
       } else {

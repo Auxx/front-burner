@@ -49,6 +49,7 @@ export function upgradeDatabase(database: Database, options: UpgradeDatabaseOpti
     const prefix = `${PRE_UPGRADE_PREFIX}-v${safeVersion(from)}`;
     snapshot = snapshots.write(prefix);
     snapshots.prune(prefix, 1);
+    // Quoted in the deployment guide (docs/wiki/deployment.md): change both together.
     log(`Upgrading the database from ${from} to ${version}; snapshot backups/${basename(snapshot)}`);
   }
   applyMigrations(database, migrationsFolder);
