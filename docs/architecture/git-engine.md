@@ -254,15 +254,18 @@ Confirmed by spike 2 (spikes.md).
 - **A-5.8** For each connection, the proxy resolves the host name, checks
   **every** resolved address against the AR-57 rules
   (`FRONT_BURNER_BLOCK_PRIVATE_NETWORKS`), and connects only to the addresses it
-  checked (with Happy Eyeballs across them). DNS rebinding and redirects to
-  another host are covered, since every connection is checked when it is made.
-  Refusals return their own error code; AR-57 shows them to the user like an
-  unreachable host.
+  checked, one after the other in the resolver's order. DNS rebinding and
+  redirects to another host are covered, since every connection is checked when
+  it is made. Refusals return their own error code; AR-57 shows them to the user
+  like an unreachable host.
   - Addresses are checked after unwrapping embedded IPv4 addresses: IPv4-mapped
     (`::ffff:a.b.c.d`, which Docker Desktop's DNS returns for ordinary hosts),
-    NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`). Numeric host forms such as
-    `2852039166` resolve to the address they encode and are checked like any
-    other.
+    IPv4-compatible (`::a.b.c.d`, but not `::` or `::1`), IPv4-translated
+    (`::ffff:0:a.b.c.d`), NAT64 (`64:ff9b::/96`, and RFC 8215's local-use
+    `64:ff9b:1::/48` in RFC 6052's layout) and 6to4 (`2002::/16`). A DNS64 with
+    a prefix of the network's own is not recognised _(plan 146's call:
+    accepted)_. Numeric host forms such as `2852039166` resolve to the address
+    they encode and are checked like any other.
   - Besides AR-57's link-local ranges, these are always blocked: `0.0.0.0/8` (on
     Linux, `0.0.0.0` reaches loopback services), `::/128`, multicast
     (`224.0.0.0/4`, `ff00::/8`) and `240.0.0.0/4`. With
