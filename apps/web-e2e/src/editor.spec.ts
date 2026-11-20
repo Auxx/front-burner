@@ -392,7 +392,7 @@ test.describe('editor', () => {
     expect(await pageOverflow()).toBe(0);
   });
 
-  test('NF-13.5: resizes the editor and the preview with the arrow keys on the line between them', async ({ page, instance, isMobile }) => {
+  test('NF-13.6: resizes the editor and the preview with the arrow keys on the line between them', async ({ page, instance, isMobile }) => {
     test.skip(isMobile, 'a phone shows the Edit and Preview tabs instead');
     const { id } = seedHandbook(instance.dataDir);
     await openScreen(page, `/repositories/${id}/files/README.md`);
@@ -497,7 +497,7 @@ test.describe('editor', () => {
     await expect(page).toHaveTitle('README.md · handbook · Front Burner');
   });
 
-  test('has no axe violations with a file open', async ({ page, instance, isMobile }) => {
+  test('NF-13.8: has no axe violations with a file open', async ({ page, instance, isMobile }) => {
     const { id } = seedHandbook(instance.dataDir);
     await openScreen(page, `/repositories/${id}/files/README.md`);
     await expect(editor(page, 'README.md')).toBeVisible();
@@ -584,7 +584,7 @@ test.describe('editor', () => {
       drainSaves(monitor, id);
     });
 
-    test('has no axe violations with the offer shown', async ({ page, instance, monitor }) => {
+    test('NF-13.8: has no axe violations with the offer shown', async ({ page, instance, monitor }) => {
       const { id } = seedHandbook(instance.dataDir);
       await openScreen(page, `/repositories/${id}/files/README.md`);
       await typeUnsaved(page, id, 'README.md', 'Unsaved.');

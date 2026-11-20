@@ -51,7 +51,7 @@ test.describe('OIDC from the environment', () => {
     await expect(oidcButton(page)).toBeVisible();
   });
 
-  test('has no accessibility violations on the login page', async ({ page }) => {
+  test('NF-13.8: has no accessibility violations on the login page', async ({ page }) => {
     await page.goto('/login');
     await expect(oidcButton(page)).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();

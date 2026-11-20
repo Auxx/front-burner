@@ -94,7 +94,7 @@ test.describe('administrator onboarding with OIDC', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true })).toBeVisible();
   });
 
-  test('has no accessibility violations on the OIDC step', async ({ page }) => {
+  test('NF-13.8: has no accessibility violations on the OIDC step', async ({ page }) => {
     await reachOidcStep(page);
     await expectNoAxeViolations(page);
     await page.getByLabel('Issuer URL').fill('http://id.example.com');
@@ -103,7 +103,7 @@ test.describe('administrator onboarding with OIDC', () => {
     await expectNoAxeViolations(page);
   });
 
-  test('does not scroll sideways at 320 px', async ({ page }) => {
+  test('NF-12.4: does not scroll sideways at 320 px', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await reachOidcStep(page);
     const fits = await page.evaluate(

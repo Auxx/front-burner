@@ -40,6 +40,11 @@ A project that needs a rule the shared config does not turn on imports the
 plugin from `src/index.mjs`, registers it under the name `front-burner` and
 turns the rule on in its own config.
 
+`no-raw-text` reports template text and read-out attributes (`aria-label`,
+`title`, `placeholder`, `alt`, …) that do not go through Transloco (NF-14.2). It
+is off for the web client's `index.html` and the design token overview, which
+the product does not show.
+
 `attribute-layout` reports, but does not fix, a tag that starts on the first
 line of an inline template (`` template: `<a b c>` ``): the columns of that line
 in the extracted template are not those of the `.ts` file.

@@ -75,7 +75,7 @@ test.describe('Preferences', () => {
     await expect(main(page).getByText('12345+ada@users.noreply.github.com')).toBeVisible();
   });
 
-  test('does not scroll sideways at 320 px, with the longest email', async ({ page }) => {
+  test('NF-12.4: does not scroll sideways at 320 px, with the longest email', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await openFromUserMenu(page);
     expect(await fitsWidth(page)).toBe(true);

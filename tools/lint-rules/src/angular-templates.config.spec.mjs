@@ -63,6 +63,15 @@ describe('angular-templates config', () => {
     ]);
   });
 
+  it('NF-14.2: reports text outside Transloco, except in index.html and the design token overview', async () => {
+    const code = '<p title="More">Hello</p>';
+
+    expect(await reported(code, 'app/x.component.html')).toEqual([ 'front-burner/no-raw-text 2' ]);
+    expect(await reported(component(code), 'app/x.component.ts')).toEqual([ 'front-burner/no-raw-text 2' ]);
+    expect(await reported(code, 'apps/web/src/index.html')).toEqual([]);
+    expect(await reported(code, 'libs/ui/src/design-tokens/components/x/x.component.html')).toEqual([]);
+  });
+
   it('covers inline templates', async () => {
     expect(await reported(component('<p>{{ fmt(a) }}</p>'), 'app/x.component.ts')).toEqual([
       'front-burner/no-template-calls 2'
@@ -101,26 +110,30 @@ describe('angular-templates config', () => {
     }
 
     it('fixes a tag on a later line of the template in place', async () => {
-      const code = component(lines('', '    <a href="x" class="y">x</a>', '  '));
+      const code = component(lines('', '    <a href="x" class="y">{{ t(\'x\') }}</a>', '  '));
 
-      expect(await fixedText(code)).toBe(component(lines('', '    <a href="x"', '       class="y">x</a>', '  ')));
+      expect(await fixedText(code)).toBe(
+        component(lines('', '    <a href="x"', '       class="y">{{ t(\'x\') }}</a>', '  '))
+      );
     });
 
     it('reports, but does not fix, a tag on the backtick\'s line', async () => {
-      const code = component('<a href="x" class="y">x</a>');
+      const code = component('<a href="x" class="y">{{ t(\'x\') }}</a>');
 
       expect(await reported(code, 'app/x.component.ts')).toEqual([ 'front-burner/attribute-layout 2' ]);
       expect(await fixedText(code)).toBe(code);
     });
 
     it('accepts a tag on the backtick\'s line whose attributes align in the real file', async () => {
-      const code = component(lines('<a href="x"', '                class="y">x</a>'));
+      const code = component(lines('<a href="x"', '                class="y">{{ t(\'x\') }}</a>'));
 
       expect(await reported(code, 'app/x.component.ts')).toEqual([]);
     });
 
     it('reports further attributes of a tag on the backtick\'s line that do not align with each other', async () => {
-      const code = component(lines('<a href="x"', '                class="y"', '               id="z">x</a>'));
+      const code = component(
+        lines('<a href="x"', '                class="y"', '               id="z">{{ t(\'x\') }}</a>')
+      );
 
       expect(await reported(code, 'app/x.component.ts')).toEqual([ 'front-burner/attribute-layout 2' ]);
     });

@@ -219,7 +219,7 @@ test.describe('app header', () => {
     expect(await fitsWidth(page)).toBe(true);
   });
 
-  test('does not scroll sideways at 320 px', async ({ page }) => {
+  test('NF-12.4: does not scroll sideways at 320 px', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await openDashboard(page);
     await expect(page.getByRole('banner').getByRole('button', { name: 'Menu', exact: true })).toBeVisible();
@@ -368,7 +368,7 @@ test.describe('app header', () => {
     await expect(offline).toBeHidden();
   });
 
-  test('has no accessibility violations', async ({ page }) => {
+  test('NF-13.8: has no accessibility violations', async ({ page }) => {
     await openDashboard(page);
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations).toEqual([]);

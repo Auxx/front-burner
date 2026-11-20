@@ -83,7 +83,7 @@ test.describe('login page', () => {
     await expect(page.getByText('This instance is not served over HTTPS.', { exact: false })).toHaveCount(0);
   });
 
-  test('has no accessibility violations', async ({ page }) => {
+  test('NF-13.8: has no accessibility violations', async ({ page }) => {
     await page.goto('/login');
     await expect(loginHeading(page)).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();
@@ -157,7 +157,7 @@ test.describe('login page', () => {
     expect(await fitsWidth(page)).toBe(true);
   });
 
-  test('does not scroll sideways at 320 px', async ({ page }) => {
+  test('NF-12.4: does not scroll sideways at 320 px', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/login');
     await expect(loginHeading(page)).toBeVisible();
@@ -190,6 +190,8 @@ test.describe('expiring auth tokens', () => {
     drainFailedRequests(monitor, '/api/v1/auth/session/refresh');
     // The dashboard's push channel connects with the expired token too.
     drainFailedRequests(monitor, '/api/v1/events');
+    // So does the administrators' low-space banner (NF-9.7).
+    drainFailedRequests(monitor, '/api/v1/instance/storage');
   });
 
   test('keeps the repository screen as it is while its tokens expire: no reload, and the editor keeps the focus', async ({ page, instance }) => {

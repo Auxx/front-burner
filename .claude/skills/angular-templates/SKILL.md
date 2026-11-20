@@ -140,6 +140,23 @@ reported as a call.
 </ng-container>
 ```
 
+## No text outside Transloco (lint)
+
+Every word a person reads or hears goes through Transloco (NF-14.2). Lint
+(`front-burner/no-raw-text`) reports text with a letter between tags or around
+an interpolation, and a static `aria-label`, `title`, `placeholder`, `alt`,
+`label` or other read-out attribute with a letter. Punctuation and symbols alone
+(`·`, `/`) pass, and so does the text of `<code>`, `<kbd>` and `<samp>`, such as
+an example URL or a variable's name.
+
+```html
+<!-- Bad -->
+<button aria-label="Close">{{ count() }} files</button>
+
+<!-- Good -->
+<button [attr.aria-label]="t('close')">{{ t('files', { count: count() }) }}</button>
+```
+
 ## Control flow and other syntax (lint)
 
 - Use `@if`, `@for` and `@switch`, not `*ngIf`, `*ngFor` or `*ngSwitch`

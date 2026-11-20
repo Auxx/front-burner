@@ -994,7 +994,7 @@ test.describe('images', () => {
     drainFailedImages(monitor, id);
   });
 
-  test('has no axe violations with image placeholders shown', async ({ page, instance, monitor, isMobile }) => {
+  test('NF-13.8: has no axe violations with image placeholders shown', async ({ page, instance, monitor, isMobile }) => {
     const { id } = seedHandbook(instance.dataDir, {
       'docs/guide.md': '# Guide\n\n![Flow](img/flow.png)\n\n![Missing](missing.png)\n\n![](decorative.tiff)\n\n'
         + '![Badge](https://img.shields.io/badge/a.png) ![](http://example.com/a.png)\n',

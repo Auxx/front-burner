@@ -254,7 +254,7 @@ test.describe('dashboard', () => {
     expect(await compactGuideLayout(page, instance.dataDir)).toEqual({ buttonBelow: true, fits: true });
   });
 
-  test('has no accessibility violations, empty or with repositories', async ({ page, instance }) => {
+  test('NF-13.8: has no accessibility violations, empty or with repositories', async ({ page, instance }) => {
     await openDashboard(page);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
