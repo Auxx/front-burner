@@ -367,6 +367,31 @@ describe('startServer', () => {
     it('ignores X-Forwarded-Proto from an unrelated address', async () => {
       expect(await hsts('203.0.113.7')).toBeUndefined();
     });
+
+    /** The statuses of 11 logins, each claiming another client address; the limit is 10 per address (LG-65). */
+    const loginsFromClaimedAddresses = async (trusted: string) => {
+      app = await start({ FRONT_BURNER_TRUSTED_PROXIES: trusted });
+      const statuses: number[] = [];
+      for (let i = 1; i <= 11; i++) {
+        const response = await request(app.getHttpServer())
+          .post('/api/v1/auth/login')
+          .set('X-Forwarded-For', `198.51.100.${i}`)
+          .send({ email: 'nobody@example.com', password: 'wrong', refreshTokenDelivery: 'body' });
+        statuses.push(response.status);
+      }
+      return statuses;
+    };
+
+    // Security review (plan 145): a client that is not a trusted proxy cannot choose its rate limit key.
+    it('ignores X-Forwarded-For from an unrelated address when counting logins', async () => {
+      const statuses = await loginsFromClaimedAddresses('203.0.113.7');
+      expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401));
+      expect(statuses[10]).toBe(429);
+    });
+
+    it('counts logins per forwarded address behind a trusted proxy', async () => {
+      expect(await loginsFromClaimedAddresses('loopback')).toEqual(Array(11).fill(401));
+    });
   });
 });
 
