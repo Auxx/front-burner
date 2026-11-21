@@ -310,7 +310,9 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   where NF-2's screen targets end, in the production build too, so that
   `perf-screen.mjs` times the client's own moments rather than guesses from the
   DOM _(plan 151's call: a mark costs nothing)_. `markPerformance` in
-  `shared/util` sets them and does nothing where the API is missing:
+  `shared/util` sets them, keeping only the latest mark of each name (the
+  browser keeps marks until they are cleared, and the preview sets one per
+  render), and does nothing where the API is missing:
   - `fb:app-ready`: the root component, after the first route's page has
     rendered (NF-2.7);
   - `fb:tree-folder-shown`, with `{ folder }` (`''` for the root): the file
