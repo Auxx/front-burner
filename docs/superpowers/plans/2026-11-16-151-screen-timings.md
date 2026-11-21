@@ -98,5 +98,6 @@ same table as `perf-api.mjs`.
 - **Finding:** the local run misses NF-2.1, NF-2.2 and NF-2.7 on slow 4G, and
   NF-2.5 on the phone. The instance compresses no response: the initial files
   are 714 KB as sent and 198 KB gzipped, the 1,000-entry listing 94 KB and 3 KB,
-  and the web client's files are sent with `max-age=0`. Plan 159 (Part F) adds
-  compression and long caching of the hashed files.
+  and the web client's files are sent with `max-age=0`.
+  [Plan 159](2026-11-21-159-compression.md) (Part F) adds compression and long
+  caching of the hashed files.
