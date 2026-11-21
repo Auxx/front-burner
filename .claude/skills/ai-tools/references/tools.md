@@ -16,6 +16,7 @@ watch out for. The rules shared by all tools are in [SKILL.md](../SKILL.md).
 | [`typing-test`](#typing-test)       | The page for checking typing speed on a real phone (NF-2.4)        |
 | [`mem-profile`](#mem-profile)       | The memory of a test run: peak, per kind of process, over time     |
 | [`vitest-configs`](#vitest-configs) | Checking that every project's unit tests use the shared settings   |
+| [`gen-large-repo`](#gen-large-repo) | A git repository of 100,000 files, for timing NF-2.8               |
 
 ## `colour`
 
@@ -448,3 +449,34 @@ mem-profile.mjs run e2e-web-chromium --quiet --label workers-4 -- --workers=4
   characters the shell would read; `%` is allowed only at the end
   (`--maxWorkers=50%`).
 - Ctrl+C stops the command, and the report of what ran so far is still written.
+
+## `gen-large-repo`
+
+Writes a git repository of 100,000 files with one commit, for `perf-api.mjs
+--large` (NF-2.8), since spike 4's harness was not kept. Its shape stands in for
+spike 4's shallow Linux clone: one folder per 22 files (4,504 folders), at most
+5 levels deep and bushy near the top; file sizes log-normal with a median of 4
+KB, scaled so that the files total 1.2 GB (1000-based); 45 % `.c`, 30 % `.h`, 20
+% `.md`, 5 % `.txt` and 1 % binary (`.png`, `.bin`). Text files start with their
+path and are cut from seeded lines of C-like words, so git compresses them about
+as it compresses source code. Author, committer and dates are fixed, so one seed
+and set of options always gives one commit ID.
+
+| Command                                                                  | Does                                                          |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `generate [--out tmp/ai-tools/large-repo] [--seed 1] [--files] [--size]` | Writes the repository and prints its shape and commit ID      |
+| `generate --from <path> [--json]`                                        | Prints the shape of an existing clone instead; writes nothing |
+
+```shell
+gen-large-repo.mjs generate
+gen-large-repo.mjs generate --from tmp/linux
+```
+
+- **The shape is the record.** The checklist quotes the printed shape next to
+  the numbers measured with it. On 2026-11-21 the defaults printed 100,000
+  files, 4,504 folders, depth 5, 1200.0 MB, median 4.0 KB, mean 12.0 KB, largest
+  2062.5 KB, commit `135e3c3a`, in 25 to 40 seconds.
+- `--out` must be missing or empty; the tool never deletes. Delete the folder
+  when done: it holds 1.2 GB of files and as much again in `.git`.
+- `--from` takes a clone inside the workspace (clone Linux into `tmp/` to
+  compare with spike 4), leaves out `.git` and does not follow symbolic links.
