@@ -5,7 +5,7 @@ import { createServer } from 'node:https';
 import { cpus, platform, tmpdir, totalmem } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { createSseParser, parseServerTiming } from './perf-stats.mjs';
+import { createSseParser, jobProblem, parseServerTiming, retryAfterMs } from './perf-stats.mjs';
 import { WORKSPACE_ROOT } from './workspace.mjs';
 
 export const DEFAULT_WORK = 'tmp/ai-tools/perf-api';
@@ -19,6 +19,8 @@ const FOLDER_ENTRIES = 1000;
 const BIG_FILE_BYTES = 100 * 1024;
 const CLONE_WAIT_MS = 60 * 60 * 1000;
 const JOB_WAIT_MS = 10 * 60 * 1000;
+/** Failed connections in a row after which the push channel gives up. */
+const EVENT_FAILURES = 5;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -257,13 +259,17 @@ export class Session {
     this.url = url.replace(/\/$/, '');
     this.email = email;
     this.password = password;
+    /** `{ done, fail }` of each job waited for, by job ID. */
     this.waiters = new Map();
     this.finished = new Map();
     this.closed = false;
+    this.streamUp = false;
+    /** The push channel's connections so far. */
+    this.generation = 0;
   }
 
   async login() {
-    const response = await this.raw('POST', '/auth/login', {
+    const { response } = await this.send('POST', '/auth/login', {
       email: this.email,
       password: this.password,
       refreshTokenDelivery: 'body'
@@ -281,7 +287,7 @@ export class Session {
   }
 
   async refresh() {
-    const response = await this.raw('POST', '/auth/session/refresh', { refreshToken: this.refreshToken }, {
+    const { response } = await this.send('POST', '/auth/session/refresh', { refreshToken: this.refreshToken }, {
       auth: false
     });
     if (response.status !== 200) {
@@ -290,8 +296,26 @@ export class Session {
     this.keep(await response.json());
   }
 
-  async raw(method, path, body, { auth = true } = {}) {
+  /**
+   * Refreshes the auth token when it is about to expire, or when `force`.
+   * Callers at once share one refresh: a refresh token is used only once, and
+   * using it again revokes the session.
+   */
+  async fresh(force = false) {
+    if (force || Date.now() > this.expiresAt - 60_000) {
+      this.refreshing ??= this.refresh().finally(() => (this.refreshing = undefined));
+      await this.refreshing;
+    }
+  }
+
+  /**
+   * Sends one request, waiting out 429s as told (NF-11.4), so that a limit
+   * never ends a run: `{ response, sentAt }`, where `sentAt` is when the
+   * request that got through was sent, the waits left out.
+   */
+  async send(method, path, body, { auth = true } = {}) {
     for (;;) {
+      const sentAt = performance.now();
       const response = await fetch(`${this.url}/api/v1${path}`, {
         method,
         headers: {
@@ -301,24 +325,21 @@ export class Session {
         body: body === undefined ? undefined : JSON.stringify(body)
       });
       if (response.status !== 429) {
-        return response;
+        return { response, sentAt };
       }
-      // NF-11.4: wait as told, so that a limit never ends a run.
       await response.body?.cancel();
-      await sleep(Number(response.headers.get('retry-after') ?? '1') * 1000);
+      await sleep(retryAfterMs(response.headers.get('retry-after')));
     }
   }
 
   /**
-   * Calls the API: `{ status, body, serverMs }`, where `serverMs` is the
-   * response's `Server-Timing`. Refreshes the auth token when it is about to
-   * expire. Throws when the status is not `expect`.
+   * Calls the API: `{ status, body, serverMs, sentAt }`, where `serverMs` is
+   * the response's `Server-Timing`. Refreshes the auth token when it is about
+   * to expire. Throws when the status is not `expect`.
    */
   async call(method, path, body, expect = 200) {
-    if (Date.now() > this.expiresAt - 60_000) {
-      await this.refresh();
-    }
-    const response = await this.raw(method, path, body);
+    await this.fresh();
+    const { response, sentAt } = await this.send(method, path, body);
     const text = await response.text();
     if (response.status !== expect) {
       throw new Error(`${method} ${path}: expected ${expect}, got ${response.status} ${text.slice(0, 300)}`);
@@ -326,53 +347,89 @@ export class Session {
     return {
       status: response.status,
       body: text === '' ? undefined : JSON.parse(text),
-      serverMs: parseServerTiming(response.headers.get('server-timing'))
+      serverMs: parseServerTiming(response.headers.get('server-timing')),
+      sentAt
     };
   }
 
-  /** Opens the push channel; `job.finished` events end the matching `waitForJob`. */
+  /**
+   * Keeps the push channel open, reconnecting when the server ends it (it
+   * does when the auth token expires, A-3.10); `job.finished` events end the
+   * matching `timedJob`. Fails the session after {@link EVENT_FAILURES}
+   * connections in a row that fail.
+   */
   async openEvents() {
+    let failures = 0;
+    let forceRefresh = false;
     while (!this.closed) {
-      if (Date.now() > this.expiresAt - 60_000) {
-        await this.refresh();
-      }
       this.abort = new AbortController();
       try {
+        await this.fresh(forceRefresh);
+        forceRefresh = false;
         const response = await fetch(`${this.url}/api/v1/events`, {
           headers: { authorization: `Bearer ${this.authToken}` },
           signal: this.abort.signal
         });
+        const type = response.headers.get('content-type') ?? '';
+        if (response.status === 429) {
+          await response.body?.cancel();
+          await sleep(retryAfterMs(response.headers.get('retry-after')));
+          continue;
+        }
+        if (!response.ok || !type.startsWith('text/event-stream')) {
+          await response.body?.cancel();
+          forceRefresh = response.status === 401;
+          throw new Error(`it answered ${response.status} (${type || 'no content type'})`);
+        }
+        failures = 0;
+        this.generation++;
+        this.streamUp = true;
+        this.onReady?.();
         const parse = createSseParser(({ event, data }) => {
           if (event === 'job.finished') {
             const { jobId } = JSON.parse(data);
             const at = performance.now();
             this.finished.set(jobId, at);
-            this.waiters.get(jobId)?.(at);
+            this.waiters.get(jobId)?.done(at);
           }
         });
         const decoder = new TextDecoder();
         for await (const chunk of response.body) {
           parse(decoder.decode(chunk, { stream: true }));
-          if (!this.ready) {
-            this.ready = true;
-            this.onReady?.();
-          }
         }
       } catch (error) {
         if (this.closed) {
           return;
         }
+        if (++failures >= EVENT_FAILURES) {
+          this.fail(new Error(`The push channel of ${this.email} failed ${failures} times in a row: ${error.message}`));
+          return;
+        }
         process.stderr.write(`push channel of ${this.email}: ${error.message}; reconnecting\n`);
+      } finally {
+        this.streamUp = false;
       }
-      // The server ends the stream when the auth token expires (A-3.10).
-      await sleep(200);
+      await sleep(200 * Math.max(1, failures));
     }
   }
 
-  async startEvents() {
-    const ready = new Promise(resolve => (this.onReady = resolve));
-    this.eventsDone = this.openEvents();
-    await ready;
+  /** Ends the jobs waited for, and the wait for the push channel, with `error`. */
+  fail(error) {
+    this.failure ??= error;
+    this.onFail?.(error);
+    for (const { fail } of this.waiters.values()) {
+      fail(error);
+    }
+  }
+
+  /** Opens the push channel; resolves once it is open, rejects when it cannot be. */
+  startEvents() {
+    const ready = new Promise((resolve, reject) => {
+      this.onReady = resolve;
+      this.onFail = reject;
+    });
+    this.eventsDone = this.openEvents().catch(error => this.fail(error));
+    return ready;
   }
 
   close() {
@@ -382,12 +439,21 @@ export class Session {
 
   /**
    * Starts a git job with `POST path` and resolves with the milliseconds from
-   * sending the request to its `job.finished` event (NF-2.6). Polls the job's
-   * state every 2 seconds as well, in case the stream was reconnecting.
+   * sending the request that got through to its `job.finished` event (NF-2.6).
+   * Throws unless the job succeeded (see `jobProblem`). While the push channel
+   * stays up, the event is the only signal. Once it has been down, the event
+   * may be lost, so the job's state is polled every 2 seconds; a job found
+   * finished that way resolves undefined, because when it finished is known
+   * only to within 2 seconds, and its sample is dropped.
    */
   async timedJob(repositoryId, path) {
-    const started = performance.now();
-    const { body } = await this.call('POST', `/repositories/${repositoryId}${path}`, undefined, 202);
+    if (this.failure) {
+      throw this.failure;
+    }
+    const generation = this.generation;
+    const upAtStart = this.streamUp;
+    const jobPath = jobId => `/repositories/${repositoryId}/git/jobs/${jobId}`;
+    const { body, sentAt } = await this.call('POST', `/repositories/${repositoryId}${path}`, undefined, 202);
     const { jobId } = body;
     const finished = await new Promise((resolve, reject) => {
       if (this.finished.has(jobId)) {
@@ -395,32 +461,50 @@ export class Session {
         return;
       }
       const deadline = Date.now() + JOB_WAIT_MS;
+      const end = () => {
+        clearInterval(poll);
+        this.waiters.delete(jobId);
+      };
       const poll = setInterval(async () => {
         try {
-          const state = (await this.call('GET', `/repositories/${repositoryId}/git/jobs/${jobId}`)).body;
+          if (Date.now() > deadline) {
+            throw new Error(`job ${jobId} did not finish in ${JOB_WAIT_MS / 60_000} minutes`);
+          }
+          if (upAtStart && this.streamUp && this.generation === generation) {
+            return;
+          }
+          const state = (await this.call('GET', jobPath(jobId))).body;
           if (state.status !== 'queued' && state.status !== 'running') {
-            done(performance.now());
-          } else if (Date.now() > deadline) {
-            throw new Error(`job ${jobId} did not finish`);
+            end();
+            resolve(undefined);
           }
         } catch (error) {
-          clearInterval(poll);
-          this.waiters.delete(jobId);
+          end();
           reject(error);
         }
       }, 2000);
-      const done = at => {
-        clearInterval(poll);
-        this.waiters.delete(jobId);
-        resolve(at);
-      };
-      this.waiters.set(jobId, done);
+      this.waiters.set(jobId, {
+        done: at => {
+          end();
+          resolve(at);
+        },
+        fail: error => {
+          end();
+          reject(error);
+        }
+      });
     });
-    const state = (await this.call('GET', `/repositories/${repositoryId}/git/jobs/${jobId}`)).body;
-    if (state.outcome?.kind === 'failed' || state.status === 'failed') {
-      throw new Error(`${path} failed: ${JSON.stringify(state.outcome)}`);
+    const problem = jobProblem(path, (await this.call('GET', jobPath(jobId))).body);
+    if (problem !== undefined) {
+      throw new Error(problem);
     }
-    return finished - started;
+    if (finished === undefined) {
+      process.stderr.write(
+        `${this.email}: job ${jobId} was found finished by polling while the push channel was down; dropped\n`
+      );
+      return undefined;
+    }
+    return finished - sentAt;
   }
 
   /** The names of this user's repositories, lower case. */
@@ -472,7 +556,8 @@ export class Session {
 
 /**
  * Runs `measure` `warmup` times unrecorded, then `runs` times, and returns
- * the durations it resolves with.
+ * the durations it resolves with; a run that resolves undefined (a dropped
+ * sample) is left out.
  */
 async function repeat(runs, warmup, measure) {
   for (let i = 0; i < warmup; i++) {
@@ -480,7 +565,10 @@ async function repeat(runs, warmup, measure) {
   }
   const values = [];
   for (let i = 0; i < runs; i++) {
-    values.push(await measure(i));
+    const value = await measure(i);
+    if (value !== undefined) {
+      values.push(value);
+    }
   }
   return values;
 }
@@ -658,10 +746,11 @@ export async function measureLarge(context, { samples }) {
   for (const v of await repeat(runs, warmup, commit)) {
     add('commit-warm', v);
   }
-  // NF-1.4: a push at this size works; the first one sends every commit above.
+  // NF-1.4: a push at this size works. No warm-up: the first push, which
+  // sends every commit above, is the one most worth recording.
   log('push');
   for (
-    const v of await repeat(Math.min(runs, 10), 1, async () => (await commit(), session.timedJob(id, '/git/push')))
+    const v of await repeat(Math.min(runs, 10), 0, async () => (await commit(), session.timedJob(id, '/git/push')))
   ) {
     add('push-large', v);
   }

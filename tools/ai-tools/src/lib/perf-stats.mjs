@@ -47,6 +47,41 @@ export function parseServerTiming(header) {
 }
 
 /**
+ * How long to wait after a 429, in milliseconds, from its `Retry-After`:
+ * seconds or an HTTP date (RFC 9110). A header that is missing, cannot be
+ * read or names a past time gives a short wait rather than none, so that a
+ * retry never spins.
+ */
+export function retryAfterMs(header, now = Date.now()) {
+  const MIN_MS = 250;
+  const text = typeof header === 'string' ? header.trim() : '';
+  if (/^\d+$/.test(text)) {
+    return Math.max(MIN_MS, Number(text) * 1000);
+  }
+  const at = Date.parse(text);
+  return Number.isNaN(at) ? 1000 : Math.max(MIN_MS, at - now);
+}
+
+/**
+ * Why a finished git job cannot be timed, or undefined when it can: it must
+ * be done, with the outcome its kind gives (`pushed`, or `pulled` without a
+ * conflict).
+ */
+export function jobProblem(path, state) {
+  const expected = path.endsWith('/push') ? 'pushed' : 'pulled';
+  if (state?.status !== 'done') {
+    return `${path} ended ${state?.status}: ${JSON.stringify(state?.outcome)}`;
+  }
+  if (state.outcome?.kind !== expected) {
+    return `${path} did not succeed: ${JSON.stringify(state.outcome)}`;
+  }
+  if (state.outcome.result === 'conflicted') {
+    return `${path} conflicted`;
+  }
+  return undefined;
+}
+
+/**
  * A reader of Server-Sent Events: feed it chunks of text as they arrive; it
  * calls `onEvent({ event, data })` for each complete event. Comments (lines
  * starting with `:`) are skipped.
@@ -151,7 +186,15 @@ export function resultTable(rows) {
     row.kind === 'job'
       ? `≤ ${ms(row.targetMs)} added (job p95 ${ms(row.jobP95)}, git p50 ${ms(row.gitP50)})`
       : `${row.kind === 'about' ? '≈ ' : ''}${ms(row.targetMs)}`,
-    row.kind === 'info' ? '—' : row.pass ? 'yes' : 'NO'
+    row.kind === 'info' ? '—' : row.pass ? 'yes' : row.kind === 'about' ? 'over' : 'NO'
   ]);
   return [ header, ...lines ];
+}
+
+/**
+ * Whether every hard target is met. A soft target ("about 2 seconds",
+ * NF-2.8) shows "over" in the table but fails nothing.
+ */
+export function allPass(rows) {
+  return rows.every(row => row.pass || row.kind === 'about');
 }

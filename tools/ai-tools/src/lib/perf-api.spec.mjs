@@ -1,8 +1,19 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createRemote, fillDataDir, git, markdownOf, scaleUserEmail, startGitServer, timedGit } from './perf-api.mjs';
+import {
+  createRemote,
+  fillDataDir,
+  git,
+  markdownOf,
+  scaleUserEmail,
+  Session,
+  startGitServer,
+  timedGit
+} from './perf-api.mjs';
 import { WORKSPACE_ROOT } from './workspace.mjs';
 
 let dir;
@@ -111,4 +122,144 @@ describe('fillDataDir', () => {
     writeFileSync(`${databaseFile()}-shm`, '');
     expect(() => fillDataDir(dir, { users: 1, repositories: 1 })).toThrow(/stop the instance/);
   });
+});
+
+/**
+ * A fake instance: login, refresh tokens that work once, `/me`, the push
+ * channel (`events: 'ok'` or a status to refuse it with), and push jobs, the
+ * first of which (`limitFirstPush`) is answered 429 for a second.
+ */
+async function fakeInstance({ events = 'ok', limitFirstPush = false } = {}) {
+  const state = { refreshes: 0, used: new Set(), streams: new Set(), jobs: 0 };
+  let token = 0;
+  const tokens = () => {
+    token++;
+    return {
+      authToken: `auth-${token}`,
+      refreshToken: `refresh-${token}`,
+      // Expired at once, so that the next call refreshes.
+      authTokenExpiresAt: new Date(Date.now() - 1000).toISOString()
+    };
+  };
+  const json = (response, status, body) => {
+    response.writeHead(status, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(body));
+  };
+  const server = createHttpServer(async (request, response) => {
+    let text = '';
+    for await (const chunk of request) {
+      text += chunk;
+    }
+    const path = request.url;
+    if (path === '/api/v1/auth/login') {
+      json(response, 200, tokens());
+    } else if (path === '/api/v1/auth/session/refresh') {
+      const { refreshToken } = JSON.parse(text);
+      if (state.used.has(refreshToken)) {
+        json(response, 401, { code: 'session-revoked' });
+        return;
+      }
+      state.used.add(refreshToken);
+      state.refreshes++;
+      // A slow refresh, so that callers at once overlap.
+      await new Promise(resolve => setTimeout(resolve, 50));
+      json(response, 200, tokens());
+    } else if (path === '/api/v1/me') {
+      json(response, 200, {});
+    } else if (path === '/api/v1/events') {
+      if (events !== 'ok') {
+        json(response, events, { code: 'refused' });
+        return;
+      }
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.write(': connected\n\n');
+      state.streams.add(response);
+      response.on('close', () => state.streams.delete(response));
+    } else if (path === '/api/v1/repositories/1/git/push') {
+      if (limitFirstPush && state.jobs === 0) {
+        state.jobs++;
+        response.writeHead(429, { 'retry-after': '1' });
+        response.end();
+        return;
+      }
+      const jobId = ++state.jobs;
+      json(response, 202, { jobId });
+      setTimeout(() => {
+        for (const stream of state.streams) {
+          stream.write(`event: job.finished\ndata: {"jobId":${jobId}}\n\n`);
+        }
+      }, 50);
+    } else if (path.startsWith('/api/v1/repositories/1/git/jobs/')) {
+      json(response, 200, { status: 'done', outcome: { kind: 'pushed' } });
+    } else {
+      json(response, 404, {});
+    }
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  return {
+    url: `http://127.0.0.1:${server.address().port}`,
+    state,
+    close: () =>
+      new Promise(resolve => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      })
+  };
+}
+
+describe('Session', () => {
+  it('shares one refresh among calls at once, since a refresh token works only once', async () => {
+    const instance = await fakeInstance();
+    const session = new Session(instance.url, 'a@example.invalid', 'pw');
+    try {
+      await session.login();
+      await Promise.all([ session.call('GET', '/me'), session.call('GET', '/me'), session.startEvents() ]);
+      expect(instance.state.refreshes).toBe(1);
+    } finally {
+      session.close();
+      await instance.close();
+    }
+  });
+
+  it('refuses a push channel that does not answer with an event stream', async () => {
+    const instance = await fakeInstance({ events: 500 });
+    const session = new Session(instance.url, 'a@example.invalid', 'pw');
+    try {
+      await session.login();
+      await expect(session.startEvents()).rejects.toThrow(/failed 5 times in a row: it answered 500/);
+      await expect(session.timedJob(1, '/git/push')).rejects.toThrow(/push channel/);
+    } finally {
+      session.close();
+      await instance.close();
+    }
+  }, 10_000);
+
+  it('times a job from the request that got through, a 429\'s wait left out', async () => {
+    const instance = await fakeInstance({ limitFirstPush: true });
+    const session = new Session(instance.url, 'a@example.invalid', 'pw');
+    try {
+      await session.login();
+      await session.startEvents();
+      const started = performance.now();
+      const ms = await session.timedJob(1, '/git/push');
+      expect(performance.now() - started).toBeGreaterThan(1000);
+      expect(ms).toBeGreaterThanOrEqual(40);
+      expect(ms).toBeLessThan(500);
+    } finally {
+      session.close();
+      await instance.close();
+    }
+  });
+
+  it('drops a job found finished by polling, with no push channel', async () => {
+    const instance = await fakeInstance();
+    const session = new Session(instance.url, 'a@example.invalid', 'pw');
+    try {
+      await session.login();
+      expect(await session.timedJob(1, '/git/push')).toBeUndefined();
+    } finally {
+      session.close();
+      await instance.close();
+    }
+  }, 10_000);
 });

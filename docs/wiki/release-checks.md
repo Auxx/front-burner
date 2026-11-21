@@ -259,9 +259,9 @@ machine runs CI, so they prove the code path, not the number; the number is plan
 
 **Indicative only**: a developer machine much faster than the reference host,
 with the instance, the tool and its git server on the same machine. Plan 152's
-run on the reference host is the one that counts. Taken on 2026-11-21 at commit
-`8f8ce52` with plan 150's `perf-api.mjs`, against the built server (`node
-dist/apps/server/main.js`, `FRONT_BURNER_SERVER_TIMING=true`,
+run on the reference host is the one that counts. Taken on 2026-11-21 with plan
+150's `perf-api.mjs` after its review, against the server of commit `90fd68b`
+built (`node dist/apps/server/main.js`, `FRONT_BURNER_SERVER_TIMING=true`,
 `FRONT_BURNER_LOG_LEVEL=warn`) on a fresh data directory. `--cold` was not run
 (it needs root).
 
@@ -274,33 +274,38 @@ largest 2062.5 KB, commit `135e3c3a`.
 ```text
 Host: 20 CPUs (12th Gen Intel(R) Core(TM) i7-12700K), 31.1 GB memory, linux, git version 2.56.1
 Instance: http://127.0.0.1:3555; 1 user(s) at once; 50 runs after 5 warm-up runs
-Large repository: tmp/ai-tools/large-repo, 100,000 files, 4,504 folders, 1.20 GB; cloned in 41 s
+Large repository: tmp/ai-tools/large-repo, 100,000 files, 4,504 folders, 1.20 GB; cloned in 42 s
 
 Rule    Operation                       Runs  p50     p95     Max     Target                                          Pass
-NF-2.1  Open a folder of 1,000 entries  50    12 ms   14 ms   16 ms   300 ms                                          yes
-NF-2.2  Open a 100 KB Markdown file     50    4.0 ms  5.1 ms  5.8 ms  200 ms                                          yes
-NF-2.3  Save a 100 KB file              50    18 ms   19 ms   24 ms   200 ms                                          yes
-NF-2.6  Pull (job) over git pull        50    43 ms   54 ms   108 ms  ≤ 1000 ms added (job p95 83 ms, git p50 29 ms)  yes
-NF-2.6  Push (job) over git push        50    22 ms   25 ms   28 ms   ≤ 1000 ms added (job p95 57 ms, git p50 31 ms)  yes
-NF-2.8  Status, warm, 100,000 files     50    350 ms  355 ms  362 ms  ≈ 2000 ms                                       yes
-NF-2.8  Commit, warm, 100,000 files     50    172 ms  178 ms  179 ms  ≈ 2000 ms                                       yes
-NF-1.4  Push (job), 100,000 files       10    143 ms  150 ms  150 ms  —                                               —
+NF-2.1  Open a folder of 1,000 entries  50    10 ms   11 ms   12 ms   300 ms                                          yes
+NF-2.2  Open a 100 KB Markdown file     50    3.2 ms  3.9 ms  4.1 ms  200 ms                                          yes
+NF-2.3  Save a 100 KB file              50    18 ms   37 ms   42 ms   200 ms                                          yes
+NF-2.6  Pull (job) over git pull        50    42 ms   51 ms   93 ms   ≤ 1000 ms added (job p95 78 ms, git p50 28 ms)  yes
+NF-2.6  Push (job) over git push        50    19 ms   26 ms   32 ms   ≤ 1000 ms added (job p95 58 ms, git p50 32 ms)  yes
+NF-2.8  Status, warm, 100,000 files     50    356 ms  363 ms  378 ms  ≈ 2000 ms                                       yes
+NF-2.8  Commit, warm, 100,000 files     50    174 ms  179 ms  181 ms  ≈ 2000 ms                                       yes
+NF-1.4  Push (job), 100,000 files       10    148 ms  195 ms  195 ms  —                                               —
 ```
 
-`perf-api.mjs scale` on the stopped instance (50 users, 2,500 working copies,
-written in 3 s); `perf-api.mjs ready` while it started: **ready after 9.9 s**.
-Then `perf-api.mjs run --users 10`, among the 2,500 working copies:
+The NF-1.4 row's slowest push (195 ms) is the first, which sends every commit of
+the status and commit runs.
+
+`perf-api.mjs scale` on the stopped instance (50 users, 2,500 working copies);
+`perf-api.mjs ready` while it started: **ready after 10.5 s**. Then
+`perf-api.mjs run --users 10`, among the 2,500 working copies:
 
 ```text
 Instance: http://127.0.0.1:3555; 10 user(s) at once; 50 runs after 5 warm-up runs
 
 Rule    Operation                       Runs  p50     p95     Max     Target                                           Pass
-NF-2.1  Open a folder of 1,000 entries  500   101 ms  113 ms  122 ms  300 ms                                           yes
-NF-2.2  Open a 100 KB Markdown file     500   29 ms   36 ms   43 ms   200 ms                                           yes
-NF-2.3  Save a 100 KB file              500   83 ms   171 ms  235 ms  200 ms                                           yes
-NF-2.6  Pull (job) over git pull        500   331 ms  459 ms  503 ms  ≤ 1000 ms added (job p95 522 ms, git p50 64 ms)  yes
-NF-2.6  Push (job) over git push        500   179 ms  229 ms  311 ms  ≤ 1000 ms added (job p95 290 ms, git p50 61 ms)  yes
+NF-2.1  Open a folder of 1,000 entries  500   99 ms   107 ms  114 ms  300 ms                                           yes
+NF-2.2  Open a 100 KB Markdown file     500   27 ms   33 ms   38 ms   200 ms                                           yes
+NF-2.3  Save a 100 KB file              500   87 ms   151 ms  235 ms  200 ms                                           yes
+NF-2.6  Pull (job) over git pull        500   235 ms  355 ms  412 ms  ≤ 1000 ms added (job p95 418 ms, git p50 63 ms)  yes
+NF-2.6  Push (job) over git push        500   133 ms  166 ms  204 ms  ≤ 1000 ms added (job p95 226 ms, git p50 60 ms)  yes
 ```
 
-With 10 users at once, the save's p95 (171 ms) is close to its 200 ms target on
-this machine; it is the first number to watch on the reference host.
+No sample was dropped in either run: every job ended on its `job.finished`
+event. With 10 users at once, the save's p95 (151 ms, 171 ms on an earlier run)
+is the closest to its target, 200 ms, on this machine; it is the first number to
+watch on the reference host.

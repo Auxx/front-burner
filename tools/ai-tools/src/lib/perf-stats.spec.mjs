@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { createSseParser, parseServerTiming, percentile, resultRows, resultTable, summarise } from './perf-stats.mjs';
+import {
+  allPass,
+  createSseParser,
+  jobProblem,
+  parseServerTiming,
+  percentile,
+  resultRows,
+  resultTable,
+  retryAfterMs,
+  summarise
+} from './perf-stats.mjs';
 
 describe('percentile', () => {
   it('takes the nearest rank', () => {
@@ -76,5 +86,46 @@ describe('resultRows', () => {
     const [ row ] = resultRows({ 'push-large': [ 9000 ] });
     expect(row.pass).toBe(true);
     expect(resultTable([ row ])[1].slice(6)).toEqual([ '—', '—' ]);
+  });
+
+  it('shows a soft target that is over as "over", and fails only on hard targets', () => {
+    const over = resultRows({ 'status-warm': [ 2500 ], file: [ 10 ] });
+    expect(resultTable(over)[2].slice(6)).toEqual([ '≈ 2000 ms', 'over' ]);
+    expect(allPass(over)).toBe(true);
+    expect(allPass(resultRows({ 'status-warm': [ 2500 ], file: [ 250 ] }))).toBe(false);
+  });
+});
+
+describe('retryAfterMs', () => {
+  const now = Date.parse('2026-11-21T12:00:00Z');
+
+  it('reads seconds or an HTTP date', () => {
+    expect(retryAfterMs('7', now)).toBe(7000);
+    expect(retryAfterMs('Sat, 21 Nov 2026 12:00:03 GMT', now)).toBe(3000);
+  });
+
+  it('never gives a wait of nothing', () => {
+    expect(retryAfterMs('0', now)).toBe(250);
+    expect(retryAfterMs('Sat, 21 Nov 2026 11:00:00 GMT', now)).toBe(250);
+    expect(retryAfterMs('soon', now)).toBe(1000);
+    expect(retryAfterMs(null, now)).toBe(1000);
+  });
+});
+
+describe('jobProblem', () => {
+  it('accepts a push that pushed and a pull that pulled without a conflict', () => {
+    expect(jobProblem('/git/push', { status: 'done', outcome: { kind: 'pushed' } })).toBeUndefined();
+    expect(jobProblem('/git/pull', { status: 'done', outcome: { kind: 'pulled', result: 'fast-forward' } }))
+      .toBeUndefined();
+  });
+
+  it('refuses a job that was cancelled, failed, or pulled into a conflict', () => {
+    expect(jobProblem('/git/push', { status: 'cancelled', outcome: null })).toMatch(/ended cancelled/);
+    expect(jobProblem('/git/push', { status: 'done', outcome: { kind: 'failed', code: 'rejected' } })).toMatch(
+      /did not succeed/
+    );
+    expect(jobProblem('/git/pull', { status: 'done', outcome: { kind: 'pulled', result: 'conflicted' } })).toMatch(
+      /conflicted/
+    );
   });
 });

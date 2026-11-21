@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /** The defaults: about the size of spike 4's shallow Linux clone (A-5.14). */
@@ -166,7 +167,15 @@ export function fileContent(file, index, pool, random) {
 function git(cwd, args, env = {}) {
   return execFileSync('git', [ ...GIT_CONFIG, ...args ], {
     cwd,
-    env: { ...process.env, ...env },
+    // No user or system configuration (excludes, hooks, attributes), so that
+    // one seed always gives one commit ID.
+    env: {
+      PATH: process.env['PATH'] ?? '/usr/bin:/bin',
+      HOME: tmpdir(),
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      ...env
+    },
     encoding: 'utf8',
     stdio: [ 'ignore', 'pipe', 'pipe' ],
     maxBuffer: 64 * 1024 ** 2

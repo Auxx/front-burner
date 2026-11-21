@@ -18,7 +18,7 @@ import {
   TEST_CERTIFICATE,
   waitUntilReady
 } from '../lib/perf-api.mjs';
-import { resultRows, resultTable } from '../lib/perf-stats.mjs';
+import { allPass, resultRows, resultTable } from '../lib/perf-stats.mjs';
 import { resolveInWorkspace, workspacePath } from '../lib/workspace.mjs';
 
 const log = message => process.stderr.write(`${message}\n`);
@@ -205,7 +205,7 @@ main({
               'request to job.finished, less the median of plain git against the same remote.',
               ...(options.cold ? [] : [ 'Cold rows need --cold (as root, on the instance\'s host).' ])
             ].join('\n'));
-          return rows.every(row => row.pass) ? 0 : 1;
+          return allPass(rows) ? 0 : 1;
         } finally {
           for (const session of sessions) {
             session.close();

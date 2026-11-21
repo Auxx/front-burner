@@ -460,8 +460,9 @@ spike 4's shallow Linux clone: one folder per 22 files (4,504 folders), at most
 KB, scaled so that the files total 1.2 GB (1000-based); 45 % `.c`, 30 % `.h`, 20
 % `.md`, 5 % `.txt` and 1 % binary (`.png`, `.bin`). Text files start with their
 path and are cut from seeded lines of C-like words, so git compresses them about
-as it compresses source code. Author, committer and dates are fixed, so one seed
-and set of options always gives one commit ID.
+as it compresses source code. Author, committer and dates are fixed, and git
+runs without the user's or the system's configuration, so one seed and set of
+options always gives one commit ID.
 
 | Command                                                                  | Does                                                          |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
@@ -490,11 +491,11 @@ number is never quoted without the machine. Plan 152 runs it on the reference
 host; a run anywhere else is only "indicative" in the release checklist
 (`docs/wiki/release-checks.md`, "Plan 150").
 
-| Command                                                                         | Does                                                                                       |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `run --url <instance> (--email <e> \| --users <n>) [--large] [--cold] [--json]` | Prepares its repositories, times each operation, prints the table; 1 if a target is missed |
-| `scale --data-dir <dir> [--repos-dir <dir>] [--users 49] [--repositories 50]`   | Fills a stopped instance with users and working copies (NF-1.1, NF-1.3)                    |
-| `ready --url <instance> [--timeout 600]`                                        | Seconds from the command's start until `/api/health/ready` answers 200                     |
+| Command                                                                         | Does                                                                                            |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `run --url <instance> (--email <e> \| --users <n>) [--large] [--cold] [--json]` | Prepares its repositories, times each operation, prints the table; 1 if a hard target is missed |
+| `scale --data-dir <dir> [--repos-dir <dir>] [--users 49] [--repositories 50]`   | Fills a stopped instance with users and working copies (NF-1.1, NF-1.3)                         |
+| `ready --url <instance> [--timeout 600]`                                        | Seconds from the command's start until `/api/health/ready` answers 200                          |
 
 The instance runs with `FRONT_BURNER_SERVER_TIMING=true` (A-7.14), and its git
 trusts the e2e suites' test certificate
@@ -516,16 +517,23 @@ PERF_PASSWORD=… perf-api.mjs run --url http://127.0.0.1:3000 --users 10
   from `Server-Timing`, so the client's network is left out, as NF-2's "API is
   measured on the server" says: a folder `many/` of 1,000 files, a 100 KB
   `big.md`, and saves of a 100 KB `saved.md`. NF-2.6 times a pull or push job
-  from its request to `job.finished` on the push channel (with a poll every 2
-  seconds in case the stream was reconnecting), and subtracts the median of
-  plain `git pull` or `git push` from this host against the same remote: what
-  the instance adds. Before each pull, a clone on this host pushes a commit;
-  before each push, the tool saves and commits through the API. `--large` adds
-  the repository of `gen-large-repo.mjs` (`--large-repo`) and times warm status
-  and commit (NF-2.8), and 10 pushes (NF-1.4, no target); `--cold` also drops
-  the page cache before 5 status and 5 commit runs (`--cold-runs`), which needs
-  Linux and root on the instance's host. Each operation has 5 warm-up runs
-  (`--warmup`) and 50 measured ones (`--runs`).
+  from the request that got through (a `429`'s wait left out) to `job.finished`
+  on the push channel, and subtracts the median of plain `git pull` or `git
+  push` from this host against the same remote: what the instance adds. A job
+  that was cancelled, failed or pulled into a conflict ends the run. Once the
+  push channel has been down, its event may be lost, so the job's state is
+  polled every 2 seconds; a job found finished that way is dropped, with a line
+  on stderr, and the Runs column shows fewer runs. A push channel that refuses 5
+  connections in a row ends the run. Before each pull, a clone on this host
+  pushes a commit; before each push, the tool saves and commits through the API.
+  `--large` adds the repository of `gen-large-repo.mjs` (`--large-repo`) and
+  times warm status and commit (NF-2.8), and 10 pushes with no warm-up, the
+  first of which sends every commit before it (NF-1.4, no target); `--cold` also
+  drops the page cache before 5 status and 5 commit runs (`--cold-runs`), which
+  needs Linux and root on the instance's host. Each other operation has 5
+  warm-up runs (`--warmup`) and 50 measured ones (`--runs`).
+- **Pass.** A hard target missed shows "NO" and makes `run` exit 1. NF-2.8's
+  "about 2 seconds" is soft: over it shows "over" and fails nothing.
 - **Its repositories.** `--name` (default `perf`) and `<name>-large` are created
   and refused when the user has one with that name. It never removes them:
   remove them in the web client, and delete `--work`, when done.
