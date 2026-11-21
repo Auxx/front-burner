@@ -67,7 +67,8 @@ const config: Config = {
   knownHostsFile: undefined,
   oidc: undefined,
   oidcRequiredClaim: undefined,
-  metricsToken: undefined
+  metricsToken: undefined,
+  serverTiming: false
 };
 
 describe('LoggingModule', () => {

@@ -167,3 +167,9 @@ top of the security rules in the requirements and NF-11. See
   were ever bypassed, injected markup could make the browser load an image from
   any `https:` host, for example to leak that a file was viewed; it still could
   not run script. A-7.11a keeps this from happening while the sanitisers work.
+- **A-7.14** `Server-Timing` is off unless `FRONT_BURNER_SERVER_TIMING` is
+  `true` (A-1.15). Turned on, every API response but the health endpoints' and
+  the metrics' carries `Server-Timing: app;dur=<ms>`: only a duration, never a
+  route or ID. A duration can hint at work a request did that its answer does
+  not show, so the variable is meant for a measuring run (plan 150's
+  `perf-api.mjs`), not for an instance in use.

@@ -9,6 +9,7 @@ export * from './instance/instance.module';
 export * from './logging/error-for-log';
 export * from './logging/logger-options';
 export * from './logging/logging.module';
+export * from './logging/server-timing';
 export * from './metrics/http-metrics.middleware';
 export * from './metrics/keep-last-value';
 export * from './metrics/metrics-registry';

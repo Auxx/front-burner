@@ -16,7 +16,10 @@ numbering conventions.
   root `package.json`'s `version`, which a release image's build sets from its
   tag; the web client's build reads the same field, so a client compares the two
   for equality only, never orders them (A-8.7). It is not an environment
-  variable, so that it cannot differ from the web client's.
+  variable, so that it cannot differ from the web client's. With
+  `FRONT_BURNER_SERVER_TIMING=true`, the same responses also carry
+  `Server-Timing: app;dur=<ms>`, the time from the request's arrival to its
+  headers, so that a measuring tool can leave the network out (NF-2, A-7.14).
 - **A-3.2** Long operations return `202 Accepted` with a job ID (A-1.13). A git
   job's state is read with `GET /repositories/:id/git/jobs/:jobId`: its status
   and, once it has ended, its outcome, such as a push's commits and upstream, a

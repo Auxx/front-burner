@@ -16,6 +16,8 @@ watch out for. The rules shared by all tools are in [SKILL.md](../SKILL.md).
 | [`typing-test`](#typing-test)       | The page for checking typing speed on a real phone (NF-2.4)        |
 | [`mem-profile`](#mem-profile)       | The memory of a test run: peak, per kind of process, over time     |
 | [`vitest-configs`](#vitest-configs) | Checking that every project's unit tests use the shared settings   |
+| [`gen-large-repo`](#gen-large-repo) | A git repository of 100,000 files, for timing NF-2.8               |
+| [`perf-api`](#perf-api)             | The API's NF-2 timings against a running instance, at NF-1's scale |
 
 ## `colour`
 
@@ -448,3 +450,111 @@ mem-profile.mjs run e2e-web-chromium --quiet --label workers-4 -- --workers=4
   characters the shell would read; `%` is allowed only at the end
   (`--maxWorkers=50%`).
 - Ctrl+C stops the command, and the report of what ran so far is still written.
+
+## `gen-large-repo`
+
+Writes a git repository of 100,000 files with one commit, for `perf-api.mjs
+--large` (NF-2.8), since spike 4's harness was not kept. Its shape stands in for
+spike 4's shallow Linux clone: one folder per 22 files (4,504 folders), at most
+5 levels deep and bushy near the top; file sizes log-normal with a median of 4
+KB, scaled so that the files total 1.2 GB (1000-based); 45 % `.c`, 30 % `.h`, 20
+% `.md`, 5 % `.txt` and 1 % binary (`.png`, `.bin`). Text files start with their
+path and are cut from seeded lines of C-like words, so git compresses them about
+as it compresses source code. Author, committer and dates are fixed, and git
+runs without the user's or the system's configuration, so one seed and set of
+options always gives one commit ID.
+
+| Command                                                                  | Does                                                          |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `generate [--out tmp/ai-tools/large-repo] [--seed 1] [--files] [--size]` | Writes the repository and prints its shape and commit ID      |
+| `generate --from <path> [--json]`                                        | Prints the shape of an existing clone instead; writes nothing |
+
+```shell
+gen-large-repo.mjs generate
+gen-large-repo.mjs generate --from tmp/linux
+```
+
+- **The shape is the record.** The checklist quotes the printed shape next to
+  the numbers measured with it. On 2026-11-21 the defaults printed 100,000
+  files, 4,504 folders, depth 5, 1200.0 MB, median 4.0 KB, mean 12.0 KB, largest
+  2062.5 KB, commit `135e3c3a`, in 25 to 40 seconds.
+- `--out` must be missing or empty; the tool never deletes. Delete the folder
+  when done: it holds 1.2 GB of files and as much again in `.git`.
+- `--from` takes a clone inside the workspace (clone Linux into `tmp/` to
+  compare with spike 4), leaves out `.git` and does not follow symbolic links.
+
+## `perf-api`
+
+Measures NF-2's API targets against a running instance and prints p50, p95 and
+max next to each target, with the host's CPUs, memory and git version, so that a
+number is never quoted without the machine. Plan 152 runs it on the reference
+host; a run anywhere else is only "indicative" in the release checklist
+(`docs/wiki/release-checks.md`, "Plan 150").
+
+| Command                                                                         | Does                                                                                            |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `run --url <instance> (--email <e> \| --users <n>) [--large] [--cold] [--json]` | Prepares its repositories, times each operation, prints the table; 1 if a hard target is missed |
+| `scale --data-dir <dir> [--repos-dir <dir>] [--users 49] [--repositories 50]`   | Fills a stopped instance with users and working copies (NF-1.1, NF-1.3)                         |
+| `ready --url <instance> [--timeout 600]`                                        | Seconds from the command's start until `/api/health/ready` answers 200                          |
+
+The instance runs with `FRONT_BURNER_SERVER_TIMING=true` (A-7.14), and its git
+trusts the e2e suites' test certificate
+(`GIT_SSL_CAINFO=libs/server/core/security/src/testing/fixtures/test.crt`): the
+tool serves the remotes itself, from `--work` (default `tmp/ai-tools/perf-api`),
+over HTTPS on `127.0.0.1` (`--git-host`, `--git-port`; the certificate is for
+`localhost`, `127.0.0.1` and `::1`, so a container needs `--network host`). The
+password is read from `PERF_PASSWORD`, never from the command line.
+
+```shell
+PERF_PASSWORD=… perf-api.mjs run --url http://127.0.0.1:3000 --email admin@example.com
+PERF_PASSWORD=… perf-api.mjs run --url http://127.0.0.1:3000 --email admin@example.com --large
+perf-api.mjs scale --data-dir tmp/perf-data          # the instance stopped
+perf-api.mjs ready --url http://127.0.0.1:3000 & <start the instance>
+PERF_PASSWORD=… perf-api.mjs run --url http://127.0.0.1:3000 --users 10
+```
+
+- **What it measures.** NF-2.1, NF-2.2 and NF-2.3 read the server's own duration
+  from `Server-Timing`, so the client's network is left out, as NF-2's "API is
+  measured on the server" says: a folder `many/` of 1,000 files, a 100 KB
+  `big.md`, and saves of a 100 KB `saved.md`. NF-2.6 times a pull or push job
+  from the request that got through (a `429`'s wait left out) to `job.finished`
+  on the push channel, and subtracts the median of plain `git pull` or `git
+  push` from this host against the same remote: what the instance adds. A job
+  that was cancelled, failed or pulled into a conflict ends the run. Once the
+  push channel has been down, its event may be lost, so the job's state is
+  polled every 2 seconds; a job found finished that way is dropped, with a line
+  on stderr, and the Runs column shows fewer runs. A push channel that refuses 5
+  connections in a row ends the run. Before each pull, a clone on this host
+  pushes a commit; before each push, the tool saves and commits through the API.
+  `--large` adds the repository of `gen-large-repo.mjs` (`--large-repo`) and
+  times warm status and commit (NF-2.8), and 10 pushes with no warm-up, the
+  first of which sends every commit before it (NF-1.4, no target); `--cold` also
+  drops the page cache before 5 status and 5 commit runs (`--cold-runs`), which
+  needs Linux and root on the instance's host. Each other operation has 5
+  warm-up runs (`--warmup`) and 50 measured ones (`--runs`).
+- **Pass.** A hard target missed shows "NO" and makes `run` exit 1. NF-2.8's
+  "about 2 seconds" is soft: over it shows "over" and fails nothing.
+- **Its repositories.** `--name` (default `perf`) and `<name>-large` are created
+  and refused when the user has one with that name. It never removes them:
+  remove them in the web client, and delete `--work`, when done.
+- **`--users n`** logs in as the first n users of `scale`
+  (`perf-user-01@example.invalid` on, with the administrator's password), each
+  with a repository `<name>-u<i>` of its own, and runs the measures of all of
+  them at once (NF-1.2). Separate users, because NF-11.4 limits each user to 600
+  requests a minute; a `429` is waited out (`Retry-After`), never counted. Only
+  10 logins a minute are allowed from one address, which `--users 10` uses up.
+- **`scale`** writes into the data directory directly, since the MVP has no API
+  that creates users. It refuses one whose database is open (a `-shm` or `-wal`
+  file) or that holds any user besides the first administrator. Every user gets
+  50 ready repositories with a small working copy (20 pages), copied from one
+  template; their remote, `https://git.example.invalid/perf/scale.git`, is never
+  reachable, so no fetch of theirs reaches the network. The data directory must
+  be in the workspace, like every path of these tools: for a container,
+  bind-mount one under `tmp/`, and run `scale` as the container's UID so that
+  the instance can write what it wrote.
+- **The tool shares the machine** with the instance and its git server in a
+  local run, and its own git work adds load, more so with `--users 10`. On the
+  reference host it runs on the host too (plan 152), so that the remote is as
+  near to the instance's git as to plain git, on both sides of NF-2.6's
+  subtraction, and so that `scale` can reach the data directory.
+- `--cold` was not run when the tool was written (no root on that machine).
