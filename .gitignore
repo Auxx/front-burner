@@ -56,3 +56,4 @@ vitest.config.*.timestamp*
 .env.*
 !.env.example
 .junie/plans/
+compose.local.yaml
