@@ -11,6 +11,7 @@ import {
   untracked,
   viewChild
 } from '@angular/core';
+import { markPerformance } from '@front-burner/shared-util';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 import { ImageCache } from '../../images/image-cache';
@@ -66,6 +67,9 @@ interface ImagesFor {
  *
  * Images are shown by an `ImageLoader` (A-8.16) from the `ImageCache` that
  * the repository screen provides, for the repository `repositoryId`.
+ *
+ * Each render it writes sets the performance mark `fb:preview-updated`
+ * (A-8.17).
  */
 @Component({
   selector: 'md-preview',
@@ -111,6 +115,8 @@ export class MarkdownPreviewComponent {
   private ownScrollTop: number | null = null;
   /** A place to scroll to again once the newest text is shown. */
   private pendingPlace: number | null = null;
+  /** The render last marked as shown, so that a new path or fragment alone sets no mark. */
+  private markedState: unknown = null;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.imageLoader?.destroy());
@@ -129,6 +135,10 @@ export class MarkdownPreviewComponent {
         return;
       }
       const changes = patchBlocks(container, state, purifyHtml);
+      if (state !== this.markedState) {
+        this.markedState = state;
+        markPerformance('fb:preview-updated');
+      }
       untracked(() => {
         loader.detach(changes.removed);
         loader.attach(changes.added);

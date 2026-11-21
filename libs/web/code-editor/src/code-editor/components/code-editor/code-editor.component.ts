@@ -14,6 +14,7 @@ import {
 import { openSearchPanel } from '@codemirror/search';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { markPerformance } from '@front-burner/shared-util';
 import { acceptConflict, type ConflictChoice, goToConflict } from '../../conflicts/conflict-extension';
 import { setFindPanelInjector, SWAPPING_ATTRIBUTE } from '../../search/find-panel';
 
@@ -26,6 +27,9 @@ export interface EditorStateChange {
  * The one CodeMirror view of a screen. It shows whatever state it is given and reports
  * every new state, so that the caller keeps one state per file and with it each file's
  * undo history and cursor (A-8.15, ED-8).
+ *
+ * Each time it shows another state, such as another file's, it sets the
+ * performance mark `fb:editor-ready` (A-8.17).
  *
  * Its styles are not encapsulated: CodeMirror builds its own DOM, which Angular's scoped
  * styles never reach.
@@ -136,6 +140,10 @@ export class CodeEditorComponent {
         this.view.setState(state);
       } finally {
         this.view.dom.removeAttribute(SWAPPING_ATTRIBUTE);
+      }
+      // CodeMirror has written the state's lines into the page: the editor takes input now (NF-2.2).
+      if (this.view.contentDOM.getAttribute('contenteditable') === 'true') {
+        markPerformance('fb:editor-ready');
       }
     }
   }

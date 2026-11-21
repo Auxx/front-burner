@@ -141,6 +141,22 @@ describe('MarkdownPreviewComponent', () => {
     expect(blocks().children[1].textContent).toBe('C');
   });
 
+  it('marks fb:preview-updated after each render', async () => {
+    // jsdom has no User Timing API.
+    const marks: { name: string; text: string; }[] = [];
+    performance.mark = ((name: string) => {
+      marks.push({ name, text: blocks().textContent ?? '' });
+    }) as typeof performance.mark;
+    try {
+      await answer([ [ 'a', '<p>A</p>' ] ]);
+      await answer([ [ 'a', '<p>A</p>' ], [ 'b', '<p>B</p>' ] ]);
+
+      expect(marks).toEqual([ { name: 'fb:preview-updated', text: 'A' }, { name: 'fb:preview-updated', text: 'AB' } ]);
+    } finally {
+      delete (performance as Partial<Performance>).mark;
+    }
+  });
+
   it('purifies what it writes', async () => {
     await answer([ [ 'a', '<p onclick="alert(1)">A<script>alert(2)</script></p>' ] ]);
 
