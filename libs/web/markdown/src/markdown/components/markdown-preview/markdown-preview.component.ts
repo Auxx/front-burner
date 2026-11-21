@@ -115,8 +115,11 @@ export class MarkdownPreviewComponent {
   private ownScrollTop: number | null = null;
   /** A place to scroll to again once the newest text is shown. */
   private pendingPlace: number | null = null;
-  /** The render last marked as shown, so that a new path or fragment alone sets no mark. */
-  private markedState: unknown = null;
+  /**
+   * The render last marked as shown, and where: a new path or fragment alone
+   * sets no mark, but the same render written into a new container does.
+   */
+  private marked: { state: unknown; container: HTMLElement; } | null = null;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.imageLoader?.destroy());
@@ -135,8 +138,8 @@ export class MarkdownPreviewComponent {
         return;
       }
       const changes = patchBlocks(container, state, purifyHtml);
-      if (state !== this.markedState) {
-        this.markedState = state;
+      if (state !== this.marked?.state || container !== this.marked.container) {
+        this.marked = { state, container };
         markPerformance('fb:preview-updated');
       }
       untracked(() => {

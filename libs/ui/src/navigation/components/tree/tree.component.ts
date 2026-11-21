@@ -248,6 +248,16 @@ export class TreeComponent {
     return true;
   }
 
+  /**
+   * Whether the visible row of `value` is on the page now: with virtual
+   * scrolling, a row is rendered only within the viewport's range, and can
+   * be a frame later than its node.
+   */
+  isRendered(value: string): boolean {
+    const index = this.rowIndex().get(value);
+    return index !== undefined && this.rowElement(index) !== null;
+  }
+
   private rowId(index: number): string {
     return `${this.rowIdPrefix}${index}`;
   }

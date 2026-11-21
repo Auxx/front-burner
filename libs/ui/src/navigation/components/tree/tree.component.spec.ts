@@ -490,6 +490,14 @@ describe('TreeComponent', () => {
     expect(host.selected()).toBe('docs/guides/setup.md');
   });
 
+  it('tells whether a row is on the page by its value', async () => {
+    await create(restore);
+    const component = fixture.debugElement.query(By.directive(TreeComponent)).componentInstance as TreeComponent;
+
+    expect(component.isRendered('docs/guides')).toBe(true);
+    expect(component.isRendered('nope')).toBe(false);
+  });
+
   it('does not select or toggle a row when its menu button is clicked', async () => {
     await create();
 

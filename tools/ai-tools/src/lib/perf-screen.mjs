@@ -15,6 +15,8 @@ const EDITOR_FILE = 'big.md';
 const PREVIEW_FILE = 'preview.md';
 /** The web client's `localStorage` key of the session (LG-40). */
 const AUTH_KEY = 'front-burner.auth';
+/** The session is refreshed before a run when its auth token has less left than this; a run takes under a minute. */
+const RENEW_MARGIN_MS = 5 * 60_000;
 /** How long one measure may wait for its mark; slow 4G and a 4× slower CPU are slow. */
 const MARK_WAIT_MS = 60_000;
 
@@ -129,6 +131,21 @@ export function sessionState(origin, cookies, login) {
 }
 
 /**
+ * Whether the auth token stored in `state` expires within `marginMs` of
+ * `now`; a state without a readable expiry counts as expiring.
+ */
+export function expiresSoon(state, now, marginMs) {
+  const item = state.origins.flatMap(origin => origin.localStorage).find(entry => entry.name === AUTH_KEY);
+  let expiresAt = Number.NaN;
+  try {
+    expiresAt = Date.parse(JSON.parse(item?.value ?? '{}').authTokenExpiresAt);
+  } catch {
+    // Counts as expiring.
+  }
+  return Number.isNaN(expiresAt) || expiresAt - now < marginMs;
+}
+
+/**
  * A context's state with only the session kept: what the web client
  * remembers per device, such as the expanded folders (FB-14) or the view
  * mode, would make the next run start elsewhere.
@@ -183,21 +200,21 @@ export function createScreenRemote(work, name) {
 
 /**
  * Runs in every page before the web client: records when each click and key
- * press happened, and the time of the first `fb:preview-updated` mark whose
- * render shows `window.__fbExpect`, checked as the mark is set.
+ * press happened, and the time of each `fb:preview-updated` mark whose render
+ * shows `__fbInput.expect`, checked as the mark is set.
  */
 function recordInput() {
-  const input = { clicks: [], keys: [], previewSeen: null, expect: null };
+  const input = { clicks: [], keys: [], previewSeen: [], expect: null };
   window.__fbInput = input;
   addEventListener('click', event => input.clicks.push(event.timeStamp), true);
   addEventListener('keydown', event => input.keys.push(event.timeStamp), true);
   const mark = performance.mark.bind(performance);
   performance.mark = (name, options) => {
     const entry = mark(name, options);
-    if (name === 'fb:preview-updated' && input.expect !== null && input.previewSeen === null) {
+    if (name === 'fb:preview-updated' && input.expect !== null) {
       const text = document.querySelector('md-preview .blocks')?.textContent ?? '';
       if (text.includes(input.expect)) {
-        input.previewSeen = entry.startTime;
+        input.previewSeen.push(entry.startTime);
       }
     }
     return entry;
@@ -231,6 +248,33 @@ export class ScreenBrowser {
     }
   }
 
+  /**
+   * Refreshes the session from the tool, before a context starts, when its
+   * auth token expires within {@link RENEW_MARGIN_MS}: the web client then
+   * never refreshes during a run, whose new cookie could arrive after the
+   * context's state was read and leave the next one a spent refresh token.
+   */
+  async renewIfDue() {
+    if (!expiresSoon(this.state, Date.now(), RENEW_MARGIN_MS)) {
+      return;
+    }
+    const context = await this.browser.newContext({ storageState: this.state });
+    try {
+      // A cookie-based refresh carries REFRESH_HEADER (`shared/contracts`) and no other site's Origin (LG-33).
+      const response = await context.request.post(`${this.url}/api/v1/auth/session/refresh`, {
+        data: {},
+        headers: { 'X-Front-Burner-Refresh': '1', origin: new URL(this.url).origin }
+      });
+      if (!response.ok()) {
+        throw new Error(`Refreshing the session failed: ${response.status()} ${await response.text()}`);
+      }
+      const { cookies } = await context.storageState();
+      this.state = sessionState(new URL(this.url).origin, cookies, await response.json());
+    } finally {
+      await context.close();
+    }
+  }
+
   async close() {
     await this.browser?.close();
   }
@@ -241,6 +285,7 @@ export class ScreenBrowser {
    * old one used again would end the session.
    */
   async fresh(measure) {
+    await this.renewIfDue();
     const context = await this.browser.newContext({ ...this.device, baseURL: this.url, storageState: this.state });
     try {
       await context.addInitScript(recordInput);
@@ -373,6 +418,10 @@ export class ScreenBrowser {
   editor(repositoryId, key) {
     return this.fresh(async page => {
       await this.openScreen(page, repositoryId);
+      // The mark names no file, so no other file may be opening: the screen opened without one.
+      if (await page.evaluate(() => performance.getEntriesByName('fb:editor-ready', 'mark').length > 0)) {
+        throw new Error('The repository screen opened a file by itself, so the editor\'s mark cannot be told apart.');
+      }
       await this.throttle(page, SCREEN_OPERATIONS[key].network);
       await this.press(this.entry(page, EDITOR_FILE));
       const clicked = await this.lastInput(page, 'clicks');
@@ -409,9 +458,13 @@ export class ScreenBrowser {
         await this.press(page.getByRole('tab', { name: 'Preview', exact: true }));
         from = await this.lastInput(page, 'clicks');
       }
-      const seen = await page.waitForFunction(() => window.__fbInput.previewSeen, undefined, {
-        timeout: MARK_WAIT_MS,
-        polling: 20
+      // Only a render after `from` counts: on a phone, one before the tap would not be on screen.
+      const seen = await page.waitForFunction(
+        from => window.__fbInput.previewSeen.find(time => time >= from) ?? null,
+        from,
+        { timeout: MARK_WAIT_MS, polling: 20 }
+      ).catch(async error => {
+        throw await this.explain(page, error, `a render showing "${word}"`);
       });
       return (await seen.jsonValue()) - from;
     });

@@ -14,14 +14,16 @@ export type PerformanceMarkName = 'fb:app-ready' | 'fb:tree-folder-shown' | 'fb:
  * Sets a performance mark, also in the production build; does nothing where
  * there is no User Timing API, such as in jsdom.
  *
- * Only the latest mark of each name is kept: the browser keeps marks until
- * they are cleared, and the preview sets one per render, so a long editing
- * session would otherwise collect them without end. A measure waits for the
- * mark set after its own click or key, so it never needs an earlier one.
+ * The browser keeps marks until they are cleared, and the preview sets one
+ * per render, so a long editing session would collect them without end. So
+ * only the latest mark of each name is kept, except `fb:tree-folder-shown`:
+ * the marks of different folders must not clear each other, and there is one
+ * per folder the user shows, not per render. A measure waits for the mark set
+ * after its own click or key, so it never needs an earlier one.
  */
 export function markPerformance(name: PerformanceMarkName, detail?: unknown): void {
   if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
-    if (typeof performance.clearMarks === 'function') {
+    if (name !== 'fb:tree-folder-shown' && typeof performance.clearMarks === 'function') {
       performance.clearMarks(name);
     }
     performance.mark(name, detail === undefined ? undefined : { detail });

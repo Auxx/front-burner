@@ -4,7 +4,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  ElementRef,
   inject,
   input,
   output,
@@ -107,19 +106,18 @@ export class FileTreeComponent {
     return shown ? rowActions(shown) : [];
   });
 
-  /** The shown folders whose entries are not on the page yet, with their first row's label. */
+  /** The shown folders whose entries are not on the page yet, with their first row's value. */
   private readonly unmarked = new Map<string, string>();
   /** The shown folders whose `fb:tree-folder-shown` mark is set. */
   private readonly marked = new Set<string>();
 
   constructor() {
-    const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
     afterRenderEffect(() => {
       this.findShownFolders(this.store.nodes(), this.store.expanded());
-      untracked(() => this.markShownFolders(host));
+      untracked(() => this.markShownFolders());
     });
     // The tree renders its rows a frame later than the store has them (virtual scrolling).
-    afterEveryRender(() => this.markShownFolders(host));
+    afterEveryRender(() => this.markShownFolders());
 
     // After rendering, so that the tree has the rows the store has now. Tried
     // once: a row that is not shown then must not take the focus later.
@@ -168,7 +166,8 @@ export class FileTreeComponent {
       if (!first || first.kind === 'loading' || first.kind === 'error') {
         return;
       }
-      shown.set(folder, first.accessibleName ?? first.label);
+      // A value is unique in the tree, unlike a label: `README.md` can be the first entry of many folders.
+      shown.set(folder, first.value);
       for (const child of children) {
         if (child.kind === 'folder' && child.children && open.has(child.path)) {
           visit(child.path, child.children);
@@ -182,9 +181,9 @@ export class FileTreeComponent {
         this.unmarked.delete(folder);
       }
     }
-    for (const [ folder, label ] of shown) {
+    for (const [ folder, value ] of shown) {
       if (!this.marked.has(folder)) {
-        this.unmarked.set(folder, label);
+        this.unmarked.set(folder, value);
       }
     }
   }
@@ -192,17 +191,16 @@ export class FileTreeComponent {
   /**
    * Sets `fb:tree-folder-shown`, with the folder's path as its detail, once
    * the first entry of a shown folder is on the page (NF-2.1; read by
-   * `perf-screen.mjs`).
+   * `perf-screen.mjs`). A folder whose first entry is outside the viewport
+   * waits until it is scrolled to; each wait costs a lookup per render.
    */
-  private markShownFolders(host: HTMLElement): void {
+  private markShownFolders(): void {
     if (this.unmarked.size === 0) {
       return;
     }
-    const labels = new Set(
-      Array.from(host.querySelectorAll('[role="treeitem"]'), item => item.getAttribute('aria-label'))
-    );
-    for (const [ folder, label ] of this.unmarked) {
-      if (labels.has(label)) {
+    const tree = this.tree();
+    for (const [ folder, value ] of this.unmarked) {
+      if (tree.isRendered(value)) {
         this.unmarked.delete(folder);
         this.marked.add(folder);
         markPerformance('fb:tree-folder-shown', { folder });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  expiresSoon,
   MEASURES,
   previewMarkdown,
   PROFILES,
@@ -65,6 +66,27 @@ describe('sessionState', () => {
         ]
       }
     ]);
+  });
+});
+
+describe('expiresSoon', () => {
+  const now = Date.parse('2026-11-21T12:00:00Z');
+  const stateWith = value => ({
+    cookies: [],
+    origins: [ { origin: 'http://127.0.0.1:3000', localStorage: [ { name: 'front-burner.auth', value } ] } ]
+  });
+  const expiring = at => stateWith(JSON.stringify({ authTokenExpiresAt: at }));
+
+  it('tells a token with time left from one about to expire', () => {
+    expect(expiresSoon(expiring('2026-11-21T12:10:00Z'), now, 5 * 60_000)).toBe(false);
+    expect(expiresSoon(expiring('2026-11-21T12:04:59Z'), now, 5 * 60_000)).toBe(true);
+    expect(expiresSoon(expiring('2026-11-21T11:59:00Z'), now, 5 * 60_000)).toBe(true);
+  });
+
+  it('counts a missing or unreadable session as expiring', () => {
+    expect(expiresSoon({ cookies: [], origins: [] }, now, 0)).toBe(true);
+    expect(expiresSoon(stateWith('not json'), now, 0)).toBe(true);
+    expect(expiresSoon(stateWith('{}'), now, 0)).toBe(true);
   });
 });
 

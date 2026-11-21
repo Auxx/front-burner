@@ -17,14 +17,21 @@ describe('markPerformance', () => {
 
   it('keeps only the latest mark of each name', () => {
     performance.mark('other');
-    markPerformance('fb:tree-folder-shown', { folder: '' });
     markPerformance('fb:preview-updated');
+    markPerformance('fb:editor-ready');
+    markPerformance('fb:preview-updated');
+
+    expect(performance.getEntriesByName('fb:preview-updated', 'mark')).toHaveLength(1);
+    expect(performance.getEntriesByName('fb:editor-ready', 'mark')).toHaveLength(1);
+    expect(performance.getEntriesByName('other', 'mark')).toHaveLength(1);
+  });
+
+  it('keeps the mark of every folder shown', () => {
+    markPerformance('fb:tree-folder-shown', { folder: '' });
     markPerformance('fb:tree-folder-shown', { folder: 'docs' });
 
     const folders = performance.getEntriesByName('fb:tree-folder-shown', 'mark') as PerformanceMark[];
-    expect(folders.map(mark => mark.detail)).toEqual([ { folder: 'docs' } ]);
-    expect(performance.getEntriesByName('fb:preview-updated', 'mark')).toHaveLength(1);
-    expect(performance.getEntriesByName('other', 'mark')).toHaveLength(1);
+    expect(folders.map(mark => mark.detail)).toEqual([ { folder: '' }, { folder: 'docs' } ]);
   });
 
   it('does nothing without the User Timing API', () => {

@@ -607,7 +607,14 @@ from `PERF_PASSWORD`.
   logins a minute are allowed per address): each context starts with the refresh
   token's cookie and the web client's `front-burner.auth`, and hands them on,
   since a refresh replaces the token. Nothing else the device remembers is
-  handed on, such as the expanded folders (FB-14).
+  handed on, such as the expanded folders (FB-14). When the auth token has less
+  than 5 minutes left, the tool refreshes the session itself before the next
+  context, so that the web client never refreshes during a run and no spent
+  refresh token is handed on.
+- **Telling marks apart.** `fb:editor-ready` names no file, so the editor
+  measure fails if one is set before its click (a file the screen opened by
+  itself). The preview measure counts only a render that shows the typed word
+  and comes after the last key, or after the tap on **Preview**.
 - **Its repository.** `--name` (default `screen`) is created and refused when it
   exists; the preview runs save the typed words into it. Remove it in the web
   client, and delete `--work`, when done.

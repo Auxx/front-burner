@@ -150,6 +150,9 @@ describe('MarkdownPreviewComponent', () => {
     try {
       await answer([ [ 'a', '<p>A</p>' ] ]);
       await answer([ [ 'a', '<p>A</p>' ], [ 'b', '<p>B</p>' ] ]);
+      // The same render after a move: nothing new is shown.
+      host.path.set('docs/moved.md');
+      await fixture.whenStable();
 
       expect(marks).toEqual([ { name: 'fb:preview-updated', text: 'A' }, { name: 'fb:preview-updated', text: 'AB' } ]);
     } finally {
