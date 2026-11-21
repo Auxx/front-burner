@@ -78,3 +78,25 @@ same table as `perf-api.mjs`.
       in the checklist as "indicative".
 - [ ] **Step 3: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `feat(ai-tools): perf-screen`.
+
+**As built** _(decided while building it)_:
+
+- The marks are A-8.17, set by `markPerformance` in `shared/util`, which does
+  nothing without the User Timing API (jsdom has none). `fb:editor-ready` is set
+  when the editor shows another state and its content is editable, not on focus:
+  the editor does not take the focus when a file opens. `fb:tree-folder-shown`
+  waits for the folder's first row in the page, which virtual scrolling can
+  render a frame after the store has it.
+- `perf-screen.mjs` has one command, `run`, with `--profile`, `--runs`,
+  `--warmup` and `--measures`. Like `perf-api.mjs` it adds its own repository
+  from a remote it serves, so plan 152 runs both the same way.
+- One login for the whole run, handed from context to context, since logins are
+  limited per address; only the session is handed on, as the expanded folders
+  would otherwise carry into the next run.
+- On a phone the preview row times from the tap on **Preview**, since a hidden
+  preview does no work (A-8.12); NF-2.5 has no network, so it is not throttled.
+- **Finding:** the local run misses NF-2.1, NF-2.2 and NF-2.7 on slow 4G, and
+  NF-2.5 on the phone. The instance compresses no response: the initial files
+  are 714 KB as sent and 198 KB gzipped, the 1,000-entry listing 94 KB and 3 KB,
+  and the web client's files are sent with `max-age=0`. Plan 159 (Part F) adds
+  compression and long caching of the hashed files.
