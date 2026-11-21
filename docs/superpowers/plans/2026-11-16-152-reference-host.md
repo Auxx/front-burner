@@ -20,9 +20,13 @@ section, says:
 1. start the image of plan 137 with the guide's compose example (plan 140), a
    metrics token and `FRONT_BURNER_SERVER_TIMING=true` (plan 150), which is
    removed again after the run;
-2. `node tools/ai-tools/src/bin/perf-api.mjs --large …` from another machine on
-   the same network, then with `--cold` on the host as root, then with `--users
-   10` and with `--scale` (NF-1.1 to NF-1.3, plan 148's addition);
+2. on the host itself, with the container on the host's network and
+   `GIT_SSL_CAINFO` set to the test certificate (plan 150's `perf-api` section
+   in the `ai-tools` skill: the tool serves the remotes on `127.0.0.1`, and
+   `Server-Timing` already leaves the network out): `node
+   tools/ai-tools/src/bin/perf-api.mjs run --large …`, then with `--cold` as
+   root, then `scale` with the instance stopped, `ready` while it starts, and
+   `run --users 10` (NF-1.1 to NF-1.3, plan 148's addition);
 3. `node tools/ai-tools/src/bin/perf-screen.mjs --profile desktop` and
    `--profile phone` against the instance's HTTPS address;
 4. record the host's CPU model, memory, disk, kernel, Docker and git versions.

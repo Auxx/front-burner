@@ -17,6 +17,7 @@ watch out for. The rules shared by all tools are in [SKILL.md](../SKILL.md).
 | [`mem-profile`](#mem-profile)       | The memory of a test run: peak, per kind of process, over time     |
 | [`vitest-configs`](#vitest-configs) | Checking that every project's unit tests use the shared settings   |
 | [`gen-large-repo`](#gen-large-repo) | A git repository of 100,000 files, for timing NF-2.8               |
+| [`perf-api`](#perf-api)             | The API's NF-2 timings against a running instance, at NF-1's scale |
 
 ## `colour`
 
@@ -480,3 +481,72 @@ gen-large-repo.mjs generate --from tmp/linux
   when done: it holds 1.2 GB of files and as much again in `.git`.
 - `--from` takes a clone inside the workspace (clone Linux into `tmp/` to
   compare with spike 4), leaves out `.git` and does not follow symbolic links.
+
+## `perf-api`
+
+Measures NF-2's API targets against a running instance and prints p50, p95 and
+max next to each target, with the host's CPUs, memory and git version, so that a
+number is never quoted without the machine. Plan 152 runs it on the reference
+host; a run anywhere else is only "indicative" in the release checklist
+(`docs/wiki/release-checks.md`, "Plan 150").
+
+| Command                                                                         | Does                                                                                       |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `run --url <instance> (--email <e> \| --users <n>) [--large] [--cold] [--json]` | Prepares its repositories, times each operation, prints the table; 1 if a target is missed |
+| `scale --data-dir <dir> [--repos-dir <dir>] [--users 49] [--repositories 50]`   | Fills a stopped instance with users and working copies (NF-1.1, NF-1.3)                    |
+| `ready --url <instance> [--timeout 600]`                                        | Seconds from the command's start until `/api/health/ready` answers 200                     |
+
+The instance runs with `FRONT_BURNER_SERVER_TIMING=true` (A-7.14), and its git
+trusts the e2e suites' test certificate
+(`GIT_SSL_CAINFO=libs/server/core/security/src/testing/fixtures/test.crt`): the
+tool serves the remotes itself, from `--work` (default `tmp/ai-tools/perf-api`),
+over HTTPS on `127.0.0.1` (`--git-host`, `--git-port`; the certificate is for
+`localhost`, `127.0.0.1` and `::1`, so a container needs `--network host`). The
+password is read from `PERF_PASSWORD`, never from the command line.
+
+```shell
+PERF_PASSWORD=… perf-api.mjs run --url http://127.0.0.1:3000 --email admin@example.com
+PERF_PASSWORD=… perf-api.mjs run --url http://127.0.0.1:3000 --email admin@example.com --large
+perf-api.mjs scale --data-dir tmp/perf-data          # the instance stopped
+perf-api.mjs ready --url http://127.0.0.1:3000 & <start the instance>
+PERF_PASSWORD=… perf-api.mjs run --url http://127.0.0.1:3000 --users 10
+```
+
+- **What it measures.** NF-2.1, NF-2.2 and NF-2.3 read the server's own duration
+  from `Server-Timing`, so the client's network is left out, as NF-2's "API is
+  measured on the server" says: a folder `many/` of 1,000 files, a 100 KB
+  `big.md`, and saves of a 100 KB `saved.md`. NF-2.6 times a pull or push job
+  from its request to `job.finished` on the push channel (with a poll every 2
+  seconds in case the stream was reconnecting), and subtracts the median of
+  plain `git pull` or `git push` from this host against the same remote: what
+  the instance adds. Before each pull, a clone on this host pushes a commit;
+  before each push, the tool saves and commits through the API. `--large` adds
+  the repository of `gen-large-repo.mjs` (`--large-repo`) and times warm status
+  and commit (NF-2.8), and 10 pushes (NF-1.4, no target); `--cold` also drops
+  the page cache before 5 status and 5 commit runs (`--cold-runs`), which needs
+  Linux and root on the instance's host. Each operation has 5 warm-up runs
+  (`--warmup`) and 50 measured ones (`--runs`).
+- **Its repositories.** `--name` (default `perf`) and `<name>-large` are created
+  and refused when the user has one with that name. It never removes them:
+  remove them in the web client, and delete `--work`, when done.
+- **`--users n`** logs in as the first n users of `scale`
+  (`perf-user-01@example.invalid` on, with the administrator's password), each
+  with a repository `<name>-u<i>` of its own, and runs the measures of all of
+  them at once (NF-1.2). Separate users, because NF-11.4 limits each user to 600
+  requests a minute; a `429` is waited out (`Retry-After`), never counted. Only
+  10 logins a minute are allowed from one address, which `--users 10` uses up.
+- **`scale`** writes into the data directory directly, since the MVP has no API
+  that creates users. It refuses one whose database is open (a `-shm` or `-wal`
+  file) or that holds any user besides the first administrator. Every user gets
+  50 ready repositories with a small working copy (20 pages), copied from one
+  template; their remote, `https://git.example.invalid/perf/scale.git`, is never
+  reachable, so no fetch of theirs reaches the network. The data directory must
+  be in the workspace, like every path of these tools: for a container,
+  bind-mount one under `tmp/`, and run `scale` as the container's UID so that
+  the instance can write what it wrote.
+- **The tool shares the machine** with the instance and its git server in a
+  local run, and its own git work adds load, more so with `--users 10`. On the
+  reference host it runs on the host too (plan 152), so that the remote is as
+  near to the instance's git as to plain git, on both sides of NF-2.6's
+  subtraction, and so that `scale` can reach the data directory.
+- `--cold` was not run when the tool was written (no root on that machine).
