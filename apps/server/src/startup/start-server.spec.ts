@@ -125,6 +125,30 @@ describe('startServer', () => {
   );
 
   // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('no Server-Timing by default', async () => {
+    app = await start();
+
+    const response = await request(app.getHttpServer()).get('/api/v1/me');
+
+    expect(response.status).toBe(401);
+    expect(response.headers['server-timing']).toBeUndefined();
+  });
+
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'with FRONT_BURNER_SERVER_TIMING, API responses carry Server-Timing, the health endpoints never',
+    async () => {
+      app = await start({ FRONT_BURNER_SERVER_TIMING: 'true' });
+
+      const api = await request(app.getHttpServer()).get('/api/v1/me');
+      const health = await request(app.getHttpServer()).get('/api/health/live');
+
+      expect(api.headers['server-timing']).toMatch(/^app;dur=\d+\.\d$/);
+      expect(health.headers['server-timing']).toBeUndefined();
+    }
+  );
+
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
   it.skipIf(process.platform === 'win32')('rate-limits requests that the auth guard refuses (A-1.12)', async () => {
     app = await start();
 

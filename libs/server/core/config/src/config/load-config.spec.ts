@@ -58,7 +58,8 @@ describe('loadConfig', () => {
       knownHostsFile: undefined,
       oidc: undefined,
       oidcRequiredClaim: undefined,
-      metricsToken: undefined
+      metricsToken: undefined,
+      serverTiming: false
     });
     expect(warnings).toEqual([]);
   });
@@ -244,6 +245,17 @@ describe('loadConfig', () => {
     expect(switchOf(undefined)).toBe(false);
     expect(issuesOf({ FRONT_BURNER_BLOCK_PRIVATE_NETWORKS: '1' })).toEqual([
       { variable: 'FRONT_BURNER_BLOCK_PRIVATE_NETWORKS', message: 'must be true or false' }
+    ]);
+  });
+
+  it('reads FRONT_BURNER_SERVER_TIMING, false by default', () => {
+    const switchOf = (value: string | undefined) =>
+      loadConfig({ ...BASE, FRONT_BURNER_SERVER_TIMING: value }).config.serverTiming;
+    expect(switchOf('true')).toBe(true);
+    expect(switchOf('false')).toBe(false);
+    expect(switchOf(undefined)).toBe(false);
+    expect(issuesOf({ FRONT_BURNER_SERVER_TIMING: 'yes' })).toEqual([
+      { variable: 'FRONT_BURNER_SERVER_TIMING', message: 'must be true or false' }
     ]);
   });
 

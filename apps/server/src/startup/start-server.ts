@@ -7,6 +7,7 @@ import {
   createRequestLogger,
   httpMetrics,
   METRICS_REGISTRY,
+  serverTiming,
   UNVERSIONED_ROUTES
 } from '@front-burner/server-core-observability';
 import { securityHeaders, serveWebClient, versionHeader } from '@front-burner/server-core-security';
@@ -114,6 +115,10 @@ function configure(
   app.set('trust proxy', config.trustedProxies);
   // First, so that every response has an ID and is logged (NF-10.6, A-1.12).
   app.use(requestLogger);
+  // Next, so that the duration covers everything the server does; only for a measuring run (plan 150).
+  if (config.serverTiming) {
+    app.use(serverTiming({ except: UNVERSIONED_ROUTES }));
+  }
   // Next, so that every API request is timed, also those refused before a route (NF-10.11).
   if (config.metricsToken !== undefined) {
     app.use(httpMetrics(app.get(METRICS_REGISTRY)));

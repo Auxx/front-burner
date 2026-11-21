@@ -191,7 +191,11 @@ const schema = z.object({
   [OIDC_REQUIRED_CLAIM_NAME]: requiredClaimPart(),
   [OIDC_REQUIRED_CLAIM_VALUE]: requiredClaimPart(),
   [METRICS_TOKEN]: z.string().optional(),
-  [METRICS_TOKEN_FILE]: z.string().optional()
+  [METRICS_TOKEN_FILE]: z.string().optional(),
+  // Off by default: only a measuring run needs it (plan 150).
+  FRONT_BURNER_SERVER_TIMING: z.enum([ 'true', 'false' ], {
+    error: () => 'must be true or false'
+  }).default('false').transform(v => v === 'true')
 }).refine(v => v[SETUP_TOKEN] === undefined || v[SETUP_TOKEN_FILE] === undefined, {
   path: [ SETUP_TOKEN ],
   message: `cannot be set together with ${SETUP_TOKEN_FILE}`
@@ -466,7 +470,8 @@ export function loadConfig(
         : resolve(cwd, values.FRONT_BURNER_KNOWN_HOSTS_FILE),
       oidc,
       oidcRequiredClaim,
-      metricsToken: metricsToken.value
+      metricsToken: metricsToken.value,
+      serverTiming: values.FRONT_BURNER_SERVER_TIMING
     },
     warnings
   };

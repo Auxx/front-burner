@@ -164,6 +164,7 @@ revisited cheaply. Parts marked **Pending spike N** depend on a spike in
   | `FRONT_BURNER_LOW_DISK_THRESHOLD`     | `2GB`                        | NF-9.7: a whole number of bytes, or a number followed by `KB`, `MB` or `GB` (1024-based). `0` turns the check off; a size above 0 but under a byte is refused.                   |
   | `FRONT_BURNER_DB_SNAPSHOT_INTERVAL`   | `1d`                         | NF-6.2: a snapshot is written once the newest is this old. At least `1h`.                                                                                                        |
   | `FRONT_BURNER_DB_SNAPSHOT_KEEP`       | `7`                          | NF-6.2: how many daily snapshots are kept. A whole number of at least 1.                                                                                                         |
+  | `FRONT_BURNER_SERVER_TIMING`          | `false`                      | `true` adds `Server-Timing` to API responses, for measuring runs only (A-7.14).                                                                                                  |
 
   The deployment guide's "Environment variables" documents every variable the
   schema reads, with its default; `CONFIG_VARIABLES` and `CONFIG_DEFAULTS` in

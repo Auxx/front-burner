@@ -686,10 +686,11 @@ use:
 
 ### Logging
 
-| Variable                  | Default | Meaning                                                                                                 |
-| ------------------------- | ------- | ------------------------------------------------------------------------------------------------------- |
-| `FRONT_BURNER_LOG_LEVEL`  | `info`  | `error`, `warn`, `info` or `debug`. Each level also logs the levels before it.                          |
-| `FRONT_BURNER_LOG_FORMAT` | `json`  | `json` writes one JSON object per line, for log collectors; `pretty` is readable text, for development. |
+| Variable                     | Default | Meaning                                                                                                                                      |
+| ---------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FRONT_BURNER_LOG_LEVEL`     | `info`  | `error`, `warn`, `info` or `debug`. Each level also logs the levels before it.                                                               |
+| `FRONT_BURNER_LOG_FORMAT`    | `json`  | `json` writes one JSON object per line, for log collectors; `pretty` is readable text, for development.                                      |
+| `FRONT_BURNER_SERVER_TIMING` | `false` | `true` adds a `Server-Timing` header with each API request's duration on the server. Only for measuring performance; leave it off otherwise. |
 
 Front Burner logs to the container's output only, which `docker compose logs
 front-burner` shows. At `info` and above, the log names users, repositories and

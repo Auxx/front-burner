@@ -65,6 +65,12 @@ export interface Config {
    * 16 characters; undefined when not set, which turns metrics off (NF-10.10).
    */
   metricsToken: string | undefined;
+  /**
+   * `FRONT_BURNER_SERVER_TIMING=true`: every API response carries its
+   * duration on the server in `Server-Timing`, for `perf-api.mjs` (plan 150).
+   * Off by default.
+   */
+  serverTiming: boolean;
 }
 
 /** A claim the OIDC ID token must carry, trimmed (AO-40, LG-69; temporary MVP measure). */
