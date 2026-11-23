@@ -27,8 +27,10 @@ section, says:
    tools/ai-tools/src/bin/perf-api.mjs run --large …`, then with `--cold` as
    root, then `scale` with the instance stopped, `ready` while it starts, and
    `run --users 10` (NF-1.1 to NF-1.3, plan 148's addition);
-3. `node tools/ai-tools/src/bin/perf-screen.mjs --profile desktop` and
-   `--profile phone` against the instance's HTTPS address;
+3. `node tools/ai-tools/src/bin/perf-screen.mjs run --email …` with `--profile
+   desktop` and `--profile phone` against the instance's HTTPS address, on the
+   host too: like `perf-api.mjs`, it serves its own remote with the test
+   certificate (plan 151's `perf-screen` section in the `ai-tools` skill);
 4. record the host's CPU model, memory, disk, kernel, Docker and git versions.
 
 **Tech Stack:** plans 150 and 151's tools.

@@ -118,7 +118,8 @@ export function createSseParser(onEvent) {
 
 /**
  * The operations measured and their targets (NF-2). `kind` says what a
- * sample is: `server`, the `Server-Timing` duration; `job`, the time from the
+ * sample is: `server`, the `Server-Timing` duration; `screen`, a time in the
+ * browser (`perf-screen.mjs`); `job`, the time from the
  * request to `job.finished`, from which the median of plain git's time is
  * taken (`overhead`); `about`, a soft target ("about 2 seconds", NF-2.8);
  * `info`, the time from the request to `job.finished`, with no target: that
@@ -141,11 +142,12 @@ export const OPERATIONS = {
  * One result row per measured operation. `samples` maps an operation to its
  * durations; for a `job` operation, `baselines` maps it to plain git's, and
  * the row's p50, p95 and max are the job's minus git's median, the time the
- * instance adds (NF-2.6).
+ * instance adds (NF-2.6). `operations` is another tool's table of the same
+ * shape, such as `perf-screen.mjs`'s.
  */
-export function resultRows(samples, baselines = {}) {
+export function resultRows(samples, baselines = {}, operations = OPERATIONS) {
   const rows = [];
-  for (const [ key, operation ] of Object.entries(OPERATIONS)) {
+  for (const [ key, operation ] of Object.entries(operations)) {
     const values = samples[key];
     if (!values || values.length === 0) {
       continue;

@@ -54,6 +54,30 @@ describe('CodeEditorComponent', () => {
     expect(fixture.nativeElement.querySelector('.cm-content').textContent).toContain('Some text.');
   });
 
+  it('marks fb:editor-ready when the editor takes input', async () => {
+    // jsdom has no User Timing API.
+    const marks: { name: string; editable: string | null | undefined; text: string | undefined; }[] = [];
+    performance.mark = ((name: string) => {
+      const content = fixture.nativeElement.querySelector('.cm-content') as HTMLElement | null;
+      marks.push({ name, editable: content?.getAttribute('contenteditable'), text: content?.textContent ?? undefined });
+    }) as typeof performance.mark;
+    try {
+      await setUp();
+      const todo = stateOf(TODO, 'todo.md');
+      await show(todo);
+      view().dispatch({ changes: { from: 0, insert: 'x' } });
+      await show(changes[changes.length - 1].state);
+
+      // Once per file shown, not per keystroke.
+      expect(marks).toEqual([
+        { name: 'fb:editor-ready', editable: 'true', text: expect.stringContaining('Some text.') },
+        { name: 'fb:editor-ready', editable: 'true', text: expect.stringContaining('Write tests') }
+      ]);
+    } finally {
+      delete (performance as Partial<Performance>).mark;
+    }
+  });
+
   it('lets each line take its direction from its text (ED-30)', async () => {
     await setUp();
     await show(stateOf('# Title\n\nمرحبا بكم\n'));

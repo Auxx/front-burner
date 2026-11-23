@@ -212,6 +212,58 @@ describe('FileTreeComponent', () => {
     expect(row('guide.md').getAttribute('aria-selected')).toBe('true');
   });
 
+  describe('performance marks', () => {
+    // jsdom has no User Timing API.
+    let marks: { name: string; detail: unknown; }[];
+    const shown = () =>
+      marks.filter(mark => mark.name === 'fb:tree-folder-shown').map(mark =>
+        (mark.detail as { folder: string; }).folder
+      );
+
+    beforeEach(() => {
+      marks = [];
+      performance.mark = ((name: string, options?: PerformanceMarkOptions) => {
+        marks.push({ name, detail: options?.detail });
+      }) as typeof performance.mark;
+    });
+    afterEach(() => delete (performance as Partial<Performance>).mark);
+
+    it('marks fb:tree-folder-shown when a folder\'s entries are shown', async () => {
+      await create();
+
+      expect(shown()).toEqual([ '' ]);
+
+      row('docs').click();
+      await settle(fixture);
+
+      expect(row('intro.md')).toBeDefined();
+      expect(shown()).toEqual([ '', 'docs' ]);
+    });
+
+    it('does not mark a folder that failed to load', async () => {
+      answers['docs'] = [
+        throwError(() => new HttpErrorResponse({ status: 500, error: { code: 'internal', params: {}, requestId: '' } }))
+      ];
+      await create();
+      row('docs').click();
+      await settle(fixture);
+
+      expect(shown()).toEqual([ '' ]);
+    });
+
+    it('marks a folder again when it is expanded again', async () => {
+      await create();
+      row('docs').click();
+      await settle(fixture);
+      row('docs').click();
+      await settle(fixture);
+      row('docs').click();
+      await settle(fixture);
+
+      expect(shown()).toEqual([ '', 'docs', 'docs' ]);
+    });
+  });
+
   it('does not expand a submodule', async () => {
     await create();
 

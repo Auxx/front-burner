@@ -18,6 +18,7 @@ watch out for. The rules shared by all tools are in [SKILL.md](../SKILL.md).
 | [`vitest-configs`](#vitest-configs) | Checking that every project's unit tests use the shared settings   |
 | [`gen-large-repo`](#gen-large-repo) | A git repository of 100,000 files, for timing NF-2.8               |
 | [`perf-api`](#perf-api)             | The API's NF-2 timings against a running instance, at NF-1's scale |
+| [`perf-screen`](#perf-screen)       | NF-2's screen timings in a throttled Chromium, desktop or phone    |
 
 ## `colour`
 
@@ -558,3 +559,67 @@ PERF_PASSWORD=… perf-api.mjs run --url http://127.0.0.1:3000 --users 10
   near to the instance's git as to plain git, on both sides of NF-2.6's
   subtraction, and so that `scale` can reach the data directory.
 - `--cold` was not run when the tool was written (no root on that machine).
+
+## `perf-screen`
+
+Measures NF-2's screen targets in Playwright's Chromium and prints p50, p95 and
+max next to each target, with the host. Each time ends at a performance mark of
+the web client (A-8.17 in `docs/architecture/web-client.md`), so the numbers are
+the client's own moments, not guesses from the DOM. Plan 152 runs it on the
+reference host; a run anywhere else is only "indicative" in the release
+checklist (`docs/wiki/release-checks.md`, "Plan 151").
+
+| Command                                                                                  | Does                                                                               |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `run --url <instance> --email <e> [--profile desktop\|phone] [--runs 20] [--measures …]` | Adds its repository, times each measure in fresh contexts; 1 if a target is missed |
+
+```shell
+PERF_PASSWORD=… perf-screen.mjs run --url http://127.0.0.1:3000 --email admin@example.com
+PERF_PASSWORD=… perf-screen.mjs run --url http://127.0.0.1:3000 --email admin@example.com --profile phone
+PERF_PASSWORD=… perf-screen.mjs run --url … --email … --measures folder,preview --runs 5
+```
+
+The instance must serve the built web client (the image, or `node
+dist/apps/server/main.js` after a production build), and its git must trust the
+test certificate, as for [`perf-api`](#perf-api): the tool serves its remote
+itself, from `--work` (default `tmp/ai-tools/perf-screen`). The password is read
+from `PERF_PASSWORD`.
+
+- **The measures.** `first-load` (NF-2.7): from the navigation to `/` to
+  `fb:app-ready`, on slow 4G with an empty cache; then a reload in the same
+  context, printed as the warm row for information. `folder` (NF-2.1): from the
+  click on the folder `many/` (1,000 files) to `fb:tree-folder-shown` for it, on
+  slow 4G. `editor-broadband` and `editor-slow-4g` (NF-2.2): from the click on
+  the 100 KB `big.md` to `fb:editor-ready`, the editor's chunk not loaded yet;
+  broadband is not throttled and runs on the desktop only. `preview` (NF-2.5):
+  types a word at the end of the 200 KB `preview.md`, not throttled, and times
+  until a `fb:preview-updated` whose render shows that word: from the last key
+  on a desktop, where the preview is beside the editor; from the tap on the
+  **Preview** tab on a phone, where the hidden preview does no work (A-8.12).
+- **Throttling.** Slow 4G is Chrome DevTools' preset as DevTools sets it, the
+  values NF-2 names: 562.5 ms per request, 180 KB/s down, 84 KB/s up
+  (1000-based). It is set after the screen has opened, just before the measured
+  click, except for the first load. `--profile phone` is Playwright's Pixel 7
+  (touch, a narrow screen, so the tree is a drawer) with the CPU 4 times slower,
+  as `typing-test.mjs` and the preview's e2e test take a mid-range phone to be.
+- **Fresh contexts.** Every run, warm-up runs too (`--warmup`, default 1), is a
+  new browser context, so the cache is cold. One login serves the whole run (10
+  logins a minute are allowed per address): each context starts with the refresh
+  token's cookie and the web client's `front-burner.auth`, and hands them on,
+  since a refresh replaces the token. Nothing else the device remembers is
+  handed on, such as the expanded folders (FB-14). When the auth token has less
+  than 5 minutes left, the tool refreshes the session itself before the next
+  context, so that the web client never refreshes during a run and no spent
+  refresh token is handed on.
+- **Telling marks apart.** `fb:editor-ready` names no file, so the editor
+  measure fails if one is set before its click (a file the screen opened by
+  itself). The preview measure counts only a render that shows the typed word
+  and comes after the last key, or after the tap on **Preview**.
+- **Its repository.** `--name` (default `screen`) is created and refused when it
+  exists; the preview runs save the typed words into it. Remove it in the web
+  client, and delete `--work`, when done.
+- **A missed mark** ends the run after 60 seconds with the page's address and
+  the `fb:` marks set so far, which tells a lost session (the login page) from a
+  mark that never came.
+- The run on a developer machine shares the CPU with the instance; the slow 4G
+  rows hardly depend on it, the preview row does.

@@ -1,11 +1,14 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { CurrentUser, OnboardingStatus } from '@front-burner/shared-contracts';
 import { provideCore } from '@front-burner/web-core';
+import { TranslocoTestingModule } from '@jsverse/transloco';
 
 import en from '../../public/i18n/en.json';
+import { App } from './app';
 import { appRoutes } from './app.routes';
 
 const required: OnboardingStatus = {
@@ -219,5 +222,38 @@ describe('appRoutes', () => {
     expect(TestBed.inject(Router).url).toBe('/onboarding');
     expect(heading()).toContain('Set up Front Burner');
     expect(document.title).toBe('Set up Front Burner · Front Burner');
+  });
+});
+
+describe('App', () => {
+  @Component({ template: '<h1>First page</h1>' })
+  class FirstPage {}
+
+  @Component({ template: '<h1>Second page</h1>' })
+  class SecondPage {}
+
+  it('marks fb:app-ready once, after the first page renders', async () => {
+    // jsdom has no User Timing API.
+    const marks: { name: string; heading: string | undefined; }[] = [];
+    TestBed.configureTestingModule({
+      imports: [ TranslocoTestingModule.forRoot({ langs: { en: {} } }) ],
+      providers: [ provideRouter([ { path: '', component: FirstPage }, { path: 'second', component: SecondPage } ]) ]
+    });
+    const fixture = TestBed.createComponent(App);
+    const heading = () => (fixture.nativeElement as HTMLElement).querySelector('h1')?.textContent ?? undefined;
+    performance.mark = ((name: string) => {
+      marks.push({ name, heading: heading() });
+    }) as typeof performance.mark;
+    try {
+      await TestBed.inject(Router).navigateByUrl('/');
+      await fixture.whenStable();
+      await TestBed.inject(Router).navigateByUrl('/second');
+      await fixture.whenStable();
+
+      expect(heading()).toBe('Second page');
+      expect(marks).toEqual([ { name: 'fb:app-ready', heading: 'First page' } ]);
+    } finally {
+      delete (performance as Partial<Performance>).mark;
+    }
   });
 });

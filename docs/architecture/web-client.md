@@ -303,3 +303,25 @@ libraries and [overview.md](overview.md) for the numbering conventions.
   `HttpClient` rather than `fetch`, to keep one token path.)_ Remote images are
   set only after **Show remote images**. It also picks the `<source>` of a
   `<picture>` with `matchMedia` (IM-12).
+
+## A-8: Performance marks
+
+- **A-8.17** The web client sets **performance marks** (the User Timing API)
+  where NF-2's screen targets end, in the production build too, so that
+  `perf-screen.mjs` times the client's own moments rather than guesses from the
+  DOM _(plan 151's call: a mark costs nothing)_. `markPerformance` in
+  `shared/util` sets them, keeping only the latest mark of each name but
+  `fb:tree-folder-shown`, whose folders must not clear each other (the browser
+  keeps marks until they are cleared, and the preview sets one per render), and
+  does nothing where the API is missing:
+  - `fb:app-ready`: the root component, after the first route's page has
+    rendered (NF-2.7);
+  - `fb:tree-folder-shown`, with `{ folder }` (`''` for the root): the file
+    tree, once the first entry of a folder just loaded or expanded is on the
+    page, which with virtual scrolling can be a frame after the store has it
+    (NF-2.1);
+  - `fb:editor-ready`: the code editor, each time it shows another state, such
+    as another file's, once CodeMirror has written it into the page and its
+    content takes input (NF-2.2). The editor does not take the focus when a file
+    opens, so the mark does not wait for it;
+  - `fb:preview-updated`: the preview, after it writes a new render (NF-2.5).
