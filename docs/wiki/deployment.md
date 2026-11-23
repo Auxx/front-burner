@@ -352,6 +352,11 @@ If you only use Front Burner on your home network and cannot get a public
 certificate, you can use a certificate from your own certificate authority, as
 long as every device that opens Front Burner trusts it.
 
+Front Burner compresses its responses itself, so the reverse proxy does not need
+to. Its web client is compressed once, when the image is built, and the API's
+answers as they are sent. You do not need Caddy's `encode` or nginx's `gzip`; if
+you turn them on anyway, they leave what is already compressed as it is.
+
 ### Caddy next to the compose example
 
 Caddy gets and renews a Let's Encrypt certificate by itself, redirects plain
