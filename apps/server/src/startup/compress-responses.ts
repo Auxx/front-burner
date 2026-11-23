@@ -44,10 +44,32 @@ export function shouldCompress(req: Request, res: Response): boolean {
  * `Server-Timing` (A-7.14) leaves out the time to compress and send.
  */
 export function compressResponses(): RequestHandler {
-  return compression({
+  const compress = compression({
     filter: shouldCompress,
     threshold: 1024,
     level: 6,
     brotli: { params: { [constants.BROTLI_PARAM_QUALITY]: 4 } }
   });
+  return (req, res, next) => {
+    weakenEtagWhenEncoded(res);
+    compress(req, res, next);
+  };
+}
+
+/**
+ * A strong `ETag` names one exact set of bytes, and the compressed answer's bytes
+ * are not the file's: once `compression` has chosen an encoding, a strong
+ * `ETag` (such as a repository image's) becomes weak. Wrapped before
+ * `compression` wraps `writeHead`, so this runs after it has set
+ * `Content-Encoding`. A weak `ETag` still matches `If-None-Match`.
+ */
+function weakenEtagWhenEncoded(res: Response): void {
+  const writeHead = res.writeHead;
+  res.writeHead = function(this: Response, ...args: Parameters<Response['writeHead']>) {
+    const etag = this.getHeader('ETag');
+    if (this.getHeader('Content-Encoding') !== undefined && typeof etag === 'string' && !etag.startsWith('W/')) {
+      this.setHeader('ETag', `W/${etag}`);
+    }
+    return writeHead.apply(this, args);
+  } as Response['writeHead'];
 }

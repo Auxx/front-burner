@@ -302,6 +302,18 @@ describe('serveWebClient', () => {
       expect(res.status).toBe(304);
     });
 
+    it('sends the file as it is when its variant has gone since startup', async () => {
+      const app = compressedApp();
+      rmSync(join(webRoot, 'main-ABCD1234.js.br'));
+      const res = await request(app).get('/main-ABCD1234.js').set('Accept-Encoding', 'br');
+      expect(res.status).toBe(200);
+      expect(res.headers['content-encoding']).toBeUndefined();
+      expect(res.headers['content-type']).toBe(JS_TYPE);
+      expect(res.headers['content-length']).toBe(String(JS.length));
+      expect(res.headers['cache-control']).toBe(VERSIONED_CACHE_CONTROL);
+      expect(res.text).toBe(JS);
+    });
+
     it.each([ '/main-ABCD1234.js.br', '/main-ABCD1234.js.gz', '/main-ABCD1234.js%2Ebr' ])(
       'answers 404 for %s by its own name',
       async path => {
@@ -327,7 +339,7 @@ describe('serveWebClient', () => {
   describe('caching', () => {
     function cachingApp(): express.Application {
       writeFileSync(join(webRoot, 'index.html'), INDEX);
-      for (const file of [ 'main-ABCD1234.js', 'styles-ABCD1234.css', 'favicon.ico' ]) {
+      for (const file of [ 'main-ABCD1234.js', 'styles-ABCD1234.css', 'favicon.ico', 'main.js', 'styles.css' ]) {
         writeFileSync(join(webRoot, file), file);
       }
       writeFileSync(join(webRoot, 'main-ABCD1234.js.gz'), gzipSync('main-ABCD1234.js'));
@@ -353,8 +365,19 @@ describe('serveWebClient', () => {
       expect(res.headers['cache-control']).toBe(VERSIONED_CACHE_CONTROL);
     });
 
-    it.each([ '/assets/icons.svg', '/i18n/en.json', '/favicon.ico' ])('keeps max-age=0 for %s', async path => {
-      const res = await request(cachingApp()).get(path);
+    it.each([ '/assets/icons.svg', '/i18n/en.json', '/favicon.ico', '/main.js', '/styles.css' ])(
+      'keeps max-age=0 for %s (a development build names main.js and styles.css without a hash)',
+      async path => {
+        const res = await request(cachingApp()).get(path);
+        expect(res.status).toBe(200);
+        expect(res.headers['cache-control']).toBe('public, max-age=0');
+      }
+    );
+
+    it('keeps max-age=0 for a file in media/ without a hash', async () => {
+      const app = cachingApp();
+      writeFileSync(join(webRoot, 'media', 'inter.woff2'), 'font');
+      const res = await request(app).get('/media/inter.woff2');
       expect(res.status).toBe(200);
       expect(res.headers['cache-control']).toBe('public, max-age=0');
     });

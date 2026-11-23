@@ -149,14 +149,16 @@ top of the security rules in the requirements and NF-11. See
   Accept-Encoding` on every answer for that file, compressed or not; a variant
   asked for by its own name (`main-X.js.br`) gets 404. The files the build names
   by their content, every root-level `.js` and `.css` file and every file in
-  `media/`, are cached for good (`public, max-age=31536000, immutable`); the
-  rule is a list of places, and `precompress.mjs` fails the build when a file in
-  them has no hash in its name. `index.html` is `no-store`; other files are
-  revalidated on every use (`max-age=0`), except one asked for with `?v=` and
-  the instance's version, which is cached for good too: the web client asks for
-  its icon sprite as `assets/icons.svg?v=<version>`, so that icons drawn while
-  offline, such as the offline banner's (NV-15), are there, and an upgrade
-  changes the URL.
+  `media/` with a hash in its name, are cached for good (`public,
+  max-age=31536000, immutable`). The rule needs both the place and the hash: a
+  development build names `main.js` without one, and `precompress.mjs` fails the
+  production build when a file in those places has none. If a variant cannot be
+  sent (gone since startup), the file is sent as it is. `index.html` is
+  `no-store`; other files are revalidated on every use (`max-age=0`), except one
+  asked for with `?v=` and the instance's version, which is cached for good too:
+  the web client asks for its icon sprite as `assets/icons.svg?v=<version>`, so
+  that icons drawn while offline, such as the offline banner's (NV-15), are
+  there, and an upgrade changes the URL.
 - **A-7.10** HTML from Markdown is sanitised by `rehype-sanitize` and then
   DOMPurify, both configured from the safe HTML whitelist (REQ-EDIT-002), and
   passed to Angular in one shared preview component (D-7.6). Raw repository
@@ -201,4 +203,6 @@ top of the security rules in the requirements and NF-11. See
     and sent by A-7.9, and `index.html` holds a nonce.
 
   The encoding is chosen when the headers are written, so `Server-Timing`
-  (A-7.14) still leaves out the time to compress and send.
+  (A-7.14) still leaves out the time to compress and send. A compressed answer's
+  strong `ETag`, such as a repository image's, is made weak (`W/`), since its
+  bytes are not the file's; `If-None-Match` still matches it.

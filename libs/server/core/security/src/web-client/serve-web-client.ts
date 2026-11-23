@@ -139,19 +139,21 @@ function pickEncoding(
   return best?.variant;
 }
 
+/** A content hash before the extension, as Angular writes it: `main-AB12cd_-.js` (as in `precompress.mjs`). */
+const HASH = /-[A-Za-z0-9_-]{8}\.[^./]+$/;
+
 /**
  * Whether the build names the file at `file` (relative, with `/`) by its
  * content, so that it can be cached for good: with `outputHashing: "all"`,
- * every root-level `.js` and `.css` file and every file in `media/`. A list of
- * places, not a guess from the name: the build's `precompress.mjs` fails when a
- * file in these places has no hash.
+ * every root-level `.js` and `.css` file and every file in `media/`, when its
+ * name has a hash. Both the place and the name must say so: a development
+ * build writes `main.js` without a hash, and the production build's
+ * `precompress.mjs` fails when a file in these places has none.
  */
 function isHashedFile(file: string): boolean {
   const segments = file.split('/');
-  if (segments.length === 1) {
-    return [ '.js', '.css' ].includes(extname(file));
-  }
-  return segments[0] === 'media';
+  const place = segments.length === 1 ? [ '.js', '.css' ].includes(extname(file)) : segments[0] === 'media';
+  return place && HASH.test(segments[segments.length - 1]);
 }
 
 /**
@@ -192,6 +194,29 @@ export function serveWebClient(
     res.status(404).set('X-Request-Id', requestId).json(body);
   };
 
+  /** The file as it is, or `index.html` with a fresh nonce, or 404 for a missing file of the build. */
+  const serveFileOrIndex = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+    // index.html is a template: it must only leave through the nonce branch.
+    const serveFile: express.RequestHandler = isIndexPath(req.path) ? (_req, _res, done) => done() : files;
+    serveFile(req, res, err => {
+      if (err) {
+        next(err);
+        return;
+      }
+      if (isMissingBuildFile(req.path, webRoot)) {
+        sendNotFound(res);
+        return;
+      }
+      const nonce = createNonce();
+      res
+        .status(200)
+        .type('text/html; charset=utf-8')
+        .set('Cache-Control', 'no-store')
+        .set('Content-Security-Policy', contentSecurityPolicy(nonce))
+        .send(template.split(CSP_NONCE_PLACEHOLDER).join(nonce));
+    });
+  };
+
   app.use((req, res, next) => {
     if ((req.method !== 'GET' && req.method !== 'HEAD') || isApiPath(req.path)) {
       next();
@@ -218,36 +243,20 @@ export function serveWebClient(
           }
           // A range of compressed bytes is a trap, and nothing in the web client asks for one.
           res.sendFile(join(webRoot, file + ext), { acceptRanges: false, dotfiles: 'ignore' }, err => {
+            // The variant went missing or cannot be read since startup: the file as it is will do.
             if (err && !res.headersSent) {
               for (const header of [ 'Content-Encoding', 'Content-Type', 'Cache-Control' ]) {
                 res.removeHeader(header);
               }
-              next(err);
+              res.status(200);
+              serveFileOrIndex(req, res, next);
             }
           });
           return;
         }
       }
     }
-    // index.html is a template: it must only leave through the nonce branch.
-    const serveFile: express.RequestHandler = isIndexPath(req.path) ? (_req, _res, done) => done() : files;
-    serveFile(req, res, err => {
-      if (err) {
-        next(err);
-        return;
-      }
-      if (isMissingBuildFile(req.path, webRoot)) {
-        sendNotFound(res);
-        return;
-      }
-      const nonce = createNonce();
-      res
-        .status(200)
-        .type('text/html; charset=utf-8')
-        .set('Cache-Control', 'no-store')
-        .set('Content-Security-Policy', contentSecurityPolicy(nonce))
-        .send(template.split(CSP_NONCE_PLACEHOLDER).join(nonce));
-    });
+    serveFileOrIndex(req, res, next);
   });
   return true;
 }

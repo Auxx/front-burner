@@ -1,4 +1,15 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
@@ -103,6 +114,33 @@ describe('precompress', () => {
     expect(precompress(dir)).toEqual(first);
     expect(files()).toEqual([ 'main-ABCD1234.js', 'main-ABCD1234.js.br', 'main-ABCD1234.js.gz' ]);
     expect(readFileSync(join(dir, 'main-ABCD1234.js.br'))).toEqual(br);
+  });
+
+  it('removes a variant from an earlier run when the file is now under 1 KB, or left out', () => {
+    write('i18n/en.json', text(900));
+    write('i18n/en.json.br', 'stale');
+    write('i18n/en.json.gz', 'stale');
+    write('index.html', text(4096));
+    write('index.html.gz', 'stale');
+
+    precompress(dir);
+
+    expect(files()).toEqual([ 'i18n', 'i18n/en.json', 'index.html' ]);
+  });
+
+  it('runs as a script from a path with a space and through a symbolic link', () => {
+    const real = join(dir, 'a workspace');
+    mkdirSync(real);
+    copyFileSync(join(import.meta.dirname, 'precompress.mjs'), join(real, 'precompress.mjs'));
+    symlinkSync(real, join(dir, 'linked'));
+    const out = join(dir, 'out');
+    mkdirSync(out);
+    writeFileSync(join(out, 'main-ABCD1234.js'), text(4096));
+
+    execFileSync(process.execPath, [ join(dir, 'linked', 'precompress.mjs'), out ]);
+
+    expect(existsSync(join(out, 'main-ABCD1234.js.br'))).toBe(true);
+    expect(existsSync(join(out, 'main-ABCD1234.js.gz'))).toBe(true);
   });
 
   it('fails when a root-level .js or .css file has no hash in its name', () => {
