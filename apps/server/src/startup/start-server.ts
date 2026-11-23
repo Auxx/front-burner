@@ -19,6 +19,7 @@ import { Logger } from 'nestjs-pino';
 import type { DestinationStream, Logger as PinoLogger } from 'pino';
 import type { HttpLogger } from 'pino-http';
 import { AppModule } from '../app/app.module';
+import { compressResponses } from './compress-responses';
 import { prepareDataDir } from './prepare-data-dir';
 import { upgradeDatabase } from './upgrade-database';
 
@@ -123,6 +124,9 @@ function configure(
   if (config.metricsToken !== undefined) {
     app.use(httpMetrics(app.get(METRICS_REGISTRY)));
   }
+  // Before the routes, so that every API answer can be compressed (A-7.15); after the timing, which is
+  // set when the headers are written and so leaves out the time to compress (A-7.14).
+  app.use(compressResponses());
   app.use(securityHeaders());
   // The health probes reveal no version (NF-10.9), nor do the metrics, which are not part of the API.
   app.use(versionHeader(config.version, { except: UNVERSIONED_ROUTES }));

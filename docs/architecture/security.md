@@ -185,3 +185,20 @@ top of the security rules in the requirements and NF-11. See
   route or ID. A duration can hint at work a request did that its answer does
   not show, so the variable is meant for a measuring run (plan 150's
   `perf-api.mjs`), not for an instance in use.
+- **A-7.15** API answers of 1 KB or more are compressed as they are sent, by
+  Express's `compression` middleware (plan 159): compressible types only, gzip
+  at level 6, or Brotli at quality 4 when the client prefers it. It is always
+  on, with no variable. Left out:
+  - the **push channel** (`text/event-stream`, A-3.10), whose events would wait
+    in the compressor's buffer;
+  - the **authentication and onboarding routes** (`/api/v1/auth/` and
+    `/api/v1/onboarding/`), whose answers carry auth and refresh tokens. When a
+    secret and text the request chose share one compressed body, the body's size
+    can reveal the secret a guess at a time (BREACH). These answers are small,
+    so nothing is lost. Any other route that returns a secret must be added to
+    this list;
+  - everything outside `/api/`: the web client's files are compressed at build
+    and sent by A-7.9, and `index.html` holds a nonce.
+
+  The encoding is chosen when the headers are written, so `Server-Timing`
+  (A-7.14) still leaves out the time to compress and send.
