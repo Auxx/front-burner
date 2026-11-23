@@ -330,9 +330,11 @@ this section in the same change, without being asked:
   highlighting on narrow screens, with a button that turns it on (ED-9a).
 - **Large repositories.** Spike 4 (A-5.14) found status at 100,000 files fast
   enough without any git setting: about 100 ms warm and 1.4 s with a cold cache,
-  on a machine that stands in for the reference host, so the release checks
-  repeat it. After a restore, status could take longer than its 10 s timeout, so
-  recovery on start refreshes each index (A-5.15, NF-9.4).
+  on a machine that stands in for the reference host. After a restore, status
+  could take longer than its 10 s timeout, so recovery on start refreshes each
+  index (A-5.15, NF-9.4). _Checked_ on the reference host by the release checks
+  (plan 152): through the API, status takes 0.5 s warm and 2.6 s cold, a commit
+  1.4 s and 3.5 s (p95). Both stay requests, by a decision recorded at NF-2.8.
 
 ## Open questions
 

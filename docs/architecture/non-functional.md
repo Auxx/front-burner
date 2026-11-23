@@ -55,6 +55,13 @@ sees the result.
 - **NF-2.8** Any operation that can take longer than about 2 seconds runs as a
   job, and its progress and result are pushed to the client. No API request is
   held open for more than 30 seconds.
+  - **Status and commit stay requests** (decision of 2026-11-23, plan 152). On
+    the reference host, at NF-1.4's 100,000 files, they take p95 0.5 s and 1.4 s
+    with a warm cache, and 2.6 s and 3.5 s with a cold one, after a restart or a
+    restore before the files are in memory. That is over "about 2 seconds", but
+    only then and only at that size, and far below the 30 seconds above and the
+    git engine's 10 s timeout, so they are not made jobs. Spike 4 in
+    [spikes.md](spikes.md) has the numbers.
 - **NF-2.9** The initial JavaScript of the web client is at most **300 KB
   gzipped**. The editor, the live preview, Shiki languages and the conflict
   resolution screens are loaded on demand.

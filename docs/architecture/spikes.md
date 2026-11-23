@@ -235,8 +235,8 @@ they are built. See [overview.md](overview.md) for the numbering conventions.
     i7-12700K and a 4 GB memory limit stood in for 2 vCPU and 4 GB; the disk was
     a Crucial P310 NVMe SSD in a USB enclosure, with btrfs (zstd). This core is
     probably faster than a typical vCPU, and git 2.56 was used, not the 2.47 of
-    the image in spike 1, so **the numbers are re-checked with the release
-    checks** (`docs/wiki/todo.md`).
+    the image in spike 1, so **the numbers were re-checked with the release
+    checks**: see "Release repeat on the reference host" below.
   - **Method:** a shallow clone of Linux 7.4-rc1, with the engine's exact
     command lines and environment. Five runs each, three for the stale index;
     the median and the worst. Warm runs had 97,348 files. Cold runs had exactly
@@ -278,6 +278,25 @@ they are built. See [overview.md](overview.md) for the numbering conventions.
   - **NF-2.8:** a cold status and a cold commit (worst 1.76 s) are close to
     "about 2 seconds" on this machine, and may pass it on a slower host. The
     release checks decide.
+  - **Release repeat on the reference host** (plan 152, 2026-11-23): a 2 vCPU, 4
+    GB droplet with an SSD, the release image and its git 2.47.3, and
+    `gen-large-repo.mjs`'s 100,000 files (1.2 GB) instead of Linux, through the
+    API with `perf-api.mjs run --large --cold` (`docs/wiki/release-checks.md`,
+    "Reference host"). The commit is the whole API request, not only plan 52's
+    git.
+
+    | Through the API, p50 / p95 | Warm (50 runs)   | Cold (5 runs)    |
+    | -------------------------- | ---------------- | ---------------- |
+    | Status                     | 438 / 521 ms     | 2,016 / 2,614 ms |
+    | Commit                     | 1,240 / 1,440 ms | 1,738 / 3,458 ms |
+
+    **NF-2.8's question is answered: no.** Cold, both go over about 2 seconds.
+    **Decision** (the operator's, recorded at NF-2.8 in
+    [non-functional.md](non-functional.md#nf-2-performance)): neither becomes a
+    job. A cold cache happens only after a restart or a restore, recovery on
+    start refreshes each index (A-5.15), and both stay far below the 30-second
+    limit on a request and the 10 s `LOCAL_TIMEOUT_MS`. A restart among 2,500
+    working copies took 46 s, 42 s of it recovery.
   - **`STATUS_REFRESH_MS` is 2,000 ms:** warm status × 2 is about 200 ms, well
     under the default. A-5.14 records it.
   - **A stale index is the problem found.** After a restore (NF-6.5) every
