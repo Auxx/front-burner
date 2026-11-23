@@ -62,7 +62,7 @@
     "micromark-util-sanitize-uri": "2.0.1",
     "nestjs-pino": "5.3.1",
     "nestjs-zod": "5.5.0",
-    "openid-client": "6.8.8",
+    "openid-client": "6.9.1",
     "pino": "10.4.0",
     "pino-http": "11.0.0",
     "pino-pretty": "13.2.0",
