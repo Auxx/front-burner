@@ -368,3 +368,117 @@ reference host by plan 152. The phone's NF-2.5 row, 1.1 s from the tap on
 **Preview** to a render of the 200 KB file with a CPU 4 times slower, has no
 network part: whether a phone's first render after switching tab counts against
 NF-2.5's "after typing stops" is to be decided, with plan 155's real phones.
+
+## Reference host
+
+Plan 152 measures NF-1 and NF-2 on the reference host of
+[non-functional.md](../architecture/non-functional.md#reference-host) (2 vCPU, 4
+GB RAM, an SSD), running the release image, and repeats spike 4's status and
+commit timings there with the image's git. The run sheet below is how it was
+done, so that a later release can repeat it; the results follow it.
+
+### Run sheet
+
+A throwaway cloud VM of the reference size is enough, with a fresh Linux and SSH
+as root. Nothing on it is kept: delete it after the run. `<host>` is its
+address, `<commit>` the commit measured.
+
+1. **The host.** Install Docker with Compose and Node 24 (the version in
+   `.nvmrc`), and let only SSH in, since the instance listens on the host's
+   network:
+
+   ```sh
+   apt-get install -y docker.io docker-compose-v2 rsync build-essential python3
+   # Node 24 from nodejs.org into /opt, linked into /usr/local/bin
+   ufw allow OpenSSH && ufw --force enable
+   ```
+
+2. **The workspace and the image**, from a developer machine at `<commit>`. The
+   tools need the workspace's files but, of the dependencies, only
+   `better-sqlite3` (for `scale`). The image is built as CI builds it, or pulled
+   from `ghcr.io` once a release exists:
+
+   ```sh
+   git ls-files -z | rsync -a --from0 --files-from=- ./ root@<host>:/srv/fb/
+   ssh root@<host> 'mkdir /srv/deps && cd /srv/deps && echo {} > package.json \
+     && npm install better-sqlite3@<package.json version> \
+     && ln -s /srv/deps/node_modules /srv/fb/node_modules'
+   docker build -f tools/docker/Dockerfile -t front-burner:ref-<commit> .
+   docker save front-burner:ref-<commit> | gzip -1 | ssh root@<host> 'gunzip | docker load'
+   ```
+
+3. **The instance**, on the host in `/srv/fb/tmp/ref`: the guide's compose
+   example (`docs/wiki/compose.example.yaml`) unchanged, its three secret files
+   and a metrics token made with `openssl rand -hex 32` (owner 1000, mode 600),
+   an empty `data/` owned by 1000, and this `compose.override.yaml`. The data
+   directory is a bind mount under the workspace, because `scale` writes into
+   it; the instance is on the host's network, because the tools serve their
+   remotes on `127.0.0.1` with the test certificate.
+
+   ```yaml
+   services:
+     front-burner:
+       image: front-burner:ref-<commit>
+       network_mode: host
+       ports: !reset []
+       environment:
+         FRONT_BURNER_SERVER_TIMING: "true"
+         FRONT_BURNER_METRICS_TOKEN_FILE: /run/secrets/front-burner-metrics-token
+         GIT_SSL_CAINFO: /perf/test.crt
+       secrets:
+         - front-burner-metrics-token
+       volumes: !override
+         - ./data:/data
+         - /srv/fb/libs/server/core/security/src/testing/fixtures/test.crt:/perf/test.crt:ro
+   secrets:
+     front-burner-metrics-token:
+       file: ./secrets/metrics-token
+   ```
+
+   Then `docker compose up -d`, and onboard `admin@example.com` with `POST
+   /api/v1/onboarding/password-setup` and the setup token. The password goes
+   into `PERF_PASSWORD` for every command below.
+
+4. **The large repository and the API, one user** (NF-1.4, NF-2.1 to NF-2.3,
+   NF-2.6, NF-2.8), on the host as root, since `--cold` drops the page cache:
+
+   ```sh
+   cd /srv/fb
+   node tools/ai-tools/src/bin/gen-large-repo.mjs generate
+   node tools/ai-tools/src/bin/perf-api.mjs run --url http://127.0.0.1:8080 \
+     --email admin@example.com --large --cold
+   ```
+
+5. **Scale and the restart** (NF-1.1 to NF-1.3, NF-9.4's recovery): stop the
+   instance, fill it as the container's UID, and time the start, which also
+   refreshes the index of each working copy after the cold runs:
+
+   ```sh
+   (cd tmp/ref && docker compose stop)
+   setpriv --reuid=1000 --regid=1000 --clear-groups \
+     node tools/ai-tools/src/bin/perf-api.mjs scale --data-dir tmp/ref/data
+   node tools/ai-tools/src/bin/perf-api.mjs ready --url http://127.0.0.1:8080 &
+   (cd tmp/ref && docker compose start); wait
+   node tools/ai-tools/src/bin/perf-api.mjs run --url http://127.0.0.1:8080 --users 10
+   ```
+
+6. **The screens** (NF-2.1, NF-2.2, NF-2.5, NF-2.7), from a machine outside the
+   host, so that the browser does not share the host's CPU and the requests
+   cross the real network as well as the slow 4G throttling. An SSH tunnel
+   carries the instance to the machine and the tool's git server back to the
+   host's `127.0.0.1`, where the instance clones from:
+
+   ```sh
+   ssh -N -L 8080:127.0.0.1:8080 -R 9418:127.0.0.1:9418 root@<host> &
+   node tools/ai-tools/src/bin/perf-screen.mjs run --url http://127.0.0.1:8080 \
+     --email admin@example.com --git-port 9418 --profile desktop
+   node tools/ai-tools/src/bin/perf-screen.mjs run --url http://127.0.0.1:8080 \
+     --email admin@example.com --git-port 9418 --profile phone --name screen-phone
+   ```
+
+7. **The host's record**: `lscpu`, `free -m`, `lsblk -d -o NAME,ROTA,SIZE`,
+   `uname -r`, `docker --version`, `git --version` on the host and in the
+   container, and the image's ID.
+
+8. **Afterwards**: `FRONT_BURNER_SERVER_TIMING` is for measuring only; the VM is
+   deleted with the instance, which removes it too.
