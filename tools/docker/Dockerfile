@@ -32,9 +32,11 @@ ARG FRONT_BURNER_VERSION=
 RUN if [ -n "$FRONT_BURNER_VERSION" ]; then npm pkg set version="$FRONT_BURNER_VERSION"; fi
 
 # The backend's build also writes a package.json and lockfile with only its
-# runtime dependencies next to main.js.
+# runtime dependencies next to main.js. The web client's files are compressed
+# once, here, and served as they are (A-7.9).
 RUN npx nx run server:build:production \
-    && npx nx run web:build:production
+    && npx nx run web:build:production \
+    && node apps/web/scripts/precompress.mjs dist/apps/web/browser
 
 # ---- deps: the backend's production dependencies ----------------------------
 FROM node:${NODE_VERSION}-trixie AS deps

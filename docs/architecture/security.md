@@ -139,12 +139,26 @@ top of the security rules in the requirements and NF-11. See
   path that is not a file of the build gets `index.html`, so that reloading a
   deep link such as `/repositories/1/files/docs/README.md` works; only a missing
   file under a folder of the build (`assets/`, `i18n/`, `media/`) or a missing
-  root-level file with an extension (a hashed chunk) gets 404. Files are
-  revalidated on every use (`max-age=0`), except one asked for with `?v=` and
-  the instance's version, which is cached for good (`immutable`): the web client
-  asks for its icon sprite as `assets/icons.svg?v=<version>`, so that icons
-  drawn while offline, such as the offline banner's (NV-15), are there, and an
-  upgrade changes the URL.
+  root-level file with an extension (a hashed chunk) gets 404. The build
+  compresses the web client's files once (`web:precompress`, plan 159): a `.br`
+  and a `.gz` next to each `.js`, `.css`, `.json`, `.svg`, `.txt`,
+  `.webmanifest` or `.map` file of 1 KB or more, kept only when smaller, never
+  for `index.html`. For a file with variants, the backend sends the best one
+  that `Accept-Encoding` allows (`br`, then `gzip`, `q=0` honoured) with the
+  file's own `Content-Type`, `Content-Encoding`, no `Range` support, and `Vary:
+  Accept-Encoding` on every answer for that file, compressed or not; a variant
+  asked for by its own name (`main-X.js.br`) gets 404. The files the build names
+  by their content, every root-level `.js` and `.css` file and every file in
+  `media/` with a hash in its name, are cached for good (`public,
+  max-age=31536000, immutable`). The rule needs both the place and the hash: a
+  development build names `main.js` without one, and `precompress.mjs` fails the
+  production build when a file in those places has none. If a variant cannot be
+  sent (gone since startup), the file is sent as it is. `index.html` is
+  `no-store`; other files are revalidated on every use (`max-age=0`), except one
+  asked for with `?v=` and the instance's version, which is cached for good too:
+  the web client asks for its icon sprite as `assets/icons.svg?v=<version>`, so
+  that icons drawn while offline, such as the offline banner's (NV-15), are
+  there, and an upgrade changes the URL.
 - **A-7.10** HTML from Markdown is sanitised by `rehype-sanitize` and then
   DOMPurify, both configured from the safe HTML whitelist (REQ-EDIT-002), and
   passed to Angular in one shared preview component (D-7.6). Raw repository
@@ -173,3 +187,22 @@ top of the security rules in the requirements and NF-11. See
   route or ID. A duration can hint at work a request did that its answer does
   not show, so the variable is meant for a measuring run (plan 150's
   `perf-api.mjs`), not for an instance in use.
+- **A-7.15** API answers of 1 KB or more are compressed as they are sent, by
+  Express's `compression` middleware (plan 159): compressible types only, gzip
+  at level 6, or Brotli at quality 4 when the client prefers it. It is always
+  on, with no variable. Left out:
+  - the **push channel** (`text/event-stream`, A-3.10), whose events would wait
+    in the compressor's buffer;
+  - the **authentication and onboarding routes** (`/api/v1/auth/` and
+    `/api/v1/onboarding/`), whose answers carry auth and refresh tokens. When a
+    secret and text the request chose share one compressed body, the body's size
+    can reveal the secret a guess at a time (BREACH). These answers are small,
+    so nothing is lost. Any other route that returns a secret must be added to
+    this list;
+  - everything outside `/api/`: the web client's files are compressed at build
+    and sent by A-7.9, and `index.html` holds a nonce.
+
+  The encoding is chosen when the headers are written, so `Server-Timing`
+  (A-7.14) still leaves out the time to compress and send. A compressed answer's
+  strong `ETag`, such as a repository image's, is made weak (`W/`), since its
+  bytes are not the file's; `If-None-Match` still matches it.

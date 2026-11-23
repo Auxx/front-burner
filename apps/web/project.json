@@ -99,8 +99,23 @@
     },
     "test": {
       "executor": "@angular/build:unit-test",
+      "dependsOn": [
+        "test-scripts"
+      ],
       "options": {
         "watch": false
+      }
+    },
+    "test-scripts": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/scripts/**/*",
+        "sharedGlobals"
+      ],
+      "options": {
+        "command": "vitest run",
+        "cwd": "apps/web/scripts"
       }
     },
     "serve-static": {
@@ -127,6 +142,26 @@
       ],
       "options": {
         "command": "node apps/web/scripts/size-check.mjs dist/apps/web/browser"
+      }
+    },
+    "precompress": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": [
+        "build"
+      ],
+      "inputs": [
+        "{projectRoot}/scripts/precompress.mjs",
+        {
+          "dependentTasksOutputFiles": "**/*"
+        }
+      ],
+      "outputs": [
+        "{workspaceRoot}/dist/apps/web/browser/**/*.br",
+        "{workspaceRoot}/dist/apps/web/browser/**/*.gz"
+      ],
+      "options": {
+        "command": "node apps/web/scripts/precompress.mjs dist/apps/web/browser"
       }
     },
     "typecheck": {

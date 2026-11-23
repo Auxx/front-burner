@@ -149,6 +149,24 @@ describe('startServer', () => {
   );
 
   // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+  it.skipIf(process.platform === 'win32')('A-7.15: compresses an API answer of 1 KB or more', async () => {
+    app = await start({ FRONT_BURNER_METRICS_TOKEN: 'server-spec-metrics-token-0123456789' });
+
+    // The metrics are the one large answer that needs no login.
+    const metrics = await request(app.getHttpServer())
+      .get('/api/metrics')
+      .set('Authorization', 'Bearer server-spec-metrics-token-0123456789')
+      .set('Accept-Encoding', 'gzip');
+    const small = await request(app.getHttpServer()).get('/api/v1/me').set('Accept-Encoding', 'gzip');
+
+    expect(metrics.status).toBe(200);
+    expect(metrics.headers['content-encoding']).toBe('gzip');
+    expect(metrics.text).toContain('# HELP');
+    expect(small.status).toBe(401);
+    expect(small.headers['content-encoding']).toBeUndefined();
+  });
+
+  // Starts the server, whose git step runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
   it.skipIf(process.platform === 'win32')('rate-limits requests that the auth guard refuses (A-1.12)', async () => {
     app = await start();
 

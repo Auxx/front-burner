@@ -1,8 +1,8 @@
 import type { ApiError } from '@front-burner/shared-contracts';
 import express from 'express';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { extname, join, posix } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { extname, join, posix, relative, sep } from 'node:path';
 import { contentSecurityPolicy, createNonce, CSP_NONCE_PLACEHOLDER } from '../csp/csp';
 
 /**
@@ -69,11 +69,99 @@ function isMissingBuildFile(path: string, webRoot: string): boolean {
   }
 }
 
+/** The precompressed variants of a file, by `Content-Encoding`, best first. */
+const ENCODINGS = [ { encoding: 'br', ext: '.br' }, { encoding: 'gzip', ext: '.gz' } ] as const;
+
+type Encoding = (typeof ENCODINGS)[number]['encoding'];
+
 /**
- * Serves the built web client from `webRoot` (A-7.9): files as they are, and
- * `index.html` with a fresh CSP nonce for every other route, so that the
- * client-side router can handle it. Returns `false`, registering nothing, when
- * there is no build.
+ * The files of `webRoot` (relative, with `/`) that the build precompressed,
+ * with the encodings of their variants. Dot-files are left out, as
+ * `express.static` does not serve them.
+ */
+function findVariants(webRoot: string): Map<string, Set<Encoding>> {
+  const variants = new Map<string, Set<Encoding>>();
+  const entries = readdirSync(webRoot, { recursive: true, withFileTypes: true });
+  for (const entry of entries) {
+    const variant = ENCODINGS.find(({ ext }) => entry.name.endsWith(ext));
+    if (!entry.isFile() || !variant) {
+      continue;
+    }
+    const file = relative(webRoot, join(entry.parentPath, entry.name)).split(sep).join('/').slice(
+      0,
+      -variant.ext.length
+    );
+    if (file.split('/').some(segment => segment.startsWith('.')) || !existsSync(join(webRoot, file))) {
+      continue;
+    }
+    const encodings = variants.get(file) ?? new Set<Encoding>();
+    encodings.add(variant.encoding);
+    variants.set(file, encodings);
+  }
+  return variants;
+}
+
+/** The path of the request relative to the web root, with `/`, or `undefined` when it cannot be decoded. */
+function relativePathOf(path: string): string | undefined {
+  try {
+    return posix.normalize(decodeURIComponent(path)).replace(/^\/+/, '');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The best of `available` that `Accept-Encoding` allows: the highest `q`, `br`
+ * before `gzip` at the same `q`; `q=0` refuses an encoding, `*` stands for any
+ * encoding not named. `undefined` sends the file as it is.
+ */
+function pickEncoding(
+  acceptEncoding: string | undefined,
+  available: ReadonlySet<Encoding>
+): (typeof ENCODINGS)[number] | undefined {
+  const weights = new Map<string, number>();
+  for (const part of (acceptEncoding ?? '').split(',')) {
+    const [ name, ...params ] = part.split(';').map(item => item.trim().toLowerCase());
+    if (!name) {
+      continue;
+    }
+    const q = params.map(param => /^q=([0-9.]+)$/.exec(param)?.[1]).find(value => value !== undefined);
+    const weight = q === undefined ? 1 : Number(q);
+    weights.set(name, Number.isFinite(weight) ? weight : 0);
+  }
+  let best: { variant: (typeof ENCODINGS)[number]; weight: number; } | undefined;
+  for (const variant of ENCODINGS) {
+    const weight = weights.get(variant.encoding) ?? weights.get('*') ?? 0;
+    if (available.has(variant.encoding) && weight > 0 && (!best || weight > best.weight)) {
+      best = { variant, weight };
+    }
+  }
+  return best?.variant;
+}
+
+/** A content hash before the extension, as Angular writes it: `main-AB12cd_-.js` (as in `precompress.mjs`). */
+const HASH = /-[A-Za-z0-9_-]{8}\.[^./]+$/;
+
+/**
+ * Whether the build names the file at `file` (relative, with `/`) by its
+ * content, so that it can be cached for good: with `outputHashing: "all"`,
+ * every root-level `.js` and `.css` file and every file in `media/`, when its
+ * name has a hash. Both the place and the name must say so: a development
+ * build writes `main.js` without a hash, and the production build's
+ * `precompress.mjs` fails when a file in these places has none.
+ */
+function isHashedFile(file: string): boolean {
+  const segments = file.split('/');
+  const place = segments.length === 1 ? [ '.js', '.css' ].includes(extname(file)) : segments[0] === 'media';
+  return place && HASH.test(segments[segments.length - 1]);
+}
+
+/**
+ * Serves the built web client from `webRoot` (A-7.9): files as they are, or
+ * the precompressed variant the request accepts, and `index.html` with a fresh
+ * CSP nonce for every other route, so that the client-side router can handle
+ * it. Files the build names by their content are cached for good. Returns
+ * `false`, registering nothing, when there is no build.
  */
 export function serveWebClient(
   app: express.Application,
@@ -85,21 +173,29 @@ export function serveWebClient(
     return false;
   }
   const template = readFileSync(indexPath, 'utf8');
+  const variants = findVariants(webRoot);
+  const cacheControlOf = (req: express.Request, file: string | undefined): string | undefined => {
+    const versioned = options.version !== undefined && req.query['v'] === options.version;
+    return versioned || (file !== undefined && isHashedFile(file)) ? VERSIONED_CACHE_CONTROL : undefined;
+  };
   const files = express.static(webRoot, {
     index: false,
     redirect: false,
     setHeaders: (res: express.Response) => {
-      if (options.version !== undefined && res.req.query['v'] === options.version) {
-        res.setHeader('Cache-Control', VERSIONED_CACHE_CONTROL);
+      const cacheControl = cacheControlOf(res.req, relativePathOf(res.req.path));
+      if (cacheControl) {
+        res.setHeader('Cache-Control', cacheControl);
       }
     }
   });
+  const sendNotFound = (res: express.Response): void => {
+    const requestId = (res.getHeader('X-Request-Id') as string | undefined) ?? randomUUID();
+    const body: ApiError = { code: 'not-found', params: {}, requestId, message: 'Not found.' };
+    res.status(404).set('X-Request-Id', requestId).json(body);
+  };
 
-  app.use((req, res, next) => {
-    if ((req.method !== 'GET' && req.method !== 'HEAD') || isApiPath(req.path)) {
-      next();
-      return;
-    }
+  /** The file as it is, or `index.html` with a fresh nonce, or 404 for a missing file of the build. */
+  const serveFileOrIndex = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
     // index.html is a template: it must only leave through the nonce branch.
     const serveFile: express.RequestHandler = isIndexPath(req.path) ? (_req, _res, done) => done() : files;
     serveFile(req, res, err => {
@@ -108,9 +204,7 @@ export function serveWebClient(
         return;
       }
       if (isMissingBuildFile(req.path, webRoot)) {
-        const requestId = (res.getHeader('X-Request-Id') as string | undefined) ?? randomUUID();
-        const body: ApiError = { code: 'not-found', params: {}, requestId, message: 'Not found.' };
-        res.status(404).set('X-Request-Id', requestId).json(body);
+        sendNotFound(res);
         return;
       }
       const nonce = createNonce();
@@ -121,6 +215,48 @@ export function serveWebClient(
         .set('Content-Security-Policy', contentSecurityPolicy(nonce))
         .send(template.split(CSP_NONCE_PLACEHOLDER).join(nonce));
     });
+  };
+
+  app.use((req, res, next) => {
+    if ((req.method !== 'GET' && req.method !== 'HEAD') || isApiPath(req.path)) {
+      next();
+      return;
+    }
+    const file = relativePathOf(req.path);
+    if (file !== undefined) {
+      // A variant is only sent in place of its file: no second URL with the wrong type.
+      const variantOf = ENCODINGS.find(({ ext }) => file.endsWith(ext) && variants.has(file.slice(0, -ext.length)));
+      if (variantOf) {
+        sendNotFound(res);
+        return;
+      }
+      const available = isIndexPath(req.path) ? undefined : variants.get(file);
+      if (available) {
+        res.vary('Accept-Encoding');
+        const variant = pickEncoding(req.get('Accept-Encoding'), available);
+        if (variant) {
+          const { encoding, ext } = variant;
+          res.type(extname(file)).set('Content-Encoding', encoding);
+          const cacheControl = cacheControlOf(req, file);
+          if (cacheControl) {
+            res.set('Cache-Control', cacheControl);
+          }
+          // A range of compressed bytes is a trap, and nothing in the web client asks for one.
+          res.sendFile(join(webRoot, file + ext), { acceptRanges: false, dotfiles: 'ignore' }, err => {
+            // The variant went missing or cannot be read since startup: the file as it is will do.
+            if (err && !res.headersSent) {
+              for (const header of [ 'Content-Encoding', 'Content-Type', 'Cache-Control' ]) {
+                res.removeHeader(header);
+              }
+              res.status(200);
+              serveFileOrIndex(req, res, next);
+            }
+          });
+          return;
+        }
+      }
+    }
+    serveFileOrIndex(req, res, next);
   });
   return true;
 }
