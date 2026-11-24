@@ -19,6 +19,7 @@ watch out for. The rules shared by all tools are in [SKILL.md](../SKILL.md).
 | [`gen-large-repo`](#gen-large-repo) | A git repository of 100,000 files, for timing NF-2.8               |
 | [`perf-api`](#perf-api)             | The API's NF-2 timings against a running instance, at NF-1's scale |
 | [`perf-screen`](#perf-screen)       | NF-2's screen timings in a throttled Chromium, desktop or phone    |
+| [`cpu-profile`](#cpu-profile)       | Where a Node.js process spent its time, from `node --cpu-prof`     |
 
 ## `colour`
 
@@ -495,6 +496,7 @@ host; a run anywhere else is only "indicative" in the release checklist
 | Command                                                                         | Does                                                                                            |
 | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `run --url <instance> (--email <e> \| --users <n>) [--large] [--cold] [--json]` | Prepares its repositories, times each operation, prints the table; 1 if a hard target is missed |
+| `run … [--measures <list>] [--metrics-token-file <f> [--instance-pid <pid>]]`   | The same for some operations only, and the instance's load while they ran                       |
 | `scale --data-dir <dir> [--repos-dir <dir>] [--users 49] [--repositories 50]`   | Fills a stopped instance with users and working copies (NF-1.1, NF-1.3)                         |
 | `ready --url <instance> [--timeout 600]`                                        | Seconds from the command's start until `/api/health/ready` answers 200                          |
 
@@ -544,6 +546,14 @@ PERF_PASSWORD=… perf-api.mjs run --url http://127.0.0.1:3000 --users 10
   them at once (NF-1.2). Separate users, because NF-11.4 limits each user to 600
   requests a minute; a `429` is waited out (`Retry-After`), never counted. Only
   10 logins a minute are allowed from one address, which `--users 10` uses up.
+- **`--think`** is the seconds each user pauses before every run, on average
+  (each pause evenly between half and one and a half times it, so that the users
+  drift apart); the pause is not part of what is timed. With `--users` it is 5
+  by default, NF-1.2's "active" user (plan 160's decision, recorded at NF-1.2);
+  with `--email`, 0. `--think 0` with `--users` is a load test: every user sends
+  the next request as soon as the last one ends, so the instance is at full load
+  and the times are about n times one request's cost, which is not what NF-1.2
+  asks. A full `--users 10` run takes about 40 minutes with the pauses.
 - **`scale`** writes into the data directory directly, since the MVP has no API
   that creates users. It refuses one whose database is open (a `-shm` or `-wal`
   file) or that holds any user besides the first administrator. Every user gets
@@ -559,6 +569,26 @@ PERF_PASSWORD=… perf-api.mjs run --url http://127.0.0.1:3000 --users 10
   near to the instance's git as to plain git, on both sides of NF-2.6's
   subtraction, and so that `scale` can reach the data directory.
 - `--cold` was not run when the tool was written (no root on that machine).
+- **Finding a cause** (plan 160). `--measures folder,file,save,push,pull` (any
+  of them, in that order) runs only those, so that the load of one operation can
+  be told from the others'. `--metrics-token-file` names a file holding the
+  instance's metrics token (in the workspace, such as the run sheet's
+  `tmp/ref/secrets/metrics-token`): the tool scrapes `/api/metrics` every
+  `--scrape-every` seconds (default 5) while the measures run and prints, after
+  the table, the event loop's delay (prom-client's histogram, which restarts at
+  every scrape: the mean of the windows' p50, the highest p99 and max), each job
+  type's mean run time from `job_duration_seconds` next to the mean time the
+  tool saw from the request to `job.finished` (the rest is the wait for a place
+  in the pool and the event's way back), and the highest number queued.
+  `--instance-pid`, the host PID of the instance's container (`docker inspect -f
+  '{{.State.Pid}}' <container>`, which is the image's init, `tini`: the tool
+  takes its one child, the backend), splits the host's CPU into the Node.js
+  process (its own time, not its children's), the rest of its cgroup (git and
+  its helpers, also the short-lived ones) and everything else on the host (the
+  tool and its git server). It reads `/proc` and `/sys/fs/cgroup` (cgroup v2),
+  so it needs Linux, on the instance's host; the clock tick is taken as 100 Hz.
+  A Node.js process at about 1.0 core is its main thread at its limit: profile
+  it with [`cpu-profile`](#cpu-profile).
 
 ## `perf-screen`
 
@@ -623,3 +653,34 @@ from `PERF_PASSWORD`.
   mark that never came.
 - The run on a developer machine shares the CPU with the instance; the slow 4G
   rows hardly depend on it, the preview row does.
+
+## `cpu-profile`
+
+Summarises a V8 CPU profile, the `.cpuprofile` that `node --cpu-prof` writes
+when the process ends: where the main thread spent its time, by function and by
+package, over the whole profile or a window of it. Plan 160 used it to find why
+10 users at once saturate the instance's main thread.
+
+| Command                                                      | Does                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------- |
+| `timeline <file> [--bucket 5] [--json]`                      | Busy (not idle) time in each bucket of seconds                |
+| `summary <file> [--from <s>] [--to <s>] [--top 25] [--json]` | Self time by package; top functions by self and by total time |
+
+To profile the instance in its container, start it with `NODE_OPTIONS:
+"--cpu-prof --cpu-prof-dir=/data/prof"` (a folder of the data volume that UID
+1000 can write), run the load, and stop it: the profile is written on exit. The
+image's health check is a `node -e` too, so the folder also fills with small
+profiles of those; the instance's is the large one. `timeline` shows where the
+load ran (after the start's recovery), and `summary --from --to` keeps to it.
+
+- **Only the main thread.** A CPU profile does not see libuv's threads (the file
+  system's work) or child processes (git): `perf-api.mjs run --instance-pid`
+  gives those. What it does see is what blocks the event loop, such as `spawn`
+  (libuv forks the whole process on Linux, so it costs more the more memory the
+  process holds) or the JavaScript side of many small `fs` calls.
+- **Total time** counts a function once per stack, so a recursive function is
+  not counted twice. **Packages** are read from `node_modules/` in the script's
+  URL; `node` is Node.js's own JavaScript, `application` any other script (the
+  backend's bundled `main.js`, whose line numbers are the bundle's), `(native)`
+  frames with no script, and V8's `(program)` and `(garbage collector)`.
+- The file is read whole into memory (a few MB for minutes of profile).

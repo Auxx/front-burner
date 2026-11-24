@@ -1,6 +1,7 @@
 import { isStorageFull } from '@front-burner/server-core-storage';
 import { Injectable } from '@nestjs/common';
 import { ChildProcess, spawn } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -32,6 +33,66 @@ const HARDENING = [
 
 /** How an operator with a private certificate authority points git at it (AR-43). */
 const PASSED_THROUGH = [ 'GIT_SSL_CAINFO', 'SSL_CERT_FILE', 'SSL_CERT_DIR' ];
+
+/** Debian's bundle of the system's certificate authorities, made with `/etc/ssl/certs` from the same certificates. */
+const SYSTEM_CA_BUNDLE = '/etc/ssl/certs/ca-certificates.crt';
+
+/** The system's bundle followed by an operator's file, by the operator's file: written once per process. */
+const combinedBundles = new Map<string, string>();
+
+function combinedBundle(systemBundle: string, own: string): string | undefined {
+  const key = `${systemBundle}\0${own}`;
+  let file = combinedBundles.get(key);
+  if (file === undefined) {
+    let pem: string;
+    try {
+      pem = `${readFileSync(systemBundle, 'utf8')}\n${readFileSync(own, 'utf8')}`;
+    } catch {
+      return undefined;
+    }
+    file = join(mkdtempSync(join(tmpdir(), 'fb-ca-')), 'ca.pem');
+    writeFileSync(file, pem, { mode: 0o600 });
+    combinedBundles.set(key, file);
+  }
+  return file;
+}
+
+/** What git's environment and options say about the certificate authorities it trusts. */
+export interface CaSettings {
+  env: Record<string, string>;
+  /** `-c` options, before the command. */
+  args: string[];
+}
+
+/**
+ * The certificate authorities git trusts (AR-43): the system's, and the
+ * operator's own when `GIT_SSL_CAINFO` names a file. git's curl reads its
+ * default folder, `/etc/ssl/certs`, file by file on every connection, about 85
+ * ms on the reference host, three times a fetch _(plan 160)_; the bundle file
+ * holds the same certificates. So the folder is turned off and git reads the
+ * bundle, with the operator's file added to it when there is one, which is what
+ * the folder gave next to that file. With `SSL_CERT_DIR` set, without the
+ * bundle, or with a `GIT_SSL_CAINFO` that cannot be read, nothing changes: the
+ * variables are passed on as they are, and git reports a file it cannot use.
+ */
+export function caSettings(source: NodeJS.ProcessEnv, systemBundle = SYSTEM_CA_BUNDLE): CaSettings {
+  const env: Record<string, string> = {};
+  for (const name of PASSED_THROUGH) {
+    const value = source[name];
+    if (value) {
+      env[name] = value;
+    }
+  }
+  if (env['SSL_CERT_DIR'] !== undefined || !existsSync(systemBundle)) {
+    return { env, args: [] };
+  }
+  const own = env['GIT_SSL_CAINFO'];
+  const bundle = own === undefined ? systemBundle : combinedBundle(systemBundle, own);
+  if (bundle === undefined) {
+    return { env, args: [] };
+  }
+  return { env: { ...env, GIT_SSL_CAINFO: bundle }, args: [ '-c', 'http.sslCAPath=' ] };
+}
 
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024;
 
@@ -168,16 +229,11 @@ export class GitRunner {
       // A working copy without `.git` is not a repository: git never looks for one in the folders above it.
       ...(options.cwd === undefined ? {} : { GIT_CEILING_DIRECTORIES: dirname(resolve(options.cwd)) })
     };
-    for (const name of PASSED_THROUGH) {
-      const value = process.env[name];
-      if (value) {
-        env[name] = value;
-      }
-    }
-    Object.assign(env, options.env);
+    const ca = caSettings(process.env);
+    Object.assign(env, ca.env, options.env);
 
     // detached: git gets its own process group, so a timeout kills its children too.
-    const child = spawn('git', [ ...HARDENING, ...args ], {
+    const child = spawn('git', [ ...HARDENING, ...ca.args, ...args ], {
       cwd: options.cwd,
       env,
       detached: true,

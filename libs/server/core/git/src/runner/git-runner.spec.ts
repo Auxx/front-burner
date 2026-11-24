@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GitOperationError, WORKING_COPY_FOLDER_GONE } from '../engine/git-errors';
-import { GitRunner } from './git-runner';
+import { caSettings, GitRunner } from './git-runner';
 
 /** Processes whose command line contains every one of `parts`, as separate arguments. */
 function processesRunning(...parts: string[]): number[] {
@@ -145,18 +145,40 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
     expect(() => readdirSync(home ?? '')).toThrow();
   });
 
-  it('passes GIT_SSL_CAINFO through', async () => {
-    process.env['GIT_SSL_CAINFO'] = '/etc/fb-test/ca.pem';
-    delete process.env['SSL_CERT_DIR'];
+  it('passes SSL_CERT_DIR and SSL_CERT_FILE through, and the options\' env', async () => {
+    process.env['SSL_CERT_DIR'] = '/etc/fb-test/certs';
+    process.env['SSL_CERT_FILE'] = '/etc/fb-test/file.pem';
 
     const env = await runner.run([ '-c', 'alias.env=!env', 'env' ], {
       env: { FB_EXTRA: 'yes' },
       timeoutMs: 10_000
     });
 
-    expect(env.stdout).toContain('GIT_SSL_CAINFO=/etc/fb-test/ca.pem\n');
+    expect(env.stdout).toContain('SSL_CERT_DIR=/etc/fb-test/certs\n');
+    expect(env.stdout).toContain('SSL_CERT_FILE=/etc/fb-test/file.pem\n');
     expect(env.stdout).toContain('FB_EXTRA=yes\n');
-    expect(env.stdout).not.toContain('SSL_CERT_DIR=');
+  });
+
+  it('trusts the operator\'s GIT_SSL_CAINFO next to the system\'s authorities, without their folder', async () => {
+    const own = join(dir, 'own.pem');
+    writeFileSync(own, '-----BEGIN CERTIFICATE-----\nOWN\n-----END CERTIFICATE-----\n');
+    process.env['GIT_SSL_CAINFO'] = own;
+    delete process.env['SSL_CERT_DIR'];
+
+    const result = await runner.run([ '-c', 'alias.ca=!echo "$GIT_SSL_CAINFO" && git config http.sslCAPath', 'ca' ], {
+      timeoutMs: 10_000
+    });
+
+    const [ file, capath ] = result.stdout.split('\n');
+    const expected = caSettings({ GIT_SSL_CAINFO: own });
+    expect(file).toBe(expected.env['GIT_SSL_CAINFO']);
+    expect(readFileSync(file ?? '', 'utf8')).toContain('OWN');
+    if (expected.args.length > 0) {
+      // A host with the system's bundle (Debian, the image): the folder is off.
+      expect(file).not.toBe(own);
+      expect(capath).toBe('');
+      expect(result.exitCode).toBe(0);
+    }
   });
 
   // Reads /proc, which only Linux has.
@@ -372,6 +394,57 @@ describe.skipIf(process.platform === 'win32')('GitRunner', () => {
       const result = await runner.run([ 'rev-parse', '--verify', 'nope' ], { timeoutMs: 10_000 });
 
       expect(result.exitCode).not.toBe(0);
+    });
+  });
+});
+
+describe('caSettings (AR-43, plan 160)', () => {
+  let dir: string;
+  let bundle: string;
+  let own: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'fb-ca-spec-'));
+    bundle = join(dir, 'ca-certificates.crt');
+    own = join(dir, 'own.pem');
+    writeFileSync(bundle, 'SYSTEM\n');
+    writeFileSync(own, 'OWN\n');
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const CA_PATH_OFF = [ '-c', 'http.sslCAPath=' ];
+
+  it('points git at the system\'s bundle, not its folder, which curl reads file by file on every connection', () => {
+    expect(caSettings({}, bundle)).toEqual({ env: { GIT_SSL_CAINFO: bundle }, args: CA_PATH_OFF });
+  });
+
+  it('adds the system\'s bundle to the operator\'s GIT_SSL_CAINFO, as the folder did, once per file', () => {
+    const settings = caSettings({ GIT_SSL_CAINFO: own, SSL_CERT_FILE: '/x.pem' }, bundle);
+
+    expect(settings.args).toEqual(CA_PATH_OFF);
+    expect(settings.env['SSL_CERT_FILE']).toBe('/x.pem');
+    const combined = settings.env['GIT_SSL_CAINFO'] ?? '';
+    expect(combined).not.toBe(own);
+    expect(readFileSync(combined, 'utf8')).toBe('SYSTEM\n\nOWN\n');
+    expect(caSettings({ GIT_SSL_CAINFO: own }, bundle).env['GIT_SSL_CAINFO']).toBe(combined);
+  });
+
+  it('changes nothing with SSL_CERT_DIR, without the system\'s bundle, or with an unreadable GIT_SSL_CAINFO', () => {
+    expect(caSettings({ SSL_CERT_DIR: '/certs', GIT_SSL_CAINFO: own }, bundle)).toEqual({
+      env: { SSL_CERT_DIR: '/certs', GIT_SSL_CAINFO: own },
+      args: []
+    });
+    expect(caSettings({ GIT_SSL_CAINFO: own }, join(dir, 'missing.crt'))).toEqual({
+      env: { GIT_SSL_CAINFO: own },
+      args: []
+    });
+    // git then says what is wrong with it, as before.
+    expect(caSettings({ GIT_SSL_CAINFO: join(dir, 'gone.pem') }, bundle)).toEqual({
+      env: { GIT_SSL_CAINFO: join(dir, 'gone.pem') },
+      args: []
     });
   });
 });

@@ -546,8 +546,15 @@ address, `<commit>` the commit measured.
      node tools/ai-tools/src/bin/perf-api.mjs scale --data-dir tmp/ref/data
    node tools/ai-tools/src/bin/perf-api.mjs ready --url http://127.0.0.1:8080 &
    (cd tmp/ref && docker compose start); wait
-   node tools/ai-tools/src/bin/perf-api.mjs run --url http://127.0.0.1:8080 --users 10
+   node tools/ai-tools/src/bin/perf-api.mjs run --url http://127.0.0.1:8080 --users 10 \
+     --metrics-token-file tmp/ref/secrets/metrics-token \
+     --instance-pid "$(docker inspect -f '{{.State.Pid}}' ref-front-burner-1)"
    ```
+
+   Each of the 10 users pauses 5 seconds on average before each operation, as
+   NF-1.2 measures "active" (plan 160), so the run takes about 40 minutes. The
+   load printed after the table (CPU by process, the event loop's delay, each
+   job's run time against its wait) says where the time went when a row misses.
 
 6. **The screens** (NF-2.1, NF-2.2, NF-2.5, NF-2.7), from a machine outside the
    host, so that the browser does not share the host's CPU and the requests
@@ -563,9 +570,10 @@ address, `<commit>` the commit measured.
      --email admin@example.com --git-port 9418 --profile phone --name screen-phone
    ```
 
-   When a `--users 10` row of step 5 misses its target, run it again the same
-   way, from outside (`--name perfx --git-port 9418`), to tell the instance's
-   own load from the tool's.
+   When a `--users 10` row of step 5 misses its target and the load shows the
+   tool's own share of the CPU ("everything else") as large, run it again the
+   same way, from outside (`--name perfx --git-port 9418`), to tell the
+   instance's own load from the tool's.
 
 7. **The host's record**: `lscpu`, `free -m`, `lsblk -d -o NAME,ROTA,SIZE`,
    `uname -r`, `docker --version`, `git --version` on the host and in the

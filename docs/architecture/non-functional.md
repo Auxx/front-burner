@@ -25,6 +25,14 @@ does not enforce them as hard limits.
 
 - **NF-1.1** Up to **50 registered users** per instance.
 - **NF-1.2** Up to **10 users active at the same time**.
+  - **How "active" is measured** (decision of 2026-11-24, plan 160). The release
+    checks run `perf-api.mjs run --users 10`, in which each user pauses before
+    every operation for 5 seconds on average (evenly between 2.5 and 7.5), as a
+    person at work does between opening, saving, pulling and pushing. NF-2's
+    targets must hold during that run. Without the pauses the same tool sends
+    each user's next request the moment the last one ends, which keeps the
+    instance at full load all the time: a load test, whose response times are
+    about 10 times the cost of one request, and not this rule.
 - **NF-1.3** Up to **50 repositories per user**, so about 2,500 working copies
   per instance.
 - **NF-1.4** Largest supported repository (full clone): **2 GB on disk**,
@@ -412,7 +420,11 @@ These rules add to the security rules already in the requirements.
     goes into the image. The release workflow scans the image it publishes
     before pushing it, so a vulnerability stops the release (NF-11.12).
 - **NF-11.11** The image is built on a slim base with only Node.js, git and
-  `openssh-client`, and runs as a fixed non-root UID (NF-5.6).
+  `openssh-client`, and runs as a fixed non-root UID (NF-5.6). Its PID 1 is
+  `tini`, which starts the backend, passes signals on to it and reaps the
+  processes that git leaves behind, such as its detached maintenance: Node.js as
+  PID 1 never reaps them, and each became a zombie until the pids limit stopped
+  every git _(plan 160)_.
 - **NF-11.12** Every release publishes an SBOM (CycloneDX), is signed with
   **cosign**, and comes with build provenance. The release workflow
   (`.github/workflows/release.yml`) runs on GitHub Actions for a tag

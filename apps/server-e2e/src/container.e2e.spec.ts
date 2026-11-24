@@ -154,6 +154,19 @@ describe.skipIf(E2E_IMAGE === undefined)('the release image (NF-11.13)', { timeo
       expect(read.body['content']).toBe('# Handbook\n\nSaved in the container.\n');
     });
 
+    it('reaps processes left by their parent, such as git\'s detached maintenance', async () => {
+      // A process whose parent ends goes to the container's PID 1, which must reap it when it ends: otherwise
+      // each fetch, merge and commit leaves a zombie, until the pids limit stops every git (plan 160).
+      const zombies = await container.exec(
+        'sh',
+        '-c',
+        '(sleep 0.1 &); sleep 1; grep -h "^State:" /proc/[0-9]*/status | grep -c zombie || true'
+      );
+
+      expect(zombies.trim()).toBe('0');
+      expect((await container.exec('cat', '/proc/1/comm')).trim()).toBe('tini');
+    });
+
     it('a session survives a restart', async () => {
       await container.restart();
 

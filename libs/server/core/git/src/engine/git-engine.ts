@@ -11,7 +11,7 @@ import { BeforeApplicationShutdown, Inject, Injectable, Logger } from '@nestjs/c
 import { access, mkdtemp, readdir, readlink, rename, rm, unlink } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { Broker, GitCredentials, openBroker } from '../broker/broker';
-import { assertSafeRepositoryConfig, UnsafeRepositoryConfigError } from '../config/repository-config';
+import { assertSafeRepositoryConfig, LocalConfig, UnsafeRepositoryConfigError } from '../config/repository-config';
 import { GIT_OPTIONS, GitOptions } from '../git.options';
 import { GitResult, GitRunner } from '../runner/git-runner';
 import { redactCredentials } from '../runner/redact';
@@ -182,6 +182,27 @@ const NO_DIFF: FileDiff = { kind: 'text', lines: [], complete: true, lineEndings
 /** Index entries of submodules (`git ls-files --stage`). */
 const GITLINK_MODE = '160000';
 
+/** The folders that hold each segment of `path`: `''`, then `a`, `a/b`, … up to its parent. */
+function ancestorsOf(path: string): string[] {
+  if (path === '') {
+    return [];
+  }
+  const segments = path.split('/');
+  return segments.map((_, index) => segments.slice(0, index).join('/'));
+}
+
+/** The shortest prefix of `path`, itself included, that is one of `gitlinks`; `null` when none is. */
+function submoduleAmong(gitlinks: Set<string>, path: string): string | null {
+  const segments = path.split('/');
+  for (let index = 1; index <= segments.length; index++) {
+    const prefix = segments.slice(0, index).join('/');
+    if (gitlinks.has(prefix)) {
+      return prefix;
+    }
+  }
+  return null;
+}
+
 /** Escapes the characters a `:(glob)` pathspec treats as wildcards. */
 const escapeGlob = (path: string) => path.replace(/[*?[\\]/g, '\\$&');
 
@@ -329,15 +350,6 @@ export class GitEngine implements BeforeApplicationShutdown {
     return new Set(
       result.stdout.split('\0').filter(path => path !== '').map(path => path.slice(prefix.length).replace(/\/$/, ''))
     );
-  }
-
-  /**
-   * The names (not paths) of the submodules (gitlinks) of the index directly
-   * inside `folder` (`''` is the root).
-   */
-  async gitlinksIn(workingCopy: string, folder: string): Promise<Set<string>> {
-    const entries = await this.indexEntriesIn(workingCopy, folder);
-    return new Set([ ...entries ].filter(([ , mode ]) => mode === GITLINK_MODE).map(([ name ]) => name));
   }
 
   /**
@@ -712,8 +724,34 @@ export class GitEngine implements BeforeApplicationShutdown {
     if (path === '') {
       return null;
     }
-    const segments = path.split('/');
-    const folders = segments.map((_, index) => segments.slice(0, index).join('/'));
+    return submoduleAmong(await this.gitlinksDirectlyIn(workingCopy, ancestorsOf(path)), path);
+  }
+
+  /**
+   * What a folder listing needs of the index, from one git (plan 160): the
+   * names (not paths) of the submodules (gitlinks) directly inside `folder`
+   * (`''` is the root), and the submodule that `folder` is or lies inside, as
+   * `submoduleOn` finds it.
+   */
+  async folderGitlinks(
+    workingCopy: string,
+    folder: string
+  ): Promise<{ gitlinks: Set<string>; submodule: string | null; }> {
+    const found = await this.gitlinksDirectlyIn(workingCopy, [ ...ancestorsOf(folder), folder ]);
+    const prefix = folder === '' ? '' : `${folder}/`;
+    const gitlinks = new Set(
+      [ ...found ].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes('/')).map(path =>
+        path.slice(prefix.length)
+      )
+    );
+    return { gitlinks, submodule: folder === '' ? null : submoduleAmong(found, folder) };
+  }
+
+  /**
+   * The paths of the gitlinks of the index directly inside each of `folders`
+   * (`''` is the root): the glob's `*` does not cross `/` (FB-15).
+   */
+  private async gitlinksDirectlyIn(workingCopy: string, folders: string[]): Promise<Set<string>> {
     const result = await this.local.run(workingCopy, [
       'ls-files',
       '--stage',
@@ -725,19 +763,14 @@ export class GitEngine implements BeforeApplicationShutdown {
       throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
     }
     const gitlinks = new Set<string>();
+    // -z: "<mode> <object> <stage>\t<path>\0" per entry; a conflict has one per stage.
     for (const line of result.stdout.split('\0')) {
       const tab = line.indexOf('\t');
       if (tab > 0 && line.startsWith(`${GITLINK_MODE} `)) {
         gitlinks.add(line.slice(tab + 1));
       }
     }
-    for (let index = 1; index <= segments.length; index++) {
-      const prefix = segments.slice(0, index).join('/');
-      if (gitlinks.has(prefix)) {
-        return prefix;
-      }
-    }
-    return null;
+    return gitlinks;
   }
 
   /** True when a submodule (gitlink) of the index lies anywhere inside `folder`, not `''`. */
@@ -1140,8 +1173,13 @@ export class GitEngine implements BeforeApplicationShutdown {
    * of a remote, and the broker's credentials are for the stored one (A-5.7).
    */
   private async assertSafeWorkingCopy(cwd: string, remoteUrl: string): Promise<void> {
-    await this.assertSafeConfig(cwd);
-    const urls = await this.local.configValues(cwd, 'remote.origin.url');
+    // One git for both checks: the config read that refuses unsafe keys gives the URL too (plan 160).
+    let urls = (await this.assertSafeConfig(cwd)).values('remote.origin.url');
+    if (urls.length === 0) {
+      // `config --list` outside a repository lists no local keys and succeeds; `--local` fails there, which
+      // reports a working copy without `.git` as missing rather than unsafe (RM-6).
+      urls = await this.local.configValues(cwd, 'remote.origin.url');
+    }
     if (urls.length !== 1 || urls[0] !== remoteUrl) {
       throw new GitOperationError('unsafe-repository-config', 'origin is not the repository\'s remote alone.');
     }
@@ -1151,42 +1189,15 @@ export class GitEngine implements BeforeApplicationShutdown {
     await this.runner.killAll();
   }
 
-  private async assertSafeConfig(cwd: string): Promise<void> {
+  private async assertSafeConfig(cwd: string): Promise<LocalConfig> {
     try {
-      await assertSafeRepositoryConfig(this.runner, cwd);
+      return await assertSafeRepositoryConfig(this.runner, cwd);
     } catch (error) {
       if (error instanceof UnsafeRepositoryConfigError) {
         throw new GitOperationError('unsafe-repository-config', error.message);
       }
       throw error;
     }
-  }
-
-  /**
-   * The index entries directly inside `folder`, by name, with their modes.
-   * Lists only that folder's entries: the glob's `*` does not cross `/` (FB-15).
-   */
-  private async indexEntriesIn(workingCopy: string, folder: string): Promise<Map<string, string>> {
-    const prefix = folder === '' ? '' : `${folder}/`;
-    const result = await this.local.run(workingCopy, [
-      'ls-files',
-      '--stage',
-      '-z',
-      '--',
-      `:(glob)${escapeGlob(prefix)}*`
-    ]);
-    if (result.exitCode !== 0) {
-      throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
-    }
-    const entries = new Map<string, string>();
-    // -z: "<mode> <object> <stage>\t<path>\0" per entry; a conflict has one per stage.
-    for (const line of result.stdout.split('\0')) {
-      const tab = line.indexOf('\t');
-      if (tab > 0) {
-        entries.set(line.slice(tab + 1 + prefix.length), line.slice(0, line.indexOf(' ')));
-      }
-    }
-    return entries;
   }
 
   /**

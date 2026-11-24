@@ -1,9 +1,11 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { main, print, table, UsageError } from '../lib/cli.mjs';
 import { DEFAULT_OUT as DEFAULT_LARGE_REPO, shapeOf } from '../lib/large-repo.mjs';
 import {
+  BASIC_MEASURES,
   createLargeRemote,
   createRemote,
   DEFAULT_WORK,
@@ -11,6 +13,7 @@ import {
   hostSummary,
   measureBasics,
   measureLarge,
+  parseMeasures,
   PASSWORD_VARIABLE,
   scaleUserEmail,
   Session,
@@ -18,6 +21,7 @@ import {
   TEST_CERTIFICATE,
   waitUntilReady
 } from '../lib/perf-api.mjs';
+import { loadLines, startLoadRecorder } from '../lib/perf-load.mjs';
 import { allPass, resultRows, resultTable } from '../lib/perf-stats.mjs';
 import { resolveInWorkspace, workspacePath } from '../lib/workspace.mjs';
 
@@ -31,6 +35,9 @@ function wholeNumber(value, option, min) {
   return n;
 }
 
+/** A user's mean pause before each operation with `--users` (NF-1.2's "active", plan 160). */
+const DEFAULT_THINK_SECONDS = 5;
+
 function hostLine(host) {
   return `Host: ${host.cpus} CPUs (${host.cpuModel}), ${host.memoryGb} GB memory, ${host.platform}, ${host.git}`;
 }
@@ -41,7 +48,8 @@ main({
   commands: {
     run: {
       usage:
-        '--url <instance> (--email <email> | --users <n>) [--name perf] [--runs 50] [--warmup 5] [--large] [--cold] [--json]',
+        '--url <instance> (--email <email> | --users <n>) [--name perf] [--runs 50] [--warmup 5] [--measures <list>] '
+        + '[--metrics-token-file <file> [--instance-pid <pid>]] [--large] [--cold] [--json]',
       summary:
         'Prepares its repositories, times NF-2.1 to NF-2.3 and NF-2.6 (and NF-2.8 with --large), prints a table.',
       help: [
@@ -57,9 +65,21 @@ main({
         '--email      the user to log in as',
         '--users      log in as the first n users that `scale` seeded, at once, each with a repository of',
         '             its own (NF-1.2); they share the password',
+        '--think      seconds a user pauses before each operation, on average: each pause is between half',
+        `             and one and a half times it (default ${DEFAULT_THINK_SECONDS} with --users, as NF-1.2's "active" user;`,
+        '             0 with --email); 0 runs every user flat out, a load test rather than NF-1.2',
         '--name       the repository to create; refused when it exists (default perf)',
         '--runs       measured runs per operation (default 50)',
         '--warmup     unmeasured runs first (default 5)',
+        `--measures   only these of ${BASIC_MEASURES.join(', ')}, comma-separated (default all)`,
+        '--metrics-token-file  a file holding the instance\'s FRONT_BURNER_METRICS_TOKEN: scrapes /api/metrics',
+        '             every --scrape-every seconds (default 5) while the measures run, and prints the load',
+        '             after the table: CPU, the event loop\'s delay, and each job type\'s run time next to',
+        '             the time from its request to job.finished',
+        '--instance-pid  the host PID of the instance\'s container (`docker inspect -f {{.State.Pid}}',
+        '             <container>`; its init\'s child is taken, or a backend run without one): splits the',
+        '             CPU into the Node.js process, the rest of its cgroup (its git) and the rest of the',
+        '             host; Linux, on the instance\'s host',
         `--large      also add the repository of gen-large-repo.mjs (--large-repo, default ${DEFAULT_LARGE_REPO})`,
         '             as <name>-large and time status and commit (NF-2.8); for the first user only',
         '--cold       also time status and commit after dropping the page cache (--cold-runs, default 5);',
@@ -76,6 +96,11 @@ main({
         name: { type: 'string', default: 'perf' },
         runs: { type: 'string', default: '50' },
         warmup: { type: 'string', default: '5' },
+        measures: { type: 'string' },
+        think: { type: 'string' },
+        'metrics-token-file': { type: 'string' },
+        'instance-pid': { type: 'string' },
+        'scrape-every': { type: 'string', default: '5' },
         large: { type: 'boolean' },
         'large-repo': { type: 'string', default: DEFAULT_LARGE_REPO },
         cold: { type: 'boolean' },
@@ -109,6 +134,28 @@ main({
         if (options.cold && (process.platform !== 'linux' || process.getuid?.() !== 0)) {
           throw new UsageError('--cold drops the page cache: run it on Linux, as root.');
         }
+        let measures;
+        try {
+          measures = parseMeasures(options.measures);
+        } catch (error) {
+          throw new UsageError(error.message);
+        }
+        if (options['instance-pid'] !== undefined && options['metrics-token-file'] === undefined) {
+          throw new UsageError('--instance-pid splits the load that --metrics-token-file records: add it.');
+        }
+        const instancePid = options['instance-pid'] === undefined
+          ? undefined
+          : wholeNumber(options['instance-pid'], '--instance-pid', 1);
+        const thinkSeconds = options.think === undefined
+          ? (users === undefined ? 0 : DEFAULT_THINK_SECONDS)
+          : Number(options.think);
+        if (!Number.isFinite(thinkSeconds) || thinkSeconds < 0) {
+          throw new UsageError(`--think must be a number of seconds, 0 or more: ${options.think}`);
+        }
+        const scrapeEvery = wholeNumber(options['scrape-every'], '--scrape-every', 1);
+        const metricsToken = options['metrics-token-file'] === undefined
+          ? undefined
+          : readFileSync(resolveInWorkspace(options['metrics-token-file']), 'utf8').trim();
         const work = resolveInWorkspace(options.work);
         const largeRepo = options.large ? resolveInWorkspace(options['large-repo']) : undefined;
         const host = hostSummary();
@@ -152,6 +199,8 @@ main({
               remoteUrl: `${gitServer.url}/${name}.git`,
               runs,
               warmup,
+              measures,
+              thinkMs: thinkSeconds * 1000,
               log: what => log(`${email}: ${what}`)
             });
           }
@@ -159,7 +208,23 @@ main({
           const samples = {};
           const baselines = {};
           const started = performance.now();
+          const recorder = metricsToken === undefined
+            ? undefined
+            : await startLoadRecorder({
+              url: options.url,
+              token: metricsToken,
+              containerPid: instancePid,
+              everyMs: scrapeEvery * 1000
+            });
           await Promise.all(contexts.map(context => measureBasics(context, { samples, baselines })));
+          let load;
+          if (recorder !== undefined) {
+            const summary = await recorder.stop();
+            delete summary.scrapes;
+            const mean = values => values?.length ? values.reduce((a, b) => a + b, 0) / values.length : undefined;
+            const jobTotals = { 'sync.push': mean(samples.push), 'sync.pull': mean(samples.pull) };
+            load = { ...summary, jobTotals, lines: loadLines(summary, jobTotals) };
+          }
 
           let large;
           if (largeRepo !== undefined) {
@@ -179,17 +244,20 @@ main({
             host,
             url: options.url,
             users: emails.length,
+            thinkSeconds,
             runs,
             warmup,
             minutes: Math.round((performance.now() - started) / 6000) / 10,
             large,
-            rows
+            rows,
+            ...(load === undefined ? {} : { load })
           };
           print(options.json, result, () =>
             [
               '',
               hostLine(host),
-              `Instance: ${options.url}; ${emails.length} user(s) at once; ${runs} runs after ${warmup} warm-up runs`,
+              `Instance: ${options.url}; ${emails.length} user(s) at once; ${runs} runs after ${warmup} warm-up runs`
+              + (thinkSeconds > 0 ? `; each user pauses ${thinkSeconds} s on average before each` : ''),
               ...(large
                 ? [
                   `Large repository: ${large.source}, ${large.shape.files.toLocaleString('en')} files, ${
@@ -201,6 +269,7 @@ main({
               '',
               table(resultTable(rows)),
               '',
+              ...(load === undefined ? [] : [ 'Load while the measures ran:', ...load.lines, '' ]),
               'Durations are the server\'s own (Server-Timing), the network left out; NF-2.6 is the job, from its',
               'request to job.finished, less the median of plain git against the same remote.',
               ...(options.cold ? [] : [ 'Cold rows need --cold (as root, on the instance\'s host).' ])

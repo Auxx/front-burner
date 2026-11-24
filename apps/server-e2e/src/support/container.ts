@@ -56,6 +56,8 @@ export interface Container {
   /** The container's `docker inspect` document. */
   inspect(): Promise<ContainerState>;
   logs(): Promise<string>;
+  /** `docker exec`: runs a command in the running container and gives its stdout. */
+  exec(...command: string[]): Promise<string>;
   /** Waits for Docker's own health check (the image's `HEALTHCHECK`) to report healthy. */
   healthy(): Promise<void>;
   /** `docker compose restart`, then healthy again. */
@@ -178,6 +180,7 @@ export async function startContainer(options: ContainerOptions = {}): Promise<Co
     url: `http://127.0.0.1:${port}`,
     inspect,
     logs,
+    exec: async (...command: string[]) => (await run('docker', [ 'exec', await id(), ...command ])).stdout,
     healthy,
     restart: async () => {
       await compose('restart', SERVICE);
