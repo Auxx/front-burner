@@ -53,9 +53,12 @@ FROM node:${NODE_VERSION}-trixie-slim AS runtime
 # upgraded too. The server needs Node.js alone at runtime (NF-11.11): the
 # package managers that the Node.js image bundles (npm, corepack, yarn) are
 # removed, as their own dependencies bring vulnerabilities into the image.
+# tini is the container's PID 1 (plan 160): git's detached maintenance leaves
+# its process to PID 1, and Node.js never reaps it, so without an init every
+# fetch, merge and commit left a zombie until the pids limit stopped git.
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends git openssh-client ca-certificates \
+    && apt-get install -y --no-install-recommends git openssh-client ca-certificates tini \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
@@ -81,4 +84,7 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
     CMD node -e "fetch('http://127.0.0.1:' + (process.env.FRONT_BURNER_PORT || 8080) + '/api/health/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
 
+# tini passes SIGTERM on to the backend, which stops as NF-9.2 says, and exits
+# with its exit code.
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "main.js"]

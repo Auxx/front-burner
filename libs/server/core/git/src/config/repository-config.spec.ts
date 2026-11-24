@@ -27,7 +27,29 @@ describe.skipIf(process.platform === 'win32')('assertSafeRepositoryConfig', () =
     await git('config', 'remote.origin.url', 'https://example.com/o/r.git');
     await git('config', 'http.sslVerify', 'true');
 
-    await expect(assertSafeRepositoryConfig(runner, dir)).resolves.toBeUndefined();
+    await expect(assertSafeRepositoryConfig(runner, dir)).resolves.toBeDefined();
+  });
+
+  it('gives the local values, as `git config --local --get-all` reads them, from the same read', async () => {
+    await git('config', 'remote.origin.url', 'https://example.com/o/r.git');
+    await git('config', '--add', 'remote.origin.fetch', '+refs/heads/main:refs/remotes/origin/main');
+    await git('config', '--add', 'remote.origin.fetch', '+refs/heads/b:refs/remotes/origin/b');
+    await git('config', 'Branch.Feature/X.Merge', 'refs/heads/feature/X');
+    await git('config', 'user.name', 'two\nlines');
+
+    const config = await assertSafeRepositoryConfig(runner, dir);
+
+    expect(config.values('remote.origin.url')).toEqual([ 'https://example.com/o/r.git' ]);
+    expect(config.values('remote.origin.fetch')).toEqual([
+      '+refs/heads/main:refs/remotes/origin/main',
+      '+refs/heads/b:refs/remotes/origin/b'
+    ]);
+    // Section and variable names in any case; the subsection as it is.
+    expect(config.values('branch.Feature/X.merge')).toEqual([ 'refs/heads/feature/X' ]);
+    expect(config.values('BRANCH.Feature/X.MERGE')).toEqual([ 'refs/heads/feature/X' ]);
+    expect(config.values('branch.feature/x.merge')).toEqual([]);
+    expect(config.values('user.name')).toEqual([ 'two\nlines' ]);
+    expect(config.values('remote.upstream.url')).toEqual([]);
   });
 
   describe('refuses a repository config that bypasses the proxy', () => {

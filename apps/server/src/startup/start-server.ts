@@ -139,7 +139,9 @@ function configure(
   if (!serveWebClient(app.getHttpAdapter().getInstance(), webRoot, { version: config.version })) {
     log.log(`Web client not found at ${webRoot}; serving the API only.`);
   }
-  app.enableShutdownHooks();
+  // After the hooks, exit with 0 rather than raise the signal again: under the image's init the backend is not
+  // PID 1, so a raised SIGTERM would end it by the signal (exit code 143) after a clean stop (NF-9.2, plan 160).
+  app.enableShutdownHooks(undefined, { useProcessExit: true });
 }
 
 /**

@@ -1790,8 +1790,8 @@ describe('GitEngine', () => {
 
     // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
     it.skipIf(process.platform === 'win32')('lists gitlinks directly inside a folder', async () => {
-      expect(await engine().gitlinksIn(work, 'vendor')).toEqual(new Set([ 'lib' ]));
-      expect(await engine().gitlinksIn(work, '')).toEqual(new Set());
+      expect((await engine().folderGitlinks(work, 'vendor')).gitlinks).toEqual(new Set([ 'lib' ]));
+      expect((await engine().folderGitlinks(work, '')).gitlinks).toEqual(new Set());
     });
 
     // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
@@ -1806,8 +1806,8 @@ describe('GitEngine', () => {
     it.skipIf(process.platform === 'win32')('treats glob characters in the folder name literally', async () => {
       const sha = git(work, 'rev-parse', 'HEAD').trim();
       git(work, 'update-index', '--add', '--cacheinfo', `160000,${sha},v[e]ndor*/mod`);
-      expect(await engine().gitlinksIn(work, 'v[e]ndor*')).toEqual(new Set([ 'mod' ]));
-      expect(await engine().gitlinksIn(work, 'vendor')).toEqual(new Set([ 'lib' ]));
+      expect((await engine().folderGitlinks(work, 'v[e]ndor*')).gitlinks).toEqual(new Set([ 'mod' ]));
+      expect((await engine().folderGitlinks(work, 'vendor')).gitlinks).toEqual(new Set([ 'lib' ]));
     });
 
     // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
@@ -1883,6 +1883,34 @@ describe('GitEngine', () => {
       expect(await engine().submoduleOn(work, 'build/app.js')).toBeNull();
       expect(await engine().submoduleOn(work, '')).toBeNull();
     });
+
+    // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
+    it.skipIf(process.platform === 'win32')(
+      'gives a folder\'s gitlinks and the submodule it lies in, from one git (plan 160)',
+      async () => {
+        const sha = git(work, 'rev-parse', 'HEAD').trim();
+        git(work, 'update-index', '--add', '--cacheinfo', `160000,${sha},v[e]ndor*/mod`);
+        const run = vi.spyOn(runner, 'run');
+        const expected = {
+          '': [ [], null ],
+          vendor: [ [ 'lib' ], null ],
+          'vendor/lib': [ [], 'vendor/lib' ],
+          'vendor/lib/docs': [ [], 'vendor/lib' ],
+          build: [ [], null ],
+          'v[e]ndor*': [ [ 'mod' ], null ],
+          'v[e]ndor*/mod': [ [], 'v[e]ndor*/mod' ]
+        } as const;
+        for (const [ folder, [ gitlinks, submodule ] ] of Object.entries(expected)) {
+          run.mockClear();
+          const found = await engine().folderGitlinks(work, folder);
+          expect(run).toHaveBeenCalledTimes(1);
+          expect(found).toEqual({ gitlinks: new Set(gitlinks), submodule });
+          // The same answer as the check that other routes make alone.
+          expect(found.submodule).toBe(await engine().submoduleOn(work, folder));
+        }
+        run.mockRestore();
+      }
+    );
 
     // Runs git with the container's environment (POSIX PATH, /dev/null): not on Windows.
     it.skipIf(process.platform === 'win32')('finds whether a folder holds a submodule', async () => {

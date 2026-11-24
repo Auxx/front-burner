@@ -98,10 +98,10 @@ export class FolderLister {
     }
     const folder = await openInWorkingCopy(root, resolved);
     try {
-      const [ dirents, gitlinks, submodule ] = await Promise.all([
+      const [ dirents, { gitlinks, submodule } ] = await Promise.all([
         readdir(folder.path, { withFileTypes: true }),
-        this.git.gitlinksIn(root, path),
-        this.git.submoduleOn(root, path)
+        // One git for both (plan 160): each git started blocks the event loop while Node forks.
+        this.git.folderGitlinks(root, path)
       ]);
       // A submodule, and anything inside one, is not a folder of this repository (FB-23).
       if (submodule !== null) {

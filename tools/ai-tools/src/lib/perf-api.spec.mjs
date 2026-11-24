@@ -9,9 +9,11 @@ import {
   fillDataDir,
   git,
   markdownOf,
+  parseMeasures,
   scaleUserEmail,
   Session,
   startGitServer,
+  thinkPause,
   timedGit
 } from './perf-api.mjs';
 import { WORKSPACE_ROOT } from './workspace.mjs';
@@ -25,6 +27,24 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
+});
+
+describe('parseMeasures', () => {
+  it('picks measures by name, all by default, and refuses others', () => {
+    expect(parseMeasures(undefined)).toEqual(new Set([ 'folder', 'file', 'save', 'push', 'pull' ]));
+    expect(parseMeasures('pull, folder')).toEqual(new Set([ 'pull', 'folder' ]));
+    expect(() => parseMeasures('folder,status')).toThrow(/--measures/);
+    expect(() => parseMeasures(',')).toThrow(/--measures/);
+  });
+});
+
+describe('thinkPause', () => {
+  it('is between half and one and a half times the mean, and none without one', () => {
+    expect(thinkPause(5000, () => 0)).toBe(2500);
+    expect(thinkPause(5000, () => 0.5)).toBe(5000);
+    expect(thinkPause(5000, () => 0.999)).toBeCloseTo(7495);
+    expect(thinkPause(0, () => 0.5)).toBe(0);
+  });
 });
 
 describe('markdownOf', () => {

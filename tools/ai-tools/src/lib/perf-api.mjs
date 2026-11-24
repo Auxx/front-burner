@@ -555,16 +555,29 @@ export class Session {
 // The measures.
 
 /**
+ * A pause before an operation of one of the users of `--users` (NF-1.2):
+ * between half and one and a half times `thinkMs`, evenly, so that the users
+ * drift apart as people do. No pause when `thinkMs` is 0.
+ */
+export function thinkPause(thinkMs, random = Math.random) {
+  return thinkMs <= 0 ? 0 : thinkMs * (0.5 + random());
+}
+
+/**
  * Runs `measure` `warmup` times unrecorded, then `runs` times, and returns
  * the durations it resolves with; a run that resolves undefined (a dropped
- * sample) is left out.
+ * sample) is left out. With `thinkMs`, each run waits {@link thinkPause} first;
+ * the wait is not part of what `measure` times.
  */
-async function repeat(runs, warmup, measure) {
+async function repeatRuns(runs, warmup, measure, thinkMs = 0) {
+  const pause = () => sleep(thinkPause(thinkMs));
   for (let i = 0; i < warmup; i++) {
+    await pause();
     await measure(-1 - i);
   }
   const values = [];
   for (let i = 0; i < runs; i++) {
+    await pause();
     const value = await measure(i);
     if (value !== undefined) {
       values.push(value);
@@ -582,52 +595,83 @@ function serverMs(result) {
   return result.serverMs;
 }
 
+/** The operations of `measureBasics`, in the order it times them; `--measures` picks some. */
+export const BASIC_MEASURES = [ 'folder', 'file', 'save', 'push', 'pull' ];
+
+/**
+ * The measures named in `--measures`, a comma-separated list of
+ * {@link BASIC_MEASURES}, as a set; all of them when `text` is undefined.
+ */
+export function parseMeasures(text) {
+  if (text === undefined) {
+    return new Set(BASIC_MEASURES);
+  }
+  const names = text.split(',').map(name => name.trim()).filter(name => name !== '');
+  const unknown = names.filter(name => !BASIC_MEASURES.includes(name));
+  if (names.length === 0 || unknown.length > 0) {
+    throw new Error(`--measures takes a list of ${BASIC_MEASURES.join(', ')}: ${text}`);
+  }
+  return new Set(names);
+}
+
 /**
  * NF-2.1 to NF-2.3 and NF-2.6 in one repository: `samples` and `baselines`
- * collect the durations by operation.
+ * collect the durations by operation. `context.measures`, a set of
+ * {@link BASIC_MEASURES} (default all), says which run; `context.thinkMs`
+ * the user's mean pause before each run (default none).
  */
 export async function measureBasics(context, { samples, baselines }) {
-  const { session, id, clones, runs, warmup, log } = context;
+  const { session, id, clones, runs, warmup, log, measures = new Set(BASIC_MEASURES), thinkMs = 0 } = context;
+  const repeat = (count, warm, measure) => repeatRuns(count, warm, measure, thinkMs);
   const add = (key, value, into = samples) => (into[key] ??= []).push(value);
   const encode = encodeURIComponent;
 
-  log('folder');
-  for (
-    const v of await repeat(
-      runs,
-      warmup,
-      async () => serverMs(await session.call('GET', `/repositories/${id}/folder?path=many`))
-    )
-  ) {
-    add('folder', v);
+  if (measures.has('folder')) {
+    log('folder');
+    for (
+      const v of await repeat(
+        runs,
+        warmup,
+        async () => serverMs(await session.call('GET', `/repositories/${id}/folder?path=many`))
+      )
+    ) {
+      add('folder', v);
+    }
   }
-  log('file');
-  for (
-    const v of await repeat(
-      runs,
-      warmup,
-      async () => serverMs(await session.call('GET', `/repositories/${id}/file?path=${encode('big.md')}`))
-    )
-  ) {
-    add('file', v);
+  if (measures.has('file')) {
+    log('file');
+    for (
+      const v of await repeat(
+        runs,
+        warmup,
+        async () => serverMs(await session.call('GET', `/repositories/${id}/file?path=${encode('big.md')}`))
+      )
+    ) {
+      add('file', v);
+    }
   }
-  log('save');
-  const saved = markdownOf(BIG_FILE_BYTES, 'Saved');
-  for (
-    const v of await repeat(runs, warmup, async run =>
-      serverMs(
-        await session.call('PUT', `/repositories/${id}/file`, {
-          path: 'saved.md',
-          content: `${saved}\nSave ${run} at ${Date.now()}\n`,
-          lineEnding: 'lf',
-          bom: false
-        })
-      ))
-  ) {
-    add('save', v);
+  if (measures.has('save')) {
+    log('save');
+    const saved = markdownOf(BIG_FILE_BYTES, 'Saved');
+    for (
+      const v of await repeat(runs, warmup, async run =>
+        serverMs(
+          await session.call('PUT', `/repositories/${id}/file`, {
+            path: 'saved.md',
+            content: `${saved}\nSave ${run} at ${Date.now()}\n`,
+            lineEnding: 'lf',
+            bom: false
+          })
+        ))
+    ) {
+      add('save', v);
+    }
+    // A pull refuses uncommitted changes.
+    await session.call('POST', `/repositories/${id}/git/commits`, { message: 'Saves', paths: [ 'saved.md' ] }, 201);
   }
-  // A pull refuses uncommitted changes.
-  await session.call('POST', `/repositories/${id}/git/commits`, { message: 'Saves', paths: [ 'saved.md' ] }, 201);
+  if (!measures.has('push') && !measures.has('pull')) {
+    return;
+  }
 
   // NF-2.6: the job against the same operation with plain git, against the same remote.
   const elsewhere = join(clones, 'elsewhere');
@@ -646,54 +690,58 @@ export async function measureBasics(context, { samples, baselines }) {
     await timedGit(elsewhere, 'push', '-q');
   };
 
-  log('push');
-  for (
-    const v of await repeat(runs, warmup, async run => {
-      await session.call('PUT', `/repositories/${id}/file`, {
-        path: 'pushed.md',
-        content: `# Pushed\n\nRun ${run} at ${Date.now()}\n`,
-        lineEnding: 'lf',
-        bom: false
-      });
-      await session.call(
-        'POST',
-        `/repositories/${id}/git/commits`,
-        { message: `Push ${run}`, paths: [ 'pushed.md' ] },
-        201
-      );
-      return session.timedJob(id, '/git/push');
-    })
-  ) {
-    add('push', v);
-  }
-  for (
-    const v of await repeat(runs, warmup, async run => {
-      await timedGit(baseline, 'pull', '-q', '--no-rebase', '--no-edit');
-      writeFileSync(join(baseline, 'baseline.md'), `# Baseline\n\nRun ${run} at ${Date.now()}\n`);
-      await timedGit(baseline, 'add', 'baseline.md');
-      await timedGit(baseline, 'commit', '-q', '-m', `Baseline ${run}`);
-      return timedGit(baseline, 'push', '-q');
-    })
-  ) {
-    add('push', v, baselines);
+  if (measures.has('push')) {
+    log('push');
+    for (
+      const v of await repeat(runs, warmup, async run => {
+        await session.call('PUT', `/repositories/${id}/file`, {
+          path: 'pushed.md',
+          content: `# Pushed\n\nRun ${run} at ${Date.now()}\n`,
+          lineEnding: 'lf',
+          bom: false
+        });
+        await session.call(
+          'POST',
+          `/repositories/${id}/git/commits`,
+          { message: `Push ${run}`, paths: [ 'pushed.md' ] },
+          201
+        );
+        return session.timedJob(id, '/git/push');
+      })
+    ) {
+      add('push', v);
+    }
+    for (
+      const v of await repeat(runs, warmup, async run => {
+        await timedGit(baseline, 'pull', '-q', '--no-rebase', '--no-edit');
+        writeFileSync(join(baseline, 'baseline.md'), `# Baseline\n\nRun ${run} at ${Date.now()}\n`);
+        await timedGit(baseline, 'add', 'baseline.md');
+        await timedGit(baseline, 'commit', '-q', '-m', `Baseline ${run}`);
+        return timedGit(baseline, 'push', '-q');
+      })
+    ) {
+      add('push', v, baselines);
+    }
   }
 
-  log('pull');
-  for (
-    const v of await repeat(runs, warmup, async run => {
-      await pushFromElsewhere(run);
-      return session.timedJob(id, '/git/pull');
-    })
-  ) {
-    add('pull', v);
-  }
-  for (
-    const v of await repeat(runs, warmup, async run => {
-      await pushFromElsewhere(`baseline ${run}`);
-      return timedGit(baseline, 'pull', '-q', '--no-rebase', '--no-edit');
-    })
-  ) {
-    add('pull', v, baselines);
+  if (measures.has('pull')) {
+    log('pull');
+    for (
+      const v of await repeat(runs, warmup, async run => {
+        await pushFromElsewhere(run);
+        return session.timedJob(id, '/git/pull');
+      })
+    ) {
+      add('pull', v);
+    }
+    for (
+      const v of await repeat(runs, warmup, async run => {
+        await pushFromElsewhere(`baseline ${run}`);
+        return timedGit(baseline, 'pull', '-q', '--no-rebase', '--no-edit');
+      })
+    ) {
+      add('pull', v, baselines);
+    }
   }
 }
 
@@ -706,6 +754,7 @@ export function dropCaches() {
 /** NF-2.8 in the large repository: status and commit, warm and, with `cold`, after dropping the page cache. */
 export async function measureLarge(context, { samples }) {
   const { session, id, runs, warmup, cold, coldRuns, log } = context;
+  const repeat = repeatRuns;
   const add = (key, value) => (samples[key] ??= []).push(value);
   const status = async () => serverMs(await session.call('GET', `/repositories/${id}/git/status`));
   let changes = 0;

@@ -17,6 +17,14 @@ where git may connect. Lives in `server/git` (A-2). See
     environment only `GIT_SSL_CAINFO`, `SSL_CERT_FILE` and `SSL_CERT_DIR` are
     passed through when set, so that an operator with a private certificate
     authority can point git at it (AR-43); _(my call)_
+  - git's curl reads its default certificate folder, `/etc/ssl/certs`, file by
+    file on every HTTPS connection: about 85 ms each on the reference host, and
+    a fetch makes three. So, unless `SSL_CERT_DIR` is set, every call gets `-c
+    http.sslCAPath=` and `GIT_SSL_CAINFO` names the system's bundle
+    (`/etc/ssl/certs/ca-certificates.crt`, the same certificates), or, when the
+    operator set `GIT_SSL_CAINFO`, a file written once per process with the
+    bundle followed by the operator's file: what the folder and that file
+    trusted together. Without the bundle, nothing changes _(plan 160)_;
   - hardening is passed as `-c` options on every call: `protocol.allow=never`,
     `protocol.https.allow=always`, `protocol.ssh.allow=always` (NF-11.6),
     `core.hooksPath=/dev/null`, `core.fsmonitor=false` (which, like a hook,

@@ -61,7 +61,8 @@ change it.
 
 The image is for `linux/amd64` only. It runs as the non-root user with UID and
 GID **1000**, keeps all its data in `/data`, listens on port `8080`, and has a
-health check that Docker runs every 10 seconds.
+health check that Docker runs every 10 seconds. It brings its own init process
+(`tini`), so `docker run --init` and Compose's `init: true` are not needed.
 
 ## Verifying the image
 
