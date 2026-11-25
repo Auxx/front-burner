@@ -3,7 +3,8 @@ import type { BrowserContext, Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { drainFailedRequests, expect, test } from './support/fixtures';
+import { drainFailedRequests, expect, test, WEBKIT_SECURE_COOKIES } from './support/fixtures';
+import { shortcut } from './support/hands';
 import { logIn, seed, TEST_ADMIN } from './support/instance';
 import { ADMIN_ID, workingCopyOf } from './support/repositories';
 
@@ -28,7 +29,8 @@ test.describe('login page', () => {
     await expect(page.getByRole('banner')).toHaveCount(0);
   });
 
-  test('logs in and goes to the page asked for, with the refresh token in a cookie', async ({ page, context }) => {
+  test('logs in and goes to the page asked for, with the refresh token in a cookie', async ({ page, context, browserName }) => {
+    test.skip(browserName === 'webkit', WEBKIT_SECURE_COOKIES);
     await page.goto('/');
     await expect(page).toHaveURL(/\/login\?returnUrl=%2F$/);
     await expect(loginHeading(page)).toBeVisible();
@@ -168,7 +170,8 @@ test.describe('login page', () => {
 test.describe('expiring auth tokens', () => {
   test.use({ instanceOptions: SHORT_TOKENS });
 
-  test('AC-AUTH-003.14: sends the user to the login page when the refresh fails', async ({ page, context, request, monitor }) => {
+  test('AC-AUTH-003.14: sends the user to the login page when the refresh fails', async ({ page, context, request, monitor, browserName }) => {
+    test.skip(browserName === 'webkit', WEBKIT_SECURE_COOKIES);
     await page.goto('/login');
     await logIn(page);
     await expect(dashboardHeading(page)).toBeVisible();
@@ -194,7 +197,8 @@ test.describe('expiring auth tokens', () => {
     drainFailedRequests(monitor, '/api/v1/instance/storage');
   });
 
-  test('keeps the repository screen as it is while its tokens expire: no reload, and the editor keeps the focus', async ({ page, instance }) => {
+  test('keeps the repository screen as it is while its tokens expire: no reload, and the editor keeps the focus', async ({ page, instance, browserName }) => {
+    test.skip(browserName === 'webkit', WEBKIT_SECURE_COOKIES);
     // Waiting for the background fetches, then for several tokens to expire.
     test.slow();
     const [ id ] = seed(instance.dataDir, {
@@ -205,7 +209,7 @@ test.describe('expiring auth tokens', () => {
     await logIn(page);
     const editor = page.getByRole('main', { name: 'Editor' }).getByRole('textbox', { name: 'README.md', exact: true });
     await editor.click();
-    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.press(await shortcut(page, 'End'));
     await page.keyboard.type('Typed.');
     await expect.poll(() => readFileSync(join(dir, 'README.md'), 'utf8'), { timeout: 40_000 }).toContain('Typed.');
     // The background fetches of a screen that opens, of a remote that never answers, read the status again when
@@ -236,7 +240,8 @@ test.describe('expiring auth tokens', () => {
       .toContain('Typed. Still here.');
   });
 
-  test('AC-AUTH-003.11: two tabs share one refresh', async ({ page, context, monitor }) => {
+  test('AC-AUTH-003.11: two tabs share one refresh', async ({ page, context, monitor, browserName }) => {
+    test.skip(browserName === 'webkit', WEBKIT_SECURE_COOKIES);
     // Without a push channel, whose streams renew their tokens before they expire (A-8.5), the tokens expire.
     await context.route('**/api/v1/events*', route => route.abort());
     await page.goto('/login');

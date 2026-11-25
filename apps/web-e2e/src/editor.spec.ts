@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { drainFailedRequests, expect, type Monitor, test } from './support/fixtures';
+import { shortcut } from './support/hands';
 import { logIn, seed, seededRemoteUrl, TEST_ADMIN } from './support/instance';
 import { gitIn } from './support/working-copy';
 
@@ -92,7 +93,7 @@ async function showTree(page: Page): Promise<void> {
 /** Types `text` at the end of the open file `name`. */
 async function typeAtEnd(page: Page, name: string, text: string): Promise<void> {
   await editor(page, name).click();
-  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press(await shortcut(page, 'End'));
   await page.keyboard.type(text);
 }
 
@@ -243,11 +244,11 @@ test.describe('editor', () => {
     await expect(editor(page, 'big.md')).toBeVisible();
 
     await editor(page, 'big.md').click();
-    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.press(await shortcut(page, 'End'));
     await page.keyboard.insertText('a'.repeat(1000));
     await expect(status(page)).toHaveText(TOO_LARGE);
 
-    await page.keyboard.press('ControlOrMeta+z');
+    await page.keyboard.press(await shortcut(page, 'z'));
     await page.keyboard.insertText('small');
     await expect(status(page)).toHaveText(SAVED);
     expect(onDisk(dir, 'big.md').endsWith('\nsmall')).toBe(true);
@@ -299,7 +300,7 @@ test.describe('editor', () => {
       return;
     }
     await editor(page, 'README.md').click();
-    await page.keyboard.press('ControlOrMeta+f');
+    await page.keyboard.press(await shortcut(page, 'f'));
     await expect(search).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(editor(page, 'README.md')).toBeFocused();

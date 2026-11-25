@@ -18,6 +18,21 @@ export async function settled(page: Page): Promise<void> {
   );
 }
 
+/**
+ * The editor's shortcut `key` with the modifier CodeMirror uses on this page:
+ * Cmd on Apple's systems, as the phone projects' iPhone is whatever the tests
+ * run on, and Ctrl elsewhere. Playwright's `ControlOrMeta` follows the system
+ * the tests run on instead. Worked out as `@codemirror/view` does.
+ */
+export async function shortcut(page: Page, key: string): Promise<string> {
+  const apple = await page.evaluate(() => {
+    const ios = /Apple Computer/.test(navigator.vendor)
+      && (/Mobile\/\w+/.test(navigator.userAgent) || navigator.maxTouchPoints > 2);
+    return ios || /Mac/.test(navigator.platform);
+  });
+  return `${apple ? 'Meta' : 'Control'}+${key}`;
+}
+
 /** Checks the page, or only the parts that `selectors` name, with axe-core once it has settled. */
 export async function axe(page: Page, ...selectors: string[]): Promise<void> {
   await settled(page);
@@ -55,6 +70,12 @@ export async function recordAnnouncements(page: Page): Promise<() => Promise<str
  * can be seen (NF-13.3). Backwards, because the editor is the last control of
  * the page, and Firefox keeps the focus there on Tab. The editor takes Tab for
  * indenting until Escape is pressed (ED-11).
+ *
+ * Past the first or last control, headless browsers put the focus on the body,
+ * where a browser's own controls would take it. From there, Firefox goes on
+ * from the selection, which is cleared for it, and WebKit keeps the focus on
+ * the body on Shift+Tab: when Shift+Tab comes back to where it has been
+ * without reaching `target`, it goes on with Tab.
  */
 export async function tabTo(page: Page, target: Locator, limit = 150): Promise<void> {
   // A toolbar is one stop of Tab, and its arrow keys move between its buttons (NF-13.4).
@@ -66,14 +87,31 @@ export async function tabTo(page: Page, target: Locator, limit = 150): Promise<v
       const active = document.activeElement;
       return inToolbar ? element.closest('[role="toolbar"]')?.contains(active) === true : element === active;
     }, orientation !== null);
+  let key = 'Shift+Tab';
+  await page.evaluate(() => ((window as unknown as { tabToSeen: WeakSet<Element>; }).tabToSeen = new WeakSet()));
   for (let presses = 0; !(await reached()); presses++) {
     if (presses === limit) {
-      throw new Error(`Shift+Tab did not reach ${target}`);
+      throw new Error(`Tab did not reach ${target}`);
     }
-    if (await page.evaluate(() => document.activeElement?.closest('.cm-editor') != null)) {
+    const { inEditor, again } = await page.evaluate(() => {
+      const active = document.activeElement ?? document.body;
+      const seen = (window as unknown as { tabToSeen?: WeakSet<Element>; }).tabToSeen ??= new WeakSet();
+      const visited = seen.has(active);
+      seen.add(active);
+      if (active === document.body) {
+        // Where a browser's own controls would take the focus. Firefox goes on
+        // from the selection, such as in a field typed in before.
+        window.getSelection()?.removeAllRanges();
+      }
+      return { inEditor: active.closest('.cm-editor') !== null, again: visited };
+    });
+    if (again && key === 'Shift+Tab') {
+      key = 'Tab';
+    }
+    if (inEditor) {
       await page.keyboard.press('Escape');
     }
-    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press(key);
   }
   if (orientation !== null) {
     await arrowTo(page, target, orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown');
@@ -134,7 +172,7 @@ export function keyboard(page: Page): Hands {
     },
     typeInto: async (target, text) => {
       await tabTo(page, target);
-      await page.keyboard.press('ControlOrMeta+End');
+      await page.keyboard.press(await shortcut(page, 'End'));
       await page.keyboard.type(text);
     },
     choose: async (group, name) => {
@@ -160,7 +198,7 @@ export function touch(page: Page): Hands {
     toggle: target => target.tap(),
     typeInto: async (target, text) => {
       await target.tap();
-      await page.keyboard.press('ControlOrMeta+End');
+      await page.keyboard.press(await shortcut(page, 'End'));
       await page.keyboard.type(text);
     },
     // The radio is visually hidden, so its label is tapped.

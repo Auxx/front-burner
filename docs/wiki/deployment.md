@@ -310,14 +310,18 @@ secret, through its `…_FILE` variable.
 ## HTTPS is required
 
 Front Burner must be reached over **HTTPS**. Plain HTTP is supported only on
-`localhost`, for trying Front Burner out on your own computer.
+`localhost`, for trying Front Burner out on your own computer, and not in
+Safari: open `http://localhost` in another browser, such as Chrome or Firefox.
 
 ### Why
 
 When a user logs in, Front Burner keeps them logged in with a _refresh token_.
 For security, the web client stores it in a browser cookie that is marked
 `Secure`. Browsers only send `Secure` cookies over HTTPS, and do not even store
-them when the page is opened over plain HTTP.
+them when the page is opened over plain HTTP. Chrome and Firefox make an
+exception for `localhost`; Safari does not, so in Safari, `http://localhost`
+behaves like any other plain HTTP address below. A login through OIDC uses a
+`Secure` cookie too, so over plain HTTP it does not work at all.
 
 ### What happens over plain HTTP
 

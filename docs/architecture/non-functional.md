@@ -459,12 +459,13 @@ These rules add to the security rules already in the requirements.
   and Safari on desktop and mobile, including Chrome on Android, Safari on iOS
   and iPadOS, and Samsung Internet. The window moves with Angular upgrades.
 - **NF-12.2** End-to-end tests (Playwright) run in Chromium, Firefox and WebKit
-  on desktop, and in Chromium and WebKit with a phone-sized viewport, in a
-  nightly CI run. CI on pull requests and pushes runs them in Chromium only, on
-  desktop and with a phone-sized viewport, to keep it fast. Local runs use
-  Chromium and Firefox and skip WebKit, which does not run on every developer's
-  operating system; the nightly run is the WebKit check. Before each release,
-  the web client is checked by hand on a real iPhone and a real Android phone.
+  on desktop, and in Chromium and WebKit with a phone-sized viewport. CI on pull
+  requests and pushes runs them in Chromium only, on desktop and with a
+  phone-sized viewport, to keep it fast; a nightly CI run adds Firefox and
+  WebKit. Local runs use Chromium and Firefox and skip WebKit, which does not
+  run on every developer's operating system; the nightly run is the WebKit
+  check. Before each release, the web client is checked by hand on a real iPhone
+  and a real Android phone.
 - **NF-12.3** Not supported: Internet Explorer, legacy Edge, browsers with
   JavaScript disabled, and in-app webviews (they usually work but are not
   tested).

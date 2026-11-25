@@ -21,6 +21,7 @@ import {
   ChoiceComponent,
   EmptyStateComponent,
   InlineBannerComponent,
+  keepScrollOffset,
   SpinnerComponent
 } from '@front-burner/ui';
 import { TranslocoDirective } from '@jsverse/transloco';
@@ -91,7 +92,8 @@ export class ChangesPaneComponent {
 
   constructor() {
     // Measured again when shown after `display: none` (a collapsed pane, a closed
-    // drawer, the other tool window), and when the font size changes.
+    // drawer, the other tool window), and when the font size changes. The
+    // scroll offset is put back then too, as WebKit forgets it.
     afterRenderEffect(onCleanup => {
       const viewport = this.viewport();
       const probe = this.rowProbe().nativeElement;
@@ -99,15 +101,20 @@ export class ChangesPaneComponent {
       if (typeof ResizeObserver !== 'function') {
         return;
       }
+      const offset = viewport ? keepScrollOffset(viewport) : undefined;
       const observer = new ResizeObserver(() => {
         viewport?.checkViewportSize();
         this.measureRowHeight();
+        offset?.resized();
       });
       observer.observe(probe);
       if (viewport) {
         observer.observe(viewport.elementRef.nativeElement);
       }
-      onCleanup(() => observer.disconnect());
+      onCleanup(() => {
+        observer.disconnect();
+        offset?.stop();
+      });
     });
   }
 

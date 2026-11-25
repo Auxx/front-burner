@@ -96,7 +96,10 @@ function firstWithCurrent(
   ],
   templateUrl: './branch-list.dialog.html',
   styleUrl: './branch-list.dialog.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '(focusin)': 'keepClearOfFilter($event)'
+  }
 })
 export class BranchListDialog {
   private readonly ref = inject<DialogRef<BranchChoice>>(DialogRef);
@@ -140,6 +143,18 @@ export class BranchListDialog {
 
   constructor() {
     this.load();
+  }
+
+  /**
+   * Scrolls a row that gets the focus to below the filter, by its
+   * `scroll-margin`. Firefox leaves a row that is partly in sight where it is,
+   * behind the filter; the other browsers have already scrolled it there.
+   */
+  protected keepClearOfFilter(event: FocusEvent): void {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.classList.contains('branch')) {
+      target.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   protected retry(): void {

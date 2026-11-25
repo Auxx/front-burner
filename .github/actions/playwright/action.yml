@@ -1,7 +1,7 @@
 name: Install Playwright browsers
 description: >
-  Installs Chromium, as its headless shell, when a project is affected by one
-  of the given targets.
+  Installs a Playwright browser when a project is affected by one of the given
+  targets: Chromium as its headless shell by default.
 
 inputs:
   targets:
@@ -10,6 +10,13 @@ inputs:
   projects:
     description: Comma-separated Nx projects to look at; all when empty.
     default: ''
+  browser:
+    description: The browser to install, chromium, firefox or webkit.
+    default: chromium
+  affected:
+    description: >
+      'false' to install whatever is affected, as a run of every test does.
+    default: 'true'
 
 outputs:
   needed:
@@ -22,22 +29,38 @@ runs:
     - name: Find affected browser tests
       id: browsers
       shell: bash
+      env:
+        BROWSER: ${{ inputs.browser }}
       run: |
-        filter=()
-        if [ -n "${{ inputs.projects }}" ]; then filter=(-p "${{ inputs.projects }}"); fi
-        affected=$(npx nx show projects --affected -t ${{ inputs.targets }} "${filter[@]}" --json)
-        echo "Affected by ${{ inputs.targets }}: $affected"
-        needed=false
-        if [ "$affected" != "[]" ]; then needed=true; fi
+        case "$BROWSER" in
+          chromium | firefox | webkit) ;;
+          *) echo "Unknown browser: $BROWSER"; exit 1 ;;
+        esac
+        needed=true
+        if [ "${{ inputs.affected }}" != false ]; then
+          filter=()
+          if [ -n "${{ inputs.projects }}" ]; then filter=(-p "${{ inputs.projects }}"); fi
+          affected=$(npx nx show projects --affected -t ${{ inputs.targets }} "${filter[@]}" --json)
+          echo "Affected by ${{ inputs.targets }}: $affected"
+          if [ "$affected" = "[]" ]; then needed=false; fi
+        fi
         echo "needed=$needed" >> "$GITHUB_OUTPUT"
         echo "version=$(npx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+        # Chromium's headless shell is all that headless tests need.
+        if [ "$BROWSER" = chromium ]; then
+          echo "install=--only-shell chromium" >> "$GITHUB_OUTPUT"
+          echo "cache=chromium-shell" >> "$GITHUB_OUTPUT"
+        else
+          echo "install=$BROWSER" >> "$GITHUB_OUTPUT"
+          echo "cache=$BROWSER" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Cache Playwright browsers
       if: steps.browsers.outputs.needed == 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/ms-playwright
-        key: playwright-${{ runner.os }}-${{ steps.browsers.outputs.version }}-chromium-shell
+        key: playwright-${{ runner.os }}-${{ steps.browsers.outputs.version }}-${{ steps.browsers.outputs.cache }}
 
     # Rebuilding the man-page index after every package slows apt down a lot.
     - name: Disable man-db triggers
@@ -49,4 +72,4 @@ runs:
     - name: Install Playwright browsers
       if: steps.browsers.outputs.needed == 'true'
       shell: bash
-      run: npx playwright install --with-deps --only-shell chromium
+      run: npx playwright install --with-deps ${{ steps.browsers.outputs.install }}

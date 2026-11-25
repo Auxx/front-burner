@@ -10,7 +10,8 @@ const ADMIN_ID = 1;
 
 const heading = (page: Page, name: string) => page.getByRole('heading', { name, exact: true });
 const addRepository = (page: Page) => page.getByRole('link', { name: 'Add repository' });
-const recentList = (page: Page) => page.getByRole('list').filter({ has: page.getByRole('listitem') });
+// The Add repository guide above it has a list of its own.
+const recentList = (page: Page) => page.locator('dash-recent-repositories').getByRole('list');
 
 /** Logs in from `/` and waits for the dashboard to have loaded its list. */
 async function openDashboard(page: Page, email?: string): Promise<void> {
@@ -215,7 +216,10 @@ test.describe('dashboard', () => {
 
   test('AC-DASH-001.15: a failed load shows Try again, and Add repository still works', async ({ page, instance, monitor }) => {
     seedRepositories(instance.dataDir, [ { name: 'handbook' } ]);
-    // Fails until Try again, also for the reload after the push channel connects (A-3.11).
+    // Fails until Try again. Without a push channel, whose connect reloads the
+    // list (A-3.11) whenever it comes, maybe between `failing = false` and the
+    // click, taking Try again away.
+    await page.route('**/api/v1/events*', route => route.abort());
     let failing = true;
     await page.route('**/api/v1/repositories/recent', route => (failing ? route.abort() : route.fallback()));
     await page.goto('/');

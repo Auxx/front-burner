@@ -12,6 +12,7 @@ import {
   startGitHttpServer,
   TEST_CERTIFICATE_FILE
 } from './support/git-http-server';
+import { shortcut } from './support/hands';
 import { logIn, seed, seededRemoteUrl, type SeedRepository } from './support/instance';
 import { gitIn } from './support/working-copy';
 
@@ -950,7 +951,7 @@ test.describe('repository screen, kept up to date', () => {
     rmSync(join(workingCopyOf(instance.dataDir, handbook), '.git'), { recursive: true, force: true });
     // The save is not git's; the status read after it is, and finds the working copy damaged.
     await editorOf(page, 'README.md').click();
-    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.press(await shortcut(page, 'End'));
     await page.keyboard.type('more');
 
     await expect(page.getByText('This repository\'s working copy is missing or damaged.')).toBeVisible();
