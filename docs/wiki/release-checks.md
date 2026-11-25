@@ -377,12 +377,12 @@ and phone in the nightly workflow, on the same commit. Playwright 1.65: Chromium
 158.0.8127.18, Firefox 159.0 (build 1572), WebKit 27.2 (build 2388), on GitHub's
 `ubuntu-latest`.
 
-| Run                                                                                  | Commit               | Result                                                                              |
-| ------------------------------------------------------------------------------------ | -------------------- | ----------------------------------------------------------------------------------- |
-| [Nightly 45634938916](https://github.com/Auxx/front-burner/actions/runs/45634938916) | `988f1841`           | Failed: unit tests (TestBed on 4 cores), 63 Firefox and WebKit tests; fixed in #241 |
-| [Nightly 45693954122](https://github.com/Auxx/front-burner/actions/runs/45693954122) | `e9b7603b`           | Failed: AC-REPO-003.12 in WebKit, one flaky test; fixed in #242                     |
-| [Nightly 45709070034](https://github.com/Auxx/front-burner/actions/runs/45709070034) | `fd015017`           | Passed, with three tests flaky (passed on a retry); fixed in this plan's change     |
-| NIGHTLY_FINAL_RUN                                                                    | NIGHTLY_FINAL_COMMIT | NIGHTLY_FINAL_RESULT                                                                |
+| Run                                                                                  | Commit     | Result                                                                              |
+| ------------------------------------------------------------------------------------ | ---------- | ----------------------------------------------------------------------------------- |
+| [Nightly 45634938916](https://github.com/Auxx/front-burner/actions/runs/45634938916) | `988f1841` | Failed: unit tests (TestBed on 4 cores), 63 Firefox and WebKit tests; fixed in #241 |
+| [Nightly 45693954122](https://github.com/Auxx/front-burner/actions/runs/45693954122) | `e9b7603b` | Failed: AC-REPO-003.12 in WebKit, one flaky test; fixed in #242                     |
+| [Nightly 45709070034](https://github.com/Auxx/front-burner/actions/runs/45709070034) | `fd015017` | Passed, with three tests flaky (passed on a retry); fixed in this plan's change     |
+| [Nightly 45723718115](https://github.com/Auxx/front-burner/actions/runs/45723718115) | `95e1a4df` | Passed: 905 tests, none flaky; Chromium in the pull request's CI on the same commit |
 
 What the runs found was fixed, test first where it was the product's:
 
