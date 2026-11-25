@@ -158,7 +158,27 @@ top of the security rules in the requirements and NF-11. See
   asked for with `?v=` and the instance's version, which is cached for good too:
   the web client asks for its icon sprite as `assets/icons.svg?v=<version>`, so
   that icons drawn while offline, such as the offline banner's (NV-15), are
-  there, and an upgrade changes the URL.
+  there, and an upgrade changes the URL. **Preloads** (plan 162, NF-2.7): the
+  backend reads the build's chunk map (`chunk-map.json`, next to the web root
+  and not served, A-8.18) at startup, and adds to each `index.html`, before
+  `</head>`, a `<link rel="modulepreload">` for each chunk of the route the path
+  will open: `/` the shell's and the dashboard's, `/repositories` and
+  `/preferences` the shell's and their page's, `/repositories/<id>` and below
+  the repository screen's, plus the editor's for a Markdown file
+  (`…/files/<…>.md`, `.markdown`, `.mdx`), `/login…` and `/onboarding` the login
+  pages'; any other path none. It also adds `<link rel="preload"
+  href="i18n/en.json" as="fetch" crossorigin="anonymous">`, which the web
+  client's same-origin `fetch` reuses, and the editor's files as `<script
+  type="application/json" id="fb-chunk-map">` for the web client's own preloads.
+  Every added tag carries the request's nonce; the policy itself is unchanged.
+  The path is matched decoded, normalised and ignoring case, as Express routes.
+  **A wrong guess is harmless**: a preload only fetches a file of the build
+  earlier than the router would, so a path that opens another route than guessed
+  costs bytes, never a broken page or a weaker policy. A map from another build
+  (a stale `dist/`) cannot point at a 404: at startup, every listed file that is
+  not in the web root, or is not a plain root-level `.js` name, is dropped with
+  one `warn` line; a map that cannot be read, or none (a development build),
+  adds no tag at all.
 - **A-7.10** HTML from Markdown is sanitised by `rehype-sanitize` and then
   DOMPurify, both configured from the safe HTML whitelist (REQ-EDIT-002), and
   passed to Angular in one shared preview component (D-7.6). Raw repository

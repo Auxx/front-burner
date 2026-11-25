@@ -234,6 +234,33 @@ function moving(page: Page): Promise<string[]> {
   });
 }
 
+test.describe('the first load', () => {
+  test('NF-2.7: a first load asks for i18n/en.json once and breaks no CSP rule', async ({ page, instance }) => {
+    await onboard(instance.url);
+    await page.goto('/login');
+    await logIn(page);
+    await expect(page).toHaveTitle('Dashboard · Front Burner');
+
+    const translations: string[] = [];
+    page.on('request', request => {
+      if (new URL(request.url()).pathname === '/i18n/en.json') {
+        translations.push(request.url());
+      }
+    });
+    await page.goto('/');
+    await expect(page).toHaveTitle('Dashboard · Front Burner');
+    await expect(page.getByRole('main')).toBeVisible();
+
+    // The server preloads the route's chunks and the translations (A-7.9), each with the page's nonce: the
+    // fixture fails the test on any `securitypolicyviolation`.
+    const preloads = await page.locator('head link[rel="modulepreload"][nonce]').count();
+    expect(preloads, 'the dashboard\'s chunks are preloaded').toBeGreaterThan(2);
+    await expect(page.locator('head link[rel="preload"][href="i18n/en.json"]')).toHaveCount(1);
+    // The client's own request is answered by the preload, not sent again.
+    expect(translations).toHaveLength(1);
+  });
+});
+
 test.describe('every page', () => {
   test('NF-12.4: no page or dialog scrolls sideways at 320 px', async ({ page, instance }) => {
     await page.setViewportSize({ width: 320, height: 640 });

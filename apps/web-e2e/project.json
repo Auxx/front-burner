@@ -27,6 +27,7 @@
       ],
       "dependsOn": [
         "web:build",
+        "web:chunk-map",
         "server:build"
       ],
       "options": {

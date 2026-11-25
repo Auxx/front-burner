@@ -7,6 +7,7 @@ import { NEVER } from 'rxjs';
 
 import { DraftStore } from '../saving/draft-store';
 import { AuthSessionService } from '../services/auth-session/auth-session.service';
+import { OnboardingStateService } from '../services/onboarding-state/onboarding-state.service';
 
 import { provideCore } from './provide-core';
 
@@ -48,5 +49,16 @@ describe('provideCore', () => {
     TestBed.inject(TranslocoService);
 
     expect(created).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for the onboarding status at start, before any route asks for it (NF-2.7)', async () => {
+    TestBed.configureTestingModule({ providers: [ provideCore(), provideHttpClientTesting() ] });
+    TestBed.inject(TranslocoService);
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/onboarding').flush(null, { status: 404, statusText: 'Not Found' });
+    // The guard's later call awaits the same answer: no second request.
+    await expect(TestBed.inject(OnboardingStateService).load()).resolves.toMatchObject({ kind: 'status' });
+    http.expectNone('/api/v1/onboarding');
   });
 });

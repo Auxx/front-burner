@@ -1,9 +1,11 @@
 import type { ApiError } from '@front-burner/shared-contracts';
+import { Logger } from '@nestjs/common';
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, posix, relative, sep } from 'node:path';
 import { contentSecurityPolicy, createNonce, CSP_NONCE_PLACEHOLDER } from '../csp/csp';
+import { type ChunkMap, loadChunkMap, preloadTags } from './preloads';
 
 /**
  * A file asked for with the instance's version, such as `assets/icons.svg?v=1.4.2`:
@@ -19,6 +21,22 @@ export interface ServeWebClientOptions {
    * revalidated as usual.
    */
   version?: string;
+  /** Where a problem with the chunk map is reported, once at startup; by default the log, at `warn`. */
+  warn?: (message: string) => void;
+}
+
+/**
+ * `index.html` for the page at `path`: the template with the page's preloads
+ * before `</head>` (A-7.9), when there is a chunk map, and `nonce` in every
+ * tag (NF-11.1).
+ */
+function indexHtml(template: string, chunkMap: ChunkMap | undefined, path: string, nonce: string): string {
+  const filled = template.split(CSP_NONCE_PLACEHOLDER).join(nonce);
+  const head = filled.indexOf('</head>');
+  if (chunkMap === undefined || head < 0) {
+    return filled;
+  }
+  return filled.slice(0, head) + preloadTags(chunkMap, path, nonce) + filled.slice(head);
 }
 
 function isApiPath(path: string): boolean {
@@ -160,7 +178,8 @@ function isHashedFile(file: string): boolean {
  * Serves the built web client from `webRoot` (A-7.9): files as they are, or
  * the precompressed variant the request accepts, and `index.html` with a fresh
  * CSP nonce for every other route, so that the client-side router can handle
- * it. Files the build names by their content are cached for good. Returns
+ * it, with the preloads of that route's chunks when the build wrote a chunk
+ * map. Files the build names by their content are cached for good. Returns
  * `false`, registering nothing, when there is no build.
  */
 export function serveWebClient(
@@ -174,6 +193,7 @@ export function serveWebClient(
   }
   const template = readFileSync(indexPath, 'utf8');
   const variants = findVariants(webRoot);
+  const chunkMap = loadChunkMap(webRoot, options.warn ?? (message => new Logger('WebClient').warn(message)));
   const cacheControlOf = (req: express.Request, file: string | undefined): string | undefined => {
     const versioned = options.version !== undefined && req.query['v'] === options.version;
     return versioned || (file !== undefined && isHashedFile(file)) ? VERSIONED_CACHE_CONTROL : undefined;
@@ -213,7 +233,7 @@ export function serveWebClient(
         .type('text/html; charset=utf-8')
         .set('Cache-Control', 'no-store')
         .set('Content-Security-Policy', contentSecurityPolicy(nonce))
-        .send(template.split(CSP_NONCE_PLACEHOLDER).join(nonce));
+        .send(indexHtml(template, chunkMap, req.path, nonce));
     });
   };
 
