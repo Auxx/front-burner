@@ -18,6 +18,21 @@ export async function settled(page: Page): Promise<void> {
   );
 }
 
+/**
+ * The editor's shortcut `key` with the modifier CodeMirror uses on this page:
+ * Cmd on Apple's systems, as the phone projects' iPhone is whatever the tests
+ * run on, and Ctrl elsewhere. Playwright's `ControlOrMeta` follows the system
+ * the tests run on instead. Worked out as `@codemirror/view` does.
+ */
+export async function shortcut(page: Page, key: string): Promise<string> {
+  const apple = await page.evaluate(() => {
+    const ios = /Apple Computer/.test(navigator.vendor)
+      && (/Mobile\/\w+/.test(navigator.userAgent) || navigator.maxTouchPoints > 2);
+    return ios || /Mac/.test(navigator.platform);
+  });
+  return `${apple ? 'Meta' : 'Control'}+${key}`;
+}
+
 /** Checks the page, or only the parts that `selectors` name, with axe-core once it has settled. */
 export async function axe(page: Page, ...selectors: string[]): Promise<void> {
   await settled(page);
@@ -157,7 +172,7 @@ export function keyboard(page: Page): Hands {
     },
     typeInto: async (target, text) => {
       await tabTo(page, target);
-      await page.keyboard.press('ControlOrMeta+End');
+      await page.keyboard.press(await shortcut(page, 'End'));
       await page.keyboard.type(text);
     },
     choose: async (group, name) => {
@@ -183,7 +198,7 @@ export function touch(page: Page): Hands {
     toggle: target => target.tap(),
     typeInto: async (target, text) => {
       await target.tap();
-      await page.keyboard.press('ControlOrMeta+End');
+      await page.keyboard.press(await shortcut(page, 'End'));
       await page.keyboard.type(text);
     },
     // The radio is visually hidden, so its label is tapped.

@@ -19,6 +19,7 @@ import {
   PROTECTED_KEY_PUBLIC,
   startGitSshServer
 } from './support/git-ssh-server';
+import { axe, shortcut } from './support/hands';
 import { adminAuthToken, confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
 import { addOverApi as addRepository, ADMIN_ID, sshRepository, sshRepositoryWithSameKey } from './support/repositories';
 import { gitIn } from './support/working-copy';
@@ -526,7 +527,7 @@ test.describe('committing', () => {
     await openScreen(page, `/repositories/${id}/files/README.md`);
 
     await page.getByRole('main', { name: 'Editor' }).getByRole('textbox', { name: 'README.md', exact: true }).click();
-    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.press(await shortcut(page, 'End'));
     await page.keyboard.type('The last edit');
     await showChanges(page);
     await message(page).fill('With the last edit');
@@ -1377,7 +1378,7 @@ test.describe('pushing', () => {
           route => route.request().method() === 'PUT' ? route.abort('internetdisconnected') : route.fallback()
         );
         await editor.click();
-        await page.keyboard.press('ControlOrMeta+End');
+        await page.keyboard.press(await shortcut(page, 'End'));
         await page.keyboard.type('Kept through the merge.');
 
         const other = await context.newPage();
@@ -1505,7 +1506,7 @@ test.describe('pushing', () => {
             route => route.request().method() === 'PUT' ? route.abort('internetdisconnected') : route.fallback()
           );
           await editor.click();
-          await page.keyboard.press('ControlOrMeta+End');
+          await page.keyboard.press(await shortcut(page, 'End'));
           await page.keyboard.type('Not saved.');
 
           const other = await context.newPage();
@@ -1529,7 +1530,7 @@ test.describe('pushing', () => {
           await expect(editor).toHaveText('theirs');
           // The waiting save is gone: the next edit saves on top of their version, without the old one.
           await editor.click();
-          await page.keyboard.press('ControlOrMeta+End');
+          await page.keyboard.press(await shortcut(page, 'End'));
           await page.keyboard.type('Then edited.');
           await expect.poll(() => readFileSync(join(dir, 'guide.md'), 'utf8'), { timeout: 40_000 })
             .toBe('theirs\nThen edited.');
@@ -1632,7 +1633,7 @@ test.describe('pushing', () => {
           const { id } = await pulled(page, instance);
           const undo = async () => {
             await editor(page).click();
-            await page.keyboard.press('ControlOrMeta+z');
+            await page.keyboard.press(await shortcut(page, 'z'));
             await expect.poll(() => lines(page)).toEqual(MARKED);
           };
 
@@ -1646,14 +1647,14 @@ test.describe('pushing', () => {
 
           // The bar's buttons, with the keyboard, for the conflict at the cursor.
           await editor(page).click();
-          await page.keyboard.press('ControlOrMeta+Home');
+          await page.keyboard.press(await shortcut(page, 'Home'));
           await expect(conflictBar(page)).toContainText('Conflict 1 of 1');
           await conflictBar(page).getByRole('button', { name: 'Accept both' }).focus();
           await page.keyboard.press('Enter');
           await expect.poll(() => lines(page)).toEqual([ 'mine', 'theirs', '' ]);
           await expect(editor(page)).toBeFocused();
           await expect(conflictBar(page)).toContainText('No conflict markers left.');
-          await page.keyboard.press('ControlOrMeta+z');
+          await page.keyboard.press(await shortcut(page, 'z'));
           await expect.poll(() => lines(page)).toEqual(MARKED);
           drainFailedRequests(monitor, `/api/v1/repositories/${id}/git/merge`);
         });
@@ -1663,18 +1664,20 @@ test.describe('pushing', () => {
           const preview = main(page).getByRole('region', { name: 'Preview of guide.md' });
           const note = main(page).getByText('The preview is shown again when no conflict markers are left.');
 
+          // By touch on a phone: WebKit's iPhone drops a mouse click that takes
+          // the focus from the Pull button just pressed.
           if (isMobile) {
-            await tab(page, 'Preview').click();
+            await tab(page, 'Preview').tap();
           }
           await expect(note).toBeVisible();
           await expect(preview).toHaveCount(0);
 
           if (isMobile) {
-            await tab(page, 'Edit').click();
+            await tab(page, 'Edit').tap();
           }
           await widget(page, 'Accept theirs').click();
           if (isMobile) {
-            await tab(page, 'Preview').click();
+            await tab(page, 'Preview').tap();
           }
           await expect(preview.getByText('theirs', { exact: true })).toBeVisible();
           await expect(note).toHaveCount(0);
@@ -2008,7 +2011,7 @@ test.describe('fixing credentials from a push', () => {
     await expect(dialog(page)).toContainText('Make sure these credentials can also push.');
     await expect(dialog(page).getByRole('radio', { name: 'No credentials (public repository)' })).toBeAttached();
     await expect(dialog(page).getByRole('radio', { name: 'Paste a key' })).toHaveCount(0);
-    expect((await new AxeBuilder({ page }).include('dlg-repository-credentials').analyze()).violations).toEqual([]);
+    await axe(page, 'dlg-repository-credentials');
     await saveNewCredentials(page, WRITER);
 
     await expect(dialog(page)).toHaveCount(0);
@@ -2061,7 +2064,7 @@ test.describe('fixing credentials from a push', () => {
     await expect(dialog(page).getByLabel('Username')).toHaveValue(WRITER.username);
     await expect(dialog(page).getByRole('radio', { name: 'Use other credentials for this repository' }))
       .toBeAttached();
-    expect((await new AxeBuilder({ page }).include('dlg-repository-credentials').analyze()).violations).toEqual([]);
+    await axe(page, 'dlg-repository-credentials');
     await dialog(page).getByLabel('Password or token', { exact: true }).fill(WRITER.password);
     await dialog(page).getByRole('button', { name: 'Update' }).click();
 
@@ -2436,7 +2439,8 @@ test.describe('the commit author', () => {
     await commitButton(page, 'Commit 1 file').click();
     await expect(commitAs(page)).toBeVisible();
     await expect(question(page).getByRole('link', { name: 'GitHub\'s help on noreply addresses' })).toBeVisible();
-    expect((await new AxeBuilder({ page }).include('dlg-confirm-commit-author').analyze()).violations).toEqual([]);
+    // Once the dialog and its backdrop have faded in, as WebKit takes longer.
+    await axe(page, 'dlg-confirm-commit-author');
     await question(page).getByRole('button', { name: 'Cancel' }).click();
 
     await expect(question(page)).toBeHidden();
@@ -2466,7 +2470,7 @@ test.describe('the commit author', () => {
     await changeDialog(page).getByRole('textbox', { name: 'Name' }).fill('Ada Work');
     await changeDialog(page).getByRole('textbox', { name: 'Email' }).fill('ada@work.example');
     await changeDialog(page).getByText('For this repository').click();
-    expect((await new AxeBuilder({ page }).include('dlg-change-commit-author').analyze()).violations).toEqual([]);
+    await axe(page, 'dlg-change-commit-author');
     await changeDialog(page).getByRole('button', { name: 'Save' }).click();
 
     await expect(committingAs(page, 'Ada Work <ada@work.example>')).toBeVisible();

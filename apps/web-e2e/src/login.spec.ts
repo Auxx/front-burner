@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { drainFailedRequests, expect, test, WEBKIT_SECURE_COOKIES } from './support/fixtures';
+import { shortcut } from './support/hands';
 import { logIn, seed, TEST_ADMIN } from './support/instance';
 import { ADMIN_ID, workingCopyOf } from './support/repositories';
 
@@ -208,7 +209,7 @@ test.describe('expiring auth tokens', () => {
     await logIn(page);
     const editor = page.getByRole('main', { name: 'Editor' }).getByRole('textbox', { name: 'README.md', exact: true });
     await editor.click();
-    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.press(await shortcut(page, 'End'));
     await page.keyboard.type('Typed.');
     await expect.poll(() => readFileSync(join(dir, 'README.md'), 'utf8'), { timeout: 40_000 }).toContain('Typed.');
     // The background fetches of a screen that opens, of a remote that never answers, read the status again when

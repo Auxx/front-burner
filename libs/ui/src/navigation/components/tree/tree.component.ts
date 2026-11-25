@@ -22,6 +22,7 @@ import {
 } from '@angular/core';
 
 import { IconComponent } from '../../../content/components/icon/icon.component';
+import { keepScrollOffset } from '../../../layout/utils/kept-scroll-offset/kept-scroll-offset.util';
 import { TreeNodeDirective } from '../../directives/tree-node/tree-node.directive';
 import type { TreeNode } from '../../models/tree-node.model';
 
@@ -207,19 +208,25 @@ export class TreeComponent {
       // The viewport is measured again, and so is the row height, when it is
       // shown again after `display: none` (a hidden pane or tab), resized or
       // rotated, and when the density changes (A-10.11): the probe is one row
-      // high, so it resizes with `--ui-row-height`.
+      // high, so it resizes with `--ui-row-height`. Shown again, it gets back
+      // its scroll offset, which WebKit forgets.
       this.measureRowHeight();
       if (typeof ResizeObserver !== 'function') {
         return;
       }
       const viewport = this.viewport();
+      const offset = keepScrollOffset(viewport);
       const observer = new ResizeObserver(() => {
         viewport.checkViewportSize();
         this.measureRowHeight();
+        offset.resized();
       });
       observer.observe(tree);
       observer.observe(this.rowProbe().nativeElement);
-      destroyRef.onDestroy(() => observer.disconnect());
+      destroyRef.onDestroy(() => {
+        observer.disconnect();
+        offset.stop();
+      });
     });
 
     effect(() => {

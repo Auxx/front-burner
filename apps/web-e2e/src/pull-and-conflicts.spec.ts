@@ -144,8 +144,18 @@ function touch(page: Page): ScreenHands {
       await expect(shownFile(page, name)).toBeVisible();
     },
     acceptTheirs: () => widget(page, 'Accept theirs').tap(),
-    // A tap on text that takes no focus, such as the bar's count, takes it from the editor.
-    leaveEditor: () => mergeSummary(page).locator('.count').tap()
+    // A tap on text that takes no focus, such as the bar's count, takes it from
+    // the editor. WebKit's iPhone keeps it there, as iOS does until the
+    // on-screen keyboard's Done, which blurs the editor.
+    leaveEditor: async () => {
+      await mergeSummary(page).locator('.count').tap();
+      await page.evaluate(() => {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && active.closest('.cm-editor')) {
+          active.blur();
+        }
+      });
+    }
   };
   return hands;
 }

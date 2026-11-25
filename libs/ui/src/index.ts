@@ -65,6 +65,11 @@ export {
 export { StatusBarComponent } from './layout/components/status-bar/status-bar.component';
 export { AppShellSideDirective } from './layout/directives/app-shell-side/app-shell-side.directive';
 export { PageTitleDirective } from './layout/directives/page-title/page-title.directive';
+export {
+  keepScrollOffset,
+  type KeptScrollOffset,
+  type ScrollOffsetViewport
+} from './layout/utils/kept-scroll-offset/kept-scroll-offset.util';
 export { injectNarrowViewport } from './layout/utils/narrow-viewport/narrow-viewport.util';
 export { MenuItemComponent } from './navigation/components/menu-item/menu-item.component';
 export { MenuSeparatorComponent } from './navigation/components/menu-separator/menu-separator.component';

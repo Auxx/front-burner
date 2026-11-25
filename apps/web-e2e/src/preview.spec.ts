@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 
 import { drainFailedRequests, expect, type Monitor, test } from './support/fixtures';
+import { shortcut } from './support/hands';
 import { logIn, seed } from './support/instance';
 
 test.use({ instanceOptions: { onboarded: true } });
@@ -48,7 +49,7 @@ async function openScreen(page: Page, url: string): Promise<void> {
 /** Types `text` at the end of the open file `name`. */
 async function typeAtEnd(page: Page, name: string, text: string): Promise<void> {
   await editor(page, name).click();
-  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press(await shortcut(page, 'End'));
   await page.keyboard.type(text);
 }
 
@@ -473,7 +474,7 @@ test.describe('preview', () => {
       await expect(view.getByText('color: red')).toHaveCount(0);
 
       await editor(page, 'embed.md').click();
-      await page.keyboard.press('ControlOrMeta+a');
+      await page.keyboard.press(await shortcut(page, 'a'));
       // Deleted by CodeMirror first: typing over a selection of highlighted text makes Chrome
       // insert `style` attributes of its own, which the policy refuses.
       await page.keyboard.press('Backspace');
@@ -848,7 +849,7 @@ test.describe('images', () => {
     const requested = requests.length;
 
     await editor(page, 'many.md').click();
-    await page.keyboard.press('ControlOrMeta+Home');
+    await page.keyboard.press(await shortcut(page, 'Home'));
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('End');
