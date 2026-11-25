@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { expect, test } from './support/fixtures';
+import { settled } from './support/hands';
 import { logIn, TEST_ADMIN } from './support/instance';
 
 test.use({ instanceOptions: { onboarded: true } });
@@ -36,6 +37,7 @@ function fitsWidth(page: Page): Promise<boolean> {
 }
 
 async function axeViolations(page: Page) {
+  await settled(page);
   return (await new AxeBuilder({ page }).analyze()).violations;
 }
 

@@ -11,6 +11,7 @@ import {
   startGitHttpServer,
   TEST_CERTIFICATE_FILE
 } from './support/git-http-server';
+import { settled } from './support/hands';
 import { logIn } from './support/instance';
 
 test.use({ instanceOptions: { onboarded: true, gitCaFile: TEST_CERTIFICATE_FILE } });
@@ -72,6 +73,7 @@ function fitsWidth(page: Page): Promise<boolean> {
 }
 
 async function axeViolations(page: Page) {
+  await settled(page);
   return (await new AxeBuilder({ page }).analyze()).violations;
 }
 

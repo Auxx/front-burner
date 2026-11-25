@@ -18,7 +18,7 @@ import {
   PROTECTED_KEY_PUBLIC,
   startGitSshServer
 } from './support/git-ssh-server';
-import { keyboard, touch } from './support/hands';
+import { keyboard, settled, touch } from './support/hands';
 import { adminAuthToken, confirmCommitAuthor, logIn, seed, type SeedRepository, TEST_ADMIN } from './support/instance';
 import { addOverApi, api, runGitJob, sshRepository } from './support/repositories';
 import { gitIn } from './support/working-copy';
@@ -1030,6 +1030,7 @@ test.describe('Remove repository', () => {
     await expect(busyDialog.getByRole('listitem')).toHaveText([ '2 uncommitted files', '3 commits not pushed' ]);
     const remove = busyDialog.getByRole('button', { name: 'Remove', exact: true });
     await expect(remove).toHaveAttribute('aria-disabled', 'true');
+    await settled(page);
     expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
     await busyDialog.getByLabel(`Type ${busy.name} to confirm`).fill(busy.name);
     await expect(remove).not.toHaveAttribute('aria-disabled');
@@ -1053,8 +1054,15 @@ test.describe('Remove repository', () => {
       credentials: { mode: 'new-https', name: 'GitHub work', username: 'ada', password: 'token' }
     });
 
-    // The second device has the file open, with an edit that waits to be saved.
+    // The second device has the file open, with an edit that waits to be saved:
+    // its save is held, as one that reached the server would leave an
+    // uncommitted change, which the dialog asks about (or refuses with 409
+    // when it comes while the dialog is open).
     const other = await browser.newContext({ baseURL: instance.url });
+    await other.route(
+      `**/api/v1/repositories/${id}/file`,
+      route => route.request().method() === 'PUT' ? new Promise<void>(() => undefined) : route.fallback()
+    );
     try {
       const second = await other.newPage();
       const opened = second.waitForResponse(response => response.url().endsWith(`/api/v1/repositories/${id}/open`));
