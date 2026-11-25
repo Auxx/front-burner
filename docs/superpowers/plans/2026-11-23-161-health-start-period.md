@@ -43,8 +43,8 @@ repository) goes past it, and the guide's "First start" tells the operator that
 container suite (`apps/server-e2e/src/container.e2e.spec.ts`) if it relies on
 the old timings.
 
-- [ ] **Step 1:** Change the `HEALTHCHECK` and the guide's text.
-- [ ] **Step 2:** Run the container suite (`npx nx run
+- [x] **Step 1:** Change the `HEALTHCHECK` and the guide's text.
+- [x] **Step 2:** Run the container suite (`npx nx run
       server-e2e:e2e-container`, or CI's `image` job).
-- [ ] **Step 3:** Update the NF-1.1 row of `docs/wiki/release-checks.md`; set
+- [x] **Step 3:** Update the NF-1.1 row of `docs/wiki/release-checks.md`; set
       this plan's row to **Done**; commit.

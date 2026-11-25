@@ -81,7 +81,12 @@ VOLUME /data
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
+# The start can take a minute or more among many working copies, as recovery
+# visits each one (NF-9.4; plan 152: 46 s among 2,500), so failed checks don't
+# count for 5 minutes. Docker reports `healthy` at the first check that passes,
+# even within that time, and checks every 2 s meanwhile, so that it comes soon
+# after the instance is ready.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=300s --start-interval=2s --retries=3 \
     CMD node -e "fetch('http://127.0.0.1:' + (process.env.FRONT_BURNER_PORT || 8080) + '/api/health/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
 
 # tini passes SIGTERM on to the backend, which stops as NF-9.2 says, and exits
