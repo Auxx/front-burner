@@ -17,6 +17,7 @@ import { EditorView } from '@codemirror/view';
 import { markPerformance } from '@front-burner/shared-util';
 import { acceptConflict, type ConflictChoice, goToConflict } from '../../conflicts/conflict-extension';
 import { setFindPanelInjector, SWAPPING_ATTRIBUTE } from '../../search/find-panel';
+import { loadHtmlInMarkdown, upgradeLanguage } from '../../state/editor-state';
 
 export interface EditorStateChange {
   state: EditorState;
@@ -29,7 +30,9 @@ export interface EditorStateChange {
  * undo history and cursor (A-8.15, ED-8).
  *
  * Each time it shows another state, such as another file's, it sets the
- * performance mark `fb:editor-ready` (A-8.17).
+ * performance mark `fb:editor-ready` (A-8.17), then loads the full language, with HTML tags
+ * highlighted, and swaps it in for the basic one, in the state it shows and in each state it is
+ * given later (A-8.11).
  *
  * Its styles are not encapsulated: CodeMirror builds its own DOM, which Angular's scoped
  * styles never reach.
@@ -51,6 +54,7 @@ export class CodeEditorComponent {
   private readonly nonce = inject(CSP_NONCE, { optional: true });
   private readonly injector = inject(EnvironmentInjector);
   private view?: EditorView;
+  private destroyed = false;
 
   constructor() {
     effect(() => this.show(this.state()));
@@ -66,6 +70,7 @@ export class CodeEditorComponent {
 
     inject(DestroyRef).onDestroy(() => {
       viewport?.removeEventListener('resize', keepCursorInView);
+      this.destroyed = true;
       this.view?.destroy();
     });
   }
@@ -141,10 +146,32 @@ export class CodeEditorComponent {
       } finally {
         this.view.dom.removeAttribute(SWAPPING_ATTRIBUTE);
       }
+      // A state created before the full language loaded, such as a file opened then and shown again.
+      this.upgradeLanguage();
       // CodeMirror has written the state's lines into the page: the editor takes input now (NF-2.2).
       if (this.view.contentDOM.getAttribute('contenteditable') === 'true') {
         markPerformance('fb:editor-ready');
+        this.loadFullLanguage();
       }
+    }
+  }
+
+  /**
+   * Loads the full language after the editor is ready, so that no measure of NF-2.2 waits for
+   * it, and swaps it in. Once loaded, it resolves at once. When it fails to load, such as
+   * offline, the editor keeps the basic language and the next file shown tries again.
+   */
+  private loadFullLanguage(): void {
+    loadHtmlInMarkdown().then(
+      () => this.upgradeLanguage(),
+      () => undefined
+    );
+  }
+
+  private upgradeLanguage(): void {
+    const spec = this.view && !this.destroyed ? upgradeLanguage(this.view.state) : null;
+    if (spec) {
+      this.view?.dispatch(spec);
     }
   }
 

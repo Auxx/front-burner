@@ -165,6 +165,26 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     screens a file over 100 KB opens without the Markdown language (ED-9a), and
     **Turn on highlighting** adds it through a `Compartment`, without recreating
     the editor or losing its undo history (ED-8).
+  - **Two languages** (plan 163). The editor starts with the **basic language**:
+    CommonMark and YAML front matter, built from `@lezer/markdown`'s parser as
+    `commonmarkLanguage` is, which parses HTML tags as `HTMLTag` without
+    highlighting their names and attributes. The **full language**, `markdown({
+    codeLanguages: [], addKeymap: false })` with front matter, is in
+    `state/markdown-html.ts`, which only `loadHtmlInMarkdown()` imports, so the
+    HTML, CSS and JavaScript grammars that `markdown()` brings (about 51 KB of
+    Brotli) arrive in a chunk of their own. The code editor loads it after it
+    first sets `fb:editor-ready`, then `upgradeLanguage` swaps it into the
+    highlighting `Compartment` of the state it shows, and of each state it is
+    given later, such as a file opened before the load; turning highlighting on
+    uses the full language once it has loaded. The swap is one transaction that
+    keeps the text, the selection and the undo history. When the chunk fails to
+    load, such as offline, the editor keeps the basic language without a word,
+    and the next file shown tries again. _(Plan's call: the highlighting is the
+    same as before, a moment later, and no measure waits for the chunk.)_
+    Nothing outside `markdown-html.ts` may import `@codemirror/lang-markdown`:
+    the bundler splits by module, and that module imports `lang-html` for
+    `markdown()`, so it would bring the grammars back into the editor's chunk
+    (A-8.18).
   - Syntax colours are CSS classes, never inline styles: `classHighlighter` plus
     a small highlighter for the Markdown tags it has no class for (quote, inline
     code, marks, HTML tags and attributes), styled on the `--ui-syntax-*` tokens
@@ -356,7 +376,16 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     it in every chunk that imports an entry point exporting it:
     `libs/web/markdown/src/index.ts` therefore does not export `renderSafeHtml`,
     and the worker and the specs import it by path. Leaving it out took the
-    editor pane's chunk from 124 KB to 26 KB of Brotli.
+    editor pane's chunk from 124 KB to 26 KB of Brotli. `@codemirror/lang-html`
+    is forbidden too, with the grammars it brings: it comes after the editor
+    (A-8.11), which took CodeMirror's chunk from 165 KB to 117 KB of Brotli.
+  - **The editor's budget.** The build fails when the editor's own files, the
+    `editor` group less the `repository-screen` group, which is loaded before
+    any file can be chosen, are over `EDITOR_LIMIT_BYTES`, 230 KB gzipped
+    (NF-2.2) _(plan's call: slow 4G leaves NF-2.2's 2 s, less one round trip and
+    about 150 ms to render, for about 230 KB of Brotli at 180 KB/s; gzip, which
+    the script can compute before `precompress`, is the larger of the two, so
+    the budget has a margin)_. The script prints the size with the groups'.
   - **`ChunkPreloaderService`** (`web/core`) adds a `<link rel="modulepreload">`
     with the page's CSP nonce for each file of a group that has none yet. It
     does nothing without `#fb-chunk-map` or with one that does not parse, as
