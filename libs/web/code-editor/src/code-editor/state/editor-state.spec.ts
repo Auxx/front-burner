@@ -1,4 +1,4 @@
-import { undo, undoDepth } from '@codemirror/commands';
+import { toggleComment, undo, undoDepth } from '@codemirror/commands';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorSelection, type EditorState, type Transaction } from '@codemirror/state';
 import { EditorView, runScopeHandlers } from '@codemirror/view';
@@ -303,6 +303,22 @@ describe('the HTML language', () => {
 
     expect(editor.isHighlighting(on)).toBe(true);
     expect(hasHtmlTags(on)).toBe(true);
+  });
+
+  it('comments out a line with either language, as an HTML comment', async () => {
+    const comment = (state: EditorState) => {
+      let result = state.update({ selection: EditorSelection.cursor(state.doc.toString().indexOf('# Heading')) }).state;
+      const done = toggleComment({ state: result, dispatch: transaction => (result = transaction.state) });
+      return { done, line: result.doc.lineAt(result.selection.main.head).text };
+    };
+    const basic = createHtml();
+
+    expect(comment(basic)).toEqual({ done: true, line: '<!-- # Heading -->' });
+    await editor.loadHtmlInMarkdown();
+    expect(comment(basic.update(editor.upgradeLanguage(basic) ?? {}).state)).toEqual({
+      done: true,
+      line: '<!-- # Heading -->'
+    });
   });
 
   it('is highlighting with either language', async () => {

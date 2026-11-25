@@ -37,8 +37,14 @@ export const FORBIDDEN = Object.freeze({
   editor: Object.freeze([
     'node_modules/hast-util-raw/',
     'libs/web/markdown/src/markdown/pipeline/render-safe-html.ts',
-    // With its CSS and JavaScript grammars: loaded after the editor is ready (A-8.11).
-    'node_modules/@codemirror/lang-html/'
+    // The HTML language with its CSS and JavaScript ones and their grammars: loaded after the
+    // editor is ready (A-8.11), each named so that none comes back by another import.
+    'node_modules/@codemirror/lang-html/',
+    'node_modules/@codemirror/lang-css/',
+    'node_modules/@codemirror/lang-javascript/',
+    'node_modules/@lezer/html/',
+    'node_modules/@lezer/css/',
+    'node_modules/@lezer/javascript/'
   ])
 });
 

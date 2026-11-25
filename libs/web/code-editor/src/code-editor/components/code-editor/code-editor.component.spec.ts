@@ -352,6 +352,69 @@ describe('CodeEditorComponent', () => {
       log.mockRestore();
     });
 
+    it('loads the HTML language for a read-only state too, which marks no fb:editor-ready', async () => {
+      holdNextLoad();
+      TestBed.configureTestingModule({ imports: [ CodeEditorComponent ] });
+      fixture = TestBed.createComponent(CodeEditorComponent);
+      changes = [];
+      fixture.componentInstance.stateChange.subscribe(change => changes.push(change));
+      const readOnly = createEditorState({ content: NOTES, highlight: true, label: 'notes.md', readOnly: true });
+      await show(readOnly);
+
+      expect(events).toEqual([ 'load' ]);
+
+      vi.mocked(upgradeLanguage).mockImplementation(state => (state === readOnly ? UPGRADE : null));
+      const dispatch = vi.spyOn(view(), 'dispatch');
+      finishLoad(true);
+      await settle();
+
+      expect(dispatch).toHaveBeenCalledExactlyOnceWith(UPGRADE);
+    });
+
+    it('upgrades at the next render, not as soon as the language has loaded', async () => {
+      // A caller may build its next state only when change detection reads it, as the editor
+      // pane does with the Wrap toggle: an upgrade emitted before would replace that state.
+      holdNextLoad();
+      await setUp();
+      const shown = view().state;
+      vi.mocked(upgradeLanguage).mockImplementation(state => (state === shown ? UPGRADE : null));
+      const dispatch = vi.spyOn(view(), 'dispatch');
+
+      finishLoad(true);
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+
+      expect(dispatch).not.toHaveBeenCalled();
+
+      await fixture.whenStable();
+
+      expect(dispatch).toHaveBeenCalledExactlyOnceWith(UPGRADE);
+    });
+
+    it('does not upgrade a state that the caller has replaced but the view does not show yet', async () => {
+      holdNextLoad();
+      await setUp();
+      const replaced = view().state;
+      const next = stateOf(TODO, 'todo.md');
+      vi.mocked(upgradeLanguage).mockImplementation(state => (state === replaced ? UPGRADE : null));
+      const dispatch = vi.spyOn(view(), 'dispatch');
+
+      // The new state is given, but the view takes it only at the next change detection.
+      fixture.componentRef.setInput('state', next);
+      finishLoad(true);
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(changes).toEqual([]);
+
+      await fixture.whenStable();
+
+      expect(view().state).toBe(next);
+    });
+
     it('does not upgrade a view that is gone', async () => {
       holdNextLoad();
       await setUp();

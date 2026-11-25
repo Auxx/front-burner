@@ -1,6 +1,13 @@
 import { defaultKeymap, history, historyKeymap, insertNewline } from '@codemirror/commands';
 import { yamlFrontmatter } from '@codemirror/lang-yaml';
-import { defineLanguageFacet, Language, LanguageSupport, syntaxHighlighting } from '@codemirror/language';
+import {
+  defineLanguageFacet,
+  indentNodeProp,
+  Language,
+  languageDataProp,
+  LanguageSupport,
+  syntaxHighlighting
+} from '@codemirror/language';
 import { search, searchKeymap } from '@codemirror/search';
 import {
   Compartment,
@@ -55,15 +62,27 @@ export interface CursorPosition {
 
 // The basic language, which the editor starts with: CommonMark with front matter, as the full
 // language parses it, but with HTML tags left as `HTMLTag` and their names and attributes
-// unhighlighted. It is `commonmarkLanguage` of `@codemirror/lang-markdown` built from the same
-// parser, because importing that package here would bring `@codemirror/lang-html` into this
-// chunk: the bundler splits by module, and the module's `markdown()`, which the full language
-// uses, imports `lang-html` (A-8.11, A-8.18).
+// unhighlighted. It is built here from the parser of `@codemirror/lang-markdown`'s
+// `commonmarkLanguage`, because importing that package here would bring `@codemirror/lang-html`
+// into this chunk: the bundler splits by module, and the module's `markdown()`, which the full
+// language uses, imports `lang-html` (A-8.11, A-8.18).
+//
+// Like `commonmarkLanguage`, it hangs its language data (the comment markers, for `Mod-/`) and
+// its indentation on the parser's `Document` node: `yamlFrontmatter` takes only the parser, so
+// data given to `new Language` would be lost. It leaves out the package's folding props, as
+// the editor has no folding. What the full language adds beyond HTML, such as making a link of
+// a URL pasted over a selection, comes with it.
+const markdownData = defineLanguageFacet({ commentTokens: { block: { open: '<!--', close: '-->' } } });
 const basicLanguage: Extension = yamlFrontmatter({
   content: new LanguageSupport(
     new Language(
-      defineLanguageFacet({ commentTokens: { block: { open: '<!--', close: '-->' } } }),
-      commonmarkParser,
+      markdownData,
+      commonmarkParser.configure({
+        props: [
+          languageDataProp.add({ Document: markdownData }),
+          indentNodeProp.add({ Document: () => null })
+        ]
+      }),
       [],
       'markdown'
     )

@@ -214,7 +214,16 @@ describe.skipIf(!existsSync(join(BUILD, 'browser-stats.json')))('the production 
     const initial = initialScripts(readFileSync(join(BUILD, 'browser', 'index.html'), 'utf8'));
     const map = chunkMap(metafile, initial);
 
-    expect(FORBIDDEN.editor).toContain('node_modules/@codemirror/lang-html/');
+    expect(FORBIDDEN.editor).toEqual(
+      expect.arrayContaining([
+        'node_modules/@codemirror/lang-html/',
+        'node_modules/@codemirror/lang-css/',
+        'node_modules/@codemirror/lang-javascript/',
+        'node_modules/@lezer/html/',
+        'node_modules/@lezer/css/',
+        'node_modules/@lezer/javascript/'
+      ])
+    );
     expect(() => checkGroups(metafile, map)).not.toThrow();
     expect(gzipSize(join(BUILD, 'browser'), editorOwnFiles(map))).toBeLessThanOrEqual(EDITOR_LIMIT_BYTES);
   });
