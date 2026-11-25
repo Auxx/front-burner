@@ -11,6 +11,7 @@ export { FileSaver, type FileSaverOptions, SAVE_DELAY_MS, SAVE_RETRY_DELAYS_MS }
 export type { SaveResult, SaveStatus } from './core/saving/save-status.model';
 export { type ApiErrorText, ApiErrorTextService } from './core/services/api-error-text/api-error-text.service';
 export { AuthSessionService, type SessionEnd } from './core/services/auth-session/auth-session.service';
+export { ChunkPreloaderService, type ClientChunkGroup } from './core/services/chunk-preloader/chunk-preloader.service';
 export { CurrentUserService } from './core/services/current-user/current-user.service';
 export { OnboardingStateService, type OnboardingView } from './core/services/onboarding-state/onboarding-state.service';
 export { OnlineStatusService } from './core/services/online-status/online-status.service';

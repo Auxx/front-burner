@@ -22,16 +22,21 @@
                     (click)="retryOpen.emit()">{{ t('retry') }}</button>
           </div>
         </ui-empty-state>
-      } @else if (file(); as file) {
-        @defer {
-          <rs-editor-pane [file]="file"
-                          [fragment]="fragment()"
-                          (openPath)="openPath.emit($event)" />
+      } @else {
+        <!-- The editor's chunk loads while the file does (A-8.18). -->
+        @defer (when file() !== null; prefetch on immediate) {
+          @if (file(); as file) {
+            <rs-editor-pane [file]="file"
+                            [fragment]="fragment()"
+                            (openPath)="openPath.emit($event)" />
+          } @else {
+            <ui-spinner [label]="t('opening')" />
+          }
+        } @placeholder {
+          <ui-spinner [label]="t('opening')" />
         } @loading (minimum 0ms) {
           <ui-spinner [label]="t('opening')" />
         }
-      } @else {
-        <ui-spinner [label]="t('opening')" />
       }
     }
   } @else if (path() === null) {

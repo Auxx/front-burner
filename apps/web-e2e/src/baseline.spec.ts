@@ -240,6 +240,7 @@ test.describe('the first load', () => {
     await page.goto('/login');
     await logIn(page);
     await expect(page).toHaveTitle('Dashboard · Front Burner');
+    await fontsLoaded(page);
 
     const translations: string[] = [];
     page.on('request', request => {
@@ -258,6 +259,7 @@ test.describe('the first load', () => {
     await expect(page.locator('head link[rel="preload"][href="i18n/en.json"]')).toHaveCount(1);
     // The client's own request is answered by the preload, not sent again.
     expect(translations).toHaveLength(1);
+    await fontsLoaded(page);
   });
 });
 

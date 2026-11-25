@@ -1,7 +1,8 @@
 import { signal } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import type { ApiError, CurrentUser, Entry } from '@front-burner/shared-contracts';
-import { CurrentUserService } from '@front-burner/web-core';
+import { ChunkPreloaderService, CurrentUserService } from '@front-burner/web-core';
+import type { Mock } from 'vitest';
 
 import { entry } from '../../../testing/listings';
 import { openFile } from '../../../testing/open-files';
@@ -19,8 +20,21 @@ function failure(code: string): ApiError {
   return { code, params: {}, requestId: 'abcdef0123456789', message: code };
 }
 
+/** The providers of the editor area and its editor pane, with the chunk preloader's `preload` as given. */
+function providers(preload: (group: string) => void) {
+  return [
+    { provide: OpenFilesService, useValue: {} },
+    { provide: DiskChangesService, useValue: {} },
+    { provide: RepositorySessionService, useValue: { repository: signal({ id: 12 }) } },
+    ViewModeService,
+    { provide: CurrentUserService, useValue: { user: signal<CurrentUser | undefined>(undefined) } },
+    { provide: ChunkPreloaderService, useValue: { preload } }
+  ];
+}
+
 describe('EditorAreaComponent', () => {
   let fixture: ComponentFixture<EditorAreaComponent>;
+  let preload: Mock<(group: string) => void>;
 
   const area = () => fixture.nativeElement as HTMLElement;
 
@@ -31,18 +45,29 @@ describe('EditorAreaComponent', () => {
   }
 
   beforeEach(async () => {
+    preload = vi.fn();
     TestBed.configureTestingModule({
       imports: [ EditorAreaComponent, translocoTesting() ],
-      providers: [
-        { provide: OpenFilesService, useValue: {} },
-        { provide: DiskChangesService, useValue: {} },
-        { provide: RepositorySessionService, useValue: { repository: signal({ id: 12 }) } },
-        ViewModeService,
-        { provide: CurrentUserService, useValue: { user: signal<CurrentUser | undefined>(undefined) } }
-      ]
+      providers: providers(preload)
     });
     fixture = TestBed.createComponent(EditorAreaComponent);
     await settle(fixture);
+  });
+
+  it('NF-2.2: asks for the editor\'s chunks when a Markdown file is chosen, before the file has arrived', async () => {
+    expect(preload).not.toHaveBeenCalled();
+
+    await show('docs/guide.md', entry('guide.md'));
+
+    expect(preload).toHaveBeenCalledWith('editor');
+    expect(area().querySelector('rs-editor-pane')).toBeNull();
+  });
+
+  it('does not ask for the editor\'s chunks for a file that is not Markdown', async () => {
+    await show('logo.png', entry('logo.png'));
+    await show('docs', entry('docs', { kind: 'folder' }));
+
+    expect(preload).not.toHaveBeenCalled();
   });
 
   it('shows the empty state', () => {
@@ -125,5 +150,37 @@ describe('EditorAreaComponent', () => {
     (area().querySelector('rs-entry-message button') as HTMLButtonElement).click();
 
     expect(emitted).toEqual([ 'delete' ]);
+  });
+});
+
+describe('EditorAreaComponent while the editor\'s chunk loads', () => {
+  it('shows the file chosen last when the files change while the editor\'s chunk loads', async () => {
+    TestBed.configureTestingModule({
+      imports: [ EditorAreaComponent, translocoTesting() ],
+      providers: providers(vi.fn()),
+      deferBlockBehavior: DeferBlockBehavior.Manual
+    });
+    const fixture = TestBed.createComponent(EditorAreaComponent);
+    const area = fixture.nativeElement as HTMLElement;
+    fixture.componentRef.setInput('path', 'docs/a.md');
+    fixture.componentRef.setInput('entry', entry('a.md'));
+    await settle(fixture);
+    expect(area.querySelector('ui-spinner')?.getAttribute('aria-label')).toBe(`${K}.opening`);
+
+    const [ block ] = await fixture.getDeferBlocks();
+    await block.render(DeferBlockState.Loading);
+    fixture.componentRef.setInput('file', openFile('docs/a.md'));
+    fixture.componentRef.setInput('path', 'docs/b.md');
+    fixture.componentRef.setInput('entry', entry('b.md'));
+    fixture.componentRef.setInput('file', openFile('docs/b.md'));
+    await settle(fixture);
+    expect(area.querySelector('rs-editor-pane')).toBeNull();
+
+    const [ loaded ] = await fixture.getDeferBlocks();
+    await loaded.render(DeferBlockState.Complete);
+    await settle(fixture);
+
+    expect(area.querySelector('rs-editor-pane .cm-content')?.textContent).toContain('# docs/b.md');
+    expect(area.querySelector('rs-editor-pane .cm-content')?.textContent).not.toContain('# docs/a.md');
   });
 });
