@@ -417,7 +417,10 @@ docker compose ps
 ```
 
 The first start takes a few seconds. `docker compose ps` shows the instance as
-`healthy` once it is ready; until then the port refuses connections. If it shows
+`starting` until it is ready, and the port refuses connections meanwhile; then
+it shows `healthy`. A later start among many working copies can take a minute or
+more, as Front Burner checks each one first (with 2,500 of them, about 45
+seconds on a small server), and shows `starting` all that time. If it shows
 `restarting` or `unhealthy`, read the log, which says what is wrong:
 
 ```sh
@@ -1184,6 +1187,10 @@ reports:
   repositories directory cannot be written to. Docker shows the container as
   `unhealthy` after three failed checks in a row. The log usually says why.
 
+While the instance starts, the image's health check calls `/api/health/ready`
+every 2 seconds, and failed checks don't count for the first 5 minutes, so that
+a long start shows as `starting`, not `unhealthy`.
+
 ### Prometheus metrics
 
 Once you set `FRONT_BURNER_METRICS_TOKEN` (see [Metrics](#metrics) under
@@ -1471,9 +1478,11 @@ cannot read it. See [Secrets](#secrets).
 start, Front Burner checks every working copy before it opens its port, so the
 port refuses connections meanwhile. This usually takes moments, but it can take
 minutes after restoring a backup of large repositories, since git then has to
-read every file again. If your orchestrator checks that the instance is alive,
-give it a generous start period, so that it doesn't restart the instance partway
-through.
+read every file again. The image's own health check waits 5 minutes before it
+counts a failure (see [Health checks](#health-checks)); a start that takes
+longer shows as `unhealthy` until it ends, which Docker alone doesn't act on. If
+your orchestrator checks that the instance is alive, give it a generous start
+period, so that it doesn't restart the instance partway through.
 
 **A repository shows "Working copy is missing or damaged" after a failed pull.**
 Front Burner could not undo a merge that failed, and has blocked the repository
