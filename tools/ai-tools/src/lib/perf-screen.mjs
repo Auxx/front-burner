@@ -161,6 +161,31 @@ export function sessionOnly(state) {
 }
 
 /**
+ * The requests of a measure grouped into waves of round trips made one
+ * after another: wave 1 holds the requests that start before any request
+ * has ended, and a request is in wave _n_ + 1 when it starts at or after the
+ * first end in wave _n_. `start` and `end` are ms from the measure's start;
+ * requests that started before it (a negative `start`) are left out. Sorted
+ * by start, ties by URL.
+ */
+export function waves(requests) {
+  const sorted = requests.filter(request => request.start >= 0).sort((a, b) =>
+    a.start - b.start || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)
+  );
+  let wave = 0;
+  let firstEnd = Number.NEGATIVE_INFINITY;
+  return sorted.map(request => {
+    if (request.start >= firstEnd) {
+      wave++;
+      firstEnd = request.end;
+    } else {
+      firstEnd = Math.min(firstEnd, request.end);
+    }
+    return { ...request, wave };
+  });
+}
+
+/**
  * The 200 KB file of the preview measure: many short blocks, as a real file
  * has, so that typing re-renders only the last one (A-8.12).
  */
@@ -219,6 +244,33 @@ function recordInput() {
     }
     return entry;
   };
+}
+
+/** The measures that `waterfall` can trace: the two slow 4G rows that round trips set. */
+export const WATERFALL_MEASURES = [ 'first-load', 'editor-slow-4g' ];
+/** How long a waterfall waits after its mark for the requests still on their way. */
+const WATERFALL_SETTLE_MS = 3000;
+
+/**
+ * Records every request of `page` from now, as it finishes or fails: its
+ * URL, and its start and end in ms since the epoch, as the browser timed it.
+ */
+function recordRequests(page) {
+  const requests = [];
+  const done = request => {
+    const timing = request.timing();
+    const end = timing.responseEnd >= 0 ? timing.startTime + timing.responseEnd : Date.now();
+    requests.push({ url: request.url(), start: timing.startTime, end });
+  };
+  page.on('requestfinished', done);
+  page.on('requestfailed', done);
+  return requests;
+}
+
+/** A URL of the instance as its path and query; any other URL in full. */
+export function shortUrl(url, instance) {
+  const parsed = new URL(url);
+  return parsed.origin === new URL(instance).origin ? `${parsed.pathname}${parsed.search}` : url;
 }
 
 /** One browser for the run, and the session that each fresh context starts with. */
@@ -426,6 +478,49 @@ export class ScreenBrowser {
       await this.press(this.entry(page, EDITOR_FILE));
       const clicked = await this.lastInput(page, 'clicks');
       return (await this.waitForMark(page, 'fb:editor-ready', { after: clicked })) - clicked;
+    });
+  }
+
+  /**
+   * Every request of the measure `first-load` (cold) or `editor-slow-4g`,
+   * grouped into {@link waves}: the requests that started from the measure's
+   * start to its mark, each with its start and end in ms from the measure's
+   * start, and `endMs`, when the mark was set.
+   */
+  waterfall(measure, repositoryId) {
+    if (!WATERFALL_MEASURES.includes(measure)) {
+      throw new Error(`No waterfall for ${measure}; one of ${WATERFALL_MEASURES.join(', ')}`);
+    }
+    return this.fresh(async page => {
+      let from;
+      let mark;
+      let requests;
+      if (measure === 'first-load') {
+        await this.throttle(page, SCREEN_OPERATIONS[measure].network);
+        requests = recordRequests(page);
+        await page.goto('/', { waitUntil: 'commit' });
+        from = 0;
+        mark = await this.waitForMark(page, 'fb:app-ready');
+        this.assertLoggedIn(page);
+      } else {
+        await this.openScreen(page, repositoryId);
+        await this.throttle(page, SCREEN_OPERATIONS[measure].network);
+        requests = recordRequests(page);
+        await this.press(this.entry(page, EDITOR_FILE));
+        from = await this.lastInput(page, 'clicks');
+        mark = await this.waitForMark(page, 'fb:editor-ready', { after: from });
+      }
+      // Requests still on their way when the mark was set end soon after it.
+      await page.waitForTimeout(WATERFALL_SETTLE_MS);
+      const origin = (await page.evaluate(() => performance.timeOrigin)) + from;
+      const endMs = mark - from;
+      const relative = requests.map(request => ({
+        url: shortUrl(request.url, this.url),
+        start: request.start - origin,
+        end: request.end - origin
+      })).filter(request => request.start <= endMs);
+      const grouped = waves(relative);
+      return { measure, endMs, waves: grouped.at(-1)?.wave ?? 0, requests: grouped };
     });
   }
 

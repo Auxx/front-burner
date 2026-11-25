@@ -8,7 +8,8 @@ import {
   selectMeasures,
   sessionOnly,
   sessionState,
-  SLOW_4G
+  SLOW_4G,
+  waves
 } from './perf-screen.mjs';
 import { allPass, resultRows, resultTable } from './perf-stats.mjs';
 
@@ -136,5 +137,45 @@ describe('the screen rows', () => {
     expect(table[2].slice(6)).toEqual([ '—', '—' ]);
     expect(table[3].slice(4)).toEqual([ '310 ms', '310 ms', '300 ms', 'NO' ]);
     expect(allPass(rows)).toBe(false);
+  });
+});
+
+describe('waves', () => {
+  const request = (url, start, end) => ({ url, start, end });
+
+  it('puts requests that start before any has ended in wave 1', () => {
+    expect(waves([ request('/a', 0, 600), request('/b', 10, 700), request('/c', 599, 800) ]).map(r => r.wave))
+      .toEqual([ 1, 1, 1 ]);
+  });
+
+  it('starts wave 2 at the first request that starts after one has ended', () => {
+    const result = waves([
+      request('/index.html', 0, 600),
+      request('/main.js', 600, 1700),
+      request('/chunk.js', 620, 1300),
+      request('/lazy.js', 1300, 1900),
+      request('/en.json', 1310, 1950),
+      request('/api', 1960, 2500)
+    ]);
+
+    expect(result.map(r => [ r.url, r.wave ])).toEqual([
+      [ '/index.html', 1 ],
+      [ '/main.js', 2 ],
+      [ '/chunk.js', 2 ],
+      [ '/lazy.js', 3 ],
+      [ '/en.json', 3 ],
+      [ '/api', 4 ]
+    ]);
+  });
+
+  it('sorts by start, ties by URL', () => {
+    expect(waves([ request('/b', 5, 50), request('/a', 5, 40), request('/c', 0, 30) ]).map(r => r.url))
+      .toEqual([ '/c', '/a', '/b' ]);
+  });
+
+  it('ignores requests that started before the measure', () => {
+    expect(waves([ request('/old', -100, 20), request('/new', 0, 600) ])).toEqual([
+      { url: '/new', start: 0, end: 600, wave: 1 }
+    ]);
   });
 });

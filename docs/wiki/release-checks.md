@@ -456,6 +456,74 @@ takes them: `modulepreload` for the lazy route's and the editor's chunks, and
 fewer requests one after another on the first page. The phone's NF-2.5 row has
 no network part and stays as plan 151 left it.
 
+## Plan 162: round trips
+
+**Indicative only**, on the same machine as plans 151 and 159. Plan 162's
+`perf-screen.mjs waterfall` lists every request of a cold first load and of
+opening the 100 KB `big.md`, on slow 4G, and groups them into **waves**: a
+request is in wave _n_ + 1 when it starts at or after the first end in wave _n_.
+The number of waves is the number of round trips made one after another, each
+562.5 ms on slow 4G.
+
+### Before
+
+Taken on 2026-11-25 against the server and web client of commit `12f164d` (this
+plan's base) built for production, with `web:precompress`, on a fresh data
+directory on disk (`FRONT_BURNER_LOG_LEVEL=warn`,
+`FRONT_BURNER_SERVER_TIMING=true`).
+
+| Measure                        | Desktop: waves | Mark    | Phone: waves | Mark    |
+| ------------------------------ | -------------- | ------- | ------------ | ------- |
+| First load, cold cache         | 8              | 5396 ms | 8            | 5597 ms |
+| Editor usable, 100 KB, slow 4G | 3              | 3439 ms | 3            | 3604 ms |
+
+`perf-screen.mjs waterfall --email admin@example.com` (desktop), the first load:
+
+```text
+Wave  Start    End      Request
+1     0 ms     583 ms   /
+2     592 ms   1269 ms  /styles-POZISHPY.css
+2     592 ms   1868 ms  /chunk-BNfx-oCf.js
+2     592 ms   1227 ms  /chunk-B9dn0NrW.js
+2     592 ms   1194 ms  /polyfills-7Q6ROF5C.js
+2     592 ms   2419 ms  /main-ZCKRL2BP.js
+3     1268 ms  2391 ms  /media/inter-latin-wght-normal-NRMW37G5.woff2
+4     2448 ms  3058 ms  /chunk-BvLe0wMs.js
+4     2449 ms  3049 ms  /chunk-64USeiKr.js
+4     2449 ms  3033 ms  /chunk-DywkOlpa.js
+5     3052 ms  3816 ms  /i18n/en.json
+5     3058 ms  3732 ms  /chunk-BYRY_D2E.js
+5     3058 ms  4224 ms  /chunk-CyM9pZN3.js
+6     4241 ms  4808 ms  /api/v1/onboarding
+7     4811 ms  5383 ms  /chunk-C_z1MSRN.js
+8     5386 ms  5957 ms  /api/v1/me
+8     5390 ms  5966 ms  /api/v1/repositories/recent
+
+Mark at 5396 ms; 17 requests in 8 waves.
+```
+
+Opening `big.md`:
+
+```text
+Wave  Start    End      Request
+1     17 ms    584 ms   /api/v1/repositories/1/git/fetch/file-opened
+1     17 ms    601 ms   /api/v1/repositories/1/file?path=big.md
+2     617 ms   1876 ms  /chunk-CGCanc0T.js
+3     1881 ms  3393 ms  /chunk-BasEaq0f.js
+
+Mark at 3439 ms; 4 requests in 3 waves.
+```
+
+The phone's waterfalls have the same requests in the same waves, each a few ms
+later. The font (wave 3) is not waited for. What the first load waits for, wave
+by wave: `index.html`; `main` and the files `index.html` names; the route's lazy
+chunks, found once `main` has run; their own static imports and the
+translations; the onboarding status, asked for only by the guard; the shell's
+lazy component, loaded only once the guard has let the route through; and the
+dashboard's API requests, whose answers the mark does not wait for. The editor
+waits for the file, then its first chunk, then that chunk's static import: 124
+KB and 169 KB of Brotli, 1.6 s at 180 KB/s however they are ordered.
+
 ## Reference host
 
 Plan 152 measures NF-1 and NF-2 on the reference host of
