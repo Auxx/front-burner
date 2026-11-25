@@ -419,7 +419,7 @@ docker compose ps
 The first start takes a few seconds. `docker compose ps` shows the instance as
 `starting` until it is ready, and the port refuses connections meanwhile; then
 it shows `healthy`. A later start among many working copies can take a minute or
-more, as Front Burner checks each one first (with 2,500 of them, about 45
+more, as Front Burner checks each one first (with 2,500 of them, 45 to 85
 seconds on a small server), and shows `starting` all that time. If it shows
 `restarting` or `unhealthy`, read the log, which says what is wrong:
 
