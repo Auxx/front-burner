@@ -1,4 +1,4 @@
-import { undo, undoDepth } from '@codemirror/commands';
+import { toggleComment, undo, undoDepth } from '@codemirror/commands';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorSelection, type EditorState, type Transaction } from '@codemirror/state';
 import { EditorView, runScopeHandlers } from '@codemirror/view';
@@ -211,5 +211,143 @@ describe('createEditorState', () => {
     expect(numbers).toContain('1');
     expect(numbers).toContain('2');
     view.destroy();
+  });
+});
+
+describe('the HTML language', () => {
+  // A fresh module per test, so that each starts before the HTML language has loaded.
+  let editor: typeof import('./editor-state');
+  const HTML = '---\ntitle: Notes\n---\n\n# Heading\n\n<abbr title="x">y</abbr>\n';
+
+  function createHtml(options: Partial<EditorStateOptions> = {}): EditorState {
+    return editor.createEditorState({ content: HTML, highlight: true, label: 'notes.md', ...options });
+  }
+
+  /**
+   * Whether the HTML tag's name and attribute are parsed as such, as the HTML language parses
+   * them; it is mounted as an overlay on `HTMLTag`, which only `resolveInner` enters.
+   */
+  function hasHtmlTags(state: EditorState): boolean {
+    const tree = ensureSyntaxTree(state, state.doc.length, 5000);
+    const text = state.doc.toString();
+    return tree?.resolveInner(text.indexOf('<abbr') + 2, 1).name === 'TagName'
+      && tree.resolveInner(text.indexOf('title=') + 2, 1).name === 'AttributeName';
+  }
+
+  beforeEach(async () => {
+    vi.resetModules();
+    editor = await import('./editor-state');
+  });
+
+  afterEach(() => {
+    vi.doUnmock('./markdown-html');
+  });
+
+  it('highlights Markdown and front matter before the HTML language has loaded', () => {
+    const state = createHtml();
+
+    expect(nodeNames(state)).toContain('Frontmatter');
+    expect(nodeNames(state)).toContain('ATXHeading1');
+    expect(nodeNames(state)).toContain('HTMLTag');
+    expect(hasHtmlTags(state)).toBe(false);
+  });
+
+  it('highlights HTML tags once it has loaded and the state is upgraded', async () => {
+    const state = createHtml();
+
+    await editor.loadHtmlInMarkdown();
+    const spec = editor.upgradeLanguage(state);
+    if (spec === null) {
+      throw new Error('Not upgraded');
+    }
+    const upgraded = state.update(spec).state;
+
+    expect(hasHtmlTags(upgraded)).toBe(true);
+    expect(nodeNames(upgraded)).toContain('Frontmatter');
+    expect(hasHtmlTags(createHtml())).toBe(true);
+  });
+
+  it('keeps the text, the selection and the undo history when upgraded', async () => {
+    const edited = createHtml().update({ changes: { from: 0, insert: 'x' }, selection: { anchor: 5, head: 7 } }).state;
+
+    await editor.loadHtmlInMarkdown();
+    const upgraded = edited.update(editor.upgradeLanguage(edited) ?? {}).state;
+
+    expect(hasHtmlTags(upgraded)).toBe(true);
+    expect(upgraded.doc.toString()).toBe(`x${HTML}`);
+    expect(upgraded.selection.main).toMatchObject({ anchor: 5, head: 7 });
+    expect(undoDepth(upgraded)).toBe(1);
+    expect(runUndo(upgraded).doc.toString()).toBe(HTML);
+  });
+
+  it('upgrades nothing while highlighting is off, or before the load, or once upgraded', async () => {
+    expect(editor.upgradeLanguage(createHtml())).toBeNull();
+
+    await editor.loadHtmlInMarkdown();
+    const off = createHtml({ highlight: false });
+    const basic = editor.createEditorState({ content: HTML, highlight: false, label: 'notes.md' });
+
+    expect(editor.upgradeLanguage(off)).toBeNull();
+    expect(editor.upgradeLanguage(basic)).toBeNull();
+    expect(editor.upgradeLanguage(createHtml())).toBeNull();
+  });
+
+  it('turns highlighting back on with the HTML language after the load', async () => {
+    await editor.loadHtmlInMarkdown();
+    const off = createHtml().update(editor.setHighlighting(false)).state;
+
+    expect(editor.isHighlighting(off)).toBe(false);
+    expect(editor.upgradeLanguage(off)).toBeNull();
+
+    const on = off.update(editor.setHighlighting(true)).state;
+
+    expect(editor.isHighlighting(on)).toBe(true);
+    expect(hasHtmlTags(on)).toBe(true);
+  });
+
+  it('comments out a line with either language, as an HTML comment', async () => {
+    const comment = (state: EditorState) => {
+      let result = state.update({ selection: EditorSelection.cursor(state.doc.toString().indexOf('# Heading')) }).state;
+      const done = toggleComment({ state: result, dispatch: transaction => (result = transaction.state) });
+      return { done, line: result.doc.lineAt(result.selection.main.head).text };
+    };
+    const basic = createHtml();
+
+    expect(comment(basic)).toEqual({ done: true, line: '<!-- # Heading -->' });
+    await editor.loadHtmlInMarkdown();
+    expect(comment(basic.update(editor.upgradeLanguage(basic) ?? {}).state)).toEqual({
+      done: true,
+      line: '<!-- # Heading -->'
+    });
+  });
+
+  it('is highlighting with either language', async () => {
+    const basic = createHtml();
+
+    expect(editor.isHighlighting(basic)).toBe(true);
+    await editor.loadHtmlInMarkdown();
+
+    expect(editor.isHighlighting(basic)).toBe(true);
+    expect(editor.isHighlighting(basic.update(editor.upgradeLanguage(basic) ?? {}).state)).toBe(true);
+  });
+
+  it('keeps the basic language when the load fails, and loads again on the next call', async () => {
+    const log = vi.spyOn(console, 'error');
+    vi.doMock('./markdown-html', () => {
+      throw new Error('Failed to fetch dynamically imported module');
+    });
+
+    await expect(editor.loadHtmlInMarkdown()).rejects.toThrow();
+    const basic = createHtml();
+
+    expect(editor.upgradeLanguage(basic)).toBeNull();
+    expect(hasHtmlTags(basic)).toBe(false);
+
+    vi.doUnmock('./markdown-html');
+    await editor.loadHtmlInMarkdown();
+
+    expect(editor.upgradeLanguage(basic)).not.toBeNull();
+    expect(log).not.toHaveBeenCalled();
+    log.mockRestore();
   });
 });

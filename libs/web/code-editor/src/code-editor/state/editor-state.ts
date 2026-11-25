@@ -1,7 +1,13 @@
 import { defaultKeymap, history, historyKeymap, insertNewline } from '@codemirror/commands';
-import { markdown } from '@codemirror/lang-markdown';
 import { yamlFrontmatter } from '@codemirror/lang-yaml';
-import { syntaxHighlighting } from '@codemirror/language';
+import {
+  defineLanguageFacet,
+  indentNodeProp,
+  Language,
+  languageDataProp,
+  LanguageSupport,
+  syntaxHighlighting
+} from '@codemirror/language';
 import { search, searchKeymap } from '@codemirror/search';
 import {
   Compartment,
@@ -14,6 +20,7 @@ import {
 } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { classHighlighter, tagHighlighter, tags } from '@lezer/highlight';
+import { parser as commonmarkParser } from '@lezer/markdown';
 import { conflictExtension, type ConflictTexts } from '../conflicts/conflict-extension';
 import { findIconSprite, findLabels, type FindPanelLabels } from '../search/find-labels';
 import { createFindPanel, openReplacePanel } from '../search/find-panel';
@@ -53,9 +60,43 @@ export interface CursorPosition {
   column: number;
 }
 
-// The Markdown language, without languages for fenced code and without its keymap, which
-// continues lists on Enter (ED-9).
-const language = yamlFrontmatter({ content: markdown({ codeLanguages: [], addKeymap: false }) });
+// The basic language, which the editor starts with: CommonMark with front matter, as the full
+// language parses it, but with HTML tags left as `HTMLTag` and their names and attributes
+// unhighlighted. It is built here from the parser of `@codemirror/lang-markdown`'s
+// `commonmarkLanguage`, because importing that package here would bring `@codemirror/lang-html`
+// into this chunk: the bundler splits by module, and the module's `markdown()`, which the full
+// language uses, imports `lang-html` (A-8.11, A-8.18).
+//
+// Like `commonmarkLanguage`, it hangs its language data (the comment markers, for `Mod-/`) and
+// its indentation on the parser's `Document` node: `yamlFrontmatter` takes only the parser, so
+// data given to `new Language` would be lost. It leaves out the package's folding props, as
+// the editor has no folding. What the full language adds beyond HTML, such as making a link of
+// a URL pasted over a selection, comes with it.
+const markdownData = defineLanguageFacet({ commentTokens: { block: { open: '<!--', close: '-->' } } });
+const basicLanguage: Extension = yamlFrontmatter({
+  content: new LanguageSupport(
+    new Language(
+      markdownData,
+      commonmarkParser.configure({
+        props: [
+          languageDataProp.add({ Document: markdownData }),
+          indentNodeProp.add({ Document: () => null })
+        ]
+      }),
+      [],
+      'markdown'
+    )
+  )
+});
+
+// The full language (`MARKDOWN_WITH_HTML`), once `loadHtmlInMarkdown` has loaded it.
+let fullLanguage: Extension | undefined;
+let loadingFullLanguage: Promise<void> | undefined;
+
+/** The language that highlighting turns on: the full one once it has loaded. */
+function language(): Extension {
+  return fullLanguage ?? basicLanguage;
+}
 
 // The Markdown tags that `classHighlighter` has no class for. Both highlighters run in the
 // same pass over the syntax tree, so this costs no extra work while typing.
@@ -129,7 +170,7 @@ export function createEditorState(options: EditorStateOptions): EditorState {
       options.findLabels ? findLabels.of(options.findLabels) : [],
       options.findIconSprite === undefined ? [] : findIconSprite.of(options.findIconSprite),
       keymap.of([ ...exactKeys, ...defaultKeymap, ...historyKeymap, replaceKey, ...searchKeymap ]),
-      highlighting.of(options.highlight ? language : []),
+      highlighting.of(options.highlight ? language() : []),
       syntaxHighlighting(classHighlighter),
       syntaxHighlighting(markdownHighlighter),
       lineNumbers(),
@@ -153,11 +194,42 @@ export function createEditorState(options: EditorStateOptions): EditorState {
 
 /** Switches highlighting without recreating the state, so the undo history stays (ED-8, ED-9a). */
 export function setHighlighting(on: boolean): TransactionSpec {
-  return { effects: highlighting.reconfigure(on ? language : []) };
+  return { effects: highlighting.reconfigure(on ? language() : []) };
 }
 
+/** Whether the state highlights, with the basic language or the full one. */
 export function isHighlighting(state: EditorState): boolean {
-  return highlighting.get(state) === language;
+  const current = highlighting.get(state);
+  return current === basicLanguage || (current !== undefined && current === fullLanguage);
+}
+
+/**
+ * Loads the full language, with HTML tags highlighted, in a chunk of its own, once (A-8.11).
+ * Rejects when the chunk does not load, such as offline, and the next call then tries again;
+ * the editor keeps the basic language meanwhile.
+ */
+export function loadHtmlInMarkdown(): Promise<void> {
+  loadingFullLanguage ??= import('./markdown-html').then(
+    ({ MARKDOWN_WITH_HTML }) => {
+      fullLanguage = MARKDOWN_WITH_HTML;
+    },
+    (error: unknown) => {
+      loadingFullLanguage = undefined;
+      throw error;
+    }
+  );
+  return loadingFullLanguage;
+}
+
+/**
+ * Swaps the basic language of a state that highlights for the full one, once it has loaded,
+ * as one transaction that keeps the text, the selection and the undo history; `null` when there
+ * is nothing to swap.
+ */
+export function upgradeLanguage(state: EditorState): TransactionSpec | null {
+  return fullLanguage !== undefined && highlighting.get(state) === basicLanguage
+    ? { effects: highlighting.reconfigure(fullLanguage) }
+    : null;
 }
 
 /** Switches soft wrapping without recreating the state, so the undo history stays. */

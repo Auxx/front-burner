@@ -2,12 +2,24 @@ import { CSP_NONCE } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { undo } from '@codemirror/commands';
 import { openSearchPanel } from '@codemirror/search';
-import { EditorSelection, type EditorState } from '@codemirror/state';
+import { EditorSelection, type EditorState, type TransactionSpec } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 
 import { SWAPPING_ATTRIBUTE } from '../../search/find-panel';
-import { createEditorState } from '../../state/editor-state';
+import { createEditorState, loadHtmlInMarkdown, upgradeLanguage } from '../../state/editor-state';
 import { CodeEditorComponent, type EditorStateChange } from './code-editor.component';
+
+// The component's part in loading the full language is tested here with these two stubbed; the
+// languages themselves in `editor-state.spec.ts`. By default they call through, with the full
+// language loaded before every test, so that no upgrade lands in the middle of one.
+vi.mock('../../state/editor-state', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../state/editor-state')>();
+  return {
+    ...actual,
+    loadHtmlInMarkdown: vi.fn(actual.loadHtmlInMarkdown),
+    upgradeLanguage: vi.fn(actual.upgradeLanguage)
+  };
+});
 
 const NOTES = '# Notes\n\nSome text.\n';
 const TODO = '# To do\n\n- Write tests\n';
@@ -15,6 +27,8 @@ const TODO = '# To do\n\n- Write tests\n';
 describe('CodeEditorComponent', () => {
   let fixture: ComponentFixture<CodeEditorComponent>;
   let changes: EditorStateChange[];
+
+  beforeAll(() => loadHtmlInMarkdown());
 
   function stateOf(content: string, label = 'notes.md'): EditorState {
     return createEditorState({ content, highlight: true, label });
@@ -250,6 +264,169 @@ describe('CodeEditorComponent', () => {
 
     expect(content.querySelector('.tok-heading')).not.toBeNull();
     expect(content.querySelector('[style*="color"]')).toBeNull();
+  });
+
+  describe('the full language', () => {
+    // What `upgradeLanguage` returns in these tests, which marks the dispatch it is given to.
+    const UPGRADE: TransactionSpec = { selection: { anchor: 1 } };
+    let events: string[];
+    let finishLoad: (loaded: boolean) => void;
+
+    /** Makes the next load wait for `finishLoad`, noting when it starts in `events`. */
+    function holdNextLoad(): void {
+      vi.mocked(loadHtmlInMarkdown).mockImplementationOnce(() => {
+        events.push('load');
+        return new Promise<void>((resolve, reject) => {
+          finishLoad =
+            loaded => (loaded ? resolve() : reject(new Error('Failed to fetch dynamically imported module')));
+        });
+      });
+    }
+
+    async function settle(): Promise<void> {
+      await new Promise(resolve => setTimeout(resolve));
+      await fixture.whenStable();
+    }
+
+    beforeEach(() => {
+      events = [];
+      // jsdom has no User Timing API.
+      performance.mark = ((name: string) => {
+        events.push(name);
+      }) as typeof performance.mark;
+    });
+
+    afterEach(() => {
+      delete (performance as Partial<Performance>).mark;
+      vi.mocked(loadHtmlInMarkdown).mockReset();
+      vi.mocked(upgradeLanguage).mockReset();
+    });
+
+    it('loads the HTML language after fb:editor-ready and upgrades the view', async () => {
+      holdNextLoad();
+      await setUp();
+
+      expect(events).toEqual([ 'fb:editor-ready', 'load' ]);
+
+      const shown = view().state;
+      vi.mocked(upgradeLanguage).mockImplementation(state => (state === shown ? UPGRADE : null));
+      const dispatch = vi.spyOn(view(), 'dispatch');
+      finishLoad(true);
+      await settle();
+
+      expect(dispatch).toHaveBeenCalledExactlyOnceWith(UPGRADE);
+      expect(changes.at(-1)?.state).toBe(view().state);
+    });
+
+    it('upgrades a state that was created before the load when it is shown', async () => {
+      const before = stateOf(TODO, 'todo.md');
+      await setUp();
+      const dispatch = vi.spyOn(view(), 'dispatch');
+      vi.mocked(upgradeLanguage).mockImplementation(state => (state === before ? UPGRADE : null));
+
+      await show(before);
+
+      expect(dispatch).toHaveBeenCalledExactlyOnceWith(UPGRADE);
+      expect(changes.at(-1)?.state).toBe(view().state);
+      expect(view().state.doc.toString()).toBe(TODO);
+    });
+
+    it('keeps the basic language without a word when the load fails, and tries again with the next file', async () => {
+      const log = vi.spyOn(console, 'error');
+      holdNextLoad();
+      await setUp();
+      vi.mocked(upgradeLanguage).mockReturnValue(UPGRADE);
+      const dispatch = vi.spyOn(view(), 'dispatch');
+
+      finishLoad(false);
+      await settle();
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(log).not.toHaveBeenCalled();
+
+      vi.mocked(upgradeLanguage).mockReturnValue(null);
+      holdNextLoad();
+      await show(stateOf(TODO, 'todo.md'));
+
+      expect(events).toEqual([ 'fb:editor-ready', 'load', 'fb:editor-ready', 'load' ]);
+      log.mockRestore();
+    });
+
+    it('loads the HTML language for a read-only state too, which marks no fb:editor-ready', async () => {
+      holdNextLoad();
+      TestBed.configureTestingModule({ imports: [ CodeEditorComponent ] });
+      fixture = TestBed.createComponent(CodeEditorComponent);
+      changes = [];
+      fixture.componentInstance.stateChange.subscribe(change => changes.push(change));
+      const readOnly = createEditorState({ content: NOTES, highlight: true, label: 'notes.md', readOnly: true });
+      await show(readOnly);
+
+      expect(events).toEqual([ 'load' ]);
+
+      vi.mocked(upgradeLanguage).mockImplementation(state => (state === readOnly ? UPGRADE : null));
+      const dispatch = vi.spyOn(view(), 'dispatch');
+      finishLoad(true);
+      await settle();
+
+      expect(dispatch).toHaveBeenCalledExactlyOnceWith(UPGRADE);
+    });
+
+    it('upgrades at the next render, not as soon as the language has loaded', async () => {
+      // A caller may build its next state only when change detection reads it, as the editor
+      // pane does with the Wrap toggle: an upgrade emitted before would replace that state.
+      holdNextLoad();
+      await setUp();
+      const shown = view().state;
+      vi.mocked(upgradeLanguage).mockImplementation(state => (state === shown ? UPGRADE : null));
+      const dispatch = vi.spyOn(view(), 'dispatch');
+
+      finishLoad(true);
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+
+      expect(dispatch).not.toHaveBeenCalled();
+
+      await fixture.whenStable();
+
+      expect(dispatch).toHaveBeenCalledExactlyOnceWith(UPGRADE);
+    });
+
+    it('does not upgrade a state that the caller has replaced but the view does not show yet', async () => {
+      holdNextLoad();
+      await setUp();
+      const replaced = view().state;
+      const next = stateOf(TODO, 'todo.md');
+      vi.mocked(upgradeLanguage).mockImplementation(state => (state === replaced ? UPGRADE : null));
+      const dispatch = vi.spyOn(view(), 'dispatch');
+
+      // The new state is given, but the view takes it only at the next change detection.
+      fixture.componentRef.setInput('state', next);
+      finishLoad(true);
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(changes).toEqual([]);
+
+      await fixture.whenStable();
+
+      expect(view().state).toBe(next);
+    });
+
+    it('does not upgrade a view that is gone', async () => {
+      holdNextLoad();
+      await setUp();
+      vi.mocked(upgradeLanguage).mockReturnValue(UPGRADE);
+      const dispatch = vi.spyOn(view(), 'dispatch');
+
+      fixture.destroy();
+      finishLoad(true);
+      await new Promise(resolve => setTimeout(resolve));
+
+      expect(dispatch).not.toHaveBeenCalled();
+    });
   });
 
   it('removes the view when destroyed', async () => {

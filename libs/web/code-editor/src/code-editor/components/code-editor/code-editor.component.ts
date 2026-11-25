@@ -1,5 +1,7 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   CSP_NONCE,
   DestroyRef,
@@ -7,8 +9,10 @@ import {
   ElementRef,
   EnvironmentInjector,
   inject,
+  Injector,
   input,
   output,
+  untracked,
   ViewEncapsulation
 } from '@angular/core';
 import { openSearchPanel } from '@codemirror/search';
@@ -17,6 +21,7 @@ import { EditorView } from '@codemirror/view';
 import { markPerformance } from '@front-burner/shared-util';
 import { acceptConflict, type ConflictChoice, goToConflict } from '../../conflicts/conflict-extension';
 import { setFindPanelInjector, SWAPPING_ATTRIBUTE } from '../../search/find-panel';
+import { loadHtmlInMarkdown, upgradeLanguage } from '../../state/editor-state';
 
 export interface EditorStateChange {
   state: EditorState;
@@ -29,7 +34,9 @@ export interface EditorStateChange {
  * undo history and cursor (A-8.15, ED-8).
  *
  * Each time it shows another state, such as another file's, it sets the
- * performance mark `fb:editor-ready` (A-8.17).
+ * performance mark `fb:editor-ready` (A-8.17) when the editor takes input. Then, read-only or
+ * not, it loads the full language, with HTML tags highlighted, and swaps it in for the basic
+ * one, in the state it shows and in each state it is given later (A-8.11).
  *
  * Its styles are not encapsulated: CodeMirror builds its own DOM, which Angular's scoped
  * styles never reach.
@@ -50,7 +57,10 @@ export class CodeEditorComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly nonce = inject(CSP_NONCE, { optional: true });
   private readonly injector = inject(EnvironmentInjector);
+  private readonly componentInjector = inject(Injector);
+  private readonly changeDetector = inject(ChangeDetectorRef);
   private view?: EditorView;
+  private destroyed = false;
 
   constructor() {
     effect(() => this.show(this.state()));
@@ -66,6 +76,7 @@ export class CodeEditorComponent {
 
     inject(DestroyRef).onDestroy(() => {
       viewport?.removeEventListener('resize', keepCursorInView);
+      this.destroyed = true;
       this.view?.destroy();
     });
   }
@@ -141,10 +152,49 @@ export class CodeEditorComponent {
       } finally {
         this.view.dom.removeAttribute(SWAPPING_ATTRIBUTE);
       }
+      // A state created before the full language loaded, such as a file opened then and shown again.
+      this.upgradeLanguage();
       // CodeMirror has written the state's lines into the page: the editor takes input now (NF-2.2).
       if (this.view.contentDOM.getAttribute('contenteditable') === 'true') {
         markPerformance('fb:editor-ready');
       }
+      // After the mark, so that NF-2.2's measure never waits for it; for a read-only state too,
+      // such as the conflict version view, which sets no mark.
+      this.loadFullLanguage();
+    }
+  }
+
+  /**
+   * Loads the full language once a state is shown, and swaps it in. Once loaded, it resolves at
+   * once. When it fails to load, such as offline, the editor keeps the basic language and the
+   * next file shown tries again.
+   *
+   * The swap waits for the next render. Until then the caller may hold changes not yet applied,
+   * such as the Wrap toggle's, which build its next state only when change detection reads it:
+   * an upgrade of the state shown, emitted before, would replace that next state. The render
+   * applies them first, through `show`, which upgrades the state it is given.
+   */
+  private loadFullLanguage(): void {
+    loadHtmlInMarkdown().then(
+      () => {
+        if (this.view && !this.destroyed && upgradeLanguage(this.view.state) !== null) {
+          afterNextRender(() => this.upgradeLanguage(), { injector: this.componentInjector });
+          this.changeDetector.markForCheck();
+        }
+      },
+      () => undefined
+    );
+  }
+
+  private upgradeLanguage(): void {
+    // Not while the caller's newest state is still to be shown: `show` upgrades it.
+    const view = this.view;
+    if (!view || this.destroyed || view.state !== untracked(this.state)) {
+      return;
+    }
+    const spec = upgradeLanguage(view.state);
+    if (spec) {
+      view.dispatch(spec);
     }
   }
 

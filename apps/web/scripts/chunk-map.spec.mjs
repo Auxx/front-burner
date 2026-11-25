@@ -1,8 +1,18 @@
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { chunkMap, GROUPS, writeChunkMap } from './chunk-map.mjs';
+import {
+  checkGroups,
+  chunkMap,
+  EDITOR_LIMIT_BYTES,
+  editorOwnFiles,
+  FORBIDDEN,
+  GROUPS,
+  gzipSize,
+  writeChunkMap
+} from './chunk-map.mjs';
 import { initialScripts } from './size-check.mjs';
 
 const output = (entryPoint, imports = [], dynamic = []) => ({
@@ -73,6 +83,47 @@ describe('chunkMap', () => {
   });
 });
 
+describe('checkGroups', () => {
+  const withInputs = (base, inputs) => ({
+    ...base,
+    inputs: Object.fromEntries(inputs.map(path => [ path, { bytesInOutput: 1 } ]))
+  });
+  const forbidden = { editor: [ 'node_modules/hast-util-raw/', 'libs/web/markdown/render-safe-html.ts' ] };
+  /** The fixture, with `hast-util-raw` in `holder` if given. */
+  const metafile = holder => ({
+    outputs: {
+      ...METAFILE.outputs,
+      'chunk-editor00.js': withInputs(METAFILE.outputs['chunk-editor00.js'], [ 'libs/web/editor.ts' ]),
+      'chunk-cm000000.js': withInputs(METAFILE.outputs['chunk-cm000000.js'], [
+        'node_modules/@codemirror/view/dist/index.js',
+        ...(holder === 'chunk-cm000000.js' ? [ 'node_modules/hast-util-raw/lib/index.js' ] : [])
+      ]),
+      'chunk-dashdep0.js': withInputs(
+        METAFILE.outputs['chunk-dashdep0.js'],
+        holder === 'chunk-dashdep0.js' ? [ 'node_modules/hast-util-raw/lib/index.js' ] : []
+      )
+    }
+  });
+  const check = holder =>
+    checkGroups(metafile(holder), chunkMap(metafile(holder), INITIAL, { editor: 'libs/web/editor.ts' }), forbidden);
+
+  it('fails when the editor\'s chunks hold a forbidden input, naming the chunk and the input', () => {
+    expect(() => check('chunk-cm000000.js')).toThrow(
+      'editor: chunk-cm000000.js holds node_modules/hast-util-raw/lib/index.js'
+    );
+  });
+
+  it('passes when the forbidden input is only in a chunk outside the group', () => {
+    expect(() => check('chunk-dashdep0.js')).not.toThrow();
+    expect(() => check(undefined)).not.toThrow();
+  });
+
+  it('forbids the preview pipeline in the editor\'s chunks', () => {
+    expect(FORBIDDEN.editor).toContain('node_modules/hast-util-raw/');
+    expect(FORBIDDEN.editor).toContain('libs/web/markdown/src/markdown/pipeline/render-safe-html.ts');
+  });
+});
+
 describe('writeChunkMap', () => {
   let dist;
 
@@ -109,6 +160,35 @@ describe('writeChunkMap', () => {
       /editor: chunk-cm000000\.js is not in .*browser/
     );
   });
+
+  it('fails when the editor\'s own files are over the budget, not counting the repository screen\'s', () => {
+    // The editor also imports the dashboard's deep chunk, standing in for the repository screen's.
+    const metafile = {
+      outputs: {
+        ...METAFILE.outputs,
+        'chunk-editor00.js': output('libs/web/editor.ts', [ 'chunk-cm000000.js', 'chunk-deep0000.js' ])
+      }
+    };
+    writeFileSync(join(dist, 'browser-stats.json'), JSON.stringify(metafile));
+    // Random bytes, which gzip does not shrink.
+    writeFileSync(join(dist, 'browser', 'chunk-cm000000.js'), randomBytes(3 * 1024));
+    writeFileSync(join(dist, 'browser', 'chunk-deep0000.js'), randomBytes(3 * 1024));
+    const groups = {
+      'repository-screen': 'libs/web/feature-dashboard/src/index.ts',
+      editor: 'libs/web/editor.ts'
+    };
+
+    expect(writeChunkMap(dist, groups, 4 * 1024).editor).toContain('chunk-deep0000.js');
+
+    writeFileSync(join(dist, 'browser', 'chunk-cm000000.js'), randomBytes(5 * 1024));
+    expect(() => writeChunkMap(dist, groups, 4 * 1024)).toThrow(
+      /^editor: 5\.\d KB gzipped, over the 4 KB budget \(NF-2\.2\)$/
+    );
+  });
+
+  it('sets the editor\'s budget at 230 KB gzipped', () => {
+    expect(EDITOR_LIMIT_BYTES).toBe(230 * 1024);
+  });
 });
 
 const BUILD = join(import.meta.dirname, '..', '..', '..', 'dist', 'apps', 'web');
@@ -127,5 +207,24 @@ describe.skipIf(!existsSync(join(BUILD, 'browser-stats.json')))('the production 
         expect(existsSync(join(BUILD, 'browser', file))).toBe(true);
       }
     }
+  });
+
+  it('keeps the preview pipeline and the HTML grammars out of the editor\'s chunks, within the budget', () => {
+    const metafile = JSON.parse(readFileSync(join(BUILD, 'browser-stats.json'), 'utf8'));
+    const initial = initialScripts(readFileSync(join(BUILD, 'browser', 'index.html'), 'utf8'));
+    const map = chunkMap(metafile, initial);
+
+    expect(FORBIDDEN.editor).toEqual(
+      expect.arrayContaining([
+        'node_modules/@codemirror/lang-html/',
+        'node_modules/@codemirror/lang-css/',
+        'node_modules/@codemirror/lang-javascript/',
+        'node_modules/@lezer/html/',
+        'node_modules/@lezer/css/',
+        'node_modules/@lezer/javascript/'
+      ])
+    );
+    expect(() => checkGroups(metafile, map)).not.toThrow();
+    expect(gzipSize(join(BUILD, 'browser'), editorOwnFiles(map))).toBeLessThanOrEqual(EDITOR_LIMIT_BYTES);
   });
 });
