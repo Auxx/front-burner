@@ -5,7 +5,8 @@ import { translocoTesting } from '../../../testing/transloco-testing';
 import { LastAccessedComponent } from './last-accessed.component';
 
 const KEY = 'web-shell.LastAccessedComponent';
-const AT = '2026-10-26T10:00:00.000Z';
+// Relative to the run, so that the relative time does not change as the calendar moves on.
+const AT = new Date(Date.now() - 3 * 86_400_000).toISOString();
 
 describe('LastAccessedComponent', () => {
   let fixture: ComponentFixture<LastAccessedComponent>;
@@ -25,7 +26,7 @@ describe('LastAccessedComponent', () => {
   it('shows the relative time and the exact time on focus', () => {
     expect(host().textContent).toContain(`${KEY}.label`);
     expect(time().getAttribute('datetime')).toBe(AT);
-    expect(time().textContent?.trim()).toMatch(/ago$|^yesterday$/);
+    expect(time().textContent?.trim()).toBe('3 days ago');
 
     const exact = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(AT));
     expect(time().getAttribute('tabindex')).toBe('0');
