@@ -579,12 +579,9 @@ test.describe('the credential dialogs and the banner', () => {
     httpsRemotes['public.git'] = bare;
     const remoteUrl = `${git.url}/public.git`;
     const [ publicId ] = seed(instance.dataDir, {
-      repositories: [ { userId: ADMIN_ID, name: 'public', remoteUrl } ]
+      repositories: [ { userId: ADMIN_ID, name: 'public', remoteUrl, workingCopy: { clone: bare, origin: remoteUrl } } ]
     }).repositoryIds;
     const dir = workingCopyOf(instance.dataDir, publicId);
-    rmSync(dir, { recursive: true, force: true });
-    gitIn(dirname(dir), 'clone', '-q', bare, dir);
-    gitIn(dir, 'remote', 'set-url', 'origin', remoteUrl);
     gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
     await page.goto(`/repositories/${publicId}`);
     await expect(summary(page)).toHaveText(/1 to push/);

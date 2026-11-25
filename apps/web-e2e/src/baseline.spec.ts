@@ -259,7 +259,8 @@ test.describe('the first load', () => {
     await expect(page.locator('head link[rel="preload"][href="i18n/en.json"]')).toHaveCount(1);
     // The client's own request is answered by the preload, not sent again.
     // WebKit preloads it but does not give the preload to `fetch`, which asks
-    // for it again, even with the preload's own headers.
+    // for it again, even with the preload's own headers (A-8.19 in
+    // docs/architecture/web-client.md).
     expect(translations).toHaveLength(browserName === 'webkit' ? 2 : 1);
     await fontsLoaded(page);
   });

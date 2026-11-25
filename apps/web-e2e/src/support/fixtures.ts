@@ -1,4 +1,5 @@
-import { type BrowserContext, test as base } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { type BrowserContext, type Page, test as base } from '@playwright/test';
 
 import { type Instance, type InstanceOptions, startInstance, TEST_TOKEN } from './instance';
 
@@ -29,8 +30,38 @@ function isClosedOnboarding(error: ConsoleError): boolean {
   return new URL(error.url, 'http://x').pathname === '/api/v1/onboarding' && error.text.includes('404');
 }
 
+/**
+ * Waits for every animation, so that axe measures the colours a dialog ends
+ * with. One that is cancelled meanwhile, such as a transition that a change
+ * of colour scheme replaces, has nothing more to wait for.
+ */
+export async function settled(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    Promise.all(
+      document.getAnimations()
+        .filter(animation => animation.effect?.getTiming().iterations !== Infinity)
+        .map(animation => animation.finished.catch(() => undefined))
+    )
+  );
+}
+
+// Every check with axe-core waits for the page to settle first: a dialog or a
+// menu that is still fading in has the colours of its start, which fail on
+// contrast in a slower browser (WebKit, Firefox) though not in Chromium.
+const analyze = AxeBuilder.prototype.analyze;
+AxeBuilder.prototype.analyze = async function(this: AxeBuilder) {
+  await settled((this as unknown as { page: Page; }).page);
+  return analyze.call(this);
+};
+
 /** How each browser reports a request it cancelled itself: Chromium, Firefox, WebKit. */
 const CANCELLED = new Set([ 'net::ERR_ABORTED', 'NS_BINDING_ABORTED', 'Load request cancelled' ]);
+
+/**
+ * Firefox's message for a font download it cancelled itself carries
+ * `NS_BINDING_ABORTED` as a number; no failed request comes with it.
+ */
+const FIREFOX_ABORTED_DOWNLOAD = 'status=2152398850';
 
 /**
  * The address of a failed request that a message names, where the browser
@@ -114,7 +145,8 @@ export const test = base.extend<{ instanceOptions: InstanceOptions; instance: In
       const cancelled = new Set<string>();
       let leaving = false;
       const record = (error: ConsoleError) => {
-        if (!isClosedOnboarding(error) && (strict || !leaving)) {
+        const cancelledDownload = error.text.includes(FIREFOX_ABORTED_DOWNLOAD);
+        if (!isClosedOnboarding(error) && (strict || (!leaving && !cancelledDownload))) {
           monitor.consoleErrors.push(error);
         }
       };
@@ -181,9 +213,11 @@ export const expect = base.expect;
  * Why a test that needs the refresh cookie (LG-32) or the OIDC state cookie
  * (LG-17) is skipped in WebKit: both are `Secure`, and WebKit keeps no
  * `Secure` cookie on `http://localhost`, where the tests run (WebKit bug
- * 281149). Chromium and Firefox run these tests.
+ * 281149). Chromium and Firefox run these tests. Recorded as A-8.19 in
+ * `docs/architecture/web-client.md`.
  */
-export const WEBKIT_SECURE_COOKIES = 'WebKit keeps no Secure cookie over plain HTTP on localhost (WebKit bug 281149)';
+export const WEBKIT_SECURE_COOKIES =
+  'WebKit keeps no Secure cookie over plain HTTP on localhost (WebKit bug 281149; A-8.19 in docs/architecture/web-client.md)';
 
 /**
  * Removes the console errors browsers log for failed requests to `pathname`,

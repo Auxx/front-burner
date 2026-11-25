@@ -19,7 +19,7 @@ import {
   PROTECTED_KEY_PUBLIC,
   startGitSshServer
 } from './support/git-ssh-server';
-import { axe, shortcut } from './support/hands';
+import { axe, press, shortcut } from './support/hands';
 import { adminAuthToken, confirmCommitAuthor, logIn, seed, TEST_ADMIN } from './support/instance';
 import { addOverApi as addRepository, ADMIN_ID, sshRepository, sshRepositoryWithSameKey } from './support/repositories';
 import { gitIn } from './support/working-copy';
@@ -61,10 +61,10 @@ async function gitAction(page: Page, name: 'Fetch' | 'Pull' | 'Push' | 'Commit m
   if (await gitActions.isVisible()) {
     // Opened while a job runs, the menu would close as the job ends.
     await expect(gitActions).not.toHaveAttribute('aria-disabled', 'true');
-    await gitActions.click();
+    await press(gitActions);
     const item = page.getByRole('menuitem', { name });
     await expect(item).not.toHaveAttribute('aria-disabled', 'true');
-    await item.click();
+    await press(item);
   } else {
     await expect(button).not.toHaveAttribute('aria-disabled', 'true');
     await button.click();
@@ -126,7 +126,7 @@ test.describe('the branch list', () => {
     }).repositoryIds;
     await openScreen(page, `/repositories/${id}`);
 
-    await branchButton(page, 'main').click();
+    await press(branchButton(page, 'main'));
 
     await expect(
       list(page).getByText(
@@ -143,7 +143,7 @@ test.describe('the branch list', () => {
     gitIn(dir, 'update-ref', 'refs/remotes/origin/feature', 'HEAD');
     await openScreen(page, `/repositories/${id}`);
 
-    await branchButton(page, 'main').click();
+    await press(branchButton(page, 'main'));
 
     await expect(filter(page)).toBeFocused();
     const rows = list(page).getByRole('listitem');
@@ -195,7 +195,7 @@ test.describe('the branch list', () => {
       gitIn(dir, 'branch', `branch-${String(index).padStart(2, '0')}`);
     }
     await openScreen(page, `/repositories/${id}`);
-    await branchButton(page, 'main').click();
+    await press(branchButton(page, 'main'));
     await expect(list(page).getByRole('button', { name: 'branch-29' })).toBeVisible();
 
     // The last branch scrolls the list to its end; each row above it then comes from under the filter.
@@ -217,7 +217,7 @@ test.describe('the branch list', () => {
     gitIn(dir, 'checkout', '-q', '-b', branch);
     await openScreen(page, `/repositories/${id}`);
 
-    await branchButton(page, branch).click();
+    await press(branchButton(page, branch));
 
     const row = list(page).getByRole('listitem').filter({ hasText: branch });
     await expect(row).toBeVisible();
@@ -237,7 +237,7 @@ test.describe('the branch list', () => {
         json: { code: 'internal', params: {}, requestId: 'abcdef0123456789', message: 'internal' }
       }), { times: 1 });
 
-    await branchButton(page, 'main').click();
+    await press(branchButton(page, 'main'));
 
     await expect(list(page).getByRole('button', { name: 'Try again' })).toBeVisible();
     await expect(list(page).getByRole('listitem')).toHaveCount(0);
@@ -262,7 +262,7 @@ test.describe('the branch list', () => {
       page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: 'Files' });
 
     async function select(page: Page, from: string, to: string): Promise<void> {
-      await branchButton(page, from).click();
+      await press(branchButton(page, from));
       await list(page).getByRole('button', { name: to }).click();
       await expect(list(page)).toHaveCount(0);
     }
@@ -293,7 +293,7 @@ test.describe('the branch list', () => {
       gitIn(dir, 'update-ref', 'refs/remotes/origin/feature', 'HEAD');
       await openScreen(page, `/repositories/${id}`);
 
-      await branchButton(page, 'main').click();
+      await press(branchButton(page, 'main'));
       await expect(list(page).getByRole('listitem')).toHaveCount(3);
       await filter(page).fill('FEAT');
       await expect(list(page).getByRole('listitem')).toHaveCount(1);
@@ -307,7 +307,7 @@ test.describe('the branch list', () => {
       const { id, dir } = unconfirmedHandbook(instance);
       await openScreen(page, `/repositories/${id}`);
 
-      await branchButton(page, 'main').click();
+      await press(branchButton(page, 'main'));
       await expect(list(page).getByRole('button', { name: 'New branch' })).toBeVisible();
       await list(page).getByRole('button', { name: 'New branch' }).click();
 
@@ -345,7 +345,7 @@ test.describe('the branch list', () => {
       await openScreen(page, `/repositories/${id}/files/README.md`);
       await expect(editor(page, 'README.md')).toContainText('# Uncommitted Changes');
 
-      await branchButton(page, 'main').click();
+      await press(branchButton(page, 'main'));
       await list(page).getByRole('button', { name: 'New branch' }).click();
 
       const newBranch = page.getByRole('dialog', { name: 'New branch' });
@@ -436,7 +436,7 @@ test.describe('the branch list', () => {
       gitIn(dir, 'branch', 'other');
       await openScreen(page, `/repositories/${id}`);
       await expect(branchButton(page, 'main')).toBeVisible();
-      await branchButton(page, 'main').click();
+      await press(branchButton(page, 'main'));
       await expect(list(page).getByRole('button', { name: 'other' })).toBeVisible();
       gitIn(dir, 'branch', '-D', 'other');
 
@@ -669,14 +669,15 @@ test.describe('pushing', () => {
     remotes[name] = bare;
     const remoteUrl = `${git.url}/${name}`;
     const [ id ] = seed(instance.dataDir, {
-      repositories: [ { userId: ADMIN_ID, name: `pushed-${next}`, remoteUrl } ]
+      repositories: [ {
+        userId: ADMIN_ID,
+        name: `pushed-${next}`,
+        remoteUrl,
+        ...(remote === 'cloned' ? { workingCopy: { clone: bare, origin: remoteUrl } } : {})
+      } ]
     }).repositoryIds;
     const dir = join(instance.dataDir, 'repos', String(ADMIN_ID), String(id));
-    if (remote === 'cloned') {
-      rmSync(dir, { recursive: true, force: true });
-      gitIn(dirname(dir), 'clone', '-q', bare, dir);
-      gitIn(dir, 'remote', 'set-url', 'origin', remoteUrl);
-    } else {
+    if (remote === 'empty') {
       gitIn(dir, 'remote', 'add', 'origin', remoteUrl);
     }
     return { id, dir, bare };
@@ -1617,6 +1618,9 @@ test.describe('pushing', () => {
             gitIn(dir, 'config', 'merge.conflictStyle', conflictStyle);
           }
           await openScreen(page, `/repositories/${id}/files/draft.md`);
+          // After the fetch made when the file opens: Pull is busy while it runs, maybe
+          // only from just after `gitAction` found it available.
+          await expect(summary(page)).toContainText('1 to pull');
           await gitAction(page, 'Pull');
           await expect(editor(page)).toBeVisible();
           return { id, dir };
@@ -1790,7 +1794,10 @@ test.describe('pushing', () => {
 
         test('stays visible with the on-screen keyboard open', async ({ page, instance, isMobile, browserName, monitor }) => {
           test.skip(!isMobile, 'The on-screen keyboard is a phone\'s.');
-          test.skip(browserName !== 'chromium', 'Shrinking the visual viewport as the keyboard does needs Chromium.');
+          test.skip(
+            browserName !== 'chromium',
+            'Shrinking the visual viewport as the keyboard does needs Chromium (A-8.20).'
+          );
           const { id } = await pulled(page, instance);
           await editor(page).locator('.cm-line').filter({ hasText: /^theirs$/ }).click();
           const size = page.viewportSize() ?? { width: 412, height: 839 };
@@ -2002,12 +2009,14 @@ test.describe('fixing credentials from a push', () => {
     await confirmCommitAuthor(instance.url);
     const { remoteUrl, bare } = remote();
     const [ id ] = seed(instance.dataDir, {
-      repositories: [ { userId: ADMIN_ID, name: `public-${next}`, remoteUrl } ]
+      repositories: [ {
+        userId: ADMIN_ID,
+        name: `public-${next}`,
+        remoteUrl,
+        workingCopy: { clone: bare, origin: remoteUrl }
+      } ]
     }).repositoryIds;
     const dir = join(instance.dataDir, 'repos', String(ADMIN_ID), String(id));
-    rmSync(dir, { recursive: true, force: true });
-    gitIn(dirname(dir), 'clone', '-q', bare, dir);
-    gitIn(dir, 'remote', 'set-url', 'origin', remoteUrl);
     gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
     await openScreen(page, `/repositories/${id}`);
 
@@ -2087,12 +2096,14 @@ test.describe('fixing credentials from a push', () => {
     const { remoteUrl, bare } = remote();
     const before = gitIn(bare, 'rev-parse', 'main').trim();
     const [ id ] = seed(instance.dataDir, {
-      repositories: [ { userId: ADMIN_ID, name: `phone-${next}`, remoteUrl } ]
+      repositories: [ {
+        userId: ADMIN_ID,
+        name: `phone-${next}`,
+        remoteUrl,
+        workingCopy: { clone: bare, origin: remoteUrl }
+      } ]
     }).repositoryIds;
     const dir = join(instance.dataDir, 'repos', String(ADMIN_ID), String(id));
-    rmSync(dir, { recursive: true, force: true });
-    gitIn(dirname(dir), 'clone', '-q', bare, dir);
-    gitIn(dir, 'remote', 'set-url', 'origin', remoteUrl);
     gitIn(dir, 'commit', '-q', '--allow-empty', '-m', 'second');
     await openScreen(page, `/repositories/${id}`);
     await push(page);

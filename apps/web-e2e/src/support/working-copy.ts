@@ -11,9 +11,11 @@ import { dirname, join } from 'node:path';
  *   `*.log` and an untracked `build/` and `debug.log` it ignores, a tracked
  *   `keep.log` that matches it, a symbolic link `latest` to `README.md`, a
  *   submodule `vendor` (not cloned, AR-50), an image `logo.png`, and a folder
- *   `media` with `cover.md` and two images.
+ *   `media` with `cover.md` and two images;
+ * - `{ clone, origin }`: a clone of the repository at the path `clone`, whose
+ *   `origin` is then set to `origin`, such as its address on a git server.
  */
-export type WorkingCopyFixture = 'empty' | 'handbook';
+export type WorkingCopyFixture = 'empty' | 'handbook' | { readonly clone: string; readonly origin: string; };
 
 const gitEnv = {
   PATH: process.env['PATH'] ?? '/usr/bin:/bin',
@@ -55,6 +57,12 @@ export function gitIn(dir: string, ...args: string[]): string {
 /** Creates the working copy of a seeded repository at `dir`, as a clone would have left it. */
 export function createWorkingCopy(dir: string, fixture: WorkingCopyFixture): void {
   const git = (...args: string[]) => gitIn(dir, ...args);
+  if (typeof fixture === 'object') {
+    mkdirSync(dirname(dir), { recursive: true });
+    gitIn(dirname(dir), 'clone', '-q', fixture.clone, dir);
+    git('remote', 'set-url', 'origin', fixture.origin);
+    return;
+  }
   mkdirSync(dir, { recursive: true });
   git('init', '-q', '-b', 'main');
   if (fixture === 'empty') {

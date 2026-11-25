@@ -951,9 +951,15 @@ test.describe('repository screen, kept up to date', () => {
 
     rmSync(join(workingCopyOf(instance.dataDir, handbook), '.git'), { recursive: true, force: true });
     // The save is not git's; the status read after it is, and finds the working copy damaged.
-    await editorOf(page, 'README.md').click();
-    await page.keyboard.press(await shortcut(page, 'End'));
-    await page.keyboard.type('more');
+    // A read the screen makes on its own, such as after the fetch made when the file opened,
+    // may find it first: the screen has then left, and there is nothing to edit.
+    await editorOf(page, 'README.md').click({ timeout: 5_000 }).then(
+      async () => {
+        await page.keyboard.press(await shortcut(page, 'End'));
+        await page.keyboard.type('more');
+      },
+      () => undefined
+    );
 
     await expect(page.getByText('This repository\'s working copy is missing or damaged.')).toBeVisible();
     await expect(editorOf(page, 'README.md')).toHaveCount(0);
@@ -1362,12 +1368,14 @@ test.describe('repository screen, kept up to date', () => {
     await showChanges(page);
     await scrollTo(changesPane(page), 2500);
 
+    // Polled: where the browser forgets it (WebKit), the offset comes back
+    // when the pane's resize is observed, up to a frame after it shows.
     await filesButton(page).click();
     await expect(tree(page)).toBeVisible();
-    expect(await scrolled(tree(page))).toBe(1500);
+    await expect.poll(() => scrolled(tree(page))).toBe(1500);
     await changesButton(page).click();
     await expect(changesPane(page)).toBeVisible();
-    expect(await scrolled(changesPane(page))).toBe(2500);
+    await expect.poll(() => scrolled(changesPane(page))).toBe(2500);
   });
 
   test('shortens a long path without scrolling sideways, with the whole path available', async ({ page, instance, isMobile }) => {

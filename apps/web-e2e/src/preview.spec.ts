@@ -172,7 +172,10 @@ test.describe('view modes', () => {
     await expect(editor(page, 'sections.md')).toBeVisible();
     await expect.poll(async () => Math.abs((await editorTopLine(page)) - previewTop)).toBeLessThanOrEqual(2);
 
-    test.skip(browserName !== 'chromium', 'Shrinking the visual viewport as the keyboard does needs Chromium.');
+    test.skip(
+      browserName !== 'chromium',
+      'Shrinking the visual viewport as the keyboard does needs Chromium (A-8.20).'
+    );
     const line = editor(page, 'sections.md').locator('.cm-line').filter({ hasText: /^Text \d+ of the file\.$/ }).last();
     await line.click();
     const size = page.viewportSize() ?? { width: 412, height: 839 };
@@ -358,7 +361,7 @@ test.describe('preview', () => {
   });
 
   test('AC-EDIT-001.16: updates a 200 KB file\'s preview within 300 ms after typing stops', async ({ page, instance, browserName }) => {
-    test.skip(browserName !== 'chromium', 'CPU throttling needs the Chrome DevTools Protocol.');
+    test.skip(browserName !== 'chromium', 'CPU throttling needs the Chrome DevTools Protocol (A-8.20).');
     // Many short blocks, as a real file has: typing re-renders only the last one (A-8.12).
     const parts = [ '# Large' ];
     let length = parts[0].length;
