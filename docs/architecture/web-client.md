@@ -347,6 +347,16 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     missing. The server adds the first route's groups to `index.html` (A-7.9),
     and hands the groups the client preloads itself (`editor`) in `<script
     type="application/json" id="fb-chunk-map">`.
+  - **What the editor's chunks must not hold.** The build also fails when a
+    group's files hold an input that `FORBIDDEN` lists for it, naming the chunk
+    and the input (plan 163). For `editor` these are the preview's Markdown
+    pipeline (`render-safe-html.ts` and `hast-util-raw`), which runs in the
+    preview worker (A-8.13) and which the editor never needs to take input. The
+    pipeline's module builds the pipeline at its top level, so the bundler keeps
+    it in every chunk that imports an entry point exporting it:
+    `libs/web/markdown/src/index.ts` therefore does not export `renderSafeHtml`,
+    and the worker and the specs import it by path. Leaving it out took the
+    editor pane's chunk from 124 KB to 26 KB of Brotli.
   - **`ChunkPreloaderService`** (`web/core`) adds a `<link rel="modulepreload">`
     with the page's CSP nonce for each file of a group that has none yet. It
     does nothing without `#fb-chunk-map` or with one that does not parse, as

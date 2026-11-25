@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { chunkMap, GROUPS, writeChunkMap } from './chunk-map.mjs';
+import { checkGroups, chunkMap, FORBIDDEN, GROUPS, writeChunkMap } from './chunk-map.mjs';
 import { initialScripts } from './size-check.mjs';
 
 const output = (entryPoint, imports = [], dynamic = []) => ({
@@ -73,6 +73,47 @@ describe('chunkMap', () => {
   });
 });
 
+describe('checkGroups', () => {
+  const withInputs = (base, inputs) => ({
+    ...base,
+    inputs: Object.fromEntries(inputs.map(path => [ path, { bytesInOutput: 1 } ]))
+  });
+  const forbidden = { editor: [ 'node_modules/hast-util-raw/', 'libs/web/markdown/render-safe-html.ts' ] };
+  /** The fixture, with `hast-util-raw` in `holder` if given. */
+  const metafile = holder => ({
+    outputs: {
+      ...METAFILE.outputs,
+      'chunk-editor00.js': withInputs(METAFILE.outputs['chunk-editor00.js'], [ 'libs/web/editor.ts' ]),
+      'chunk-cm000000.js': withInputs(METAFILE.outputs['chunk-cm000000.js'], [
+        'node_modules/@codemirror/view/dist/index.js',
+        ...(holder === 'chunk-cm000000.js' ? [ 'node_modules/hast-util-raw/lib/index.js' ] : [])
+      ]),
+      'chunk-dashdep0.js': withInputs(
+        METAFILE.outputs['chunk-dashdep0.js'],
+        holder === 'chunk-dashdep0.js' ? [ 'node_modules/hast-util-raw/lib/index.js' ] : []
+      )
+    }
+  });
+  const check = holder =>
+    checkGroups(metafile(holder), chunkMap(metafile(holder), INITIAL, { editor: 'libs/web/editor.ts' }), forbidden);
+
+  it('fails when the editor\'s chunks hold a forbidden input, naming the chunk and the input', () => {
+    expect(() => check('chunk-cm000000.js')).toThrow(
+      'editor: chunk-cm000000.js holds node_modules/hast-util-raw/lib/index.js'
+    );
+  });
+
+  it('passes when the forbidden input is only in a chunk outside the group', () => {
+    expect(() => check('chunk-dashdep0.js')).not.toThrow();
+    expect(() => check(undefined)).not.toThrow();
+  });
+
+  it('forbids the preview pipeline in the editor\'s chunks', () => {
+    expect(FORBIDDEN.editor).toContain('node_modules/hast-util-raw/');
+    expect(FORBIDDEN.editor).toContain('libs/web/markdown/src/markdown/pipeline/render-safe-html.ts');
+  });
+});
+
 describe('writeChunkMap', () => {
   let dist;
 
@@ -127,5 +168,12 @@ describe.skipIf(!existsSync(join(BUILD, 'browser-stats.json')))('the production 
         expect(existsSync(join(BUILD, 'browser', file))).toBe(true);
       }
     }
+  });
+
+  it('keeps the preview pipeline out of the editor\'s chunks', () => {
+    const metafile = JSON.parse(readFileSync(join(BUILD, 'browser-stats.json'), 'utf8'));
+    const initial = initialScripts(readFileSync(join(BUILD, 'browser', 'index.html'), 'utf8'));
+
+    expect(() => checkGroups(metafile, chunkMap(metafile, initial))).not.toThrow();
   });
 });

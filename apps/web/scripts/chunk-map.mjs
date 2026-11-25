@@ -26,12 +26,33 @@ export const GROUPS = Object.freeze({
   editor: 'libs/web/feature-repository-screen/src/repository-screen/components/editor-pane/editor-pane.component.ts'
 });
 
+/**
+ * The inputs, by path prefix, that a group's files must not hold (plan 163;
+ * NF-2.2, A-8.18). The preview's Markdown pipeline runs in the preview worker
+ * (A-8.13); it reaches the editor's chunks only when an entry point that the
+ * editor imports exports it, since the module builds its pipeline at its top
+ * level and so is never dropped as unused.
+ */
+export const FORBIDDEN = Object.freeze({
+  editor: Object.freeze([
+    'node_modules/hast-util-raw/',
+    'libs/web/markdown/src/markdown/pipeline/render-safe-html.ts'
+  ])
+});
+
 /** The version of `chunk-map.json`'s format, which the server checks. */
 export const VERSION = 1;
 
 /** An output path of the metafile relative to `browser/`: the build may write them from the workspace. */
 function relativeToBrowser(path) {
   return path.replace(/^(?:.*\/)?browser\//, '');
+}
+
+/** The metafile's outputs by their path relative to `browser/`. */
+function outputsOf(metafile) {
+  return new Map(
+    Object.entries(metafile.outputs).map(([ path, output ]) => [ relativeToBrowser(path), output ])
+  );
 }
 
 /**
@@ -41,9 +62,7 @@ function relativeToBrowser(path) {
  * output's `entryPoint`.
  */
 export function chunkMap(metafile, initialFiles, groups = GROUPS) {
-  const outputs = new Map(
-    Object.entries(metafile.outputs).map(([ path, output ]) => [ relativeToBrowser(path), output ])
-  );
+  const outputs = outputsOf(metafile);
   const initial = new Set(initialFiles.map(relativeToBrowser));
   const map = {};
   for (const [ group, source ] of Object.entries(groups)) {
@@ -71,15 +90,35 @@ export function chunkMap(metafile, initialFiles, groups = GROUPS) {
 }
 
 /**
+ * Throws when a file of a group in `map` holds an input that starts with one
+ * of the group's prefixes in `forbidden`, naming the group, the file and the
+ * input.
+ */
+export function checkGroups(metafile, map, forbidden = FORBIDDEN) {
+  const outputs = outputsOf(metafile);
+  for (const [ group, prefixes ] of Object.entries(forbidden)) {
+    for (const file of map[group] ?? []) {
+      const input = Object.keys(outputs.get(file)?.inputs ?? {}).find(path =>
+        prefixes.some(prefix => path.startsWith(prefix))
+      );
+      if (input !== undefined) {
+        throw new Error(`${group}: ${file} holds ${input}`);
+      }
+    }
+  }
+}
+
+/**
  * Reads `<dist>/browser-stats.json` and `<dist>/browser/index.html`, writes
  * `<dist>/chunk-map.json` and returns its groups. Throws when a listed file is
- * not in `browser/`.
+ * not in `browser/`, or when a group holds a forbidden input (`checkGroups`).
  */
 export function writeChunkMap(dist, groups = GROUPS) {
   const browser = join(dist, 'browser');
   const metafile = JSON.parse(readFileSync(join(dist, 'browser-stats.json'), 'utf8'));
   const initial = initialScripts(readFileSync(join(browser, 'index.html'), 'utf8'));
   const map = chunkMap(metafile, initial, groups);
+  checkGroups(metafile, map);
   for (const [ group, files ] of Object.entries(map)) {
     for (const file of files) {
       if (!existsSync(join(browser, file))) {
