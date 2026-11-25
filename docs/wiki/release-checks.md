@@ -73,18 +73,18 @@ The targets are p95 on the reference host. The tests below run on whatever
 machine runs CI, so they prove the code path, not the number; the number is plan
 152's.
 
-| Rule            | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Result                                              | Date       | Commit    |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------- | --------- |
-| [NF-2.1][nf-2]  | **Test** (API, median of 5, not on the reference host): `libs/server/feature/files/src/listing/folder-lister.spec.ts` › "AC-FILE-001.7: lists 1,000 entries within 300 ms in a repository of 100,000 files". **Measured**: API by plan 150 (`perf-api.mjs`), screen on slow 4G by plan 151 (`perf-screen.mjs`), both on the reference host by plan 152. Indicative API: [Plan 150](#plan-150-indicative-api-timings). Indicative screen: [Plan 151](#plan-151-indicative-screen-timings), 1.1 s on slow 4G; [after compression](#plan-159-after-compression), 0.61 s. [Reference host](#reference-host), before compression: API 94 ms for one user, 633 ms for 10 at once with no pauses; screen 1.1 s on slow 4G, a row set by the network, not the host. [Plan 160](#plan-160-ten-users-measured-again): API 82 ms for one user, 128 ms for 10 at once. | Pass                                                | 2026-11-24 | `f052735` |
-| [NF-2.2][nf-2]  | **Test** (screen, one run): `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.2: is ready to edit a 100 KB file within NF-2.2". **Measured**: API by plan 150, screen on broadband and slow 4G by plan 151, on the reference host by plan 152. Indicative API: [Plan 150](#plan-150-indicative-api-timings). Indicative screen: [Plan 151](#plan-151-indicative-screen-timings), broadband passes, 8.3 s on slow 4G; [after compression](#plan-159-after-compression), 3.4 s on slow 4G. [Reference host](#reference-host), before compression: API 48 ms for one user, 174 to 208 ms for 10 at once with no pauses; screen 182 ms on broadband, 8.3 s on slow 4G. [Plan 160](#plan-160-ten-users-measured-again): API 20 ms for one user, 25 ms for 10 at once.                                                                                            | Fail on slow 4G (fix: plan 162)                     | 2026-11-24 | `f052735` |
-| [NF-2.3][nf-2]  | **Test** (the indicator, not the time): `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.3: saves after typing stops without committing". **Measured**: the API's 200 ms by plan 150, on the reference host by plan 152. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): 19 ms for one user, 81 to 135 ms for 10 at once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Pass                                                | 2026-11-23 | `f9c295c` |
-| [NF-2.4][nf-2]  | **Hand**: plan 155, `typing-test.mjs` on a real mid-range phone at 200 KB and 1 MB, with and without the conflict view (`docs/wiki/typing-test.md`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | To check (155)                                      |            |           |
-| [NF-2.5][nf-2]  | **Test** (CPU-throttled Chromium, not a phone): `apps/web-e2e/src/preview.spec.ts` › "AC-EDIT-001.16: updates a 200 KB file's preview within 300 ms after typing stops". **Measured**: plan 151 (`perf-screen.mjs`), on the reference host by plan 152. Indicative: [Plan 151](#plan-151-indicative-screen-timings), 126 ms on a desktop; 1.1 s on the phone profile, from the tap on **Preview**. [Reference host](#reference-host): the same, 128 ms and 1.2 s (no server part).                                                                                                                                                                                                                                                                                                                                                                         | Fail on the phone profile (to decide with plan 155) | 2026-11-23 | `f9c295c` |
-| [NF-2.6][nf-2]  | **Measured**: plan 150 (`perf-api.mjs`, the job against plain `git`), on the reference host by plan 152. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): one user adds 547 ms to a pull and 273 ms to a push; 10 users at once with no pauses add 3.3 to 3.7 s and 1.5 to 1.9 s. [Plan 160](#plan-160-ten-users-measured-again): one user adds 273 ms and 115 ms; 10 users at once, 944 ms and 349 ms, the pull within 56 ms of the target.                                                                                                                                                                                                                                                                                                                                                                   | Pass                                                | 2026-11-24 | `f052735` |
-| [NF-2.7][nf-2]  | **Measured**: plan 151 (`perf-screen.mjs`, slow 4G), on the reference host by plan 152. Indicative: [Plan 151](#plan-151-indicative-screen-timings), 11.0 s cold; [after compression](#plan-159-after-compression), 5.4 s cold (desktop) and 5.6 s (phone). [Reference host](#reference-host), before compression: 11.0 s cold, the same.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Fail (fix: plan 162)                                | 2026-11-23 | `b72a3f8` |
-| [NF-2.8][nf-2]  | **Document**: clones, pulls, pushes, fetches, merges and large deletes are jobs (A-6 in [jobs.md](../architecture/jobs.md)). **Measured**: whether a cold status or commit at 100,000 files stays under about 2 seconds, plan 150 (`perf-api.mjs run --large --cold`), on the reference host by plan 152, which answers spike 4's question in `spikes.md`. Indicative, warm only: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): cold status 2.6 s and cold commit 3.5 s at p95, warm 0.5 s and 1.4 s; status and commit stay requests, by the operator's decision recorded at NF-2.8.                                                                                                                                                                                                                                   | Pass (by decision)                                  | 2026-11-23 | `f9c295c` |
-| [NF-2.9][nf-2]  | **Test**: `apps/web/scripts/size-check.mjs` (the `web:size-check` target, which CI runs after every build) fails above 300 KB gzipped. Lazy loading of the editor, preview, Shiki and conflict screens: **Document**, A-8.1 in [web-client.md](../architecture/web-client.md).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Pass                                                | 2026-11-20 | `7e82076` |
-| [NF-2.10][nf-2] | **Test**: `libs/server/feature/files/src/listing/folder-lister.spec.ts` › "AC-FILE-001.7: lists 1,000 entries within 300 ms in a repository of 100,000 files"; `apps/web-e2e/src/repository-screen.spec.ts` › "AC-FILE-001.22: shows Try again for a folder that fails" (one folder at a time).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Pass                                                | 2026-11-20 | `7e82076` |
+| Rule            | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Result                                              | Date       | Commit    |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------- | --------- |
+| [NF-2.1][nf-2]  | **Test** (API, median of 5, not on the reference host): `libs/server/feature/files/src/listing/folder-lister.spec.ts` › "AC-FILE-001.7: lists 1,000 entries within 300 ms in a repository of 100,000 files". **Measured**: API by plan 150 (`perf-api.mjs`), screen on slow 4G by plan 151 (`perf-screen.mjs`), both on the reference host by plan 152. Indicative API: [Plan 150](#plan-150-indicative-api-timings). Indicative screen: [Plan 151](#plan-151-indicative-screen-timings), 1.1 s on slow 4G; [after compression](#plan-159-after-compression), 0.61 s. [Reference host](#reference-host), before compression: API 94 ms for one user, 633 ms for 10 at once with no pauses; screen 1.1 s on slow 4G, a row set by the network, not the host. [Plan 160](#plan-160-ten-users-measured-again): API 82 ms for one user, 128 ms for 10 at once.                                                                                                                                      | Pass                                                | 2026-11-24 | `f052735` |
+| [NF-2.2][nf-2]  | **Test** (screen, one run): `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.2: is ready to edit a 100 KB file within NF-2.2". **Measured**: API by plan 150, screen on broadband and slow 4G by plan 151, on the reference host by plan 152. Indicative API: [Plan 150](#plan-150-indicative-api-timings). Indicative screen: [Plan 151](#plan-151-indicative-screen-timings), broadband passes, 8.3 s on slow 4G; [after compression](#plan-159-after-compression), 3.4 s on slow 4G; [plan 162](#plan-162-round-trips), the editor's chunks in one wave with the file, 2.3 s. [Reference host](#reference-host), before compression: API 48 ms for one user, 174 to 208 ms for 10 at once with no pauses; screen 182 ms on broadband, 8.3 s on slow 4G. [Plan 160](#plan-160-ten-users-measured-again): API 20 ms for one user, 25 ms for 10 at once. [Plan 162 on the reference host](#on-the-reference-host): 2.3 s (desktop) and 2.5 s (phone) on slow 4G, the editor's 293 KB of chunks. | Fail on slow 4G (fix: plan 163)                     | 2026-11-25 | `c1ad1ed` |
+| [NF-2.3][nf-2]  | **Test** (the indicator, not the time): `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.3: saves after typing stops without committing". **Measured**: the API's 200 ms by plan 150, on the reference host by plan 152. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): 19 ms for one user, 81 to 135 ms for 10 at once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Pass                                                | 2026-11-23 | `f9c295c` |
+| [NF-2.4][nf-2]  | **Hand**: plan 155, `typing-test.mjs` on a real mid-range phone at 200 KB and 1 MB, with and without the conflict view (`docs/wiki/typing-test.md`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | To check (155)                                      |            |           |
+| [NF-2.5][nf-2]  | **Test** (CPU-throttled Chromium, not a phone): `apps/web-e2e/src/preview.spec.ts` › "AC-EDIT-001.16: updates a 200 KB file's preview within 300 ms after typing stops". **Measured**: plan 151 (`perf-screen.mjs`), on the reference host by plan 152. Indicative: [Plan 151](#plan-151-indicative-screen-timings), 126 ms on a desktop; 1.1 s on the phone profile, from the tap on **Preview**. [Reference host](#reference-host): the same, 128 ms and 1.2 s (no server part).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Fail on the phone profile (to decide with plan 155) | 2026-11-23 | `f9c295c` |
+| [NF-2.6][nf-2]  | **Measured**: plan 150 (`perf-api.mjs`, the job against plain `git`), on the reference host by plan 152. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): one user adds 547 ms to a pull and 273 ms to a push; 10 users at once with no pauses add 3.3 to 3.7 s and 1.5 to 1.9 s. [Plan 160](#plan-160-ten-users-measured-again): one user adds 273 ms and 115 ms; 10 users at once, 944 ms and 349 ms, the pull within 56 ms of the target.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Pass                                                | 2026-11-24 | `f052735` |
+| [NF-2.7][nf-2]  | **Measured**: plan 151 (`perf-screen.mjs`, slow 4G), on the reference host by plan 152. Indicative: [Plan 151](#plan-151-indicative-screen-timings), 11.0 s cold; [after compression](#plan-159-after-compression), 5.4 s cold (desktop) and 5.6 s (phone); [plan 162](#plan-162-round-trips), the first route's chunks preloaded, 3.7 s and 3.8 s. [Reference host](#reference-host), before compression: 11.0 s cold, the same. [Plan 162 on the reference host](#on-the-reference-host): 3.7 s cold (desktop) and 3.8 s (phone), from 8 waves of round trips to 5. **Test** that the preloads break no CSP rule and the translations are fetched once: `apps/web-e2e/src/baseline.spec.ts` › "NF-2.7: a first load asks for i18n/en.json once and breaks no CSP rule".                                                                                                                                                                                                                       | Pass                                                | 2026-11-25 | `c1ad1ed` |
+| [NF-2.8][nf-2]  | **Document**: clones, pulls, pushes, fetches, merges and large deletes are jobs (A-6 in [jobs.md](../architecture/jobs.md)). **Measured**: whether a cold status or commit at 100,000 files stays under about 2 seconds, plan 150 (`perf-api.mjs run --large --cold`), on the reference host by plan 152, which answers spike 4's question in `spikes.md`. Indicative, warm only: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): cold status 2.6 s and cold commit 3.5 s at p95, warm 0.5 s and 1.4 s; status and commit stay requests, by the operator's decision recorded at NF-2.8.                                                                                                                                                                                                                                                                                                                                                                        | Pass (by decision)                                  | 2026-11-23 | `f9c295c` |
+| [NF-2.9][nf-2]  | **Test**: `apps/web/scripts/size-check.mjs` (the `web:size-check` target, which CI runs after every build) fails above 300 KB gzipped. Lazy loading of the editor, preview, Shiki and conflict screens: **Document**, A-8.1 in [web-client.md](../architecture/web-client.md).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Pass                                                | 2026-11-20 | `7e82076` |
+| [NF-2.10][nf-2] | **Test**: `libs/server/feature/files/src/listing/folder-lister.spec.ts` › "AC-FILE-001.7: lists 1,000 entries within 300 ms in a repository of 100,000 files"; `apps/web-e2e/src/repository-screen.spec.ts` › "AC-FILE-001.22: shows Try again for a folder that fails" (one folder at a time).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Pass                                                | 2026-11-20 | `7e82076` |
 
 [nf-2]: ../architecture/non-functional.md#nf-2-performance
 
@@ -523,6 +523,148 @@ lazy component, loaded only once the guard has let the route through; and the
 dashboard's API requests, whose answers the mark does not wait for. The editor
 waits for the file, then its first chunk, then that chunk's static import: 124
 KB and 169 KB of Brotli, 1.6 s at 180 KB/s however they are ordered.
+
+### After
+
+Taken on 2026-11-25 as above, against commit `c1ad1ed` (this plan's last code
+change): the server preloads the first route's chunks and the translations
+(A-7.9), the web client asks for the onboarding status at start and for the
+editor's chunks as soon as a Markdown file is chosen (A-8.18). The groups of the
+chunk map, from `web:chunk-map`, each counted whole although groups share chunks
+(`/` preloads the union of `shell` and `dashboard`, 118 KB of Brotli):
+
+| Group               | Files | gzip     | Brotli   |
+| ------------------- | ----- | -------- | -------- |
+| `auth`              | 3     | 126.0 KB | 104.5 KB |
+| `shell`             | 3     | 108.7 KB | 89.1 KB  |
+| `dashboard`         | 3     | 111.3 KB | 91.3 KB  |
+| `repositories`      | 5     | 153.1 KB | 128.2 KB |
+| `preferences`       | 4     | 133.3 KB | 110.7 KB |
+| `repository-screen` | 6     | 196.0 KB | 163.9 KB |
+| `editor`            | 8     | 538.6 KB | 450.3 KB |
+
+| Measure                        | Waves before | After | Desktop: mark before | After   | Phone: mark before | After   |
+| ------------------------------ | ------------ | ----- | -------------------- | ------- | ------------------ | ------- |
+| First load, cold cache         | 8            | 5     | 5396 ms              | 3657 ms | 5597 ms            | 3780 ms |
+| Editor usable, 100 KB, slow 4G | 3            | 1     | 3439 ms              | 2297 ms | 3604 ms            | 2436 ms |
+
+The phone has the same waves as the desktop, before and after.
+
+`perf-screen.mjs waterfall --email admin@example.com` (desktop), the first load:
+
+```text
+Wave  Start    End      Request
+1     0 ms     584 ms   /
+2     591 ms   1294 ms  /styles-POZISHPY.css
+2     591 ms   1169 ms  /chunk-BP_c6noG.js
+2     591 ms   1327 ms  /chunk-CFSmKejw.js
+2     591 ms   1961 ms  /chunk-DZ53YNge.js
+2     591 ms   1278 ms  /chunk-CwN1F0Zo.js
+2     591 ms   1428 ms  /i18n/en.json
+2     591 ms   2644 ms  /chunk-BLd-aSjC.js
+2     592 ms   1894 ms  /chunk-B9dn0NrW.js
+2     592 ms   1886 ms  /polyfills-7Q6ROF5C.js
+2     592 ms   3053 ms  /main-5RP3FM7F.js
+3     1293 ms  2684 ms  /media/inter-latin-wght-normal-NRMW37G5.woff2
+4     3080 ms  3650 ms  /api/v1/onboarding
+4     3100 ms  3683 ms  /chunk-Bnm064l4.js
+4     3100 ms  3675 ms  /chunk-Cr_n4ZYl.js
+5     3657 ms  4225 ms  /api/v1/me
+
+Mark at 3657 ms; 16 requests in 5 waves.
+```
+
+Opening `big.md`:
+
+```text
+Wave  Start  End      Request
+1     16 ms  589 ms   /api/v1/repositories/1/git/fetch/file-opened
+1     17 ms  623 ms   /api/v1/repositories/1/file?path=big.md
+1     20 ms  2256 ms  /chunk-Bc7qgy-3.js
+1     20 ms  2006 ms  /chunk-DvbM9cmz.js
+
+Mark at 2297 ms; 4 requests in 1 waves.
+```
+
+`i18n/en.json` is asked for once, by the preload. `perf-screen.mjs run --email
+admin@example.com` (desktop):
+
+```text
+Host: 20 CPUs (12th Gen Intel(R) Core(TM) i7-12700K), 31.1 GB memory, linux
+Instance: http://127.0.0.1:3556; profile desktop (Desktop Chrome, CPU 1× slower); 20 runs after 1 warm-up runs, each in a fresh context
+
+Rule    Operation                         Runs  p50      p95      Max      Target   Pass
+NF-2.7  First load, cold cache            20    3657 ms  3665 ms  3666 ms  5000 ms  yes
+NF-2.7  First load, warm cache            20    1231 ms  1239 ms  1240 ms  —        —
+NF-2.1  Show a folder of 1,000 entries    20    608 ms   610 ms   611 ms   1000 ms  yes
+NF-2.2  Editor usable, 100 KB, broadband  20    75 ms    77 ms    77 ms    1000 ms  yes
+NF-2.2  Editor usable, 100 KB, slow 4G    20    2297 ms  2302 ms  2302 ms  2000 ms  NO
+NF-2.5  Preview updated, 200 KB           20    126 ms   128 ms   128 ms   300 ms   yes
+```
+
+`perf-screen.mjs run --email admin@example.com --profile phone`:
+
+```text
+Instance: http://127.0.0.1:3556; profile phone (Pixel 7, CPU 4× slower); 20 runs after 1 warm-up runs, each in a fresh context
+
+Rule    Operation                       Runs  p50      p95      Max      Target   Pass
+NF-2.7  First load, cold cache          20    3779 ms  3781 ms  3783 ms  5000 ms  yes
+NF-2.7  First load, warm cache          20    1446 ms  1470 ms  1525 ms  —        —
+NF-2.1  Show a folder of 1,000 entries  20    650 ms   654 ms   655 ms   1000 ms  yes
+NF-2.2  Editor usable, 100 KB, slow 4G  20    2445 ms  2451 ms  2453 ms  2000 ms  NO
+NF-2.5  Preview updated, 200 KB         20    1085 ms  1101 ms  1103 ms  300 ms   NO
+```
+
+What changed and what is left:
+
+- **The first load, cold, passes**: 5.4 s to 3.7 s (desktop), 5.6 s to 3.8 s
+  (phone), from 8 waves to 5. The route's chunks and the translations now arrive
+  with `main` (wave 2), and the onboarding status and the shell's lazy component
+  no longer wait for each other. The waves left: `index.html`; every file it
+  names; the onboarding status and the two chunks `main` imports dynamically at
+  start, all asked for only once `main` has run; the dashboard's API requests,
+  which the mark does not wait for. `main` itself now ends later (3.1 s against
+  2.4 s), as the preloaded chunks share the 180 KB/s with it. Inlining the
+  onboarding status into `index.html` (the plan's "Left out") would save at most
+  wave 4's onboarding request, which runs beside two chunks that take as long:
+  not worth it while the row passes.
+- **The editor on slow 4G still misses by 0.3 s (desktop) and 0.45 s (phone)**:
+  3.4 s to 2.3 s, from 3 waves to 1. Its time is now bytes, not round trips: the
+  file and the editor's two chunks start together, and the chunks, 169 KB and
+  124 KB of Brotli, take 1.6 s at 180 KB/s on top of the round trip.
+  CodeMirror's chunk carries `@lezer/javascript` (93 KB before compression), and
+  the editor pane's own chunk carries the preview's Markdown pipeline
+  (`hast-util-raw` alone 203 KB before compression, with micromark), which
+  A-8.13 runs in a worker; why the main thread's chunk holds it too was not
+  traced here. Plan 163 (Part F of the step 6 index) takes them.
+- The warm load, the folder and the preview are unchanged, as expected.
+
+### On the reference host
+
+Taken on 2026-11-25 on plan 152's droplet (2 vCPU, 4 GB, Ubuntu 24.04.5, kernel
+6.8.0-149-generic, Docker 29.1.3), with steps 3 and 6 of the run sheet: a second
+instance beside plan 152's, on a fresh data directory and port 8090, with the
+run sheet's override but no metrics token, and the screens from the developer
+machine through the SSH tunnel. Before: the image of plan 161
+(`sha256:36f7001d6182`, commit `aade0f2`, whose server and web client are this
+plan's base). After: the image built from commit `c1ad1ed` with the run sheet's
+`docker build` (`sha256:c35262bc7edf`). The second instance was removed
+afterwards.
+
+| Rule   | Operation (p95)                  | Desktop: before | After   | Phone: before | After   | Target |
+| ------ | -------------------------------- | --------------- | ------- | ------------- | ------- | ------ |
+| NF-2.7 | First load, cold cache           | 5389 ms         | 3666 ms | 5595 ms       | 3819 ms | 5 s    |
+| NF-2.7 | First load, warm cache           | 1247 ms         | 1242 ms | 1503 ms       | 1501 ms | —      |
+| NF-2.1 | Show a folder of 1,000 entries   | 610 ms          | 610 ms  | 651 ms        | 667 ms  | 1 s    |
+| NF-2.2 | Editor usable, 100 KB, broadband | 183 ms          | 146 ms  | —             | —       | 1 s    |
+| NF-2.2 | Editor usable, 100 KB, slow 4G   | 3450 ms         | 2330 ms | 3603 ms       | 2487 ms | 2 s    |
+| NF-2.5 | Preview updated, 200 KB          | 128 ms          | 130 ms  | 1157 ms       | 1381 ms | 300 ms |
+
+The waterfalls have the same waves as on the developer machine: 8 and 3 before,
+5 and 1 after, with the marks within 40 ms of its own. The slow 4G rows are set
+by the throttled network, not by the host or the distance to London. The phone's
+preview row has no network part, and runs on the developer machine's CPU slowed
+4 times: its 1.2 s to 1.4 s is the browser's, not the host's.
 
 ## Reference host
 
