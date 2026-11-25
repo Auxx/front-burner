@@ -91,6 +91,11 @@ compose file runs it with a read-only root file system, `/tmp` as a tmpfs,
 
 ### Build and rebuild the image
 
+The build needs Docker Engine 25 or later with BuildKit (`docker buildx`), the
+default: the `HEALTHCHECK` uses `--start-interval`, and the legacy builder
+ignores `tools/docker/Dockerfile.dockerignore`, so it sends the whole workspace,
+`node_modules` and `tmp/` included, to the daemon.
+
 ```sh
 docker build -f tools/docker/Dockerfile -t front-burner:test .
 ```

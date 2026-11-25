@@ -421,7 +421,8 @@ The first start takes a few seconds. `docker compose ps` shows the instance as
 it shows `healthy`. A later start among many working copies can take a minute or
 more, as Front Burner checks each one first (with 2,500 of them, 45 to 85
 seconds on a small server), and shows `starting` all that time. If it shows
-`restarting` or `unhealthy`, read the log, which says what is wrong:
+`restarting` or `unhealthy`, or is still `starting` after a few minutes, read
+the log, which says what is wrong:
 
 ```sh
 docker compose logs front-burner
@@ -1171,7 +1172,11 @@ A clone or a pull that failed in the background is a job: its lines carry a
 
 Both need no login and reveal nothing about the instance, so a load balancer or
 uptime monitor can call them. The image's health check calls `/api/health/ready`
-every 10 seconds, and `docker compose ps` shows its result.
+every 10 seconds, and `docker compose ps` shows its result. While the instance
+starts, failed checks don't count for the first 5 minutes, so that a long start
+shows as `starting`, not `unhealthy`; Docker Engine 25 or later also checks
+every 2 seconds meanwhile, so that `healthy` comes soon after the instance is
+ready.
 
 `/api/health/ready` answers only once the start is complete: the database
 updated, the working copies checked and interrupted jobs handled. Then it
@@ -1186,10 +1191,6 @@ reports:
 - **`fail`**, with status `503`: the database cannot be read, or `/data` or the
   repositories directory cannot be written to. Docker shows the container as
   `unhealthy` after three failed checks in a row. The log usually says why.
-
-While the instance starts, the image's health check calls `/api/health/ready`
-every 2 seconds, and failed checks don't count for the first 5 minutes, so that
-a long start shows as `starting`, not `unhealthy`.
 
 ### Prometheus metrics
 
@@ -1480,9 +1481,10 @@ port refuses connections meanwhile. This usually takes moments, but it can take
 minutes after restoring a backup of large repositories, since git then has to
 read every file again. The image's own health check waits 5 minutes before it
 counts a failure (see [Health checks](#health-checks)); a start that takes
-longer shows as `unhealthy` until it ends, which Docker alone doesn't act on. If
-your orchestrator checks that the instance is alive, give it a generous start
-period, so that it doesn't restart the instance partway through.
+longer shows as `unhealthy` from about five and a half minutes until it ends.
+Docker Compose doesn't act on that, but an orchestrator such as Docker Swarm or
+Kubernetes may: if yours checks that the instance is alive, give it a generous
+start period, so that it doesn't restart the instance partway through.
 
 **A repository shows "Working copy is missing or damaged" after a failed pull.**
 Front Burner could not undo a merge that failed, and has blocked the repository

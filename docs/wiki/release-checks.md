@@ -797,9 +797,10 @@ polled every second:
 
 Recovery took 75 s, between "Administrator onboarding state" (10:42:29) and
 "Nest application successfully started" (10:43:44) in the log, against 42 s warm
-for plan 152. The four checks just before it failed, inside the start period,
-and the next one, at 10:43:46, passed. With the old 20 s and three failures 10 s
-apart, this start would have shown `unhealthy` from about 50 s.
+for plan 152. Every check until then failed, inside the start period (the last
+four are in `docker inspect`'s health log, which keeps five), and the next one,
+at 10:43:46, passed. With the old 20 s and three failures 10 s apart, this start
+would have shown `unhealthy` from about 50 s.
 
 The container suite (`npx nx run server-e2e:e2e-container`, `E2E_IMAGE` set to
 this image) passed on the droplet: 9 tests, among them "the hardened container

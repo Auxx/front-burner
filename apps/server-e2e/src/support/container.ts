@@ -25,7 +25,12 @@ const TEST_CERTIFICATE = resolve(
   '../../../../libs/server/core/security/src/testing/fixtures/test.crt'
 );
 const SERVICE = 'front-burner';
-/** Docker's health check runs every 10 seconds; a healthy start takes one or two. */
+/**
+ * The image's health check runs every 2 seconds during its 5-minute start
+ * period (Docker Engine 25 or later; every 10 seconds before), so a healthy
+ * start is reported within seconds. A start that never gets ready stays
+ * `starting` in that time, so it fails this deadline, not as `unhealthy`.
+ */
 const HEALTHY_WITHIN_MS = 60_000;
 
 /** The image the container suite tests, such as `front-burner:test`; without it the suite is skipped. */
