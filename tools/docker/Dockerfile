@@ -32,10 +32,14 @@ ARG FRONT_BURNER_VERSION=
 RUN if [ -n "$FRONT_BURNER_VERSION" ]; then npm pkg set version="$FRONT_BURNER_VERSION"; fi
 
 # The backend's build also writes a package.json and lockfile with only its
-# runtime dependencies next to main.js. The web client's files are compressed
-# once, here, and served as they are (A-7.9).
+# runtime dependencies next to main.js. The chunk map, which the server reads
+# to preload a route's chunks, is written from the build's metafile, which the
+# image does not need (A-8.18); the web client's files are compressed once,
+# here, and served as they are (A-7.9).
 RUN npx nx run server:build:production \
     && npx nx run web:build:production \
+    && node apps/web/scripts/chunk-map.mjs dist/apps/web \
+    && rm dist/apps/web/browser-stats.json \
     && node apps/web/scripts/precompress.mjs dist/apps/web/browser
 
 # ---- deps: the backend's production dependencies ----------------------------

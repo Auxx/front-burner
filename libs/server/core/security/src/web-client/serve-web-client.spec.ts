@@ -10,14 +10,18 @@ import { serveWebClient, VERSIONED_CACHE_CONTROL } from './serve-web-client';
 const INDEX = '<html><body><app-root ngCspNonce="__CSP_NONCE__"></app-root></body></html>';
 
 describe('serveWebClient', () => {
+  /** The build's folder: `browser/` (the web root) and the chunk map next to it, as `dist/apps/web` holds them. */
+  let dist: string;
   let webRoot: string;
 
   beforeEach(() => {
-    webRoot = mkdtempSync(join(tmpdir(), 'fb-web-'));
+    dist = mkdtempSync(join(tmpdir(), 'fb-web-'));
+    webRoot = join(dist, 'browser');
+    mkdirSync(webRoot);
   });
 
   afterEach(() => {
-    rmSync(webRoot, { recursive: true, force: true });
+    rmSync(dist, { recursive: true, force: true });
   });
 
   function createApp(): express.Application {
@@ -391,6 +395,149 @@ describe('serveWebClient', () => {
       const res = await request(cachingApp()).get('/chunk-MISSING1.js');
       expect(res.status).toBe(404);
       expect(res.headers['cache-control']).not.toBe(VERSIONED_CACHE_CONTROL);
+    });
+  });
+
+  describe('the preloads of the first route (A-7.9)', () => {
+    const HEAD_INDEX = '<html><head><title>Front Burner</title></head>'
+      + '<body><app-root ngCspNonce="__CSP_NONCE__"></app-root></body></html>';
+    const GROUPS = {
+      shell: [ 'chunk-shell001.js', 'chunk-common01.js' ],
+      dashboard: [ 'chunk-dashbrd1.js', 'chunk-common01.js' ],
+      'repository-screen': [ 'chunk-reposcr1.js' ],
+      editor: [ 'chunk-editor01.js', 'chunk-reposcr1.js' ],
+      auth: [ 'chunk-auth0001.js' ]
+    };
+
+    function preloadApp(
+      chunkMap: unknown = { version: 1, groups: GROUPS },
+      warn: (message: string) => void = vi.fn()
+    ): express.Application {
+      writeFileSync(join(webRoot, 'index.html'), HEAD_INDEX);
+      for (const file of new Set(Object.values(GROUPS).flat())) {
+        writeFileSync(join(webRoot, file), file);
+      }
+      // `null`: no chunk map at all.
+      if (chunkMap !== null) {
+        writeFileSync(join(dist, 'chunk-map.json'), JSON.stringify(chunkMap));
+      }
+      const app = express();
+      serveWebClient(app, webRoot, { warn });
+      return app;
+    }
+
+    /** The `modulepreload` links of a page, in order, each checked to carry the page's nonce. */
+    function modulePreloads(body: string): string[] {
+      const nonce = nonceOf(body);
+      return [ ...body.matchAll(/<link rel="modulepreload" href="([^"]+)" nonce="([^"]+)">/g) ].map(match => {
+        expect(match[2]).toBe(nonce);
+        return match[1];
+      });
+    }
+
+    it('preloads the shell\'s and the dashboard\'s chunks on /, with the nonce', async () => {
+      const res = await request(preloadApp()).get('/');
+      expect(modulePreloads(res.text)).toEqual([ 'chunk-shell001.js', 'chunk-common01.js', 'chunk-dashbrd1.js' ]);
+      // Before </head>, so that the browser starts them before it reaches the body.
+      expect(res.text.indexOf('modulepreload')).toBeLessThan(res.text.indexOf('</head>'));
+    });
+
+    it('preloads the repository screen\'s on /repositories/1, and the editor\'s too on a Markdown file', async () => {
+      const app = preloadApp();
+      expect(modulePreloads((await request(app).get('/repositories/1')).text)).toEqual([ 'chunk-reposcr1.js' ]);
+      expect(modulePreloads((await request(app).get('/repositories/1/files/docs/a.md')).text)).toEqual([
+        'chunk-reposcr1.js',
+        'chunk-editor01.js'
+      ]);
+      expect(modulePreloads((await request(app).get('/repositories/1/files/docs/A.MDX')).text)).toEqual([
+        'chunk-reposcr1.js',
+        'chunk-editor01.js'
+      ]);
+    });
+
+    it.each([ '/repositories/abc', '/some/route', '/repositories/0', '/repositoriesx/1', '/%E0%A4%A' ])(
+      'preloads no chunk for %s',
+      async path => {
+        const res = await request(preloadApp()).get(path);
+        expect(res.status).toBe(200);
+        expect(modulePreloads(res.text)).toEqual([]);
+      }
+    );
+
+    it('preloads only the repository screen\'s for a file that is not Markdown', async () => {
+      const res = await request(preloadApp()).get('/repositories/1/files/a.txt');
+      expect(modulePreloads(res.text)).toEqual([ 'chunk-reposcr1.js' ]);
+    });
+
+    it('matches /REPOSITORIES/1 like /repositories/1, and an encoded or dotted path like its plain form', async () => {
+      const app = preloadApp();
+      for (const path of [ '/REPOSITORIES/1', '/repositories/1/', '/%72epositories/1', '/x/../repositories/1' ]) {
+        expect(modulePreloads((await request(app).get(path)).text)).toEqual([ 'chunk-reposcr1.js' ]);
+      }
+    });
+
+    it('preloads the login page\'s chunks on /login and /onboarding', async () => {
+      const app = preloadApp();
+      for (const path of [ '/login', '/login/reset', '/onboarding' ]) {
+        expect(modulePreloads((await request(app).get(path)).text)).toEqual([ 'chunk-auth0001.js' ]);
+      }
+    });
+
+    it('preloads i18n/en.json as fetch on every page', async () => {
+      const app = preloadApp();
+      for (const path of [ '/', '/some/route' ]) {
+        const body = (await request(app).get(path)).text;
+        expect(body).toContain(
+          `<link rel="preload" href="i18n/en.json" as="fetch" crossorigin="anonymous" nonce="${nonceOf(body)}">`
+        );
+      }
+    });
+
+    it('puts the editor\'s files in #fb-chunk-map', async () => {
+      const body = (await request(preloadApp()).get('/repositories/1')).text;
+      const match = /<script type="application\/json" id="fb-chunk-map" nonce="([^"]+)">([^<]*)<\/script>/.exec(body);
+      expect(match?.[1]).toBe(nonceOf(body));
+      expect(JSON.parse(match?.[2] ?? '')).toEqual({ editor: [ 'chunk-editor01.js', 'chunk-reposcr1.js' ] });
+    });
+
+    it('drops a listed file that is not in the web root, with one warning', async () => {
+      const warn = vi.fn();
+      const app = preloadApp({
+        version: 1,
+        groups: { ...GROUPS, shell: [ 'chunk-shell001.js', 'chunk-stale001.js', 'chunk-stale002.js' ] }
+      }, warn);
+
+      expect(modulePreloads((await request(app).get('/')).text)).toEqual([
+        'chunk-shell001.js',
+        'chunk-dashbrd1.js',
+        'chunk-common01.js'
+      ]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toMatch(/names 2 files/);
+    });
+
+    it('drops a name that is not a plain file of the web root', async () => {
+      writeFileSync(join(dist, 'outside.js'), 'outside');
+      const warn = vi.fn();
+      const app = preloadApp({ version: 1, groups: { shell: [ '../outside.js', 'a"><script>.js' ] } }, warn);
+      const body = (await request(app).get('/')).text;
+      expect(modulePreloads(body)).toEqual([]);
+      expect(body).not.toContain('outside.js');
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('adds nothing without a chunk map', async () => {
+      const warn = vi.fn();
+      const body = (await request(preloadApp(null, warn)).get('/')).text;
+      expect(body).toBe(HEAD_INDEX.replace('__CSP_NONCE__', nonceOf(body)));
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('adds nothing, with one warning, when the chunk map cannot be read', async () => {
+      const warn = vi.fn();
+      const body = (await request(preloadApp({ version: 2, groups: {} }, warn)).get('/')).text;
+      expect(body).not.toContain('preload');
+      expect(warn).toHaveBeenCalledTimes(1);
     });
   });
 });

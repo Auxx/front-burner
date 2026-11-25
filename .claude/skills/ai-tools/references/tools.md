@@ -602,11 +602,13 @@ checklist (`docs/wiki/release-checks.md`, "Plan 151").
 | Command                                                                                  | Does                                                                               |
 | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `run --url <instance> --email <e> [--profile desktop\|phone] [--runs 20] [--measures …]` | Adds its repository, times each measure in fresh contexts; 1 if a target is missed |
+| `waterfall --url <instance> --email <e> [--profile desktop\|phone] [--measures …]`       | Lists every request of a cold first load and of opening `big.md`, in waves         |
 
 ```shell
 PERF_PASSWORD=… perf-screen.mjs run --url http://127.0.0.1:3000 --email admin@example.com
 PERF_PASSWORD=… perf-screen.mjs run --url http://127.0.0.1:3000 --email admin@example.com --profile phone
 PERF_PASSWORD=… perf-screen.mjs run --url … --email … --measures folder,preview --runs 5
+PERF_PASSWORD=… perf-screen.mjs waterfall --url … --email … --measures first-load --name wf
 ```
 
 The instance must serve the built web client (the image, or `node
@@ -653,6 +655,17 @@ from `PERF_PASSWORD`.
   mark that never came.
 - The run on a developer machine shares the CPU with the instance; the slow 4G
   rows hardly depend on it, the preview row does.
+- **The waterfall** (plan 162) says why a slow 4G row takes the time it does. It
+  runs `first-load` (cold) and `editor-slow-4g` once each, after one unmeasured
+  run, in a fresh context throttled as `run` throttles it, and prints a line per
+  request that started before the measure's mark: its wave, its start and end in
+  ms from the navigation or the click (the browser's own timing), and its path.
+  A request is in wave _n_ + 1 when it starts at or after the first end in wave
+  _n_, so the number of waves is the number of round trips made one after
+  another, each 562.5 ms on slow 4G. Only what went over the network is listed:
+  a request answered from the browser's cache, or by an earlier `preload` or
+  `modulepreload` of the same file, is not. It takes the same `--name` and
+  `--work` as `run` and adds its own repository too.
 
 ## `cpu-profile`
 

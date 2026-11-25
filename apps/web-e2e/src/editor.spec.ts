@@ -175,6 +175,23 @@ function drainSaves(monitor: Monitor, repositoryId: number): void {
 }
 
 test.describe('editor', () => {
+  test('NF-2.2: opening a file breaks no CSP rule', async ({ page, instance, isMobile }) => {
+    const { id } = seedHandbook(instance.dataDir);
+    await openScreen(page, `/repositories/${id}`);
+    const preloads = page.locator('head link[rel="modulepreload"][nonce]');
+    const before = await preloads.count();
+
+    // The web client preloads the editor's chunks itself, each with the page's nonce (A-8.18); the fixture
+    // fails the test on any `securitypolicyviolation`.
+    await select(page, 'README.md', isMobile);
+    await expect(editor(page, 'README.md')).toBeVisible();
+    expect(await preloads.count(), 'the editor\'s chunks are preloaded').toBeGreaterThan(before);
+
+    // Opened by its address, the server preloads them (A-7.9).
+    await page.goto(`/repositories/${id}/files/docs/guide.md`);
+    await expect(editor(page, 'guide.md')).toBeVisible();
+  });
+
   test('AC-EDIT-001.3: saves after typing stops without committing', async ({ page, instance }) => {
     const { id, dir } = seedHandbook(instance.dataDir);
     const commits = commitCount(dir);

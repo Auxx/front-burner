@@ -61,6 +61,7 @@
             }
           ],
           "outputHashing": "all",
+          "statsJson": true,
           "optimization": {
             "scripts": true,
             "styles": {
@@ -144,11 +145,32 @@
         "command": "node apps/web/scripts/size-check.mjs dist/apps/web/browser"
       }
     },
-    "precompress": {
+    "chunk-map": {
       "executor": "nx:run-commands",
       "cache": true,
       "dependsOn": [
         "build"
+      ],
+      "inputs": [
+        "{projectRoot}/scripts/chunk-map.mjs",
+        "{projectRoot}/scripts/size-check.mjs",
+        {
+          "dependentTasksOutputFiles": "**/*.{js,html,json}"
+        }
+      ],
+      "outputs": [
+        "{workspaceRoot}/dist/apps/web/chunk-map.json"
+      ],
+      "options": {
+        "command": "node apps/web/scripts/chunk-map.mjs dist/apps/web"
+      }
+    },
+    "precompress": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": [
+        "build",
+        "chunk-map"
       ],
       "inputs": [
         "{projectRoot}/scripts/precompress.mjs",

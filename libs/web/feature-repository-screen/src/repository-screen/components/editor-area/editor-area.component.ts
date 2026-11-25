@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output } from '@angular/core';
 import type { ApiError, Entry } from '@front-burner/shared-contracts';
 import { ButtonComponent, EmptyStateActionsComponent, EmptyStateComponent, SpinnerComponent } from '@front-burner/ui';
-import { ApiErrorTextService } from '@front-burner/web-core';
+import { ApiErrorTextService, ChunkPreloaderService } from '@front-burner/web-core';
 import type { PreviewPathLink } from '@front-burner/web-markdown';
 import { TranslocoDirective } from '@jsverse/transloco';
 
@@ -18,7 +18,8 @@ const EXPLAINED = new Set([ 'file-too-large', 'file-not-utf8' ]);
  * The editor area of the repository screen, inside its `main` region labelled
  * "Editor" (NV-17). Without a file it says how to start, with a **New file**
  * button that emits `newFile` (FB-12). A Markdown file shows a loading state
- * while it opens (ED-5), then the editor pane, loaded on demand (ED-4); one
+ * while it opens (ED-5), then the editor pane, loaded on demand (ED-4) while
+ * the file opens, its chunks preloaded as soon as the file is chosen (A-8.18); one
  * that cannot be opened, too large or not UTF-8, says why in the message
  * panel (FB-21), and any other failure offers **Try again** (`retryOpen`).
  * For any other entry, or a path that does not exist, it says why it cannot
@@ -80,4 +81,15 @@ export class EditorAreaComponent {
   protected readonly editing = computed(() =>
     !this.goneElsewhere() && this.markdown() && this.openError() === null && this.file() !== null
   );
+
+  constructor() {
+    const preloader = inject(ChunkPreloaderService);
+    // As soon as a Markdown file is chosen, before it has arrived: the editor's chunk and all its imports
+    // then load in one round trip, while the file does (NF-2.2, A-8.18).
+    effect(() => {
+      if (this.markdown()) {
+        preloader.preload('editor');
+      }
+    });
+  }
 }

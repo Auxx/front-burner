@@ -16,11 +16,14 @@ import { storageStatusInterceptor } from '../interceptors/storage-status/storage
 import { versionCheckInterceptor } from '../interceptors/version-check/version-check.interceptor';
 import { PageTitleStrategy } from '../routing/page-title.strategy';
 import { DraftStore } from '../saving/draft-store';
+import { OnboardingStateService } from '../services/onboarding-state/onboarding-state.service';
 
 /**
  * The providers every page of the web client needs: HTTP with the auth token
  * and the version check (A-8.7), the storage status after a `low-storage` error (NF-9.7), translations and page titles. Creates the draft store at start-up, so that
- * every tab deletes the browser drafts when the session ends (NF-3.5).
+ * every tab deletes the browser drafts when the session ends (NF-3.5), and
+ * asks for the onboarding status at start-up, so that it arrives while the
+ * first route's chunks load (NF-2.7).
  */
 export function provideCore(): EnvironmentProviders {
   return makeEnvironmentProviders([
@@ -42,6 +45,8 @@ export function provideCore(): EnvironmentProviders {
     }),
     { provide: TRANSLOCO_TRANSPILER, useClass: IcuTranspiler },
     { provide: TitleStrategy, useClass: PageTitleStrategy },
-    provideEnvironmentInitializer(() => inject(DraftStore))
+    provideEnvironmentInitializer(() => inject(DraftStore)),
+    // While the first route's chunks load, not after them: the onboarding guard awaits the same answer (NF-2.7).
+    provideEnvironmentInitializer(() => void inject(OnboardingStateService).load())
   ]);
 }

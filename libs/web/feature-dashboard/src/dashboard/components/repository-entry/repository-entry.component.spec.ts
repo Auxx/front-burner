@@ -17,7 +17,8 @@ const ready: RepositorySummary = {
   error: null,
   warnings: [],
   clone: null,
-  lastAccessedAt: '2026-10-26T10:00:00.000Z'
+  // Relative to the run, so that the relative time does not change as the calendar moves on.
+  lastAccessedAt: new Date(Date.now() - 3 * 86_400_000).toISOString()
 };
 
 describe('RepositoryEntryComponent', () => {
@@ -44,7 +45,7 @@ describe('RepositoryEntryComponent', () => {
     expect(host().textContent).toContain('github.com/acme/handbook');
     expect(host().textContent).toContain('web-shell.LastAccessedComponent.label');
     expect(host().querySelector('time')?.getAttribute('datetime')).toBe(ready.lastAccessedAt);
-    expect(host().querySelector('time')?.textContent?.trim()).toMatch(/ago$|^yesterday$/);
+    expect(host().querySelector('time')?.textContent?.trim()).toBe('3 days ago');
   });
 
   it('links a ready repository to the editor', async () => {

@@ -325,3 +325,44 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     content takes input (NF-2.2). The editor does not take the focus when a file
     opens, so the mark does not wait for it;
   - `fb:preview-updated`: the preview, after it writes a new render (NF-2.5).
+
+## A-8: Preloading lazy chunks
+
+- **A-8.18** On slow 4G every request costs a round trip of 562.5 ms, so a lazy
+  chunk whose static imports are found only once it has arrived costs one round
+  trip per level of imports (plan 162, NF-2.2, NF-2.7). Requests that can be
+  known at the start are started at the start:
+  - **The chunk map.** The production build writes esbuild's metafile
+    (`statsJson`); `apps/web/scripts/chunk-map.mjs` (the `web:chunk-map` target,
+    run before `precompress` and in the image's build) turns it into
+    `dist/apps/web/chunk-map.json`, next to `browser/` and not served: for each
+    **group**, the output chunk whose `entryPoint` is the group's source file
+    plus its static imports, transitively, less the files `index.html` already
+    loads. The groups are the lazy features of the routes (`auth`, `shell`,
+    `dashboard`, `repositories`, `preferences`, `repository-screen`) and
+    `editor`, the editor pane's `@defer` _(plan's call: only the build knows
+    which file holds which lazy import; guessing from the source or the chunks'
+    text would break on Angular's next naming change)_. The build fails when a
+    group's source file is no output's `entryPoint`, or a listed file is
+    missing. The server adds the first route's groups to `index.html` (A-7.9),
+    and hands the groups the client preloads itself (`editor`) in `<script
+    type="application/json" id="fb-chunk-map">`.
+  - **`ChunkPreloaderService`** (`web/core`) adds a `<link rel="modulepreload">`
+    with the page's CSP nonce for each file of a group that has none yet. It
+    does nothing without `#fb-chunk-map` or with one that does not parse, as
+    under `ng serve`, where the chunks load as they are imported.
+  - **The editor loads with its file.** The editor area asks the preloader for
+    the `editor` group as soon as a Markdown file is chosen, before the file has
+    arrived, and its `@defer` around `rs-editor-pane` is `when file() !== null;
+    prefetch on immediate`, outside the branch that waits for the file, so the
+    editor's chunks and the file load side by side; its content shows the file
+    of the moment, so a file chosen while the chunk loads is the one shown.
+  - **The onboarding status at start.** `provideCore()` asks
+    `OnboardingStateService` for it in an environment initializer, without
+    waiting, so it arrives while the first route's chunks load; the onboarding
+    guard awaits the same cached answer.
+  - **No idle prefetch of the editor** _(plan's call)_: the editor's chunks are
+    not loaded while the repository screen is idle. On slow 4G they would
+    compete with the tree's own requests, and `perf-screen.mjs` times the editor
+    from a click with its chunk not loaded yet (A-8.17), as a user who opens a
+    file at once would see it.
