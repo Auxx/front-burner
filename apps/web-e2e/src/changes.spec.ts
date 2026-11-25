@@ -56,10 +56,17 @@ async function gitAction(page: Page, name: 'Fetch' | 'Pull' | 'Push' | 'Commit m
   const button = bar.getByRole('button', { name, exact: true });
   const gitActions = bar.getByRole('button', { name: 'Git actions' });
   await expect(button.or(gitActions)).toBeVisible();
+  // Not while another job runs, such as the fetch made when a file is opened:
+  // the action is then unavailable, and a click on it only says why.
   if (await gitActions.isVisible()) {
+    // Opened while a job runs, the menu would close as the job ends.
+    await expect(gitActions).not.toHaveAttribute('aria-disabled', 'true');
     await gitActions.click();
-    await page.getByRole('menuitem', { name }).click();
+    const item = page.getByRole('menuitem', { name });
+    await expect(item).not.toHaveAttribute('aria-disabled', 'true');
+    await item.click();
   } else {
+    await expect(button).not.toHaveAttribute('aria-disabled', 'true');
     await button.click();
   }
 }
@@ -127,7 +134,7 @@ test.describe('the branch list', () => {
         { exact: true }
       )
     ).toBeVisible();
-    expect((await new AxeBuilder({ page }).include('rs-branch-list').analyze()).violations).toEqual([]);
+    await axe(page, 'rs-branch-list');
   });
 
   test('lists and filters the branches, with the current one marked, and returns the focus', async ({ page, instance }) => {
@@ -145,7 +152,7 @@ test.describe('the branch list', () => {
     await expect(rows.nth(1)).toHaveText(/main\s*Current branch/);
     await expect(rows.nth(2)).toHaveText('origin/feature');
     await expect(list(page).getByRole('button', { name: /^main/ })).toHaveAttribute('aria-current', 'true');
-    expect((await new AxeBuilder({ page }).include('rs-branch-list').analyze()).violations).toEqual([]);
+    await axe(page, 'rs-branch-list');
 
     await filter(page).fill('docs');
     await expect(rows).toHaveCount(1);
@@ -308,7 +315,7 @@ test.describe('the branch list', () => {
       await expect(newBranch).toBeVisible();
       const nameInput = newBranch.getByRole('textbox', { name: 'Name' });
       await expect(nameInput).toBeFocused();
-      expect((await new AxeBuilder({ page }).include('rs-new-branch').analyze()).violations).toEqual([]);
+      await axe(page, 'rs-new-branch');
 
       await nameInput.fill('bad..name');
       await newBranch.getByRole('button', { name: 'Create branch' }).click();
@@ -367,7 +374,7 @@ test.describe('the branch list', () => {
 
       await expect(refusal(page).getByText(REFUSAL)).toBeVisible();
       await expect(refusal(page).getByRole('listitem')).toHaveText([ 'README.md' ]);
-      expect((await new AxeBuilder({ page }).include('rs-switch-refused').analyze()).violations).toEqual([]);
+      await axe(page, 'rs-switch-refused');
       expect(gitIn(dir, 'branch', '--show-current').trim()).toBe('main');
 
       await refusal(page).getByRole('button', { name: 'Show changes' }).click();
@@ -783,7 +790,7 @@ test.describe('pushing', () => {
       const details = page.getByRole('dialog', { name: FETCH_FAILED });
       await expect(details).toContainText(FETCH_FAILED);
       await expect(details.getByRole('button', { name: 'Try again' })).toBeFocused();
-      expect((await new AxeBuilder({ page }).include('ui-popover').analyze()).violations).toEqual([]);
+      await axe(page, 'ui-popover');
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
       await details.getByRole('button', { name: 'Try again' }).click();
@@ -2154,8 +2161,7 @@ test.describe('a locked key', () => {
     await banner(page).getByRole('button', { name: 'Unlock' }).click();
     await expect(dialog(page).getByLabel('Passphrase')).toBeFocused();
     // Contrast is measured once the dialog and its backdrop have faded in.
-    await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished)));
-    expect((await new AxeBuilder({ page }).include('dlg-unlock-key').analyze()).violations).toEqual([]);
+    await axe(page, 'dlg-unlock-key');
     await unlock(page);
 
     await expect(dialog(page)).toHaveCount(0);
@@ -2368,8 +2374,7 @@ test.describe('a changed host key', () => {
     const trust = dialog(page).getByRole('button', { name: 'Trust the new key' });
     // `aria-disabled`, which a click passes through and the button swallows (its unit test clicks it).
     await expect(trust).toBeDisabled();
-    await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished)));
-    expect((await new AxeBuilder({ page }).include('dlg-changed-host-key').analyze()).violations).toEqual([]);
+    await axe(page, 'dlg-changed-host-key');
 
     await dialog(page).getByLabel('I have checked the new fingerprint with the server\'s owner.').check();
     await expect(trust).toBeEnabled();

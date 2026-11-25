@@ -12,7 +12,7 @@ import {
   startGitHttpServer,
   TEST_CERTIFICATE_FILE
 } from './support/git-http-server';
-import { shortcut } from './support/hands';
+import { settled, shortcut } from './support/hands';
 import { logIn, seed, seededRemoteUrl, type SeedRepository } from './support/instance';
 import { gitIn } from './support/working-copy';
 
@@ -902,6 +902,7 @@ test.describe('repository screen', () => {
     await entryAction(page, 'build', 'Delete', isMobile);
     await expect(dialog(page).getByText('It holds 1 file, 1 of them non-Markdown.')).toBeVisible();
 
+    await settled(page);
     expect((await new AxeBuilder({ page }).include('.cdk-overlay-container').analyze()).violations).toEqual([]);
   });
 });
@@ -1685,6 +1686,7 @@ test.describe('repository screen, kept up to date', () => {
     await openSwitcher(page, isMobile);
     await expect(switcher(page).getByRole('menuitem', { name: /^cloning-one/ })).toBeVisible();
 
+    await settled(page);
     expect((await axe(page, isMobile).exclude('.cdk-overlay-container').analyze()).violations).toEqual([]);
     // A pop-up menu is in the overlay, outside the landmarks, by design: the
     // best-practice `region` rule does not apply to it.

@@ -97,8 +97,12 @@ export async function onboard(url: string): Promise<void> {
 /** How often {@link startInstance} tries again when its port was taken. */
 const START_ATTEMPTS = 3;
 
-/** How long a server that failed to start gets to exit and say why. */
-const EXIT_WAIT_MS = 2_000;
+/**
+ * How long a server that failed to start gets to exit and say why. When
+ * another instance took its port, that one answers at once, while this server
+ * may still take seconds to boot under load before it finds the port taken.
+ */
+const EXIT_WAIT_MS = READY_TIMEOUT_MS;
 
 /** Another listener took the port between {@link freePort} and the server's `listen()`. */
 class PortTaken extends Error {}
