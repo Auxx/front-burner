@@ -1,8 +1,10 @@
 name: Nightly
 
-# CI runs browser tests in Chromium only; this runs every test of every
-# project in Chromium, Firefox and WebKit, on desktop and mobile (NF-12.2).
-# Scheduled runs start only from the default branch.
+# CI runs the browser tests in Chromium, on desktop and phone, on every pull
+# request and push; this runs them in the other browsers: Firefox on desktop,
+# and WebKit on desktop and phone (NF-12.2). Unit and Storybook tests do not
+# depend on the browser engine (Storybook's run in Chromium alone), so CI's
+# runs cover them. Scheduled runs start only from the default branch.
 on:
 #  schedule:
 #    - cron: "0 3 * * *"
@@ -15,40 +17,53 @@ concurrency:
   group: nightly-${{ github.ref }}
   cancel-in-progress: true
 
+# As in ci.yml: the Nx cache inside the workspace, where the setup action can
+# save it between runs, within the repository's cache storage.
+env:
+  NX_CACHE_DIRECTORY: ${{ github.workspace }}/.nx/cache
+  NX_WORKSPACE_DATA_DIRECTORY: ${{ github.workspace }}/.nx/workspace-data
+  NX_MAX_CACHE_SIZE: 1GB
+
 # Actions are pinned to commit SHAs (tags can be moved); Dependabot updates them.
 jobs:
-  browser-tests:
+  # One job per browser and shard, each with its own Nx cache (see
+  # .github/actions/setup), which also holds the builds the tests start. WebKit
+  # has twice the tests of Firefox (desktop and phone), so it has more shards.
+  # Unchanged code with the same browsers takes the result from the cache.
+  web-e2e:
+    name: Browser end-to-end tests, ${{ matrix.browser }} (${{ matrix.shard }}/${{ matrix.shards }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # nx-set-shas, in the setup action, reads earlier workflow runs.
+      actions: read
+    strategy:
+      # Every shard reports its own failures.
+      fail-fast: false
+      matrix:
+        include:
+          - { browser: firefox, shard: 1, shards: 2 }
+          - { browser: firefox, shard: 2, shards: 2 }
+          - { browser: webkit, shard: 1, shards: 3 }
+          - { browser: webkit, shard: 2, shards: 3 }
+          - { browser: webkit, shard: 3, shards: 3 }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: .nvmrc
-          cache: npm
+          fetch-depth: 0
 
-      - run: npm ci
-
-      - name: Find Playwright version
-        id: playwright
-        run: echo "version=$(npx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: ./.github/actions/setup
         with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-all
+          nx-cache: nightly-${{ matrix.browser }}-${{ matrix.shard }}
 
-      # Rebuilding the man-page index after every package slows apt down a lot.
-      - name: Disable man-db triggers
-        run: sudo rm -f /var/lib/man-db/auto-update
+      - uses: ./.github/actions/playwright
+        with:
+          targets: e2e
+          projects: web-e2e
+          browser: ${{ matrix.browser }}
+          affected: 'false'
 
-      # On a cache hit this only installs the system packages.
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium firefox webkit
-
-      - name: Test
-        run: npx nx run-many -t test test-storybook e2e --parallel=3
+      - name: Browser end-to-end tests
+        run: npx nx run web-e2e:e2e --shard=${{ matrix.shard }}/${{ matrix.shards }}
         env:
-          # Local runs skip WebKit unless asked for it.
-          E2E_BROWSERS: chromium,firefox,webkit
+          E2E_BROWSERS: ${{ matrix.browser }}

@@ -27,8 +27,8 @@ const projects = [
 /**
  * `E2E_BROWSERS` (comma-separated browser engines, e.g. `chromium`) limits the
  * run to the projects on those engines. CI sets it to `chromium` on every
- * pull request; the nightly workflow sets `chromium,firefox,webkit` to run
- * every project. Unset, as in local runs, it skips WebKit, which does not run
+ * pull request; the nightly workflow runs `firefox` and `webkit`, which with
+ * CI's run covers every project. Unset, as in local runs, it skips WebKit, which does not run
  * on every developer's operating system; the nightly run covers it (NF-12.2).
  */
 const browsers = (process.env['E2E_BROWSERS'] || 'chromium,firefox')

@@ -815,22 +815,24 @@ test.describe('images', () => {
       'other.md': '# Other\n\n[Back](many.md)\n',
       ...Object.fromEntries(images.map(index => [ `img/${index}.png`, png(index, 1) ]))
     });
-    // Counts the requests in flight, delayed so that more would overlap if the limit failed.
+    // Counts the requests in flight, delayed so that more would overlap if the
+    // limit failed, and the images the server sends in full (200), not a
+    // revalidation's 304.
     let inFlight = 0;
     let mostInFlight = 0;
+    const loads: string[] = [];
     await page.route(url => IMAGE_ENDPOINT.test(url.pathname), async route => {
       inFlight++;
       mostInFlight = Math.max(mostInFlight, inFlight);
       const response = await route.fetch();
+      if (response.status() === 200) {
+        loads.push(new URL(route.request().url()).searchParams.get('path') ?? '');
+      }
       await new Promise(resolve => setTimeout(resolve, 50));
       inFlight--;
-      await route.fulfill({ response });
-    });
-    const loads: string[] = [];
-    page.on('response', response => {
-      if (IMAGE_ENDPOINT.test(new URL(response.url()).pathname) && response.status() === 200) {
-        loads.push(new URL(response.url()).searchParams.get('path') ?? '');
-      }
+      // WebKit cannot be fulfilled with a 304, the answer to its revalidation
+      // of a cached image: that request goes on to the server again instead.
+      await (response.status() === 304 ? route.continue() : route.fulfill({ response }));
     });
     const requests = imageRequests(page);
     await openPreview(page, `/repositories/${id}/files/many.md`, isMobile);

@@ -251,11 +251,16 @@ through environment variables (AO-41).
 - **LG-32** The refresh token cookie is `HttpOnly`, `Secure`, `SameSite=Strict`,
   and its path is limited to the authentication endpoints that need it (refresh
   and logout), so it is not sent with any other request. It expires together
-  with the session. The web client must therefore be served over HTTPS; browsers
-  allow `Secure` cookies on `localhost` for development. Over plain HTTP from
-  any other address, users can log in but are not kept logged in once the auth
-  token expires. The [deployment guide](../wiki/deployment.md) explains this to
-  operators.
+  with the session. The web client must therefore be served over HTTPS; Chromium
+  and Firefox allow `Secure` cookies on `localhost` for development, but Safari
+  (WebKit) does not
+  ([WebKit bug 281149](https://bugs.webkit.org/show_bug.cgi?id=281149)). Over
+  plain HTTP from any other address, and in Safari on `localhost` too, users can
+  log in with a password but are not kept logged in once the auth token expires,
+  and an OIDC login fails, as its state cookie (LG-17) is `Secure` as well. The
+  [deployment guide](../wiki/deployment.md) explains this to operators. The
+  browser tests skip what needs these cookies in WebKit, as they serve the web
+  client over plain HTTP on `localhost`.
 - **LG-33** When the refresh or logout endpoint reads the refresh token from the
   cookie, it also requires a custom request header that browsers do not send on
   cross-site requests without CORS permission, and refuses the request if the

@@ -1,5 +1,6 @@
 import angular from '@analogjs/vite-plugin-angular';
 import { readFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
 import { join, relative } from 'node:path';
 import swc from 'unplugin-swc';
 import { defineConfig, mergeConfig, type ViteUserConfig } from 'vitest/config';
@@ -14,7 +15,11 @@ export const sharedTestOptions = {
   globals: true,
   // Nx runs 3 projects at once: 30% of the cores each was the fastest setting
   // that stays reliable, using less memory than the default (ai-tools mem-profile).
-  maxWorkers: '30%'
+  // At least 2, as with 1 Vitest runs all of a project's files in one context
+  // when isolation is off, as it is in the vmThreads pool that the Angular
+  // plugin picks: each file's test-setup.ts would then set up TestBed again
+  // (30% of a 4-core CI runner is 1). VITEST_MAX_WORKERS overrides this.
+  maxWorkers: Math.max(2, Math.round(availableParallelism() * 0.3))
 } satisfies ViteUserConfig['test'];
 
 export interface ProjectOptions {

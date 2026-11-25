@@ -47,9 +47,12 @@ describe('TooltipDirective', () => {
       (element: HTMLButtonElement) => (element.getAttribute('aria-label') ?? element.textContent?.trim()) === text
     ) as HTMLButtonElement;
   const shown = () => [ ...document.querySelectorAll('ui-tooltip') ].map(element => element.textContent?.trim());
-  // jsdom decides `:focus-visible` from the last event, as browsers do.
+  // jsdom decides `:focus-visible` from the last event, as browsers do. The Tab
+  // comes from the host, not from the body: when it comes from the element
+  // losing the focus, jsdom also looks at earlier spec files' focus, which the
+  // Angular unit-test builder runs in the same document.
   const keyboardFocus = (element: HTMLElement) => {
-    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    fixture.nativeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     element.focus();
   };
   const pointer = (element: Element, type: 'pointerenter' | 'pointerleave') =>

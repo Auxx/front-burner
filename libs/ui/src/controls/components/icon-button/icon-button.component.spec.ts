@@ -42,8 +42,11 @@ describe('IconButtonComponent', () => {
   });
 
   it('shows its label as a tooltip on focus', () => {
-    // jsdom decides `:focus-visible` from the last event, as browsers do.
-    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    // jsdom decides `:focus-visible` from the last event, as browsers do. The
+    // Tab comes from the host, not from the body: when it comes from the
+    // element losing the focus, jsdom also looks at earlier spec files' focus,
+    // which the Angular unit-test builder runs in the same document.
+    fixture.nativeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     buttons()[0].focus();
 
     expect(document.querySelector('ui-tooltip')?.textContent?.trim()).toBe('Fetch');

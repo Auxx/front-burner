@@ -340,6 +340,26 @@ describe('BranchListDialog', () => {
     expect(await closed).toBeUndefined();
   });
 
+  it('scrolls a focused row clear of the filter, and leaves the filter where it is', async () => {
+    // jsdom has no scrollIntoView.
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.fn(function(this: Element) {
+      scrolled.push(this);
+    });
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true });
+    try {
+      await open();
+
+      row('Docs')?.focus();
+      filter().focus();
+
+      expect(scrolled).toEqual([ row('Docs') ]);
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+    } finally {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+    }
+  });
+
   it('closes with the local branch that was chosen', async () => {
     const { closed } = await open();
 
