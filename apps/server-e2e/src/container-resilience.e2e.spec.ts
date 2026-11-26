@@ -1,3 +1,4 @@
+import { safeVersion } from '@front-burner/server-core-database';
 import { type GitHttpServer, startGitHttpServer } from '@front-burner/server-core-git/testing';
 import { chmodSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,6 +8,7 @@ import {
   buildUpgradeImage,
   type Container,
   E2E_IMAGE,
+  removeImage,
   type RunResult,
   startContainer,
   UPGRADE_TEST_VERSION
@@ -204,6 +206,13 @@ async function whileStopped(container: Container, script: string): Promise<strin
   return result.stdout;
 }
 
+/** Removes a temporary folder, if the setup got as far as making it. */
+function removeFolder(path: string | undefined): void {
+  if (path !== undefined) {
+    rmSync(path, { recursive: true, force: true });
+  }
+}
+
 /** Closes what a describe opened; every step runs even when an earlier one fails. */
 async function closeAll(...steps: (Promise<unknown> | undefined)[]): Promise<void> {
   const results = await Promise.allSettled(steps);
@@ -254,7 +263,7 @@ describe.skipIf(E2E_IMAGE === undefined)(
         try {
           await closeAll(container?.remove(), proxy?.close(), remotes?.git.close());
         } finally {
-          rmSync(remotes.root, { recursive: true, force: true });
+          removeFolder(remotes?.root);
         }
       }, SLOW_MS);
 
@@ -402,7 +411,7 @@ describe.skipIf(E2E_IMAGE === undefined)(
         try {
           await closeAll(container?.remove(), remotes?.git.close());
         } finally {
-          rmSync(remotes.root, { recursive: true, force: true });
+          removeFolder(remotes?.root);
         }
       }, SLOW_MS);
 
@@ -519,8 +528,8 @@ describe.skipIf(E2E_IMAGE === undefined)(
         try {
           await closeAll(source?.remove(), ...restored.map(container => container.remove()), remotes?.git.close());
         } finally {
-          rmSync(remotes.root, { recursive: true, force: true });
-          rmSync(archives, { recursive: true, force: true });
+          removeFolder(remotes?.root);
+          removeFolder(archives);
         }
       }, SLOW_MS);
 
@@ -618,11 +627,9 @@ describe.skipIf(E2E_IMAGE === undefined)(
 
       afterAll(async () => {
         try {
-          await closeAll(container?.remove(), remotes?.git.close());
+          await closeAll(container?.remove(), remotes?.git.close(), removeImage(newImage));
         } finally {
-          if (remotes !== undefined) {
-            rmSync(remotes.root, { recursive: true, force: true });
-          }
+          removeFolder(remotes?.root);
         }
       }, SLOW_MS);
 
@@ -633,7 +640,9 @@ describe.skipIf(E2E_IMAGE === undefined)(
         expect(await instance.version()).toBe(UPGRADE_TEST_VERSION);
         // Step 5: the snapshot, named after the old version, and the log line that names it.
         const [ snapshot ] = await preUpgradeSnapshots();
-        expect(snapshot).toMatch(new RegExp(`^pre-upgrade-v${oldVersion.replaceAll('.', '\\.')}-.*\\.sqlite$`));
+        // Named as the server names it: `safeVersion` keeps letters, digits, `_`, `.`, `+` and `-`.
+        expect(snapshot?.startsWith(`pre-upgrade-v${safeVersion(oldVersion)}-`), snapshot).toBe(true);
+        expect(snapshot).toMatch(/\.sqlite$/);
         expect(await container.logs()).toContain(
           `Upgrading the database from ${oldVersion} to ${UPGRADE_TEST_VERSION}; snapshot backups/${snapshot}`
         );

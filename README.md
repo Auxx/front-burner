@@ -178,16 +178,16 @@ registry fails too.
 The workflow builds `tools/docker/Dockerfile` for `linux/amd64` with the tag's
 version, scans it with Trivy (a vulnerability stops the release), checks that it
 reports the version, runs server-e2e's container suites on it (the smoke test,
-and the resilience checks with the upgrade check), and pushes it to
-`ghcr.io/<owner>/front-burner` as `<version>`. It signs the pushed image with
-keyless cosign, attests its build provenance and its CycloneDX SBOM, and
-verifies the signature. Only then does it move `<major>.<minor>` and `latest` to
-the image: for a stable version (no pre-release part), and only when it is the
-newest stable version of its line and of all, so a fix on an older line (1.0.5
-after 1.1.0) leaves `latest` on 1.1.0. Last, it creates a draft GitHub release
-with the SBOM attached and the notes from `.github/release-notes.md`. Releases
-run one at a time; push one release tag at a time, since GitHub keeps only one
-waiting run and cancels the others.
+and the resilience checks with the upgrade check, in a job of its own that can
+publish nothing), and pushes that same image to `ghcr.io/<owner>/front-burner`
+as `<version>`. It signs the pushed image with keyless cosign, attests its build
+provenance and its CycloneDX SBOM, and verifies the signature. Only then does it
+move `<major>.<minor>` and `latest` to the image: for a stable version (no
+pre-release part), and only when it is the newest stable version of its line and
+of all, so a fix on an older line (1.0.5 after 1.1.0) leaves `latest` on 1.1.0.
+Last, it creates a draft GitHub release with the SBOM attached and the notes
+from `.github/release-notes.md`. Releases run one at a time; push one release
+tag at a time, since GitHub keeps only one waiting run and cancels the others.
 
 To make a release:
 

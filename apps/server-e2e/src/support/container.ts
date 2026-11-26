@@ -295,6 +295,13 @@ export async function startContainer(options: ContainerOptions = {}): Promise<Co
   };
 }
 
+/** `docker image rm` of an image a test built, such as `buildUpgradeImage`'s; nothing when there is none. */
+export async function removeImage(image: string | undefined): Promise<void> {
+  if (image !== undefined) {
+    await run('docker', [ 'image', 'rm', '--force', image ]);
+  }
+}
+
 /** What `Dockerfile.dockerignore` leaves out of the build anyway, and is too large to copy. */
 const NOT_COPIED = new Set([ 'node_modules', 'dist', 'tmp', 'coverage', 'out-tsc', '.nx', '.angular', '.git' ]);
 
@@ -308,7 +315,8 @@ const NOT_COPIED = new Set([ 'node_modules', 'dist', 'tmp', 'coverage', 'out-tsc
  * @returns the new image's tag.
  */
 export async function buildUpgradeImage(baseImage: string): Promise<string> {
-  const tag = `${baseImage.replace(/[:@].*$/, '')}:upgrade-test`;
+  // The repository without its tag or digest: a registry's port, before the last `/`, stays.
+  const tag = `${baseImage.replace(/(@.*|:[^/]*)$/, '')}:upgrade-test`;
   const copy = mkdtempSync(join(tmpdir(), 'front-burner-e2e-upgrade-source-'));
   try {
     cpSync(WORKSPACE, copy, {
