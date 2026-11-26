@@ -362,6 +362,9 @@ test.describe('app header', () => {
     await expect(newVersion).toBeHidden();
 
     // The banner's icon comes from the cached sprite: no request fails, which the monitor checks.
+    // Once the toast outlet, loaded when the reloaded page is idle, is there: going offline
+    // would cut its chunk short.
+    await expect(page.getByRole('region', { name: 'Notifications' })).toBeAttached();
     await context.setOffline(true);
     await expect(offline).toBeVisible();
     await context.setOffline(false);

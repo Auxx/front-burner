@@ -1,21 +1,17 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 
-import { expect } from './fixtures';
+import { expect, settled, test } from './fixtures';
+
+export { settled };
 
 /**
- * Waits for every animation, so that axe measures the colours a dialog ends
- * with. One that is cancelled meanwhile, such as a transition that a change
- * of colour scheme replaces, has nothing more to wait for.
+ * Taps `target` in a project with touch, a phone, and clicks it otherwise:
+ * WebKit's iPhone can drop a mouse click, and a phone is used by touch
+ * anyway (A-8.20).
  */
-export async function settled(page: Page): Promise<void> {
-  await page.evaluate(() =>
-    Promise.all(
-      document.getAnimations()
-        .filter(animation => animation.effect?.getTiming().iterations !== Infinity)
-        .map(animation => animation.finished.catch(() => undefined))
-    )
-  );
+export async function press(target: Locator): Promise<void> {
+  await (test.info().project.use.hasTouch === true ? target.tap() : target.click());
 }
 
 /**

@@ -270,11 +270,10 @@ test.describe('pulling and conflicts', () => {
     const bare = createHandbookRemote(parent);
     remotes[`${name}.git`] = bare;
     const remoteUrl = `${git.url}/${name}.git`;
-    const [ id ] = seed(instance.dataDir, { repositories: [ { userId: ADMIN_ID, name, remoteUrl } ] }).repositoryIds;
+    const [ id ] = seed(instance.dataDir, {
+      repositories: [ { userId: ADMIN_ID, name, remoteUrl, workingCopy: { clone: bare, origin: remoteUrl } } ]
+    }).repositoryIds;
     const dir = workingCopyOf(instance.dataDir, id);
-    rmSync(dir, { recursive: true, force: true });
-    gitIn(dirname(dir), 'clone', '-q', bare, dir);
-    gitIn(dir, 'remote', 'set-url', 'origin', remoteUrl);
     publish(dir, bare, files);
     return { id, dir, bare };
   }

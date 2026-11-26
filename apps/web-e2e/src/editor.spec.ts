@@ -266,6 +266,7 @@ test.describe('editor', () => {
     await expect(editor(page, 'hundred.md')).toBeEditable();
     expect(Date.now() - started).toBeLessThan(1000);
 
+    // Throttling needs the Chrome DevTools Protocol (A-8.20).
     if (browserName !== 'chromium') {
       return;
     }
@@ -310,7 +311,7 @@ test.describe('editor', () => {
     // The browser's own Tab, not the editor's: no tab is inserted.
     await expect(editor(page, 'README.md')).toHaveText(/^# Handbook$/);
     // The editor is the page's last focusable element: Chromium and WebKit move the focus past it to the
-    // page, while Firefox keeps it there (with an element after the editor, Firefox moves to it too).
+    // page, while Firefox keeps it there (with an element after the editor, Firefox moves to it too; A-8.20).
     if (browserName !== 'firefox') {
       await expect(editor(page, 'README.md')).not.toBeFocused();
     }

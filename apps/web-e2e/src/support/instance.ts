@@ -56,12 +56,40 @@ export interface Instance {
   output(): string;
 }
 
-async function freePort(): Promise<number> {
+/**
+ * Each Playwright worker takes its servers' ports from a range of its own,
+ * below Linux's ephemeral ports (32768 and up), which the system hands out
+ * for port 0: parallel workers never pick the same port, as two that both
+ * asked for port 0 could, and then one test's requests reach the other's
+ * server.
+ */
+const PORT_BASE = 20_000;
+const PORTS_PER_WORKER = 400;
+let nextPort = 0;
+
+async function canListen(port: number): Promise<boolean> {
   const server = createServer();
-  await new Promise<void>(done => server.listen(0, '127.0.0.1', done));
-  const { port } = server.address() as { port: number; };
+  try {
+    await new Promise<void>((done, fail) => {
+      server.once('error', fail);
+      server.listen(port, '127.0.0.1', done);
+    });
+  } catch {
+    return false;
+  }
   await new Promise<void>(done => server.close(() => done()));
-  return port;
+  return true;
+}
+
+async function freePort(): Promise<number> {
+  const slot = Number(process.env['TEST_PARALLEL_INDEX'] ?? 0);
+  for (let tries = 0; tries < PORTS_PER_WORKER; tries++) {
+    const port = PORT_BASE + slot * PORTS_PER_WORKER + (nextPort++ % PORTS_PER_WORKER);
+    if (await canListen(port)) {
+      return port;
+    }
+  }
+  throw new Error(`No free port for worker ${slot}`);
 }
 
 async function waitUntilReady(url: string, child: ChildProcess, output: () => string): Promise<void> {
@@ -322,7 +350,10 @@ export function seed(
       insertPreferences.run(id, user.displayName ?? user.email, user.email);
       return id;
     });
-    const repositoryIds = (rows.repositories ?? []).map(repository => {
+    // In one transaction with its working copy: the running server sees the
+    // repository only once its working copy is complete, so that nothing it
+    // starts on it, such as a fetch, finds the folder missing or half made.
+    const addRepository = sqlite.transaction((repository: SeedRepository) => {
       const at = (repository.lastAccessedAt ?? new Date()).getTime();
       const id = Number(
         insertRepository.run(
@@ -347,6 +378,7 @@ export function seed(
       }
       return id;
     });
+    const repositoryIds = (rows.repositories ?? []).map(repository => addRepository(repository));
     return { userIds, repositoryIds };
   } finally {
     sqlite.close();

@@ -417,3 +417,48 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     compete with the tree's own requests, and `perf-screen.mjs` times the editor
     from a click with its chunk not loaded yet (A-8.17), as a user who opens a
     file at once would see it.
+
+## A-8: Browser differences
+
+The full browser run (NF-12.2, plan 154) runs every browser test in Chromium,
+Firefox and WebKit, on desktop and on a phone. What it found is fixed, test
+first, unless it is one of these. A test adjusted for one browser says why and
+names the record here.
+
+- **A-8.19** **Differences the product accepts.**
+  - **`Secure` cookies on `http://localhost` (WebKit, Safari).** WebKit keeps no
+    `Secure` cookie over plain HTTP, `localhost` included
+    ([WebKit bug 281149](https://bugs.webkit.org/show_bug.cgi?id=281149)), so in
+    Safari on `http://localhost` users are not kept logged in and OIDC logins
+    fail (LG-32). The cookies stay `Secure`; the deployment guide says that
+    Safari needs HTTPS. The browser tests serve over plain HTTP, so the tests
+    that need the refresh or OIDC state cookie are skipped in WebKit
+    (`WEBKIT_SECURE_COOKIES` in `apps/web-e2e/src/support/fixtures.ts`).
+  - **The translations' preload (WebKit, Safari).** WebKit preloads
+    `i18n/en.json` (A-7.9) but does not give the preload to `fetch`, even with
+    the preload's own headers, so a first load downloads it twice (NF-2.7). The
+    NF-2.7 test allows the second request in WebKit only. A versioned address,
+    which could be cached, may remove it; not done yet.
+- **A-8.20** **Differences of the test browsers**, which the tests work around
+  for that browser only and the product does not see:
+  - Playwright 1.65's Firefox crashes the page when axe-core reads an ARIA
+    element-reflection property such as `ariaLabelledByElements` (playwright
+    #44135); the fixtures remove those properties in Firefox, and axe-core reads
+    the attributes instead.
+  - Firefox and WebKit log the loads that a navigation or the browser cancels,
+    which Chromium does not: the console monitor leaves them out there, and
+    Chromium's runs keep checking the rest.
+  - Headless Firefox and WebKit put the focus on the body past the first or last
+    control, where a browser's own controls would take it (`tabTo`).
+  - On the iPhone projects CodeMirror uses Cmd, whatever system the tests run on
+    (`shortcut()`); WebKit's iPhone keeps the focus in the editor after a tap
+    elsewhere, as iOS does until the keyboard's Done, and drops a mouse click
+    that takes the focus from a button just pressed, so phone tests tap.
+  - WebKit cannot be fulfilled with a 304 through a route, so a revalidation in
+    a routed test goes on to the server.
+  - Only Chromium can shrink the visual viewport as an on-screen keyboard does,
+    or throttle the network and the CPU (the Chrome DevTools Protocol): those
+    tests, or those steps, run in Chromium alone.
+  - Firefox keeps the focus on the page's last focusable element on Tab, where
+    Chromium and WebKit move it past it, so ED-11's test checks the move in
+    those two only.
