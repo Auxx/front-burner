@@ -2,7 +2,8 @@
   @let repository = this.repository();
   <div class="details">
     <div class="title">
-      <a class="name"
+      <a uiLink
+         class="name"
          [routerLink]="['/repositories', repository.id, 'settings']">{{ repository.name }}</a>
       <shell-repository-status showReady
                                [repository]="repository" />

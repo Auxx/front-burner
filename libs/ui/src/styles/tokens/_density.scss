@@ -14,6 +14,13 @@ $tokens: (
   control-height: (1.75rem, 2.75rem),
   control-height-small: (1.5rem, 2.75rem),
   row-height: (1.5rem, 2.75rem),
+  // The gap between a grouped control's frame and its parts, such as the
+  // segments of a segmented control. None on touch, so that each part has the
+  // whole target.
+  control-inset: (functions.ref(space-0-5), 0rem),
+  // A link that stands on its own as text (`touch-target-text`). None in
+  // compact density, where such links meet WCAG 2.5.8 by their spacing.
+  text-target-size: (0rem, 2.75rem),
   control-padding-inline: (functions.ref(space-3), functions.ref(space-4)),
 
   // Codicons are drawn on a 16 px grid

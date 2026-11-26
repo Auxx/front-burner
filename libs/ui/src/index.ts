@@ -71,6 +71,7 @@ export {
   type ScrollOffsetViewport
 } from './layout/utils/kept-scroll-offset/kept-scroll-offset.util';
 export { injectNarrowViewport } from './layout/utils/narrow-viewport/narrow-viewport.util';
+export { LinkComponent } from './navigation/components/link/link.component';
 export { MenuItemComponent } from './navigation/components/menu-item/menu-item.component';
 export { MenuSeparatorComponent } from './navigation/components/menu-separator/menu-separator.component';
 export { MenuComponent } from './navigation/components/menu/menu.component';

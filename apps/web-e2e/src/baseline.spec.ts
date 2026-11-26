@@ -196,6 +196,44 @@ async function insideViewport(page: Page, locator: Locator): Promise<boolean> {
 }
 
 /**
+ * The visible controls of the page, or of `within`, smaller than 44 × 44 px,
+ * the touch target of NF-13.5, as plan 155's phone check measures them. Not
+ * counted: visually hidden elements (the skip link until it has the focus, a
+ * radio button or checkbox inside its label, where the label is the target),
+ * the label of a text field (the field is the target), and links in the
+ * preview's Markdown, which are inline (WCAG 2.5.8's exception).
+ */
+function smallTargets(page: Page, within?: Locator): Promise<string[]> {
+  return (within ?? page.locator('body')).evaluate(root => {
+    const selector = 'a[href], button, input, select, textarea, label, '
+      + '[role=button], [role=tab], [role=menuitem], [role=radio], [role=checkbox], [role=treeitem]';
+    const found: string[] = [];
+    for (const element of root.querySelectorAll<HTMLElement>(selector)) {
+      const box = element.getBoundingClientRect();
+      if (box.width <= 1 || box.height <= 1 || !element.checkVisibility({ visibilityProperty: true })) {
+        continue;
+      }
+      if (element.closest('md-preview, [aria-hidden="true"], [inert]')) {
+        continue;
+      }
+      if (element instanceof HTMLLabelElement && !element.querySelector('input[type=checkbox], input[type=radio]')) {
+        continue;
+      }
+      if (element instanceof HTMLInputElement && element.closest('label')) {
+        continue;
+      }
+      if (box.width < 43.5 || box.height < 43.5) {
+        const name = (element.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 40);
+        found.push(
+          `${element.tagName.toLowerCase()} "${name}" is ${Math.round(box.width)} × ${Math.round(box.height)}`
+        );
+      }
+    }
+    return found;
+  });
+}
+
+/**
  * What moves on the page: every running animation that changes more than
  * opacity, and every element with a transition longer than zero of anything
  * but opacity. A fade is not motion: the spinner's and progress bar's slow
@@ -292,6 +330,28 @@ test.describe('every page', () => {
       await shown.scrollIntoViewIfNeeded();
       return (await insideViewport(page, shown)) ? found : [ ...found, 'not inside the screen' ];
     });
+
+    expect(problems).toEqual([]);
+  });
+
+  test('NF-13.5: every control is at least 44 px on a phone', async ({ page, instance, isMobile }) => {
+    test.skip(!isMobile, 'The touch target is 44 px on touch screens only; the phone projects check it.');
+
+    const problems = await visitEveryPage(page, instance, opened => smallTargets(page, opened));
+
+    // The Changes tab, with a change to tick.
+    await page.goto('/repositories');
+    await page.getByRole('link', { name: 'Open handbook' }).click();
+    await expect(page).toHaveURL(/\/repositories\/\d+/);
+    const id = Number(/\/repositories\/(\d+)/.exec(page.url())?.[1]);
+    writeFileSync(join(workingCopyOf(instance.dataDir, id), 'README.md'), '# Handbook\n\nChanged.\n');
+    // The status is read when the screen opens.
+    await page.reload();
+    await page.getByRole('toolbar', { name: 'Tool windows' }).getByRole('button', { name: /^Changes/ }).click();
+    const changes = page.getByRole('region', { name: 'Changes', exact: true });
+    await expect(changes.getByRole('checkbox', { name: 'Commit README.md' })).toBeVisible();
+    await settled(page);
+    problems.push(...(await smallTargets(page)).map(problem => `the Changes tab: ${problem}`));
 
     expect(problems).toEqual([]);
   });

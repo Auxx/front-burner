@@ -2,7 +2,8 @@
 
 @layer components {
   :host {
-    --ui-segmented-control-padding: var(--ui-space-0-5);
+    // On touch, none: each segment is a whole target (NF-13.5).
+    --ui-segmented-control-padding: var(--ui-control-inset);
 
     box-sizing: border-box;
     display: inline-grid;

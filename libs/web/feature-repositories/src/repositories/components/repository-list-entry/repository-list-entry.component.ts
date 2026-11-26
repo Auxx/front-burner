@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { RepositorySummary } from '@front-burner/shared-contracts';
-import { ButtonComponent } from '@front-burner/ui';
+import { ButtonComponent, LinkComponent } from '@front-burner/ui';
 import {
   LastAccessedComponent,
   RepositoryStatusComponent,
@@ -21,6 +21,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
     TranslocoDirective,
     RouterLink,
     ButtonComponent,
+    LinkComponent,
     RepositoryStatusComponent,
     RepositoryStatusDetailComponent,
     LastAccessedComponent

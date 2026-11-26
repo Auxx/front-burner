@@ -21,11 +21,15 @@
   flex: none;
 }
 
-// The whole height of the row can be tapped.
+// The whole height of the row can be tapped, and the label is at least a
+// target wide (NF-13.5).
 .tick {
+  box-sizing: border-box;
   display: flex;
   flex: none;
   align-items: center;
+  justify-content: center;
+  min-inline-size: var(--ui-control-height);
   align-self: stretch;
   padding-inline: var(--ui-space-2) var(--ui-space-1);
   cursor: pointer;

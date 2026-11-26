@@ -25,6 +25,31 @@ export default meta;
 
 type Story = StoryObj<TabStripComponent>;
 
+/**
+ * At touch density a tab with a short label, such as the editor's **Edit**, is
+ * still a 44 px target (NF-13.5).
+ */
+export const TouchTargets: Story = {
+  render: () => ({
+    template: `
+      <div uiTabGroup>
+        <ui-tab-strip label="View" selected="edit">
+          <button uiTab="edit">Edit</button>
+          <button uiTab="preview">Preview</button>
+        </ui-tab-strip>
+      </div>
+    `
+  }),
+  globals: { density: 'touch' },
+  play: async ({ canvasElement }) => {
+    for (const name of [ 'Edit', 'Preview' ]) {
+      const box = within(canvasElement).getByRole('tab', { name }).getBoundingClientRect();
+      await expect(box.width).toBeGreaterThanOrEqual(44);
+      await expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+  }
+};
+
 /** The tabs of the left pane, in the header of an island (GA-10). */
 export const LeftPane: Story = {
   render: () => ({

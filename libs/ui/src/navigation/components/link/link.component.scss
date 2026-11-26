@@ -1,0 +1,7 @@
+@use '../../../styles/mixins';
+
+@layer components {
+  :host {
+    @include mixins.touch-target-text;
+  }
+}
