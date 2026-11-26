@@ -94,6 +94,14 @@ Operations, after the MVP:
   an encryption key reset, in system settings. When they exist, the deployment
   guide sends the operator there rather than to the OIDC environment variables.
 
+Release checks not run yet:
+
+- The VoiceOver pass of the accessibility hand check (NF-13.8; pass V of
+  `docs/wiki/release-checks.md`, "Plan 156: accessibility"). The keyboard and
+  NVDA passes passed on 2026-11-26; VoiceOver was left out because no iOS device
+  was at hand. Run it on any iPhone with the current iOS and Safari, following
+  the same script and report, and record it in that section's results.
+
 Spikes (`docs/architecture/spikes.md`), each on its own `spike/<name>` branch,
 never merged, time-boxed to 1–2 days; findings go back into the architecture
 documents:
