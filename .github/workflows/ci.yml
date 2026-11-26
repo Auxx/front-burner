@@ -322,9 +322,13 @@ jobs:
         with:
           nx-cache: image
 
-      # The image that was just scanned, not a build of its own.
-      - name: Container smoke test
+      # The image that was just scanned, not a build of its own: the smoke test
+      # and the resilience checks (plan 153). The upgrade check builds a second
+      # image with a throwaway migration, which takes minutes, so it runs on
+      # pushes to master only, not on pull requests.
+      - name: Container smoke test and resilience checks
         if: steps.changes.outputs.needed == 'true'
         run: npx nx run server-e2e:e2e-container
         env:
           E2E_IMAGE: front-burner:ci
+          E2E_UPGRADE_TEST: ${{ github.event_name != 'pull_request' }}

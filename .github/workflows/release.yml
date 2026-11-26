@@ -35,7 +35,8 @@ jobs:
   release:
     name: Build, scan, publish
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The build from scratch, the container suite and its second build.
+    timeout-minutes: 90
     # The least the job needs (NF-11.12): the draft release, the image, the
     # OIDC token for keyless signing and attesting, and the attestations.
     permissions:
@@ -230,6 +231,24 @@ jobs:
             exit 1
           fi
           echo "The image reports version $actual."
+
+      # The container suite on the image that is about to be pushed: the smoke
+      # test and the resilience checks, with the upgrade from this image to a
+      # build with one more migration and going back (plan 153). A failure
+      # stops the release before anything is published.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Container suite
+        env:
+          E2E_IMAGE: front-burner:release
+          E2E_UPGRADE_TEST: 'true'
+          NX_NO_CLOUD: 'true'
+          NX_DAEMON: 'false'
+        run: |
+          npm ci
+          npx nx run server-e2e:e2e-container
 
       # The SBOM of the image as built, in CycloneDX (NF-11.12).
       - name: SBOM
