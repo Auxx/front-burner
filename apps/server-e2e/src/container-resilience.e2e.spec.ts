@@ -1,6 +1,6 @@
 import { safeVersion } from '@front-burner/server-core-database';
 import { type GitHttpServer, startGitHttpServer } from '@front-burner/server-core-git/testing';
-import { chmodSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -229,7 +229,10 @@ async function startRemotes(
   const root = mkdtempSync(join(tmpdir(), 'front-burner-e2e-resilience-git-'));
   const { handbook } = createRemotes(root);
   pushFileFromElsewhere(handbook, 'README.md', '# Handbook\n');
-  const bare = Object.fromEntries(names.map(name => [ name, copyRemote(root, handbook, name) ]));
+  // A folder of their own, as a copy may share the fixture's name (`handbook`).
+  const served = join(root, 'served');
+  mkdirSync(served);
+  const bare = Object.fromEntries(names.map(name => [ name, copyRemote(served, handbook, name) ]));
   const git = await startGitHttpServer({
     repositories: Object.fromEntries(Object.entries(bare).map(([ name, path ]) => [ `${name}.git`, path ]))
   });
