@@ -213,7 +213,9 @@ function smallTargets(page: Page, within?: Locator): Promise<string[]> {
       if (box.width <= 1 || box.height <= 1 || !element.checkVisibility({ visibilityProperty: true })) {
         continue;
       }
-      if (element.closest('md-preview, [aria-hidden="true"], [inert]')) {
+      // A control hidden from assistive technology can still be tapped, such as
+      // the editor's Accept buttons above a conflict, so it counts.
+      if (element.closest('md-preview, [inert]')) {
         continue;
       }
       if (element instanceof HTMLLabelElement && !element.querySelector('input[type=checkbox], input[type=radio]')) {

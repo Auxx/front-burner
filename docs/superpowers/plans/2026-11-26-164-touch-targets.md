@@ -97,5 +97,11 @@ Page not found (**Go to the dashboard**).
       links, text fields' labels, the preview's links).
 - [x] **Step 2: Verify** — as in the index's "Verifying", plus the end-to-end
       suite in Chromium on desktop and phone.
-- [x] **Step 3: Record** — update the NF-13.5 row and plan 155's results in
+- [x] **Step 3: The real phone again** — the operator measured the build on the
+      test instance: everything above passed, and line 53 found the editor's
+      **Accept** buttons above a conflict at 24 px high. They are hidden from
+      assistive technology, which the end-to-end check had skipped; it now
+      counts every control that can be tapped, and the buttons take the small
+      control height (`editor-theme.ts`), 44 px on touch screens.
+- [x] **Step 4: Record** — update the NF-13.5 row and plan 155's results in
       `docs/wiki/release-checks.md`; set this plan's row to **Done**.
