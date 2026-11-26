@@ -1,6 +1,7 @@
 <ng-container *transloco="let t; prefix: 'web-shell.PageNotFoundPage'">
   <ui-centred-island width="24rem">
     <h1 tabindex="-1">{{ t('heading') }}</h1>
-    <a routerLink="/">{{ t('dashboard') }}</a>
+    <a uiLink
+       routerLink="/">{{ t('dashboard') }}</a>
   </ui-centred-island>
 </ng-container>

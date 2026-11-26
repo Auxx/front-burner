@@ -2,7 +2,8 @@
   @let repository = this.repository();
   <div class="title">
     @if (openable()) {
-      <a class="name"
+      <a uiLink
+         class="name"
          [routerLink]="['/repositories', repository.id]">{{ repository.name }}</a>
     } @else {
       <span class="name">{{ repository.name }}</span>
@@ -14,7 +15,8 @@
   <div class="meta">
     <shell-last-accessed [at]="repository.lastAccessedAt" />
     @if (hasSettingsLink()) {
-      <a class="settings"
+      <a uiLink
+         class="settings"
          [routerLink]="['/repositories', repository.id, 'settings']"
          [attr.aria-label]="t('settingsLabel', { name: repository.name })">{{ t('settings') }}</a>
     }

@@ -1,3 +1,5 @@
+@use '../../../styles/mixins';
+
 @layer components {
   :host {
     display: grid;
@@ -47,8 +49,10 @@
   }
 
   // The ancestors' links are muted, as the rest of the trail, and keep their
-  // underline.
+  // underline. Each is a whole target (NF-13.5).
   li ::ng-deep a {
+    @include mixins.touch-target-text;
+
     color: inherit;
 
     &:hover {

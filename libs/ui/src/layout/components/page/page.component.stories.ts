@@ -83,6 +83,40 @@ export const WithAncestors: Story = {
   }
 };
 
+/**
+ * At touch density each ancestor's link is a 44 px target (NF-13.5), even with
+ * a one-letter name, and the `h1` still sits beside the breadcrumbs.
+ */
+export const TouchTargets: Story = {
+  render: props => ({
+    props,
+    styles: [ canvas ],
+    template: `
+      <div class="canvas">
+        <ui-page [breadcrumbsLabel]="breadcrumbsLabel" [column]="column">
+          <a *uiBreadcrumb href="/repositories">Repositories</a>
+          <a *uiBreadcrumb href="/repositories/1">a</a>
+          <h1 uiPageTitle>Settings</h1>
+        </ui-page>
+      </div>
+    `
+  }),
+  globals: { density: 'touch' },
+  play: async ({ canvasElement }) => {
+    for (const link of canvasElement.querySelectorAll('nav a')) {
+      const box = link.getBoundingClientRect();
+      await expect(box.width).toBeGreaterThanOrEqual(44);
+      await expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    const nav = canvasElement.querySelector('nav') as HTMLElement;
+    const h1 = canvasElement.querySelector('h1') as HTMLElement;
+    // Still one line: the h1 lies within the breadcrumbs' height.
+    const [ title, trail ] = [ h1.getBoundingClientRect(), nav.getBoundingClientRect() ];
+    await expect(title.top).toBeGreaterThanOrEqual(trail.top - 1);
+    await expect(title.bottom).toBeLessThanOrEqual(trail.bottom + 1);
+  }
+};
+
 /** The content in a centred column of 40rem, as on the Add repository page. */
 export const CentredColumn: Story = {
   ...WithAncestors,

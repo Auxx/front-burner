@@ -1,0 +1,13 @@
+// A link or other text that stands on its own, made a whole target of 44 px on
+// touch screens (NF-13.5): padding gives it the height, and the line it is on
+// grows with it, so that no two targets overlap. In compact density
+// `--ui-text-target-size` is 0, and nothing changes.
+@mixin touch-target-text {
+  display: inline-block;
+  box-sizing: border-box;
+  min-inline-size: var(--ui-text-target-size);
+  // A long name still wraps on a narrow screen (NF-12.4).
+  max-inline-size: 100%;
+  padding-block: max(0px, calc((var(--ui-text-target-size) - 1lh) / 2));
+  overflow-wrap: anywhere;
+}

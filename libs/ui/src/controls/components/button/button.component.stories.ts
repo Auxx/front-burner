@@ -130,6 +130,30 @@ export const Busy: Story = {
   }
 };
 
+/**
+ * At touch density a button with a short label is still a 44 px target in
+ * every size (NF-13.5).
+ */
+export const TouchTargets: Story = {
+  render: () => ({
+    styles: [ row ],
+    template: `
+      <div class="row">
+        <button uiButton variant="ghost">OK</button>
+        <button uiButton variant="ghost" size="small">Go</button>
+      </div>
+    `
+  }),
+  globals: { density: 'touch' },
+  play: async ({ canvasElement }) => {
+    for (const button of canvasElement.querySelectorAll('button')) {
+      const box = button.getBoundingClientRect();
+      await expect(box.width).toBeGreaterThanOrEqual(44);
+      await expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+  }
+};
+
 /** An icon in front of a label stays `--ui-icon-size` square in every size. */
 export const GhostWithIconAndText: Story = {
   render: () => ({

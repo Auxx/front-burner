@@ -4,7 +4,8 @@
   :host {
     box-sizing: border-box;
     min-block-size: var(--ui-control-height);
-    min-inline-size: 0;
+    // A short label is still a whole target (NF-13.5).
+    min-inline-size: var(--ui-control-height);
     padding-block: 0;
     padding-inline: var(--ui-space-2);
     background: none;

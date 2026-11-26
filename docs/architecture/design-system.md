@@ -262,7 +262,7 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   | Group      | Components                                                                                               | Built on                                                |
   | ---------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
   | Layout     | `AppShell`, `Island`, `CentredIsland`, `Page`, `SplitPane`, `ActivityBar`, `StatusBar`, `Collapsible`    | Own code, CDK `Breakpoints`                             |
-  | Navigation | `TabStrip`, `Tree`, `Menu`                                                                               | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
+  | Navigation | `TabStrip`, `Tree`, `Menu`, `Link`                                                                       | Aria Tabs and Menu; CDK Overlay and Scrolling; own Tree |
   | Controls   | `Button`, `IconButton`, `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `SegmentedControl` | Native elements; Aria Combobox and Listbox; CDK Overlay |
   | Feedback   | `Dialog`, `Popover`, `Tooltip`, `Toast`, `InlineBanner`, `Badge`, `Spinner`, `ProgressBar`               | CDK Overlay, Dialog and LiveAnnouncer                   |
   | Content    | `Icon`, `EmptyState`, `KeyValueList`, `Divider`                                                          | Own code; a curated Codicons sprite                     |
@@ -353,6 +353,18 @@ The decisions behind it are D-9 in [decisions.md](decisions.md); see
   HTML allows in a `<dl>`. Values sit beside their labels, and under them when
   the list is narrower than 22 rem; fingerprints and other machine values are
   `mono`. Long values wrap anywhere.
+- **A-10.51** Every target is the control height across both axes, 44 px on
+  touch screens (NF-13.5), not only across the one its text sets: buttons and
+  tabs have it as their minimum width; the segments of a segmented control have
+  the whole height of the control on touch, as its inset (`--ui-control-inset`)
+  is none there; and a link that stands on its own, outside running text, is
+  `a[uiLink]`, which on touch screens is 44 px high and wide by padding, its
+  line growing with it (`--ui-text-target-size`, none in compact density, where
+  such links meet WCAG 2.5.8 by their spacing). Breadcrumbs get the same from
+  `Page`. A link inside a sentence needs none (WCAG 2.5.8). Negative margins,
+  which would keep the line as it was, were tried and dropped: the targets of a
+  wrapped breadcrumb overlapped. _(Plan 164's call, after plan 155's phone check
+  measured 40 px segments, 18 px links and a 43 px tab.)_
 
 ## A-10: Icons and fonts
 

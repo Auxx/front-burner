@@ -62,6 +62,24 @@ export const Narrow: Story = {
   }
 };
 
+/**
+ * At touch density every segment is a whole 44 px target (NF-13.5): the
+ * control's inset is inside the segments, not around them.
+ */
+export const TouchTargets: Story = {
+  ...Credentials,
+  globals: { density: 'touch' },
+  play: async ({ canvasElement }) => {
+    const segments = [ ...canvasElement.querySelectorAll<HTMLElement>('.segment') ];
+    await expect(segments).toHaveLength(3);
+    for (const segment of segments) {
+      const box = segment.getBoundingClientRect();
+      await expect(box.height).toBeGreaterThanOrEqual(44);
+      await expect(box.width).toBeGreaterThanOrEqual(44);
+    }
+  }
+};
+
 /** The clone mode, with the chosen mode's description below it (AR-33). */
 export const CloneMode: Story = {
   render: () => ({

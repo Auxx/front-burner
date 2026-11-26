@@ -153,7 +153,8 @@ export const editorTheme = EditorView.theme({
     fontFamily: 'var(--ui-font-family-sans)',
     fontSize: 'var(--ui-font-size-ui-small)'
   },
-  // The Accept buttons above a conflict (GC-11), at least 24 by 24 CSS pixels (NF-13.5).
+  // The Accept buttons above a conflict (GC-11): the small control height, at least 24 by 24
+  // CSS pixels, and 44 on touch screens (NF-13.5).
   '.cm-conflict-actions': {
     display: 'flex',
     flexWrap: 'wrap',
@@ -163,8 +164,8 @@ export const editorTheme = EditorView.theme({
     fontSize: 'var(--ui-font-size-ui-small)'
   },
   '.cm-conflict-action': {
-    minInlineSize: '24px',
-    minBlockSize: '24px',
+    minInlineSize: 'max(24px, var(--ui-control-height-small))',
+    minBlockSize: 'max(24px, var(--ui-control-height-small))',
     boxSizing: 'border-box',
     margin: '0',
     padding: '0 var(--ui-space-2)',
