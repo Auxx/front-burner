@@ -147,7 +147,8 @@ libraries and [overview.md](overview.md) for the numbering conventions.
     MB test file (about 380), typing at a 4× CPU slowdown in desktop emulation
     took a median of 19 ms and at most 47 ms by the browser's timing, against 16
     ms and 39 ms without the view (`typing-test.mjs`, `?conflicts=on`,
-    2026-11-14); the phone check waits for step 6.
+    2026-11-14). Step 6's phone check (plan 155) did not measure it; the
+    measurement is in `docs/wiki/todo.md`.
   - Typing stays within NF-2.4 on its own: at a 4× CPU slowdown, keystrokes in a
     200 KB file took at most 32–40 ms, and in a 1 MB file 40–56 ms, right at the
     limit (spike 3).

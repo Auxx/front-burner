@@ -57,14 +57,14 @@ Plan 154 repeats the end-to-end suites in every browser.
 
 ## NF-1: Scale
 
-| Rule           | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Result         | Date       | Commit    |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- | --------- |
-| [NF-1.1][nf-1] | **Measured**: plan 150's `perf-api.mjs scale` seeds 50 users with 50 small repositories each; `perf-api.mjs ready` times a restart among them (recovery visits every working copy, NF-9.4) and `run --users 10` the API measures; plan 152 runs them on the reference host. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): the 50 users fit and the instance starts among them, ready after 46 s, but only just inside the image's health check. [Plan 161](#plan-161-health-check-start-period): with a 5-minute start period, a cold start among them is `starting` for 81 s and `healthy` 2 s after ready. | Pass           | 2026-11-25 | `aade0f2` |
-| [NF-1.2][nf-1] | **Measured**: plan 150's `perf-api.mjs run --users 10` runs its measures from 10 users at once, each pausing 5 s on average before each operation (plan 160, recorded at NF-1.2); plan 152 runs it on the reference host. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host), with no pauses: NF-2.1 and NF-2.6 missed. [Plan 160](#plan-160-ten-users-measured-again), with the pauses: every target holds, the pull closest (p95 944 ms added).                                                                                                                                                                  | Pass           | 2026-11-24 | `f052735` |
-| [NF-1.3][nf-1] | **Measured**: as NF-1.1, `perf-api.mjs scale` (2,500 working copies). The disk they need: **Document**, [Sizing the disk](deployment.md#sizing-the-disk). [Reference host](#reference-host): 2,500 working copies, recovered on start in 42 s.                                                                                                                                                                                                                                                                                                                                                                                                              | Pass           | 2026-11-23 | `f9c295c` |
-| [NF-1.4][nf-1] | **Test**: `libs/server/feature/files/src/listing/folder-lister.spec.ts` › "AC-FILE-001.7: lists 1,000 entries within 300 ms in a repository of 100,000 files". The rest, a repository of that size cloned, opened, committed and pushed: **Measured** by plan 150's `gen-large-repo.mjs` and `perf-api.mjs run --large` (clone, status, commit, push), on the reference host by plan 152. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): cloned in 35 s; the folder 94 ms, warm status 521 ms and commit 1.4 s at p95; 10 pushes, worst 1.4 s.                                                                | Pass           | 2026-11-23 | `f9c295c` |
-| [NF-1.5][nf-1] | **Test**: `apps/server-e2e/src/files.e2e.spec.ts` › "AC-EDIT-001.10: refuses a save over 1 MB and accepts it once smaller"; `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.10: shows the 1 MB refusal and saves again once smaller". Editing a 1 MB file on a phone: **Hand**, plan 155 (NF-2.4).                                                                                                                                                                                                                                                                                                                                                         | To check (155) |            |           |
-| [NF-1.7][nf-1] | **Document**: [Sizing the disk](deployment.md#sizing-the-disk) gives the formula, per user and working copy.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Pass           | 2026-11-20 | `7e82076` |
+| Rule           | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Result                           | Date       | Commit    |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ---------- | --------- |
+| [NF-1.1][nf-1] | **Measured**: plan 150's `perf-api.mjs scale` seeds 50 users with 50 small repositories each; `perf-api.mjs ready` times a restart among them (recovery visits every working copy, NF-9.4) and `run --users 10` the API measures; plan 152 runs them on the reference host. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): the 50 users fit and the instance starts among them, ready after 46 s, but only just inside the image's health check. [Plan 161](#plan-161-health-check-start-period): with a 5-minute start period, a cold start among them is `starting` for 81 s and `healthy` 2 s after ready. | Pass                             | 2026-11-25 | `aade0f2` |
+| [NF-1.2][nf-1] | **Measured**: plan 150's `perf-api.mjs run --users 10` runs its measures from 10 users at once, each pausing 5 s on average before each operation (plan 160, recorded at NF-1.2); plan 152 runs it on the reference host. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host), with no pauses: NF-2.1 and NF-2.6 missed. [Plan 160](#plan-160-ten-users-measured-again), with the pauses: every target holds, the pull closest (p95 944 ms added).                                                                                                                                                                  | Pass                             | 2026-11-24 | `f052735` |
+| [NF-1.3][nf-1] | **Measured**: as NF-1.1, `perf-api.mjs scale` (2,500 working copies). The disk they need: **Document**, [Sizing the disk](deployment.md#sizing-the-disk). [Reference host](#reference-host): 2,500 working copies, recovered on start in 42 s.                                                                                                                                                                                                                                                                                                                                                                                                              | Pass                             | 2026-11-23 | `f9c295c` |
+| [NF-1.4][nf-1] | **Test**: `libs/server/feature/files/src/listing/folder-lister.spec.ts` › "AC-FILE-001.7: lists 1,000 entries within 300 ms in a repository of 100,000 files". The rest, a repository of that size cloned, opened, committed and pushed: **Measured** by plan 150's `gen-large-repo.mjs` and `perf-api.mjs run --large` (clone, status, commit, push), on the reference host by plan 152. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): cloned in 35 s; the folder 94 ms, warm status 521 ms and commit 1.4 s at p95; 10 pushes, worst 1.4 s.                                                                | Pass                             | 2026-11-23 | `f9c295c` |
+| [NF-1.5][nf-1] | **Test**: `apps/server-e2e/src/files.e2e.spec.ts` › "AC-EDIT-001.10: refuses a save over 1 MB and accepts it once smaller"; `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.10: shows the 1 MB refusal and saves again once smaller". Editing a 1 MB file on a phone: **Hand**, plan 155 (NF-2.4).                                                                                                                                                                                                                                                                                                                                                         | Not measured: see the NF-2.4 row | 2026-11-26 | `e0e4a48` |
+| [NF-1.7][nf-1] | **Document**: [Sizing the disk](deployment.md#sizing-the-disk) gives the formula, per user and working copy.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Pass                             | 2026-11-20 | `7e82076` |
 
 [nf-1]: ../architecture/non-functional.md#nf-1-scale
 
@@ -74,18 +74,18 @@ The targets are p95 on the reference host. The tests below run on whatever
 machine runs CI, so they prove the code path, not the number; the number is plan
 152's.
 
-| Rule            | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Result                                              | Date       | Commit    |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------- | --------- |
-| [NF-2.1][nf-2]  | **Test** (API, median of 5, not on the reference host): `libs/server/feature/files/src/listing/folder-lister.spec.ts` › "AC-FILE-001.7: lists 1,000 entries within 300 ms in a repository of 100,000 files". **Measured**: API by plan 150 (`perf-api.mjs`), screen on slow 4G by plan 151 (`perf-screen.mjs`), both on the reference host by plan 152. Indicative API: [Plan 150](#plan-150-indicative-api-timings). Indicative screen: [Plan 151](#plan-151-indicative-screen-timings), 1.1 s on slow 4G; [after compression](#plan-159-after-compression), 0.61 s. [Reference host](#reference-host), before compression: API 94 ms for one user, 633 ms for 10 at once with no pauses; screen 1.1 s on slow 4G, a row set by the network, not the host. [Plan 160](#plan-160-ten-users-measured-again): API 82 ms for one user, 128 ms for 10 at once.                                                                                                                                                                                                                                                                                                                                                                                                                                               | Pass                                                | 2026-11-24 | `f052735` |
-| [NF-2.2][nf-2]  | **Test** (screen, one run): `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.2: is ready to edit a 100 KB file within NF-2.2". **Measured**: API by plan 150, screen on broadband and slow 4G by plan 151, on the reference host by plan 152. Indicative API: [Plan 150](#plan-150-indicative-api-timings). Indicative screen: [Plan 151](#plan-151-indicative-screen-timings), broadband passes, 8.3 s on slow 4G; [after compression](#plan-159-after-compression), 3.4 s on slow 4G; [plan 162](#plan-162-round-trips), the editor's chunks in one wave with the file, 2.3 s. [Reference host](#reference-host), before compression: API 48 ms for one user, 174 to 208 ms for 10 at once with no pauses; screen 182 ms on broadband, 8.3 s on slow 4G. [Plan 160](#plan-160-ten-users-measured-again): API 20 ms for one user, 25 ms for 10 at once. [Plan 162 on the reference host](#on-the-reference-host): 2.3 s (desktop) and 2.5 s (phone) on slow 4G, the editor's 293 KB of chunks. [Plan 163](#plan-163-editor-bytes), the preview pipeline and the HTML grammars out of the editor's chunks (143 KB of Brotli left), with a budget the build checks: 1.5 s (desktop) and 1.6 s (phone) on slow 4G; [on the reference host](#on-the-reference-host-1), 1.47 s (desktop) and 1.59 s (phone). | Pass                                                | 2026-11-25 | `cb5f662` |
-| [NF-2.3][nf-2]  | **Test** (the indicator, not the time): `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.3: saves after typing stops without committing". **Measured**: the API's 200 ms by plan 150, on the reference host by plan 152. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): 19 ms for one user, 81 to 135 ms for 10 at once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Pass                                                | 2026-11-23 | `f9c295c` |
-| [NF-2.4][nf-2]  | **Hand**: plan 155, `typing-test.mjs` on a real mid-range phone at 200 KB and 1 MB, with and without the conflict view (`docs/wiki/typing-test.md`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | To check (155)                                      |            |           |
-| [NF-2.5][nf-2]  | **Test** (CPU-throttled Chromium, not a phone): `apps/web-e2e/src/preview.spec.ts` › "AC-EDIT-001.16: updates a 200 KB file's preview within 300 ms after typing stops". **Measured**: plan 151 (`perf-screen.mjs`), on the reference host by plan 152. Indicative: [Plan 151](#plan-151-indicative-screen-timings), 126 ms on a desktop; 1.1 s on the phone profile, from the tap on **Preview**. [Reference host](#reference-host): the same, 128 ms and 1.2 s (no server part).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Fail on the phone profile (to decide with plan 155) | 2026-11-23 | `f9c295c` |
-| [NF-2.6][nf-2]  | **Measured**: plan 150 (`perf-api.mjs`, the job against plain `git`), on the reference host by plan 152. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): one user adds 547 ms to a pull and 273 ms to a push; 10 users at once with no pauses add 3.3 to 3.7 s and 1.5 to 1.9 s. [Plan 160](#plan-160-ten-users-measured-again): one user adds 273 ms and 115 ms; 10 users at once, 944 ms and 349 ms, the pull within 56 ms of the target.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Pass                                                | 2026-11-24 | `f052735` |
-| [NF-2.7][nf-2]  | **Measured**: plan 151 (`perf-screen.mjs`, slow 4G), on the reference host by plan 152. Indicative: [Plan 151](#plan-151-indicative-screen-timings), 11.0 s cold; [after compression](#plan-159-after-compression), 5.4 s cold (desktop) and 5.6 s (phone); [plan 162](#plan-162-round-trips), the first route's chunks preloaded, 3.7 s and 3.8 s. [Reference host](#reference-host), before compression: 11.0 s cold, the same. [Plan 162 on the reference host](#on-the-reference-host): 3.7 s cold (desktop) and 3.8 s (phone), from 8 waves of round trips to 5. **Test** that the preloads break no CSP rule and the translations are fetched once: `apps/web-e2e/src/baseline.spec.ts` › "NF-2.7: a first load asks for i18n/en.json once and breaks no CSP rule".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Pass                                                | 2026-11-25 | `c1ad1ed` |
-| [NF-2.8][nf-2]  | **Document**: clones, pulls, pushes, fetches, merges and large deletes are jobs (A-6 in [jobs.md](../architecture/jobs.md)). **Measured**: whether a cold status or commit at 100,000 files stays under about 2 seconds, plan 150 (`perf-api.mjs run --large --cold`), on the reference host by plan 152, which answers spike 4's question in `spikes.md`. Indicative, warm only: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): cold status 2.6 s and cold commit 3.5 s at p95, warm 0.5 s and 1.4 s; status and commit stay requests, by the operator's decision recorded at NF-2.8.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Pass (by decision)                                  | 2026-11-23 | `f9c295c` |
-| [NF-2.9][nf-2]  | **Test**: `apps/web/scripts/size-check.mjs` (the `web:size-check` target, which CI runs after every build) fails above 300 KB gzipped. Lazy loading of the editor, preview, Shiki and conflict screens: **Document**, A-8.1 in [web-client.md](../architecture/web-client.md).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Pass                                                | 2026-11-20 | `7e82076` |
-| [NF-2.10][nf-2] | **Test**: `libs/server/feature/files/src/listing/folder-lister.spec.ts` › "AC-FILE-001.7: lists 1,000 entries within 300 ms in a repository of 100,000 files"; `apps/web-e2e/src/repository-screen.spec.ts` › "AC-FILE-001.22: shows Try again for a folder that fails" (one folder at a time).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Pass                                                | 2026-11-20 | `7e82076` |
+| Rule            | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Result                                                                                                                                      | Date       | Commit    |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------- |
+| [NF-2.1][nf-2]  | **Test** (API, median of 5, not on the reference host): `libs/server/feature/files/src/listing/folder-lister.spec.ts` › "AC-FILE-001.7: lists 1,000 entries within 300 ms in a repository of 100,000 files". **Measured**: API by plan 150 (`perf-api.mjs`), screen on slow 4G by plan 151 (`perf-screen.mjs`), both on the reference host by plan 152. Indicative API: [Plan 150](#plan-150-indicative-api-timings). Indicative screen: [Plan 151](#plan-151-indicative-screen-timings), 1.1 s on slow 4G; [after compression](#plan-159-after-compression), 0.61 s. [Reference host](#reference-host), before compression: API 94 ms for one user, 633 ms for 10 at once with no pauses; screen 1.1 s on slow 4G, a row set by the network, not the host. [Plan 160](#plan-160-ten-users-measured-again): API 82 ms for one user, 128 ms for 10 at once.                                                                                                                                                                                                                                                                                                                                                                                                                                               | Pass                                                                                                                                        | 2026-11-24 | `f052735` |
+| [NF-2.2][nf-2]  | **Test** (screen, one run): `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.2: is ready to edit a 100 KB file within NF-2.2". **Measured**: API by plan 150, screen on broadband and slow 4G by plan 151, on the reference host by plan 152. Indicative API: [Plan 150](#plan-150-indicative-api-timings). Indicative screen: [Plan 151](#plan-151-indicative-screen-timings), broadband passes, 8.3 s on slow 4G; [after compression](#plan-159-after-compression), 3.4 s on slow 4G; [plan 162](#plan-162-round-trips), the editor's chunks in one wave with the file, 2.3 s. [Reference host](#reference-host), before compression: API 48 ms for one user, 174 to 208 ms for 10 at once with no pauses; screen 182 ms on broadband, 8.3 s on slow 4G. [Plan 160](#plan-160-ten-users-measured-again): API 20 ms for one user, 25 ms for 10 at once. [Plan 162 on the reference host](#on-the-reference-host): 2.3 s (desktop) and 2.5 s (phone) on slow 4G, the editor's 293 KB of chunks. [Plan 163](#plan-163-editor-bytes), the preview pipeline and the HTML grammars out of the editor's chunks (143 KB of Brotli left), with a budget the build checks: 1.5 s (desktop) and 1.6 s (phone) on slow 4G; [on the reference host](#on-the-reference-host-1), 1.47 s (desktop) and 1.59 s (phone). | Pass                                                                                                                                        | 2026-11-25 | `cb5f662` |
+| [NF-2.3][nf-2]  | **Test** (the indicator, not the time): `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.3: saves after typing stops without committing". **Measured**: the API's 200 ms by plan 150, on the reference host by plan 152. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): 19 ms for one user, 81 to 135 ms for 10 at once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Pass                                                                                                                                        | 2026-11-23 | `f9c295c` |
+| [NF-2.4][nf-2]  | **Hand**: plan 155, `typing-test.mjs` on a real mid-range phone at 200 KB and 1 MB, with and without the conflict view (`docs/wiki/typing-test.md`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Not measured: no lag noticed in a week of use on an Android phone ([Plan 155](#plan-155-phones)); the measurement is in `docs/wiki/todo.md` | 2026-11-26 | `e0e4a48` |
+| [NF-2.5][nf-2]  | **Test** (CPU-throttled Chromium, not a phone): `apps/web-e2e/src/preview.spec.ts` › "AC-EDIT-001.16: updates a 200 KB file's preview within 300 ms after typing stops". **Measured**: plan 151 (`perf-screen.mjs`), on the reference host by plan 152. Indicative: [Plan 151](#plan-151-indicative-screen-timings), 126 ms on a desktop; 1.1 s on the phone profile, from the tap on **Preview**. [Reference host](#reference-host): the same, 128 ms and 1.2 s (no server part).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Fail on the phone profile (to decide with plan 155)                                                                                         | 2026-11-23 | `f9c295c` |
+| [NF-2.6][nf-2]  | **Measured**: plan 150 (`perf-api.mjs`, the job against plain `git`), on the reference host by plan 152. Indicative: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): one user adds 547 ms to a pull and 273 ms to a push; 10 users at once with no pauses add 3.3 to 3.7 s and 1.5 to 1.9 s. [Plan 160](#plan-160-ten-users-measured-again): one user adds 273 ms and 115 ms; 10 users at once, 944 ms and 349 ms, the pull within 56 ms of the target.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Pass                                                                                                                                        | 2026-11-24 | `f052735` |
+| [NF-2.7][nf-2]  | **Measured**: plan 151 (`perf-screen.mjs`, slow 4G), on the reference host by plan 152. Indicative: [Plan 151](#plan-151-indicative-screen-timings), 11.0 s cold; [after compression](#plan-159-after-compression), 5.4 s cold (desktop) and 5.6 s (phone); [plan 162](#plan-162-round-trips), the first route's chunks preloaded, 3.7 s and 3.8 s. [Reference host](#reference-host), before compression: 11.0 s cold, the same. [Plan 162 on the reference host](#on-the-reference-host): 3.7 s cold (desktop) and 3.8 s (phone), from 8 waves of round trips to 5. **Test** that the preloads break no CSP rule and the translations are fetched once: `apps/web-e2e/src/baseline.spec.ts` › "NF-2.7: a first load asks for i18n/en.json once and breaks no CSP rule".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Pass                                                                                                                                        | 2026-11-25 | `c1ad1ed` |
+| [NF-2.8][nf-2]  | **Document**: clones, pulls, pushes, fetches, merges and large deletes are jobs (A-6 in [jobs.md](../architecture/jobs.md)). **Measured**: whether a cold status or commit at 100,000 files stays under about 2 seconds, plan 150 (`perf-api.mjs run --large --cold`), on the reference host by plan 152, which answers spike 4's question in `spikes.md`. Indicative, warm only: [Plan 150](#plan-150-indicative-api-timings). [Reference host](#reference-host): cold status 2.6 s and cold commit 3.5 s at p95, warm 0.5 s and 1.4 s; status and commit stay requests, by the operator's decision recorded at NF-2.8.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Pass (by decision)                                                                                                                          | 2026-11-23 | `f9c295c` |
+| [NF-2.9][nf-2]  | **Test**: `apps/web/scripts/size-check.mjs` (the `web:size-check` target, which CI runs after every build) fails above 300 KB gzipped. Lazy loading of the editor, preview, Shiki and conflict screens: **Document**, A-8.1 in [web-client.md](../architecture/web-client.md).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Pass                                                                                                                                        | 2026-11-20 | `7e82076` |
+| [NF-2.10][nf-2] | **Test**: `libs/server/feature/files/src/listing/folder-lister.spec.ts` › "AC-FILE-001.7: lists 1,000 entries within 300 ms in a repository of 100,000 files"; `apps/web-e2e/src/repository-screen.spec.ts` › "AC-FILE-001.22: shows Try again for a folder that fails" (one folder at a time).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Pass                                                                                                                                        | 2026-11-20 | `7e82076` |
 
 [nf-2]: ../architecture/non-functional.md#nf-2-performance
 
@@ -220,28 +220,28 @@ machine runs CI, so they prove the code path, not the number; the number is plan
 
 ## NF-12: Browser and device support
 
-| Rule             | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Result         | Date       | Commit    |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- | --------- |
-| [NF-12.1][nf-12] | **Document**: the web client has no `browserslist` of its own, so Angular's default applies. **Test**: every browser test in Chromium, Firefox and WebKit, desktop and phone, passes ([Plan 154](#plan-154-full-browser-run)), with the browser differences of [A-8.19 and A-8.20](../architecture/web-client.md#a-8-browser-differences). **Hand**: plan 155, Safari on iOS and Chrome on Android.                                                                                                                                                                                                                                                                                                                                                                                                              | To check (155) |            |           |
-| [NF-12.2][nf-12] | **Document**: `apps/web-e2e/playwright.config.mts` and `.github/workflows/ci.yml` (Chromium, desktop and phone, on every pull request); `.github/workflows/nightly.yml` (Firefox on desktop, WebKit on desktop and phone, started by hand). **Test**: both pass on the same commit ([Plan 154](#plan-154-full-browser-run)). Real phones: plan 155.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | To check (155) |            |           |
-| [NF-12.3][nf-12] | **Document**: a rule about what is not supported; there is nothing to test.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Pass           | 2026-11-20 | `7e82076` |
-| [NF-12.4][nf-12] | **Test**: `apps/web-e2e/src/baseline.spec.ts` › "NF-12.4: no page or dialog scrolls sideways at 320 px" (every page in its list: onboarding, login, dashboard with the account menu, repository management, Add repository, a repository's settings with the Remove dialog, a failed clone's settings, Preferences, the repository screen with a file open and the branch list, the repository screen during a merge, and Page not found); the page specs' own tests, for example `apps/web-e2e/src/login.spec.ts` › "NF-12.4: does not scroll sideways at 320 px", `apps/web-e2e/src/add-repository.spec.ts` › "AC-REPO-001.26: usable at 320 px, with no axe violations" and `apps/web-e2e/src/repository-screen.spec.ts` › "NF-12.4: opens a fold in place, and keeps a long line inside the diff at 320 px". | Pass           | 2026-11-20 | `bd78526` |
-| [NF-12.5][nf-12] | **Test**: the "by touch alone" tests, for example `apps/web-e2e/src/commit-and-push.spec.ts` › "exit criterion 7, on a phone by touch alone", `apps/web-e2e/src/pull-and-conflicts.spec.ts` › "exit criterion 8, on a phone by touch alone" and `apps/web-e2e/src/repository-screen.spec.ts` › "AC-FILE-001.23: browses by touch alone"; `apps/web-e2e/src/preview.spec.ts` › "AC-EDIT-001.21: switches Edit and Preview tabs on a phone, keeping the place, with the cursor above the on-screen keyboard". A real on-screen keyboard: **Hand**, plan 155.                                                                                                                                                                                                                                                       | To check (155) |            |           |
-| [NF-12.6][nf-12] | **Test**: `apps/web-e2e/src/baseline.spec.ts` › "NF-12.6: every page works in landscape on a phone" (the phone projects, turned to landscape: every page of the NF-12.4 row's list does not scroll sideways and shows its heading, and every dialog and menu fits the screen); passed in `mobile-chromium` on 2026-11-20. Real phones, rotated: **Hand**, plan 155.                                                                                                                                                                                                                                                                                                                                                                                                                                              | To check (155) |            |           |
+| Rule             | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Result                                                           | Date       | Commit    |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------- | --------- |
+| [NF-12.1][nf-12] | **Document**: the web client has no `browserslist` of its own, so Angular's default applies. **Test**: every browser test in Chromium, Firefox and WebKit, desktop and phone, passes ([Plan 154](#plan-154-full-browser-run)), with the browser differences of [A-8.19 and A-8.20](../architecture/web-client.md#a-8-browser-differences). **Hand**: plan 155, Safari on iOS and Chrome on Android.                                                                                                                                                                                                                                                                                                                                                                                                              | Pass on Android ([Plan 155](#plan-155-phones)); iPhone: To check | 2026-11-26 | `e0e4a48` |
+| [NF-12.2][nf-12] | **Document**: `apps/web-e2e/playwright.config.mts` and `.github/workflows/ci.yml` (Chromium, desktop and phone, on every pull request); `.github/workflows/nightly.yml` (Firefox on desktop, WebKit on desktop and phone, started by hand). **Test**: both pass on the same commit ([Plan 154](#plan-154-full-browser-run)). Real phones: plan 155.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Pass on Android ([Plan 155](#plan-155-phones)); iPhone: To check | 2026-11-26 | `e0e4a48` |
+| [NF-12.3][nf-12] | **Document**: a rule about what is not supported; there is nothing to test.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Pass                                                             | 2026-11-20 | `7e82076` |
+| [NF-12.4][nf-12] | **Test**: `apps/web-e2e/src/baseline.spec.ts` › "NF-12.4: no page or dialog scrolls sideways at 320 px" (every page in its list: onboarding, login, dashboard with the account menu, repository management, Add repository, a repository's settings with the Remove dialog, a failed clone's settings, Preferences, the repository screen with a file open and the branch list, the repository screen during a merge, and Page not found); the page specs' own tests, for example `apps/web-e2e/src/login.spec.ts` › "NF-12.4: does not scroll sideways at 320 px", `apps/web-e2e/src/add-repository.spec.ts` › "AC-REPO-001.26: usable at 320 px, with no axe violations" and `apps/web-e2e/src/repository-screen.spec.ts` › "NF-12.4: opens a fold in place, and keeps a long line inside the diff at 320 px". | Pass                                                             | 2026-11-20 | `bd78526` |
+| [NF-12.5][nf-12] | **Test**: the "by touch alone" tests, for example `apps/web-e2e/src/commit-and-push.spec.ts` › "exit criterion 7, on a phone by touch alone", `apps/web-e2e/src/pull-and-conflicts.spec.ts` › "exit criterion 8, on a phone by touch alone" and `apps/web-e2e/src/repository-screen.spec.ts` › "AC-FILE-001.23: browses by touch alone"; `apps/web-e2e/src/preview.spec.ts` › "AC-EDIT-001.21: switches Edit and Preview tabs on a phone, keeping the place, with the cursor above the on-screen keyboard". A real on-screen keyboard: **Hand**, plan 155.                                                                                                                                                                                                                                                       | Pass on Android ([Plan 155](#plan-155-phones)); iPhone: To check | 2026-11-26 | `e0e4a48` |
+| [NF-12.6][nf-12] | **Test**: `apps/web-e2e/src/baseline.spec.ts` › "NF-12.6: every page works in landscape on a phone" (the phone projects, turned to landscape: every page of the NF-12.4 row's list does not scroll sideways and shows its heading, and every dialog and menu fits the screen); passed in `mobile-chromium` on 2026-11-20. Real phones, rotated: **Hand**, plan 155.                                                                                                                                                                                                                                                                                                                                                                                                                                              | Pass on Android ([Plan 155](#plan-155-phones)); iPhone: To check | 2026-11-26 | `e0e4a48` |
 
 [nf-12]: ../architecture/non-functional.md#nf-12-browser-and-device-support
 
 ## NF-13: Accessibility
 
-| Rule             | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Result                                                                                     | Date       | Commit    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------- | --------- |
-| [NF-13.1][nf-13] | **Test** (what axe finds): the NF-13.8 row. The rest of WCAG 2.2 AA: **Hand**, plan 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check | 2026-11-26 | `e0e4a48` |
-| [NF-13.2][nf-13] | Limited in the MVP: **Edit conflict markers** is offered. **Test**: `apps/web-e2e/src/pull-and-conflicts.spec.ts` › "AC-GIT-003.15: the conflict list, the conflict bar and the buttons work with the keyboard alone and by touch alone, and axe-core reports no violations". With screen readers: **Hand**, plan 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check | 2026-11-26 | `e0e4a48` |
-| [NF-13.3][nf-13] | **Test**: the "with the keyboard alone" tests, for example `apps/web-e2e/src/commit-and-push.spec.ts` › "exit criterion 7, on desktop with the keyboard alone" and `apps/web-e2e/src/repository-management-walkthrough.spec.ts` › "exit criterion 11, on desktop with the keyboard alone"; `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.22: opens find and replace from the button and Ctrl+F, and Esc then Tab leaves the editor" and "A-10.30: the focused editor has no focus ring; the find panel's controls have one"; `apps/web-e2e/src/app-header.spec.ts` › "AC-APP-001.12: Skip to content is the first element reached with Tab…". A visible focus everywhere and no trap: **Hand**, plan 156, in Chrome and Firefox ([Plan 156](#plan-156-accessibility)). | Pass                                                                                       | 2026-11-26 | `e0e4a48` |
-| [NF-13.5][nf-13] | **Test** (in part): `apps/web-e2e/src/repository-screen.spec.ts` › "the branch and counts stay in the one bar" (44 px on a phone). Every control: **Hand**, plans 155 and 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | To check (155, 156)                                                                        |            |           |
-| [NF-13.6][nf-13] | **Test**: `apps/web-e2e/src/editor.spec.ts` › "NF-13.6: resizes the editor and the preview with the arrow keys on the line between them" (renamed from NF-13.5 by plan 149); `apps/web-e2e/src/repository-screen.spec.ts` › "AC-FILE-001.4: collapses, expands and resizes the tree with the keyboard". Moving files is not in the MVP.                                                                                                                                                                                                                                                                                                                                                                                                                                   | Pass                                                                                       | 2026-11-20 | `bd78526` |
-| [NF-13.7][nf-13] | **Test**: reduced motion, `apps/web-e2e/src/baseline.spec.ts` › "NF-13.7: reduced motion turns animations off" (on every page of the NF-12.4 row's list and in its dialogs and menus, nothing moves but a fade, and the same check finds a transition once motion is welcome); colour, in part, `libs/web/shell/src/shell/components/repository-status/repository-status.component.spec.ts` › "gives each warning the warning icon (NF-13.7)". Colour never the only signal, everywhere: **Hand**, plan 156.                                                                                                                                                                                                                                                              | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check | 2026-11-26 | `e0e4a48` |
-| [NF-13.8][nf-13] | **Test**: axe-core in the specs of every page: login, onboarding, dashboard, Add repository, Preferences, repository management, the app header and its menus, and the repository screen with the editor, preview, changes, commit and push, and conflicts; each test that runs it names NF-13.8 or an acceptance criterion, for example `apps/web-e2e/src/dashboard.spec.ts` › "NF-13.8: has no accessibility violations, empty or with repositories" and `apps/web-e2e/src/login.spec.ts` › "NF-13.8: has no accessibility violations". The manual pass: **Hand**, plan 156.                                                                                                                                                                                            | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check | 2026-11-26 | `e0e4a48` |
+| Rule             | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Result                                                                                                                             | Date       | Commit    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------- |
+| [NF-13.1][nf-13] | **Test** (what axe finds): the NF-13.8 row. The rest of WCAG 2.2 AA: **Hand**, plan 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check                                         | 2026-11-26 | `e0e4a48` |
+| [NF-13.2][nf-13] | Limited in the MVP: **Edit conflict markers** is offered. **Test**: `apps/web-e2e/src/pull-and-conflicts.spec.ts` › "AC-GIT-003.15: the conflict list, the conflict bar and the buttons work with the keyboard alone and by touch alone, and axe-core reports no violations". With screen readers: **Hand**, plan 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check                                         | 2026-11-26 | `e0e4a48` |
+| [NF-13.3][nf-13] | **Test**: the "with the keyboard alone" tests, for example `apps/web-e2e/src/commit-and-push.spec.ts` › "exit criterion 7, on desktop with the keyboard alone" and `apps/web-e2e/src/repository-management-walkthrough.spec.ts` › "exit criterion 11, on desktop with the keyboard alone"; `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.22: opens find and replace from the button and Ctrl+F, and Esc then Tab leaves the editor" and "A-10.30: the focused editor has no focus ring; the find panel's controls have one"; `apps/web-e2e/src/app-header.spec.ts` › "AC-APP-001.12: Skip to content is the first element reached with Tab…". A visible focus everywhere and no trap: **Hand**, plan 156, in Chrome and Firefox ([Plan 156](#plan-156-accessibility)). | Pass                                                                                                                               | 2026-11-26 | `e0e4a48` |
+| [NF-13.5][nf-13] | **Test** (in part): `apps/web-e2e/src/repository-screen.spec.ts` › "the branch and counts stay in the one bar" (44 px on a phone). Every control: **Hand**, plans 155 and 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Fail on Android: [plan 164](../superpowers/plans/2026-11-26-164-touch-targets.md) ([Plan 155](#plan-155-phones)); iPhone: To check | 2026-11-26 | `e0e4a48` |
+| [NF-13.6][nf-13] | **Test**: `apps/web-e2e/src/editor.spec.ts` › "NF-13.6: resizes the editor and the preview with the arrow keys on the line between them" (renamed from NF-13.5 by plan 149); `apps/web-e2e/src/repository-screen.spec.ts` › "AC-FILE-001.4: collapses, expands and resizes the tree with the keyboard". Moving files is not in the MVP.                                                                                                                                                                                                                                                                                                                                                                                                                                   | Pass                                                                                                                               | 2026-11-20 | `bd78526` |
+| [NF-13.7][nf-13] | **Test**: reduced motion, `apps/web-e2e/src/baseline.spec.ts` › "NF-13.7: reduced motion turns animations off" (on every page of the NF-12.4 row's list and in its dialogs and menus, nothing moves but a fade, and the same check finds a transition once motion is welcome); colour, in part, `libs/web/shell/src/shell/components/repository-status/repository-status.component.spec.ts` › "gives each warning the warning icon (NF-13.7)". Colour never the only signal, everywhere: **Hand**, plan 156.                                                                                                                                                                                                                                                              | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check                                         | 2026-11-26 | `e0e4a48` |
+| [NF-13.8][nf-13] | **Test**: axe-core in the specs of every page: login, onboarding, dashboard, Add repository, Preferences, repository management, the app header and its menus, and the repository screen with the editor, preview, changes, commit and push, and conflicts; each test that runs it names NF-13.8 or an acceptance criterion, for example `apps/web-e2e/src/dashboard.spec.ts` › "NF-13.8: has no accessibility violations, empty or with repositories" and `apps/web-e2e/src/login.spec.ts` › "NF-13.8: has no accessibility violations". The manual pass: **Hand**, plan 156.                                                                                                                                                                                            | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check                                         | 2026-11-26 | `e0e4a48` |
 
 [nf-13]: ../architecture/non-functional.md#nf-13-accessibility
 
@@ -421,6 +421,433 @@ Two differences of Safari are accepted and recorded as A-8.19 in
 [web-client.md](../architecture/web-client.md#a-8-browser-differences): no
 `Secure` cookie on `http://localhost`, and a second download of the translations
 on a first load.
+
+## Plan 155: phones
+
+The web client by hand on a real Android phone and a real iPhone: every MVP page
+by touch alone, the editor with the on-screen keyboard open (NF-12.5), portrait
+and landscape (NF-12.6), touch targets (NF-13.5), and typing speed in large
+files, with and without the conflict view (NF-2.4). The browser tests of plan
+154 already do the same in emulated phones; this check finds what only a real
+phone, keyboard and finger show.
+
+The operator follows the script once on each phone and fills in the
+[report](#report) for each. A failure becomes a plan in Part F of the step 6
+index, unless it is a one-line fix.
+
+### Before you start
+
+**The phones.** A mid-range Android phone with the current Chrome (NF-2.4 names
+a mid-range phone; a Galaxy A5x or a Pixel "a" model), and an iPhone with
+Safari. Charged above 50 %, battery saver off, other apps closed, the usual
+on-screen keyboard with autocorrect as normally used.
+
+**The instance.** A fresh instance of the release image, set up by
+[the deployment guide](deployment.md): the compose example with
+[Caddy next to it](deployment.md#caddy-next-to-the-compose-example), on a host
+with a domain, so that the phones reach it over HTTPS with a real certificate.
+Plain HTTP is not enough: the refresh cookie is `Secure`
+([HTTPS is required](deployment.md#https-is-required)). The reference host of
+plan 152 will do, with a domain pointed at it.
+
+**The remotes**, on GitHub (or Bitbucket), each with a few Markdown files in
+folders, a `README.md`, an image the README embeds, and a second branch:
+
+- `phone-https`: private, with a fine-grained token that can read and write its
+  contents. Make a second token for the same repository too: exit criterion 11
+  revokes the first.
+- `phone-ssh`: private, for a key that Front Burner generates (exit criterion
+  3).
+- `phone-locked`: private, with a deploy key with write access whose private key
+  has a passphrase, made beforehand with `ssh-keygen -t ed25519 -N <passphrase>`
+  (exit criterion 10).
+- A public repository larger than about 200 MB, such as
+  `https://github.com/git/git.git`, whose clone takes long enough to be
+  interrupted (exit criterion 11).
+
+Somewhere to push from other than the phone: a clone of `phone-https` on a
+computer, or GitHub's web editor.
+
+**The remote inspector**, for the typing runs and for measuring a control: on
+Android, `chrome://inspect` in Chrome on the computer with USB debugging on; on
+an iPhone, Safari's Web Inspector on a Mac (Settings › Apps › Safari › Advanced
+› Web Inspector on the phone).
+
+**Measuring touch targets.** Where a line says _measure_, run this in the remote
+inspector's console. It lists the visible controls smaller than 44 × 44 px, the
+size NF-13.5 asks for on touch screens. A link inside a sentence is allowed to
+be smaller (WCAG 2.5.8's inline exception), and a radio button or checkbox
+counts by its label when the label is tappable.
+
+```js
+console.table(
+  [
+    ...document.querySelectorAll(
+      'a[href], button, input, select, textarea, label, [role=button], [role=tab], [role=menuitem], [role=radio], [role=checkbox], [role=treeitem]'
+    )
+  ]
+    .map(e => ({ e, r: e.getBoundingClientRect() }))
+    .filter(({ r }) => r.width > 0 && r.height > 0 && (r.width < 44 || r.height < 44))
+    .map(({ e, r }) => ({
+      control: (e.getAttribute('aria-label') ?? e.textContent).trim().slice(0, 40),
+      tag: e.tagName.toLowerCase(),
+      width: Math.round(r.width),
+      height: Math.round(r.height)
+    }))
+);
+```
+
+### How to follow the script
+
+Each line is one thing to do and what should happen. Do every line by touch
+alone: no Bluetooth keyboard, no mouse. Start each part in portrait. Where a
+line says _rotate_, turn the phone to landscape, repeat what the line names, and
+turn it back.
+
+Three things are checked on every page and in every dialog, without a line of
+their own; note any page where one fails:
+
+- **No sideways scroll** (NF-12.4): the page never moves sideways, except a wide
+  table or code block in the preview, which scrolls inside itself.
+- **No zoom on focus** (iOS): tapping a field does not zoom the page in. Safari
+  zooms into a field whose text is smaller than 16 px.
+- **Nothing under the keyboard** (NF-12.5): with the on-screen keyboard open,
+  the field typed in, its error message and the button that submits it can be
+  seen, or scrolled to without closing the keyboard.
+
+A line passes when what happens matches it. Anything else, however small, is a
+note in the report: what was done, what happened, and a screenshot or screen
+recording if it helps.
+
+### Script
+
+**1 and 2: onboarding, login and logout.**
+
+1. Open the instance's address. The Administrator onboarding page opens.
+2. Fill in the setup token, the name, the email and the password, and finish
+   onboarding. Typing in each field: no zoom, the field above the keyboard.
+   _Rotate_ with the keyboard open in the password field.
+3. The dashboard opens, empty, with **Add repository**.
+4. Open the user menu in the app header, then **Log out**. The login page opens.
+5. Log in again with a wrong password: a generic error, under the field or above
+   the keyboard. Then with the right one: the dashboard.
+6. On the second phone, log in too. Both stay logged in through the rest of the
+   script (exit criterion 5's other device).
+
+**3: adding repositories.**
+
+7. **Add repository**. Paste `phone-https`'s HTTPS URL into **Remote URL**: the
+   repository name is filled in from it. Long-press to paste works.
+8. Under the credentials, **Add new credentials**: a name, the username and the
+   first token. The branches load.
+9. **Full clone**, then **Add repository**. The dashboard shows "Cloning
+   phone-https…" and the clone's progress until it is ready.
+10. **Add repository** again with `phone-ssh`'s SSH URL. **Generate a key**,
+    give it a name, **Generate**.
+11. **Copy** the public key: it is on the clipboard (paste it into a note to
+    see). Add it on GitHub as a deploy key with write access, from the same
+    phone if you can, switching apps and back: the form is as you left it.
+12. Tick **I have added this key to my git server**. Accept the host key if
+    asked. The branches load.
+13. **Single branch**, choose `main`, tick **I understand**, then **Add
+    repository**. The clone is followed on the dashboard until ready.
+14. _Rotate_ the Add repository page with the form filled in and the keyboard
+    closed: every section and **Add repository** can be reached.
+15. _Measure_ on the Add repository page with **Generate a key** chosen.
+
+**4: browsing and files.**
+
+16. Open `phone-https` from the dashboard. The repository screen opens with
+    `README.md`.
+17. Open **Files**: the file tree. Tap a folder: it expands. Tap it again: it
+    collapses. Tap a Markdown file: it opens, and the tree closes.
+18. In the tree, **Actions for** a folder (the button at the end of its row),
+    then **New file**. Type a name without `.md`: "Will be created as …md".
+    **Create**: the new file opens in the editor.
+19. **New folder** the same way, then rename the folder and the new file from
+    their **Actions for** menus. A name already taken shows an error in the
+    dialog, above the keyboard.
+20. Delete the new file, then the folder, each after its confirmation dialog.
+21. _Rotate_ with the tree open and with a dialog open: the dialog fits the
+    screen, and its buttons can be tapped.
+22. _Measure_ with the tree open and a folder expanded, and with an **Actions
+    for** menu open.
+
+**5: saving, and the editor with the keyboard.**
+
+23. Open `README.md` and tap in the middle of a paragraph. The keyboard opens;
+    the cursor is above it, and the editor's toolbar (**Edit**, **Preview**,
+    **Wrap**, find) is visible or comes back when you scroll up a little.
+24. Type a sentence. The save status shows "Saving…", then "Saved", shortly
+    after you stop.
+25. Type at the end of the file, then press Enter until the cursor reaches the
+    keyboard: the editor scrolls, and the cursor stays above the keyboard.
+26. _Rotate_ with the keyboard open while typing: the cursor stays visible above
+    the keyboard, and typing goes on in the same place.
+27. Select a word by long-press, drag its handles, and replace it. Use the
+    keyboard's word suggestions and autocorrect on a few words: the text is as
+    the keyboard shows it, with no doubled or lost letters.
+28. Open find (the toolbar's search button). Search for a word and replace it.
+    The find panel's fields: no zoom, above the keyboard.
+29. Reload the page: the saved text is there. On the second phone, open the same
+    file: the same text.
+30. Turn on airplane mode, type a few words: "Not saved — offline, retrying".
+    Turn it off: "Saved" within a few seconds.
+
+**6: the preview.**
+
+31. Tap **Preview**: the rendered file, at the place you were editing. Tap
+    **Edit**: back at the same place, with the cursor where it was.
+32. In a file with front matter, a fenced code block, a table, a `<details>`
+    block and a `<script>` tag (add them if the repository has none): the front
+    matter is not body text, the code is highlighted, a wide table or code block
+    scrolls inside itself, and the preview notes that something was removed.
+33. A repository image shows. A remote image (`https:` on another host) shows
+    only after **Show remote images**.
+34. _Rotate_ in the preview.
+
+**7: changes, commit and push.**
+
+35. Edit two files and delete a third. The **Changes** tab shows "Changes (3)".
+36. Open each change: its diff, readable at phone width, a long line wrapped or
+    scrolled inside the diff.
+37. **Discard** one change, and confirm: "Changes (2)".
+38. Untick one file, type a commit message (no zoom; the message and the commit
+    button above the keyboard), and commit 1 file. Confirm the commit author
+    when asked.
+39. The branch shows "1 to push". From the **Git actions** menu, **Push**: a
+    toast "Pushed 1 commit to origin/main".
+40. Tap an unavailable git action, such as **Push** with nothing to push: it
+    says why.
+41. _Measure_ on the **Changes** tab with two changes, and with the **Git
+    actions** menu open.
+
+**8: branches and pull.**
+
+42. Tap the branch name in the bar: the branch list. **New branch**, name it,
+    **Create branch**: "Not published".
+43. Switch to `main` and back from the branch list. Switch to the remote's
+    second branch: it gets its upstream.
+44. Make a change, commit and push on the new branch: it gets its upstream on
+    the first push.
+45. Push a commit to `main` from the computer. On the phone, switch to `main`,
+    then **Git actions** › **Pull**: "Pulled 1 commit".
+46. _Rotate_ with the branch list open. _Measure_ with it open.
+
+**9: remote changes and conflicts.**
+
+47. Edit `README.md` on the computer and push. On the phone, edit the same line
+    of `README.md` and commit. Open the file: within a few seconds a notice says
+    that origin/main has 1 new commit and that this file changed too.
+48. **Pull** from the notice. The merge shows "0 of 1 file resolved" and
+    `README.md` with its conflict markers, "Mine (main)" and "Theirs
+    (origin/main)", and an **Accept** button above the conflict.
+49. Tap **Accept theirs** above the conflict: the markers are gone, and the
+    conflict bar says no conflict markers are left.
+50. Type in the resolved file with the keyboard open: the conflict bar and the
+    cursor stay visible. _Rotate_ while typing.
+51. **Mark as resolved**, then commit the merge and **Push**.
+52. Make another conflict as in line 47. **Pull**, then **Use their version**
+    for the file, then **Git actions** › **Abort merge** and confirm: the branch
+    and the file are as they were before the pull.
+53. _Measure_ with a conflict open: the conflict bar, and the **Accept** buttons
+    in the editor.
+
+**10: a locked key after a restart.**
+
+54. **Add repository** with `phone-locked`'s SSH URL, **Paste a key**, paste its
+    private key, enter the passphrase. Add it with **Full clone**: the clone
+    finishes.
+55. On the host: `docker compose restart front-burner`. On the phone, reload the
+    dashboard: `phone-locked` shows "Key locked" with **Unlock**.
+56. Open `phone-locked` and **Pull** from **Git actions**. The **Unlock** dialog
+    opens: enter a wrong passphrase ("Wrong passphrase", above the keyboard),
+    then the right one. The pull carries on and finishes.
+
+**11: repository management and settings.**
+
+57. In the app header, **Repositories**: the repository management page lists
+    all three, with their status.
+58. Type in **Filter by name or remote**: the list narrows; no zoom.
+59. **Add repository** with the large public repository, **No credentials
+    (public repository)**, **Full clone**. As soon as the dashboard shows it
+    cloning, on the host: `docker compose restart front-burner`.
+60. After the restart, on the repository management page: the large repository
+    shows that its clone failed. Open its settings: **Details** shows git's
+    message and a request ID, and **Copy** copies the ID.
+61. **Retry clone**: the clone starts again. Remove the repository while it
+    clones, or once it is done, from its settings, confirming the dialog. It
+    leaves the list.
+62. Revoke `phone-https`'s first token on GitHub. On the phone, open
+    `phone-https` and **Git actions** › **Fetch**: a warning that the
+    credentials were refused.
+63. On the repository management page, `phone-https` shows the warning and its
+    fix. Open its settings, **Change credentials**, **Add new credentials** with
+    the second token: the warning goes; **Fetch** works.
+64. On the settings page, change the commit author for this repository and back
+    to **Use my default**. Change the git control level and back.
+65. _Measure_ on the settings page, with every section loaded and with
+    **Details** open. Tap each control of its rows with a fingertip: none is
+    missed and none hits its neighbour.
+66. _Rotate_ the repository management page and the settings page, with **Change
+    credentials** open.
+
+**Preferences and the app header.**
+
+67. User menu › **Preferences**. **Edit** the default commit author, **Save**:
+    "Saved". Its fields: no zoom, above the keyboard.
+68. _Measure_ the app header with the user menu open, and the Preferences page.
+69. Open an address that does not exist, such as `/nothing`: Page not found,
+    with a way back to the dashboard.
+
+**Low and full storage.** These change the instance, so they come last.
+
+70. On the host, set `FRONT_BURNER_LOW_DISK_THRESHOLD` to more than the free
+    space (for example `100000GB`) in the instance's `compose.yaml` and run
+    `docker compose up -d`. Within a minute the banner "The server is running
+    low on storage. New repositories can't be added until space is freed." shows
+    on every page. _Rotate_ with it shown: it does not cover the page's
+    controls.
+71. Try **Add repository** with any remote: the form says "The server is running
+    low on storage. Contact your administrator.". Typing and saving in
+    `phone-https` still work.
+72. Remove the variable again and `docker compose up -d`: the banner goes within
+    a minute.
+73. For a full disk, stop the instance (`docker compose down`) and start a
+    throwaway one from a copy of its folder with an empty `data/` (owned by UID
+    1000), with this `compose.override.yaml` next to the copy's `compose.yaml`
+    (as the container suite's `container-tmpfs-repos.yaml` does):
+
+    ```yaml
+    services:
+      front-burner:
+        environment:
+          FRONT_BURNER_REPOS_DIR: /repositories
+          FRONT_BURNER_LOW_DISK_THRESHOLD: '0'
+        tmpfs:
+          - /repositories:size=64m,uid=1000,gid=1000,mode=0700
+    ```
+
+    Complete onboarding, add a small public repository, and open a Markdown file
+    on the phone.
+
+74. Fill the volume: `docker compose exec front-burner sh -c 'head -c 128M
+    /dev/zero > /repositories/filler'`. Type a few lines on the phone: "Server
+    storage is full — not saved". Reload: the browser draft is offered ("You
+    have unsaved changes from …").
+75. Remove the filler (`docker compose exec front-burner rm
+    /repositories/filler`), restore the draft and type: "Saved". Then remove the
+    throwaway instance and start the main one again.
+
+### Typing speed
+
+NF-2.4: a keystroke is shown within 50 ms on a mid-range phone, in files up to 1
+MB. Measured with `typing-test.mjs`'s page, as [typing-test.md](typing-test.md)
+describes (its steps 1 to 3: start the page, prepare the phone, measure), on
+both phones. On narrow screens, a file over 100 KB opens without Markdown
+highlighting (ED-9a), so the large files are measured with the setup **Without
+Markdown highlighting, front matter included**, which is what a phone gets; the
+conflict view is the **Conflicts** box.
+
+Type every run at the same steady, normal pace: tap the place named, type 50
+letters, then press Enter 10 times. If a run's typing speed is more than 1 key/s
+away from the others, do it again.
+
+| Run | File       | Setup                                          | Where                 |
+| --- | ---------- | ---------------------------------------------- | --------------------- |
+| 1   | `2kb.md`   | Everything on                                  | **Middle** (baseline) |
+| 2   | `200kb.md` | Without Markdown highlighting                  | **Middle**            |
+| 3   | `200kb.md` | Without Markdown highlighting, **Conflicts**   | **Middle**            |
+| 4   | `1mb.md`   | Without Markdown highlighting                  | **End**               |
+| 5   | `1mb.md`   | Without Markdown highlighting, **Conflicts**   | **End**               |
+| 6   | `1mb.md`   | Without Markdown highlighting                  | **Middle**            |
+| 7   | `1mb.md`   | Without Markdown highlighting, **Conflicts**   | **Middle**            |
+| 8   | `200kb.md` | Everything on (after **Turn on highlighting**) | **Middle**            |
+
+A run passes as typing-test.md's "What happens next" says: the page's own meter
+has no keystroke over 50 ms, and in the browser timing the share of keystrokes
+over 50 ms is at most 5 percentage points above the baseline's. One slow first
+keystroke after a file loads is noted but does not fail a run. On an iPhone,
+only the page's own meter applies. Run 8 is a note, not a pass or fail: it shows
+what **Turn on highlighting** costs on that phone.
+
+Then, in the product: open a file of about 1 MB in `phone-https` (`1mb.md` from
+`tmp/typing-test/`, committed and pushed from the computer, then pulled), type a
+sentence in the middle and at the end, and note how it felt.
+
+### Report
+
+One per phone, pasted into the pull request:
+
+```text
+Phone check — plan 155
+Date:
+Commit or image tag:
+Phone: <make, model, year>
+OS and browser: <e.g. Android 16, Chrome 158 / iOS 26.1, Safari 26.1>
+Keyboard: <e.g. Gboard, the iOS keyboard>
+
+Script: every line passed except:
+- <line number>: <what was done, what happened>
+
+Measured (lines 15, 22, 41, 46, 53, 65, 68), controls under 44 px:
+- <line number>: <the console table, or "none">
+
+Pages where a check of every page failed (sideways scroll, zoom on focus,
+hidden under the keyboard):
+
+Typing (paste each "Copy results" output):
+Run 1 (2 KB, middle, baseline):
+Run 2 (200 KB, middle):
+Run 3 (200 KB, middle, conflicts):
+Run 4 (1 MB, end):
+Run 5 (1 MB, end, conflicts):
+Run 6 (1 MB, middle):
+Run 7 (1 MB, middle, conflicts):
+Run 8 (200 KB, middle, highlighting on):
+Typing in the product, 1 MB file, how it felt:
+```
+
+### Results
+
+Run by the operator on 2026-11-26, against a fresh instance of the release image
+built from `e0e4a48` at `https://fbtest.hexmode.org`, set up by the deployment
+guide (the compose example behind Caddy) on the reference host. The report is in
+[pull request #245](https://github.com/Auxx/front-burner/pull/245).
+
+| Phone               | OS and browser                                   | Keyboard | Script                       | Typing       |
+| ------------------- | ------------------------------------------------ | -------- | ---------------------------- | ------------ |
+| Google Pixel 10 Pro | Android 17, Vivaldi 8.3.4192.96 (Chromium-based) | Gboard   | Passed; touch targets failed | Not measured |
+| iPhone              | —                                                | —        | Not run: no iOS device       | Not run      |
+
+**The script** passed on the Android phone: every line by touch alone, the
+editor with the keyboard open and rotated, and no page scrolling sideways. The
+browser was Vivaldi, which runs Chrome's engine; NF-12.1 names Chrome on Android
+itself, which was not used.
+
+**Touch targets** (NF-13.5) failed: the measuring lines found controls under 44
+px, all in shared components of `libs/ui`, fixed by
+[plan 164](../superpowers/plans/2026-11-26-164-touch-targets.md):
+
+| Control                                                                                          | Measured                          | Lines      |
+| ------------------------------------------------------------------------------------------------ | --------------------------------- | ---------- |
+| The segmented control's segments (credentials, clone mode, the view mode's Split, Edit, Preview) | 40 px high                        | 15, 22     |
+| The **Changes** tab's checkboxes                                                                 | 24 × 24 px, in a 36 × 48 px label | 41         |
+| The breadcrumb links (settings page, Preferences)                                                | 18 px high                        | 15, 65, 68 |
+| A text button, **Edit**, on the conflict screen                                                  | 43 × 44 px                        | 53         |
+
+Not findings: the visually hidden **Skip to content** link and radio inputs (1 ×
+1 px; the label is the target), the labels of text fields (the field is the
+target), and links inside the previewed Markdown (WCAG 2.5.8's inline
+exception). Line 46 reported nothing.
+
+**Typing speed** (NF-2.4) was not measured with `typing-test.mjs`. The operator
+used the test instance on the Android phone for over a week and noticed no lag.
+That is a note, not the measurement NF-2.4 asks for; the measurement is in
+`docs/wiki/todo.md`.
+
+**The iPhone** checks were not run, for want of an iOS device; they are in
+`docs/wiki/todo.md`.
 
 ## Plan 156: accessibility
 
