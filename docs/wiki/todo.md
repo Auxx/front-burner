@@ -101,6 +101,17 @@ Release checks not run yet:
   NVDA passes passed on 2026-11-26; VoiceOver was left out because no iOS device
   was at hand. Run it on any iPhone with the current iOS and Safari, following
   the same script and report, and record it in that section's results.
+- The iPhone run of the phone hand check (NF-12.1, NF-12.2, NF-12.5, NF-12.6,
+  NF-13.5; `docs/wiki/release-checks.md`, "Plan 155: phones"). The Android run
+  passed on 2026-11-26, except touch targets (plan 164); the iPhone run was left
+  out because no iOS device was at hand. Run the whole script on an iPhone with
+  the current iOS and Safari, with Safari's Web Inspector for the _measure_
+  lines; iOS's zoom on focus is checked only there.
+- The typing speed measurement on a real phone (NF-2.4, and NF-1.5's 1 MB file
+  on a phone): the "Typing speed" runs of "Plan 155: phones", with
+  `typing-test.mjs`, on a mid-range Android phone and an iPhone. The operator
+  used a test instance on an Android phone (a Pixel 10 Pro, not mid-range) for
+  over a week without noticing lag, which is not a measurement.
 
 Spikes (`docs/architecture/spikes.md`), each on its own `spike/<name>` branch,
 never merged, time-boxed to 1–2 days; findings go back into the architecture
