@@ -233,15 +233,15 @@ machine runs CI, so they prove the code path, not the number; the number is plan
 
 ## NF-13: Accessibility
 
-| Rule             | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Result              | Date       | Commit    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- | ---------- | --------- |
-| [NF-13.1][nf-13] | **Test** (what axe finds): the NF-13.8 row. The rest of WCAG 2.2 AA: **Hand**, plan 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | To check (156)      |            |           |
-| [NF-13.2][nf-13] | Limited in the MVP: **Edit conflict markers** is offered. **Test**: `apps/web-e2e/src/pull-and-conflicts.spec.ts` › "AC-GIT-003.15: the conflict list, the conflict bar and the buttons work with the keyboard alone and by touch alone, and axe-core reports no violations". With screen readers: **Hand**, plan 156.                                                                                                                                                                                                                                                                                                                                                                                       | To check (156)      |            |           |
-| [NF-13.3][nf-13] | **Test**: the "with the keyboard alone" tests, for example `apps/web-e2e/src/commit-and-push.spec.ts` › "exit criterion 7, on desktop with the keyboard alone" and `apps/web-e2e/src/repository-management-walkthrough.spec.ts` › "exit criterion 11, on desktop with the keyboard alone"; `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.22: opens find and replace from the button and Ctrl+F, and Esc then Tab leaves the editor" and "A-10.30: the focused editor has no focus ring; the find panel's controls have one"; `apps/web-e2e/src/app-header.spec.ts` › "AC-APP-001.12: Skip to content is the first element reached with Tab…". A visible focus everywhere and no trap: **Hand**, plan 156. | To check (156)      |            |           |
-| [NF-13.5][nf-13] | **Test** (in part): `apps/web-e2e/src/repository-screen.spec.ts` › "the branch and counts stay in the one bar" (44 px on a phone). Every control: **Hand**, plans 155 and 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | To check (155, 156) |            |           |
-| [NF-13.6][nf-13] | **Test**: `apps/web-e2e/src/editor.spec.ts` › "NF-13.6: resizes the editor and the preview with the arrow keys on the line between them" (renamed from NF-13.5 by plan 149); `apps/web-e2e/src/repository-screen.spec.ts` › "AC-FILE-001.4: collapses, expands and resizes the tree with the keyboard". Moving files is not in the MVP.                                                                                                                                                                                                                                                                                                                                                                      | Pass                | 2026-11-20 | `bd78526` |
-| [NF-13.7][nf-13] | **Test**: reduced motion, `apps/web-e2e/src/baseline.spec.ts` › "NF-13.7: reduced motion turns animations off" (on every page of the NF-12.4 row's list and in its dialogs and menus, nothing moves but a fade, and the same check finds a transition once motion is welcome); colour, in part, `libs/web/shell/src/shell/components/repository-status/repository-status.component.spec.ts` › "gives each warning the warning icon (NF-13.7)". Colour never the only signal, everywhere: **Hand**, plan 156.                                                                                                                                                                                                 | To check (156)      |            |           |
-| [NF-13.8][nf-13] | **Test**: axe-core in the specs of every page: login, onboarding, dashboard, Add repository, Preferences, repository management, the app header and its menus, and the repository screen with the editor, preview, changes, commit and push, and conflicts; each test that runs it names NF-13.8 or an acceptance criterion, for example `apps/web-e2e/src/dashboard.spec.ts` › "NF-13.8: has no accessibility violations, empty or with repositories" and `apps/web-e2e/src/login.spec.ts` › "NF-13.8: has no accessibility violations". The manual pass: **Hand**, plan 156.                                                                                                                               | To check (156)      |            |           |
+| Rule             | How it is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Result                                                                                     | Date       | Commit    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------- | --------- |
+| [NF-13.1][nf-13] | **Test** (what axe finds): the NF-13.8 row. The rest of WCAG 2.2 AA: **Hand**, plan 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check | 2026-11-26 | `e0e4a48` |
+| [NF-13.2][nf-13] | Limited in the MVP: **Edit conflict markers** is offered. **Test**: `apps/web-e2e/src/pull-and-conflicts.spec.ts` › "AC-GIT-003.15: the conflict list, the conflict bar and the buttons work with the keyboard alone and by touch alone, and axe-core reports no violations". With screen readers: **Hand**, plan 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check | 2026-11-26 | `e0e4a48` |
+| [NF-13.3][nf-13] | **Test**: the "with the keyboard alone" tests, for example `apps/web-e2e/src/commit-and-push.spec.ts` › "exit criterion 7, on desktop with the keyboard alone" and `apps/web-e2e/src/repository-management-walkthrough.spec.ts` › "exit criterion 11, on desktop with the keyboard alone"; `apps/web-e2e/src/editor.spec.ts` › "AC-EDIT-001.22: opens find and replace from the button and Ctrl+F, and Esc then Tab leaves the editor" and "A-10.30: the focused editor has no focus ring; the find panel's controls have one"; `apps/web-e2e/src/app-header.spec.ts` › "AC-APP-001.12: Skip to content is the first element reached with Tab…". A visible focus everywhere and no trap: **Hand**, plan 156, in Chrome and Firefox ([Plan 156](#plan-156-accessibility)). | Pass                                                                                       | 2026-11-26 | `e0e4a48` |
+| [NF-13.5][nf-13] | **Test** (in part): `apps/web-e2e/src/repository-screen.spec.ts` › "the branch and counts stay in the one bar" (44 px on a phone). Every control: **Hand**, plans 155 and 156.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | To check (155, 156)                                                                        |            |           |
+| [NF-13.6][nf-13] | **Test**: `apps/web-e2e/src/editor.spec.ts` › "NF-13.6: resizes the editor and the preview with the arrow keys on the line between them" (renamed from NF-13.5 by plan 149); `apps/web-e2e/src/repository-screen.spec.ts` › "AC-FILE-001.4: collapses, expands and resizes the tree with the keyboard". Moving files is not in the MVP.                                                                                                                                                                                                                                                                                                                                                                                                                                   | Pass                                                                                       | 2026-11-20 | `bd78526` |
+| [NF-13.7][nf-13] | **Test**: reduced motion, `apps/web-e2e/src/baseline.spec.ts` › "NF-13.7: reduced motion turns animations off" (on every page of the NF-12.4 row's list and in its dialogs and menus, nothing moves but a fade, and the same check finds a transition once motion is welcome); colour, in part, `libs/web/shell/src/shell/components/repository-status/repository-status.component.spec.ts` › "gives each warning the warning icon (NF-13.7)". Colour never the only signal, everywhere: **Hand**, plan 156.                                                                                                                                                                                                                                                              | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check | 2026-11-26 | `e0e4a48` |
+| [NF-13.8][nf-13] | **Test**: axe-core in the specs of every page: login, onboarding, dashboard, Add repository, Preferences, repository management, the app header and its menus, and the repository screen with the editor, preview, changes, commit and push, and conflicts; each test that runs it names NF-13.8 or an acceptance criterion, for example `apps/web-e2e/src/dashboard.spec.ts` › "NF-13.8: has no accessibility violations, empty or with repositories" and `apps/web-e2e/src/login.spec.ts` › "NF-13.8: has no accessibility violations". The manual pass: **Hand**, plan 156.                                                                                                                                                                                            | Pass with the keyboard and NVDA ([Plan 156](#plan-156-accessibility)); VoiceOver: To check | 2026-11-26 | `e0e4a48` |
 
 [nf-13]: ../architecture/non-functional.md#nf-13-accessibility
 
@@ -811,6 +811,305 @@ Typing in the product, 1 MB file, how it felt:
 ### Results
 
 To check.
+
+## Plan 156: accessibility
+
+The manual accessibility pass before the release (NF-13.8): the whole MVP
+against WCAG 2.2 AA (NF-13.1), in three passes:
+
+- **K**, with the **keyboard alone** in a desktop browser (NF-13.3);
+- **V**, with **VoiceOver on iOS**, in Safari on an iPhone;
+- **N**, with **NVDA on Windows**, in Chrome or Firefox.
+
+axe-core already runs in the browser tests of every page (the NF-13.8 row); this
+pass finds what axe cannot: focus order and visibility, traps, what a screen
+reader says and how often, and whether a page makes sense without seeing it. The
+**Edit conflict markers** method and keeping a whole version are the MVP's
+conflict methods (NF-13.2 as limited in the MVP).
+
+The operator follows the script once per pass and fills in the
+[report](#accessibility-report). A finding names the WCAG success criterion it
+breaks. A small finding is fixed in this plan's pull request, after a test that
+fails without the fix (a Storybook interaction test, or an end-to-end test with
+axe or ARIA assertions); a larger one becomes a plan in Part F of the step 6
+index.
+
+### Before you start
+
+**The instance.** A fresh instance of the release image, set up by
+[the deployment guide](deployment.md), over HTTPS with a real certificate. Plan
+155's phone check needs the same instance and remotes, so one set-up serves
+both; remove the repositories between passes, or add them again under other
+names.
+
+**The remotes**, on GitHub (or Bitbucket), each with a few Markdown files in
+folders, a `README.md` that embeds an image, and a second branch:
+
+- `phone-https`: private, with two fine-grained tokens that can read and write
+  its contents (line 45 revokes the first);
+- `phone-ssh`: private, for a key that Front Burner generates;
+- `phone-locked`: private, with a deploy key with write access whose private key
+  has a passphrase (`ssh-keygen -t ed25519 -N <passphrase>`);
+- a public repository larger than about 200 MB, such as
+  `https://github.com/git/git.git`, whose clone takes long enough to be
+  interrupted.
+
+Somewhere to push from other than the browser being tested: a clone on a
+computer, or GitHub's web editor.
+
+**The passes.**
+
+- **K**: Chrome or Firefox on a desktop, the mouse put away. The current
+  versions. The operating system's "reduce motion" setting on for part of the
+  pass (line 46).
+- **V**: an iPhone with the current iOS and Safari, VoiceOver on (Settings ›
+  Accessibility › VoiceOver), used with its gestures only: swipe right and left
+  to move, double-tap to activate, the rotor for headings, landmarks and form
+  controls. The on-screen keyboard for typing.
+- **N**: Windows with the current NVDA and Chrome or Firefox, the keyboard only,
+  in NVDA's browse mode and focus mode as a user would switch between them. NVDA
+  › Tools › **Speech viewer** on, so that what NVDA says can be copied into the
+  report.
+
+### How to follow the script
+
+Each numbered line is one thing to do and what should happen. Do it in every
+pass, unless the line names its passes, such as **(K)** or **(V, N)**. In the
+screen reader passes, "press" means activating the control the screen reader's
+way, and "hear" is what the screen reader says.
+
+These are checked on every page and in every dialog, without a line of their
+own; note any page or dialog where one fails:
+
+- **(K)** The focus can always be seen, and it moves in reading order (WCAG
+  2.4.7, 2.4.11, 2.4.3). Nothing traps it (2.1.2): `Tab` and `Shift+Tab` leave
+  everything but a dialog, and `Esc` closes a dialog or menu and returns the
+  focus to what opened it.
+- **(K)** Nothing that a mouse could do is missing from the keyboard (2.1.1).
+- **(V, N)** Every control has a name that says what it does, and its role and
+  state (expanded, checked, current, unavailable) are said (4.1.2). Every field
+  says its label, and its error when it has one (3.3.1, 3.3.2).
+- **(V, N)** Moving to another page says the new page's title, and the focus is
+  on its main heading, or on the editor area on the repository screen (NV-18).
+  Headings and landmarks (banner, navigation, main, the repository screen's
+  labelled regions) let you jump around (1.3.1, 2.4.1, NV-17).
+- **(V, N)** A change that is not where the focus is (a toast, a banner, a
+  status) is said once, without moving the focus, and is not said again and
+  again while it stays (4.1.3).
+- **(All)** Colour is never the only signal (1.4.1, NF-13.7): changes, diffs,
+  conflict regions, warnings, statuses and ignored files each have an icon or a
+  word too.
+
+A line passes when what happens matches it. Anything else is a finding in the
+report: the line, the pass, what was done, what happened (for N, a copy from the
+speech viewer), and the WCAG success criterion.
+
+### Script
+
+**1 and 2: onboarding, login and logout.**
+
+1. Open the instance's address. **(K, N)** The first `Tab` reaches **Skip to
+   content**; pressing it moves the focus to the page's content.
+2. Complete administrator onboarding. Leave a required field empty and submit:
+   the error is said or shown with the field, and the focus goes to the first
+   field in error.
+3. On the dashboard, open the user menu, move through it with the arrow keys
+   **(K, N)**, close it with `Esc`: the focus is back on its button. Then **Log
+   out**.
+4. Log in with a wrong password: the error is said once. Log in with the right
+   one: the dashboard's title is said.
+
+**3: adding repositories.**
+
+5. **Add repository** with `phone-https`'s HTTPS URL and **Add new
+   credentials**. The radio groups (credentials, clone mode, git control level)
+   say their group's label and each choice; **(K)** the arrow keys move between
+   choices.
+6. While the branches load, "Loading branches…" or its spinner is said or shown
+   once; when they are loaded, the branch field can be reached.
+7. **Full clone**, **Add repository**. On the dashboard, "Cloning phone-https.
+   It will be ready to open soon." is said once. **(V, N)** The clone's progress
+   bar can be reached and says its value, but is **not** said by itself as it
+   moves.
+8. **Add repository** with `phone-ssh`'s SSH URL, **Generate a key**. The public
+   key can be reached and read; **Copy** says that it copied. Accepting the host
+   key, if asked, is a dialog whose fingerprint can be read.
+9. **Single branch**: the warning and **I understand** are reached in order;
+   submitting without ticking it says "Tick this box to continue".
+10. **(K)** Leave the form with changes made: "Discard your changes?" focuses
+    **Keep editing**, the safe choice.
+
+**4: browsing and files.**
+
+11. Open `phone-https`. The file tree is a tree: **(K, N)** the arrow keys move
+    between entries, right and left expand and collapse folders, `Enter` opens a
+    file (FB-46). **(V, N)** Each entry says its name, that it is a folder or
+    file, whether it is expanded, and its flags (Markdown, ignored, empty).
+12. Open an entry's actions menu from the keyboard **(K, N)** or with VoiceOver
+    **(V)**. **New file**: the dialog focuses its name field; "Will be created
+    as …md" is read with it. **Create**: the focus goes to the new file's
+    editor.
+13. **New folder**, rename, and delete, each by its dialog. A taken name's error
+    is said. After a delete, the focus lands on a sensible entry, not on the
+    page's top.
+14. **(K)** Collapse, expand and resize the tree with the keyboard (NF-13.6).
+
+**5: the editor and saving.**
+
+15. **(V, N)** The editor says the open file's name (ED-37).
+16. Type a sentence. "Saving…" and then "Saved" are said once each, without
+    moving the focus (ED-38), and not on every keystroke.
+17. **(K)** `Tab` inserts a tab; `Esc` then `Tab` leaves the editor (NF-13.3).
+    The caret and the active line's number show where the focus is (A-10.30).
+18. **(K)** `Ctrl+F` (`Cmd+F`) opens find. The count of matches is said once per
+    search **(N)**; the find panel's controls show their focus; `Esc` returns to
+    the editor.
+19. **(V, N)** Typing in the editor reads back what was typed, and moving with
+    the arrow keys **(N)** or the rotor **(V)** reads the line.
+20. **(K)** Resize the editor and the preview with the arrow keys on the line
+    between them (NF-13.6).
+21. Turn off the network: the offline banner is said once, and "Not saved —
+    offline, retrying" once. Turn it back on: "Saved".
+
+**6: the preview.**
+
+22. **Preview**, then **Edit**: the view mode controls say which is selected.
+23. **(V, N)** The preview is a labelled region; its headings keep the file's
+    levels, and the rotor or NVDA's `H` moves between them (ED-37). A table is
+    read as a table; an image says its alt text; a code block is read as text.
+24. In a file with removed HTML, the notice is **not** said while typing in the
+    editor (SH-20), and can be reached in the preview. **Show remote images**
+    can be reached and pressed.
+
+**7: changes, commit and push.**
+
+25. Edit two files and delete a third. The **Changes** tab says its count.
+26. Open each change's diff. **(V, N)** Added and removed lines are said as
+    added and removed, not only shown in colour (1.4.1, 1.3.1).
+27. **Discard** a change: the confirmation focuses **Cancel**; after it, the
+    focus is on the list, and the new count is said or shown.
+28. Untick a file (its checkbox says its file's name), type a message, commit,
+    confirm the commit author. The result is said as a toast, once.
+29. **Push**, from the bar's buttons **(K, N)** or the **Git actions** menu on
+    the phone **(V)**: "Pushing…" then the toast "Pushed 1 commit to
+    origin/main", each once.
+30. An unavailable action, such as **Push** with nothing to push, keeps the
+    focus and says why when pressed (A-10.46).
+
+**8: branches and pull.**
+
+31. The branch button says "Branch main: open the branch list". The list's
+    filter and rows can be reached in order; **(K)** the arrow keys move through
+    the rows.
+32. **New branch**, **Create branch**: the new branch and "Not published" are
+    said or shown. "Switching branch…" is said once per switch.
+33. Push a commit from elsewhere, then **Pull**: "Pulling…" and the result, once
+    each.
+
+**9: remote changes and conflicts.**
+
+34. Make a remote change to an open file: the notice that origin/main has new
+    commits is said once, without moving the focus.
+35. Make a conflict and **Pull** from the notice. The merge's summary ("0 of 1
+    file resolved") and the conflict list can be reached; the list says each
+    file and whether it is resolved.
+36. **(K, N)** The conflict bar outside the editor is the way to the conflicts:
+    **Next** and **Previous** say "Conflict 1 of 1: mine and theirs" (GC-28),
+    and the editor's own **Accept** buttons are not reached with `Tab`.
+37. **(N)** Resolve the conflict with NVDA alone: move to it with the conflict
+    bar, read its mine and theirs parts in the editor (labelled "Mine (main)"
+    and "Theirs (origin/main)"), **Accept theirs** from the bar, then edit a
+    line. "No conflict markers left." is said once.
+38. **(V)** The same with VoiceOver: the **Accept** buttons are reached through
+    the conflict bar, and the marker lines are labelled.
+39. **Mark as resolved**, commit the merge and push; each result said once.
+40. Make another conflict, **Use their version**, then **Abort merge**: the
+    dialog focuses **Cancel**; after the abort, the focus is on the repository
+    screen, not lost on the page's top.
+
+**10: a locked key after a restart.**
+
+41. Add `phone-locked` with its pasted key and passphrase. Restart the instance
+    (`docker compose restart front-burner`). On the dashboard, the "Key locked"
+    warning is read with its repository, and **Unlock** can be reached.
+42. Open `phone-locked` and **Pull**. The **Unlock** dialog moves the focus to
+    its passphrase field (RC-25); a wrong passphrase says "Wrong passphrase";
+    the right one closes the dialog, returns the focus, and the pull's result is
+    said once.
+
+**11: repository management and settings.**
+
+43. **Repositories**: the list's headings or rows say each repository and its
+    status. Typing in **Filter by name or remote** says how many are shown, once
+    the typing stops, not on every key.
+44. **Add repository** with the large public repository, **No credentials
+    (public repository)**, **Full clone**, and restart the instance while it
+    clones (`docker compose restart front-burner`): the clone fails. Its
+    settings: the status, **Details** (says expanded or collapsed), the request
+    ID and **Copy** ("Request ID copied."). **Retry clone** and **Clone again**
+    say what they do; **Clone again**'s confirmation focuses **Cancel**.
+45. Revoke `phone-https`'s first token and **Fetch**: the warning is read with
+    its fix. **Change credentials**: the dialog focuses its first field; adding
+    the second token clears the warning, and the focus returns to **Change
+    credentials**. The settings page's key-value lists read each value with its
+    label (A-10.50).
+
+**The rest of the product.**
+
+46. **(K)** With the system's "reduce motion" on, dialogs, menus, toasts and the
+    tree only fade; nothing slides or spins (NF-13.7).
+47. **(K)** At 200 % browser zoom, on the dashboard, the Add repository page,
+    the repository screen and the settings page: nothing is cut off and nothing
+    overlaps (1.4.4, 1.4.10).
+48. **Preferences**: **Edit** the default commit author, **Save**: "Saved" is
+    said once.
+49. `/nothing`: the page title "This page doesn't exist." is said, and the link
+    to the dashboard can be reached.
+50. **(V)** Rotate the iPhone on a page and in a dialog: VoiceOver keeps its
+    place.
+51. Set `FRONT_BURNER_LOW_DISK_THRESHOLD` to more than the free space (for
+    example `100000GB`) and run `docker compose up -d`. Within a minute, the
+    low-space banner is said once when it appears, and not again on every page
+    change. Remove the variable again afterwards.
+
+### Accessibility report
+
+One per pass, pasted into the pull request:
+
+```text
+Accessibility pass — plan 156
+Pass: <K / V / N>
+Date:
+Commit or image tag:
+OS: <e.g. Fedora 45, iOS 26.1, Windows 11 24H2>
+Browser: <e.g. Chrome 158, Safari 26.1, Firefox 159>
+Screen reader: <none, VoiceOver, NVDA 2026.x>
+
+Every line passed except:
+- <line>: <what was done, what happened or was said> — WCAG <x.y.z>
+
+Pages or dialogs where a check of every page failed:
+- <page>: <which check, what happened> — WCAG <x.y.z>
+
+Anything else that was hard or confusing, even if no rule is broken:
+```
+
+### Results
+
+Run by the operator on 2026-11-26, against a fresh instance of the release image
+built from `e0e4a48` at `https://fbtest.hexmode.org`, set up by the deployment
+guide (the compose example behind Caddy) on the reference host. The reports are
+in [pull request #246](https://github.com/Auxx/front-burner/pull/246).
+
+| Pass | OS         | Browser              | Screen reader | Result                                         |
+| ---- | ---------- | -------------------- | ------------- | ---------------------------------------------- |
+| K    | Fedora 45  | Chrome 157.0.8103.50 | —             | Pass: no findings                              |
+| K    | Fedora 45  | Firefox 161.0        | —             | Pass: no findings                              |
+| N    | Windows 11 | Chrome 157.0         | NVDA 2026.3.1 | Pass: no findings                              |
+| V    | —          | Safari on iOS        | VoiceOver     | Not run: no iOS device; in `docs/wiki/todo.md` |
+
+No finding needed a fix or a plan. The VoiceOver pass is still to be run, on any
+iPhone with the current iOS, before NF-13.8's manual pass is complete.
 
 ## Plan 159: after compression
 
