@@ -8,8 +8,8 @@ name: Release
 # it. A tag that does not match v*.*.* does not start this workflow.
 #
 # Run from the Actions tab (workflow_dispatch), it is a dry run: it builds,
-# scans, checks the version and makes the SBOM, but pushes, signs and releases
-# nothing. Only a tag publishes, so no branch, fork or pull request can.
+# scans, checks the version, runs the container suite and makes the SBOM, but
+# pushes, signs and releases nothing (the publish job is skipped). Only a tag publishes, so no branch, fork or pull request can.
 on:
   push:
     tags:
@@ -31,20 +31,30 @@ concurrency:
   cancel-in-progress: false
 
 # Actions are pinned to commit SHAs (tags can be moved); Dependabot updates them.
+#
+# Three jobs, so that only the last holds anything that can publish (NF-11.12):
+# `build` and `container-suite` run with read permissions, and `publish`, which
+# runs no npm code on the runner, gets the write permissions and the OIDC
+# token. All three use the same image, built once and passed on as an artifact.
 jobs:
-  release:
-    name: Build, scan, publish
+  build:
+    name: Build and scan
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # The least the job needs (NF-11.12): the draft release, the image, the
-    # OIDC token for keyless signing and attesting, and the attestations.
+    # Reading the registry only, to check that the version is new. The build's
+    # npm code runs inside BuildKit, not on the runner.
     permissions:
-      contents: write
-      packages: write
-      id-token: write
-      attestations: write
+      contents: read
+      packages: read
     env:
       PUBLISH: ${{ github.event_name == 'push' }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      minor: ${{ steps.version.outputs.minor }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      move-minor: ${{ steps.version.outputs.move-minor }}
+      move-latest: ${{ steps.version.outputs.move-latest }}
+      image: ${{ steps.version.outputs.image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -248,10 +258,122 @@ jobs:
           path: front-burner-${{ steps.version.outputs.version }}.cdx.json
           if-no-files-found: error
 
-      # ---- Publishing: a tag only ----------------------------------------------
+      # The scanned image, for the container suite and the push.
+      - name: Save the image
+        run: docker save front-burner:release | gzip -1 > front-burner-release.tar.gz
 
-      # The scanned image itself, under <version> only. <major>.<minor> and
-      # latest move after it is signed, attested and verified.
+      - name: Keep the image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image
+          path: front-burner-release.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  # The container suite on the image that is about to be pushed: the smoke test
+  # and the resilience checks, with the upgrade from this image to a build with
+  # one more migration and going back (plan 153). A failure stops the release
+  # before anything is published. It runs npm code on the runner, so it holds
+  # no permission beyond reading the repository.
+  container-suite:
+    name: Container suite
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image
+
+      - name: Load the image
+        run: gunzip -c front-burner-release.tar.gz | docker load
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Container suite
+        env:
+          E2E_IMAGE: front-burner:release
+          E2E_UPGRADE_TEST: 'true'
+          NX_NO_CLOUD: 'true'
+          NX_DAEMON: 'false'
+        run: |
+          npm ci
+          npx nx run server-e2e:e2e-container
+
+  # ---- Publishing: a tag only ------------------------------------------------
+  publish:
+    name: Publish
+    needs: [ build, container-suite ]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The least the job needs (NF-11.12): the draft release, the image, the
+    # OIDC token for keyless signing and attesting, and the attestations.
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      PUBLISH: 'true'
+    steps:
+      # For .github/release-notes.md.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The build job's version, under the same step name as there.
+      - name: Version
+        id: version
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          MINOR: ${{ needs.build.outputs.minor }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+          MOVE_MINOR: ${{ needs.build.outputs.move-minor }}
+          MOVE_LATEST: ${{ needs.build.outputs.move-latest }}
+          IMAGE: ${{ needs.build.outputs.image }}
+        run: |
+          {
+            echo "version=$VERSION"
+            echo "minor=$MINOR"
+            echo "prerelease=$PRERELEASE"
+            echo "move-minor=$MOVE_MINOR"
+            echo "move-latest=$MOVE_LATEST"
+            echo "image=$IMAGE"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+
+      - name: Load the image
+        run: gunzip -c front-burner-release.tar.gz | docker load
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The scanned and tested image itself, under <version> only.
+      # <major>.<minor> and latest move after it is signed, attested and
+      # verified.
       - name: Push
         id: push
         if: env.PUBLISH == 'true'

@@ -1,0 +1,14 @@
+# Laid over container-compose.yaml by container-resilience.e2e.spec.ts: a small
+# tmpfs is the repositories volume (FRONT_BURNER_REPOS_DIR, NF-5.4), so that a
+# test can fill it as a full disk would be (NF-9.8). A tmpfs is lost when the
+# container stops; the database stays on the data volume.
+
+services:
+  front-burner:
+    environment:
+      FRONT_BURNER_REPOS_DIR: /repositories
+      # 64 MB is far below the 2 GB default: the low-space check would refuse
+      # the test's clone (NF-9.7), which is not what these tests are about.
+      FRONT_BURNER_LOW_DISK_THRESHOLD: '0'
+    tmpfs:
+      - /repositories:size=64m,uid=1000,gid=1000,mode=0700

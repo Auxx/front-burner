@@ -71,7 +71,7 @@ the procedures this follows).
 - Modify: `apps/server-e2e/src/support/container.ts` (`kill()`, a tmpfs
   repositories volume)
 
-- [ ] **Step 1: Write the tests**: `NF-9.5: a clone killed mid-way is failed and
+- [x] **Step 1: Write the tests**: `NF-9.5: a clone killed mid-way is failed and
       removed on start`; `NF-9.5: a pull killed mid-merge is undone on start`;
       `NF-9.5: a merge waiting for resolution survives a kill`; `NF-9.4: a stale
       index.lock is removed on start`; `NF-9.8: a full repositories volume
@@ -79,9 +79,9 @@ the procedures this follows).
       space freed, the save goes through`; `NF-10.1: the data volume holds no
       log file after the runs` _(plan 148's addition: the container suite proves
       the read-only root, not what lands in `/data`)_.
-- [ ] **Step 2: Run them** as plan 138 says; fix what fails, or plan it (index,
+- [x] **Step 2: Run them** as plan 138 says; fix what fails, or plan it (index,
       Part F).
-- [ ] **Step 3: Commit** — `test(server-e2e): kills and a full disk`
+- [x] **Step 3: Commit** — `test(server-e2e): kills and a full disk`
 
 ---
 
@@ -101,17 +101,17 @@ the procedures this follows).
 - Produces: `buildUpgradeImage(baseImage: string): Promise<string>` (the new
   image's tag).
 
-- [ ] **Step 1: Write the tests**: `NF-6.2: a copy of a running instance
+- [x] **Step 1: Write the tests**: `NF-6.2: a copy of a running instance
       restores from its snapshot` (the first snapshot is written a moment after
       the start, plan 129); `NF-6.5: a stopped copy restores as it was`;
       `NF-6.4: a restore moves newer working copies to orphans`; `NF-7.1: an
       upgrade writes a pre-upgrade snapshot and migrates`; `NF-7.3: the old
       image refuses the upgraded database and starts from the pre-upgrade
       snapshot`.
-- [ ] **Step 2: Run them**; fix what fails.
-- [ ] **Step 3: Fill the checklist rows**, including NF-9.1, NF-9.2 and NF-11.13
+- [x] **Step 2: Run them**; fix what fails.
+- [x] **Step 3: Fill the checklist rows**, including NF-9.1, NF-9.2 and NF-11.13
       from the CI `image` job's run of the whole container suite, which plan 148
       could not run locally.
-- [ ] **Step 4: Check and commit** — as in the index's "Verifying"; set this
+- [x] **Step 4: Check and commit** — as in the index's "Verifying"; set this
       plan's row to **Done**; commit `test(server-e2e): backup, restore and
       upgrade`.

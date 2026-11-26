@@ -142,8 +142,12 @@ type checking, lint, test, build, the Storybook browser tests and the e2e suites
 fails if they differ from the committed files, plus a Trivy scan of the
 production dependencies in `package-lock.json`. The `image` job builds
 `tools/docker/Dockerfile` and scans the image with Trivy, failing on a high or
-critical vulnerability that has a fix. It runs on every push to `master`, and on
-a pull request unless every changed file is one the image does not contain
+critical vulnerability that has a fix, then runs server-e2e's container suites
+on that image (`npx nx run server-e2e:e2e-container`): the smoke test and the
+resilience checks (kills, a full disk, backup and restore). The upgrade check,
+which builds a second image with a throwaway migration, runs only on pushes to
+`master` (`E2E_UPGRADE_TEST=true`). The job runs on every push to `master`, and
+on a pull request unless every changed file is one the image does not contain
 (docs, Markdown, tests, stories, the e2e suites apart from server-e2e's
 container suites, `tools/ai-tools`, `tools/lint-rules` and `.github` apart from
 `ci.yml` and `.github/actions`). Its runtime stage is rebuilt every time, so the
@@ -173,8 +177,10 @@ registry fails too.
 
 The workflow builds `tools/docker/Dockerfile` for `linux/amd64` with the tag's
 version, scans it with Trivy (a vulnerability stops the release), checks that it
-reports the version, and pushes it to `ghcr.io/<owner>/front-burner` as
-`<version>`. It signs the pushed image with keyless cosign, attests its build
+reports the version, runs server-e2e's container suites on it (the smoke test,
+and the resilience checks with the upgrade check, in a job of its own that can
+publish nothing), and pushes that same image to `ghcr.io/<owner>/front-burner`
+as `<version>`. It signs the pushed image with keyless cosign, attests its build
 provenance and its CycloneDX SBOM, and verifies the signature. Only then does it
 move `<major>.<minor>` and `latest` to the image: for a stable version (no
 pre-release part), and only when it is the newest stable version of its line and
@@ -195,8 +201,8 @@ To make a release:
    the package to this repository.
 
 Run the workflow from the Actions tab (Run workflow) for a dry run: it builds,
-scans, checks the version and makes the SBOM, kept as the run's `sbom` artifact,
-but pushes, signs and releases nothing.
+scans, checks the version, runs the container suites and makes the SBOM, kept as
+the run's `sbom` artifact, but pushes, signs and releases nothing.
 
 Only maintainers should be able to push release tags: add a tag ruleset for `v*`
 (Settings → Rules → Rulesets) that restricts creating, updating and deleting
