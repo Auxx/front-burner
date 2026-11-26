@@ -339,7 +339,8 @@ describe.skipIf(E2E_IMAGE === undefined)(
         const id = await instance.add('Waiting', `${remotes.git.url}/waiting.git`);
         const root = await workingCopy(container, id);
         pushFileFromElsewhere(remotes.bare['waiting'] as string, 'both.md', 'theirs\n');
-        expect((await instance.save(id, 'both.md', 'mine\n')).status).toBe(200);
+        // A save changes only files that exist; this one is new, as in the process-level test.
+        await container.exec('sh', '-c', `printf 'mine\\n' > ${root}/both.md`);
         await gitIn(container, root, 'add', 'both.md');
         await gitIn(container, root, 'commit', '-q', '-m', 'mine');
         const recorded = (await gitIn(container, root, 'rev-parse', 'HEAD')).trim();
@@ -509,16 +510,27 @@ describe.skipIf(E2E_IMAGE === undefined)(
         await waitFor(async () => (await snapshots()).length === 1);
         await instance.onboard();
         handbookId = await instance.add('Handbook', `${remotes.git.url}/handbook.git`);
-        // As if a day had passed: the next start writes a snapshot with the administrator and Handbook.
+        // As if a day had passed, and the hour until the job checks again: the first snapshot dated long
+        // ago, and the queued check due, as the job runner keeps its next run across a restart. The next
+        // start then writes a snapshot with the administrator and Handbook.
         const [ first ] = await snapshots();
-        await source.exec(
-          'sh',
-          '-c',
+        await source.stop();
+        await whileStopped(
+          source,
           `cd /data/backups && mv ${first} front-burner-2000-01-01T00-00-00Z-${
             first?.replace(/^front-burner-[\dT-]+Z-/, '')
           }`
         );
-        await source.restart();
+        const due = await source.run([
+          'node',
+          '-e',
+          'const db = new (require("better-sqlite3"))("/data/db/front-burner.sqlite");'
+          + 'const { changes } = db.prepare("UPDATE jobs SET run_at = 0 WHERE type = \'database.snapshot\''
+          + ' AND status = \'queued\'").run();'
+          + 'db.close(); if (changes !== 1) { console.error(`${changes} queued checks`); process.exit(1); }'
+        ]);
+        expect(due, due.stderr).toMatchObject({ exitCode: 0 });
+        await source.start();
         await waitFor(async () => (await snapshots()).length === 2);
         snapshot = (await snapshots()).filter(name => !name.startsWith('front-burner-2000-')).at(0) as string;
         await instance.login();
