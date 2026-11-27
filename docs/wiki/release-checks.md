@@ -1592,6 +1592,144 @@ mark at 2295 ms; the phone's marks were at 2437 ms before and 1587 ms after.
   2.45 s to 1.59 s (phone), within 20 ms of the developer machine's. The other
   rows are unchanged; the phone's preview row is NF-2.5's, as above.
 
+## Exit criteria
+
+Plan 157: the MVP's exit criteria (`docs/product/mvp.md`, "Exit criteria") on a
+fresh instance set up by following [the deployment guide](deployment.md) word by
+word, in a desktop browser and on a phone. Criterion 1 is walked twice, each on
+its own fresh instance: once with a password, once with OIDC.
+
+The walk also fills the [NF-11.12](#nf-11-security-baseline) row: the instance
+runs the image of a **release candidate** tag (such as `v1.0.0-rc.1`, a
+pre-release), verified as
+[Verifying the image](deployment.md#verifying-the-image) says.
+
+A step that fails stops the release: a one-line fix is made in this plan's
+branch; anything larger gets a plan in Part F of the step 6 index, and the
+criterion is walked again on its build. A place where the walker had to know
+something the guide does not say is a **guide fix**, even if the walk went on.
+
+### Before you start
+
+**The release candidate.** The operator pushes a `v<major>.<minor>.<patch>-rc.N`
+tag on `master` at this plan's commit. The release workflow builds, scans,
+pushes, signs and attests the image and makes a draft pre-release with its SBOM.
+Record the workflow run and the image digest.
+
+**The hosts.** A Linux host for `linux/amd64` with Docker Engine and Compose v2
+and no Front Burner on it, and a domain pointed at it, for each instance (A and
+B). The reference host will do, in a new folder per instance, with the test
+instance of plans 155 and 156 stopped (`docker compose down` in `/srv/fbtest`)
+and its domain, or a new one, pointed at the instance being walked. Only one
+instance listens on ports 80 and 443 at a time.
+
+**The remotes.** Those of plan 155's ["Before you start"](#before-you-start):
+`phone-https` (with two tokens), `phone-ssh`, `phone-locked` (a deploy key with
+a passphrase) and a large public repository, each with Markdown files in
+folders, a `README.md` that embeds an image, and a second branch. Somewhere to
+push from other than the browser being walked.
+
+**For instance B**, an OIDC provider with a client for the instance's address
+(the operator's Slack app of plan 158 will do).
+
+**The browsers.** A desktop browser (Chrome or Firefox, current) and a phone
+(current Chrome on Android, or Safari on an iPhone).
+
+### Walk sheet
+
+Do only what the guide says. Keep a list of every place where you had to guess,
+look elsewhere, or do something the guide does not say: each is a guide fix.
+
+**Instance A: password, criteria 1 to 12.**
+
+1. **Criterion 1.** In a new, empty folder, follow the guide from
+   [Before you start](deployment.md#before-you-start) to
+   [First start](deployment.md#first-start), in order: the image (the release
+   candidate's version, with `<owner>` in lower case), verifying it (both
+   commands pass; the digest goes into `compose.yaml`), the volumes, the
+   secrets, the compose example, HTTPS with
+   [Caddy next to it](deployment.md#caddy-next-to-the-compose-example), and the
+   first start. `docker compose ps` shows `healthy`.
+2. Open `https://<your-domain>` on the desktop. Complete administrator
+   onboarding with the setup token and a password: the dashboard opens, empty.
+3. **Criterion 2.** Log out from the user menu; log in with a wrong password (a
+   generic error), then with the right one. Log in on the phone too.
+4. On the host, `docker compose restart front-burner`. When it is `healthy`
+   again, reload the page on the desktop and on the phone: both are still logged
+   in, with no login page in between.
+5. **Criteria 3 to 11, on the desktop**: plan 155's [script](#script), lines 7
+   to 13 and 16 to 69, with the mouse and keyboard. Skip the _Rotate_ and
+   _Measure_ parts, and the lines about the on-screen keyboard (25 to 27). Where
+   a line says "on the second phone", use the phone.
+6. **Criteria 3 to 11, on the phone**: the same lines again, by touch alone,
+   with the remotes reset or new ones (a second `phone-https`, `phone-ssh` and
+   `phone-locked` under other names will do), so that each criterion starts from
+   the same state as on the desktop. _Rotate_ and _Measure_ may be skipped:
+   plans 155 and 164 did them.
+7. **Criterion 12.** Every row of the tables of this document above has a
+   result, and none is a **Fail** without a merged fix and a new result. Then,
+   on the host: `docker compose exec front-burner id` shows UID and GID 1000,
+   and `docker inspect` of the container shows it read-only, with every
+   capability dropped and `no-new-privileges`, as the compose example sets it.
+
+**Instance B: OIDC, criteria 1 and 2.**
+
+8. **Criterion 1.** In another new, empty folder (with instance A stopped),
+   follow the guide the same way, but set up OIDC as
+   [First administrator](deployment.md#first-administrator) says, with
+   environment variables, and without a setup token.
+9. Open the instance on the desktop: the login page offers OIDC, not the
+   onboarding page. Log in through the provider with `FRONT_BURNER_ADMIN_EMAIL`:
+   the dashboard opens, as the administrator.
+10. **Criterion 2.** Log out and in again through OIDC, on the desktop and on
+    the phone. Restart as in line 4: both are still logged in.
+11. Stop and remove both instances (`docker compose down -v` in each folder),
+    and start the test instance again if it is still needed.
+
+### Walk report
+
+Pasted into the pull request:
+
+```text
+Step 6 walkthrough — plan 157
+Date:
+Release candidate tag, workflow run, image digest:
+Host: <provider, size, OS, Docker and Compose versions>
+Desktop: <OS, browser and version>
+Phone: <make, model, OS, browser and version>
+OIDC provider:
+
+Instance A (password): every line passed except:
+- <line, plan 155 line if any, desktop or phone>: <what was done, what happened>
+
+Instance B (OIDC): every line passed except:
+-
+
+Guide fixes (every place the guide was not enough):
+- <section>: <what was missing or wrong>
+```
+
+### Walk results
+
+To be filled in by plan 157 from the walk report.
+
+| Criterion | Instance | Desktop  | Phone    |
+| --------- | -------- | -------- | -------- |
+| 1         | A        | To check | To check |
+| 1         | B (OIDC) | To check | To check |
+| 2         | A        | To check | To check |
+| 2         | B (OIDC) | To check | To check |
+| 3         | A        | To check | To check |
+| 4         | A        | To check | To check |
+| 5         | A        | To check | To check |
+| 6         | A        | To check | To check |
+| 7         | A        | To check | To check |
+| 8         | A        | To check | To check |
+| 9         | A        | To check | To check |
+| 10        | A        | To check | To check |
+| 11        | A        | To check | To check |
+| 12        | A        | To check | —        |
+
 ## Reference host
 
 Plan 152 measures NF-1 and NF-2 on the reference host of
