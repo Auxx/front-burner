@@ -1612,7 +1612,8 @@ something the guide does not say is a **guide fix**, even if the walk went on.
 ### Before you start
 
 **The release candidate.** The operator pushes a `v<major>.<minor>.<patch>-rc.N`
-tag on `master` at this plan's commit. The release workflow builds, scans,
+tag on the newest commit of `master` (the workflow takes only commits of
+`master`; this plan changes only documents). The release workflow builds, scans,
 pushes, signs and attests the image and makes a draft pre-release with its SBOM.
 Record the workflow run and the image digest.
 
