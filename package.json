@@ -1,6 +1,6 @@
 {
   "name": "@front-burner/source",
-  "version": "0.0.0",
+  "version": "0.1.0-rc.1",
   "license": "MIT",
   "scripts": {
     "format": "dprint fmt",
